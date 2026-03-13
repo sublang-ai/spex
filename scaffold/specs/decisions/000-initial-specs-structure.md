@@ -1,4 +1,4 @@
-# DR-000: Initial Specs Structure
+# DR-000: Spec Structure and Format
 
 ## Status
 
@@ -6,60 +6,99 @@ Accepted
 
 ## Context
 
-Projects need a standardized structure and format for specifications to support iterative development and collaboration between AI and humans.
+Specifications (specs) need a standardized format and structure to support iterative development and collaboration between AI and humans.
 
 ## Decision
 
-Use `boss scaffold` to create the following.
+### Essential elements
 
-### Records
+Spex organizes specs around three essential elements of software development:
 
-| Directory | Format | Naming |
+- **Decisions**. The choices made in product and system *design*.
+- **Iterations**. The incremental plans for *implementation*.
+- **Requirements**. The *behaviors* and *constraints* of the product and system.
+
+### Forms
+
+Spex uses two forms of specs to balance unification and flexibility.
+
+- **Records** must follow specified formats and may use free-form content within those formats.
+Decisions and iterations are stored as records.
+  - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]].
+  - Iteration records (IRs) contain four sections: Goal, Deliverables, Tasks, and Acceptance criteria.
+- **Items** must follow the GEARS pattern [[2]] to specify requirements and constraints.
+Each item file must include an intent statement.
+
+### Repo layout
+
+Spex creates the default `specs/` directory under the repo root, with the following subdirectories and files.
+
+| Path | Content | File Naming |
 | --------- | ------- | ------ |
-| decisions/ | [ADR](https://github.com/npryce/adr-tools) (Architectural Decision Record) | `NNN-<kebab-case-title>.md` |
-| iterations/ | Goal, deliverables, tasks, verification | `NNN-<kebab-case-title>.md` |
+| `decisions/` | DRs | \<NNN\>-\<kebab-case\>.md |
+| `iterations/` | IRs | \<NNN\>-\<kebab-case\>.md |
+| `items/` | item files | [\<path\>/]\<kebab-case\>.md |
+| `map.md` | spec index for navigation | - |
+| `meta.md` | the spec of specs | - |
 
-### Specs
+### Citation rules
 
-Spec files follow [GEARS](https://sublang.ai/ref/gears-ai-ready-spec-syntax) syntax and can be organized hierarchically. Suggested top-level groups:
+DRs and items are persistent and may cite each other.
+IRs may be temporary and must not be cited by DRs or items.
+Only `map.md` may reference IRs, as it indexes all spec files and is kept in sync as files change.
 
-| Group | Purpose |
+### Item groups
+
+Item files are grouped into three subdirectories under `items/`:
+
+| Subdirectory | Purpose |
 | ----- | ------- |
-| user/ | What the system does |
-| dev/ | How the system is built |
-| test/ | Verification criteria |
+| `user/` | What the system does. User-visible behavior. |
+| `dev/` | How the system is built. Not user-visible. |
+| `test/` | Acceptance test cases. Each item cites the user or dev item it tests. |
 
-Naming: `<kebab-case-name>.md`
+### Item syntax
 
-GEARS pattern:
+A spec item must follow the GEARS syntax:
 
 ```text
 [Where <static precondition(s)>] [While <stateful precondition(s)>] [When <trigger>] The <subject> shall <behavior>.
 ```
 
-| Clause | Purpose |
+| Keyword | Purpose |
 | ------ | ------- |
 | Where | Static preconditions (features, config) |
 | While | Stateful preconditions (runtime state) |
 | When | Trigger event (at most one) |
 | shall | Required behavior |
 
-Test specs map Given-When-Then: Given → Where+While, When → When, Then → shall.
+For test specs, Given-When-Then maps to: Given → Where+While, When → When, Then → shall.
 
-### Initial Files
+### Spec packages
 
-| Path | Content |
-| ---- | ------- |
-| `spec-map.md` | Spec index for navigation (non-normative) |
-| `decisions/000-initial-specs-structure.md` | This DR |
-| `iterations/000-spdx-headers.md` | Initial IR |
-| `user/meta.md` | GEARS syntax guide |
-| `dev/git.md` | Git workflow rules |
-| `dev/style.md` | Authoring conventions |
-| `test/spdx-headers.md` | SPDX headers verification |
+A spec package is a coherent set of spec items for a *single* intent.
+It is the basic unit for spec composition, reuse, and extension.
+
+A spec package is stored in one to three coordinated item files sharing the same relative path and basename.
+The item files are located in `user/`, `dev/`, or `test/` according to which [groups](#item-groups) they belong to.
+
+For example, a spec package for generating short URLs may be named `gen-url` and consist of:
+
+- `items/user/signing/gen-url.md` for user-facing behaviors (e.g., basic operations, URL format)
+- `items/dev/signing/gen-url.md` for internal-implementation behaviors (e.g., algorithms)
+- `items/test/signing/gen-url.md` for tests covering the corresponding user and dev items
+
+Here, `signing/` is a local collection of related spec packages for development convenience.
+
+`map.md` organizes item files by package.
 
 ## Consequences
 
-- Consistent structure and format across iterations
-- Clear separation of records and specs
-- Specs can be grouped hierarchically as needed
+- Consistent structure and format across development cycles
+- Clear positions of directories and files
+- Flexible expression of design and implementation
+
+## References
+
+[1]: https://github.com/npryce/adr-tools "ADR Tools"
+[2]: https://sublang.ai/ref/gears-ai-ready-spec-syntax "GEARS: AI-Ready Spec Syntax"
