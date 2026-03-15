@@ -8,8 +8,12 @@ This spec defines acceptance tests for SPDX copyright and license headers.
 
 ### LIC-3
 
-Where [LIC-1](../dev/licensing.md#lic-1) applies to the file, when checking its first comment block after any shebang, the file shall contain `SPDX-FileCopyrightText`.
+Verifies: [LIC-1](../dev/licensing.md#lic-1)
+
+Where the file has comment syntax and is not [excluded](../dev/licensing.md#exclusions), while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-FileCopyrightText`.
 
 ### LIC-4
 
-Where [LIC-2](../dev/licensing.md#lic-2) applies to the file, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier`.
+Verifies: [LIC-2](../dev/licensing.md#lic-2)
+
+Where the file has comment syntax, is not [excluded](../dev/licensing.md#exclusions), and a [license file](../dev/licensing.md#license-file-detection) exists at project root, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier`.

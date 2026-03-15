@@ -26,7 +26,7 @@ Item files shall be grouped into three subdirectories under `items/`:
 | ----- | ------- |
 | `user/` | What the system does. User-visible behavior. |
 | `dev/` | How the system is built. Not user-visible. |
-| `test/` | Acceptance testing. Each item cites the user or dev item it tests. |
+| `test/` | Acceptance testing. Test items cite the user or dev items they verify. |
 
 ### META-3
 
@@ -88,13 +88,13 @@ A spec package shall consist of one to three coordinated item files sharing the 
 
 A spec package shall have a basename \<kebab-case\>.md unique within `specs/items/`, with a short form \<ALLCAPS\>.
 
-Example. `package-management.md` has short form `PKGMGT`.
+Example: `package-management.md` has short form `PKGMGT`.
 
 ### META-11
 
 Each item shall have an ID unique within the repo, following \<PACK\>-\<N...\> format (e.g., AUTH-11, URL-3) as a markdown heading for anchor linking.
 
-Note. \<PACK\> refers to the short form of the package name.
+Note: \<PACK\> refers to the short form of the package name.
 
 ### META-12
 
@@ -125,6 +125,12 @@ IRs shall not be cited by any spec except `map.md`.
 ### META-18
 
 External references in specs shall cite authoritative sources (e.g., official docs) with numbered markers (e.g., `[[1]]`) linked to specific URLs in a `## References` section that shall have no uncited entries.
+
+### META-19
+
+Each test item shall include one `Verifies:` metadata line immediately below its item ID heading.
+
+The `Verifies:` line shall contain one or more comma-separated [citations](#meta-15) to the user or dev items that the test item verifies.
 
 ## References
 
