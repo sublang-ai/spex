@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
+
 # IR-000: SPDX Headers
 
 ## Goal
@@ -6,7 +9,7 @@ Add SPDX headers (license and copyright info) to applicable files.
 
 ## Deliverables
 
-- [ ] Add SPDX headers to applicable files missing them
+- [x] Add SPDX headers to applicable files missing them
 - [ ] Document header format in a dev spec
 
 ## Tasks

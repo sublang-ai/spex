@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
+
 # LIC: Licensing Headers
 
 ## Intent
@@ -33,3 +36,19 @@ Where the file has comment syntax and is not excluded by [Exclusions](#exclusion
 ### LIC-2
 
 Where the file has comment syntax, is not excluded by [Exclusions](#exclusions), and one or more project-root license files match [License File Detection](#license-file-detection), while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-License-Identifier` in its first comment block after any shebang.
+
+## Format
+
+This project carries a single `LICENSE` file (Apache-2.0). All applicable files use:
+
+```markdown
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
+```
+
+For source code files with `//` comment syntax:
+
+```typescript
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+```
