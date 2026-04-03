@@ -11,7 +11,7 @@ SCAF spec package.
 ## Deliverables
 
 - [x] Node.js project setup (package.json, tsconfig.json, .gitignore updates)
-- [ ] CLI entry point with `scaffold` subcommand routing
+- [x] CLI entry point with `scaffold` subcommand routing
 - [ ] `createSpecsStructure()` per [SCAF-7](../items/dev/scaffold.md#scaf-7)
 - [ ] `copyTemplates()` per [SCAF-8](../items/dev/scaffold.md#scaf-8), [SCAF-9](../items/dev/scaffold.md#scaf-9)
 - [ ] `appendAgentSpecs()` per [SCAF-10](../items/dev/scaffold.md#scaf-10)
