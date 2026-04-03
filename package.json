@@ -1,0 +1,25 @@
+{
+  "name": "spex",
+  "version": "0.1.0",
+  "description": "Spec framework CLI",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "spex": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "scaffold/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "@types/node": "^22.0.0"
+  }
+}
