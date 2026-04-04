@@ -48,6 +48,12 @@ meta.md     The spec of specs
 | dev | [licensing.md](items/dev/licensing.md) | SPDX header requirements and file-scope rules |
 | test | [licensing.md](items/test/licensing.md) | Copyright and license header presence checks |
 
+### RELEASE
+
+| Group | File | Summary |
+| --- | --- | --- |
+| dev | [release.md](items/dev/release.md) | Versioning, changelog, release process, package hygiene |
+
 ### SCAF
 
 | Group | File | Summary |
