@@ -52,11 +52,13 @@ jobs:
           # Extract section between ## [VERSION] and next ## [
           sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md > /tmp/release-notes.md
           cat /tmp/release-notes.md
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "::error::No release notes found for version ${VERSION} in CHANGELOG.md"
+            exit 1
+          fi
 
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
