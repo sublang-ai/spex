@@ -8,7 +8,14 @@ import { resolveBase } from "./resolve-base.js";
  * @param pathArg - Optional explicit target path
  */
 export function scaffold(pathArg?: string): void {
-  const basePath = resolveBase(pathArg);
+  let basePath: string;
+  try {
+    basePath = resolveBase(pathArg);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`spex scaffold: ${msg}`);
+    process.exit(1);
+  }
 
   // Task 4: createSpecsStructure()
   // Task 5: copyTemplates()
