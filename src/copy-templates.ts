@@ -30,8 +30,7 @@ function copyRecursive(
 ): void {
   const entries = readdirSync(srcDir);
   for (const entry of entries) {
-    // Skip .DS_Store and other dotfiles
-    if (entry.startsWith(".")) continue;
+    if (entry === ".DS_Store") continue;
 
     const srcPath = join(srcDir, entry);
     const destPath = join(destDir, entry);

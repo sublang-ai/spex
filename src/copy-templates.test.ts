@@ -58,6 +58,11 @@ describe("copyTemplates", () => {
         existsSync(join(dir, "specs", "items", "dev", "git.md")),
         "specs/items/dev/git.md should be copied",
       );
+      // Tracked dotfiles must not be skipped (SCAF-8)
+      assert.ok(
+        existsSync(join(dir, "specs", "items", "user", ".gitkeep")),
+        "specs/items/user/.gitkeep should be copied",
+      );
 
       // Verify content matches the source
       const srcMap = readFileSync(
