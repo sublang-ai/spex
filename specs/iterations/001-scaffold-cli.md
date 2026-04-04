@@ -18,7 +18,7 @@ SCAF spec package.
 - [x] Target resolution per [SCAF-1](../items/user/scaffold.md#scaf-1), [SCAF-2](../items/user/scaffold.md#scaf-2), [SCAF-3](../items/user/scaffold.md#scaf-3)
 - [x] Idempotency per [SCAF-4](../items/user/scaffold.md#scaf-4)
 - [x] Agent instructions per [SCAF-5](../items/user/scaffold.md#scaf-5)
-- [ ] Error handling per [SCAF-6](../items/user/scaffold.md#scaf-6)
+- [x] Error handling per [SCAF-6](../items/user/scaffold.md#scaf-6)
 
 ## Tasks
 
