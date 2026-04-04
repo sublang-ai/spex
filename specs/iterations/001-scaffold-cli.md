@@ -12,7 +12,7 @@ SCAF spec package.
 
 - [x] Node.js project setup (package.json, tsconfig.json, .gitignore updates)
 - [x] CLI entry point with `scaffold` subcommand routing
-- [ ] `createSpecsStructure()` per [SCAF-7](../items/dev/scaffold.md#scaf-7)
+- [x] `createSpecsStructure()` per [SCAF-7](../items/dev/scaffold.md#scaf-7)
 - [ ] `copyTemplates()` per [SCAF-8](../items/dev/scaffold.md#scaf-8), [SCAF-9](../items/dev/scaffold.md#scaf-9)
 - [ ] `appendAgentSpecs()` per [SCAF-10](../items/dev/scaffold.md#scaf-10)
 - [x] Target resolution per [SCAF-1](../items/user/scaffold.md#scaf-1), [SCAF-2](../items/user/scaffold.md#scaf-2), [SCAF-3](../items/user/scaffold.md#scaf-3)

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import { createSpecsStructure } from "./create-specs-structure.js";
 import { resolveBase } from "./resolve-base.js";
 
 /**
@@ -17,7 +18,8 @@ export function scaffold(pathArg?: string): void {
     process.exit(1);
   }
 
-  // Task 4: createSpecsStructure()
+  createSpecsStructure(basePath);
+
   // Task 5: copyTemplates()
   // Task 6: appendAgentSpecs()
 
