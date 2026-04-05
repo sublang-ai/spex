@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-05
+
+### Changed
+
+- Package description and npm keywords for better discoverability
+- README rewritten with workflow overview, usage example, and contributing section
+- RELEASE spec expanded with README requirement (RELEASE-14)
+
 ## [0.1.0] - 2026-04-05
 
 ### Added
@@ -24,5 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/sublang-ai/spex/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sublang-ai/spex/releases/tag/v0.1.0

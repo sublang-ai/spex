@@ -1,13 +1,22 @@
 {
   "name": "@sublang/spex",
-  "version": "0.1.0",
-  "description": "Spec framework CLI",
+  "version": "0.1.1",
+  "description": "The essential spec layer AI agents need to build software reliably",
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/sublang-ai/spex.git"
   },
+  "keywords": [
+    "spex",
+    "ai-agents",
+    "specs",
+    "specification",
+    "spec-driven-development",
+    "scaffold",
+    "cli"
+  ],
   "bin": {
     "spex": "dist/cli.js"
   },
