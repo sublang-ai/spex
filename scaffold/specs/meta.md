@@ -65,6 +65,10 @@ A DR shall specify design decisions and constraints, not duplicate implementatio
 A DR is sufficient when an implementer can generate or audit code from the design intent, constraints, and tradeoffs.
 Implementation details shall be included only when they are part of the design contract.
 
+### META-25
+
+DRs and IRs shall use semantic line breaks: each sentence shall begin on a new line for diff readability. Fixed-width column wrapping within a sentence is allowed.
+
 ## Item syntax
 
 ### META-6
