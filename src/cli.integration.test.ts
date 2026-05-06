@@ -44,6 +44,20 @@ function makeTmp(): string {
   return realpathSync(mkdtempSync(join(tmpdir(), "spex-integ-")));
 }
 
+function initGit(dir: string): void {
+  execSync("git init", { cwd: dir, stdio: "ignore" });
+  execSync("git config user.email test@example.com", {
+    cwd: dir,
+    stdio: "ignore",
+  });
+  execSync("git config user.name Test", { cwd: dir, stdio: "ignore" });
+}
+
+function gitCommit(dir: string, message: string): void {
+  execSync("git add specs", { cwd: dir, stdio: "ignore" });
+  execSync(`git commit -m "${message}"`, { cwd: dir, stdio: "ignore" });
+}
+
 describe("CLI integration", () => {
   // Acceptance: spex scaffold <path> creates full specs structure
   it("scaffold <path> creates specs structure and agent files", () => {
@@ -128,11 +142,96 @@ describe("CLI integration", () => {
     const dir = makeTmp();
     try {
       // Init a git repo in the temp dir
-      execSync("git init", { cwd: dir, stdio: "ignore" });
+      initGit(dir);
 
       const result = run(["scaffold"], { cwd: dir });
       assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
       assert.ok(existsSync(join(dir, "specs", "map.md")));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --update overwrites tracked scaffold files and prints merge prompt", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      assert.equal(run(["scaffold"], { cwd: dir }).exitCode, 0);
+      writeFileSync(join(dir, "specs", "items", "user", "project.md"), "# Project\n");
+      gitCommit(dir, "initial specs");
+
+      const mapPath = join(dir, "specs", "map.md");
+      const projectPath = join(dir, "specs", "items", "user", "project.md");
+      writeFileSync(mapPath, "# Custom map\n");
+      gitCommit(dir, "customize map");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
+      assert.ok(result.stdout.includes("specs/map.md (updated)"));
+      assert.ok(result.stdout.includes("I just ran `spex scaffold --update`"));
+      assert.ok(readFileSync(mapPath, "utf-8").includes("# Spec Map"));
+      assert.notEqual(readFileSync(mapPath, "utf-8"), "# Custom map\n");
+      assert.equal(readFileSync(projectPath, "utf-8"), "# Project\n");
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --update rejects a path argument", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["scaffold", "--update", dir]);
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("--update does not accept a <path>"));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --update rejects outside git repositories", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("requires cwd inside a git repository"));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --update rejects dirty specs trees", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      assert.equal(run(["scaffold"], { cwd: dir }).exitCode, 0);
+      gitCommit(dir, "initial specs");
+
+      writeFileSync(join(dir, "specs", "map.md"), "# Dirty\n");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("requires a clean specs/ working tree"));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --update rejects scaffold files missing from HEAD", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      assert.equal(run(["scaffold"], { cwd: dir }).exitCode, 0);
+      gitCommit(dir, "initial specs");
+      execSync("git rm specs/meta.md", { cwd: dir, stdio: "ignore" });
+      execSync('git commit -m "remove scaffold file"', {
+        cwd: dir,
+        stdio: "ignore",
+      });
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("scaffold-provided files tracked in HEAD"));
+      assert.ok(result.stderr.includes("specs/meta.md"));
     } finally {
       rmSync(dir, { recursive: true });
     }

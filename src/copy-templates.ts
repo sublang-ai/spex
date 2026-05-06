@@ -49,6 +49,24 @@ function copyRecursive(
   }
 }
 
+function listRecursive(srcDir: string, relRoot: string): string[] {
+  const paths: string[] = [];
+  const entries = readdirSync(srcDir);
+  for (const entry of entries) {
+    if (entry === ".DS_Store") continue;
+
+    const srcPath = join(srcDir, entry);
+    const relPath = posix.join(relRoot, entry);
+
+    if (statSync(srcPath).isDirectory()) {
+      paths.push(...listRecursive(srcPath, relPath));
+    } else {
+      paths.push(relPath);
+    }
+  }
+  return paths;
+}
+
 /**
  * Copy bundled template files from scaffold/specs/ to target specs/.
  *
@@ -65,4 +83,23 @@ export function copyTemplates(basePath: string): void {
   }
 
   copyRecursive(srcSpecs, destSpecs, "specs");
+}
+
+export function getScaffoldSpecFiles(): string[] {
+  const scaffoldDir = getScaffoldDir();
+  const srcSpecs = join(scaffoldDir, "specs");
+
+  if (!existsSync(srcSpecs)) {
+    throw new Error(`Bundled scaffold/specs/ not found: ${srcSpecs}`);
+  }
+
+  return listRecursive(srcSpecs, "specs");
+}
+
+export function overwriteScaffoldSpecFiles(basePath: string): void {
+  const scaffoldDir = getScaffoldDir();
+  for (const relPath of getScaffoldSpecFiles()) {
+    copyFileSync(join(scaffoldDir, relPath), join(basePath, relPath));
+    console.log(`  ${relPath} (updated)`);
+  }
 }

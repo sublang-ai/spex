@@ -7,7 +7,8 @@ import { scaffold } from "./scaffold.js";
 const USAGE = `Usage: spex <command> [options]
 
 Commands:
-  scaffold [<path>]   Create specs directory structure`;
+  scaffold [<path>]   Create specs directory structure
+  scaffold --update   Refresh scaffold-provided specs templates`;
 
 function main(): void {
   const args = process.argv.slice(2);
@@ -20,7 +21,7 @@ function main(): void {
 
   switch (command) {
     case "scaffold":
-      scaffold(args[1]);
+      scaffold(args.slice(1));
       break;
     default:
       console.error(`Unknown command: ${command}\n`);
