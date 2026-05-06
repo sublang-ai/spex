@@ -64,9 +64,11 @@ function readSpecMergePrompt(): string {
     join(ROOT, "specs", "items", "user", "scaffold.md"),
     "utf-8",
   );
-  const match = spec.match(/Example merge prompt:\n\n```text\n([\s\S]*?)\n```/);
+  const match = spec.match(
+    /Example merge prompt:\r?\n\r?\n```text\r?\n([\s\S]*?)\r?\n```/,
+  );
   assert.ok(match, "SCAF-11 example merge prompt should exist");
-  return match[1];
+  return match[1].replace(/\r\n/g, "\n");
 }
 
 describe("CLI integration", () => {
