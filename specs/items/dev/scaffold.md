@@ -32,6 +32,48 @@ Where `getScaffoldDir()` resolves the bundled scaffold path, it
 shall navigate from the `dist/` output directory up to the package
 root and return the `scaffold/` directory path.
 
+### SCAF-13
+
+Where `getScaffoldSpecFiles()` is called, it shall resolve the
+bundled `scaffold/specs/` directory and return the scaffold-provided
+file paths relative to the target repository root, using POSIX path
+separators and excluding `.DS_Store` entries.
+
+### SCAF-14
+
+Where `overwriteScaffoldSpecFiles()` is called with a base path, it
+shall overwrite each target file returned by `getScaffoldSpecFiles()`
+with the corresponding bundled template and report each overwritten
+file with an `(updated)` indicator.
+
+## Update Orchestration
+
+### SCAF-15
+
+Where `getGitRoot()` is called, it shall return the current git
+repository root, or throw an error when the current working directory
+is outside a git repository.
+
+### SCAF-16
+
+Where `assertCleanSpecsTree()` is called with a base path, it shall
+verify that `git status --porcelain -- specs` is empty in that
+repository, or throw an error when the `specs/` working tree is not
+clean.
+
+### SCAF-17
+
+Where `assertScaffoldFilesTracked()` is called with a base path, it
+shall verify that every path returned by `getScaffoldSpecFiles()`
+exists in `HEAD`, or throw an error listing the missing paths.
+
+### SCAF-18
+
+Where `updateScaffoldTemplates()` is called, it shall resolve the
+current git repository root, enforce update preconditions, overwrite
+scaffold-provided files, and print the merge prompt specified by
+[SCAF-11](../user/scaffold.md#scaf-11).
+
 ## Agent Spec Appending
 
 ### SCAF-10

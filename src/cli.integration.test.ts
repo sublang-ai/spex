@@ -22,6 +22,7 @@ const CLI = resolve(
   "dist",
   "cli.js",
 );
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function run(
   args: string[],
@@ -56,6 +57,16 @@ function initGit(dir: string): void {
 function gitCommit(dir: string, message: string): void {
   execSync("git add specs", { cwd: dir, stdio: "ignore" });
   execSync(`git commit -m "${message}"`, { cwd: dir, stdio: "ignore" });
+}
+
+function readSpecMergePrompt(): string {
+  const spec = readFileSync(
+    join(ROOT, "specs", "items", "user", "scaffold.md"),
+    "utf-8",
+  );
+  const match = spec.match(/Example merge prompt:\n\n```text\n([\s\S]*?)\n```/);
+  assert.ok(match, "SCAF-11 example merge prompt should exist");
+  return match[1];
 }
 
 describe("CLI integration", () => {
@@ -168,7 +179,7 @@ describe("CLI integration", () => {
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
       assert.ok(result.stdout.includes("specs/map.md (updated)"));
-      assert.ok(result.stdout.includes("I just ran `spex scaffold --update`"));
+      assert.ok(result.stdout.endsWith(`${readSpecMergePrompt()}\n`));
       assert.ok(readFileSync(mapPath, "utf-8").includes("# Spec Map"));
       assert.notEqual(readFileSync(mapPath, "utf-8"), "# Custom map\n");
       assert.equal(readFileSync(projectPath, "utf-8"), "# Project\n");
