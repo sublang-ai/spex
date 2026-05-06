@@ -67,7 +67,9 @@ Implementation details shall be included only when they are part of the design c
 
 ### META-25
 
-DRs and IRs shall use semantic line breaks: each sentence shall begin on a new line for diff readability. Fixed-width column wrapping within a sentence is allowed.
+In prose paragraphs of DRs and IRs, each sentence shall begin on a new line for diff readability.
+List items and table cells are exempt, since their delimiters already isolate per-entry changes.
+Fixed-width column wrapping within a sentence is allowed.
 
 ## Item syntax
 
