@@ -7,9 +7,9 @@ Quick-reference index for locating spec files.
 Spec items are the source of truth.
 Code can be inconsistent with specs during development.
 
-## Drafting specs
+## Authoring and reviewing specs
 
-Before authoring or modifying a DR, IR, or item, read [`meta.md`](meta.md).
+Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing a DR, IR, or item.
 
 - DRs and IRs: see [Organization](meta.md#organization), [Record format](meta.md#record-format), and [Citation](meta.md#citation).
 - Items: see [Organization](meta.md#organization), [Item syntax](meta.md#item-syntax), [Spec packages](meta.md#spec-packages), and [Citation](meta.md#citation).
