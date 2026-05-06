@@ -42,11 +42,13 @@ unmodified.
 
 ### SCAF-11
 
-Where the `scaffold` subcommand is invoked with `--update` inside a
-git repository while the `specs/` working tree is clean, the CLI
-shall overwrite scaffold-provided files with the bundled templates,
-leave files outside the scaffold's path set unmodified, and print a
-copy-paste-ready LLM merge prompt as the user's next action.
+Where the `scaffold` subcommand is invoked with `--update` and no
+`<path>` argument from within a git repository, while the `specs/`
+working tree is clean and the scaffold-provided files are tracked
+in HEAD, the CLI shall overwrite those scaffold-provided files
+with the bundled templates, leave files outside the scaffold's
+path set unmodified, and print a copy-paste-ready LLM merge prompt
+as the user's next action.
 
 Example merge prompt:
 
@@ -67,11 +69,12 @@ framework intent is ambiguous; don't guess.
 
 ### SCAF-12
 
-Where the `scaffold` subcommand is invoked with `--update` outside a
-git repository, or while the `specs/` working tree has uncommitted
-changes, the CLI shall exit non-zero with an error stating that
-`--update` requires a clean `specs/` tree under git so overwritten
-files remain recoverable.
+Where the `scaffold` subcommand is invoked with `--update` while
+any precondition of [SCAF-11](#scaf-11) does not hold (no `<path>`
+argument, cwd inside a git repository, `specs/` working tree
+clean, scaffold-provided files tracked in HEAD), the CLI shall
+exit non-zero with an error explaining the failed precondition so
+that overwritten files remain recoverable.
 
 ## Agent Instructions
 
