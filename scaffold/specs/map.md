@@ -7,6 +7,8 @@ Quick-reference index for locating spec files.
 Spec items are the source of truth.
 Code can be inconsistent with specs during development.
 
+Conventions for DRs, IRs, and items are defined in [meta.md](meta.md) (rationale in [DR-000](decisions/000-spec-structure-format.md)).
+
 ## Layout
 
 ```text
