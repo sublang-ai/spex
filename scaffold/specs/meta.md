@@ -29,13 +29,17 @@ Item files shall be grouped into three subdirectories under `items/`:
 | ----- | ------- |
 | `user/` | What the system does. User-visible behavior. |
 | `dev/` | How the system is built. Not user-visible. |
-| `test/` | Acceptance testing, focused on integration and system tests. Test items cite the user or dev items they verify. |
-
-Unit tests shall be part of the implementation and shall not be specified as spec items.
+| `test/` | Acceptance testing. Test items cite the user or dev items they verify. |
 
 ### META-3
 
 Each item file shall include an `## Intent` section stating its purpose.
+
+### META-21
+
+Test items shall focus on integration and system testing.
+
+Unit tests shall be part of the implementation and shall not be specified as spec items.
 
 ## Record format
 
@@ -46,6 +50,10 @@ Each decision record (DR) shall follow the ADR format [[2]] with the following s
 ### META-5
 
 Each iteration record (IR) shall contain the following sections: Goal, Deliverables, Tasks, and Acceptance criteria.
+
+### META-22
+
+In an IR, the Deliverables shall be expressed as checkboxes for progress tracking, and each task shall be sized to a single commit.
 
 ## Item syntax
 
