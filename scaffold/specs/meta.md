@@ -59,6 +59,12 @@ In an IR, the Deliverables shall be expressed as checkboxes for progress trackin
 
 DRs and IRs shall be written in concise language, including only what is needed to act on or audit the record, with preference for bullets and tables over prose paragraphs.
 
+### META-24
+
+A DR shall specify design decisions and constraints, not duplicate implementation logic.
+A DR is sufficient when an implementer can generate or audit code from the design intent, constraints, and tradeoffs.
+Implementation details shall be included only when they are part of the design contract.
+
 ## Item syntax
 
 ### META-6
