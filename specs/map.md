@@ -58,5 +58,5 @@ meta.md     The spec of specs
 
 | Group | File | Summary |
 | --- | --- | --- |
-| user | [scaffold.md](items/user/scaffold.md) | Target resolution, idempotency, agent instructions, error handling |
+| user | [scaffold.md](items/user/scaffold.md) | Target resolution, idempotency, update mode, agent instructions, error handling |
 | dev | [scaffold.md](items/dev/scaffold.md) | Directory creation, template copying, scaffold path resolution, agent spec appending |
