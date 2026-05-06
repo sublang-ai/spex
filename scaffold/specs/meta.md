@@ -55,6 +55,10 @@ Each iteration record (IR) shall contain the following sections: Goal, Deliverab
 
 In an IR, the Deliverables shall be expressed as checkboxes for progress tracking, and each task shall be sized to a single commit.
 
+### META-23
+
+DRs and IRs shall be written in concise language, including only what is needed to act on or audit the record, with preference for bullets and tables over prose paragraphs.
+
 ## Item syntax
 
 ### META-6
