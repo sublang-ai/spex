@@ -29,7 +29,9 @@ Item files shall be grouped into three subdirectories under `items/`:
 | ----- | ------- |
 | `user/` | What the system does. User-visible behavior. |
 | `dev/` | How the system is built. Not user-visible. |
-| `test/` | Acceptance testing. Test items cite the user or dev items they verify. |
+| `test/` | Acceptance testing, focused on integration and system tests. Test items cite the user or dev items they verify. |
+
+Unit tests shall be part of the implementation and shall not be specified as spec items.
 
 ### META-3
 
