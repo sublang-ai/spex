@@ -59,6 +59,19 @@ function gitCommit(dir: string, message: string): void {
   execSync(`git commit -m "${message}"`, { cwd: dir, stdio: "ignore" });
 }
 
+function parseIndicators(stdout: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const line of stdout.split("\n")) {
+    const m = line.match(/^\s+(\S+)\s+\((.+)\)\s*$/);
+    if (m) map.set(m[1], m[2]);
+  }
+  return map;
+}
+
+function bundledPath(relPath: string): string {
+  return join(ROOT, "scaffold", relPath);
+}
+
 function readSpecMergePrompt(): string {
   const spec = readFileSync(
     join(ROOT, "specs", "items", "user", "scaffold.md"),
@@ -165,46 +178,161 @@ describe("CLI integration", () => {
     }
   });
 
-  it("scaffold --update refreshes framework, keeps customized seeds, and prints merge prompt", () => {
+  // SCAF-24 cell: framework, hash equals bundled current.
+  it("update: framework at bundled current → (unchanged), bytes unchanged", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
-      assert.equal(run(["scaffold"], { cwd: dir }).exitCode, 0);
-      writeFileSync(join(dir, "specs", "items", "user", "project.md"), "# Project\n");
+      run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
-      const mapPath = join(dir, "specs", "map.md");
-      const projectPath = join(dir, "specs", "items", "user", "project.md");
-      writeFileSync(mapPath, "# Custom map\n");
+      const target = join(dir, "specs", "meta.md");
+      const before = readFileSync(target);
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "unchanged");
+      assert.deepEqual(readFileSync(target), before);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-24 cell: framework, hash differs from bundled current.
+  it("update: framework diverged from bundled → (updated), bytes equal bundled", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      gitCommit(dir, "initial specs");
+
+      const target = join(dir, "specs", "meta.md");
+      writeFileSync(target, "# locally extended\n");
+      gitCommit(dir, "extend meta");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "updated");
+      assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/meta.md")));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-24 cell: seed, hash equals bundled current.
+  it("update: seed at bundled current → (unchanged), bytes unchanged", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      gitCommit(dir, "initial specs");
+
+      const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
+      const before = readFileSync(target);
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/iterations/000-spdx-headers.md"),
+        "unchanged",
+      );
+      assert.deepEqual(readFileSync(target), before);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-24 cell: seed, hash in history but not current. .gitkeep history is
+  // [prior 1-byte "\n", current 0-byte ""] — set the working tree to the prior.
+  it("update: seed at prior bundled version → (updated), bytes equal bundled current", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      const target = join(dir, "specs", "items", "user", ".gitkeep");
+      writeFileSync(target, "\n");
+      gitCommit(dir, "initial specs with prior gitkeep");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/items/user/.gitkeep"),
+        "updated",
+      );
+      assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/items/user/.gitkeep")));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-24 cell: seed, hash not in history (user customized).
+  it("update: seed customized → (kept — user-modified), bytes unchanged", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      gitCommit(dir, "initial specs");
+
+      const target = join(dir, "specs", "map.md");
+      writeFileSync(target, "# Custom map\n");
       gitCommit(dir, "customize map");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
-      assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
-
-      // Framework files: working tree matches bundled, so unchanged.
-      assert.ok(result.stdout.includes("specs/meta.md (unchanged)"));
-      assert.ok(
-        result.stdout.includes(
-          "specs/decisions/000-spec-structure-format.md (unchanged)",
-        ),
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/map.md"),
+        "kept — user-modified",
       );
-
-      // Customized seed kept.
-      assert.ok(result.stdout.includes("specs/map.md (kept — user-modified)"));
-      assert.equal(readFileSync(mapPath, "utf-8"), "# Custom map\n");
-
-      // Pristine seed already at current bundled hash → unchanged.
-      assert.ok(
-        result.stdout.includes(
-          "specs/iterations/000-spdx-headers.md (unchanged)",
-        ),
-      );
-
-      // User-added file untouched.
-      assert.equal(readFileSync(projectPath, "utf-8"), "# Project\n");
-
-      // Merge prompt printed.
+      assert.equal(readFileSync(target, "utf-8"), "# Custom map\n");
+      // Review prompt still printed.
       assert.ok(result.stdout.includes(readSpecMergePrompt()));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-24 cell: seed, file absent.
+  it("update: seed deleted → (kept — missing), file still absent", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      gitCommit(dir, "initial specs");
+
+      const target = join(dir, "specs", "items", "dev", "git.md");
+      execSync("git rm specs/items/dev/git.md", { cwd: dir, stdio: "ignore" });
+      execSync('git commit -m "remove seed"', { cwd: dir, stdio: "ignore" });
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/items/dev/git.md"),
+        "kept — missing",
+      );
+      assert.equal(existsSync(target), false);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-25: over-eager indicator regression guard.
+  it("update: (updated) does not appear for any unchanged file", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      gitCommit(dir, "initial specs");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      const indicators = parseIndicators(result.stdout);
+      for (const [path, indicator] of indicators) {
+        assert.notEqual(
+          indicator,
+          "updated",
+          `${path} reported (updated) on a freshly scaffolded repo`,
+        );
+      }
     } finally {
       rmSync(dir, { recursive: true });
     }
