@@ -54,9 +54,11 @@ working tree is clean and the framework files (defined in
    version of that file. Customized seeds shall be left
    unmodified and reported as `(kept — user-modified)`.
 3. Leave any file outside the framework and seed sets unmodified.
-4. Print a copy-paste-ready LLM merge prompt summarizing which
-   files changed, listing any pristine seeds that were also
-   refreshed so the user can verify them.
+4. Print per-file indicators, a clear completion message, and a
+   copy-paste-ready LLM merge prompt. The prompt shall not assert
+   that a path changed unless that path was reported with an
+   `(updated)` indicator, and shall list any pristine seeds that
+   were refreshed so the user can verify them.
 
 ### SCAF-12
 
@@ -88,6 +90,9 @@ file shall be classified as either **framework** or **seed**:
 
 When a new file is added under `scaffold/specs/`, it shall be
 assigned to exactly one of these classes.
+
+Bundled support assets outside `scaffold/specs/` (for example,
+`scaffold/update-merge-prompt.md`) are not framework or seed files.
 
 ## Agent Instructions
 

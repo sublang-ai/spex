@@ -3,6 +3,7 @@
 
 import { execFileSync } from "node:child_process";
 import { appendAgentSpecs } from "./append-agent-specs.js";
+import { readBundledMarkdown } from "./bundled-scaffold.js";
 import {
   copyTemplates,
   getFrameworkSpecFiles,
@@ -11,16 +12,6 @@ import {
 } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
 import { resolveBase } from "./resolve-base.js";
-
-const FRAMEWORK_MERGE_PROMPT = `I just ran \`spex scaffold --update\`. The spex framework files in
-my working tree (specs/meta.md and specs/decisions/000-spec-structure-format.md)
-have new bundled versions; my prior versions are in HEAD.
-
-Review the diffs. If section headings or requirement IDs in those
-files changed, update citations across specs/ (DRs, IRs, items,
-map.md) to match. If I had local extensions in DR-000, reapply
-them on top of the new content. Stop and ask if framework intent
-is ambiguous; don't guess.`;
 
 type ScaffoldOptions =
   | { mode: "create"; pathArg?: string }
@@ -84,6 +75,10 @@ function assertFrameworkFilesTracked(basePath: string): void {
   }
 }
 
+function readUpdateMergePrompt(): string {
+  return readBundledMarkdown("update-merge-prompt.md");
+}
+
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
@@ -91,7 +86,13 @@ function updateScaffoldTemplates(): void {
   overwriteFrameworkSpecFiles(basePath);
   const seedReport = refreshPristineSeeds(basePath);
   console.log("");
-  console.log(FRAMEWORK_MERGE_PROMPT);
+  console.log("spex scaffold --update completed.");
+  console.log("Review the file indicators above, then run `git diff -- specs`.");
+  console.log(
+    "Use this prompt with your AI agent to reconcile citations and local extensions:",
+  );
+  console.log("");
+  console.log(readUpdateMergePrompt());
   if (seedReport.refreshed.length > 0) {
     console.log("");
     console.log("Pristine seeds also refreshed (no prior customization detected):");

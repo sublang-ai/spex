@@ -9,8 +9,8 @@ import {
   readFileSync,
   statSync,
 } from "node:fs";
-import { dirname, join, posix, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, posix } from "node:path";
+import { getScaffoldDir } from "./bundled-scaffold.js";
 
 // SCAF-19: framework vs seed classification.
 const FRAMEWORK_FILES = [
@@ -28,19 +28,6 @@ const SEED_FILES = [
 ] as const;
 
 export type PristineState = "pristine" | "modified" | "missing";
-
-/**
- * Resolve the bundled scaffold/ directory path.
- *
- * SCAF-9: navigate from dist/ output directory up to the package
- * root and return the scaffold/ directory path.
- */
-export function getScaffoldDir(): string {
-  const thisFile = fileURLToPath(import.meta.url);
-  // thisFile is in dist/ — go up one level to package root.
-  const packageRoot = dirname(dirname(thisFile));
-  return resolve(packageRoot, "scaffold");
-}
 
 /**
  * Recursively copy files from srcDir to destDir.

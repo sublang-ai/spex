@@ -13,7 +13,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { getScaffoldDir, copyTemplates } from "./copy-templates.js";
+import { getScaffoldDir } from "./bundled-scaffold.js";
+import { copyTemplates } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
 
 describe("getScaffoldDir", () => {

@@ -61,7 +61,7 @@ spex scaffold --update
 
 Review the changes with `git diff -- specs`.
 Update any citations that reference renamed sections or renumbered IDs — the command prints
-a copy-paste-ready prompt you can hand to your AI agent for that review.
+clear next steps and a copy-paste-ready prompt you can hand to your AI agent for that review.
 
 ## Workflow
 

@@ -15,6 +15,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { readBundledMarkdown } from "./bundled-scaffold.js";
 
 const CLI = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -52,6 +53,7 @@ function initGit(dir: string): void {
     stdio: "ignore",
   });
   execSync("git config user.name Test", { cwd: dir, stdio: "ignore" });
+  execSync("git config commit.gpgsign false", { cwd: dir, stdio: "ignore" });
 }
 
 function gitCommit(dir: string, message: string): void {
@@ -76,16 +78,8 @@ function toCrlf(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n");
 }
 
-function readSpecMergePrompt(): string {
-  const spec = readFileSync(
-    join(ROOT, "specs", "items", "user", "scaffold.md"),
-    "utf-8",
-  );
-  const match = spec.match(
-    /Example merge prompt[^:]*:\r?\n\r?\n```text\r?\n([\s\S]*?)\r?\n```/,
-  );
-  assert.ok(match, "SCAF-11 example merge prompt should exist");
-  return match[1].replace(/\r\n/g, "\n");
+function readBundledMergePrompt(): string {
+  return readBundledMarkdown("update-merge-prompt.md");
 }
 
 describe("CLI integration", () => {
@@ -252,13 +246,13 @@ describe("CLI integration", () => {
       run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
-      const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
+      const target = join(dir, "specs", "items", "dev", "git.md");
       const before = readFileSync(target);
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/iterations/000-spdx-headers.md"),
+        parseIndicators(result.stdout).get("specs/items/dev/git.md"),
         "unchanged",
       );
       assert.deepEqual(readFileSync(target), before);
@@ -274,7 +268,7 @@ describe("CLI integration", () => {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
 
-      const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
+      const target = join(dir, "specs", "items", "dev", "git.md");
       writeFileSync(target, toCrlf(readFileSync(target, "utf-8")));
       gitCommit(dir, "initial specs with crlf seed");
       const before = readFileSync(target);
@@ -282,7 +276,7 @@ describe("CLI integration", () => {
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/iterations/000-spdx-headers.md"),
+        parseIndicators(result.stdout).get("specs/items/dev/git.md"),
         "unchanged",
       );
       assert.deepEqual(readFileSync(target), before);
@@ -333,8 +327,9 @@ describe("CLI integration", () => {
         "kept — user-modified",
       );
       assert.equal(readFileSync(target, "utf-8"), "# Custom map\n");
-      // Review prompt still printed.
-      assert.ok(result.stdout.includes(readSpecMergePrompt()));
+      assert.match(result.stdout, /--update[^\n]*complet/i);
+      assert.ok(result.stdout.includes("git diff -- specs"));
+      assert.ok(result.stdout.includes(readBundledMergePrompt()));
     } finally {
       rmSync(dir, { recursive: true });
     }

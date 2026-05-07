@@ -3,7 +3,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { getScaffoldDir } from "./copy-templates.js";
+import { getScaffoldDir } from "./bundled-scaffold.js";
 
 const SECTION_HEADING = "## Specs (Source of Truth)";
 const AGENT_FILES = ["CLAUDE.md", "AGENTS.md"];

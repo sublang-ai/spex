@@ -71,17 +71,14 @@ The manifest shall satisfy the following invariants:
 
 - It shall contain an entry for every file under `scaffold/specs/`,
   regardless of framework/seed classification, so that any caller
-  can detect whether a target file matches a previously
-  distributed bundled version.
-- Each entry's hash array shall list, in chronological release
-  order, the canonical SHA-256 of every published version of that
-  file's bundled content, with the most recently published version
-  as the final entry.
-- The manifest shall record only published bundled state. When
-  a release that ships changed bundled content is prepared, the
-  new SHA-256 of each changed file shall appear as the final
-  entry of that file's history list before the release is
-  tagged.
+  can detect whether a target file matches a recognized bundled
+  version.
+- Each entry's hash array shall list, in chronological order, the
+  canonical SHA-256 of every recognized bundled version of that
+  file's content. The final entry shall equal the current bundled
+  file content's canonical SHA-256.
+- When bundled content changes, the new canonical SHA-256 shall be
+  appended as the final entry before the change is committed.
 
 The manifest schema shall be a flat JSON object mapping POSIX
 relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:
@@ -148,9 +145,10 @@ current git repository root, enforce update preconditions
 ([SCAF-15](#scaf-15), [SCAF-16](#scaf-16),
 [SCAF-17](#scaf-17)), overwrite framework files
 ([SCAF-14](#scaf-14)), refresh pristine seeds
-([SCAF-23](#scaf-23)), and print the merge prompt specified by
-[SCAF-11](../user/scaffold.md#scaf-11) tailored to the set of
-files actually modified.
+([SCAF-23](#scaf-23)), read the bundled merge prompt from
+`scaffold/update-merge-prompt.md`, and print the per-file
+indicators, clear completion message, and merge prompt specified
+by [SCAF-11](../user/scaffold.md#scaf-11).
 
 ## Agent Spec Appending
 

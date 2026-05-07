@@ -14,7 +14,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { appendAgentSpecs } from "./append-agent-specs.js";
-import { getScaffoldDir } from "./copy-templates.js";
+import { getScaffoldDir } from "./bundled-scaffold.js";
 
 function makeTmp(): string {
   return realpathSync(mkdtempSync(join(tmpdir(), "spex-test-")));
