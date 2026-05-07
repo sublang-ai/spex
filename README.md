@@ -58,7 +58,8 @@ spex scaffold --update
 Spex-authoritative files (`specs/meta.md` and the spec-format decision
 record) are refreshed unconditionally. Starter files (`map.md`, the
 sample iteration, boilerplate items) are refreshed only when you have
-not customized them. Anything you authored or customized is left alone.
+not customized them. Customized starter files, and anything you
+authored outside the bundled framework files, are left alone.
 
 Run from inside a git repository with a clean `specs/` working tree.
 Review the changes with `git diff -- specs` and update any citations
