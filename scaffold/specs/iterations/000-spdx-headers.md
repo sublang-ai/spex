@@ -9,7 +9,7 @@ Add SPDX headers (license and copyright info) to applicable files.
 
 ## Deliverables
 
-- [x] Add SPDX headers to applicable files missing them
+- [ ] Add SPDX headers to applicable files missing them
 - [ ] Document header format in a dev spec
 
 ## Tasks

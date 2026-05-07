@@ -49,7 +49,7 @@ Each decision record (DR) shall follow the ADR format [[2]] with the following s
 
 ### META-5
 
-Each iteration record (IR) shall contain the following sections: Goal, Deliverables, Tasks, and Acceptance criteria.
+Each iteration record (IR) shall contain the following sections: Goal, Deliverables (with checkboxes), Tasks (numbered, each in one-commit size), and Acceptance criteria.
 
 ### META-22
 
