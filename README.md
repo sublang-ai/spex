@@ -49,37 +49,22 @@ Complete Iteration #0
 
 ### Updating templates
 
-When a new spex release ships updated scaffold templates, refresh them with:
+When a new release ships updated templates, refresh them with:
 
 ```sh
 spex scaffold --update
 ```
 
-Bundled files fall into two classes:
+Spex-authoritative files (`specs/meta.md` and the spec-format decision
+record) are refreshed unconditionally. Starter files (`map.md`, the
+sample iteration, boilerplate items) are refreshed only when you have
+not customized them. Anything you authored or customized is left alone.
 
-- **Framework files** are spex-authoritative and refreshed unconditionally.
-  Currently `specs/meta.md` and `specs/decisions/000-spec-structure-format.md`.
-- **Seed files** are starters you are expected to edit (`specs/map.md`, the
-  starter iteration, boilerplate items under `items/dev/` and `items/test/`,
-  and the placeholder under `items/user/`). A seed is refreshed only when
-  its current content matches a previously distributed bundled version —
-  i.e., you have not customized it. Customized seeds are left alone and
-  reported as `(kept — user-modified)`.
-
-Files you added yourself (new decision records, new iterations, new items,
-anything under `items/user/`) are never touched.
-
-Review the diff with `git diff -- specs` and update any citations across
-your specs to match renamed sections or renumbered IDs.
-
-Preconditions:
-
-- Run from inside a git repository.
-- `specs/` working tree must be clean (commit or stash local changes first).
-- The framework files must be tracked in `HEAD`.
-
-After the command runs, it prints a merge prompt summarizing what changed.
-To discard the update, run `git checkout -- specs`.
+Run from inside a git repository with a clean `specs/` working tree.
+Review the changes with `git diff -- specs` and update any citations
+that reference renamed sections or renumbered IDs — the command prints
+a copy-paste-ready prompt you can hand to your AI agent for that
+review. To discard, run `git checkout -- specs`.
 
 ## Workflow
 
