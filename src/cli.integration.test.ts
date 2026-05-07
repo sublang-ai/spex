@@ -181,11 +181,11 @@ describe("CLI integration", () => {
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
 
-      // Framework files always refreshed.
-      assert.ok(result.stdout.includes("specs/meta.md (updated)"));
+      // Framework files: working tree matches bundled, so unchanged.
+      assert.ok(result.stdout.includes("specs/meta.md (unchanged)"));
       assert.ok(
         result.stdout.includes(
-          "specs/decisions/000-spec-structure-format.md (updated)",
+          "specs/decisions/000-spec-structure-format.md (unchanged)",
         ),
       );
 
@@ -193,9 +193,11 @@ describe("CLI integration", () => {
       assert.ok(result.stdout.includes("specs/map.md (kept — user-modified)"));
       assert.equal(readFileSync(mapPath, "utf-8"), "# Custom map\n");
 
-      // Pristine seed refreshed.
+      // Pristine seed already at current bundled hash → unchanged.
       assert.ok(
-        result.stdout.includes("specs/iterations/000-spdx-headers.md (updated)"),
+        result.stdout.includes(
+          "specs/iterations/000-spdx-headers.md (unchanged)",
+        ),
       );
 
       // User-added file untouched.

@@ -42,9 +42,12 @@ repository root, using POSIX path separators.
 ### SCAF-14
 
 Where `overwriteFrameworkSpecFiles()` is called with a base path,
-it shall overwrite each target file returned by
-`getFrameworkSpecFiles()` with the corresponding bundled template
-and report each overwritten file with an `(updated)` indicator.
+it shall, for each target file returned by
+`getFrameworkSpecFiles()`, compare the target's SHA-256 to the
+bundled template's. When they differ, it shall overwrite the
+target and report the path with an `(updated)` indicator. When
+they match, it shall leave the target unwritten and report the
+path with an `(unchanged)` indicator.
 
 ### SCAF-20
 
@@ -97,8 +100,11 @@ Where `refreshPristineSeeds()` is called with a base path, it
 shall, for each seed path returned by `getSeedSpecFiles()`,
 consult `isPristine` ([SCAF-22](#scaf-22)) and:
 
-- On `"pristine"`, overwrite the target file with the bundled
-  template and report the path with an `(updated)` indicator.
+- On `"pristine"`, when the target's SHA-256 differs from the
+  bundled template's, overwrite the target and report the path
+  with an `(updated)` indicator; when they match, leave the
+  target unwritten and report the path with an `(unchanged)`
+  indicator.
 - On `"modified"`, leave the target file unmodified and report
   the path with a `(kept — user-modified)` indicator.
 - On `"missing"`, leave the target absent and report the path

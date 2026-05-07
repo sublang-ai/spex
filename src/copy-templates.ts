@@ -114,21 +114,30 @@ export function getFileHistory(relPath: string): string[] {
   return manifest[relPath] ?? [];
 }
 
+function hashFile(path: string): string {
+  return `sha256-${createHash("sha256").update(readFileSync(path)).digest("hex")}`;
+}
+
 // SCAF-22.
 export function isPristine(basePath: string, relPath: string): PristineState {
   const target = join(basePath, relPath);
   if (!existsSync(target)) return "missing";
-  const hash = `sha256-${createHash("sha256")
-    .update(readFileSync(target))
-    .digest("hex")}`;
-  return getFileHistory(relPath).includes(hash) ? "pristine" : "modified";
+  return getFileHistory(relPath).includes(hashFile(target))
+    ? "pristine"
+    : "modified";
 }
 
 // SCAF-14.
 export function overwriteFrameworkSpecFiles(basePath: string): void {
   const scaffoldDir = getScaffoldDir();
   for (const relPath of FRAMEWORK_FILES) {
-    copyFileSync(join(scaffoldDir, relPath), join(basePath, relPath));
+    const target = join(basePath, relPath);
+    const source = join(scaffoldDir, relPath);
+    if (existsSync(target) && hashFile(target) === hashFile(source)) {
+      console.log(`  ${relPath} (unchanged)`);
+      continue;
+    }
+    copyFileSync(source, target);
     console.log(`  ${relPath} (updated)`);
   }
 }
@@ -136,26 +145,37 @@ export function overwriteFrameworkSpecFiles(basePath: string): void {
 // SCAF-23.
 export function refreshPristineSeeds(basePath: string): {
   refreshed: string[];
+  unchanged: string[];
   modified: string[];
   missing: string[];
 } {
   const scaffoldDir = getScaffoldDir();
   const refreshed: string[] = [];
+  const unchanged: string[] = [];
   const modified: string[] = [];
   const missing: string[] = [];
   for (const relPath of SEED_FILES) {
     const state = isPristine(basePath, relPath);
-    if (state === "pristine") {
-      copyFileSync(join(scaffoldDir, relPath), join(basePath, relPath));
-      console.log(`  ${relPath} (updated)`);
-      refreshed.push(relPath);
-    } else if (state === "modified") {
-      console.log(`  ${relPath} (kept — user-modified)`);
-      modified.push(relPath);
-    } else {
+    if (state === "missing") {
       console.log(`  ${relPath} (kept — missing)`);
       missing.push(relPath);
+      continue;
     }
+    if (state === "modified") {
+      console.log(`  ${relPath} (kept — user-modified)`);
+      modified.push(relPath);
+      continue;
+    }
+    const target = join(basePath, relPath);
+    const source = join(scaffoldDir, relPath);
+    if (hashFile(target) === hashFile(source)) {
+      console.log(`  ${relPath} (unchanged)`);
+      unchanged.push(relPath);
+      continue;
+    }
+    copyFileSync(source, target);
+    console.log(`  ${relPath} (updated)`);
+    refreshed.push(relPath);
   }
-  return { refreshed, modified, missing };
+  return { refreshed, unchanged, modified, missing };
 }
