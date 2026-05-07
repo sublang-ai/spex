@@ -44,37 +44,66 @@ unmodified.
 
 Where the `scaffold` subcommand is invoked with `--update` and no
 `<path>` argument from within a git repository, while the `specs/`
-working tree is clean and the scaffold-provided files are tracked
-in HEAD, the CLI shall overwrite those scaffold-provided files
-with the bundled templates, leave files outside the scaffold's
-path set unmodified, and print a copy-paste-ready LLM merge prompt
-as the user's next action.
+working tree is clean and the framework files (defined in
+[SCAF-19](#scaf-19)) are tracked in HEAD, the CLI shall:
 
-Example merge prompt:
+1. Overwrite every **framework file** with the bundled template.
+2. For every **seed file**, refresh it with the bundled template
+   only when the user has not customized it — that is, when the
+   working-tree content matches a previously distributed bundled
+   version of that file. Customized seeds shall be left
+   unmodified and reported as `(kept — user-modified)`.
+3. Leave any file outside the framework and seed sets unmodified.
+4. Print a copy-paste-ready LLM merge prompt summarizing which
+   files changed.
+
+Example merge prompt (when only framework files were refreshed):
 
 ```text
-I just ran `spex scaffold --update` in this repo. My working tree
-now has the new spex framework templates in `specs/`; my prior
-customized versions are in HEAD.
+I just ran `spex scaffold --update`. The spex framework files in
+my working tree (specs/meta.md and specs/decisions/000-spec-structure-format.md)
+have new bundled versions; my prior versions are in HEAD.
 
-Merge them: keep my project content from HEAD (my DRs, IRs, items,
-map.md entries, any sections I added) while adopting the new
-framework content from the working tree (meta.md rules, scaffolded
-examples, conventions). For files in both, update my citations to
-follow renamed sections or renumbered IDs.
-
-Write the merged result to the working tree. Stop and ask if
-framework intent is ambiguous; don't guess.
+Review the diffs. If section headings or requirement IDs in those
+files changed, update citations across specs/ (DRs, IRs, items,
+map.md) to match. If I had local extensions in DR-000, reapply
+them on top of the new content. Stop and ask if framework intent
+is ambiguous; don't guess.
 ```
+
+When pristine seeds were also refreshed, the prompt shall list
+those paths so the user can verify them.
 
 ### SCAF-12
 
 Where the `scaffold` subcommand is invoked with `--update` while
 any precondition of [SCAF-11](#scaf-11) does not hold (no `<path>`
 argument, cwd inside a git repository, `specs/` working tree
-clean, scaffold-provided files tracked in HEAD), the CLI shall
-exit non-zero with an error explaining the failed precondition so
-that overwritten files remain recoverable.
+clean, framework files tracked in HEAD), the CLI shall exit
+non-zero with an error explaining the failed precondition so that
+overwritten files remain recoverable.
+
+### SCAF-19
+
+Where files bundled under `scaffold/specs/` are concerned, each
+file shall be classified as either **framework** or **seed**:
+
+- **Framework** — spex-authoritative content that users do not
+  author. Refreshed unconditionally on `--update`.
+  - `specs/meta.md`
+  - `specs/decisions/000-spec-structure-format.md`
+- **Seed** — starter content that users are expected to edit,
+  extend, or replace. Written once on initial `scaffold` and only
+  refreshed by `--update` when the user has not customized it.
+  - `specs/map.md`
+  - `specs/iterations/000-spdx-headers.md`
+  - `specs/items/dev/git.md`
+  - `specs/items/dev/licensing.md`
+  - `specs/items/test/licensing.md`
+  - `specs/items/user/.gitkeep`
+
+Adding a new bundled file requires assigning it to one of these
+classes.
 
 ## Agent Instructions
 

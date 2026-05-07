@@ -34,17 +34,78 @@ root and return the `scaffold/` directory path.
 
 ### SCAF-13
 
-Where `getScaffoldSpecFiles()` is called, it shall resolve the
-bundled `scaffold/specs/` directory and return the scaffold-provided
-file paths relative to the target repository root, using POSIX path
-separators and excluding `.DS_Store` entries.
+Where `getFrameworkSpecFiles()` is called, it shall return the
+file paths classified as **framework** by
+[SCAF-19](../user/scaffold.md#scaf-19), relative to the target
+repository root, using POSIX path separators.
 
 ### SCAF-14
 
-Where `overwriteScaffoldSpecFiles()` is called with a base path, it
-shall overwrite each target file returned by `getScaffoldSpecFiles()`
-with the corresponding bundled template and report each overwritten
-file with an `(updated)` indicator.
+Where `overwriteFrameworkSpecFiles()` is called with a base path,
+it shall overwrite each target file returned by
+`getFrameworkSpecFiles()` with the corresponding bundled template
+and report each overwritten file with an `(updated)` indicator.
+
+### SCAF-20
+
+Where `getSeedSpecFiles()` is called, it shall return the file
+paths classified as **seed** by
+[SCAF-19](../user/scaffold.md#scaf-19), relative to the target
+repository root, using POSIX path separators.
+
+### SCAF-21
+
+Where `getFileHistory(relPath)` is called, it shall load the
+bundled file-history manifest at `scaffold/.file-history.json`
+and return the array of SHA-256 content hashes recorded for that
+path, or an empty array when the path is not present. The current
+bundled hash shall always be the last element of the array.
+
+The manifest covers every file under `scaffold/specs/`, regardless
+of framework/seed classification, so that any caller — including
+future tooling — can detect whether a target file matches a
+previously distributed bundled version.
+
+The release process shall append the prior bundled hash for any
+file whose bundled content is about to change, before the new
+content is committed, so that users upgrading from any prior
+published version are recognized as pristine.
+
+The manifest schema shall be a flat JSON object mapping POSIX
+relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:
+
+```json
+{
+  "specs/items/dev/git.md": ["sha256-...", "sha256-..."]
+}
+```
+
+### SCAF-22
+
+Where `isPristine(basePath, relPath)` is called, it shall:
+
+1. Return `"missing"` when no file exists at `<basePath>/<relPath>`.
+2. Otherwise, compute the SHA-256 hash of the file's content and
+   return `"pristine"` when the hash is a member of the array
+   returned by `getFileHistory(relPath)` ([SCAF-21](#scaf-21)),
+   or `"modified"` otherwise.
+
+This predicate is the sole change-detection primitive; callers
+apply their own policy on top of its result.
+
+### SCAF-23
+
+Where `refreshPristineSeeds()` is called with a base path, it
+shall, for each seed path returned by `getSeedSpecFiles()`,
+consult `isPristine` ([SCAF-22](#scaf-22)) and:
+
+- On `"pristine"`, overwrite the target file with the bundled
+  template and report the path with an `(updated)` indicator.
+- On `"modified"`, leave the target file unmodified and report
+  the path with a `(kept — user-modified)` indicator.
+- On `"missing"`, leave the target absent and report the path
+  with a `(kept — missing)` indicator, so that seeds the user
+  has deliberately deleted are not resurrected.
 
 ## Update Orchestration
 
@@ -63,16 +124,21 @@ clean.
 
 ### SCAF-17
 
-Where `assertScaffoldFilesTracked()` is called with a base path, it
-shall verify that every path returned by `getScaffoldSpecFiles()`
-exists in `HEAD`, or throw an error listing the missing paths.
+Where `assertFrameworkFilesTracked()` is called with a base path,
+it shall verify that every path returned by
+`getFrameworkSpecFiles()` exists in `HEAD`, or throw an error
+listing the missing paths.
 
 ### SCAF-18
 
 Where `updateScaffoldTemplates()` is called, it shall resolve the
-current git repository root, enforce update preconditions, overwrite
-scaffold-provided files, and print the merge prompt specified by
-[SCAF-11](../user/scaffold.md#scaf-11).
+current git repository root, enforce update preconditions
+([SCAF-15](#scaf-15), [SCAF-16](#scaf-16),
+[SCAF-17](#scaf-17)), overwrite framework files
+([SCAF-14](#scaf-14)), refresh pristine seeds
+([SCAF-23](#scaf-23)), and print the merge prompt specified by
+[SCAF-11](../user/scaffold.md#scaf-11) tailored to the set of
+files actually modified.
 
 ## Agent Spec Appending
 
