@@ -202,6 +202,27 @@ describe("CLI integration", () => {
     }
   });
 
+  // SCAF-24 cell: framework, canonical hash equals bundled current.
+  it("update: framework at bundled current with CRLF → (unchanged), bytes unchanged", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+
+      const target = join(dir, "specs", "meta.md");
+      writeFileSync(target, toCrlf(readFileSync(target, "utf-8")));
+      gitCommit(dir, "initial specs with crlf framework");
+      const before = readFileSync(target);
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "unchanged");
+      assert.deepEqual(readFileSync(target), before);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   // SCAF-24 cell: framework, hash differs from bundled current.
   it("update: framework diverged from bundled → (updated), bytes equal bundled", () => {
     const dir = makeTmp();
