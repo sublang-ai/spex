@@ -21,6 +21,11 @@ printed indicator for that path and (b) the post-run file-system
 state, so that an over-eager indicator cannot pass while bytes
 remain unchanged or vice versa.
 
+Hash comparisons shall use the canonical content hash from
+[SCAF-21](../dev/scaffold.md#scaf-21). A text file with CRLF
+line endings and otherwise bundled-current content shall remain
+in the bundled-current cell and preserve its existing bytes.
+
 | File class | Working-tree state vs manifest | Indicator | Post-run file-system state |
 | --- | --- | --- | --- |
 | framework | hash equals bundled current | `(unchanged)` | bytes unchanged |

@@ -60,8 +60,12 @@ repository root, using POSIX path separators.
 
 Where `getFileHistory(relPath)` is called, it shall load the
 bundled file-history manifest at `scaffold/.file-history.json`
-and return the array of SHA-256 content hashes recorded for that
-path, or an empty array when the path is not present.
+and return the array of canonical SHA-256 content hashes recorded
+for that path, or an empty array when the path is not present.
+
+Canonical content hashing shall normalize CRLF and CR line endings
+to LF for text content before hashing. Content containing NUL bytes
+shall be hashed byte-for-byte.
 
 The manifest shall satisfy the following invariants:
 
@@ -70,9 +74,9 @@ The manifest shall satisfy the following invariants:
   can detect whether a target file matches a previously
   distributed bundled version.
 - Each entry's hash array shall list, in chronological release
-  order, the SHA-256 of every published version of that file's
-  bundled content, with the most recently published version as
-  the final entry.
+  order, the canonical SHA-256 of every published version of that
+  file's bundled content, with the most recently published version
+  as the final entry.
 - The manifest shall record only published bundled state. When
   a release that ships changed bundled content is prepared, the
   new SHA-256 of each changed file shall appear as the final
@@ -93,10 +97,10 @@ relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:
 Where `isPristine(basePath, relPath)` is called, it shall:
 
 1. Return `"missing"` when no file exists at `<basePath>/<relPath>`.
-2. Otherwise, compute the SHA-256 hash of the file's content and
-   return `"pristine"` when the hash is a member of the array
-   returned by `getFileHistory(relPath)` ([SCAF-21](#scaf-21)),
-   or `"modified"` otherwise.
+2. Otherwise, compute the canonical SHA-256 hash of the file's
+   content and return `"pristine"` when the hash is a member of
+   the array returned by `getFileHistory(relPath)`
+   ([SCAF-21](#scaf-21)), or `"modified"` otherwise.
 
 ### SCAF-23
 
@@ -104,10 +108,10 @@ Where `refreshPristineSeeds()` is called with a base path, it
 shall, for each seed path returned by `getSeedSpecFiles()`,
 consult `isPristine` ([SCAF-22](#scaf-22)) and:
 
-- On `"pristine"`, when the target's SHA-256 differs from the
-  bundled template's, overwrite the target and report the path
-  with an `(updated)` indicator; when they match, leave the
-  target unwritten and report the path with an `(unchanged)`
+- On `"pristine"`, when the target's canonical SHA-256 differs
+  from the bundled template's, overwrite the target and report
+  the path with an `(updated)` indicator; when they match, leave
+  the target unwritten and report the path with an `(unchanged)`
   indicator.
 - On `"modified"`, leave the target file unmodified and report
   the path with a `(kept — user-modified)` indicator.

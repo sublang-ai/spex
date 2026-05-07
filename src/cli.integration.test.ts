@@ -72,6 +72,10 @@ function bundledPath(relPath: string): string {
   return join(ROOT, "scaffold", relPath);
 }
 
+function toCrlf(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n");
+}
+
 function readSpecMergePrompt(): string {
   const spec = readFileSync(
     join(ROOT, "specs", "items", "user", "scaffold.md"),
@@ -228,6 +232,30 @@ describe("CLI integration", () => {
       gitCommit(dir, "initial specs");
 
       const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
+      const before = readFileSync(target);
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/iterations/000-spdx-headers.md"),
+        "unchanged",
+      );
+      assert.deepEqual(readFileSync(target), before);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-24 cell: seed, canonical hash equals bundled current.
+  it("update: seed at bundled current with CRLF → (unchanged), bytes unchanged", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+
+      const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
+      writeFileSync(target, toCrlf(readFileSync(target, "utf-8")));
+      gitCommit(dir, "initial specs with crlf seed");
       const before = readFileSync(target);
 
       const result = run(["scaffold", "--update"], { cwd: dir });

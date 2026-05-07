@@ -115,7 +115,15 @@ export function getFileHistory(relPath: string): string[] {
 }
 
 function hashFile(path: string): string {
-  return `sha256-${createHash("sha256").update(readFileSync(path)).digest("hex")}`;
+  const data = readFileSync(path);
+  return `sha256-${createHash("sha256")
+    .update(canonicalHashInput(data))
+    .digest("hex")}`;
+}
+
+function canonicalHashInput(data: Buffer): Buffer | string {
+  if (data.includes(0)) return data;
+  return data.toString("utf-8").replace(/\r\n?/g, "\n");
 }
 
 // SCAF-22.
