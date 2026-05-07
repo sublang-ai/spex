@@ -1,0 +1,28 @@
+{
+  "specs/decisions/000-spec-structure-format.md": [
+    "sha256-28d0705311a8ede97c487a944efe99bed20863e246da0aa1a33286dd4f8864ca"
+  ],
+  "specs/items/dev/git.md": [
+    "sha256-1b194304866d05580de8b2d0caa3454aa772e876fb3dee1f6c5d637c9e9a42b2"
+  ],
+  "specs/items/dev/licensing.md": [
+    "sha256-ff6ce317bf51fb2f4a20dde8790a79f2a1237f6b5835c74e619f6e3d1647ab50"
+  ],
+  "specs/items/test/licensing.md": [
+    "sha256-075e5782e80c7068deb55c21bfc43a1214a85945ed535d95f6ceadbbc9fa187f"
+  ],
+  "specs/items/user/.gitkeep": [
+    "sha256-01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  ],
+  "specs/iterations/000-spdx-headers.md": [
+    "sha256-a5ae7e8e31e4292a9364ba7947b2fbf27836e9f88dc80436557191550fe1bd34"
+  ],
+  "specs/map.md": [
+    "sha256-a1d6bc4a23fa58d8ccdcf7cd0570fc05face0aae8b6947367298dad3cde0af75",
+    "sha256-ff80b3088852d9ae07856d72a71e649a77251d3abd127531536bbe389dad2ad4"
+  ],
+  "specs/meta.md": [
+    "sha256-ce07160cf8af1fb67f4f86c572aa182e92dff24a72b313a89914e058de894b56",
+    "sha256-14413d27b8e0c0753cd7167eb88c3a3b780c3c22127a5f0205875590f740204c"
+  ]
+}

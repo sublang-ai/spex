@@ -55,25 +55,31 @@ When a new spex release ships updated scaffold templates, refresh them with:
 spex scaffold --update
 ```
 
-This overwrites every scaffold-shipped file in your working tree with the
-latest version — including `meta.md`, `map.md`, the starter decision
-record, the starter iteration, and boilerplate items under `items/dev/`
-and `items/test/`. Files you added yourself (new decision records, new
-iterations, new items, anything under `items/user/`) are untouched.
+Bundled files fall into two classes:
 
-Review the diff with `git diff -- specs` and reconcile your edits to the
-overwritten files with the new versions.
+- **Framework files** are spex-authoritative and refreshed unconditionally.
+  Currently `specs/meta.md` and `specs/decisions/000-spec-structure-format.md`.
+- **Seed files** are starters you are expected to edit (`specs/map.md`, the
+  starter iteration, boilerplate items under `items/dev/` and `items/test/`,
+  and the placeholder under `items/user/`). A seed is refreshed only when
+  its current content matches a previously distributed bundled version —
+  i.e., you have not customized it. Customized seeds are left alone and
+  reported as `(kept — user-modified)`.
+
+Files you added yourself (new decision records, new iterations, new items,
+anything under `items/user/`) are never touched.
+
+Review the diff with `git diff -- specs` and update any citations across
+your specs to match renamed sections or renumbered IDs.
 
 Preconditions:
 
 - Run from inside a git repository.
 - `specs/` working tree must be clean (commit or stash local changes first).
-- The scaffold-provided files must be tracked in `HEAD`.
+- The framework files must be tracked in `HEAD`.
 
-After the command runs, it prints a merge prompt you can hand to your AI
-agent to reconcile the new framework templates (working tree) with your
-prior customizations (`HEAD`). To discard the update, run
-`git checkout -- specs`.
+After the command runs, it prints a merge prompt summarizing what changed.
+To discard the update, run `git checkout -- specs`.
 
 ## Workflow
 

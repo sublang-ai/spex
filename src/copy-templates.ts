@@ -1,9 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  copyFileSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// SCAF-19: framework vs seed classification.
+const FRAMEWORK_FILES = [
+  "specs/meta.md",
+  "specs/decisions/000-spec-structure-format.md",
+] as const;
+
+const SEED_FILES = [
+  "specs/map.md",
+  "specs/iterations/000-spdx-headers.md",
+  "specs/items/dev/git.md",
+  "specs/items/dev/licensing.md",
+  "specs/items/test/licensing.md",
+  "specs/items/user/.gitkeep",
+] as const;
+
+export type PristineState = "pristine" | "modified" | "missing";
 
 /**
  * Resolve the bundled scaffold/ directory path.
@@ -49,24 +73,6 @@ function copyRecursive(
   }
 }
 
-function listRecursive(srcDir: string, relRoot: string): string[] {
-  const paths: string[] = [];
-  const entries = readdirSync(srcDir);
-  for (const entry of entries) {
-    if (entry === ".DS_Store") continue;
-
-    const srcPath = join(srcDir, entry);
-    const relPath = posix.join(relRoot, entry);
-
-    if (statSync(srcPath).isDirectory()) {
-      paths.push(...listRecursive(srcPath, relPath));
-    } else {
-      paths.push(relPath);
-    }
-  }
-  return paths;
-}
-
 /**
  * Copy bundled template files from scaffold/specs/ to target specs/.
  *
@@ -85,21 +91,71 @@ export function copyTemplates(basePath: string): void {
   copyRecursive(srcSpecs, destSpecs, "specs");
 }
 
-export function getScaffoldSpecFiles(): string[] {
-  const scaffoldDir = getScaffoldDir();
-  const srcSpecs = join(scaffoldDir, "specs");
-
-  if (!existsSync(srcSpecs)) {
-    throw new Error(`Bundled scaffold/specs/ not found: ${srcSpecs}`);
-  }
-
-  return listRecursive(srcSpecs, "specs");
+// SCAF-13.
+export function getFrameworkSpecFiles(): readonly string[] {
+  return FRAMEWORK_FILES;
 }
 
-export function overwriteScaffoldSpecFiles(basePath: string): void {
+// SCAF-20.
+export function getSeedSpecFiles(): readonly string[] {
+  return SEED_FILES;
+}
+
+// SCAF-21.
+export function getFileHistory(relPath: string): string[] {
+  const manifestPath = join(getScaffoldDir(), ".file-history.json");
+  if (!existsSync(manifestPath)) {
+    throw new Error(`File-history manifest not found: ${manifestPath}`);
+  }
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Record<
+    string,
+    string[]
+  >;
+  return manifest[relPath] ?? [];
+}
+
+// SCAF-22.
+export function isPristine(basePath: string, relPath: string): PristineState {
+  const target = join(basePath, relPath);
+  if (!existsSync(target)) return "missing";
+  const hash = `sha256-${createHash("sha256")
+    .update(readFileSync(target))
+    .digest("hex")}`;
+  return getFileHistory(relPath).includes(hash) ? "pristine" : "modified";
+}
+
+// SCAF-14.
+export function overwriteFrameworkSpecFiles(basePath: string): void {
   const scaffoldDir = getScaffoldDir();
-  for (const relPath of getScaffoldSpecFiles()) {
+  for (const relPath of FRAMEWORK_FILES) {
     copyFileSync(join(scaffoldDir, relPath), join(basePath, relPath));
     console.log(`  ${relPath} (updated)`);
   }
+}
+
+// SCAF-23.
+export function refreshPristineSeeds(basePath: string): {
+  refreshed: string[];
+  modified: string[];
+  missing: string[];
+} {
+  const scaffoldDir = getScaffoldDir();
+  const refreshed: string[] = [];
+  const modified: string[] = [];
+  const missing: string[] = [];
+  for (const relPath of SEED_FILES) {
+    const state = isPristine(basePath, relPath);
+    if (state === "pristine") {
+      copyFileSync(join(scaffoldDir, relPath), join(basePath, relPath));
+      console.log(`  ${relPath} (updated)`);
+      refreshed.push(relPath);
+    } else if (state === "modified") {
+      console.log(`  ${relPath} (kept — user-modified)`);
+      modified.push(relPath);
+    } else {
+      console.log(`  ${relPath} (kept — missing)`);
+      missing.push(relPath);
+    }
+  }
+  return { refreshed, modified, missing };
 }

@@ -65,7 +65,7 @@ function readSpecMergePrompt(): string {
     "utf-8",
   );
   const match = spec.match(
-    /Example merge prompt:\r?\n\r?\n```text\r?\n([\s\S]*?)\r?\n```/,
+    /Example merge prompt[^:]*:\r?\n\r?\n```text\r?\n([\s\S]*?)\r?\n```/,
   );
   assert.ok(match, "SCAF-11 example merge prompt should exist");
   return match[1].replace(/\r\n/g, "\n");
@@ -165,7 +165,7 @@ describe("CLI integration", () => {
     }
   });
 
-  it("scaffold --update overwrites tracked scaffold files and prints merge prompt", () => {
+  it("scaffold --update refreshes framework, keeps customized seeds, and prints merge prompt", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
@@ -180,11 +180,29 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
-      assert.ok(result.stdout.includes("specs/map.md (updated)"));
-      assert.ok(result.stdout.endsWith(`${readSpecMergePrompt()}\n`));
-      assert.ok(readFileSync(mapPath, "utf-8").includes("# Spec Map"));
-      assert.notEqual(readFileSync(mapPath, "utf-8"), "# Custom map\n");
+
+      // Framework files always refreshed.
+      assert.ok(result.stdout.includes("specs/meta.md (updated)"));
+      assert.ok(
+        result.stdout.includes(
+          "specs/decisions/000-spec-structure-format.md (updated)",
+        ),
+      );
+
+      // Customized seed kept.
+      assert.ok(result.stdout.includes("specs/map.md (kept — user-modified)"));
+      assert.equal(readFileSync(mapPath, "utf-8"), "# Custom map\n");
+
+      // Pristine seed refreshed.
+      assert.ok(
+        result.stdout.includes("specs/iterations/000-spdx-headers.md (updated)"),
+      );
+
+      // User-added file untouched.
       assert.equal(readFileSync(projectPath, "utf-8"), "# Project\n");
+
+      // Merge prompt printed.
+      assert.ok(result.stdout.includes(readSpecMergePrompt()));
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -229,21 +247,21 @@ describe("CLI integration", () => {
     }
   });
 
-  it("scaffold --update rejects scaffold files missing from HEAD", () => {
+  it("scaffold --update rejects framework files missing from HEAD", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
       assert.equal(run(["scaffold"], { cwd: dir }).exitCode, 0);
       gitCommit(dir, "initial specs");
       execSync("git rm specs/meta.md", { cwd: dir, stdio: "ignore" });
-      execSync('git commit -m "remove scaffold file"', {
+      execSync('git commit -m "remove framework file"', {
         cwd: dir,
         stdio: "ignore",
       });
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.notEqual(result.exitCode, 0);
-      assert.ok(result.stderr.includes("scaffold-provided files tracked in HEAD"));
+      assert.ok(result.stderr.includes("framework files tracked in HEAD"));
       assert.ok(result.stderr.includes("specs/meta.md"));
     } finally {
       rmSync(dir, { recursive: true });

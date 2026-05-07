@@ -5,24 +5,22 @@ import { execFileSync } from "node:child_process";
 import { appendAgentSpecs } from "./append-agent-specs.js";
 import {
   copyTemplates,
-  getScaffoldSpecFiles,
-  overwriteScaffoldSpecFiles,
+  getFrameworkSpecFiles,
+  overwriteFrameworkSpecFiles,
+  refreshPristineSeeds,
 } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
 import { resolveBase } from "./resolve-base.js";
 
-const MERGE_PROMPT = `I just ran \`spex scaffold --update\` in this repo. My working tree
-now has the new spex framework templates in \`specs/\`; my prior
-customized versions are in HEAD.
+const FRAMEWORK_MERGE_PROMPT = `I just ran \`spex scaffold --update\`. The spex framework files in
+my working tree (specs/meta.md and specs/decisions/000-spec-structure-format.md)
+have new bundled versions; my prior versions are in HEAD.
 
-Merge them: keep my project content from HEAD (my DRs, IRs, items,
-map.md entries, any sections I added) while adopting the new
-framework content from the working tree (meta.md rules, scaffolded
-examples, conventions). For files in both, update my citations to
-follow renamed sections or renumbered IDs.
-
-Write the merged result to the working tree. Stop and ask if
-framework intent is ambiguous; don't guess.`;
+Review the diffs. If section headings or requirement IDs in those
+files changed, update citations across specs/ (DRs, IRs, items,
+map.md) to match. If I had local extensions in DR-000, reapply
+them on top of the new content. Stop and ask if framework intent
+is ambiguous; don't guess.`;
 
 type ScaffoldOptions =
   | { mode: "create"; pathArg?: string }
@@ -66,8 +64,8 @@ function assertCleanSpecsTree(basePath: string): void {
   }
 }
 
-function assertScaffoldFilesTracked(basePath: string): void {
-  const missing = getScaffoldSpecFiles().filter((relPath) => {
+function assertFrameworkFilesTracked(basePath: string): void {
+  const missing = getFrameworkSpecFiles().filter((relPath) => {
     try {
       execFileSync("git", ["cat-file", "-e", `HEAD:${relPath}`], {
         cwd: basePath,
@@ -81,9 +79,7 @@ function assertScaffoldFilesTracked(basePath: string): void {
 
   if (missing.length > 0) {
     throw new Error(
-      `--update requires scaffold-provided files tracked in HEAD: ${missing.join(
-        ", ",
-      )}`,
+      `--update requires framework files tracked in HEAD: ${missing.join(", ")}`,
     );
   }
 }
@@ -91,10 +87,18 @@ function assertScaffoldFilesTracked(basePath: string): void {
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
-  assertScaffoldFilesTracked(basePath);
-  overwriteScaffoldSpecFiles(basePath);
+  assertFrameworkFilesTracked(basePath);
+  overwriteFrameworkSpecFiles(basePath);
+  const seedReport = refreshPristineSeeds(basePath);
   console.log("");
-  console.log(MERGE_PROMPT);
+  console.log(FRAMEWORK_MERGE_PROMPT);
+  if (seedReport.refreshed.length > 0) {
+    console.log("");
+    console.log("Pristine seeds also refreshed (no prior customization detected):");
+    for (const relPath of seedReport.refreshed) {
+      console.log(`- ${relPath}`);
+    }
+  }
 }
 
 /**

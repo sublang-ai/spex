@@ -58,18 +58,19 @@ repository root, using POSIX path separators.
 Where `getFileHistory(relPath)` is called, it shall load the
 bundled file-history manifest at `scaffold/.file-history.json`
 and return the array of SHA-256 content hashes recorded for that
-path, or an empty array when the path is not present. The current
-bundled hash shall always be the last element of the array.
+path, or an empty array when the path is not present.
 
-The manifest shall record an entry for every file under
-`scaffold/specs/`, regardless of framework/seed classification,
-so that any caller can detect whether a target file matches a
-previously distributed bundled version.
+The manifest shall satisfy the following invariants:
 
-The release process shall append the prior bundled hash for any
-file whose bundled content is about to change, before the new
-content is committed, so that users upgrading from any prior
-published version are recognized as pristine.
+- It shall contain an entry for every file under `scaffold/specs/`,
+  regardless of framework/seed classification, so that any caller
+  can detect whether a target file matches a previously
+  distributed bundled version.
+- Each entry's hash array shall be ordered chronologically across
+  published versions, with the SHA-256 of the current bundled
+  content as its final entry, and shall include the SHA-256 of
+  every prior published version so that users upgrading from any
+  prior published version are recognized as pristine.
 
 The manifest schema shall be a flat JSON object mapping POSIX
 relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:
