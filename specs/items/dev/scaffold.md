@@ -61,9 +61,9 @@ and return the array of SHA-256 content hashes recorded for that
 path, or an empty array when the path is not present. The current
 bundled hash shall always be the last element of the array.
 
-The manifest covers every file under `scaffold/specs/`, regardless
-of framework/seed classification, so that any caller — including
-future tooling — can detect whether a target file matches a
+The manifest shall record an entry for every file under
+`scaffold/specs/`, regardless of framework/seed classification,
+so that any caller can detect whether a target file matches a
 previously distributed bundled version.
 
 The release process shall append the prior bundled hash for any
@@ -89,9 +89,6 @@ Where `isPristine(basePath, relPath)` is called, it shall:
    return `"pristine"` when the hash is a member of the array
    returned by `getFileHistory(relPath)` ([SCAF-21](#scaf-21)),
    or `"modified"` otherwise.
-
-This predicate is the sole change-detection primitive; callers
-apply their own policy on top of its result.
 
 ### SCAF-23
 

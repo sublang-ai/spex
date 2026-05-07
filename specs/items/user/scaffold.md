@@ -102,8 +102,8 @@ file shall be classified as either **framework** or **seed**:
   - `specs/items/test/licensing.md`
   - `specs/items/user/.gitkeep`
 
-Adding a new bundled file requires assigning it to one of these
-classes.
+When a new file is added under `scaffold/specs/`, it shall be
+assigned to exactly one of these classes.
 
 ## Agent Instructions
 
