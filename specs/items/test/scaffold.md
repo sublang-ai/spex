@@ -25,7 +25,7 @@ remain unchanged or vice versa.
 | --- | --- | --- | --- |
 | framework | hash equals bundled current | `(unchanged)` | bytes unchanged |
 | framework | hash differs from bundled current | `(updated)` | bytes equal bundled current |
-| seed | hash equals bundled current | `(unchanged)` | bytes unchanged |
+| seed | hash is in history and equals bundled current | `(unchanged)` | bytes unchanged |
 | seed | hash is in history but not current | `(updated)` | bytes equal bundled current |
 | seed | hash is not in history | `(kept — user-modified)` | bytes unchanged |
 | seed | file absent | `(kept — missing)` | file still absent |

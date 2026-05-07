@@ -69,11 +69,15 @@ The manifest shall satisfy the following invariants:
   regardless of framework/seed classification, so that any caller
   can detect whether a target file matches a previously
   distributed bundled version.
-- Each entry's hash array shall be ordered chronologically across
-  published versions, with the SHA-256 of the current bundled
-  content as its final entry, and shall include the SHA-256 of
-  every prior published version so that users upgrading from any
-  prior published version are recognized as pristine.
+- Each entry's hash array shall list, in chronological release
+  order, the SHA-256 of every published version of that file's
+  bundled content, with the most recently published version as
+  the final entry.
+- The manifest shall record only published bundled state. When
+  a release that ships changed bundled content is prepared, the
+  new SHA-256 of each changed file shall appear as the final
+  entry of that file's history list before the release is
+  tagged.
 
 The manifest schema shall be a flat JSON object mapping POSIX
 relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:

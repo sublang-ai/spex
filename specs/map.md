@@ -59,5 +59,5 @@ meta.md     The spec of specs
 | Group | File | Summary |
 | --- | --- | --- |
 | user | [scaffold.md](items/user/scaffold.md) | Target resolution, idempotency, update mode, agent instructions, error handling |
-| dev | [scaffold.md](items/dev/scaffold.md) | Directory creation, template copying, scaffold path resolution, update prechecks, scaffold-file enumeration, agent spec appending |
+| dev | [scaffold.md](items/dev/scaffold.md) | Directory creation, template copying, update prechecks, file-history manifest contract, agent spec appending |
 | test | [scaffold.md](items/test/scaffold.md) | Update state-matrix coverage and over-eager-indicator regression guard |

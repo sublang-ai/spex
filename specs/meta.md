@@ -81,6 +81,10 @@ Each item shall be self-contained:
 - It shall have no implicit dependency on sections other than its own subsections.
 - Citations to other specs or shared sections shall be explicit.
 
+### META-26
+
+A spec item shall describe behavior as observable outcomes (e.g., file state, exit code, printed output, return value, network call) under named conditions, including any conditions under which a particular outcome shall not occur.
+
 ## Spec packages
 
 ### META-9
