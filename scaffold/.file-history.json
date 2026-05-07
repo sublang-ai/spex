@@ -12,7 +12,8 @@
     "sha256-075e5782e80c7068deb55c21bfc43a1214a85945ed535d95f6ceadbbc9fa187f"
   ],
   "specs/items/user/.gitkeep": [
-    "sha256-01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    "sha256-01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   ],
   "specs/iterations/000-spdx-headers.md": [
     "sha256-a5ae7e8e31e4292a9364ba7947b2fbf27836e9f88dc80436557191550fe1bd34"
