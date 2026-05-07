@@ -55,24 +55,8 @@ working tree is clean and the framework files (defined in
    unmodified and reported as `(kept — user-modified)`.
 3. Leave any file outside the framework and seed sets unmodified.
 4. Print a copy-paste-ready LLM merge prompt summarizing which
-   files changed.
-
-Example merge prompt (when only framework files were refreshed):
-
-```text
-I just ran `spex scaffold --update`. The spex framework files in
-my working tree (specs/meta.md and specs/decisions/000-spec-structure-format.md)
-have new bundled versions; my prior versions are in HEAD.
-
-Review the diffs. If section headings or requirement IDs in those
-files changed, update citations across specs/ (DRs, IRs, items,
-map.md) to match. If I had local extensions in DR-000, reapply
-them on top of the new content. Stop and ask if framework intent
-is ambiguous; don't guess.
-```
-
-When pristine seeds were also refreshed, the prompt shall list
-those paths so the user can verify them.
+   files changed, listing any pristine seeds that were also
+   refreshed so the user can verify them.
 
 ### SCAF-12
 

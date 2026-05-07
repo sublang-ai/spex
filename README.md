@@ -55,17 +55,13 @@ When a new release ships updated templates, refresh them with:
 spex scaffold --update
 ```
 
-Spex-authoritative files (`specs/meta.md` and the spec-format decision
-record) are refreshed unconditionally. Starter files (`map.md`, the
-sample iteration, boilerplate items) are refreshed only when you have
-not customized them. Customized starter files, and anything you
-authored outside the bundled framework files, are left alone.
+- Spex-authoritative files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally.
+- Starter files (`map.md`, the sample iteration, boilerplate items) are refreshed only when you have not customized them.
+- Anything you authored outside the bundled framework and starter files is left alone.
 
-Run from inside a git repository with a clean `specs/` working tree.
-Review the changes with `git diff -- specs` and update any citations
-that reference renamed sections or renumbered IDs — the command prints
-a copy-paste-ready prompt you can hand to your AI agent for that
-review. To discard, run `git checkout -- specs`.
+Review the changes with `git diff -- specs`.
+Update any citations that reference renamed sections or renumbered IDs — the command prints
+a copy-paste-ready prompt you can hand to your AI agent for that review.
 
 ## Workflow
 
