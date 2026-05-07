@@ -13,10 +13,7 @@ history, and bundled content.
 ## Update Coverage
 
 ### SCAF-24
-
-Verifies: [SCAF-11](../user/scaffold.md#scaf-11),
-[SCAF-14](../dev/scaffold.md#scaf-14),
-[SCAF-23](../dev/scaffold.md#scaf-23).
+Verifies: [SCAF-11](../user/scaffold.md#scaf-11), [SCAF-14](../dev/scaffold.md#scaf-14), [SCAF-23](../dev/scaffold.md#scaf-23)
 
 Where `--update` is exercised, the test suite shall cover each
 row of the state matrix below and shall assert both (a) the
@@ -34,8 +31,7 @@ remain unchanged or vice versa.
 | seed | file absent | `(kept — missing)` | file still absent |
 
 ### SCAF-25
-
-Verifies: [SCAF-23](../dev/scaffold.md#scaf-23).
+Verifies: [SCAF-23](../dev/scaffold.md#scaf-23)
 
 Where `--update` is exercised over any cell of the
 [SCAF-24](#scaf-24) matrix, the test suite shall additionally
