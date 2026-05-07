@@ -47,6 +47,34 @@ Idempotency: Rerunning is safe — existing files and directories are skipped.
 Complete Iteration #0
 ```
 
+### Updating templates
+
+When a new spex release ships updated scaffold templates, refresh them with:
+
+```sh
+spex scaffold --update
+```
+
+This overwrites every scaffold-shipped file in your working tree with the
+latest version — including `meta.md`, `map.md`, the starter decision
+record, the starter iteration, and boilerplate items under `items/dev/`
+and `items/test/`. Files you added yourself (new decision records, new
+iterations, new items, anything under `items/user/`) are untouched.
+
+Review the diff with `git diff -- specs` and reconcile your edits to the
+overwritten files with the new versions.
+
+Preconditions:
+
+- Run from inside a git repository.
+- `specs/` working tree must be clean (commit or stash local changes first).
+- The scaffold-provided files must be tracked in `HEAD`.
+
+After the command runs, it prints a merge prompt you can hand to your AI
+agent to reconcile the new framework templates (working tree) with your
+prior customizations (`HEAD`). To discard the update, run
+`git checkout -- specs`.
+
 ## Workflow
 
 Spex does *not* enforce a heavyweight workflow.
