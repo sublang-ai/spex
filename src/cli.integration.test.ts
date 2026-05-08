@@ -564,6 +564,43 @@ describe("CLI integration", () => {
         readFileSync(join(dir, "specs", "user", "meta.md"), "utf-8"),
         "# Old meta\n",
       );
+      assert.equal(
+        readFileSync(
+          join(dir, "specs", "decisions", "000-initial-specs-structure.md"),
+          "utf-8",
+        ),
+        "# Old decision\n",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --update creates missing framework parent directories", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      mkdirSync(join(dir, "specs", "user"), { recursive: true });
+      writeFileSync(join(dir, "specs", "spec-map.md"), "# Old map\n");
+      writeFileSync(join(dir, "specs", "user", "meta.md"), "# Old meta\n");
+      gitCommit(dir, "old scaffold specs without decisions");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        parseIndicators(result.stdout).get(
+          "specs/decisions/000-spec-structure-format.md",
+        ),
+        "updated",
+      );
+      assert.deepEqual(
+        readFileSync(
+          join(dir, "specs", "decisions", "000-spec-structure-format.md"),
+        ),
+        readFileSync(
+          bundledPath("specs/decisions/000-spec-structure-format.md"),
+        ),
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }

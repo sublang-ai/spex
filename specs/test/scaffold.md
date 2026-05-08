@@ -30,6 +30,7 @@ in the bundled-current cell and preserve its existing bytes.
 | --- | --- | --- | --- |
 | framework | hash equals bundled current | `(unchanged)` | bytes unchanged |
 | framework | hash differs from bundled current | `(updated)` | bytes equal bundled current |
+| framework | file absent (including missing parent directories) | `(updated)` | bytes equal bundled current |
 | seed | hash is in history and equals bundled current | `(unchanged)` | bytes unchanged |
 | seed | hash is in history but not current | `(updated)` | bytes equal bundled current |
 | seed | hash is not in history | `(kept — user-modified)` | bytes unchanged |
