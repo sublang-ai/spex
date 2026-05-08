@@ -23,16 +23,6 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `map.md` | spec index for navigation with item files organized by packages | - |
 | `meta.md` | the spec of specs | - |
 
-### META-2
-
-Item files shall be grouped into three top-level directories:
-
-| Directory | Purpose |
-| ----- | ------- |
-| `user/` | What the system does. User-visible behavior. |
-| `dev/` | How the system is built. Not user-visible. |
-| `test/` | Acceptance testing. Test items cite the user or dev items they verify. |
-
 ### META-3
 
 Each item file shall include an `## Intent` section stating its purpose.
@@ -52,10 +42,6 @@ Each decision record (DR) shall follow the ADR format [[2]] with the following s
 ### META-5
 
 Each iteration record (IR) shall contain the following sections: Goal, Deliverables (with checkboxes), Tasks (numbered, each in one-commit size), and Acceptance criteria.
-
-### META-22
-
-In an IR, the Deliverables shall be expressed as checkboxes for progress tracking, and each task shall be sized to a single commit.
 
 ### META-23
 
