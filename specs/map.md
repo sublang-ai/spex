@@ -12,10 +12,9 @@ Code can be inconsistent with specs during development.
 ```text
 decisions/  Decision records (DRs)
 iterations/ Iteration records (IRs)
-items/      Spec item files
-    user/       User-visible behavior
-    dev/        Implementation requirements
-    test/       Acceptance testing
+user/       User-visible item files
+dev/        Implementation item files
+test/       Acceptance test item files
 map.md      This index
 meta.md     The spec of specs
 ```
@@ -39,25 +38,25 @@ meta.md     The spec of specs
 
 | Group | File | Summary |
 | --- | --- | --- |
-| dev | [git.md](items/dev/git.md) | Commit message format and AI co-authorship trailers |
+| dev | [git.md](dev/git.md) | Commit message format and AI co-authorship trailers |
 
 ### LIC
 
 | Group | File | Summary |
 | --- | --- | --- |
-| dev | [licensing.md](items/dev/licensing.md) | SPDX header requirements and file-scope rules |
-| test | [licensing.md](items/test/licensing.md) | Copyright and license header presence checks |
+| dev | [licensing.md](dev/licensing.md) | SPDX header requirements and file-scope rules |
+| test | [licensing.md](test/licensing.md) | Copyright and license header presence checks |
 
 ### RELEASE
 
 | Group | File | Summary |
 | --- | --- | --- |
-| dev | [release.md](items/dev/release.md) | Versioning, changelog, release process, package hygiene |
+| dev | [release.md](dev/release.md) | Versioning, changelog, release process, package hygiene |
 
 ### SCAF
 
 | Group | File | Summary |
 | --- | --- | --- |
-| user | [scaffold.md](items/user/scaffold.md) | Target resolution, idempotency, update mode, agent instructions, error handling |
-| dev | [scaffold.md](items/dev/scaffold.md) | Directory creation, template copying, update prechecks, file-history manifest contract, agent spec appending |
-| test | [scaffold.md](items/test/scaffold.md) | Update state-matrix coverage and over-eager-indicator regression guard |
+| user | [scaffold.md](user/scaffold.md) | Target resolution, idempotency, update mode, agent instructions, error handling |
+| dev | [scaffold.md](dev/scaffold.md) | Directory creation, template copying, update prechecks, file-history manifest contract, agent spec appending |
+| test | [scaffold.md](test/scaffold.md) | Update state-matrix coverage and over-eager-indicator regression guard |

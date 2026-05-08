@@ -17,23 +17,21 @@ The `specs/` directory shall contain the following subdirectories and files:
 | --------- | ------- | ------ |
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
-| `items/` | item files | [\<path\>/]\<kebab-case\>.md |
+| `user/` | item files for user-visible behavior | [\<path\>/]\<kebab-case\>.md |
+| `dev/` | item files for implementation requirements | [\<path\>/]\<kebab-case\>.md |
+| `test/` | item files for acceptance testing | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation with item files organized by packages | - |
 | `meta.md` | the spec of specs | - |
-
-### META-2
-
-Item files shall be grouped into three subdirectories under `items/`:
-
-| Subdirectory | Purpose |
-| ----- | ------- |
-| `user/` | What the system does. User-visible behavior. |
-| `dev/` | How the system is built. Not user-visible. |
-| `test/` | Acceptance testing. Test items cite the user or dev items they verify. |
 
 ### META-3
 
 Each item file shall include an `## Intent` section stating its purpose.
+
+### META-21
+
+Test items shall focus on integration and system testing.
+
+Unit tests shall be part of the implementation and shall not be specified as spec items.
 
 ## Record format
 
@@ -43,7 +41,23 @@ Each decision record (DR) shall follow the ADR format [[2]] with the following s
 
 ### META-5
 
-Each iteration record (IR) shall contain the following sections: Goal, Deliverables, Tasks, and Acceptance criteria.
+Each iteration record (IR) shall contain the following sections: Goal, Deliverables (with checkboxes), Tasks (numbered, each in one-commit size), and Acceptance criteria.
+
+### META-23
+
+DRs and IRs shall be written in concise language, including only what is needed to act on or audit the record, with preference for bullets and tables over prose paragraphs.
+
+### META-24
+
+A DR shall specify design decisions and constraints, not duplicate implementation logic.
+A DR is sufficient when an implementer can generate or audit code from the design intent, constraints, and tradeoffs.
+Implementation details shall be included only when they are part of the design contract.
+
+### META-25
+
+In prose paragraphs of DRs and IRs, each sentence shall begin on a new line for diff readability.
+List items and table cells are exempt, since their delimiters already isolate per-entry changes.
+Fixed-width column wrapping within a sentence is allowed.
 
 ## Item syntax
 
@@ -93,7 +107,7 @@ A spec package shall consist of one to three coordinated item files sharing the 
 
 ### META-10
 
-A spec package shall have a basename \<kebab-case\>.md unique within `specs/items/`, with a short form \<ALLCAPS\>.
+A spec package shall have a basename \<kebab-case\>.md unique across `specs/user/`, `specs/dev/`, and `specs/test/`, with a short form \<ALLCAPS\>.
 
 Example: `package-management.md` has short form `PKGMGT`.
 
@@ -115,33 +129,33 @@ A spec package shall define a closed set of subjects and their behaviors for a s
 
 The precondition and trigger clauses (Where, While, When; see [META-6](#meta-6)) of items shall be allowed to reference subjects and behaviors from other spec packages.
 
-### META-20
+### META-15
 
 Each spec package shall minimize references to the containing project. When a project-specific reference is essential to a package's intent, it shall be documented in the package's `## Intent` section.
 
 ## Citation
 
-### META-15
+### META-16
 
 Citations to specific items shall use relative links with anchors (e.g., `[META-1](meta.md#meta-1)`).
 
-### META-16
+### META-17
 
 DRs and items shall be allowed to cite each other.
 
-### META-17
+### META-18
 
 IRs shall not be cited by any spec except `map.md`.
 
-### META-18
+### META-19
 
 External references in specs shall cite authoritative sources (e.g., official docs) with numbered markers (e.g., `[[1]]`) linked to specific URLs in a `## References` section that shall have no uncited entries.
 
-### META-19
+### META-20
 
 Each test item shall include one `Verifies:` metadata line immediately below its item ID heading.
 
-The `Verifies:` line shall contain one or more comma-separated [citations](#meta-15) to the user or dev items that the test item verifies.
+The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the user or dev items that the test item verifies.
 
 ## References
 
