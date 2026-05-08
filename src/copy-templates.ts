@@ -207,6 +207,7 @@ export function overwriteFrameworkSpecFiles(basePath: string): void {
       console.log(`  ${relPath} (unchanged)`);
       continue;
     }
+    mkdirSync(dirname(target), { recursive: true });
     copyFileSync(source, target);
     console.log(`  ${relPath} (updated)`);
   }

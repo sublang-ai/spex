@@ -44,14 +44,14 @@ unmodified.
 
 Where the `scaffold` subcommand is invoked with `--update` and no
 `<path>` argument from within a git repository, while the `specs/`
-working tree is clean and the framework files (defined in
-[SCAF-19](#scaf-19)) are tracked in HEAD, the CLI shall:
+working tree is clean, the CLI shall:
 
 1. Migrate files from the legacy `specs/items/user/`,
    `specs/items/dev/`, and `specs/items/test/` layout to the
    corresponding flat `specs/user/`, `specs/dev/`, and `specs/test/`
    paths without overwriting existing flat paths.
-2. Overwrite every **framework file** with the bundled template.
+2. Write every **framework file** from the bundled template,
+   creating framework files that are missing in older specs trees.
 3. For every **seed file**, refresh it with the bundled template
    only when the user has not customized it — that is, when the
    working-tree content matches a previously distributed bundled
@@ -67,9 +67,8 @@ working tree is clean and the framework files (defined in
 Where the `scaffold` subcommand is invoked with `--update` while
 any precondition of [SCAF-11](#scaf-11) does not hold (no `<path>`
 argument, cwd inside a git repository, `specs/` working tree
-clean, framework files tracked in HEAD), the CLI shall exit
-non-zero with an error explaining the failed precondition so that
-overwritten files remain recoverable.
+clean), the CLI shall exit non-zero with an error explaining the
+failed precondition so that overwritten files remain recoverable.
 
 ### SCAF-19
 

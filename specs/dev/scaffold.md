@@ -42,12 +42,17 @@ repository root, using POSIX path separators.
 ### SCAF-14
 
 Where `overwriteFrameworkSpecFiles()` is called with a base path,
-it shall, for each target file returned by
+it shall, for each existing target file returned by
 `getFrameworkSpecFiles()`, compare the target's SHA-256 to the
-bundled template's. When they differ, it shall overwrite the
-target and report the path with an `(updated)` indicator. When
-they match, it shall leave the target unwritten and report the
-path with an `(unchanged)` indicator.
+bundled template's.
+When they differ, it shall overwrite the target and report the
+path with an `(updated)` indicator.
+When they match, it shall leave the target unwritten and report
+the path with an `(unchanged)` indicator.
+
+When the target path does not exist, it shall create target parent
+directories as needed, write the bundled template, and report the
+path with an `(updated)` indicator.
 
 ### SCAF-20
 
@@ -149,17 +154,18 @@ clean.
 
 ### SCAF-17
 
-Where `assertFrameworkFilesTracked()` is called with a base path,
-it shall verify that every path returned by
-`getFrameworkSpecFiles()` exists in `HEAD`, or throw an error
-listing the missing paths.
+Where `updateScaffoldTemplates()` is called on a clean `specs/`
+working tree, missing framework files shall not be a failed
+precondition.
+The CLI shall create them from bundled templates through
+`overwriteFrameworkSpecFiles()` ([SCAF-14](#scaf-14)).
 
 ### SCAF-18
 
 Where `updateScaffoldTemplates()` is called, it shall resolve the
 current git repository root, enforce update preconditions
-([SCAF-15](#scaf-15), [SCAF-16](#scaf-16),
-[SCAF-17](#scaf-17)), migrate legacy item layout
+([SCAF-15](#scaf-15), [SCAF-16](#scaf-16)), allow missing
+framework files ([SCAF-17](#scaf-17)), migrate legacy item layout
 ([SCAF-26](#scaf-26)), overwrite framework files
 ([SCAF-14](#scaf-14)), refresh pristine seeds
 ([SCAF-23](#scaf-23)), read the bundled merge prompt from

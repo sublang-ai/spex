@@ -524,22 +524,46 @@ describe("CLI integration", () => {
     }
   });
 
-  it("scaffold --update rejects framework files missing from HEAD", () => {
+  it("scaffold --update creates framework files missing from older specs trees", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
-      assert.equal(run(["scaffold"], { cwd: dir }).exitCode, 0);
-      gitCommit(dir, "initial specs");
-      execSync("git rm specs/meta.md", { cwd: dir, stdio: "ignore" });
-      execSync('git commit -m "remove framework file"', {
-        cwd: dir,
-        stdio: "ignore",
-      });
+      mkdirSync(join(dir, "specs", "decisions"), { recursive: true });
+      mkdirSync(join(dir, "specs", "user"), { recursive: true });
+      writeFileSync(join(dir, "specs", "spec-map.md"), "# Old map\n");
+      writeFileSync(join(dir, "specs", "user", "meta.md"), "# Old meta\n");
+      writeFileSync(
+        join(dir, "specs", "decisions", "000-initial-specs-structure.md"),
+        "# Old decision\n",
+      );
+      gitCommit(dir, "old scaffold specs");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
-      assert.notEqual(result.exitCode, 0);
-      assert.ok(result.stderr.includes("framework files tracked in HEAD"));
-      assert.ok(result.stderr.includes("specs/meta.md"));
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "updated");
+      assert.equal(
+        parseIndicators(result.stdout).get(
+          "specs/decisions/000-spec-structure-format.md",
+        ),
+        "updated",
+      );
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "meta.md")),
+        readFileSync(bundledPath("specs/meta.md")),
+      );
+      assert.deepEqual(
+        readFileSync(
+          join(dir, "specs", "decisions", "000-spec-structure-format.md"),
+        ),
+        readFileSync(
+          bundledPath("specs/decisions/000-spec-structure-format.md"),
+        ),
+      );
+      assert.equal(readFileSync(join(dir, "specs", "spec-map.md"), "utf-8"), "# Old map\n");
+      assert.equal(
+        readFileSync(join(dir, "specs", "user", "meta.md"), "utf-8"),
+        "# Old meta\n",
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }

@@ -6,7 +6,6 @@ import { appendAgentSpecs } from "./append-agent-specs.js";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
 import {
   copyTemplates,
-  getFrameworkSpecFiles,
   migrateLegacyItemLayout,
   overwriteFrameworkSpecFiles,
   refreshPristineSeeds,
@@ -56,26 +55,6 @@ function assertCleanSpecsTree(basePath: string): void {
   }
 }
 
-function assertFrameworkFilesTracked(basePath: string): void {
-  const missing = getFrameworkSpecFiles().filter((relPath) => {
-    try {
-      execFileSync("git", ["cat-file", "-e", `HEAD:${relPath}`], {
-        cwd: basePath,
-        stdio: "ignore",
-      });
-      return false;
-    } catch {
-      return true;
-    }
-  });
-
-  if (missing.length > 0) {
-    throw new Error(
-      `--update requires framework files tracked in HEAD: ${missing.join(", ")}`,
-    );
-  }
-}
-
 function readUpdateMergePrompt(): string {
   return readBundledMarkdown("update-merge-prompt.md");
 }
@@ -83,7 +62,6 @@ function readUpdateMergePrompt(): string {
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
-  assertFrameworkFilesTracked(basePath);
   const legacyReport = migrateLegacyItemLayout(basePath);
   overwriteFrameworkSpecFiles(basePath);
   const seedReport = refreshPristineSeeds(basePath);
