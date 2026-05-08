@@ -7,6 +7,7 @@ import { readBundledMarkdown } from "./bundled-scaffold.js";
 import {
   copyTemplates,
   getFrameworkSpecFiles,
+  migrateLegacyItemLayout,
   overwriteFrameworkSpecFiles,
   refreshPristineSeeds,
 } from "./copy-templates.js";
@@ -83,6 +84,7 @@ function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
   assertFrameworkFilesTracked(basePath);
+  const legacyReport = migrateLegacyItemLayout(basePath);
   overwriteFrameworkSpecFiles(basePath);
   const seedReport = refreshPristineSeeds(basePath);
   console.log("");
@@ -93,6 +95,20 @@ function updateScaffoldTemplates(): void {
   );
   console.log("");
   console.log(readUpdateMergePrompt());
+  if (legacyReport.migrated.length > 0) {
+    console.log("");
+    console.log("Legacy specs/items layout migrated:");
+    for (const relPath of legacyReport.migrated) {
+      console.log(`- ${relPath}`);
+    }
+  }
+  if (legacyReport.conflicts.length > 0) {
+    console.log("");
+    console.log("Legacy paths left in place because flat targets already exist:");
+    for (const relPath of legacyReport.conflicts) {
+      console.log(`- ${relPath}`);
+    }
+  }
   if (seedReport.refreshed.length > 0) {
     console.log("");
     console.log("Pristine seeds also refreshed (no prior customization detected):");

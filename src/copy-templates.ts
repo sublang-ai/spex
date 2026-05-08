@@ -5,11 +5,14 @@ import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
+  rmdirSync,
   statSync,
 } from "node:fs";
-import { join, posix } from "node:path";
+import { dirname, join, posix, relative } from "node:path";
 import { getScaffoldDir } from "./bundled-scaffold.js";
 
 // SCAF-19: framework vs seed classification.
@@ -21,10 +24,16 @@ const FRAMEWORK_FILES = [
 const SEED_FILES = [
   "specs/map.md",
   "specs/iterations/000-spdx-headers.md",
-  "specs/items/dev/git.md",
-  "specs/items/dev/licensing.md",
-  "specs/items/test/licensing.md",
-  "specs/items/user/.gitkeep",
+  "specs/dev/git.md",
+  "specs/dev/licensing.md",
+  "specs/test/licensing.md",
+  "specs/user/.gitkeep",
+] as const;
+
+const LEGACY_ITEM_DIRS = [
+  ["specs/items/user", "specs/user"],
+  ["specs/items/dev", "specs/dev"],
+  ["specs/items/test", "specs/test"],
 ] as const;
 
 export type PristineState = "pristine" | "modified" | "missing";
@@ -86,6 +95,69 @@ export function getFrameworkSpecFiles(): readonly string[] {
 // SCAF-20.
 export function getSeedSpecFiles(): readonly string[] {
   return SEED_FILES;
+}
+
+function listFiles(dir: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    if (entry === ".DS_Store") continue;
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) {
+      files.push(...listFiles(path));
+    } else {
+      files.push(path);
+    }
+  }
+  return files;
+}
+
+function removeEmptyDirectories(dir: string): boolean {
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) return false;
+  for (const entry of readdirSync(dir)) {
+    removeEmptyDirectories(join(dir, entry));
+  }
+  if (readdirSync(dir).length === 0) {
+    rmdirSync(dir);
+    return true;
+  }
+  return false;
+}
+
+// SCAF-26.
+export function migrateLegacyItemLayout(basePath: string): {
+  migrated: string[];
+  conflicts: string[];
+} {
+  const migrated: string[] = [];
+  const conflicts: string[] = [];
+
+  for (const [legacyRootRel, targetRootRel] of LEGACY_ITEM_DIRS) {
+    const legacyRoot = join(basePath, legacyRootRel);
+    if (!existsSync(legacyRoot)) continue;
+
+    for (const source of listFiles(legacyRoot)) {
+      const suffix = relative(legacyRoot, source).replace(/\\/g, "/");
+      const legacyRelPath = posix.join(legacyRootRel, suffix);
+      const targetRelPath = posix.join(targetRootRel, suffix);
+      const target = join(basePath, targetRelPath);
+
+      if (existsSync(target)) {
+        console.log(
+          `  ${legacyRelPath} (kept — target exists at ${targetRelPath})`,
+        );
+        conflicts.push(legacyRelPath);
+        continue;
+      }
+
+      mkdirSync(dirname(target), { recursive: true });
+      renameSync(source, target);
+      console.log(`  ${targetRelPath} (migrated from ${legacyRelPath})`);
+      migrated.push(targetRelPath);
+    }
+  }
+
+  removeEmptyDirectories(join(basePath, "specs", "items"));
+  return { migrated, conflicts };
 }
 
 // SCAF-21.

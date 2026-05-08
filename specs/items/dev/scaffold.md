@@ -14,7 +14,7 @@ This spec defines implementation requirements for the
 
 Where `createSpecsStructure()` is called, it shall create a
 `specs/` directory with subdirectories `decisions/`, `iterations/`,
-`items/user/`, `items/dev/`, and `items/test/` under the resolved
+`user/`, `dev/`, and `test/` under the resolved
 base path.
 
 ## Template Copying
@@ -85,7 +85,7 @@ relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:
 
 ```json
 {
-  "specs/items/dev/git.md": ["sha256-...", "sha256-..."]
+  "specs/dev/git.md": ["sha256-...", "sha256-..."]
 }
 ```
 
@@ -116,6 +116,22 @@ consult `isPristine` ([SCAF-22](#scaf-22)) and:
   with a `(kept — missing)` indicator, so that seeds the user
   has deliberately deleted are not resurrected.
 
+### SCAF-26
+
+Where `migrateLegacyItemLayout()` is called with a base path, it
+shall move every file under `specs/items/user/`, `specs/items/dev/`,
+and `specs/items/test/` to the corresponding `specs/user/`,
+`specs/dev/`, and `specs/test/` path, preserving relative subpaths
+and file content.
+
+It shall create target parent directories as needed.
+When the target path already exists, it shall leave the legacy file
+unmodified and report the conflict without overwriting either file.
+After successful moves, it shall remove empty legacy item directories.
+It shall not alter files outside the legacy item directories.
+This migration shall remain part of `--update` permanently, so late
+upgraders from legacy layouts keep a supported path.
+
 ## Update Orchestration
 
 ### SCAF-15
@@ -143,7 +159,8 @@ listing the missing paths.
 Where `updateScaffoldTemplates()` is called, it shall resolve the
 current git repository root, enforce update preconditions
 ([SCAF-15](#scaf-15), [SCAF-16](#scaf-16),
-[SCAF-17](#scaf-17)), overwrite framework files
+[SCAF-17](#scaf-17)), migrate legacy item layout
+([SCAF-26](#scaf-26)), overwrite framework files
 ([SCAF-14](#scaf-14)), refresh pristine seeds
 ([SCAF-23](#scaf-23)), read the bundled merge prompt from
 `scaffold/update-merge-prompt.md`, and print the per-file

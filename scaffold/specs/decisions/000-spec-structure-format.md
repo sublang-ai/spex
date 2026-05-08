@@ -29,7 +29,7 @@ Spex uses two forms of specs to balance unification and flexibility.
 Decisions and iterations are stored as records.
   - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]].
   - Iteration records (IRs) contain four sections: Goal, Deliverables, Tasks, and Acceptance criteria.
-- **Items** must follow the GEARS pattern [[2]] to specify requirements and constraints.
+- **Items** must follow the GEARS pattern [[2]] to specify behaviors and constraints.
 Each item file must include an intent statement.
 
 ### Organization
@@ -38,21 +38,13 @@ Spex creates the default `specs/` directory under the repo root, with the follow
 
 | Path | Content | File Naming |
 | --------- | ------- | ------ |
-| `decisions/` | DRs | \<NNN\>-\<kebab-case\>.md |
-| `iterations/` | IRs | \<NNN\>-\<kebab-case\>.md |
-| `items/` | item files | [\<path\>/]\<kebab-case\>.md |
+| `decisions/` | DRs. Design decisions and rationale. | \<NNN\>-\<kebab-case\>.md |
+| `iterations/` | IRs. Implementation plans. | \<NNN\>-\<kebab-case\>.md |
+| `user/` | item files for user-visible behavior. What the system does. | [\<path\>/]\<kebab-case\>.md |
+| `dev/` | item files for system internal behavior. How the system is built. | [\<path\>/]\<kebab-case\>.md |
+| `test/` | item files for acceptance testing. Quality guard for user and dev items. | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
-
-### Item groups
-
-Item files are grouped into three subdirectories under `items/`:
-
-| Subdirectory | Purpose |
-| ----- | ------- |
-| `user/` | What the system does. User-visible behavior. |
-| `dev/` | How the system is built. Not user-visible. |
-| `test/` | Acceptance testing. Each item cites the user or dev item it tests. |
 
 ### Item syntax
 
@@ -77,13 +69,13 @@ A spec package is a coherent set of spec items for a *single* intent.
 It is the basic unit for spec composition, reuse, and extension.
 
 A spec package consists of one to three coordinated item files sharing the same relative path and basename.
-The item files are located in `user/`, `dev/`, or `test/` according to which [groups](#item-groups) they belong to.
+The item files are located in `user/`, `dev/`, or `test/` according to their category.
 
 For example, a spec package for generating short URLs may be named `gen-url` and consist of:
 
-- `items/user/signing/gen-url.md` for user-facing behaviors (e.g., basic operations, URL format)
-- `items/dev/signing/gen-url.md` for internal-implementation behaviors (e.g., algorithms)
-- `items/test/signing/gen-url.md` for tests covering the corresponding user and dev items
+- `specs/user/signing/gen-url.md` for user-facing behaviors (e.g., basic operations, URL format)
+- `specs/dev/signing/gen-url.md` for internal-implementation behaviors (e.g., algorithms)
+- `specs/test/signing/gen-url.md` for tests covering the corresponding user and dev items
 
 Here, `signing/` is a local collection of related spec packages for development convenience.
 

@@ -43,3 +43,16 @@ Where `--update` is exercised over any cell of the
 assert that `(updated)` does not appear in the output for any
 path whose post-run content equals its pre-run content, so that
 a regression to the prior over-eager indicator cannot pass.
+
+### SCAF-27
+Verifies: [SCAF-26](../dev/scaffold.md#scaf-26)
+
+Where `--update` is exercised on a repository using the legacy
+`specs/items/user/`, `specs/items/dev/`, or `specs/items/test/`
+layout, the test suite shall assert that legacy item files are
+moved to the corresponding flat `specs/user/`, `specs/dev/`, or
+`specs/test/` path, preserving custom content and removing empty
+legacy directories.
+It shall also cover a conflicting flat target and assert that the
+legacy file remains, the flat target remains unchanged, and the
+conflict is reported.

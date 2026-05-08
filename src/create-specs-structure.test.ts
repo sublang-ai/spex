@@ -19,10 +19,9 @@ const EXPECTED_DIRS = [
   "specs",
   "specs/decisions",
   "specs/iterations",
-  "specs/items",
-  "specs/items/user",
-  "specs/items/dev",
-  "specs/items/test",
+  "specs/user",
+  "specs/dev",
+  "specs/test",
 ];
 
 describe("createSpecsStructure", () => {

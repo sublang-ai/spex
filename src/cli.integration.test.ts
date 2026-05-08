@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { execFileSync, execSync } from "node:child_process";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -94,14 +95,14 @@ describe("CLI integration", () => {
       assert.ok(existsSync(join(dir, "specs")));
       assert.ok(existsSync(join(dir, "specs", "decisions")));
       assert.ok(existsSync(join(dir, "specs", "iterations")));
-      assert.ok(existsSync(join(dir, "specs", "items", "user")));
-      assert.ok(existsSync(join(dir, "specs", "items", "dev")));
-      assert.ok(existsSync(join(dir, "specs", "items", "test")));
+      assert.ok(existsSync(join(dir, "specs", "user")));
+      assert.ok(existsSync(join(dir, "specs", "dev")));
+      assert.ok(existsSync(join(dir, "specs", "test")));
 
       // Template files
       assert.ok(existsSync(join(dir, "specs", "map.md")));
       assert.ok(existsSync(join(dir, "specs", "meta.md")));
-      assert.ok(existsSync(join(dir, "specs", "items", "user", ".gitkeep")));
+      assert.ok(existsSync(join(dir, "specs", "user", ".gitkeep")));
       assert.ok(
         existsSync(join(dir, "specs", "decisions", "000-spec-structure-format.md")),
       );
@@ -246,13 +247,13 @@ describe("CLI integration", () => {
       run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
-      const target = join(dir, "specs", "items", "dev", "git.md");
+      const target = join(dir, "specs", "dev", "git.md");
       const before = readFileSync(target);
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/items/dev/git.md"),
+        parseIndicators(result.stdout).get("specs/dev/git.md"),
         "unchanged",
       );
       assert.deepEqual(readFileSync(target), before);
@@ -268,7 +269,7 @@ describe("CLI integration", () => {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
 
-      const target = join(dir, "specs", "items", "dev", "git.md");
+      const target = join(dir, "specs", "dev", "git.md");
       writeFileSync(target, toCrlf(readFileSync(target, "utf-8")));
       gitCommit(dir, "initial specs with crlf seed");
       const before = readFileSync(target);
@@ -276,7 +277,7 @@ describe("CLI integration", () => {
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/items/dev/git.md"),
+        parseIndicators(result.stdout).get("specs/dev/git.md"),
         "unchanged",
       );
       assert.deepEqual(readFileSync(target), before);
@@ -292,17 +293,17 @@ describe("CLI integration", () => {
     try {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
-      const target = join(dir, "specs", "items", "user", ".gitkeep");
+      const target = join(dir, "specs", "user", ".gitkeep");
       writeFileSync(target, "\n");
       gitCommit(dir, "initial specs with prior gitkeep");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/items/user/.gitkeep"),
+        parseIndicators(result.stdout).get("specs/user/.gitkeep"),
         "updated",
       );
-      assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/items/user/.gitkeep")));
+      assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/user/.gitkeep")));
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -343,17 +344,119 @@ describe("CLI integration", () => {
       run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
-      const target = join(dir, "specs", "items", "dev", "git.md");
-      execSync("git rm specs/items/dev/git.md", { cwd: dir, stdio: "ignore" });
+      const target = join(dir, "specs", "dev", "git.md");
+      execSync("git rm specs/dev/git.md", { cwd: dir, stdio: "ignore" });
       execSync('git commit -m "remove seed"', { cwd: dir, stdio: "ignore" });
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/items/dev/git.md"),
+        parseIndicators(result.stdout).get("specs/dev/git.md"),
         "kept — missing",
       );
       assert.equal(existsSync(target), false);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("update: legacy specs/items layout migrates to flat item directories", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      mkdirSync(join(dir, "specs", "decisions"), { recursive: true });
+      mkdirSync(join(dir, "specs", "iterations"), { recursive: true });
+      mkdirSync(join(dir, "specs", "items", "dev"), { recursive: true });
+      mkdirSync(join(dir, "specs", "items", "user", "custom"), {
+        recursive: true,
+      });
+
+      writeFileSync(
+        join(dir, "specs", "meta.md"),
+        readFileSync(bundledPath("specs/meta.md")),
+      );
+      writeFileSync(
+        join(dir, "specs", "decisions", "000-spec-structure-format.md"),
+        readFileSync(
+          bundledPath("specs/decisions/000-spec-structure-format.md"),
+        ),
+      );
+      writeFileSync(
+        join(dir, "specs", "items", "dev", "git.md"),
+        readFileSync(bundledPath("specs/dev/git.md")),
+      );
+      writeFileSync(
+        join(dir, "specs", "items", "user", "custom", "thing.md"),
+        "# Custom thing\n",
+      );
+      gitCommit(dir, "legacy scaffold layout");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.ok(
+        result.stdout.includes(
+          "specs/dev/git.md (migrated from specs/items/dev/git.md)",
+        ),
+      );
+      assert.ok(
+        result.stdout.includes(
+          "specs/user/custom/thing.md (migrated from specs/items/user/custom/thing.md)",
+        ),
+      );
+      assert.equal(existsSync(join(dir, "specs", "items")), false);
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "dev", "git.md")),
+        readFileSync(bundledPath("specs/dev/git.md")),
+      );
+      assert.equal(
+        readFileSync(join(dir, "specs", "user", "custom", "thing.md"), "utf-8"),
+        "# Custom thing\n",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("update: legacy specs/items migration preserves conflicting flat targets", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      mkdirSync(join(dir, "specs", "decisions"), { recursive: true });
+      mkdirSync(join(dir, "specs", "dev"), { recursive: true });
+      mkdirSync(join(dir, "specs", "items", "dev"), { recursive: true });
+
+      writeFileSync(
+        join(dir, "specs", "meta.md"),
+        readFileSync(bundledPath("specs/meta.md")),
+      );
+      writeFileSync(
+        join(dir, "specs", "decisions", "000-spec-structure-format.md"),
+        readFileSync(
+          bundledPath("specs/decisions/000-spec-structure-format.md"),
+        ),
+      );
+      writeFileSync(join(dir, "specs", "dev", "git.md"), "# Flat target\n");
+      writeFileSync(
+        join(dir, "specs", "items", "dev", "git.md"),
+        "# Legacy source\n",
+      );
+      gitCommit(dir, "legacy and flat scaffold layout");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.ok(
+        result.stdout.includes(
+          "specs/items/dev/git.md (kept — target exists at specs/dev/git.md)",
+        ),
+      );
+      assert.equal(
+        readFileSync(join(dir, "specs", "dev", "git.md"), "utf-8"),
+        "# Flat target\n",
+      );
+      assert.equal(
+        readFileSync(join(dir, "specs", "items", "dev", "git.md"), "utf-8"),
+        "# Legacy source\n",
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }

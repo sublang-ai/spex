@@ -17,15 +17,17 @@ The `specs/` directory shall contain the following subdirectories and files:
 | --------- | ------- | ------ |
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
-| `items/` | item files | [\<path\>/]\<kebab-case\>.md |
+| `user/` | item files for user-visible behavior | [\<path\>/]\<kebab-case\>.md |
+| `dev/` | item files for implementation requirements | [\<path\>/]\<kebab-case\>.md |
+| `test/` | item files for acceptance testing | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation with item files organized by packages | - |
 | `meta.md` | the spec of specs | - |
 
 ### META-2
 
-Item files shall be grouped into three subdirectories under `items/`:
+Item files shall be grouped into three top-level directories:
 
-| Subdirectory | Purpose |
+| Directory | Purpose |
 | ----- | ------- |
 | `user/` | What the system does. User-visible behavior. |
 | `dev/` | How the system is built. Not user-visible. |
@@ -119,7 +121,7 @@ A spec package shall consist of one to three coordinated item files sharing the 
 
 ### META-10
 
-A spec package shall have a basename \<kebab-case\>.md unique within `specs/items/`, with a short form \<ALLCAPS\>.
+A spec package shall have a basename \<kebab-case\>.md unique across `specs/user/`, `specs/dev/`, and `specs/test/`, with a short form \<ALLCAPS\>.
 
 Example: `package-management.md` has short form `PKGMGT`.
 

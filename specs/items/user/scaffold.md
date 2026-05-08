@@ -47,14 +47,19 @@ Where the `scaffold` subcommand is invoked with `--update` and no
 working tree is clean and the framework files (defined in
 [SCAF-19](#scaf-19)) are tracked in HEAD, the CLI shall:
 
-1. Overwrite every **framework file** with the bundled template.
-2. For every **seed file**, refresh it with the bundled template
+1. Migrate files from the legacy `specs/items/user/`,
+   `specs/items/dev/`, and `specs/items/test/` layout to the
+   corresponding flat `specs/user/`, `specs/dev/`, and `specs/test/`
+   paths without overwriting existing flat paths.
+2. Overwrite every **framework file** with the bundled template.
+3. For every **seed file**, refresh it with the bundled template
    only when the user has not customized it — that is, when the
    working-tree content matches a previously distributed bundled
    version of that file. Customized seeds shall be left
    unmodified and reported as `(kept — user-modified)`.
-3. Leave any file outside the framework and seed sets unmodified.
-4. Print per-file indicators, a clear completion message, and a
+4. Leave any file outside the framework, seed, and legacy item
+   migration sets unmodified.
+5. Print per-file indicators, a clear completion message, and a
    copy-paste-ready LLM merge prompt. The prompt shall not assert
    that a path changed unless that path was reported with an
    `(updated)` indicator, and shall list any pristine seeds that
@@ -83,10 +88,10 @@ file shall be classified as either **framework** or **seed**:
   refreshed by `--update` when the user has not customized it.
   - `specs/map.md`
   - `specs/iterations/000-spdx-headers.md`
-  - `specs/items/dev/git.md`
-  - `specs/items/dev/licensing.md`
-  - `specs/items/test/licensing.md`
-  - `specs/items/user/.gitkeep`
+  - `specs/dev/git.md`
+  - `specs/dev/licensing.md`
+  - `specs/test/licensing.md`
+  - `specs/user/.gitkeep`
 
 When a new file is added under `scaffold/specs/`, it shall be
 assigned to exactly one of these classes.

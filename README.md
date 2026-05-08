@@ -70,7 +70,7 @@ We believe spec-driven development is a flexible combination of a few primitives
 
 1. **Make Decisions** — Discuss requirements, architecture, and design with AI agents. Let AI generate and review decision records in `specs/decisions/`.
 2. **Plan Iterations** — Break down work into tasks with AI agents. Let AI generate and review iteration records in `specs/iterations/`.
-3. **Agents Execute** — Let AI agents complete the tasks autonomously. They generate code and update `specs/items/`.
+3. **Agents Execute** — Let AI agents complete the tasks autonomously. They generate code and update `specs/user/`, `specs/dev/`, and `specs/test/`.
 
 Then loop back to the next decision or iteration.
 
