@@ -60,10 +60,7 @@ working tree is clean and the framework files (defined in
 4. Leave any file outside the framework, seed, and legacy item
    migration sets unmodified.
 5. Print per-file indicators, a clear completion message, and a
-   copy-paste-ready LLM merge prompt. The prompt shall not assert
-   that a path changed unless that path was reported with an
-   `(updated)` indicator, and shall list any pristine seeds that
-   were refreshed so the user can verify them.
+   copy-paste-ready LLM merge prompt.
 
 ### SCAF-12
 

@@ -28,7 +28,7 @@ Spex uses two forms of specs to balance unification and flexibility.
 - **Records** must follow specified formats and may use free-form content within those formats.
 Decisions and iterations are stored as records.
   - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]].
-  - Iteration records (IRs) contain Goal, Deliverables with checkboxes, numbered Tasks, and Acceptance criteria.
+  - Iteration records (IRs) contain four sections: Goal, Deliverables, Tasks, and Acceptance criteria.
 - **Items** must follow the GEARS pattern [[2]] to specify behaviors and constraints.
 Each item file must include an intent statement.
 

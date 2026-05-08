@@ -89,12 +89,16 @@ function updateScaffoldTemplates(): void {
   const seedReport = refreshPristineSeeds(basePath);
   console.log("");
   console.log("spex scaffold --update completed.");
-  console.log("Review the file indicators above, then run `git diff -- specs`.");
   console.log(
-    "Use this prompt with your AI agent to reconcile citations and local extensions:",
+    "Review the file indicators above and inspect changes (e.g., `git diff -- specs`).",
+  );
+  console.log(
+    "Optionally, share this prompt with your AI agent to reconcile citations and local extensions:",
   );
   console.log("");
+  console.log("```");
   console.log(readUpdateMergePrompt());
+  console.log("```");
   if (legacyReport.migrated.length > 0) {
     console.log("");
     console.log("Legacy specs/items layout migrated:");
