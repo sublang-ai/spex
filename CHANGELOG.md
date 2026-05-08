@@ -10,6 +10,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-08
+
+### Added
+
+- `spex scaffold --update` mode to refresh framework templates and
+  pristine seeds in place, with state-matrix coverage and indicator
+  output (SCAF-11, SCAF-12)
+- Automatic migration of legacy `specs/items/{user,dev,test}/`
+  layouts to the flat `specs/{user,dev,test}/` layout on `--update`
+- Bundled file-history manifest (SCAF-21) used to distinguish
+  customized seeds from pristine ones during `--update`
+- Copy-paste-ready LLM merge prompt printed by `--update`,
+  fenced for unambiguous selection
+- Spec rules META-21 (test scope), META-23/24/25 (DR/IR drafting
+  style), and META-26 (observable-outcome behaviors)
+
+### Changed
+
+- Project specs flattened from `specs/items/{user,dev,test}/` to
+  `specs/{user,dev,test}/`; DR-000 and meta.md restructured to match,
+  with citation block renumbered (META-15..META-19 → META-16..META-20)
+- `--update` reports `unchanged` for refreshes whose post-run
+  content equals the pre-run content, instead of `(updated)`
+- Customized seed files are kept on `--update` and reported as
+  `(kept — user-modified)`
+- Trailing hints around the merge prompt reframed as suggestions
+  rather than commands
+
+### Fixed
+
+- Canonical hashing for the file-history manifest normalizes
+  CRLF/CR line endings so cross-platform refreshes match
+- `.gitkeep` normalized to 0 bytes for stable hashing
+- File-history manifest scoped to published states only
+
 ## [0.1.1] - 2026-04-05
 
 ### Changed
@@ -32,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sublang-ai/spex/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/sublang-ai/spex/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sublang-ai/spex/releases/tag/v0.1.0
