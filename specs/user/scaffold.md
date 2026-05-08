@@ -53,10 +53,12 @@ working tree is clean, the CLI shall:
 2. Write every **framework file** from the bundled template,
    creating framework files that are missing in older specs trees.
 3. For every **seed file**, refresh it with the bundled template
-   only when the user has not customized it — that is, when the
+   when the user has not customized it — that is, when the
    working-tree content matches a previously distributed bundled
-   version of that file. Customized seeds shall be left
-   unmodified and reported as `(kept — user-modified)`.
+   version of that file, or when the seed is absent. Customized
+   seeds shall be left unmodified and reported as
+   `(kept — user-modified)`. Users who do not want a refreshed
+   or newly created seed shall remove it after `--update`.
 4. Leave any file outside the framework, seed, and legacy item
    migration sets unmodified.
 5. Print per-file indicators, a clear completion message, and a

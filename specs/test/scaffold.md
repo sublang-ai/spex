@@ -34,7 +34,7 @@ in the bundled-current cell and preserve its existing bytes.
 | seed | hash is in history and equals bundled current | `(unchanged)` | bytes unchanged |
 | seed | hash is in history but not current | `(updated)` | bytes equal bundled current |
 | seed | hash is not in history | `(kept — user-modified)` | bytes unchanged |
-| seed | file absent | `(kept — missing)` | file still absent |
+| seed | file absent (including missing parent directories) | `(updated)` | bytes equal bundled current |
 
 ### SCAF-25
 Verifies: [SCAF-23](../dev/scaffold.md#scaf-23)

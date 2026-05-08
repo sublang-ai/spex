@@ -117,9 +117,10 @@ consult `isPristine` ([SCAF-22](#scaf-22)) and:
   indicator.
 - On `"modified"`, leave the target file unmodified and report
   the path with a `(kept — user-modified)` indicator.
-- On `"missing"`, leave the target absent and report the path
-  with a `(kept — missing)` indicator, so that seeds the user
-  has deliberately deleted are not resurrected.
+- On `"missing"`, create target parent directories as needed,
+  write the bundled template, and report the path with an
+  `(updated)` indicator. Users who do not want a seed shall
+  remove it after `--update`.
 
 ### SCAF-26
 

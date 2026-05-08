@@ -93,7 +93,7 @@ function updateScaffoldTemplates(): void {
   }
   if (seedReport.refreshed.length > 0) {
     console.log("");
-    console.log("Pristine seeds also refreshed (no prior customization detected):");
+    console.log("Seeds written from bundled templates (absent or pristine):");
     for (const relPath of seedReport.refreshed) {
       console.log(`- ${relPath}`);
     }

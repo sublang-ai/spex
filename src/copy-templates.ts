@@ -218,20 +218,13 @@ export function refreshPristineSeeds(basePath: string): {
   refreshed: string[];
   unchanged: string[];
   modified: string[];
-  missing: string[];
 } {
   const scaffoldDir = getScaffoldDir();
   const refreshed: string[] = [];
   const unchanged: string[] = [];
   const modified: string[] = [];
-  const missing: string[] = [];
   for (const relPath of SEED_FILES) {
     const state = isPristine(basePath, relPath);
-    if (state === "missing") {
-      console.log(`  ${relPath} (kept — missing)`);
-      missing.push(relPath);
-      continue;
-    }
     if (state === "modified") {
       console.log(`  ${relPath} (kept — user-modified)`);
       modified.push(relPath);
@@ -239,14 +232,15 @@ export function refreshPristineSeeds(basePath: string): {
     }
     const target = join(basePath, relPath);
     const source = join(scaffoldDir, relPath);
-    if (hashFile(target) === hashFile(source)) {
+    if (state === "pristine" && hashFile(target) === hashFile(source)) {
       console.log(`  ${relPath} (unchanged)`);
       unchanged.push(relPath);
       continue;
     }
+    mkdirSync(dirname(target), { recursive: true });
     copyFileSync(source, target);
     console.log(`  ${relPath} (updated)`);
     refreshed.push(relPath);
   }
-  return { refreshed, unchanged, modified, missing };
+  return { refreshed, unchanged, modified };
 }

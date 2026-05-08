@@ -337,7 +337,7 @@ describe("CLI integration", () => {
   });
 
   // SCAF-24 cell: seed, file absent.
-  it("update: seed deleted → (kept — missing), file still absent", () => {
+  it("update: seed deleted → (updated), file recreated from bundled", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
@@ -352,9 +352,12 @@ describe("CLI integration", () => {
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
         parseIndicators(result.stdout).get("specs/dev/git.md"),
-        "kept — missing",
+        "updated",
       );
-      assert.equal(existsSync(target), false);
+      assert.deepEqual(
+        readFileSync(target),
+        readFileSync(bundledPath("specs/dev/git.md")),
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }

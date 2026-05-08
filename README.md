@@ -55,8 +55,8 @@ When a new release ships updated templates, refresh them with:
 spex scaffold --update
 ```
 
-- Spex-authoritative files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally.
-- Starter files (`map.md`, the sample iteration, boilerplate items) are refreshed only when you have not customized them.
+- Spex-authoritative files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally, including when they are absent.
+- Starter files (`map.md`, the sample iteration, boilerplate items) are refreshed when you have not customized them, and written from the bundled template when they are absent. Customized starter files are kept as-is. Remove a starter file *after* `--update` if you do not want it.
 - Anything you authored outside the bundled framework and starter files is left alone.
 
 Review the changes with `git diff -- specs`.
