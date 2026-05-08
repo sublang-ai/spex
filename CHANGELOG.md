@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `spex scaffold --update` now writes absent seed files
+  (`map.md`, `dev/git.md`, `dev/licensing.md`, `test/licensing.md`,
+  the sample iteration, `user/.gitkeep`) from the bundled template
+  and reports the path with `(updated)`. The previous
+  `(kept — missing)` indicator is removed. Remove a seed after
+  `--update` if you do not want it.
+
+### Fixed
+
+- `spex scaffold --update` no longer fails with
+  "framework files tracked in HEAD" when upgrading a repository
+  whose `specs/` tree predates the current framework set. Missing
+  framework files are now written from the bundled template,
+  including any missing parent directories.
+
 ## [0.2.0] - 2026-05-08
 
 ### Added
