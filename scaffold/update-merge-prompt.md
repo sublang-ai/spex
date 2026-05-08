@@ -1,11 +1,8 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-I just ran `spex scaffold --update`. The command printed file indicators above.
-Any framework file marked `(updated)` now has the bundled version in my working
-tree, with its prior version in HEAD.
+Review Git diffs under @specs/ and perform a spec update merge:
 
-Review the diffs. If section headings or requirement IDs changed in updated
-framework files, update citations across specs/ (DRs, IRs, items, map.md) to
-match. If I had local extensions in DR-000, reapply them on top of the new
-content. Stop and ask if framework intent is ambiguous; don't guess.
+- If section headings or spec IDs changed, update citations across @specs/ (DRs, IRs, items, map.md) to match.
+- If @specs/decisions/000-spec-structure-format.md or @specs/meta.md changed, update existing @specs/ files to conform while preserving local content that still applies.
+- Focus only on the update merge; do not refine unrelated spec content.

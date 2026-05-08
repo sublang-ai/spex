@@ -1,23 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { canonicalContentHash } from "./copy-templates.js";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAFFOLD_ROOT = join(REPO_ROOT, "scaffold");
 const SCAFFOLD_SPECS = join(SCAFFOLD_ROOT, "specs");
-
-function canonicalHash(data: Buffer): string {
-  const input = data.includes(0)
-    ? data
-    : data.toString("utf-8").replace(/\r\n?/g, "\n");
-  return `sha256-${createHash("sha256").update(input).digest("hex")}`;
-}
 
 function listBundledSpecFiles(dir: string): string[] {
   const files: string[] = [];
@@ -62,7 +55,9 @@ describe("file-history manifest (SCAF-21)", () => {
       if (uniqueHashes.size !== hashes.length) {
         errors.push(`${relPath}: duplicate hash entries`);
       }
-      const currentHash = canonicalHash(readFileSync(join(SCAFFOLD_ROOT, relPath)));
+      const currentHash = canonicalContentHash(
+        readFileSync(join(SCAFFOLD_ROOT, relPath)),
+      );
       if (hashes[hashes.length - 1] !== currentHash) {
         errors.push(`${relPath}: final hash is not current ${currentHash}`);
       }

@@ -102,7 +102,10 @@ export function getFileHistory(relPath: string): string[] {
 }
 
 function hashFile(path: string): string {
-  const data = readFileSync(path);
+  return canonicalContentHash(readFileSync(path));
+}
+
+export function canonicalContentHash(data: Buffer): string {
   return `sha256-${createHash("sha256")
     .update(canonicalHashInput(data))
     .digest("hex")}`;
