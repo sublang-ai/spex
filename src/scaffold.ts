@@ -63,25 +63,27 @@ function readUpdateMergePrompt(): string {
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
-  const legacyReport = migrateLegacyItemLayout(basePath, {
-    logMigrated: false,
-  });
+  const legacyResults = migrateLegacyItemLayout(basePath);
   const seedPaths = new Set(getSeedSpecFiles());
   const migratedSeedSources = new Map<string, string>();
-  for (const migration of legacyReport.migrations) {
-    if (seedPaths.has(migration.targetRelPath)) {
-      migratedSeedSources.set(migration.targetRelPath, migration.legacyRelPath);
+  for (const result of legacyResults) {
+    if (result.status === "migrated" && seedPaths.has(result.targetRelPath)) {
+      migratedSeedSources.set(result.targetRelPath, result.legacyRelPath);
+    }
+  }
+  for (const result of legacyResults) {
+    if (result.status === "conflict") {
+      console.log(
+        `  ${result.legacyRelPath} (kept — target exists at ${result.targetRelPath})`,
+      );
+    } else if (!seedPaths.has(result.targetRelPath)) {
+      console.log(
+        `  ${result.targetRelPath} (migrated from ${result.legacyRelPath})`,
+      );
     }
   }
   overwriteFrameworkSpecFiles(basePath);
   refreshPristineSeeds(basePath, { migratedFrom: migratedSeedSources });
-  for (const migration of legacyReport.migrations) {
-    if (!seedPaths.has(migration.targetRelPath)) {
-      console.log(
-        `  ${migration.targetRelPath} (migrated from ${migration.legacyRelPath})`,
-      );
-    }
-  }
   console.log("");
   console.log("spex scaffold --update completed.");
   console.log(

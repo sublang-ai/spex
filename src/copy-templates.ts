@@ -42,13 +42,10 @@ type SeedIndicator =
   | "updated"
   | "unchanged"
   | "kept — user-modified";
-export type LegacyMigration = {
+export type LegacyItemLayoutResult = {
+  status: "migrated" | "conflict";
   targetRelPath: string;
   legacyRelPath: string;
-};
-
-type MigrationOptions = {
-  logMigrated?: boolean;
 };
 
 type RefreshPristineSeedsOptions = {
@@ -143,15 +140,8 @@ function removeEmptyDirectories(dir: string): boolean {
 // SCAF-26.
 export function migrateLegacyItemLayout(
   basePath: string,
-  options: MigrationOptions = {},
-): {
-  migrated: string[];
-  conflicts: string[];
-  migrations: LegacyMigration[];
-} {
-  const migrated: string[] = [];
-  const conflicts: string[] = [];
-  const migrations: LegacyMigration[] = [];
+): LegacyItemLayoutResult[] {
+  const results: LegacyItemLayoutResult[] = [];
 
   for (const [legacyRootRel, targetRootRel] of LEGACY_ITEM_DIRS) {
     const legacyRoot = join(basePath, legacyRootRel);
@@ -164,25 +154,26 @@ export function migrateLegacyItemLayout(
       const target = join(basePath, targetRelPath);
 
       if (existsSync(target)) {
-        console.log(
-          `  ${legacyRelPath} (kept — target exists at ${targetRelPath})`,
-        );
-        conflicts.push(legacyRelPath);
+        results.push({
+          status: "conflict",
+          targetRelPath,
+          legacyRelPath,
+        });
         continue;
       }
 
       mkdirSync(dirname(target), { recursive: true });
       renameSync(source, target);
-      if (options.logMigrated ?? true) {
-        console.log(`  ${targetRelPath} (migrated from ${legacyRelPath})`);
-      }
-      migrated.push(targetRelPath);
-      migrations.push({ targetRelPath, legacyRelPath });
+      results.push({
+        status: "migrated",
+        targetRelPath,
+        legacyRelPath,
+      });
     }
   }
 
   removeEmptyDirectories(join(basePath, "specs", "items"));
-  return { migrated, conflicts, migrations };
+  return results;
 }
 
 // SCAF-21.
@@ -253,19 +244,8 @@ function formatSeedIndicator(
 export function refreshPristineSeeds(
   basePath: string,
   options: RefreshPristineSeedsOptions = {},
-): {
-  refreshed: string[];
-  created: string[];
-  updated: string[];
-  unchanged: string[];
-  modified: string[];
-} {
+): void {
   const scaffoldDir = getScaffoldDir();
-  const refreshed: string[] = [];
-  const created: string[] = [];
-  const updated: string[] = [];
-  const unchanged: string[] = [];
-  const modified: string[] = [];
   for (const relPath of SEED_FILES) {
     const state = isPristine(basePath, relPath);
     if (state === "modified") {
@@ -275,7 +255,6 @@ export function refreshPristineSeeds(
         options.migratedFrom,
       );
       console.log(`  ${relPath} (${indicator})`);
-      modified.push(relPath);
       continue;
     }
     const target = join(basePath, relPath);
@@ -287,7 +266,6 @@ export function refreshPristineSeeds(
         options.migratedFrom,
       );
       console.log(`  ${relPath} (${indicator})`);
-      unchanged.push(relPath);
       continue;
     }
     mkdirSync(dirname(target), { recursive: true });
@@ -300,12 +278,5 @@ export function refreshPristineSeeds(
         options.migratedFrom,
       )})`,
     );
-    refreshed.push(relPath);
-    if (state === "missing") {
-      created.push(relPath);
-    } else {
-      updated.push(relPath);
-    }
   }
-  return { refreshed, created, updated, unchanged, modified };
 }

@@ -57,6 +57,8 @@ legacy directories.
 It shall also cover a conflicting flat target and assert that the
 legacy file remains, the flat target remains unchanged, and the
 conflict is reported.
-When a migrated file is also a seed path, the test suite shall
-assert that migration and seed refresh status are reported in one
-indicator line.
+It shall assert that conflict and non-seed migration indicator lines
+precede framework and seed indicator lines.
+When a migrated file is also a seed path, the test suite shall cover
+current, prior, and customized seed content and assert that migration
+and seed refresh status are reported in one indicator line.

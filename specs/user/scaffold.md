@@ -62,13 +62,16 @@ working tree is clean, the CLI shall:
    seed shall remove it after `--update`.
 4. Leave any file outside the framework, seed, and legacy item
    migration sets unmodified.
-5. Print per-file indicators as the single file-level action log,
-   a clear completion message, and a copy-paste-ready LLM merge
-   prompt. The merge prompt shall be the final output section; path
-   summaries shall not be repeated after it.
+5. Print per-file indicators, a clear completion message, and a
+   copy-paste-ready LLM merge prompt. Per-file indicators shall be
+   the only path-level summary printed for the run; no path summary
+   shall follow the merge prompt.
    When a legacy item migration target is also a seed path, the
    migration and seed refresh status shall be reported in one
    indicator line for that target.
+   Migration of seed paths shall be reported inline with seed state;
+   migration of non-seed paths and conflicts shall be reported before
+   framework and seed indicators.
 
 ### SCAF-12
 

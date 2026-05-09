@@ -138,9 +138,13 @@ and file content.
 
 It shall create target parent directories as needed.
 When the target path already exists, it shall leave the legacy file
-unmodified and report the conflict without overwriting either file.
+unmodified and return a conflict result identifying both paths
+without overwriting either file.
+When it moves a file, it shall return a migration result identifying
+both the legacy and target paths.
 After successful moves, it shall remove empty legacy item directories.
 It shall not alter files outside the legacy item directories.
+It shall not write to stdout; the caller owns per-file reporting.
 This migration shall remain part of `--update` permanently, so late
 upgraders from legacy layouts keep a supported path.
 

@@ -17,6 +17,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
+import { getFrameworkSpecFiles } from "./copy-templates.js";
 
 const CLI = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -73,6 +74,14 @@ function parseIndicators(stdout: string): Map<string, string> {
 
 function bundledPath(relPath: string): string {
   return join(ROOT, "scaffold", relPath);
+}
+
+function writeBundledFrameworkFileSet(dir: string): void {
+  for (const relPath of getFrameworkSpecFiles()) {
+    const target = join(dir, relPath);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, readFileSync(bundledPath(relPath)));
+  }
 }
 
 function toCrlf(text: string): string {
@@ -337,13 +346,15 @@ describe("CLI integration", () => {
   });
 
   // SCAF-24 cell: seed, file absent.
-  it("update: seed deleted → (created), file recreated from bundled", () => {
+  it("update: sample iteration seed deleted → (created)", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
+      // specs/iterations/ was never in the legacy items layout, so this
+      // exercises (created) without a combined migration indicator.
       const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
       execSync("git rm specs/iterations/000-spdx-headers.md", {
         cwd: dir,
@@ -401,21 +412,18 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.ok(
-        result.stdout.includes(
-          "specs/dev/git.md (migrated from specs/items/dev/git.md)",
-        ),
-      );
-      assert.equal(
+      assert.deepEqual(
         result.stdout
           .split("\n")
-          .filter((line) => line.includes("specs/dev/git.md")).length,
-        1,
+          .filter((line) => line.includes("specs/dev/git.md")),
+        ["  specs/dev/git.md (migrated from specs/items/dev/git.md)"],
       );
+      const customMigrationLine =
+        "  specs/user/custom/thing.md (migrated from specs/items/user/custom/thing.md)";
+      assert.ok(result.stdout.includes(customMigrationLine));
       assert.ok(
-        result.stdout.includes(
-          "specs/user/custom/thing.md (migrated from specs/items/user/custom/thing.md)",
-        ),
+        result.stdout.indexOf(customMigrationLine) <
+          result.stdout.indexOf("  specs/meta.md"),
       );
       assert.ok(result.stdout.trimEnd().endsWith("```"));
       assert.ok(!result.stdout.includes("Legacy specs/items layout migrated:"));
@@ -436,23 +444,42 @@ describe("CLI integration", () => {
     }
   });
 
-  it("update: migrated pristine seed reports migration and refresh once", () => {
+  it("update: migrated current seed reports migration once", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
-      mkdirSync(join(dir, "specs", "decisions"), { recursive: true });
+      writeBundledFrameworkFileSet(dir);
+      mkdirSync(join(dir, "specs", "items", "dev"), { recursive: true });
+      writeFileSync(
+        join(dir, "specs", "items", "dev", "git.md"),
+        readFileSync(bundledPath("specs/dev/git.md")),
+      );
+      gitCommit(dir, "legacy scaffold layout with current seed");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.deepEqual(
+        result.stdout
+          .split("\n")
+          .filter((line) => line.includes("specs/dev/git.md")),
+        ["  specs/dev/git.md (migrated from specs/items/dev/git.md)"],
+      );
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "dev", "git.md")),
+        readFileSync(bundledPath("specs/dev/git.md")),
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("update: migrated stale pristine seed reports migration and refresh once", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      writeBundledFrameworkFileSet(dir);
       mkdirSync(join(dir, "specs", "items", "user"), { recursive: true });
 
-      writeFileSync(
-        join(dir, "specs", "meta.md"),
-        readFileSync(bundledPath("specs/meta.md")),
-      );
-      writeFileSync(
-        join(dir, "specs", "decisions", "000-spec-structure-format.md"),
-        readFileSync(
-          bundledPath("specs/decisions/000-spec-structure-format.md"),
-        ),
-      );
       writeFileSync(join(dir, "specs", "items", "user", ".gitkeep"), "\n");
       gitCommit(dir, "legacy scaffold layout with old gitkeep");
 
@@ -469,6 +496,37 @@ describe("CLI integration", () => {
       assert.deepEqual(
         readFileSync(join(dir, "specs", "user", ".gitkeep")),
         readFileSync(bundledPath("specs/user/.gitkeep")),
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("update: migrated customized seed reports migration and kept once", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      writeBundledFrameworkFileSet(dir);
+      mkdirSync(join(dir, "specs", "items", "dev"), { recursive: true });
+      writeFileSync(
+        join(dir, "specs", "items", "dev", "git.md"),
+        "# Custom git\n",
+      );
+      gitCommit(dir, "legacy scaffold layout with customized seed");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.deepEqual(
+        result.stdout
+          .split("\n")
+          .filter((line) => line.includes("specs/dev/git.md")),
+        [
+          "  specs/dev/git.md (migrated from specs/items/dev/git.md; kept — user-modified)",
+        ],
+      );
+      assert.equal(
+        readFileSync(join(dir, "specs", "dev", "git.md"), "utf-8"),
+        "# Custom git\n",
       );
     } finally {
       rmSync(dir, { recursive: true });
@@ -502,9 +560,16 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
+      const conflictLine =
+        "  specs/items/dev/git.md (kept — target exists at specs/dev/git.md)";
+      assert.ok(result.stdout.includes(conflictLine));
       assert.ok(
-        result.stdout.includes(
-          "specs/items/dev/git.md (kept — target exists at specs/dev/git.md)",
+        result.stdout.indexOf(conflictLine) <
+          result.stdout.indexOf("  specs/meta.md"),
+      );
+      assert.ok(
+        !result.stdout.includes(
+          "Legacy paths left in place because flat targets already exist:",
         ),
       );
       assert.equal(
