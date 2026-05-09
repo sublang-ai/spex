@@ -19,6 +19,10 @@ SCAF spec package.
 - [x] Idempotency per [SCAF-4](../user/scaffold.md#scaf-4)
 - [x] Agent instructions per [SCAF-5](../user/scaffold.md#scaf-5)
 - [x] Error handling per [SCAF-6](../user/scaffold.md#scaf-6)
+- [x] Update-mode indicator reporting refinements:
+  absent seeds report `(created)`, post-prompt path summaries are
+  omitted, and same-run legacy seed migrations report migration plus
+  refresh status in one line
 
 ## Tasks
 

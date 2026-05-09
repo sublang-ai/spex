@@ -37,6 +37,23 @@ const LEGACY_ITEM_DIRS = [
 ] as const;
 
 export type PristineState = "pristine" | "modified" | "missing";
+type SeedIndicator =
+  | "created"
+  | "updated"
+  | "unchanged"
+  | "kept — user-modified";
+export type LegacyMigration = {
+  targetRelPath: string;
+  legacyRelPath: string;
+};
+
+type MigrationOptions = {
+  logMigrated?: boolean;
+};
+
+type RefreshPristineSeedsOptions = {
+  migratedFrom?: ReadonlyMap<string, string>;
+};
 
 /**
  * Recursively copy files from srcDir to destDir.
@@ -124,12 +141,17 @@ function removeEmptyDirectories(dir: string): boolean {
 }
 
 // SCAF-26.
-export function migrateLegacyItemLayout(basePath: string): {
+export function migrateLegacyItemLayout(
+  basePath: string,
+  options: MigrationOptions = {},
+): {
   migrated: string[];
   conflicts: string[];
+  migrations: LegacyMigration[];
 } {
   const migrated: string[] = [];
   const conflicts: string[] = [];
+  const migrations: LegacyMigration[] = [];
 
   for (const [legacyRootRel, targetRootRel] of LEGACY_ITEM_DIRS) {
     const legacyRoot = join(basePath, legacyRootRel);
@@ -151,13 +173,16 @@ export function migrateLegacyItemLayout(basePath: string): {
 
       mkdirSync(dirname(target), { recursive: true });
       renameSync(source, target);
-      console.log(`  ${targetRelPath} (migrated from ${legacyRelPath})`);
+      if (options.logMigrated ?? true) {
+        console.log(`  ${targetRelPath} (migrated from ${legacyRelPath})`);
+      }
       migrated.push(targetRelPath);
+      migrations.push({ targetRelPath, legacyRelPath });
     }
   }
 
   removeEmptyDirectories(join(basePath, "specs", "items"));
-  return { migrated, conflicts };
+  return { migrated, conflicts, migrations };
 }
 
 // SCAF-21.
@@ -214,33 +239,73 @@ export function overwriteFrameworkSpecFiles(basePath: string): void {
 }
 
 // SCAF-23.
-export function refreshPristineSeeds(basePath: string): {
+function formatSeedIndicator(
+  relPath: string,
+  indicator: SeedIndicator,
+  migratedFrom?: ReadonlyMap<string, string>,
+): string {
+  const legacyRelPath = migratedFrom?.get(relPath);
+  if (legacyRelPath === undefined) return indicator;
+  if (indicator === "unchanged") return `migrated from ${legacyRelPath}`;
+  return `migrated from ${legacyRelPath}; ${indicator}`;
+}
+
+export function refreshPristineSeeds(
+  basePath: string,
+  options: RefreshPristineSeedsOptions = {},
+): {
   refreshed: string[];
+  created: string[];
+  updated: string[];
   unchanged: string[];
   modified: string[];
 } {
   const scaffoldDir = getScaffoldDir();
   const refreshed: string[] = [];
+  const created: string[] = [];
+  const updated: string[] = [];
   const unchanged: string[] = [];
   const modified: string[] = [];
   for (const relPath of SEED_FILES) {
     const state = isPristine(basePath, relPath);
     if (state === "modified") {
-      console.log(`  ${relPath} (kept — user-modified)`);
+      const indicator = formatSeedIndicator(
+        relPath,
+        "kept — user-modified",
+        options.migratedFrom,
+      );
+      console.log(`  ${relPath} (${indicator})`);
       modified.push(relPath);
       continue;
     }
     const target = join(basePath, relPath);
     const source = join(scaffoldDir, relPath);
     if (state === "pristine" && hashFile(target) === hashFile(source)) {
-      console.log(`  ${relPath} (unchanged)`);
+      const indicator = formatSeedIndicator(
+        relPath,
+        "unchanged",
+        options.migratedFrom,
+      );
+      console.log(`  ${relPath} (${indicator})`);
       unchanged.push(relPath);
       continue;
     }
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(source, target);
-    console.log(`  ${relPath} (updated)`);
+    const indicator = state === "missing" ? "created" : "updated";
+    console.log(
+      `  ${relPath} (${formatSeedIndicator(
+        relPath,
+        indicator,
+        options.migratedFrom,
+      )})`,
+    );
     refreshed.push(relPath);
+    if (state === "missing") {
+      created.push(relPath);
+    } else {
+      updated.push(relPath);
+    }
   }
-  return { refreshed, unchanged, modified };
+  return { refreshed, created, updated, unchanged, modified };
 }

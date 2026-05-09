@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `spex scaffold --update` no longer prints post-prompt path
+  summary sections. Per-file indicators are now the single
+  file-level action log.
+- `spex scaffold --update` now reports absent seed files as
+  `(created)` and combines same-run legacy migration plus seed
+  refresh status into one indicator line.
+
 ## [0.2.1] - 2026-05-08
 
 ### Changed

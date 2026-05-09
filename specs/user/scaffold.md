@@ -57,12 +57,18 @@ working tree is clean, the CLI shall:
    working-tree content matches a previously distributed bundled
    version of that file, or when the seed is absent. Customized
    seeds shall be left unmodified and reported as
-   `(kept — user-modified)`. Users who do not want a refreshed
-   or newly created seed shall remove it after `--update`.
+   `(kept — user-modified)`. Absent seeds shall be reported as
+   `(created)`. Users who do not want a refreshed or newly created
+   seed shall remove it after `--update`.
 4. Leave any file outside the framework, seed, and legacy item
    migration sets unmodified.
-5. Print per-file indicators, a clear completion message, and a
-   copy-paste-ready LLM merge prompt.
+5. Print per-file indicators as the single file-level action log,
+   a clear completion message, and a copy-paste-ready LLM merge
+   prompt. The merge prompt shall be the final output section; path
+   summaries shall not be repeated after it.
+   When a legacy item migration target is also a seed path, the
+   migration and seed refresh status shall be reported in one
+   indicator line for that target.
 
 ### SCAF-12
 

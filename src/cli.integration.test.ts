@@ -337,26 +337,31 @@ describe("CLI integration", () => {
   });
 
   // SCAF-24 cell: seed, file absent.
-  it("update: seed deleted → (updated), file recreated from bundled", () => {
+  it("update: seed deleted → (created), file recreated from bundled", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
-      const target = join(dir, "specs", "dev", "git.md");
-      execSync("git rm specs/dev/git.md", { cwd: dir, stdio: "ignore" });
+      const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
+      execSync("git rm specs/iterations/000-spdx-headers.md", {
+        cwd: dir,
+        stdio: "ignore",
+      });
       execSync('git commit -m "remove seed"', { cwd: dir, stdio: "ignore" });
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/dev/git.md"),
-        "updated",
+        parseIndicators(result.stdout).get(
+          "specs/iterations/000-spdx-headers.md",
+        ),
+        "created",
       );
       assert.deepEqual(
         readFileSync(target),
-        readFileSync(bundledPath("specs/dev/git.md")),
+        readFileSync(bundledPath("specs/iterations/000-spdx-headers.md")),
       );
     } finally {
       rmSync(dir, { recursive: true });
@@ -401,10 +406,21 @@ describe("CLI integration", () => {
           "specs/dev/git.md (migrated from specs/items/dev/git.md)",
         ),
       );
+      assert.equal(
+        result.stdout
+          .split("\n")
+          .filter((line) => line.includes("specs/dev/git.md")).length,
+        1,
+      );
       assert.ok(
         result.stdout.includes(
           "specs/user/custom/thing.md (migrated from specs/items/user/custom/thing.md)",
         ),
+      );
+      assert.ok(result.stdout.trimEnd().endsWith("```"));
+      assert.ok(!result.stdout.includes("Legacy specs/items layout migrated:"));
+      assert.ok(
+        !result.stdout.includes("Seeds written from bundled templates"),
       );
       assert.equal(existsSync(join(dir, "specs", "items")), false);
       assert.deepEqual(
@@ -414,6 +430,45 @@ describe("CLI integration", () => {
       assert.equal(
         readFileSync(join(dir, "specs", "user", "custom", "thing.md"), "utf-8"),
         "# Custom thing\n",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("update: migrated pristine seed reports migration and refresh once", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      mkdirSync(join(dir, "specs", "decisions"), { recursive: true });
+      mkdirSync(join(dir, "specs", "items", "user"), { recursive: true });
+
+      writeFileSync(
+        join(dir, "specs", "meta.md"),
+        readFileSync(bundledPath("specs/meta.md")),
+      );
+      writeFileSync(
+        join(dir, "specs", "decisions", "000-spec-structure-format.md"),
+        readFileSync(
+          bundledPath("specs/decisions/000-spec-structure-format.md"),
+        ),
+      );
+      writeFileSync(join(dir, "specs", "items", "user", ".gitkeep"), "\n");
+      gitCommit(dir, "legacy scaffold layout with old gitkeep");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.deepEqual(
+        result.stdout
+          .split("\n")
+          .filter((line) => line.includes("specs/user/.gitkeep")),
+        [
+          "  specs/user/.gitkeep (migrated from specs/items/user/.gitkeep; updated)",
+        ],
+      );
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "user", ".gitkeep")),
+        readFileSync(bundledPath("specs/user/.gitkeep")),
       );
     } finally {
       rmSync(dir, { recursive: true });

@@ -119,8 +119,14 @@ consult `isPristine` ([SCAF-22](#scaf-22)) and:
   the path with a `(kept — user-modified)` indicator.
 - On `"missing"`, create target parent directories as needed,
   write the bundled template, and report the path with an
-  `(updated)` indicator. Users who do not want a seed shall
+  `(created)` indicator. Users who do not want a seed shall
   remove it after `--update`.
+
+When `refreshPristineSeeds()` receives migration context for a seed
+path, it shall combine the migration source and seed refresh status
+into one indicator for that path. If the migrated seed is already at
+the current bundled content, the indicator shall only report the
+migration source.
 
 ### SCAF-26
 

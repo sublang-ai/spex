@@ -6,6 +6,7 @@ import { appendAgentSpecs } from "./append-agent-specs.js";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
 import {
   copyTemplates,
+  getSeedSpecFiles,
   migrateLegacyItemLayout,
   overwriteFrameworkSpecFiles,
   refreshPristineSeeds,
@@ -62,9 +63,25 @@ function readUpdateMergePrompt(): string {
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
-  const legacyReport = migrateLegacyItemLayout(basePath);
+  const legacyReport = migrateLegacyItemLayout(basePath, {
+    logMigrated: false,
+  });
+  const seedPaths = new Set(getSeedSpecFiles());
+  const migratedSeedSources = new Map<string, string>();
+  for (const migration of legacyReport.migrations) {
+    if (seedPaths.has(migration.targetRelPath)) {
+      migratedSeedSources.set(migration.targetRelPath, migration.legacyRelPath);
+    }
+  }
   overwriteFrameworkSpecFiles(basePath);
-  const seedReport = refreshPristineSeeds(basePath);
+  refreshPristineSeeds(basePath, { migratedFrom: migratedSeedSources });
+  for (const migration of legacyReport.migrations) {
+    if (!seedPaths.has(migration.targetRelPath)) {
+      console.log(
+        `  ${migration.targetRelPath} (migrated from ${migration.legacyRelPath})`,
+      );
+    }
+  }
   console.log("");
   console.log("spex scaffold --update completed.");
   console.log(
@@ -77,27 +94,6 @@ function updateScaffoldTemplates(): void {
   console.log("```");
   console.log(readUpdateMergePrompt());
   console.log("```");
-  if (legacyReport.migrated.length > 0) {
-    console.log("");
-    console.log("Legacy specs/items layout migrated:");
-    for (const relPath of legacyReport.migrated) {
-      console.log(`- ${relPath}`);
-    }
-  }
-  if (legacyReport.conflicts.length > 0) {
-    console.log("");
-    console.log("Legacy paths left in place because flat targets already exist:");
-    for (const relPath of legacyReport.conflicts) {
-      console.log(`- ${relPath}`);
-    }
-  }
-  if (seedReport.refreshed.length > 0) {
-    console.log("");
-    console.log("Seeds written from bundled templates (absent or pristine):");
-    for (const relPath of seedReport.refreshed) {
-      console.log(`- ${relPath}`);
-    }
-  }
 }
 
 /**
