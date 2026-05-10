@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New `LIC-5` item in the scaffold's `specs/dev/licensing.md`
+  template: when a file's first comment block already carries
+  upstream SPDX headers (e.g., a scaffold template copied from
+  another project), those lines are preserved unmodified, even
+  when the project root is licensed differently. `LIC-1`/`LIC-2`
+  are satisfied by the preserved upstream headers.
+
 ## [0.2.2] - 2026-05-09
 
 ### Changed

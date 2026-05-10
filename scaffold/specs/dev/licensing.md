@@ -36,3 +36,9 @@ Where the file has comment syntax and is not excluded by [Exclusions](#exclusion
 ### LIC-2
 
 Where the file has comment syntax, is not excluded by [Exclusions](#exclusions), and one or more project-root license files match [License File Detection](#license-file-detection), while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-License-Identifier` in its first comment block after any shebang.
+
+### LIC-5
+
+Where a file's first comment block already contains `SPDX-FileCopyrightText` or `SPDX-License-Identifier` from an upstream source (e.g., a template or vendored file copied from another project), when preparing the file for inclusion in the repo, those existing SPDX lines shall be preserved unmodified, even when the project root carries a different license.
+
+[LIC-1](#lic-1) and [LIC-2](#lic-2) are satisfied by the preserved upstream headers; no project-license header shall be appended or substituted.
