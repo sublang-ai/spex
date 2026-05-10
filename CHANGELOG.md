@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-10
+
 ### Added
 
 - New `LIC-5` item in the scaffold's `specs/dev/licensing.md`
@@ -18,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   another project), those lines are preserved unmodified, even
   when the project root is licensed differently. `LIC-1`/`LIC-2`
   are satisfied by the preserved upstream headers.
+
+### Changed
+
+- Trim the bundled `iterations/000-spdx-headers.md` IR: cite
+  `dev/licensing.md` as the normative source instead of duplicating
+  its scope/exclusions, and reframe the format-documentation task
+  as adding a `## Format` section to `dev/licensing.md` with the
+  project's actual license and copyright.
 
 ## [0.2.2] - 2026-05-09
 
@@ -106,7 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/sublang-ai/spex/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/sublang-ai/spex/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/sublang-ai/spex/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/sublang-ai/spex/compare/v0.1.1...v0.2.0

@@ -13,7 +13,8 @@
   "specs/iterations/000-spdx-headers.md": [
     "sha256-a5ae7e8e31e4292a9364ba7947b2fbf27836e9f88dc80436557191550fe1bd34",
     "sha256-3b7d95e80a9ca42b81510d4fac5515fdeeb80d842f7aeb91fef76bafccc01b1a",
-    "sha256-f9914497c46f9bfa05d12dfa9190c2d53d20cffd1af3eb3e44f0f0a4b20830f2"
+    "sha256-f9914497c46f9bfa05d12dfa9190c2d53d20cffd1af3eb3e44f0f0a4b20830f2",
+    "sha256-4fac8c7fee1fec71297c50ee605f0417c3ae2b27e8aa37b03e409f08db976516"
   ],
   "specs/map.md": [
     "sha256-a1d6bc4a23fa58d8ccdcf7cd0570fc05face0aae8b6947367298dad3cde0af75",
