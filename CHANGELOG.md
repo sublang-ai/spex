@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Tighten the `LIC-5` note in the scaffold's `dev/licensing.md`
+  template: each preserved upstream SPDX line satisfies its
+  respective `LIC-1`/`LIC-2` requirement, and any missing required
+  line is supplied from upstream, not the project license.
+
 ## [0.2.3] - 2026-05-10
 
 ### Added

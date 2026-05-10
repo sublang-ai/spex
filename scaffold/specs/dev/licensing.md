@@ -41,4 +41,4 @@ Where the file has comment syntax, is not excluded by [Exclusions](#exclusions),
 
 Where a file's first comment block already contains `SPDX-FileCopyrightText` or `SPDX-License-Identifier` from an upstream source (e.g., a template or vendored file copied from another project), when preparing the file for inclusion in the repo, those existing SPDX lines shall be preserved unmodified, even when the project root carries a different license.
 
-[LIC-1](#lic-1) and [LIC-2](#lic-2) are satisfied by the preserved upstream headers; no project-license header shall be appended or substituted.
+Each preserved upstream line satisfies its respective [LIC-1](#lic-1)/[LIC-2](#lic-2) requirement; any missing required line shall be supplied from upstream, not the project license.
