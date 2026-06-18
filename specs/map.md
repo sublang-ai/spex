@@ -24,6 +24,7 @@ meta.md     The spec of specs
 | ID | File | Summary |
 | --- | --- | --- |
 | DR-000 | [000-spec-structure-format.md](decisions/000-spec-structure-format.md) | Spec structure, format, and naming conventions |
+| DR-001 | [001-scaffold-localization.md](decisions/001-scaffold-localization.md) | Scaffold localization via per-language overlays |
 
 ## Iterations
 
