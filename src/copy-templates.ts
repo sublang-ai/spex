@@ -15,6 +15,9 @@ import {
 import { dirname, join, posix, relative } from "node:path";
 import { getScaffoldDir } from "./bundled-scaffold.js";
 
+export const SUPPORTED_LANGUAGES = ["en", "zh"] as const;
+export type ScaffoldLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+
 // SCAF-19: framework vs seed classification.
 const FRAMEWORK_FILES = [
   "specs/meta.md",
@@ -50,65 +53,23 @@ export type LegacyItemLayoutResult = {
 
 type RefreshPristineSeedsOptions = {
   migratedFrom?: ReadonlyMap<string, string>;
+  language?: ScaffoldLanguage;
 };
 
-/**
- * Recursively copy files from srcDir to destDir.
- * Files that already exist at the destination are not overwritten (SCAF-8).
- * Prints status for each file relative to relRoot.
- */
-function copyRecursive(
-  srcDir: string,
-  destDir: string,
-  relRoot: string,
-): void {
-  const entries = readdirSync(srcDir);
-  for (const entry of entries) {
-    if (entry === ".DS_Store") continue;
-
-    const srcPath = join(srcDir, entry);
-    const destPath = join(destDir, entry);
-    const relPath = posix.join(relRoot, entry);
-
-    if (statSync(srcPath).isDirectory()) {
-      copyRecursive(srcPath, destPath, relPath);
-    } else {
-      if (existsSync(destPath)) {
-        console.log(`  ${relPath} (already exists)`);
-      } else {
-        copyFileSync(srcPath, destPath);
-        console.log(`  ${relPath}`);
-      }
-    }
-  }
+export function isSupportedLanguage(code: string): code is ScaffoldLanguage {
+  return SUPPORTED_LANGUAGES.includes(code as ScaffoldLanguage);
 }
 
-/**
- * Copy bundled template files from scaffold/specs/ to target specs/.
- *
- * SCAF-8: recursively copies files; existing files are not overwritten.
- * SCAF-9: resolves scaffold/ from the dist/ output directory.
- */
-export function copyTemplates(basePath: string): void {
-  const scaffoldDir = getScaffoldDir();
-  const srcSpecs = join(scaffoldDir, "specs");
-  const destSpecs = join(basePath, "specs");
-
-  if (!existsSync(srcSpecs)) {
-    throw new Error(`Bundled scaffold/specs/ not found: ${srcSpecs}`);
-  }
-
-  copyRecursive(srcSpecs, destSpecs, "specs");
+export function formatSupportedLanguages(): string {
+  return SUPPORTED_LANGUAGES.join(", ");
 }
 
-// SCAF-13.
-export function getFrameworkSpecFiles(): readonly string[] {
-  return FRAMEWORK_FILES;
+function getOverlayRelPath(language: ScaffoldLanguage, relPath: string): string {
+  return posix.join("i18n", language, relPath);
 }
 
-// SCAF-20.
-export function getSeedSpecFiles(): readonly string[] {
-  return SEED_FILES;
+function getOverlayBase(scaffoldDir: string, language: ScaffoldLanguage): string {
+  return join(scaffoldDir, "i18n", language);
 }
 
 function listFiles(dir: string): string[] {
@@ -123,6 +84,80 @@ function listFiles(dir: string): string[] {
     }
   }
   return files;
+}
+
+function listBundledSpecRelPaths(
+  scaffoldDir: string,
+  language: ScaffoldLanguage,
+): string[] {
+  const relPaths = new Set(
+    listFiles(join(scaffoldDir, "specs")).map((path) =>
+      relative(scaffoldDir, path).replace(/\\/g, "/"),
+    ),
+  );
+
+  if (language !== "en") {
+    const overlayBase = getOverlayBase(scaffoldDir, language);
+    const overlaySpecs = join(overlayBase, "specs");
+    if (existsSync(overlaySpecs)) {
+      for (const path of listFiles(overlaySpecs)) {
+        relPaths.add(relative(overlayBase, path).replace(/\\/g, "/"));
+      }
+    }
+  }
+
+  return [...relPaths].sort();
+}
+
+export function getBundledSpecFilePath(
+  relPath: string,
+  language: ScaffoldLanguage = "en",
+): string {
+  const scaffoldDir = getScaffoldDir();
+  if (language !== "en") {
+    const overlayPath = join(scaffoldDir, getOverlayRelPath(language, relPath));
+    if (existsSync(overlayPath)) return overlayPath;
+  }
+  return join(scaffoldDir, relPath);
+}
+
+/**
+ * Copy bundled template files from scaffold/specs/ to target specs/.
+ *
+ * SCAF-8: recursively copies files; existing files are not overwritten.
+ * SCAF-9: resolves scaffold/ from the dist/ output directory.
+ */
+export function copyTemplates(
+  basePath: string,
+  language: ScaffoldLanguage = "en",
+): void {
+  const scaffoldDir = getScaffoldDir();
+  const srcSpecs = join(scaffoldDir, "specs");
+
+  if (!existsSync(srcSpecs)) {
+    throw new Error(`Bundled scaffold/specs/ not found: ${srcSpecs}`);
+  }
+
+  for (const relPath of listBundledSpecRelPaths(scaffoldDir, language)) {
+    const target = join(basePath, relPath);
+    if (existsSync(target)) {
+      console.log(`  ${relPath} (already exists)`);
+      continue;
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(getBundledSpecFilePath(relPath, language), target);
+    console.log(`  ${relPath}`);
+  }
+}
+
+// SCAF-13.
+export function getFrameworkSpecFiles(): readonly string[] {
+  return FRAMEWORK_FILES;
+}
+
+// SCAF-20.
+export function getSeedSpecFiles(): readonly string[] {
+  return SEED_FILES;
 }
 
 function removeEmptyDirectories(dir: string): boolean {
@@ -189,6 +224,19 @@ export function getFileHistory(relPath: string): string[] {
   return manifest[relPath] ?? [];
 }
 
+function getRecognizedFileHistory(
+  relPath: string,
+  language: ScaffoldLanguage,
+): string[] {
+  const history = new Set(getFileHistory(relPath));
+  if (language !== "en") {
+    for (const hash of getFileHistory(getOverlayRelPath(language, relPath))) {
+      history.add(hash);
+    }
+  }
+  return [...history];
+}
+
 function hashFile(path: string): string {
   return canonicalContentHash(readFileSync(path));
 }
@@ -205,20 +253,26 @@ function canonicalHashInput(data: Buffer): Buffer | string {
 }
 
 // SCAF-22.
-export function isPristine(basePath: string, relPath: string): PristineState {
+export function isPristine(
+  basePath: string,
+  relPath: string,
+  language: ScaffoldLanguage = "en",
+): PristineState {
   const target = join(basePath, relPath);
   if (!existsSync(target)) return "missing";
-  return getFileHistory(relPath).includes(hashFile(target))
+  return getRecognizedFileHistory(relPath, language).includes(hashFile(target))
     ? "pristine"
     : "modified";
 }
 
 // SCAF-14.
-export function overwriteFrameworkSpecFiles(basePath: string): void {
-  const scaffoldDir = getScaffoldDir();
+export function overwriteFrameworkSpecFiles(
+  basePath: string,
+  language: ScaffoldLanguage = "en",
+): void {
   for (const relPath of FRAMEWORK_FILES) {
     const target = join(basePath, relPath);
-    const source = join(scaffoldDir, relPath);
+    const source = getBundledSpecFilePath(relPath, language);
     if (existsSync(target) && hashFile(target) === hashFile(source)) {
       console.log(`  ${relPath} (unchanged)`);
       continue;
@@ -245,9 +299,9 @@ export function refreshPristineSeeds(
   basePath: string,
   options: RefreshPristineSeedsOptions = {},
 ): void {
-  const scaffoldDir = getScaffoldDir();
+  const language = options.language ?? "en";
   for (const relPath of SEED_FILES) {
-    const state = isPristine(basePath, relPath);
+    const state = isPristine(basePath, relPath, language);
     if (state === "modified") {
       const indicator = formatSeedIndicator(
         relPath,
@@ -258,7 +312,7 @@ export function refreshPristineSeeds(
       continue;
     }
     const target = join(basePath, relPath);
-    const source = join(scaffoldDir, relPath);
+    const source = getBundledSpecFilePath(relPath, language);
     if (state === "pristine" && hashFile(target) === hashFile(source)) {
       const indicator = formatSeedIndicator(
         relPath,

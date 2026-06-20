@@ -14,7 +14,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { getScaffoldDir } from "./bundled-scaffold.js";
-import { copyTemplates } from "./copy-templates.js";
+import { copyTemplates, isPristine } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
 
 describe("getScaffoldDir", () => {
@@ -158,6 +158,51 @@ describe("copyTemplates", () => {
           `expected (already exists): ${line}`,
         );
       }
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("copies localized overlay files and falls back to English templates", () => {
+    const dir = makeTmp();
+    try {
+      createSpecsStructure(dir);
+      copyTemplates(dir, "zh");
+
+      assert.equal(
+        readFileSync(join(dir, "specs", "meta.md"), "utf-8"),
+        readFileSync(
+          join(getScaffoldDir(), "i18n", "zh", "specs", "meta.md"),
+          "utf-8",
+        ),
+      );
+      assert.equal(
+        readFileSync(join(dir, "specs", "map.md"), "utf-8"),
+        readFileSync(
+          join(getScaffoldDir(), "i18n", "zh", "specs", "map.md"),
+          "utf-8",
+        ),
+      );
+      assert.equal(
+        readFileSync(join(dir, "specs", "dev", "git.md"), "utf-8"),
+        readFileSync(join(getScaffoldDir(), "specs", "dev", "git.md"), "utf-8"),
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("recognizes active-language overlay history as pristine", () => {
+    const dir = makeTmp();
+    try {
+      createSpecsStructure(dir);
+      writeFileSync(
+        join(dir, "specs", "map.md"),
+        readFileSync(join(getScaffoldDir(), "i18n", "zh", "specs", "map.md")),
+      );
+
+      assert.equal(isPristine(dir, "specs/map.md", "zh"), "pristine");
+      assert.equal(isPristine(dir, "specs/map.md", "en"), "modified");
     } finally {
       rmSync(dir, { recursive: true });
     }

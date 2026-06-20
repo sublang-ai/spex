@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
@@ -11,6 +11,7 @@ import { canonicalContentHash } from "./copy-templates.js";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAFFOLD_ROOT = join(REPO_ROOT, "scaffold");
 const SCAFFOLD_SPECS = join(SCAFFOLD_ROOT, "specs");
+const SCAFFOLD_I18N = join(SCAFFOLD_ROOT, "i18n");
 
 function listBundledSpecFiles(dir: string): string[] {
   const files: string[] = [];
@@ -26,6 +27,20 @@ function listBundledSpecFiles(dir: string): string[] {
   return files.sort();
 }
 
+function listBundledManifestFiles(): string[] {
+  const files = listBundledSpecFiles(SCAFFOLD_SPECS);
+  if (existsSync(SCAFFOLD_I18N)) {
+    for (const entry of readdirSync(SCAFFOLD_I18N, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const overlaySpecs = join(SCAFFOLD_I18N, entry.name, "specs");
+      if (existsSync(overlaySpecs)) {
+        files.push(...listBundledSpecFiles(overlaySpecs));
+      }
+    }
+  }
+  return files.sort();
+}
+
 describe("file-history manifest (SCAF-21)", () => {
   it("matches the bundled scaffold/specs file set", () => {
     const manifestPath = join(REPO_ROOT, "scaffold", ".file-history.json");
@@ -35,7 +50,7 @@ describe("file-history manifest (SCAF-21)", () => {
     >;
     assert.deepEqual(
       Object.keys(manifest).sort(),
-      listBundledSpecFiles(SCAFFOLD_SPECS),
+      listBundledManifestFiles(),
     );
   });
 

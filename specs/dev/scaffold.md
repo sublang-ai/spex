@@ -26,6 +26,10 @@ from the bundled `scaffold/specs/` directory to the target `specs/`
 directory. Files that already exist at the destination shall not be
 overwritten.
 
+When a non-English language is active, `copyTemplates()` shall use a
+matching file under `scaffold/i18n/<lang>/` when present and shall
+fall back to the English file under `scaffold/specs/` otherwise.
+
 ### SCAF-9
 
 Where `getScaffoldDir()` resolves the bundled scaffold path, it
@@ -44,15 +48,15 @@ repository root, using POSIX path separators.
 Where `overwriteFrameworkSpecFiles()` is called with a base path,
 it shall, for each existing target file returned by
 `getFrameworkSpecFiles()`, compare the target's SHA-256 to the
-bundled template's.
+active-language bundled template's.
 When they differ, it shall overwrite the target and report the
 path with an `(updated)` indicator.
 When they match, it shall leave the target unwritten and report
 the path with an `(unchanged)` indicator.
 
 When the target path does not exist, it shall create target parent
-directories as needed, write the bundled template, and report the
-path with an `(updated)` indicator.
+directories as needed, write the active-language bundled template,
+and report the path with an `(updated)` indicator.
 
 ### SCAF-20
 
@@ -75,9 +79,9 @@ shall be hashed byte-for-byte.
 The manifest shall satisfy the following invariants:
 
 - It shall contain an entry for every file under `scaffold/specs/`,
-  regardless of framework/seed classification, so that any caller
-  can detect whether a target file matches a recognized bundled
-  version.
+  regardless of framework/seed classification, and every file under
+  `scaffold/i18n/<lang>/specs/`, so that any caller can detect
+  whether a target file matches a recognized bundled version.
 - Each entry's hash array shall list, in chronological order, the
   canonical SHA-256 of every recognized bundled version of that
   file's content. The final entry shall equal the current bundled
@@ -101,8 +105,8 @@ Where `isPristine(basePath, relPath)` is called, it shall:
 1. Return `"missing"` when no file exists at `<basePath>/<relPath>`.
 2. Otherwise, compute the canonical SHA-256 hash of the file's
    content and return `"pristine"` when the hash is a member of
-   the array returned by `getFileHistory(relPath)`
-   ([SCAF-21](#scaf-21)), or `"modified"` otherwise.
+   the history for either the English base path or the active-language
+   overlay path ([SCAF-21](#scaf-21)), or `"modified"` otherwise.
 
 ### SCAF-23
 
@@ -118,7 +122,7 @@ consult `isPristine` ([SCAF-22](#scaf-22)) and:
 - On `"modified"`, leave the target file unmodified and report
   the path with a `(kept — user-modified)` indicator.
 - On `"missing"`, create target parent directories as needed,
-  write the bundled template, and report the path with an
+  write the active-language bundled template, and report the path with an
   `(created)` indicator. Users who do not want a seed shall
   remove it after `--update`.
 
@@ -183,6 +187,36 @@ framework files ([SCAF-17](#scaf-17)), migrate legacy item layout
 `scaffold/update-merge-prompt.md`, and print the per-file
 indicators, clear completion message, and merge prompt specified
 by [SCAF-11](../user/scaffold.md#scaf-11).
+
+Where `updateScaffoldTemplates()` is called, it shall read the active
+language from `specs/meta.md` before selecting bundled templates,
+falling back to `en` when no authoring-language declaration is present.
+
+## Localization
+
+### SCAF-31
+
+Where bundled scaffold content is resolved for language `en`, the
+resolver shall return the English file under `scaffold/`.
+
+Where bundled scaffold content is resolved for a non-English language,
+when `scaffold/i18n/<lang>/<relPath>` exists, the resolver shall
+return that overlay file.
+
+Where no overlay file exists, the resolver shall return the English
+file under `scaffold/<relPath>`.
+
+### SCAF-32
+
+Where a localized `meta.md` overlay exists, the overlay shall include
+every English `META-*` item.
+
+For each untranslated item, the overlay item body shall remain
+byte-identical to the English item body.
+
+For each translated item, the overlay item shall carry the canonical
+SHA-256 hash of its English source item so source changes cannot leave
+a stale translation undetected.
 
 ## Agent Spec Appending
 

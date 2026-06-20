@@ -2,36 +2,87 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { appendAgentSpecs } from "./append-agent-specs.js";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
 import {
   copyTemplates,
+  formatSupportedLanguages,
   getSeedSpecFiles,
+  isSupportedLanguage,
   migrateLegacyItemLayout,
   overwriteFrameworkSpecFiles,
   refreshPristineSeeds,
+  type ScaffoldLanguage,
 } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
 import { resolveBase } from "./resolve-base.js";
 
 type ScaffoldOptions =
-  | { mode: "create"; pathArg?: string }
+  | { mode: "create"; pathArg?: string; language?: ScaffoldLanguage }
   | { mode: "update" };
 
+const AUTHORING_LANGUAGE_RE = /^Authoring language:\s*([A-Za-z0-9-]+)\s*$/m;
+
+function parseLanguage(code: string): ScaffoldLanguage {
+  if (isSupportedLanguage(code)) return code;
+  throw new Error(
+    `Unsupported language code: ${code}. Supported codes: ${formatSupportedLanguages()}`,
+  );
+}
+
 function parseArgs(args: string[]): ScaffoldOptions {
-  const updateIndex = args.indexOf("--update");
-  if (updateIndex !== -1) {
-    if (args.length !== 1) {
+  let update = false;
+  let language: ScaffoldLanguage | undefined;
+  const pathArgs: string[] = [];
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--update") {
+      update = true;
+      continue;
+    }
+    if (arg === "--lang") {
+      const code = args[i + 1];
+      if (code === undefined) {
+        throw new Error("--lang requires a language code");
+      }
+      if (language !== undefined) {
+        throw new Error("--lang may only be specified once");
+      }
+      language = parseLanguage(code);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--lang=")) {
+      if (language !== undefined) {
+        throw new Error("--lang may only be specified once");
+      }
+      language = parseLanguage(arg.slice("--lang=".length));
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    }
+    pathArgs.push(arg);
+  }
+
+  if (update) {
+    if (language !== undefined) {
+      throw new Error("--update does not accept --lang");
+    }
+    if (pathArgs.length !== 0) {
       throw new Error("--update does not accept a <path> argument");
     }
     return { mode: "update" };
   }
 
-  if (args.length > 1) {
-    throw new Error(`Unexpected arguments: ${args.slice(1).join(" ")}`);
+  if (pathArgs.length > 1) {
+    throw new Error(`Unexpected arguments: ${pathArgs.slice(1).join(" ")}`);
   }
 
-  return { mode: "create", pathArg: args[0] };
+  return { mode: "create", pathArg: pathArgs[0], language };
 }
 
 function getGitRoot(): string {
@@ -60,9 +111,38 @@ function readUpdateMergePrompt(): string {
   return readBundledMarkdown("update-merge-prompt.md");
 }
 
+function readActiveLanguage(basePath: string): ScaffoldLanguage {
+  const metaPath = join(basePath, "specs", "meta.md");
+  if (!existsSync(metaPath)) return "en";
+
+  const match = readFileSync(metaPath, "utf-8").match(AUTHORING_LANGUAGE_RE);
+  if (match === null) return "en";
+  return parseLanguage(match[1]);
+}
+
+function resolveCreateLanguage(
+  basePath: string,
+  requestedLanguage: ScaffoldLanguage | undefined,
+): ScaffoldLanguage {
+  const metaPath = join(basePath, "specs", "meta.md");
+  if (!existsSync(metaPath)) return requestedLanguage ?? "en";
+
+  const activeLanguage = readActiveLanguage(basePath);
+  if (
+    requestedLanguage !== undefined &&
+    requestedLanguage !== activeLanguage
+  ) {
+    throw new Error(
+      `--lang ${requestedLanguage} does not match existing authoring language ${activeLanguage}`,
+    );
+  }
+  return activeLanguage;
+}
+
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
+  const language = readActiveLanguage(basePath);
   const legacyResults = migrateLegacyItemLayout(basePath);
   const seedPaths = new Set(getSeedSpecFiles());
   const migratedSeedSources = new Map<string, string>();
@@ -82,8 +162,11 @@ function updateScaffoldTemplates(): void {
       );
     }
   }
-  overwriteFrameworkSpecFiles(basePath);
-  refreshPristineSeeds(basePath, { migratedFrom: migratedSeedSources });
+  overwriteFrameworkSpecFiles(basePath, language);
+  refreshPristineSeeds(basePath, {
+    language,
+    migratedFrom: migratedSeedSources,
+  });
   console.log("");
   console.log("spex scaffold --update completed.");
   console.log(
@@ -112,9 +195,10 @@ export function scaffold(args: string[] = []): void {
     }
 
     const basePath = resolveBase(options.pathArg);
+    const language = resolveCreateLanguage(basePath, options.language);
 
     createSpecsStructure(basePath);
-    copyTemplates(basePath);
+    copyTemplates(basePath, language);
     appendAgentSpecs(basePath);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

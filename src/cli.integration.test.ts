@@ -76,6 +76,10 @@ function bundledPath(relPath: string): string {
   return join(ROOT, "scaffold", relPath);
 }
 
+function overlayPath(language: string, relPath: string): string {
+  return join(ROOT, "scaffold", "i18n", language, relPath);
+}
+
 function writeBundledFrameworkFileSet(dir: string): void {
   for (const relPath of getFrameworkSpecFiles()) {
     const target = join(dir, relPath);
@@ -181,6 +185,94 @@ describe("CLI integration", () => {
       const result = run(["scaffold"], { cwd: dir });
       assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
       assert.ok(existsSync(join(dir, "specs", "map.md")));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --lang zh applies localized overlays and English fallbacks", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["scaffold", "--lang", "zh", dir]);
+      assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "meta.md")),
+        readFileSync(overlayPath("zh", "specs/meta.md")),
+      );
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "map.md")),
+        readFileSync(overlayPath("zh", "specs/map.md")),
+      );
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "dev", "git.md")),
+        readFileSync(bundledPath("specs/dev/git.md")),
+      );
+      assert.ok(
+        readFileSync(join(dir, "specs", "meta.md"), "utf-8").includes(
+          "Authoring language: zh",
+        ),
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold rejects unsupported language codes", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["scaffold", "--lang", "fr", dir]);
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("Unsupported language code: fr"));
+      assert.ok(result.stderr.includes("en, zh"));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold rejects language mismatches on existing specs trees", () => {
+    const dir = makeTmp();
+    try {
+      assert.equal(run(["scaffold", "--lang", "zh", dir]).exitCode, 0);
+      const before = readFileSync(join(dir, "specs", "map.md"));
+
+      const result = run(["scaffold", "--lang", "en", dir]);
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("does not match existing authoring language zh"));
+      assert.deepEqual(readFileSync(join(dir, "specs", "map.md")), before);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --update rejects --lang", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["scaffold", "--update", "--lang", "zh"], { cwd: dir });
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("--update does not accept --lang"));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --update refreshes zh pristine files from active overlays", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      assert.equal(run(["scaffold", "--lang", "zh"], { cwd: dir }).exitCode, 0);
+      writeFileSync(
+        join(dir, "specs", "map.md"),
+        readFileSync(bundledPath("specs/map.md")),
+      );
+      gitCommit(dir, "zh scaffold with english map");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(parseIndicators(result.stdout).get("specs/map.md"), "updated");
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "map.md")),
+        readFileSync(overlayPath("zh", "specs/map.md")),
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }

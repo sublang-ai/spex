@@ -157,6 +157,16 @@ Each test item shall include one `Verifies:` metadata line immediately below its
 
 The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the user or dev items that the test item verifies.
 
+## Authoring language
+
+### META-27
+
+Authoring language: en
+
+Where a specs tree declares an authoring language, the specs shall be authored in that language.
+
+The declaration line in this item is the machine-readable scaffold language marker.
+
 ## References
 
 [1]: https://sublang.ai/ref/gears-ai-ready-spec-syntax "GEARS: AI-Ready Spec Syntax"

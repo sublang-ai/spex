@@ -106,6 +106,42 @@ assigned to exactly one of these classes.
 Bundled support assets outside `scaffold/specs/` (for example,
 `scaffold/update-merge-prompt.md`) are not framework or seed files.
 
+Localized overlay files under `scaffold/i18n/<lang>/` shall inherit
+the class of the target path they replace.
+
+## Language Selection
+
+### SCAF-28
+
+Where the `scaffold` subcommand is invoked without `--update`,
+when `--lang <code>` is provided, the CLI shall generate localized
+bundled specs for that language.
+
+Supported language codes shall be `en` and `zh`.
+The `zh` code shall mean Simplified Chinese.
+When `--lang` is omitted and no existing `specs/meta.md` declares an
+authoring language, the CLI shall use `en`.
+When an unsupported language code is provided, the CLI shall exit
+non-zero and list the supported language codes.
+
+### SCAF-29
+
+Where the `scaffold` subcommand is invoked without `--update` while
+`specs/meta.md` exists, the CLI shall treat the existing
+authoring-language declaration as active, or `en` when no declaration
+is present.
+
+When an explicit `--lang` does not match the active language, the CLI
+shall exit non-zero without changing the existing scaffold.
+
+### SCAF-30
+
+Where the `scaffold` subcommand is invoked with `--update`, the CLI
+shall reject `--lang` and exit non-zero.
+
+The update language shall be read from the existing `specs/meta.md`
+authoring-language declaration, or `en` when no declaration is present.
+
 ## Agent Instructions
 
 ### SCAF-5

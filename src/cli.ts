@@ -7,8 +7,8 @@ import { scaffold } from "./scaffold.js";
 const USAGE = `Usage: spex <command> [options]
 
 Commands:
-  scaffold [<path>]   Create specs directory structure
-  scaffold --update   Refresh scaffold-provided specs templates`;
+  scaffold [--lang <code>] [<path>]   Create specs directory structure
+  scaffold --update                  Refresh scaffold-provided specs templates`;
 
 function main(): void {
   const args = process.argv.slice(2);

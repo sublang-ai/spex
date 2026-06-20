@@ -62,3 +62,28 @@ precede framework and seed indicator lines.
 When a migrated file is also a seed path, the test suite shall cover
 current, prior, and customized seed content and assert that migration
 and seed refresh status are reported in one indicator line.
+
+## Localization Coverage
+
+### SCAF-33
+Verifies: [SCAF-28](../user/scaffold.md#scaf-28), [SCAF-29](../user/scaffold.md#scaf-29), [SCAF-30](../user/scaffold.md#scaf-30), [SCAF-31](../dev/scaffold.md#scaf-31)
+
+Where the `scaffold` subcommand is exercised with language selection,
+the test suite shall cover a Chinese fresh scaffold, an unsupported
+language code, a mismatched language on an existing scaffold, and
+`--update` with `--lang`.
+
+The Chinese fresh scaffold case shall assert that localized overlay
+files are written for paths that have overlays and that fallback files
+remain byte-identical to their English bundled templates.
+
+### SCAF-34
+Verifies: [SCAF-21](../dev/scaffold.md#scaf-21), [SCAF-22](../dev/scaffold.md#scaf-22), [SCAF-32](../dev/scaffold.md#scaf-32)
+
+Where localized scaffold overlays are present, the test suite shall
+assert that the file-history manifest includes the overlay files and
+that active-language pristine detection recognizes both English base
+history and active-language overlay history.
+
+For each localized `meta.md` overlay, the test suite shall enforce
+completeness, kept-English parity, and translated-item source hashes.

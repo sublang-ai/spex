@@ -27,10 +27,10 @@ Spex uses two forms of specs to balance unification and flexibility.
 
 - **Records** must follow specified formats and may use free-form content within those formats.
 Decisions and iterations are stored as records.
-  - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]].
-  - Iteration records (IRs) contain four sections: Goal, Deliverables, Tasks, and Acceptance criteria.
-- **Items** must follow the GEARS pattern [[2]] to specify behaviors and constraints.
-Each item file must include an intent statement.
+  - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]], with active section titles defined by [META-4](../meta.md#meta-4).
+  - Iteration records (IRs) contain the sections defined by [META-5](../meta.md#meta-5).
+- **Items** must follow the active GEARS pattern defined by [META-6](../meta.md#meta-6) to specify behaviors and constraints.
+Each item file must include the active intent section defined by [META-3](../meta.md#meta-3).
 
 ### Organization
 
@@ -48,20 +48,8 @@ Spex creates the default `specs/` directory under the repo root, with the follow
 
 ### Item syntax
 
-A spec item must follow the GEARS syntax:
-
-```text
-[Where <static precondition(s)>] [While <stateful precondition(s)>] [When <trigger>] The <subject> shall <behavior>.
-```
-
-| Keyword | Purpose |
-| ------ | ------- |
-| Where | Static preconditions (features, config) |
-| While | Stateful preconditions (runtime state) |
-| When | Trigger event (at most one) |
-| shall | Required behavior |
-
-For test specs, Given-When-Then maps to: Given → Where+While, When → When, Then → shall.
+The active `meta.md` defines the GEARS item pattern, clause forms, and GWT mapping.
+This keeps localized scaffolds aligned with the same framework without restating English-only syntax here.
 
 ### Spec packages
 
