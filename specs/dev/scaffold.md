@@ -26,9 +26,8 @@ from the bundled `scaffold/specs/` directory to the target `specs/`
 directory. Files that already exist at the destination shall not be
 overwritten.
 
-When a non-English language is active, `copyTemplates()` shall use a
-matching file under `scaffold/i18n/<lang>/` when present and shall
-fall back to the English file under `scaffold/specs/` otherwise.
+When a language is provided by the caller, `copyTemplates()` shall
+resolve bundled content using [SCAF-31](#scaf-31).
 
 ### SCAF-9
 
@@ -45,8 +44,8 @@ repository root, using POSIX path separators.
 
 ### SCAF-14
 
-Where `overwriteFrameworkSpecFiles()` is called with a base path,
-it shall, for each existing target file returned by
+Where `overwriteFrameworkSpecFiles()` is called with a base path and
+active language, it shall, for each existing target file returned by
 `getFrameworkSpecFiles()`, compare the target's SHA-256 to the
 active-language bundled template's.
 When they differ, it shall overwrite the target and report the
@@ -100,22 +99,24 @@ relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:
 
 ### SCAF-22
 
-Where `isPristine(basePath, relPath)` is called, it shall:
+Where `isPristine(basePath, relPath, language)` is called, it shall:
 
 1. Return `"missing"` when no file exists at `<basePath>/<relPath>`.
 2. Otherwise, compute the canonical SHA-256 hash of the file's
    content and return `"pristine"` when the hash is a member of
-   the history for either the English base path or the active-language
-   overlay path ([SCAF-21](#scaf-21)), or `"modified"` otherwise.
+   the history for either the English base path or the
+   caller-provided active-language overlay path
+   ([SCAF-21](#scaf-21)), or `"modified"` otherwise.
 
 ### SCAF-23
 
-Where `refreshPristineSeeds()` is called with a base path, it
+Where `refreshPristineSeeds()` is called with a base path and active
+language, it
 shall, for each seed path returned by `getSeedSpecFiles()`,
 consult `isPristine` ([SCAF-22](#scaf-22)) and:
 
 - On `"pristine"`, when the target's canonical SHA-256 differs
-  from the bundled template's, overwrite the target and report
+  from the active-language bundled template's, overwrite the target and report
   the path with an `(updated)` indicator; when they match, leave
   the target unwritten and report the path with an `(unchanged)`
   indicator.
@@ -191,6 +192,8 @@ by [SCAF-11](../user/scaffold.md#scaf-11).
 Where `updateScaffoldTemplates()` is called, it shall read the active
 language from `specs/meta.md` before selecting bundled templates,
 falling back to `en` when no authoring-language declaration is present.
+It shall pass that active language to framework overwrite and seed
+refresh helpers.
 
 ## Localization
 

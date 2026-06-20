@@ -165,7 +165,7 @@ The `Verifies:` line shall contain one or more comma-separated [citations](#meta
 
 ## Authoring language
 
-<!-- spex-i18n-source: META-27 sha256-80c5891fd1d7a5fe80d0ceec4f37c20fd9c0e9d8a6486ae77e3899726924cd90 -->
+<!-- spex-i18n-source: META-27 sha256-2b940e88304ddb8bf47ca7becdb852ead272019f150f93b7e872093c7842cb6e -->
 ### META-27
 
 Authoring language: zh
@@ -173,6 +173,7 @@ Authoring language: zh
 在规约树声明编写语言时，规约应使用该语言编写。
 
 本条目中的声明行是 scaffold 的机器可读语言标记。
+该声明行应使用精确格式 `Authoring language: <code>`，其中 `<code>` 是受支持的 scaffold 语言代码，并且只包含 ASCII 字母、数字和连字符。
 
 ## 参考资料
 
