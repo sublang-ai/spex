@@ -69,9 +69,10 @@ and seed refresh status are reported in one indicator line.
 Verifies: [SCAF-14](../dev/scaffold.md#scaf-14), [SCAF-18](../dev/scaffold.md#scaf-18), [SCAF-23](../dev/scaffold.md#scaf-23), [SCAF-28](../user/scaffold.md#scaf-28), [SCAF-29](../user/scaffold.md#scaf-29), [SCAF-30](../user/scaffold.md#scaf-30), [SCAF-31](../dev/scaffold.md#scaf-31)
 
 Where the `scaffold` subcommand is exercised with language selection,
-the test suite shall cover a Chinese fresh scaffold, an unsupported
-language code, a mismatched language on an existing scaffold, and
-`--update` with `--lang`.
+the test suite shall cover a Chinese fresh scaffold, a localized
+update refresh on a Chinese specs tree, an unsupported language code,
+a mismatched language on an existing scaffold, and `--update` with
+`--lang`.
 
 The Chinese fresh scaffold case shall assert that localized overlay
 files are written for paths that have overlays and that fallback files

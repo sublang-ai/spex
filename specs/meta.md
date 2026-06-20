@@ -166,7 +166,7 @@ Authoring language: en
 Where a specs tree declares an authoring language, the specs shall be authored in that language.
 
 The declaration line in this item is the machine-readable scaffold language marker.
-It shall use the exact format `Authoring language: <code>`, where `<code>` is a supported scaffold language code containing only ASCII letters, digits, and hyphens.
+It shall use the exact format `Authoring language: <code>`, where `<code>` contains only ASCII letters, digits, and hyphens.
 
 ## References
 

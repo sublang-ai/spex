@@ -70,17 +70,17 @@ Fixed-width column wrapping within a sentence is allowed.
 每个规约条目应使用 GEARS 模式 [[1]]：
 
 ```text
-[在 <静态前置条件>] [当处于 <状态前置条件>] [当 <触发>] <主体>应<行为>。
+[给定 <静态前置条件>] [如果 <状态前置条件>] [当 <触发>] <主体>应<行为>。
 ```
 
 子句和标点应遵循标准中文习惯。
 
 | 子句 | 用途 | 示例 |
 | ------ | ------- | ------- |
-| 在 | 静态前置条件（功能、配置） | 在启用调试模式时 |
-| 当处于 | 状态前置条件（运行时状态） | 当处于连接活动状态时 |
-| 当 | 触发事件（至多一个） | 当用户点击提交时 |
-| 应 | 所要求的行为 | 表单应校验输入 |
+| 给定/Where | 静态前置条件（特性、配置） | 给定调试模式已启用 |
+| 如果/While | 状态前置条件（运行时状态） | 如果连接处于活动状态 |
+| 当/When | 触发事件（最多一个） | 当用户点击提交 |
+| 应/shall | 所要求的行为 | 表单应校验输入 |
 
 <!-- spex-i18n-source: META-7 sha256-7e2912d02d3d967a84c2ec8c850db8baa378197d78e517eb269ee665b9676426 -->
 ### META-7
@@ -89,9 +89,9 @@ Fixed-width column wrapping within a sentence is allowed.
 
 | GWT | 子句 |
 | --- | ------ |
-| Given | 在 + 当处于 |
-| When | 当 |
-| Then | 应 |
+| Given | 给定/Where + 如果/While |
+| When | 当/When |
+| Then | 应/shall |
 
 ### META-8
 
@@ -165,7 +165,7 @@ The `Verifies:` line shall contain one or more comma-separated [citations](#meta
 
 ## Authoring language
 
-<!-- spex-i18n-source: META-27 sha256-2b940e88304ddb8bf47ca7becdb852ead272019f150f93b7e872093c7842cb6e -->
+<!-- spex-i18n-source: META-27 sha256-1fba59bae8903b6db86c0b1ed345082eabdce1cd65fa483e932e6df265a046ec -->
 ### META-27
 
 Authoring language: zh
@@ -173,7 +173,7 @@ Authoring language: zh
 在规约树声明编写语言时，规约应使用该语言编写。
 
 本条目中的声明行是 scaffold 的机器可读语言标记。
-该声明行应使用精确格式 `Authoring language: <code>`，其中 `<code>` 是受支持的 scaffold 语言代码，并且只包含 ASCII 字母、数字和连字符。
+该声明行应使用精确格式 `Authoring language: <code>`，其中 `<code>` 只包含 ASCII 字母、数字和连字符。
 
 ## 参考资料
 
