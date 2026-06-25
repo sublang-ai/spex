@@ -52,6 +52,14 @@ working tree is clean, the CLI shall:
    paths without overwriting existing flat paths.
 2. Write every **framework file** from the bundled template,
    creating framework files that are missing in older specs trees.
+   When the framework file being replaced holds content that matches no
+   recognized bundled version — a genuine user modification rather than
+   an older pristine version — the CLI shall still replace it but warn
+   clearly before completing, naming the file and pointing the user to
+   where the change can be reviewed and reconciled. Unmodified and
+   older-pristine framework files shall be replaced without this
+   warning, and the replaced file shall be reported with an
+   `(overwritten — user-modified)` indicator.
 3. For every **seed file**, refresh it with the bundled template
    when the user has not customized it — that is, when the
    working-tree content matches a previously distributed bundled
@@ -64,8 +72,10 @@ working tree is clean, the CLI shall:
    migration sets unmodified.
 5. Print per-file indicators, a clear completion message, and a
    copy-paste-ready LLM merge prompt. Per-file indicators shall be
-   the only path-level summary printed for the run; no path summary
-   shall follow the merge prompt.
+   the only path-level summary printed to stdout for the run; no path
+   summary shall follow the merge prompt. The framework warn-before-
+   replace warning of step 2 is a stderr diagnostic, not a stdout
+   path-level summary, and is exempt from this rule.
    When a legacy item migration target is also a seed path, the
    migration and seed refresh status shall be reported in one
    indicator line for that target.
@@ -87,7 +97,9 @@ Where files bundled under `scaffold/specs/` are concerned, each
 file shall be classified as either **framework** or **seed**:
 
 - **Framework** — spex-authoritative content that users do not
-  author. Refreshed unconditionally on `--update`.
+  author. Refreshed unconditionally on `--update`; when a refresh
+  replaces content that matches no recognized bundled version,
+  `--update` warns before completing (see [SCAF-11](#scaf-11)).
   - `specs/meta.md`
   - `specs/decisions/000-spec-structure-format.md`
 - **Seed** — starter content that users are expected to edit,

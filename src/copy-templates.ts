@@ -265,22 +265,32 @@ export function isPristine(
     : "modified";
 }
 
-// SCAF-14.
+// SCAF-14. Returns the framework paths that were overwritten while
+// carrying unrecognized (user-modified) content, so the caller can warn
+// before the run completes (SCAF-18).
 export function overwriteFrameworkSpecFiles(
   basePath: string,
   language: ScaffoldLanguage = "en",
-): void {
+): string[] {
+  const replacedUserModified: string[] = [];
   for (const relPath of FRAMEWORK_FILES) {
+    const state = isPristine(basePath, relPath, language);
     const target = join(basePath, relPath);
     const source = getBundledSpecFilePath(relPath, language);
-    if (existsSync(target) && hashFile(target) === hashFile(source)) {
+    if (state !== "missing" && hashFile(target) === hashFile(source)) {
       console.log(`  ${relPath} (unchanged)`);
       continue;
     }
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(source, target);
-    console.log(`  ${relPath} (updated)`);
+    if (state === "modified") {
+      replacedUserModified.push(relPath);
+      console.log(`  ${relPath} (overwritten — user-modified)`);
+    } else {
+      console.log(`  ${relPath} (updated)`);
+    }
   }
+  return replacedUserModified;
 }
 
 // SCAF-23.

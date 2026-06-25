@@ -58,6 +58,6 @@ meta.md     The spec of specs
 
 | Group | File | Summary |
 | --- | --- | --- |
-| user | [scaffold.md](user/scaffold.md) | Target resolution, idempotency, update mode, language selection, agent instructions, error handling |
-| dev | [scaffold.md](dev/scaffold.md) | Directory creation, template copying, localization overlays, update prechecks, file-history manifest contract, agent spec appending |
-| test | [scaffold.md](test/scaffold.md) | Update state-matrix, localization, and over-eager-indicator regression coverage |
+| user | [scaffold.md](user/scaffold.md) | Target resolution, idempotency, update mode, framework warn-before-replace, language selection, agent instructions, error handling |
+| dev | [scaffold.md](dev/scaffold.md) | Directory creation, template copying, localization overlays, update prechecks, framework pristine/modified classification and warning, file-history manifest contract, agent spec appending |
+| test | [scaffold.md](test/scaffold.md) | Update state-matrix, framework warn-before-replace, localization, and over-eager-indicator regression coverage |

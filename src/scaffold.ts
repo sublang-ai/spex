@@ -139,6 +139,26 @@ function resolveCreateLanguage(
   return activeLanguage;
 }
 
+function warnReplacedFrameworkFiles(replaced: string[]): void {
+  if (replaced.length === 0) return;
+  console.warn("");
+  console.warn(
+    "WARNING: --update replaced framework file(s) that contained local modifications:",
+  );
+  for (const relPath of replaced) {
+    console.warn(`  - ${relPath}`);
+  }
+  console.warn(
+    "These files are maintained by spex and were refreshed to the bundled version.",
+  );
+  console.warn(
+    "Your previous content remains in git history; review what changed with",
+  );
+  console.warn(
+    "`git diff -- specs` and reapply any local additions on top of the refreshed file.",
+  );
+}
+
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
@@ -162,11 +182,12 @@ function updateScaffoldTemplates(): void {
       );
     }
   }
-  overwriteFrameworkSpecFiles(basePath, language);
+  const replacedFramework = overwriteFrameworkSpecFiles(basePath, language);
   refreshPristineSeeds(basePath, {
     language,
     migratedFrom: migratedSeedSources,
   });
+  warnReplacedFrameworkFiles(replacedFramework);
   console.log("");
   console.log("spex scaffold --update completed.");
   console.log(

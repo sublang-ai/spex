@@ -45,17 +45,29 @@ repository root, using POSIX path separators.
 ### SCAF-14
 
 Where `overwriteFrameworkSpecFiles()` is called with a base path and
-active language, it shall, for each existing target file returned by
-`getFrameworkSpecFiles()`, compare the target's SHA-256 to the
-active-language bundled template's.
-When they differ, it shall overwrite the target and report the
-path with an `(updated)` indicator.
-When they match, it shall leave the target unwritten and report
-the path with an `(unchanged)` indicator.
+active language, it shall, for each path returned by
+`getFrameworkSpecFiles()`, classify the target's pre-write state with
+`isPristine` ([SCAF-22](#scaf-22)) over the active-language history and
+refresh it from the active-language bundled template, reporting:
 
-When the target path does not exist, it shall create target parent
-directories as needed, write the active-language bundled template,
-and report the path with an `(updated)` indicator.
+- On `"missing"`, it shall create target parent directories as needed,
+  write the bundled template, and report an `(updated)` indicator.
+- When the target's canonical SHA-256 ([SCAF-21](#scaf-21)) equals the
+  active-language bundled template's, it shall leave the target
+  unwritten and report an `(unchanged)` indicator.
+- On `"pristine"` with a canonical SHA-256 that differs from the
+  bundled template's (an older recognized version), it shall overwrite
+  the target and report an `(updated)` indicator.
+- On `"modified"` (content matching no recognized bundled version), it
+  shall overwrite the target, report an
+  `(overwritten — user-modified)` indicator, and include the path in
+  its returned list.
+
+Framework files are refreshed unconditionally
+([SCAF-19](../user/scaffold.md#scaf-19)); the `"modified"` case still
+overwrites. The returned list of overwritten user-modified paths drives
+the warning required by [SCAF-18](#scaf-18). The list shall be empty
+when no target was overwritten while user-modified.
 
 ### SCAF-20
 
@@ -188,6 +200,13 @@ framework files ([SCAF-17](#scaf-17)), migrate legacy item layout
 `scaffold/update-merge-prompt.md`, and print the per-file
 indicators, clear completion message, and merge prompt specified
 by [SCAF-11](../user/scaffold.md#scaf-11).
+
+When `overwriteFrameworkSpecFiles()` ([SCAF-14](#scaf-14)) returns one
+or more overwritten user-modified framework paths, it shall print a
+warning to stderr that names each such path and points the user to
+where the replaced content can be reviewed and reconciled (for example,
+`git diff -- specs` and git history). When that list is empty, it shall
+print no such warning.
 
 Where `updateScaffoldTemplates()` is called, it shall read the active
 language from `specs/meta.md` before selecting bundled templates,

@@ -29,7 +29,8 @@ in the bundled-current cell and preserve its existing bytes.
 | File class | Working-tree state vs manifest | Indicator | Post-run file-system state |
 | --- | --- | --- | --- |
 | framework | hash equals bundled current | `(unchanged)` | bytes unchanged |
-| framework | hash differs from bundled current | `(updated)` | bytes equal bundled current |
+| framework | hash is in history but not current | `(updated)` | bytes equal bundled current |
+| framework | hash is not in history (user-modified) | `(overwritten — user-modified)` | bytes equal bundled current |
 | framework | file absent (including missing parent directories) | `(updated)` | bytes equal bundled current |
 | seed | hash is in history and equals bundled current | `(unchanged)` | bytes unchanged |
 | seed | hash is in history but not current | `(updated)` | bytes equal bundled current |
@@ -62,6 +63,23 @@ precede framework and seed indicator lines.
 When a migrated file is also a seed path, the test suite shall cover
 current, prior, and customized seed content and assert that migration
 and seed refresh status are reported in one indicator line.
+
+### SCAF-35
+Verifies: [SCAF-11](../user/scaffold.md#scaf-11), [SCAF-14](../dev/scaffold.md#scaf-14), [SCAF-18](../dev/scaffold.md#scaf-18), [SCAF-19](../user/scaffold.md#scaf-19)
+
+Where `--update` replaces a framework file, the test suite shall run
+the real CLI and cover both the warn and the quiet paths:
+
+- Given a framework file whose committed content matches no recognized
+  bundled version, the suite shall assert the run exits zero, the
+  file's indicator is `(overwritten — user-modified)`, the file's bytes
+  equal the bundled current, and a stderr warning names the file and
+  points to reviewing and reconciling the replaced content.
+- Given a pre-localization specs tree whose `specs/meta.md` is a
+  recognized older bundled version carrying no authoring-language
+  declaration, the suite shall assert the run exits zero, refreshes
+  `specs/meta.md` to the bundled current with an `(updated)` indicator,
+  and prints no replaced-user-content warning.
 
 ## Localization Coverage
 

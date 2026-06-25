@@ -3,7 +3,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -17,7 +17,11 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
-import { getFrameworkSpecFiles } from "./copy-templates.js";
+import {
+  canonicalContentHash,
+  getFileHistory,
+  getFrameworkSpecFiles,
+} from "./copy-templates.js";
 
 const CLI = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -26,22 +30,29 @@ const CLI = resolve(
   "cli.js",
 );
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const PRE_LOCALIZATION_META = resolve(
+  ROOT,
+  "src",
+  "__fixtures__",
+  "pre-localization-meta.md",
+);
 
 function run(
   args: string[],
   opts?: { cwd?: string },
 ): { stdout: string; stderr: string; exitCode: number } {
-  try {
-    const stdout = execFileSync(process.execPath, [CLI, ...args], {
-      encoding: "utf-8",
-      cwd: opts?.cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    return { stdout, stderr: "", exitCode: 0 };
-  } catch (err: unknown) {
-    const e = err as { stdout: string; stderr: string; status: number };
-    return { stdout: e.stdout ?? "", stderr: e.stderr ?? "", exitCode: e.status };
-  }
+  // spawnSync captures stderr on success too, so warnings emitted on a
+  // zero-exit run (e.g. replaced user-modified framework files) are visible.
+  const result = spawnSync(process.execPath, [CLI, ...args], {
+    encoding: "utf-8",
+    cwd: opts?.cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return {
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    exitCode: result.status ?? 0,
+  };
 }
 
 function makeTmp(): string {
@@ -319,8 +330,10 @@ describe("CLI integration", () => {
     }
   });
 
-  // SCAF-24 cell: framework, hash differs from bundled current.
-  it("update: framework diverged from bundled → (updated), bytes equal bundled", () => {
+  // SCAF-24 cell: framework, hash not in history (user-modified). SCAF-35:
+  // overwrite still happens, but a warning names the file and points to
+  // reviewing/reconciling the replaced content.
+  it("update: framework user-modified → (overwritten — user-modified), warns, bytes equal bundled", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
@@ -333,8 +346,59 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/meta.md"),
+        "overwritten — user-modified",
+      );
+      assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/meta.md")));
+
+      // SCAF-18: a warning names the replaced file and points to reconciliation.
+      assert.match(result.stderr, /WARNING/);
+      assert.match(result.stderr, /specs\/meta\.md/);
+      assert.match(result.stderr, /git diff -- specs/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-24 cell: framework, hash in history but not current (older pristine).
+  // SCAF-35: a pre-localization specs tree (no authoring-language declaration)
+  // updates cleanly — resolves to en, refreshes quietly, and does not warn.
+  it("update: pre-localization framework (older pristine) → (updated), no warning", () => {
+    const dir = makeTmp();
+    try {
+      // The fixture is a genuine prior bundled meta.md: recognized in history,
+      // not the current version, and predating the authoring-language marker.
+      const fixture = readFileSync(PRE_LOCALIZATION_META);
+      const fixtureHash = canonicalContentHash(fixture);
+      const history = getFileHistory("specs/meta.md");
+      assert.ok(
+        history.includes(fixtureHash),
+        "fixture must be a recognized bundled meta.md version",
+      );
+      assert.notEqual(
+        fixtureHash,
+        history[history.length - 1],
+        "fixture must not be the current bundled meta.md",
+      );
+      assert.ok(
+        !fixture.toString("utf-8").includes("Authoring language"),
+        "fixture must predate the authoring-language declaration",
+      );
+
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      const target = join(dir, "specs", "meta.md");
+      writeFileSync(target, fixture);
+      gitCommit(dir, "pre-localization specs tree");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "updated");
       assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/meta.md")));
+
+      // Updated cleanly: no replaced-user-content warning.
+      assert.doesNotMatch(result.stderr, /WARNING/);
     } finally {
       rmSync(dir, { recursive: true });
     }
