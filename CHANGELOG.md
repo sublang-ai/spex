@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The release workflow now gates publishing on CI: it waits for and
+  requires the CI workflow (`ci.yml`) to conclude successfully for the
+  tagged commit before publishing to npm or creating the GitHub
+  release, and fails without publishing otherwise (RELEASE-18).
+
 ## [0.3.0] - 2026-06-25
 
 ### Added

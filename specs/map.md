@@ -52,7 +52,7 @@ meta.md     The spec of specs
 
 | Group | File | Summary |
 | --- | --- | --- |
-| dev | [release.md](dev/release.md) | Versioning, changelog, release process, package hygiene |
+| dev | [release.md](dev/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene |
 
 ### SCAF
 

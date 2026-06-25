@@ -57,6 +57,10 @@ When the release workflow publishes a scoped package, it shall use `--access pub
 
 When the release workflow completes publishing, it shall create a GitHub release with the extracted changelog notes.
 
+### RELEASE-18
+
+When a release tag is pushed, the release workflow shall confirm the CI workflow concluded `success` for the tagged commit before publishing to npm or creating a GitHub release, waiting up to a bounded timeout for the CI workflow to complete. When the CI workflow concludes with any result other than `success`, or the timeout elapses without a successful conclusion, the release workflow shall fail without publishing to npm or creating a GitHub release.
+
 ## Package Hygiene
 
 ### RELEASE-12
