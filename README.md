@@ -47,6 +47,16 @@ Idempotency: Rerunning is safe — existing files and directories are skipped.
 Complete Iteration #0
 ```
 
+### Localization
+
+Specs are scaffolded in English by default. To scaffold in another language, pass `--lang`:
+
+```sh
+spex scaffold --lang zh
+```
+
+Chinese (`zh`) is currently bundled. Any file without a localized template falls back to English, so the tree is always complete. The chosen language is recorded in `specs/meta.md` and reused automatically on `spex scaffold --update`.
+
 ### Updating templates
 
 When a new release ships updated templates, refresh them with:
@@ -55,7 +65,7 @@ When a new release ships updated templates, refresh them with:
 spex scaffold --update
 ```
 
-- Spex-authoritative files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally, including when they are absent.
+- Spex-authoritative files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally, including when they are absent. If you had modified one of these, `--update` warns and names it so you can reapply your changes from git history.
 - Starter files (`map.md`, the sample iteration, boilerplate items) are refreshed when you have not customized them, and written from the bundled template when they are absent. Customized starter files are kept as-is. Remove a starter file *after* `--update` if you do not want it.
 - Anything you authored outside the bundled framework and starter files is left alone.
 

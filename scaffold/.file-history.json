@@ -3,9 +3,7 @@
     "sha256-f1bcf636c567b830c5d6f625e10c8e4fe2c56b71fa7787106cd7b8701ad20efe"
   ],
   "i18n/zh/specs/meta.md": [
-    "sha256-cd6d4baf2a38b56d4f8757a79b8f1edd9f7a23bd787801506adb3ef7ebc6a6ea",
-    "sha256-ebc8014cd801e400d7265d49d67716738a5e45dfd83cffbf004910a7ecf03e98",
-    "sha256-147371bdcfcfeec4909a2d770dc6ce0fda64131e115b0b17f904db3aac04c524"
+    "sha256-1d8a2507d30ef54b5d935a53b448ec74ea8a8556df5cae24e81dcfbd94f9b648"
   ],
   "specs/decisions/000-spec-structure-format.md": [
     "sha256-28d0705311a8ede97c487a944efe99bed20863e246da0aa1a33286dd4f8864ca",

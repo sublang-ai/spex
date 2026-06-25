@@ -10,8 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-25
+
+### Added
+
+- `spex scaffold --lang <code>` scaffolds specs in a non-English
+  language via per-language template overlays (DR-001). Chinese
+  (`zh`) is bundled; any file without a localized overlay falls back
+  to the English template, so the tree is always complete. The
+  authoring language is recorded in `specs/meta.md` (META-27) and
+  reused automatically by `--update`. Unsupported codes are rejected,
+  and `--lang` is rejected on `--update` and on a tree whose declared
+  language differs.
+
 ### Changed
 
+- `spex scaffold --update` now warns when it replaces a framework
+  file (`specs/meta.md`, the spec-format decision record) that
+  contained local modifications, naming each affected file and
+  pointing to `git diff -- specs` to recover and reapply the changes.
+  Framework files that merely match an older bundled version are still
+  refreshed silently.
 - Tighten the `LIC-5` note in the scaffold's `dev/licensing.md`
   template: each preserved upstream SPDX line satisfies its
   respective `LIC-1`/`LIC-2` requirement, and any missing required
@@ -123,7 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sublang-ai/spex/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/sublang-ai/spex/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/sublang-ai/spex/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/sublang-ai/spex/compare/v0.2.0...v0.2.1

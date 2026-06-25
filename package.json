@@ -1,6 +1,6 @@
 {
   "name": "@sublang/spex",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "The essential spec layer AI agents need to build software reliably",
   "type": "module",
   "license": "Apache-2.0",
