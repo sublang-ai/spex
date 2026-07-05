@@ -150,6 +150,24 @@ export function copyTemplates(
   }
 }
 
+/**
+ * Copy the bundled top-level LICENSE to the target repository root.
+ *
+ * SCAF-37: writes scaffold/LICENSE (verbatim Apache-2.0) to
+ * <basePath>/LICENSE only when the target is absent, so an existing
+ * downstream license is never overwritten. Not localized.
+ */
+export function copyRootLicense(basePath: string): void {
+  const source = join(getScaffoldDir(), "LICENSE");
+  const target = join(basePath, "LICENSE");
+  if (existsSync(target)) {
+    console.log(`  LICENSE (already exists)`);
+    return;
+  }
+  copyFileSync(source, target);
+  console.log(`  LICENSE`);
+}
+
 // SCAF-13.
 export function getFrameworkSpecFiles(): readonly string[] {
   return FRAMEWORK_FILES;

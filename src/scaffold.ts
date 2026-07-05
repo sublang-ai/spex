@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { appendAgentSpecs } from "./append-agent-specs.js";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
 import {
+  copyRootLicense,
   copyTemplates,
   formatSupportedLanguages,
   getSeedSpecFiles,
@@ -220,6 +221,7 @@ export function scaffold(args: string[] = []): void {
 
     createSpecsStructure(basePath);
     copyTemplates(basePath, language);
+    copyRootLicense(basePath);
     appendAgentSpecs(basePath);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

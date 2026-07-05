@@ -141,6 +141,51 @@ describe("CLI integration", () => {
     }
   });
 
+  // SCAF-36 / SCAF-38: scaffold writes a top-level LICENSE and no NOTICE.
+  it("scaffold <path> writes a verbatim Apache-2.0 LICENSE and no NOTICE", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["scaffold", dir]);
+      assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
+
+      const licensePath = join(dir, "LICENSE");
+      assert.ok(existsSync(licensePath), "top-level LICENSE should be written");
+      assert.deepEqual(
+        readFileSync(licensePath),
+        readFileSync(bundledPath("LICENSE")),
+        "LICENSE should be byte-identical to the bundled Apache-2.0 text",
+      );
+      assert.equal(
+        existsSync(join(dir, "NOTICE")),
+        false,
+        "no NOTICE file should be written",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-36 / SCAF-38: an existing downstream LICENSE is never overwritten.
+  it("scaffold preserves an existing LICENSE with (already exists)", () => {
+    const dir = makeTmp();
+    try {
+      const licensePath = join(dir, "LICENSE");
+      const custom = "Downstream project license\n";
+      writeFileSync(licensePath, custom);
+
+      const result = run(["scaffold", dir]);
+      assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
+      assert.equal(
+        readFileSync(licensePath, "utf-8"),
+        custom,
+        "existing LICENSE must not be overwritten",
+      );
+      assert.match(result.stdout, /LICENSE \(already exists\)/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   // Acceptance: re-running scaffold skips existing entries
   it("scaffold rerun is idempotent", () => {
     const dir = makeTmp();

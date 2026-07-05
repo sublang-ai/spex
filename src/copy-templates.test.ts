@@ -14,8 +14,18 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { getScaffoldDir } from "./bundled-scaffold.js";
-import { copyTemplates, isPristine } from "./copy-templates.js";
+import {
+  canonicalContentHash,
+  copyRootLicense,
+  copyTemplates,
+  isPristine,
+} from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
+
+// Canonical Apache License 2.0 hash (verbatim LICENSE-2.0.txt from
+// https://www.apache.org/licenses/LICENSE-2.0.txt).
+const APACHE_2_0_CANONICAL_HASH =
+  "sha256-cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30";
 
 describe("getScaffoldDir", () => {
   // SCAF-9: resolves from dist/ to package root scaffold/
@@ -203,6 +213,72 @@ describe("copyTemplates", () => {
 
       assert.equal(isPristine(dir, "specs/map.md", "zh"), "pristine");
       assert.equal(isPristine(dir, "specs/map.md", "en"), "modified");
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+describe("copyRootLicense", () => {
+  function makeTmp(): string {
+    return realpathSync(mkdtempSync(join(tmpdir(), "spex-test-")));
+  }
+
+  // SCAF-37: the bundled LICENSE is the verbatim Apache-2.0 text.
+  it("bundles the verbatim Apache License 2.0 text", () => {
+    const bundled = readFileSync(join(getScaffoldDir(), "LICENSE"));
+    assert.equal(canonicalContentHash(bundled), APACHE_2_0_CANONICAL_HASH);
+  });
+
+  // SCAF-36 / SCAF-37: writes a top-level LICENSE identical to the bundle.
+  it("writes a top-level LICENSE identical to the bundled Apache-2.0 text", () => {
+    const dir = makeTmp();
+    try {
+      copyRootLicense(dir);
+
+      const target = join(dir, "LICENSE");
+      assert.ok(existsSync(target), "LICENSE should be written at target root");
+      assert.deepEqual(
+        readFileSync(target),
+        readFileSync(join(getScaffoldDir(), "LICENSE")),
+      );
+      assert.equal(
+        canonicalContentHash(readFileSync(target)),
+        APACHE_2_0_CANONICAL_HASH,
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-36 / SCAF-37: never overwrite an existing downstream LICENSE.
+  it("does not overwrite an existing LICENSE and reports (already exists)", () => {
+    const dir = makeTmp();
+    try {
+      const target = join(dir, "LICENSE");
+      const custom = "Downstream project license\n";
+      writeFileSync(target, custom);
+
+      const output: string[] = [];
+      const origLog = console.log;
+      console.log = (msg: string) => output.push(msg);
+      try {
+        copyRootLicense(dir);
+      } finally {
+        console.log = origLog;
+      }
+
+      assert.equal(
+        readFileSync(target, "utf-8"),
+        custom,
+        "existing LICENSE must not be overwritten",
+      );
+      const licenseLine = output.find((l) => l.includes("LICENSE"));
+      assert.ok(licenseLine, "should report a LICENSE line");
+      assert.ok(
+        licenseLine.includes("(already exists)"),
+        `existing LICENSE should show (already exists): ${licenseLine}`,
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }

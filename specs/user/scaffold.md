@@ -38,6 +38,22 @@ template files already exist, the CLI shall skip those entries with
 an `(already exists)` indicator, leaving existing content
 unmodified.
 
+## License
+
+### SCAF-36
+
+Where the `scaffold` subcommand is invoked without `--update`, when no
+`LICENSE` file exists at the target root, the CLI shall write a
+top-level `LICENSE` file whose content is the verbatim Apache License
+2.0 text and report it with its path.
+
+While a `LICENSE` file already exists at the target root, the CLI shall
+leave it unmodified and report it with an `(already exists)` indicator,
+so an existing downstream license is never overwritten.
+
+The CLI shall not write a `NOTICE` file, per-file license headers, or a
+README license section, since the downstream project is unknown.
+
 ## Update
 
 ### SCAF-11
@@ -116,7 +132,11 @@ When a new file is added under `scaffold/specs/`, it shall be
 assigned to exactly one of these classes.
 
 Bundled support assets outside `scaffold/specs/` (for example,
-`scaffold/update-merge-prompt.md`) are not framework or seed files.
+`scaffold/update-merge-prompt.md` and `scaffold/LICENSE`) are not
+framework or seed files.
+The bundled root `scaffold/LICENSE` is emitted to the target root by
+[SCAF-36](#scaf-36) on initial scaffold rather than refreshed by
+`--update`, and it is not localized.
 
 Localized overlay files under `scaffold/i18n/<lang>/` shall inherit
 the class of the target path they replace.

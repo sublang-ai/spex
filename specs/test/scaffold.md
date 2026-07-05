@@ -81,6 +81,21 @@ the real CLI and cover both the warn and the quiet paths:
   `specs/meta.md` to the bundled current with an `(updated)` indicator,
   and prints no replaced-user-content warning.
 
+## License Coverage
+
+### SCAF-38
+Verifies: [SCAF-36](../user/scaffold.md#scaf-36), [SCAF-37](../dev/scaffold.md#scaf-37)
+
+Where the `scaffold` subcommand creates a project, the test suite shall
+assert that a top-level `LICENSE` file is written whose bytes equal the
+bundled `scaffold/LICENSE`, that its canonical content hash equals the
+authoritative Apache License 2.0 hash, and that no `NOTICE` file is
+written.
+
+Where a `LICENSE` file already exists at the target root, the test suite
+shall assert that `scaffold` leaves its bytes unchanged and reports it
+with an `(already exists)` indicator.
+
 ## Localization Coverage
 
 ### SCAF-33

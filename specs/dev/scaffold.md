@@ -35,6 +35,23 @@ Where `getScaffoldDir()` resolves the bundled scaffold path, it
 shall navigate from the `dist/` output directory up to the package
 root and return the `scaffold/` directory path.
 
+### SCAF-37
+
+Where `copyRootLicense(basePath)` is called, it shall copy the bundled
+`scaffold/LICENSE` to `<basePath>/LICENSE`:
+
+- When no file exists at `<basePath>/LICENSE`, it shall write the
+  bundled `LICENSE` and report the `LICENSE` path.
+- When a file exists at `<basePath>/LICENSE`, it shall leave it
+  unmodified and report an `(already exists)` indicator.
+
+The bundled `scaffold/LICENSE` shall hold the full, verbatim Apache
+License 2.0 text from its authoritative source [[1]].
+`copyRootLicense()` is invoked only on the initial (non-`--update`)
+scaffold flow; it shall not localize the file, and the bundled root
+`LICENSE` shall not participate in `--update` refresh or the
+file-history manifest ([SCAF-21](#scaf-21)).
+
 ### SCAF-13
 
 Where `getFrameworkSpecFiles()` is called, it shall return the
@@ -254,3 +271,7 @@ when found, the section shall be replaced in place and reported as
 updated, or skipped when the replacement is identical. When the
 heading is absent (including case mismatches), the content shall be
 appended to the file.
+
+## References
+
+[1]: https://www.apache.org/licenses/LICENSE-2.0.txt "Apache License, Version 2.0"
