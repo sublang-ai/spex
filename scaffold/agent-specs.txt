@@ -1,5 +1,11 @@
 ## Specs (Source of Truth)
 
-- Canonical specs live in `specs/`. Start with `specs/map.md` for a quick-reference index of all spec files.
+- Canonical specs live in @specs/.
+  Start with @specs/map.md for a quick-reference index of all spec files and @specs/meta.md for the spec format.
 - Before making changes or suggestions in an area that has a spec, read the relevant spec file(s) first and follow them.
-- If unsure which spec applies, search `specs/` and propose the most relevant file(s) before proceeding.
+- Whenever your changes involve any spec, or you make a decision worth recording, keep the specs in sync — don't let them drift.
+- Keep specs:
+  - Complete & coherent: sufficient for you to reimplement code.
+  - Right level: user requirements (in @specs/user) or system behavior (in @specs/dev), not implementation specifics; integration/system testing (in @specs/test), not unit testing.
+  - Minimal: essential and concise; also check against other spec items to avoid overlap.
+  - Well organized: spec packages are finely scoped, with high cohesion and low coupling.
