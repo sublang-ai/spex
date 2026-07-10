@@ -23,6 +23,8 @@ export interface FakeResponse {
   result: string;
   status?: "success" | "error" | "interrupted";
   usage?: FakeUsage;
+  /** Sleep before the terminal done, to test in-flight behavior. */
+  delayMs?: number;
 }
 
 export interface FakeRule {
@@ -61,7 +63,7 @@ function pick(script: FakeScript, prompt: string): FakeResponse {
 
 export interface FakeAdapterStats {
   constructed: number;
-  runs: { prompt: string; resume?: string }[];
+  runs: { prompt: string; resume?: string; cwd?: string }[];
 }
 
 /**
@@ -82,9 +84,13 @@ export function fakeAdapterImports(
 
     async *run(
       prompt: string,
-      options?: { resume?: string; abortSignal?: AbortSignal },
+      options?: { resume?: string; cwd?: string; abortSignal?: AbortSignal },
     ): AsyncGenerator<FakeEvent, void, void> {
-      stats.runs.push({ prompt, ...(options?.resume ? { resume: options.resume } : {}) });
+      stats.runs.push({
+        prompt,
+        ...(options?.resume ? { resume: options.resume } : {}),
+        ...(options?.cwd ? { cwd: options.cwd } : {}),
+      });
       const sessionId = randomUUID();
       const response = pick(script, prompt);
       const base = { agent: this.agent, sessionId };
@@ -98,6 +104,9 @@ export function fakeAdapterImports(
           timestamp: Date.now(),
           payload: { summary: response.thinking },
         };
+      }
+      if (response.delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, response.delayMs));
       }
       yield {
         ...base,

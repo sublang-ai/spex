@@ -121,6 +121,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     sessionId: z.string().min(1),
     afterSeq: z.number().int().nonnegative().optional(),
   }),
+  z.object({ type: z.literal("usage.get"), id, sessionId: z.string().min(1) }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -141,6 +142,12 @@ export interface CommandResults {
   subscribe: null;
   unsubscribe: null;
   "history.get": { records: StoredRecord[] };
+  "usage.get": {
+    inputTokens: number;
+    outputTokens: number;
+    toolUses: number;
+    totalCostUsd: number;
+  };
 }
 
 // ---------------------------------------------------------------------------

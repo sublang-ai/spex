@@ -1,0 +1,358 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+// The core service: config lifecycle (load/seed/watch, CORE-2/3),
+// loopback WebSocket endpoint with hello/version handshake (CORE-1),
+// command dispatch with schema validation (CORE-13), and record
+// channels filtered by visibility at this boundary (CORE-8/14).
+
+import { existsSync, statSync, watch, type FSWatcher } from "node:fs";
+import { basename, dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { WebSocketServer, WebSocket } from "ws";
+import type { AddressInfo } from "node:net";
+
+import {
+  checkAdapterReadiness,
+  loadConfig,
+  resolveConfigPath,
+  seedConfig,
+  summarizeConfig,
+  type ComposedConfig,
+  type LoadModule,
+} from "./config.js";
+import {
+  parseCommand,
+  PROTOCOL_VERSION,
+  type Channel,
+  type Command,
+  type ConfigState,
+  type ErrorCode,
+  type ReadinessEntry,
+  type ServerMessage,
+} from "./protocol.js";
+import { CoreError, SessionManager, type CaptainFactory, type RecordEnvelope } from "./session.js";
+import { Store } from "./store.js";
+import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
+
+const CORE_VERSION = "0.1.0";
+
+export interface CoreServiceOptions {
+  /** Shared config path; defaults to the XDG playbook location. */
+  configPath?: string;
+  /** SQLite path; defaults to in-memory (callers should set it). */
+  dbPath?: string;
+  port?: number;
+  loadModule?: LoadModule;
+  adapterImports?: PlayerAdapterImports;
+  captainFactory?: CaptainFactory;
+  env?: NodeJS.ProcessEnv;
+  home?: string;
+  /** Disable the config file watcher (tests drive reload directly). */
+  watchConfig?: boolean;
+}
+
+interface ClientState {
+  socket: WebSocket;
+  channels: Set<string>;
+}
+
+function channelKey(channel: Channel): string {
+  return `${channel.kind}:${channel.sessionId}`;
+}
+
+export class CoreService {
+  private readonly options: CoreServiceOptions;
+  private readonly configPath: string;
+  private readonly env: NodeJS.ProcessEnv;
+  private readonly home: string;
+  private readonly store: Store;
+  private readonly sessions: SessionManager;
+  private readonly clients = new Set<ClientState>();
+  private wss?: WebSocketServer;
+  private watcher?: FSWatcher;
+  private reloadTimer?: NodeJS.Timeout;
+
+  private configState: ConfigState;
+  private composed?: ComposedConfig;
+  private seeded = false;
+
+  private constructor(options: CoreServiceOptions) {
+    this.options = options;
+    this.env = options.env ?? process.env;
+    this.home = options.home ?? this.env.HOME ?? homedir();
+    this.configPath =
+      options.configPath ?? resolveConfigPath(this.env, this.home);
+    this.store = new Store(options.dbPath ?? ":memory:");
+    this.configState = { status: "missing", path: this.configPath };
+    this.sessions = new SessionManager({
+      store: this.store,
+      loadModule: options.loadModule,
+      adapterImports: options.adapterImports,
+      captainFactory: options.captainFactory,
+    });
+    this.sessions.onRecord = (envelope) => this.dispatchRecord(envelope);
+    this.sessions.onSessionState = (session) =>
+      this.broadcast({ type: "session.state", session });
+  }
+
+  static async start(options: CoreServiceOptions = {}): Promise<CoreService> {
+    const service = new CoreService(options);
+    service.store.markAllSessionsNotLive();
+    service.seeded = seedConfig(service.configPath);
+    await service.reloadConfig();
+    if (options.watchConfig !== false) service.watchConfigFile();
+    await service.listen(options.port ?? 0);
+    return service;
+  }
+
+  port(): number {
+    const address = this.wss?.address() as AddressInfo | null;
+    if (!address || typeof address === "string") {
+      throw new Error("service is not listening");
+    }
+    return address.port;
+  }
+
+  configStateSnapshot(): ConfigState {
+    return this.configState;
+  }
+
+  async stop(): Promise<void> {
+    this.watcher?.close();
+    if (this.reloadTimer) clearTimeout(this.reloadTimer);
+    await this.sessions.disposeAll();
+    for (const client of this.clients) client.socket.close();
+    await new Promise<void>((resolveClose) =>
+      this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
+    );
+    this.store.close();
+  }
+
+  // -- config ---------------------------------------------------------------
+
+  async reloadConfig(): Promise<void> {
+    if (!existsSync(this.configPath)) {
+      this.configState = { status: "missing", path: this.configPath };
+      this.composed = undefined;
+    } else {
+      try {
+        const loaded = await loadConfig(this.configPath, this.options.loadModule);
+        this.composed = loaded.composed;
+        this.configState = {
+          status: "valid",
+          summary: summarizeConfig(loaded),
+          seeded: this.seeded,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.configState = {
+          status: "invalid",
+          path: this.configPath,
+          errors: [message],
+        };
+        // Live sessions keep their previously composed config (CORE-2);
+        // only new session creation is blocked.
+        this.composed = undefined;
+      }
+    }
+    this.broadcast({ type: "config.state", state: this.configState });
+    this.broadcast({ type: "readiness.state", profiles: this.readiness() });
+  }
+
+  private watchConfigFile(): void {
+    const dir = dirname(this.configPath);
+    const file = basename(this.configPath);
+    if (!existsSync(dir)) return;
+    this.watcher = watch(dir, (_eventType, filename) => {
+      if (filename && filename !== file) return;
+      if (this.reloadTimer) clearTimeout(this.reloadTimer);
+      this.reloadTimer = setTimeout(() => {
+        void this.reloadConfig();
+      }, 150);
+    });
+  }
+
+  readiness(): ReadinessEntry[] {
+    if (this.configState.status !== "valid") return [];
+    return this.configState.summary.profiles.map((profile) => {
+      const readiness = checkAdapterReadiness(
+        profile.adapter,
+        this.env,
+        this.home,
+      );
+      return {
+        profileId: profile.id,
+        adapter: profile.adapter,
+        ready: readiness.ready,
+        ...(readiness.requirement
+          ? { requirement: readiness.requirement }
+          : {}),
+      };
+    });
+  }
+
+  // -- websocket ------------------------------------------------------------
+
+  private async listen(port: number): Promise<void> {
+    this.wss = new WebSocketServer({ host: "127.0.0.1", port });
+    this.wss.on("connection", (socket) => {
+      const client: ClientState = { socket, channels: new Set() };
+      this.clients.add(client);
+      socket.on("close", () => this.clients.delete(client));
+      socket.on("message", (data) => {
+        void this.handleMessage(client, String(data));
+      });
+      this.send(socket, {
+        type: "hello",
+        protocolVersion: PROTOCOL_VERSION,
+        coreVersion: CORE_VERSION,
+      });
+    });
+    await new Promise<void>((resolveListen, rejectListen) => {
+      this.wss?.once("listening", resolveListen);
+      this.wss?.once("error", rejectListen);
+    });
+  }
+
+  private send(socket: WebSocket, message: ServerMessage): void {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(message));
+    }
+  }
+
+  private broadcast(message: ServerMessage): void {
+    for (const client of this.clients) this.send(client.socket, message);
+  }
+
+  private dispatchRecord(envelope: RecordEnvelope): void {
+    const channel = envelope.hidden ? "debug" : "session";
+    const key = `${channel}:${envelope.sessionId}`;
+    for (const client of this.clients) {
+      if (client.channels.has(key)) {
+        this.send(client.socket, {
+          type: "record",
+          channel,
+          sessionId: envelope.sessionId,
+          seq: envelope.seq,
+          record: envelope.record,
+        });
+      }
+    }
+  }
+
+  private async handleMessage(client: ClientState, raw: string): Promise<void> {
+    const parsed = parseCommand(raw);
+    if (!parsed.ok) {
+      this.send(client.socket, {
+        type: "reply",
+        id: parsed.id ?? "",
+        ok: false,
+        error: { code: "invalid_message", message: parsed.error },
+      });
+      return;
+    }
+    const command = parsed.command;
+    try {
+      const result = await this.execute(client, command);
+      this.send(client.socket, {
+        type: "reply",
+        id: command.id,
+        ok: true,
+        result,
+      });
+    } catch (error) {
+      const code: ErrorCode =
+        error instanceof CoreError ? error.code : "internal";
+      const message = error instanceof Error ? error.message : String(error);
+      this.send(client.socket, {
+        type: "reply",
+        id: command.id,
+        ok: false,
+        error: { code, message },
+      });
+    }
+  }
+
+  private async execute(
+    client: ClientState,
+    command: Command,
+  ): Promise<unknown> {
+    switch (command.type) {
+      case "config.get":
+        return this.configState;
+      case "readiness.get":
+        return this.readiness();
+      case "project.list":
+        return this.store.listProjects();
+      case "project.register": {
+        const path = resolve(command.path);
+        if (!existsSync(path) || !statSync(path).isDirectory()) {
+          throw new CoreError(
+            "invalid_request",
+            `${path} is not a directory`,
+          );
+        }
+        return this.store.registerProject(path, basename(path), Date.now());
+      }
+      case "project.remove": {
+        if (!this.store.removeProject(command.projectId)) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        return null;
+      }
+      case "session.list":
+        return this.sessions.listSessions();
+      case "session.create": {
+        const project = this.store.getProject(command.projectId);
+        if (!project) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        if (this.configState.status !== "valid" || !this.composed) {
+          throw new CoreError(
+            "invalid_config",
+            this.configState.status === "invalid"
+              ? `config is invalid: ${this.configState.errors.join("; ")}`
+              : "config file is missing",
+          );
+        }
+        return this.sessions.createSession(project, this.composed);
+      }
+      case "session.dispose":
+        await this.sessions.disposeSession(command.sessionId);
+        return null;
+      case "turn.submit":
+        this.sessions.submitTurn(command.sessionId, command.text);
+        return { accepted: true };
+      case "turn.abort":
+        return { aborted: this.sessions.abortTurn(command.sessionId) };
+      case "subscribe": {
+        this.requireKnownSession(command.channel.sessionId);
+        client.channels.add(channelKey(command.channel));
+        return null;
+      }
+      case "unsubscribe":
+        client.channels.delete(channelKey(command.channel));
+        return null;
+      case "history.get":
+        this.requireKnownSession(command.sessionId);
+        return {
+          records: this.store.getRecords(command.sessionId, {
+            afterSeq: command.afterSeq,
+          }),
+        };
+      case "usage.get":
+        this.requireKnownSession(command.sessionId);
+        return this.store.sessionUsage(command.sessionId);
+    }
+  }
+
+  private requireKnownSession(sessionId: string): void {
+    const known = this.store
+      .listSessions()
+      .some((session) => session.id === sessionId);
+    if (!known) throw new CoreError("not_found", `no session ${sessionId}`);
+  }
+}
+
+export const createCoreService = CoreService.start;
