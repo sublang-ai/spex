@@ -38,6 +38,7 @@ meta.md     The spec of specs
 | IR-000 | [000-spdx-headers.md](iterations/000-spdx-headers.md) | Add SPDX headers to applicable files |
 | IR-001 | [001-scaffold-cli.md](iterations/001-scaffold-cli.md) | Implement scaffold CLI per SCAF package |
 | IR-002 | [002-workspace-restructure.md](iterations/002-workspace-restructure.md) | Move the scaffold CLI to packages/cli in an npm-workspaces monorepo |
+| IR-003 | [003-core-service.md](iterations/003-core-service.md) | Implement the headless core service per the CORE package |
 
 ## Packages
 
