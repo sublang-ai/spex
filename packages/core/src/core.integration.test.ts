@@ -63,6 +63,12 @@ class Client {
 
   async open(): Promise<void> {
     await new Promise<void>((resolve, reject) => {
+      // The socket may open during an unrelated await between the
+      // constructor and this call; 'open' is edge-triggered.
+      if (this.socket.readyState === WebSocket.OPEN) {
+        resolve();
+        return;
+      }
       this.socket.once("open", resolve);
       this.socket.once("error", reject);
     });
@@ -555,6 +561,76 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
 
   client.close();
   await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// Real Playbook Captain shell through the Spex pipeline (DR-003):
+// registry loading via the injected module loader, player binding,
+// visible replies, and pane visibility — no LLM, no network.
+// ---------------------------------------------------------------------------
+
+test("real captain shell: bare /code reply and roster visibility", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-shell-it-"));
+  const configPath = join(dir, "playbook.config.yaml");
+  writeFileSync(configPath, VALID_CONFIG);
+  const projectDir = join(dir, "project");
+  mkdirSync(projectDir);
+  execFileSync("git", ["init", "-q", projectDir]);
+
+  const { imports } = fakeAdapterImports({
+    fallback: { result: "not json on purpose" },
+  });
+  // No captainFactory: the service instantiates the REAL shell from
+  // @sublang/playbook/playbook-captain with the core loadModule.
+  const service = await CoreService.start({
+    configPath,
+    dbPath: join(dir, "spex.db"),
+    adapterImports: imports,
+    env: {},
+    home: join(dir, "home"),
+    watchConfig: false,
+  });
+  const client = new Client(service.port());
+  await client.open();
+
+  const project = await client.expectOk("project.register", {
+    path: projectDir,
+  });
+  const session = await client.expectOk("session.create", {
+    projectId: project.id,
+  });
+  assert.deepEqual(
+    session.players.map((p) => p.id),
+    ["code-coder", "code-reviewer"],
+  );
+  await client.expectOk("subscribe", {
+    channel: { kind: "session", sessionId: session.id },
+  });
+
+  // A bare registered command: the real shell replies without any
+  // judge call and switches the visible roster to CODE's players.
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "/code" });
+  await client.waitFor(
+    (m) => m.type === "record" && m.record.type === "turn_finished",
+  );
+
+  const transcript = JSON.stringify(client.records("session"));
+  assert.ok(
+    transcript.includes("Ask what task to run with /code."),
+    `real shell reply missing; got: ${transcript.slice(0, 600)}`,
+  );
+  const viewChange = client
+    .records("session")
+    .find((m) => m.record.type === "player_view_changed");
+  assert.ok(viewChange, "shell did not switch pane visibility");
+  assert.deepEqual(
+    (viewChange.record as unknown as { visiblePlayerIds: string[] })
+      .visiblePlayerIds,
+    ["code-coder", "code-reviewer"],
+  );
+
+  client.close();
+  await service.stop();
 });
 
 // ---------------------------------------------------------------------------
