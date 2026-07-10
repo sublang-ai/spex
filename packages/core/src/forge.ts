@@ -8,6 +8,7 @@
 
 import { execFile } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 
 import type { ForgeItem, ForgeState, RepoStatusInfo } from "./protocol.js";
 
@@ -49,8 +50,18 @@ export async function isWorkTreeRoot(
   const result = await run("git", ["rev-parse", "--show-toplevel"], path);
   if (result.code !== 0) return false;
   const top = result.stdout.trim();
-  if (!existsSync(path) || !existsSync(top)) return false;
-  return realpathSync(top) === realpathSync(path);
+  if (!top || !existsSync(path) || !existsSync(top)) return false;
+  // git prints forward-slash paths and Windows temp dirs may surface
+  // as 8.3 short names; canonicalize both sides before comparing.
+  const canonical = (p: string): string => {
+    const real = resolvePath(realpathSync.native(p));
+    return process.platform === "win32" ? real.toLowerCase() : real;
+  };
+  try {
+    return canonical(top) === canonical(path);
+  } catch {
+    return false;
+  }
 }
 
 export async function repoStatus(
