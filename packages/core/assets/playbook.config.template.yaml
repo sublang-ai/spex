@@ -1,0 +1,48 @@
+# Spex / playbook shared configuration.
+# This file is shared with the `playbook` CLI: both read and write the
+# same schema, so anything configured here works in either host.
+#
+# profiles: reusable agent settings referenced by captain and players.
+# Name profiles by their underlying agent/model (e.g. claude-opus,
+# codex-gpt) so they read distinctly from player roles.
+profiles:
+  claude-opus:
+    adapter: claude
+    model: claude-opus-4-8
+    reasoningEffort: high
+    permissions:
+      mode: auto        # protected auto mode for the Claude Captain
+  claude-opus-1m:
+    adapter: claude
+    model: claude-opus-4-8[1m]
+    reasoningEffort: xhigh
+    permissions:
+      mode: auto        # protected auto mode for the Claude Coder
+  codex-gpt:
+    adapter: codex
+    model: gpt-5.5
+    reasoningEffort: xhigh
+    permissions:
+      mode: auto
+      writablePaths:
+        - .git          # allow git metadata writes under Codex auto mode
+
+# captain: the Judge agent that routes Boss input and drives playbooks.
+captain: claude-opus
+
+# notifications: off | bell | desktop per event (omitted -> off).
+notifications:
+  player_finished: bell
+  turn_finished: desktop
+
+# playbooks: enabled playbooks. Each key must equal the registry
+# manifest id; `from` names the registry module; `players` maps the
+# playbook's roles to profiles or adapter shorthands. Any other key is
+# that playbook's own option (e.g. CODE's `committer`).
+playbooks:
+  code:
+    from: "@sublang/playbook/code/registry"
+    players:
+      coder: claude-opus-1m
+      reviewer: codex-gpt
+    committer: coder      # which role commits - `coder` or `reviewer`
