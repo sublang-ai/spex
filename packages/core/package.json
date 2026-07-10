@@ -35,6 +35,7 @@
     "@sublang/cligent": "^0.13.0",
     "@sublang/playbook": "^0.9.0",
     "better-sqlite3": "^12.2.0",
+    "esbuild": "^0.24.2",
     "ws": "^8.18.0",
     "yaml": "^2.8.0",
     "zod": "^3.25.0"

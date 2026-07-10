@@ -214,6 +214,19 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("usage.get"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("usage.days"), id }),
   z.object({ type: z.literal("config.edit"), id, op: configEditOpSchema }),
+  z.object({ type: z.literal("compile.check"), id }),
+  z.object({
+    type: z.literal("compile.run"),
+    id,
+    playbookId: z.string().regex(/^[a-z][a-z0-9_-]*$/),
+    sourceText: z.string().optional(),
+    sourcePath: z.string().optional(),
+    roles: z.array(z.string().min(1)).min(1),
+    command: z.string().min(1),
+    intent: z.string().min(1),
+    /** role -> profile id or adapter shorthand, written to the config. */
+    players: z.record(z.string(), z.string()),
+  }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -253,6 +266,11 @@ export interface CommandResults {
     };
   }[];
   "config.edit": ConfigState;
+  "compile.check": {
+    node: { ok: boolean; version?: string; command: string; guidance?: string };
+    slc: { ok: boolean; command: string[]; guidance?: string };
+  };
+  "compile.run": ConfigState;
 }
 
 // ---------------------------------------------------------------------------
@@ -306,13 +324,20 @@ export interface SessionStateMessage {
   session: SessionInfo;
 }
 
+export interface CompileProgressMessage {
+  type: "compile.progress";
+  playbookId: string;
+  line: string;
+}
+
 export type ServerMessage =
   | HelloMessage
   | ReplyMessage
   | RecordMessage
   | ConfigStateMessage
   | ReadinessStateMessage
-  | SessionStateMessage;
+  | SessionStateMessage
+  | CompileProgressMessage;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers

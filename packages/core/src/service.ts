@@ -7,7 +7,7 @@
 // channels filtered by visibility at this boundary (CORE-8/14).
 
 import { existsSync, readFileSync, statSync, watch, type FSWatcher } from "node:fs";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
@@ -47,6 +47,7 @@ import {
   profileReferences,
   type ConfigEditOp,
 } from "./config-edit.js";
+import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
 import type { ForgeState } from "./protocol.js";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
@@ -70,6 +71,10 @@ export interface CoreServiceOptions {
   forgeAdapter?: ForgeAdapter;
   /** Scaffold command for project creation, e.g. ["npx","-y","@sublang/spex"]. */
   scaffoldCommand?: string[];
+  /** Compiled-playbook library directory (DR-005). */
+  libraryDir?: string;
+  /** Injectable line-streaming spawner for compile runs (tests). */
+  compileSpawner?: LineSpawner;
 }
 
 const FORGE_CACHE_MS = 60_000;
@@ -481,6 +486,67 @@ export class CoreService {
           throw new CoreError(
             "invalid_config",
             result.error ?? "edit rejected",
+          );
+        }
+        await this.reloadConfig();
+        return this.configState;
+      }
+      case "compile.check":
+        return checkToolchain(this.env, this.options.compileSpawner);
+      case "compile.run": {
+        if (!existsSync(this.configPath)) {
+          throw new CoreError("invalid_config", "config file is missing");
+        }
+        const libraryDir =
+          this.options.libraryDir ??
+          join(
+            this.env.XDG_DATA_HOME || join(this.home, ".local", "share"),
+            "spex",
+            "playbooks",
+          );
+        let result;
+        try {
+          result = await compilePlaybook({
+            playbookId: command.playbookId,
+            source: {
+              ...(command.sourceText !== undefined
+                ? { text: command.sourceText }
+                : {}),
+              ...(command.sourcePath ? { path: command.sourcePath } : {}),
+            },
+            roles: command.roles,
+            command: command.command,
+            intent: command.intent,
+            libraryDir,
+            env: this.env,
+            ...(this.options.compileSpawner
+              ? { spawner: this.options.compileSpawner }
+              : {}),
+            onProgress: (line) =>
+              this.broadcast({
+                type: "compile.progress",
+                playbookId: command.playbookId,
+                line,
+              }),
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new CoreError("invalid_request", message);
+        }
+        const edit = await editConfigFile(
+          this.configPath,
+          {
+            kind: "playbook.add",
+            playbookId: command.playbookId,
+            from: result.from,
+            players: command.players,
+          },
+          this.options.loadModule,
+        );
+        if (!edit.ok) {
+          throw new CoreError(
+            "invalid_config",
+            `compiled, but registration was refused: ${edit.error}`,
           );
         }
         await this.reloadConfig();

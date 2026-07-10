@@ -40,6 +40,7 @@ export interface AppState {
   readiness: ReadinessEntry[];
   projects: ProjectInfo[];
   projectMeta: Record<string, ProjectMeta>;
+  compileProgress: Record<string, string[]>;
   sessions: SessionInfo[];
   views: Record<string, SessionView>;
   composers: Record<string, ComposerState>;
@@ -74,6 +75,17 @@ export const useAppStore = create<AppState>((set, get) => {
       case "readiness.state":
         set({ readiness: message.profiles });
         break;
+      case "compile.progress": {
+        const progress = get().compileProgress;
+        const lines = progress[message.playbookId] ?? [];
+        set({
+          compileProgress: {
+            ...progress,
+            [message.playbookId]: [...lines.slice(-199), message.line],
+          },
+        });
+        break;
+      }
       case "session.state": {
         const sessions = get().sessions.filter(
           (session) => session.id !== message.session.id,
@@ -129,6 +141,7 @@ export const useAppStore = create<AppState>((set, get) => {
     readiness: [],
     projects: [],
     projectMeta: {},
+    compileProgress: {},
     sessions: [],
     views: {},
     composers: {},

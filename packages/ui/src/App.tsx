@@ -12,8 +12,9 @@ import { RunView } from "./components/RunView.js";
 import { ProjectsSurface } from "./components/ProjectsSurface.js";
 import { DashboardSurface } from "./components/DashboardSurface.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
+import { LibrarySurface } from "./components/LibrarySurface.js";
 
-const SURFACES = ["Dashboard", "Sessions", "Projects", "Settings"] as const;
+const SURFACES = ["Dashboard", "Sessions", "Projects", "Library", "Settings"] as const;
 type Surface = (typeof SURFACES)[number];
 
 function ConnectionBadge() {
@@ -138,6 +139,8 @@ export function App() {
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {surface === "Projects" ? (
           <ProjectsSurface />
+        ) : surface === "Library" ? (
+          <LibrarySurface />
         ) : surface === "Settings" ? (
           <SettingsSurface />
         ) : surface === "Dashboard" ? (
