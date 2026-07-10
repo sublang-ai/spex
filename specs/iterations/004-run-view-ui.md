@@ -11,16 +11,16 @@ core WebSocket protocol.
 
 ## Deliverables
 
-- [ ] `@sublang/spex-ui` workspace package (React + Vite + Tailwind)
+- [x] `@sublang/spex-ui` workspace package (React + Vite + Tailwind)
   building in root CI
-- [ ] Protocol client with reconnect and typed commands
-- [ ] Record reducer folding the stream into per-session view state
-- [ ] Run view: Captain pane, player transcripts, Boss composer,
+- [x] Protocol client with reconnect and typed commands
+- [x] Record reducer folding the stream into per-session view state
+- [x] Run view: Captain pane, player transcripts, Boss composer,
   awaitBossReply banner, abort, pane visibility
-- [ ] App shell with navigation and session tabs
-- [ ] Dev harness: core service bootable with fake adapters for UI
+- [x] App shell with navigation and session tabs
+- [x] Dev harness: core service bootable with fake adapters for UI
   development
-- [ ] Reducer/component tests against record fixtures (RUN-19..23)
+- [x] Reducer/component tests against record fixtures (RUN-19..23)
 
 ## Tasks
 
