@@ -20,6 +20,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [20, 22]
+        exclude:
+          # better-sqlite3 ships no win32 prebuild for the Node 20 ABI
+          # and the source build trips node-gyp's VS detection there;
+          # Node 20 coverage stays on ubuntu/macos.
+          - os: windows-latest
+            node-version: 20
     runs-on: ${{ matrix.os }}
 
     steps:
