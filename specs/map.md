@@ -39,6 +39,7 @@ meta.md     The spec of specs
 | IR-001 | [001-scaffold-cli.md](iterations/001-scaffold-cli.md) | Implement scaffold CLI per SCAF package |
 | IR-002 | [002-workspace-restructure.md](iterations/002-workspace-restructure.md) | Move the scaffold CLI to packages/cli in an npm-workspaces monorepo |
 | IR-003 | [003-core-service.md](iterations/003-core-service.md) | Implement the headless core service per the CORE package |
+| IR-004 | [004-run-view-ui.md](iterations/004-run-view-ui.md) | Implement the web UI run view per the RUN package |
 
 ## Packages
 
