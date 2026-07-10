@@ -61,6 +61,12 @@ function channelKey(channel: Channel): string {
   return `${channel.kind}:${channel.sessionId}`;
 }
 
+export interface CoreServiceEvents {
+  /** Local hook for an embedding shell (notifications, badges). */
+  onRecord?: (envelope: RecordEnvelope) => void;
+  onSessionState?: (session: import("./protocol.js").SessionInfo) => void;
+}
+
 export class CoreService {
   private readonly options: CoreServiceOptions;
   private readonly configPath: string;
@@ -69,6 +75,7 @@ export class CoreService {
   private readonly store: Store;
   private readonly sessions: SessionManager;
   private readonly clients = new Set<ClientState>();
+  readonly events: CoreServiceEvents = {};
   private wss?: WebSocketServer;
   private watcher?: FSWatcher;
   private reloadTimer?: NodeJS.Timeout;
@@ -91,9 +98,14 @@ export class CoreService {
       adapterImports: options.adapterImports,
       captainFactory: options.captainFactory,
     });
-    this.sessions.onRecord = (envelope) => this.dispatchRecord(envelope);
-    this.sessions.onSessionState = (session) =>
+    this.sessions.onRecord = (envelope) => {
+      this.dispatchRecord(envelope);
+      this.events.onRecord?.(envelope);
+    };
+    this.sessions.onSessionState = (session) => {
       this.broadcast({ type: "session.state", session });
+      this.events.onSessionState?.(session);
+    };
   }
 
   static async start(options: CoreServiceOptions = {}): Promise<CoreService> {
@@ -116,6 +128,21 @@ export class CoreService {
 
   configStateSnapshot(): ConfigState {
     return this.configState;
+  }
+
+  /** Config notification preferences (event -> off|bell|desktop). */
+  notificationPrefs(): Record<string, string> {
+    const prefs = this.composed?.notifications;
+    return typeof prefs === "object" && prefs !== null
+      ? (prefs as Record<string, string>)
+      : {};
+  }
+
+  /** True while any live session has an active boss turn. */
+  hasActiveTurns(): boolean {
+    return this.sessions
+      .listSessions()
+      .some((session) => session.live && this.sessions.getLive(session.id)?.turnActive);
   }
 
   async stop(): Promise<void> {
