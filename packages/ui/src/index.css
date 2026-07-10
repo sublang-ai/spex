@@ -1,0 +1,53 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> */
+
+@import "tailwindcss";
+
+@theme {
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100;
+}
+
+.markdown :is(p, ul, ol, pre, blockquote) {
+  @apply my-1.5;
+}
+.markdown ul {
+  @apply list-disc pl-5;
+}
+.markdown ol {
+  @apply list-decimal pl-5;
+}
+.markdown code {
+  @apply rounded bg-neutral-200/70 px-1 py-0.5 font-mono text-[0.85em] dark:bg-neutral-800;
+}
+.markdown pre {
+  @apply overflow-x-auto rounded-md bg-neutral-100 p-2 dark:bg-neutral-900;
+}
+.markdown pre code {
+  @apply bg-transparent p-0;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  @apply mt-3 mb-1 font-semibold;
+}
+.markdown a {
+  @apply text-blue-600 underline dark:text-blue-400;
+}
+.markdown table {
+  @apply my-2 border-collapse text-sm;
+}
+.markdown th,
+.markdown td {
+  @apply border border-neutral-300 px-2 py-1 dark:border-neutral-700;
+}
