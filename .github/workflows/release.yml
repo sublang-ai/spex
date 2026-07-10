@@ -68,7 +68,7 @@ jobs:
 
       - name: Validate tarball
         run: |
-          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          npm pack --dry-run -w packages/cli 2>&1 | tee /tmp/pack-output.txt
           if grep -E '\.test\.(js|d\.ts)' /tmp/pack-output.txt; then
             echo "::error::Tarball contains test files"
             exit 1
@@ -77,9 +77,9 @@ jobs:
       - name: Verify version matches tag
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PKG_VERSION="$(node -p 'require("./package.json").version')"
+          PKG_VERSION="$(node -p 'require("./packages/cli/package.json").version')"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag $TAG_VERSION does not match package.json $PKG_VERSION"
+            echo "::error::Tag $TAG_VERSION does not match packages/cli/package.json $PKG_VERSION"
             exit 1
           fi
 
@@ -88,15 +88,15 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           # Extract section between ## [VERSION] and next ## [
-          sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md > /tmp/release-notes.md
+          sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" packages/cli/CHANGELOG.md > /tmp/release-notes.md
           cat /tmp/release-notes.md
           if [ ! -s /tmp/release-notes.md ]; then
-            echo "::error::No release notes found for version ${VERSION} in CHANGELOG.md"
+            echo "::error::No release notes found for version ${VERSION} in packages/cli/CHANGELOG.md"
             exit 1
           fi
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish -w packages/cli --provenance --access public
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
