@@ -12,17 +12,17 @@ macOS arm64 packaging.
 
 ## Deliverables
 
-- [ ] `apps/desktop` workspace package: Electron main booting the
+- [x] `apps/desktop` workspace package: Electron main booting the
   in-process core and loading the built UI with the core URL
-- [ ] Login-shell environment capture before adapter readiness
-- [ ] Native notifications (turn finished, boss question, failure)
+- [x] Login-shell environment capture before adapter readiness
+- [x] Native notifications (turn finished, boss question, failure)
   honoring config notification preferences
-- [ ] Dock badge from pending-attention count
-- [ ] Single-instance enforcement and clean quit with active-turn
+- [x] Dock badge from pending-attention count
+- [x] Single-instance enforcement and clean quit with active-turn
   warning
-- [ ] electron-builder config for unsigned macOS arm64 artifacts
+- [x] electron-builder config for unsigned macOS arm64 artifacts
   with agent-SDK binaries asar-unpacked
-- [ ] CI keeps building without downloading Electron binaries
+- [x] CI keeps building without downloading Electron binaries
 
 ## Tasks
 
