@@ -45,6 +45,7 @@ meta.md     The spec of specs
 | IR-007 | [007-dashboard.md](iterations/007-dashboard.md) | Implement the Dashboard per the DASH package |
 | IR-008 | [008-settings.md](iterations/008-settings.md) | Implement Settings over the shared config per the SET package |
 | IR-009 | [009-library-compile.md](iterations/009-library-compile.md) | Implement the Library and slc compile flow per the PBLIB package |
+| IR-010 | [010-hardening.md](iterations/010-hardening.md) | Real-shell verification, docs, and deferred-work inventory |
 
 ## Packages
 
