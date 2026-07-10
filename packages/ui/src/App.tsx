@@ -10,8 +10,9 @@ import { useState } from "react";
 import { useAppStore } from "./state/store.js";
 import { RunView } from "./components/RunView.js";
 import { ProjectsSurface } from "./components/ProjectsSurface.js";
+import { DashboardSurface } from "./components/DashboardSurface.js";
 
-const SURFACES = ["Sessions", "Projects"] as const;
+const SURFACES = ["Dashboard", "Sessions", "Projects"] as const;
 type Surface = (typeof SURFACES)[number];
 
 function ConnectionBadge() {
@@ -100,8 +101,9 @@ function SessionsSurface() {
 }
 
 export function App() {
-  const [surface, setSurface] = useState<Surface>("Projects");
+  const [surface, setSurface] = useState<Surface>("Dashboard");
   const configState = useAppStore((state) => state.configState);
+  const focusSession = useAppStore((state) => state.focusSession);
 
   return (
     <div className="flex h-full">
@@ -133,7 +135,18 @@ export function App() {
         </div>
       </nav>
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {surface === "Projects" ? <ProjectsSurface /> : <SessionsSurface />}
+        {surface === "Projects" ? (
+          <ProjectsSurface />
+        ) : surface === "Dashboard" ? (
+          <DashboardSurface
+            onOpenSession={(sessionId) => {
+              void focusSession(sessionId);
+              setSurface("Sessions");
+            }}
+          />
+        ) : (
+          <SessionsSurface />
+        )}
       </main>
     </div>
   );

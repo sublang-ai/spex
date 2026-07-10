@@ -42,6 +42,7 @@ meta.md     The spec of specs
 | IR-004 | [004-run-view-ui.md](iterations/004-run-view-ui.md) | Implement the web UI run view per the RUN package |
 | IR-005 | [005-desktop-shell.md](iterations/005-desktop-shell.md) | Implement the Electron desktop shell per the SHELL package |
 | IR-006 | [006-projects-forge.md](iterations/006-projects-forge.md) | Implement Projects and the gh forge adapter per the PROJ package |
+| IR-007 | [007-dashboard.md](iterations/007-dashboard.md) | Implement the Dashboard per the DASH package |
 
 ## Packages
 

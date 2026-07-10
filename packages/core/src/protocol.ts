@@ -163,6 +163,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     afterSeq: z.number().int().nonnegative().optional(),
   }),
   z.object({ type: z.literal("usage.get"), id, sessionId: z.string().min(1) }),
+  z.object({ type: z.literal("usage.days"), id }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -192,6 +193,15 @@ export interface CommandResults {
     toolUses: number;
     totalCostUsd: number;
   };
+  "usage.days": {
+    day: string;
+    totals: {
+      inputTokens: number;
+      outputTokens: number;
+      toolUses: number;
+      totalCostUsd: number;
+    };
+  }[];
 }
 
 // ---------------------------------------------------------------------------

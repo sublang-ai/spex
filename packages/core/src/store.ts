@@ -327,6 +327,34 @@ export class Store {
       );
   }
 
+  usageByDay(): { day: string; totals: UsageTotals }[] {
+    const rows = this.db
+      .prepare(
+        "SELECT date(at / 1000, 'unixepoch') AS day, " +
+          "COALESCE(SUM(input_tokens),0) AS input_tokens, " +
+          "COALESCE(SUM(output_tokens),0) AS output_tokens, " +
+          "COALESCE(SUM(tool_uses),0) AS tool_uses, " +
+          "COALESCE(SUM(total_cost_usd),0) AS total_cost_usd " +
+          "FROM usage GROUP BY day ORDER BY day DESC LIMIT 30",
+      )
+      .all() as {
+      day: string;
+      input_tokens: number;
+      output_tokens: number;
+      tool_uses: number;
+      total_cost_usd: number;
+    }[];
+    return rows.map((row) => ({
+      day: row.day,
+      totals: {
+        inputTokens: row.input_tokens,
+        outputTokens: row.output_tokens,
+        toolUses: row.tool_uses,
+        totalCostUsd: row.total_cost_usd,
+      },
+    }));
+  }
+
   sessionUsage(sessionId: string): UsageTotals {
     const row = this.db
       .prepare(

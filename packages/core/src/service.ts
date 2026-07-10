@@ -448,6 +448,8 @@ export class CoreService {
       case "usage.get":
         this.requireKnownSession(command.sessionId);
         return this.store.sessionUsage(command.sessionId);
+      case "usage.days":
+        return this.store.usageByDay();
     }
   }
 
