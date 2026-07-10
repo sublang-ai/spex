@@ -11,17 +11,17 @@ Playbook Captain shell behind the WebSocket protocol.
 
 ## Deliverables
 
-- [ ] `@sublang/spex-core` workspace package building and testing in
+- [x] `@sublang/spex-core` workspace package building and testing in
   root CI
-- [ ] Typed WebSocket protocol module exported for UI consumption
-- [ ] Config module: locate, load, validate (launcher parity), seed,
+- [x] Typed WebSocket protocol module exported for UI consumption
+- [x] Config module: locate, load, validate (launcher parity), seed,
   watch, compose
-- [ ] SQLite store with sessions/turns/records/usage persistence
-- [ ] Scripted fake adapter fixture enabling network-free tests
-- [ ] Session manager embedding runtime + captain shell with
+- [x] SQLite store with sessions/turns/records/usage persistence
+- [x] Scripted fake adapter fixture enabling network-free tests
+- [x] Session manager embedding runtime + captain shell with
   channel-boundary visibility filtering
-- [ ] WebSocket server with subscriptions, commands, readiness
-- [ ] Integration tests covering CORE-19..23
+- [x] WebSocket server with subscriptions, commands, readiness
+- [x] Integration tests covering CORE-19..23
 
 ## Tasks
 
