@@ -40,6 +40,7 @@ meta.md     The spec of specs
 | IR-002 | [002-workspace-restructure.md](iterations/002-workspace-restructure.md) | Move the scaffold CLI to packages/cli in an npm-workspaces monorepo |
 | IR-003 | [003-core-service.md](iterations/003-core-service.md) | Implement the headless core service per the CORE package |
 | IR-004 | [004-run-view-ui.md](iterations/004-run-view-ui.md) | Implement the web UI run view per the RUN package |
+| IR-005 | [005-desktop-shell.md](iterations/005-desktop-shell.md) | Implement the Electron desktop shell per the SHELL package |
 
 ## Packages
 
