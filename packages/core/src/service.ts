@@ -6,7 +6,7 @@
 // command dispatch with schema validation (CORE-13), and record
 // channels filtered by visibility at this boundary (CORE-8/14).
 
-import { existsSync, statSync, watch, type FSWatcher } from "node:fs";
+import { existsSync, readFileSync, statSync, watch, type FSWatcher } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { WebSocketServer, WebSocket } from "ws";
@@ -42,6 +42,11 @@ import {
   type ForgeAdapter,
   type RunCommand,
 } from "./forge.js";
+import {
+  editConfigFile,
+  profileReferences,
+  type ConfigEditOp,
+} from "./config-edit.js";
 import type { ForgeState } from "./protocol.js";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
@@ -450,6 +455,37 @@ export class CoreService {
         return this.store.sessionUsage(command.sessionId);
       case "usage.days":
         return this.store.usageByDay();
+      case "config.edit": {
+        if (!existsSync(this.configPath)) {
+          throw new CoreError("invalid_config", "config file is missing");
+        }
+        const op = command.op as ConfigEditOp;
+        if (op.kind === "profile.delete") {
+          const references = profileReferences(
+            readFileSync(this.configPath, "utf8"),
+            op.id,
+          );
+          if (references.length > 0) {
+            throw new CoreError(
+              "conflict",
+              `profile "${op.id}" is referenced by ${references.join(", ")}`,
+            );
+          }
+        }
+        const result = await editConfigFile(
+          this.configPath,
+          op,
+          this.options.loadModule,
+        );
+        if (!result.ok) {
+          throw new CoreError(
+            "invalid_config",
+            result.error ?? "edit rejected",
+          );
+        }
+        await this.reloadConfig();
+        return this.configState;
+      }
     }
   }
 

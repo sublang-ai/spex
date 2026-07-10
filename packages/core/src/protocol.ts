@@ -30,6 +30,7 @@ export interface ProfileSummary {
   adapter: AdapterName;
   model?: string;
   reasoningEffort?: string;
+  permissions?: { mode?: string; writablePaths?: string[] };
 }
 
 export interface PlaybookSummary {
@@ -44,6 +45,8 @@ export interface ConfigSummary {
   profiles: ProfileSummary[];
   captain: string;
   playbooks: PlaybookSummary[];
+  notifications?: Record<string, string>;
+  theme?: string;
 }
 
 export type ConfigState =
@@ -119,6 +122,52 @@ export interface ForgeState {
 
 const id = z.string().min(1);
 
+export const configEditOpSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("profile.save"),
+    id: z.string().min(1),
+    profile: z.object({
+      adapter: z.string().min(1),
+      model: z.string().optional(),
+      reasoningEffort: z.string().optional(),
+      permissions: z
+        .object({
+          mode: z.string().optional(),
+          writablePaths: z.array(z.string()).optional(),
+        })
+        .optional(),
+    }),
+  }),
+  z.object({ kind: z.literal("profile.delete"), id: z.string().min(1) }),
+  z.object({ kind: z.literal("captain.set"), ref: z.string().min(1) }),
+  z.object({
+    kind: z.literal("notifications.set"),
+    prefs: z.record(z.string(), z.string()),
+  }),
+  z.object({ kind: z.literal("theme.set"), theme: z.string().nullable() }),
+  z.object({
+    kind: z.literal("playbook.player.set"),
+    playbookId: z.string().min(1),
+    role: z.string().min(1),
+    ref: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal("playbook.option.set"),
+    playbookId: z.string().min(1),
+    key: z.string().min(1),
+    value: z.unknown(),
+  }),
+  z.object({ kind: z.literal("playbook.delete"), playbookId: z.string().min(1) }),
+  z.object({
+    kind: z.literal("playbook.add"),
+    playbookId: z.string().min(1),
+    from: z.string().min(1),
+    players: z.record(z.string(), z.string()),
+    options: z.record(z.string(), z.unknown()).optional(),
+  }),
+]);
+export type ConfigEditOpInput = z.infer<typeof configEditOpSchema>;
+
 export const channelSchema = z.object({
   kind: z.enum(["session", "debug"]),
   sessionId: z.string().min(1),
@@ -164,6 +213,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("usage.get"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("usage.days"), id }),
+  z.object({ type: z.literal("config.edit"), id, op: configEditOpSchema }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -202,6 +252,7 @@ export interface CommandResults {
       totalCostUsd: number;
     };
   }[];
+  "config.edit": ConfigState;
 }
 
 // ---------------------------------------------------------------------------

@@ -477,6 +477,14 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
               ...(typeof value.reasoningEffort === "string"
                 ? { reasoningEffort: value.reasoningEffort }
                 : {}),
+              ...(isPlainObject(value.permissions)
+                ? {
+                    permissions: value.permissions as {
+                      mode?: string;
+                      writablePaths?: string[];
+                    },
+                  }
+                : {}),
             },
           ]
         : [],
@@ -496,6 +504,10 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
         ]),
       ),
     })),
+    ...(isPlainObject(top.notifications)
+      ? { notifications: top.notifications as Record<string, string> }
+      : {}),
+    ...(typeof top.theme === "string" ? { theme: top.theme } : {}),
   };
 }
 
