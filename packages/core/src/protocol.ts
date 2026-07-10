@@ -67,6 +67,8 @@ export interface SessionInfo {
   endedAt: number | null;
   /** Player pane roster: namespaced `<playbook>-<role>` ids in config order. */
   players: { id: string; adapter: AdapterName; model?: string }[];
+  /** Panes visible at session start, before any player_view_changed record. */
+  initialVisible: string[];
 }
 
 export interface ReadinessEntry {

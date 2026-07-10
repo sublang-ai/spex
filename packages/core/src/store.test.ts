@@ -24,6 +24,7 @@ function sampleSession(store: Store): SessionInfo {
     live: true,
     endedAt: null,
     players: [{ id: "code-coder", adapter: "claude" }],
+    initialVisible: ["code-coder"],
   };
   store.createSession(session);
   return session;

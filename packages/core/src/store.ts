@@ -28,7 +28,8 @@ const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL,
     ended_at INTEGER,
     live INTEGER NOT NULL DEFAULT 0,
-    players_json TEXT NOT NULL
+    players_json TEXT NOT NULL,
+    initial_visible_json TEXT NOT NULL DEFAULT '[]'
   );
   CREATE TABLE turns (
     session_id TEXT NOT NULL,
@@ -91,6 +92,7 @@ interface SessionRow {
   ended_at: number | null;
   live: number;
   players_json: string;
+  initial_visible_json: string;
   path: string;
 }
 
@@ -194,8 +196,8 @@ export class Store {
   createSession(session: SessionInfo): void {
     this.db
       .prepare(
-        "INSERT INTO sessions (id, project_id, created_at, ended_at, live, players_json) " +
-          "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sessions (id, project_id, created_at, ended_at, live, players_json, initial_visible_json) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         session.id,
@@ -204,6 +206,7 @@ export class Store {
         session.endedAt,
         session.live ? 1 : 0,
         JSON.stringify(session.players),
+        JSON.stringify(session.initialVisible),
       );
   }
 
@@ -221,7 +224,7 @@ export class Store {
   listSessions(): SessionInfo[] {
     const rows = this.db
       .prepare(
-        "SELECT s.id, s.project_id, s.created_at, s.ended_at, s.live, s.players_json, p.path " +
+        "SELECT s.id, s.project_id, s.created_at, s.ended_at, s.live, s.players_json, s.initial_visible_json, p.path " +
           "FROM sessions s JOIN projects p ON p.id = s.project_id ORDER BY s.created_at",
       )
       .all() as SessionRow[];
@@ -233,6 +236,7 @@ export class Store {
       live: row.live === 1,
       endedAt: row.ended_at,
       players: JSON.parse(row.players_json) as SessionInfo["players"],
+      initialVisible: JSON.parse(row.initial_visible_json) as string[],
     }));
   }
 

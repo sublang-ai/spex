@@ -45,12 +45,28 @@ const REASONING_EFFORTS = new Set([
   "max",
 ]);
 
+export type ReasoningEffortName =
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max";
+
+export interface PermissionPolicyLike {
+  mode?: "auto" | "bypass";
+  fileWrite?: "allow" | "ask" | "deny";
+  shellExecute?: "allow" | "ask" | "deny";
+  networkAccess?: "allow" | "ask" | "deny";
+  writablePaths?: string[];
+}
+
 export interface ResolvedAgent {
   adapter: AdapterName;
   model?: string;
   instruction?: string;
-  permissions?: Record<string, unknown>;
-  reasoningEffort?: string;
+  permissions?: PermissionPolicyLike;
+  reasoningEffort?: ReasoningEffortName;
 }
 
 export interface ComposedPlayer extends ResolvedAgent {
@@ -139,10 +155,33 @@ function validateAgentBlock(
     if (!isPlainObject(block.permissions)) {
       throw new Error(`${path}.permissions must be an object`);
     }
-    for (const key of Object.keys(block.permissions)) {
+    const permissions = block.permissions;
+    for (const key of Object.keys(permissions)) {
       if (!PERMISSION_FIELDS.has(key)) {
         throw new Error(`Unknown config field ${path}.permissions.${key}`);
       }
+    }
+    if (
+      permissions.mode !== undefined &&
+      permissions.mode !== "auto" &&
+      permissions.mode !== "bypass"
+    ) {
+      throw new Error(`${path}.permissions.mode must be auto or bypass`);
+    }
+    for (const policy of ["fileWrite", "shellExecute", "networkAccess"]) {
+      const value = permissions[policy];
+      if (value !== undefined && !["allow", "ask", "deny"].includes(String(value))) {
+        throw new Error(
+          `${path}.permissions.${policy} must be allow, ask, or deny`,
+        );
+      }
+    }
+    if (
+      permissions.writablePaths !== undefined &&
+      (!Array.isArray(permissions.writablePaths) ||
+        permissions.writablePaths.some((p) => typeof p !== "string"))
+    ) {
+      throw new Error(`${path}.permissions.writablePaths must be a string list`);
     }
   }
   if (
