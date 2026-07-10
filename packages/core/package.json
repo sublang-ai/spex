@@ -24,6 +24,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "dev:fake": "npm run build && node dist/bin/dev-core.js --fake",
     "test": "node scripts/run-tests.cjs",
     "test:integration": "node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
   },
