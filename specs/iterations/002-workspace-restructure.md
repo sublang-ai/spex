@@ -12,15 +12,15 @@ identity and `v*` release flow intact.
 
 ## Deliverables
 
-- [ ] `packages/cli` holding the scaffold CLI (sources, scaffold
+- [x] `packages/cli` holding the scaffold CLI (sources, scaffold
   templates, tests, tsconfig, CHANGELOG, README, LICENSE) with an
   unchanged published surface
-- [ ] Private workspace root `package.json` with delegating
+- [x] Private workspace root `package.json` with delegating
   build/test scripts
-- [ ] Workspace-aware CI workflow
-- [ ] Release workflow building, validating, and publishing from
+- [x] Workspace-aware CI workflow
+- [x] Release workflow building, validating, and publishing from
   `packages/cli` on `v*` tags
-- [ ] RELEASE spec updated for the workspace layout
+- [x] RELEASE spec updated for the workspace layout
 
 ## Tasks
 
