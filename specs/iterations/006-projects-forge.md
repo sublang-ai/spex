@@ -11,16 +11,16 @@ GitHub forge adapter behind the adapter interface (DR-006).
 
 ## Deliverables
 
-- [ ] Core git module: work-tree validation, branch/dirty/
+- [x] Core git module: work-tree validation, branch/dirty/
   ahead-behind status via local git only
-- [ ] Core create flow: git init + optional spex scaffold + initial
+- [x] Core create flow: git init + optional spex scaffold + initial
   commit
-- [ ] Forge adapter interface with the gh-CLI GitHub adapter
+- [x] Forge adapter interface with the gh-CLI GitHub adapter
   (auth status, repo binding from origin, issues, PRs)
-- [ ] Protocol commands: project.create, project.status, forge.items
-- [ ] Projects UI: status-rich cards, forge panels with guidance
+- [x] Protocol commands: project.create, project.status, forge.items
+- [x] Projects UI: status-rich cards, forge panels with guidance
   states, create-new flow
-- [ ] Tests per PROJ test items with a fixture repo and stubbed gh
+- [x] Tests per PROJ test items with a fixture repo and stubbed gh
 
 ## Tasks
 
