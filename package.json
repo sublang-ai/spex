@@ -1,43 +1,23 @@
 {
-  "name": "@sublang/spex",
-  "version": "0.3.0",
-  "description": "The essential spec layer AI agents need to build software reliably",
-  "type": "module",
+  "name": "spex-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Spex: the desktop app for running playbooks, and the @sublang/spex scaffold CLI",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/sublang-ai/spex.git"
   },
-  "keywords": [
-    "spex",
-    "ai-agents",
-    "specs",
-    "specification",
-    "spec-driven-development",
-    "scaffold",
-    "cli"
-  ],
-  "bin": {
-    "spex": "dist/cli.js"
-  },
-  "files": [
-    "dist/**/*.js",
-    "!dist/**/*.test.js",
-    "dist/**/*.d.ts",
-    "!dist/**/*.test.d.ts",
-    "scaffold/"
+  "workspaces": [
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build && npm test",
-    "test": "node scripts/run-tests.cjs",
-    "test:integration": "node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "test:integration": "npm run test:integration --workspaces --if-present"
   },
   "engines": {
     "node": ">=20"
-  },
-  "devDependencies": {
-    "typescript": "^5.8.0",
-    "@types/node": "^22.0.0"
   }
 }
