@@ -9,6 +9,7 @@ import { useState } from "react";
 
 import { useAppStore } from "./state/store.js";
 import { RunView } from "./components/RunView.js";
+import { ProjectsSurface } from "./components/ProjectsSurface.js";
 
 const SURFACES = ["Sessions", "Projects"] as const;
 type Surface = (typeof SURFACES)[number];
@@ -29,99 +30,6 @@ function ConnectionBadge() {
     >
       {connection === "mismatch" ? "protocol mismatch" : connection}
     </span>
-  );
-}
-
-function ProjectsSurface() {
-  const projects = useAppStore((state) => state.projects);
-  const sessions = useAppStore((state) => state.sessions);
-  const registerProject = useAppStore((state) => state.registerProject);
-  const openSession = useAppStore((state) => state.openSession);
-  const removeProject = useAppStore((state) => state.removeProject);
-  const [path, setPath] = useState("");
-  const [error, setError] = useState<string>();
-
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
-      <h1 className="text-lg font-semibold">Projects</h1>
-      <div className="flex gap-2">
-        <input
-          value={path}
-          onChange={(event) => setPath(event.target.value)}
-          placeholder="/absolute/path/to/a/git/repo"
-          className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-        />
-        <button
-          type="button"
-          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
-          disabled={!path.trim()}
-          onClick={() => {
-            setError(undefined);
-            registerProject(path.trim())
-              .then(() => setPath(""))
-              .catch((cause: Error) => setError(cause.message));
-          }}
-        >
-          Register
-        </button>
-      </div>
-      {error ? (
-        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-          {error}
-        </div>
-      ) : null}
-      <ul className="flex flex-col gap-2">
-        {projects.map((project) => {
-          const live = sessions.some(
-            (session) => session.live && session.projectId === project.id,
-          );
-          return (
-            <li
-              key={project.id}
-              className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="font-medium">{project.name}</div>
-                <div className="truncate text-xs text-neutral-500">
-                  {project.path}
-                </div>
-              </div>
-              {live ? (
-                <span className="text-xs text-emerald-600 dark:text-emerald-400">
-                  session live
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="rounded-md border border-indigo-300 px-2.5 py-1 text-sm text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:hover:bg-indigo-950"
-                  onClick={() => {
-                    setError(undefined);
-                    openSession(project.id).catch((cause: Error) =>
-                      setError(cause.message),
-                    );
-                  }}
-                >
-                  Open session
-                </button>
-              )}
-              <button
-                type="button"
-                title="Remove from Spex (repo stays on disk)"
-                className="text-neutral-400 hover:text-red-500"
-                onClick={() => void removeProject(project.id)}
-              >
-                ✕
-              </button>
-            </li>
-          );
-        })}
-        {projects.length === 0 ? (
-          <li className="rounded-lg border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500 dark:border-neutral-700">
-            Register a local git repository to run playbooks in it.
-          </li>
-        ) : null}
-      </ul>
-    </div>
   );
 }
 

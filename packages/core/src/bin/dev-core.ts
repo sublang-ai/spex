@@ -10,6 +10,7 @@
 // Prints the WebSocket URL; the UI's default port is 8137.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
     writeFileSync(configPath, FAKE_CONFIG);
     const projectDir = join(dir, "demo-project");
     mkdirSync(projectDir);
+    execFileSync("git", ["init", "-q", projectDir]);
 
     const { imports } = fakeAdapterImports({
       rules: [

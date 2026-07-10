@@ -33,6 +33,16 @@ import {
 } from "./protocol.js";
 import { CoreError, SessionManager, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { Store } from "./store.js";
+import {
+  GitHubForgeAdapter,
+  createProjectRepo,
+  defaultRunCommand,
+  isWorkTreeRoot,
+  repoStatus,
+  type ForgeAdapter,
+  type RunCommand,
+} from "./forge.js";
+import type { ForgeState } from "./protocol.js";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
 const CORE_VERSION = "0.1.0";
@@ -50,7 +60,14 @@ export interface CoreServiceOptions {
   home?: string;
   /** Disable the config file watcher (tests drive reload directly). */
   watchConfig?: boolean;
+  /** Injectable external-command runner (git/gh; tests stub this). */
+  runCommand?: RunCommand;
+  forgeAdapter?: ForgeAdapter;
+  /** Scaffold command for project creation, e.g. ["npx","-y","@sublang/spex"]. */
+  scaffoldCommand?: string[];
 }
+
+const FORGE_CACHE_MS = 60_000;
 
 interface ClientState {
   socket: WebSocket;
@@ -83,6 +100,12 @@ export class CoreService {
   private configState: ConfigState;
   private composed?: ComposedConfig;
   private seeded = false;
+  private readonly runCommand: RunCommand;
+  private readonly forge: ForgeAdapter;
+  private readonly forgeCache = new Map<
+    string,
+    { at: number; state: ForgeState }
+  >();
 
   private constructor(options: CoreServiceOptions) {
     this.options = options;
@@ -90,6 +113,9 @@ export class CoreService {
     this.home = options.home ?? this.env.HOME ?? homedir();
     this.configPath =
       options.configPath ?? resolveConfigPath(this.env, this.home);
+    this.runCommand = options.runCommand ?? defaultRunCommand;
+    this.forge =
+      options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
     this.store = new Store(options.dbPath ?? ":memory:");
     this.configState = { status: "missing", path: this.configPath };
     this.sessions = new SessionManager({
@@ -320,7 +346,58 @@ export class CoreService {
             `${path} is not a directory`,
           );
         }
+        if (!(await isWorkTreeRoot(path, this.runCommand))) {
+          throw new CoreError(
+            "invalid_request",
+            `${path} is not the root of a git work tree (run git init first, or use project.create)`,
+          );
+        }
         return this.store.registerProject(path, basename(path), Date.now());
+      }
+      case "project.create": {
+        const path = resolve(command.path);
+        if (this.store.getProjectByPath(path)) {
+          throw new CoreError("conflict", `${path} is already registered`);
+        }
+        try {
+          await createProjectRepo({
+            path,
+            scaffold: command.scaffold,
+            run: this.runCommand,
+            ...(this.options.scaffoldCommand
+              ? { scaffoldCommand: this.options.scaffoldCommand }
+              : {}),
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new CoreError("invalid_request", message);
+        }
+        return this.store.registerProject(path, basename(path), Date.now());
+      }
+      case "project.status": {
+        const project = this.store.getProject(command.projectId);
+        if (!project) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        return repoStatus(project.path, this.runCommand);
+      }
+      case "forge.items": {
+        const project = this.store.getProject(command.projectId);
+        if (!project) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        const cached = this.forgeCache.get(project.id);
+        if (
+          !command.refresh &&
+          cached &&
+          Date.now() - cached.at < FORGE_CACHE_MS
+        ) {
+          return cached.state;
+        }
+        const status = await repoStatus(project.path, this.runCommand);
+        const state = await this.forge.state(project.path, status.originUrl);
+        this.forgeCache.set(project.id, { at: Date.now(), state });
+        return state;
       }
       case "project.remove": {
         if (!this.store.removeProject(command.projectId)) {

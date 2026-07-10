@@ -85,6 +85,34 @@ export interface StoredRecord {
   record: TmuxPlayRecord;
 }
 
+export interface RepoStatusInfo {
+  branch: string;
+  dirty: boolean;
+  ahead: number;
+  behind: number;
+  originUrl?: string;
+}
+
+export interface ForgeItem {
+  number: number;
+  title: string;
+  url: string;
+  author?: string;
+  updatedAt?: string;
+}
+
+export interface ForgeState {
+  adapter: "github";
+  /** null: adapter tool missing/unbound; false: not authenticated. */
+  authenticated: boolean | null;
+  /** owner/name when the origin remote maps to the forge. */
+  repo?: string;
+  issues: ForgeItem[];
+  prs: ForgeItem[];
+  /** Setup guidance when data cannot be served. */
+  guidance?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Client → core commands (validated per CORE-13)
 // ---------------------------------------------------------------------------
@@ -103,6 +131,19 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("project.list"), id }),
   z.object({ type: z.literal("project.register"), id, path: z.string().min(1) }),
   z.object({ type: z.literal("project.remove"), id, projectId: z.string().min(1) }),
+  z.object({
+    type: z.literal("project.create"),
+    id,
+    path: z.string().min(1),
+    scaffold: z.boolean().optional(),
+  }),
+  z.object({ type: z.literal("project.status"), id, projectId: z.string().min(1) }),
+  z.object({
+    type: z.literal("forge.items"),
+    id,
+    projectId: z.string().min(1),
+    refresh: z.boolean().optional(),
+  }),
   z.object({ type: z.literal("session.list"), id }),
   z.object({ type: z.literal("session.create"), id, projectId: z.string().min(1) }),
   z.object({ type: z.literal("session.dispose"), id, sessionId: z.string().min(1) }),
@@ -134,6 +175,9 @@ export interface CommandResults {
   "project.list": ProjectInfo[];
   "project.register": ProjectInfo;
   "project.remove": null;
+  "project.create": ProjectInfo;
+  "project.status": RepoStatusInfo;
+  "forge.items": ForgeState;
   "session.list": SessionInfo[];
   "session.create": SessionInfo;
   "session.dispose": null;

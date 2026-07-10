@@ -8,8 +8,10 @@
 import { create } from "zustand";
 import type {
   ConfigState,
+  ForgeState,
   ProjectInfo,
   ReadinessEntry,
+  RepoStatusInfo,
   ServerMessage,
   SessionInfo,
 } from "@sublang/spex-core/protocol";
@@ -27,11 +29,17 @@ export interface ComposerState {
   answering: boolean;
 }
 
+export interface ProjectMeta {
+  status?: RepoStatusInfo;
+  forge?: ForgeState;
+}
+
 export interface AppState {
   connection: ConnectionStatus;
   configState?: ConfigState;
   readiness: ReadinessEntry[];
   projects: ProjectInfo[];
+  projectMeta: Record<string, ProjectMeta>;
   sessions: SessionInfo[];
   views: Record<string, SessionView>;
   composers: Record<string, ComposerState>;
@@ -40,6 +48,8 @@ export interface AppState {
   connect(url?: string): void;
   refresh(): Promise<void>;
   registerProject(path: string): Promise<ProjectInfo>;
+  createProject(path: string, scaffold: boolean): Promise<ProjectInfo>;
+  loadProjectMeta(projectId: string, refresh?: boolean): Promise<void>;
   removeProject(projectId: string): Promise<void>;
   openSession(projectId: string): Promise<SessionInfo>;
   focusSession(sessionId: string): Promise<void>;
@@ -118,6 +128,7 @@ export const useAppStore = create<AppState>((set, get) => {
     connection: "closed",
     readiness: [],
     projects: [],
+    projectMeta: {},
     sessions: [],
     views: {},
     composers: {},
@@ -142,6 +153,9 @@ export const useAppStore = create<AppState>((set, get) => {
         getClient().command("session.list", {}),
       ]);
       set({ configState, readiness, projects, sessions });
+      for (const project of projects) {
+        void get().loadProjectMeta(project.id);
+      }
       const live = sessions.filter((session) => session.live);
       for (const session of live) {
         await get().focusSession(session.id);
@@ -151,7 +165,35 @@ export const useAppStore = create<AppState>((set, get) => {
     async registerProject(path: string): Promise<ProjectInfo> {
       const project = await getClient().command("project.register", { path });
       set({ projects: await getClient().command("project.list", {}) });
+      void get().loadProjectMeta(project.id);
       return project;
+    },
+
+    async createProject(path: string, scaffold: boolean): Promise<ProjectInfo> {
+      const project = await getClient().command("project.create", {
+        path,
+        scaffold,
+      });
+      set({ projects: await getClient().command("project.list", {}) });
+      void get().loadProjectMeta(project.id);
+      return project;
+    },
+
+    async loadProjectMeta(projectId: string, refresh = false): Promise<void> {
+      const [status, forge] = await Promise.all([
+        getClient()
+          .command("project.status", { projectId })
+          .catch(() => undefined),
+        getClient()
+          .command("forge.items", { projectId, refresh })
+          .catch(() => undefined),
+      ]);
+      set({
+        projectMeta: {
+          ...get().projectMeta,
+          [projectId]: { status, forge },
+        },
+      });
     },
 
     async removeProject(projectId: string): Promise<void> {

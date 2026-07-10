@@ -7,7 +7,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -143,13 +144,18 @@ interface Harness {
 
 async function startHarness(
   configText: string = VALID_CONFIG,
-  options: { dbPath?: string; env?: NodeJS.ProcessEnv } = {},
+  options: {
+    dbPath?: string;
+    env?: NodeJS.ProcessEnv;
+    runCommand?: import("./forge.js").RunCommand;
+  } = {},
 ): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "spex-core-it-"));
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, configText);
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
+  execFileSync("git", ["init", "-q", projectDir]);
   const dbPath = options.dbPath ?? join(dir, "spex.db");
 
   const { imports, stats } = fakeAdapterImports({
@@ -181,6 +187,7 @@ async function startHarness(
     env: options.env ?? {},
     home: join(dir, "home"),
     watchConfig: false,
+    ...(options.runCommand ? { runCommand: options.runCommand } : {}),
   });
   return { service, stats, dir, dbPath, projectDir };
 }
@@ -482,6 +489,69 @@ test("CORE-23: readiness marks profiles per adapter rules and names requirements
   assert.equal(byProfile.get("codex-fast")?.ready, false);
   assert.match(byProfile.get("codex-fast")?.requirement ?? "", /OPENAI_API_KEY/);
   assert.equal(byProfile.get("gemini-extra")?.ready, null);
+
+  client.close();
+  await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// PROJ-16..19: registration validation, create flow, stubbed forge, removal
+// ---------------------------------------------------------------------------
+
+test("PROJ: work-tree validation, create flow, forge states, removal", async () => {
+  const { defaultRunCommand } = await import("./forge.js");
+  const ghStub: import("./forge.js").RunCommand = async (command, args, cwd) => {
+    if (command !== "gh") return defaultRunCommand(command, args, cwd);
+    if (args[0] === "auth") return { code: 0, stdout: "ok", stderr: "" };
+    return {
+      code: 0,
+      stdout: JSON.stringify([
+        { number: 3, title: "Stub item", url: "https://github.com/o/r/issues/3" },
+      ]),
+      stderr: "",
+    };
+  };
+  const harness = await startHarness(VALID_CONFIG, { runCommand: ghStub });
+  const client = new Client(harness.service.port());
+  await client.open();
+
+  // Non-repo directory is rejected with guidance (PROJ-1).
+  const plain = join(harness.dir, "plain");
+  mkdirSync(plain);
+  const rejected = await client.command("project.register", { path: plain });
+  assert.ok(!rejected.ok && rejected.error.code === "invalid_request");
+  assert.match(rejected.error.message, /git work tree/);
+
+  // Create flow produces a registered, statusable repo (PROJ-2/3).
+  const created = await client.expectOk("project.create", {
+    path: join(harness.dir, "fresh"),
+  });
+  const status = await client.expectOk("project.status", {
+    projectId: created.id,
+  });
+  assert.ok(status.branch.length > 0);
+  assert.equal(status.dirty, false);
+
+  // Forge state via the stubbed gh (PROJ-5/6): bind an origin first.
+  execFileSync("git", [
+    "-C",
+    created.path,
+    "remote",
+    "add",
+    "origin",
+    "https://github.com/sublang-ai/demo.git",
+  ]);
+  const forge = await client.expectOk("forge.items", {
+    projectId: created.id,
+    refresh: true,
+  });
+  assert.equal(forge.authenticated, true);
+  assert.equal(forge.repo, "sublang-ai/demo");
+  assert.equal(forge.issues[0]?.number, 3);
+
+  // Removal keeps the repo on disk (PROJ-8/19).
+  await client.expectOk("project.remove", { projectId: created.id });
+  assert.ok(existsSync(join(created.path, ".git")));
 
   client.close();
   await harness.service.stop();
