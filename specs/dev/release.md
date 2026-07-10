@@ -15,13 +15,13 @@ The project shall follow Semantic Versioning [[1]]: `MAJOR.MINOR.PATCH` where MA
 
 ### RELEASE-2
 
-The version in `package.json` shall match the git tag (without the `v` prefix). The release workflow shall verify this match before publishing.
+The version in the released package's `package.json` (`packages/cli/package.json`) shall match the git tag (without the `v` prefix). The release workflow shall verify this match before publishing.
 
 ## Changelog
 
 ### RELEASE-3
 
-All notable changes shall be documented in `CHANGELOG.md` following the Keep a Changelog [[2]] format.
+All notable changes to the released package shall be documented in its `CHANGELOG.md` (`packages/cli/CHANGELOG.md`) following the Keep a Changelog [[2]] format.
 
 ### RELEASE-4
 
@@ -60,6 +60,10 @@ When the release workflow completes publishing, it shall create a GitHub release
 ### RELEASE-18
 
 When a release tag is pushed, the release workflow shall confirm the CI workflow concluded `success` for the tagged commit before publishing to npm or creating a GitHub release, waiting up to a bounded timeout for the CI workflow to complete. When the CI workflow concludes with any result other than `success`, or the timeout elapses without a successful conclusion, the release workflow shall fail without publishing to npm or creating a GitHub release.
+
+### RELEASE-19
+
+Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), tags matching `vMAJOR.MINOR.PATCH` shall release only the `@sublang/spex` package from `packages/cli`, and desktop app releases shall use the disjoint `app-v*` tag namespace.
 
 ## Package Hygiene
 
