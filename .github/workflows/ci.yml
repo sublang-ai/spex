@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # CI builds every workspace but never launches Electron.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
 jobs:
   test:
     strategy:

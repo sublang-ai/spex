@@ -7,6 +7,10 @@ on:
 
 permissions: {}
 
+env:
+  # The v* release channel ships only the CLI; skip Electron binaries.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
 jobs:
   require-ci-green:
     runs-on: ubuntu-latest
