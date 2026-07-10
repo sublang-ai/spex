@@ -31,7 +31,14 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-execFileSync(process.execPath, ["--test", ...files], {
-  stdio: "inherit",
-  cwd: root,
-});
+// --test-timeout turns a hung test into a named failure; force-exit
+// keeps a leaked handle from zombifying the run (observed on the
+// Windows CI runners).
+execFileSync(
+  process.execPath,
+  ["--test", "--test-timeout=180000", "--test-force-exit", ...files],
+  {
+    stdio: "inherit",
+    cwd: root,
+  },
+);
