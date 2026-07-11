@@ -25,6 +25,7 @@ export class CoreError extends Error {
     readonly code:
       | "not_found"
       | "busy"
+      | "aborted"
       | "conflict"
       | "invalid_config"
       | "invalid_request"

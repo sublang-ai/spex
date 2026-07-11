@@ -16,9 +16,11 @@ import { WebSocket } from "ws";
 import { CoreService } from "./service.js";
 import { fakeAdapterImports, type FakeAdapterStats } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
+import type { LineSpawner } from "./compile.js";
 import type {
   Command,
   CommandResults,
+  CompileProgressMessage,
   ReadinessEntry,
   RecordMessage,
   ServerMessage,
@@ -154,6 +156,7 @@ async function startHarness(
     dbPath?: string;
     env?: NodeJS.ProcessEnv;
     runCommand?: import("./forge.js").RunCommand;
+    compileSpawner?: import("./compile.js").LineSpawner;
   } = {},
 ): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "spex-core-it-"));
@@ -195,6 +198,9 @@ async function startHarness(
     home: join(dir, "home"),
     watchConfig: false,
     ...(options.runCommand ? { runCommand: options.runCommand } : {}),
+    ...(options.compileSpawner
+      ? { compileSpawner: options.compileSpawner }
+      : {}),
   });
   return { service, stats, dir, dbPath, projectDir };
 }
@@ -497,6 +503,166 @@ test("CORE-23: readiness marks profiles per adapter rules and names requirements
   assert.equal(byProfile.get("codex-fast")?.ready, false);
   assert.match(byProfile.get("codex-fast")?.requirement ?? "", /OPENAI_API_KEY/);
   assert.equal(byProfile.get("gemini-extra")?.ready, null);
+
+  client.close();
+  await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// CORE-28: readiness entries for adapter shorthands
+// ---------------------------------------------------------------------------
+
+const SHORTHAND_CONFIG = `
+profiles:
+  gemini-extra:
+    adapter: gemini
+captain: claude
+playbooks:
+  code:
+    from: "@sublang/playbook/code/registry"
+    players:
+      coder: claude
+      reviewer: codex
+`;
+
+test("CORE-28: adapter shorthands referenced by the config get readiness entries", async () => {
+  const harness = await startHarness(SHORTHAND_CONFIG, {
+    env: { ANTHROPIC_API_KEY: "test-key" },
+  });
+  const client = new Client(harness.service.port());
+  await client.open();
+
+  const readiness = await client.expectOk("readiness.get", {});
+  // The captain ref and the coder ref are both "claude": one entry.
+  const claude = readiness.filter(
+    (entry: ReadinessEntry) => entry.profileId === "claude",
+  );
+  assert.equal(claude.length, 1);
+  assert.equal(claude[0].adapter, "claude");
+  assert.equal(claude[0].ready, true);
+  const codex = readiness.find(
+    (entry: ReadinessEntry) => entry.profileId === "codex",
+  );
+  assert.equal(codex?.ready, false);
+  assert.match(codex?.requirement ?? "", /OPENAI_API_KEY/);
+  // Declared profiles still report alongside the shorthands.
+  const profile = readiness.find(
+    (entry: ReadinessEntry) => entry.profileId === "gemini-extra",
+  );
+  assert.equal(profile?.ready, null);
+
+  client.close();
+  await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// CORE-27: compile busy rejection and cancellation
+// ---------------------------------------------------------------------------
+
+/** Compile spawner whose slc run hangs until its signal aborts,
+ * mirroring how node:child_process spawn honors { signal }. */
+function hangingCompileSpawner(): LineSpawner {
+  return (command, args, cwd, onLine, signal) => {
+    if (args[0] === "--version") {
+      onLine("v24.0.0");
+      return Promise.resolve(0);
+    }
+    onLine("slc: working");
+    return new Promise((_resolve, reject) => {
+      const abort = () => reject(new Error("The operation was aborted"));
+      if (signal?.aborted) {
+        abort();
+        return;
+      }
+      signal?.addEventListener("abort", abort, { once: true });
+    });
+  };
+}
+
+const COMPILE_INPUT = {
+  playbookId: "demo",
+  sourceText: "# Demo\n\nA one-player demo workflow.\n",
+  roles: ["helper"],
+  command: "demo",
+  intent: "demo workflow for tests",
+  players: { helper: "claude" },
+};
+
+test("CORE-27: a second compile.run for the same playbook rejects busy", async () => {
+  const harness = await startHarness(VALID_CONFIG, {
+    env: { SPEX_SLC: "fake-slc" },
+    compileSpawner: hangingCompileSpawner(),
+  });
+  const client = new Client(harness.service.port());
+  await client.open();
+
+  const first = client.command("compile.run", COMPILE_INPUT);
+  await client.waitFor(
+    (m) => m.type === "compile.progress" && m.line === "slc: working",
+  );
+  const second = await client.command("compile.run", COMPILE_INPUT);
+  assert.ok(!second.ok, "duplicate compile must be rejected");
+  if (!second.ok) {
+    assert.equal(second.error.code, "busy");
+    assert.match(second.error.message, /already running for demo/);
+  }
+
+  // Cancel so the pending first command settles before teardown.
+  await client.expectOk("compile.abort", { playbookId: "demo" });
+  const firstReply = await first;
+  assert.ok(!firstReply.ok && firstReply.error.code === "aborted");
+
+  client.close();
+  await harness.service.stop();
+});
+
+test("CORE-27: compile.abort cancels the run; the ◇ line closes progress", async () => {
+  const harness = await startHarness(VALID_CONFIG, {
+    env: { SPEX_SLC: "fake-slc" },
+    compileSpawner: hangingCompileSpawner(),
+  });
+  const client = new Client(harness.service.port());
+  await client.open();
+
+  // Aborting with nothing in flight is a not_found.
+  const idle = await client.command("compile.abort", { playbookId: "demo" });
+  assert.ok(!idle.ok && idle.error.code === "not_found");
+
+  const pending = client.command("compile.run", COMPILE_INPUT);
+  await client.waitFor(
+    (m) => m.type === "compile.progress" && m.line === "slc: working",
+  );
+  await client.expectOk("compile.abort", { playbookId: "demo" });
+
+  const reply = await pending;
+  assert.ok(!reply.ok, "aborted compile must not report success");
+  if (!reply.ok) {
+    assert.equal(reply.error.code, "aborted");
+    assert.equal(reply.error.message, "compile canceled");
+  }
+
+  // Give any stray post-abort output a beat to arrive, then assert
+  // the canceled marker is the final progress line.
+  await sleep(50);
+  const progress = client.messages.filter(
+    (m): m is CompileProgressMessage => m.type === "compile.progress",
+  );
+  assert.ok(progress.length > 0);
+  assert.equal(progress[progress.length - 1].line, "◇ compile canceled");
+
+  // The slot is free again: a new compile is accepted (not busy).
+  const again = client.command("compile.run", COMPILE_INPUT);
+  await client.waitFor(
+    (m) =>
+      m.type === "compile.progress" &&
+      m.line === "slc: working" &&
+      client.messages.filter(
+        (n) => n.type === "compile.progress" && n.line === "slc: working",
+      ).length >= 2,
+  );
+  await client.expectOk("compile.abort", { playbookId: "demo" });
+  const againReply = await again;
+  assert.ok(!againReply.ok && againReply.error.code === "aborted");
 
   client.close();
   await harness.service.stop();

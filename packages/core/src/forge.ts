@@ -68,11 +68,19 @@ export async function repoStatus(
   path: string,
   run: RunCommand = defaultRunCommand,
 ): Promise<RepoStatus> {
-  const branch = await run(
-    "git",
-    ["rev-parse", "--abbrev-ref", "HEAD"],
-    path,
-  );
+  // `branch --show-current` names even an unborn branch (fresh repo,
+  // no commits), where rev-parse fails; it prints nothing on a
+  // detached HEAD, so rev-parse remains the fallback for that case.
+  const branch = await run("git", ["branch", "--show-current"], path);
+  let branchName = branch.code === 0 ? branch.stdout.trim() : "";
+  if (!branchName) {
+    const revParse = await run(
+      "git",
+      ["rev-parse", "--abbrev-ref", "HEAD"],
+      path,
+    );
+    if (revParse.code === 0) branchName = revParse.stdout.trim();
+  }
   const porcelain = await run("git", ["status", "--porcelain"], path);
   const counts = await run(
     "git",
@@ -89,7 +97,7 @@ export async function repoStatus(
     ahead = Number(aheadText) || 0;
   }
   return {
-    branch: branch.code === 0 ? branch.stdout.trim() : "(unknown)",
+    branch: branchName || "(unknown)",
     dirty: porcelain.code === 0 && porcelain.stdout.trim().length > 0,
     ahead,
     behind,

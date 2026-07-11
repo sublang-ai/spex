@@ -259,6 +259,16 @@ function validateAgentBlock(
   }
 }
 
+/**
+ * True when a config reference string acts as an adapter shorthand
+ * (launcher parity: resolveAgent treats any string that names no
+ * profiles entry as `{ adapter: value }`, accepted only for known
+ * adapters). Callers must first rule out profile ids.
+ */
+export function isKnownAdapter(value: string): value is AdapterName {
+  return (KNOWN_ADAPTERS as readonly string[]).includes(value);
+}
+
 export function resolveAgent(
   value: unknown,
   profiles: Record<string, unknown>,

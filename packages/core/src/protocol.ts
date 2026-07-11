@@ -274,6 +274,11 @@ export const commandSchema = z.discriminatedUnion("type", [
     /** role -> profile id or adapter shorthand, written to the config. */
     players: z.record(z.string(), z.string()),
   }),
+  z.object({
+    type: z.literal("compile.abort"),
+    id,
+    playbookId: z.string().min(1),
+  }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -318,6 +323,7 @@ export interface CommandResults {
     slc: { ok: boolean; command: string[]; guidance?: string };
   };
   "compile.run": ConfigState;
+  "compile.abort": null;
   "playbook.artifacts": PlaybookArtifacts;
 }
 
@@ -331,6 +337,7 @@ export type ErrorCode =
   | "invalid_config"
   | "not_found"
   | "busy"
+  | "aborted"
   | "conflict"
   | "internal";
 

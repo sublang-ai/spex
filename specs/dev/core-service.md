@@ -108,3 +108,34 @@ present the service's session token, and handshakes whose Origin
 header names a foreign web origin, so that neither arbitrary local
 web pages nor remote pages can drive the control plane; embedding
 shells receive the token at startup and pass it to the UI.
+
+## Compile Lifecycle
+
+### CORE-25
+
+The core package shall run at most one compile per playbook id at a
+time: while a compile is in flight for a playbook id, a further
+`compile.run` for that id shall be rejected fail-closed with a
+`busy` error naming the id, per
+[DR-010](../decisions/010-interface-craft.md) principle 5.
+The core package shall accept a `compile.abort` command that
+cancels the in-flight compile for a playbook id by terminating the
+toolchain child process, emits a final canceled progress line, and
+makes the pending `compile.run` reply with an `aborted` error; no
+further progress output shall follow the canceled line.
+When `compile.abort` names a playbook id with no compile in
+flight, the core package shall reject it with a `not_found` error.
+
+## Readiness Reporting
+
+### CORE-26
+
+In addition to the per-profile entries required by
+[CORE-9](../user/core-service.md#core-9), the core package shall
+emit a readiness entry for each adapter shorthand the active config
+references directly — the captain reference and every playbook
+player reference that names an adapter rather than a profiles
+entry, under the same reference-resolution rule as the launcher
+([CORE-16](#core-16)) — deduplicated across references, so that a
+config using only shorthands still surfaces unmet adapter
+requirements before the first turn fails.

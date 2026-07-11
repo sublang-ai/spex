@@ -45,13 +45,21 @@ export type LineSpawner = (
   args: string[],
   cwd: string,
   onLine: (line: string) => void,
+  signal?: AbortSignal,
 ) => Promise<number>;
 
-export const defaultSpawner: LineSpawner = (command, args, cwd, onLine) =>
+export const defaultSpawner: LineSpawner = (command, args, cwd, onLine, signal) =>
   new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...(signal ? { signal } : {}),
+    });
     let buffer = "";
     const feed = (chunk: unknown) => {
+      // A canceled run goes quiet immediately: the kill-induced tail
+      // (partial lines, SIGTERM noise) must not follow the ◇ line.
+      if (signal?.aborted) return;
       buffer += String(chunk);
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
@@ -61,6 +69,7 @@ export const defaultSpawner: LineSpawner = (command, args, cwd, onLine) =>
     child.stderr.on("data", feed);
     child.on("error", rejectPromise);
     child.on("close", (code) => {
+      if (signal?.aborted) return;
       if (buffer.trim()) onLine(buffer);
       resolvePromise(code ?? 1);
     });
@@ -145,6 +154,9 @@ export interface CompileOptions {
   onProgress?: (line: string) => void;
   /** Skip the slc run when artifacts already exist (re-package). */
   skipSlc?: boolean;
+  /** Cancels the run: the slc child is killed and the pipeline
+   * rejects with an abort error at the next stage boundary. */
+  signal?: AbortSignal;
 }
 
 export interface CompileResult {
@@ -281,6 +293,7 @@ export async function compilePlaybook(
   const progress = options.onProgress ?? (() => {});
   const spawner = options.spawner ?? defaultSpawner;
   const env = options.env ?? process.env;
+  const signal = options.signal;
   const id = options.playbookId;
   if (!/^[a-z][a-z0-9_-]*$/.test(id)) {
     throw new Error(
@@ -314,11 +327,14 @@ export async function compilePlaybook(
       [...slcArgs, "playbook", sourcePath, "--link", resolveRuntimeContract()],
       dir,
       progress,
+      signal,
     );
+    signal?.throwIfAborted();
     if (code !== 0) {
       throw new Error(`slc playbook failed with exit code ${code}`);
     }
   }
+  signal?.throwIfAborted();
 
   if (!existsSync(fsmPath) || !existsSync(playbookPath)) {
     throw new Error(
@@ -342,6 +358,7 @@ export async function compilePlaybook(
     `introspected states: idle=${ids.idleStateId} final=${ids.finalStateId} park=[${ids.parkStateIds.join(", ")}]`,
   );
 
+  signal?.throwIfAborted();
   progress("packaging: generating and bundling the registry");
   const registryTs = join(dir, `${id}.registry.ts`);
   writeFileSync(registryTs, registrySource(options, ids, playbookPath));
@@ -370,6 +387,7 @@ export async function compilePlaybook(
   }
   entry.validateOptions(undefined);
 
+  signal?.throwIfAborted();
   progress("compile complete");
   return { from: registryBundle, ...ids };
 }

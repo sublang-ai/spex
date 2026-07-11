@@ -73,3 +73,34 @@ controlled environment variables and home-directory fixtures), the
 test suite shall assert that readiness reporting marks each profile
 accordingly and names the unmet requirement for the not-ready
 profile.
+
+## Compile Lifecycle Coverage
+
+### CORE-27
+Verifies: [CORE-25](../dev/core-service.md#core-25)
+
+Where the core service runs with an injected compile spawner whose
+toolchain run blocks until canceled, the test suite shall start a
+compile over the protocol and assert that:
+
+- a second `compile.run` for the same playbook id is rejected with
+  a `busy` error naming the id while the first is in flight;
+- `compile.abort` for that id makes the pending `compile.run`
+  reply with an `aborted` error, and the final progress line
+  broadcast for the playbook is the canceled marker;
+- `compile.abort` for a playbook id with no compile in flight is
+  rejected with a `not_found` error;
+- after cancellation, a new `compile.run` for the same id is
+  accepted.
+
+## Shorthand Readiness Coverage
+
+### CORE-28
+Verifies: [CORE-26](../dev/core-service.md#core-26)
+
+Where the config references adapters by shorthand — as the captain
+and as a playbook player — alongside a declared profile, the test
+suite shall assert that readiness reporting includes exactly one
+entry per referenced shorthand, marked per the adapter readiness
+rules with the unmet requirement named for a not-ready shorthand,
+while the declared profile keeps its own entry.

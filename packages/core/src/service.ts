@@ -16,6 +16,7 @@ import type { AddressInfo } from "node:net";
 import {
   checkAdapterReadiness,
   createModuleLoader,
+  isKnownAdapter,
   loadConfig,
   resolveConfigPath,
   seedConfig,
@@ -26,6 +27,7 @@ import {
 import {
   parseCommand,
   PROTOCOL_VERSION,
+  type AdapterName,
   type Channel,
   type Command,
   type ConfigState,
@@ -134,6 +136,8 @@ export class CoreService {
     string,
     { at: number; state: ForgeState }
   >();
+  /** One in-flight compile per playbook id; abort via compile.abort. */
+  private readonly activeCompiles = new Map<string, AbortController>();
 
   private constructor(options: CoreServiceOptions) {
     this.options = options;
@@ -206,6 +210,8 @@ export class CoreService {
   async stop(): Promise<void> {
     this.watcher?.close();
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
+    // Kill any in-flight compile child so shutdown never orphans slc.
+    for (const controller of this.activeCompiles.values()) controller.abort();
     await this.sessions.disposeAll();
     for (const client of this.clients) client.socket.close();
     await new Promise<void>((resolveClose) =>
@@ -260,7 +266,8 @@ export class CoreService {
 
   readiness(): ReadinessEntry[] {
     if (this.configState.status !== "valid") return [];
-    return this.configState.summary.profiles.map((profile) => {
+    const summary = this.configState.summary;
+    const entries: ReadinessEntry[] = summary.profiles.map((profile) => {
       const readiness = checkAdapterReadiness(
         profile.adapter,
         this.env,
@@ -275,6 +282,34 @@ export class CoreService {
           : {}),
       };
     });
+    // Adapter shorthands referenced directly (the captain ref or a
+    // playbook player ref, e.g. a fresh install's "claude") get their
+    // own entry, so a not-ready adapter warns before the first turn
+    // fails cold. Shorthand = a non-profile ref naming a known adapter,
+    // the same rule launcher-parity resolveAgent applies.
+    const profileIds = new Set(summary.profiles.map((profile) => profile.id));
+    const shorthands = new Set<AdapterName>();
+    const collect = (ref: string): void => {
+      if (!profileIds.has(ref) && isKnownAdapter(ref)) shorthands.add(ref);
+    };
+    collect(summary.captain);
+    for (const playbook of summary.playbooks) {
+      for (const player of Object.values(playbook.players)) {
+        collect(player.ref);
+      }
+    }
+    for (const shorthand of shorthands) {
+      const readiness = checkAdapterReadiness(shorthand, this.env, this.home);
+      entries.push({
+        profileId: shorthand,
+        adapter: shorthand,
+        ready: readiness.ready,
+        ...(readiness.requirement
+          ? { requirement: readiness.requirement }
+          : {}),
+      });
+    }
+    return entries;
   }
 
   // -- websocket ------------------------------------------------------------
@@ -564,60 +599,99 @@ export class CoreService {
         if (!existsSync(this.configPath)) {
           throw new CoreError("invalid_config", "config file is missing");
         }
-        const libraryDir =
-          this.options.libraryDir ??
-          join(
-            this.env.XDG_DATA_HOME || join(this.home, ".local", "share"),
-            "spex",
-            "playbooks",
-          );
-        let result;
-        try {
-          result = await compilePlaybook({
-            playbookId: command.playbookId,
-            source: {
-              ...(command.sourceText !== undefined
-                ? { text: command.sourceText }
-                : {}),
-              ...(command.sourcePath ? { path: command.sourcePath } : {}),
-            },
-            roles: command.roles,
-            command: command.command,
-            intent: command.intent,
-            libraryDir,
-            env: this.env,
-            ...(this.options.compileSpawner
-              ? { spawner: this.options.compileSpawner }
-              : {}),
-            onProgress: (line) =>
-              this.broadcast({
-                type: "compile.progress",
-                playbookId: command.playbookId,
-                line,
-              }),
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          throw new CoreError("invalid_request", message);
-        }
-        const edit = await editConfigFile(
-          this.configPath,
-          {
-            kind: "playbook.add",
-            playbookId: command.playbookId,
-            from: result.from,
-            players: command.players,
-          },
-          this.options.loadModule,
-        );
-        if (!edit.ok) {
+        // One compile per playbook id, fail-closed (DR-010 §5): a
+        // duplicate submission is rejected, never queued or merged.
+        if (this.activeCompiles.has(command.playbookId)) {
           throw new CoreError(
-            "invalid_config",
-            `compiled, but registration was refused: ${edit.error}`,
+            "busy",
+            `a compile is already running for ${command.playbookId}`,
           );
         }
-        await this.reloadConfig();
-        return this.configState;
+        const controller = new AbortController();
+        this.activeCompiles.set(command.playbookId, controller);
+        try {
+          const libraryDir =
+            this.options.libraryDir ??
+            join(
+              this.env.XDG_DATA_HOME || join(this.home, ".local", "share"),
+              "spex",
+              "playbooks",
+            );
+          let result;
+          try {
+            result = await compilePlaybook({
+              playbookId: command.playbookId,
+              source: {
+                ...(command.sourceText !== undefined
+                  ? { text: command.sourceText }
+                  : {}),
+                ...(command.sourcePath ? { path: command.sourcePath } : {}),
+              },
+              roles: command.roles,
+              command: command.command,
+              intent: command.intent,
+              libraryDir,
+              env: this.env,
+              signal: controller.signal,
+              ...(this.options.compileSpawner
+                ? { spawner: this.options.compileSpawner }
+                : {}),
+              onProgress: (line) => {
+                // After an abort the ◇ canceled line (sent by the
+                // compile.abort handler) stays the last progress output.
+                if (controller.signal.aborted) return;
+                this.broadcast({
+                  type: "compile.progress",
+                  playbookId: command.playbookId,
+                  line,
+                });
+              },
+            });
+          } catch (error) {
+            if (controller.signal.aborted) {
+              throw new CoreError("aborted", "compile canceled");
+            }
+            const message =
+              error instanceof Error ? error.message : String(error);
+            throw new CoreError("invalid_request", message);
+          }
+          const edit = await editConfigFile(
+            this.configPath,
+            {
+              kind: "playbook.add",
+              playbookId: command.playbookId,
+              from: result.from,
+              players: command.players,
+            },
+            this.options.loadModule,
+          );
+          if (!edit.ok) {
+            throw new CoreError(
+              "invalid_config",
+              `compiled, but registration was refused: ${edit.error}`,
+            );
+          }
+          await this.reloadConfig();
+          return this.configState;
+        } finally {
+          this.activeCompiles.delete(command.playbookId);
+        }
+      }
+      case "compile.abort": {
+        const controller = this.activeCompiles.get(command.playbookId);
+        if (!controller) {
+          throw new CoreError(
+            "not_found",
+            `no compile is running for ${command.playbookId}`,
+          );
+        }
+        controller.abort();
+        this.broadcast({
+          type: "compile.progress",
+          playbookId: command.playbookId,
+          line: "◇ compile canceled",
+        });
+        return null;
       }
     }
   }

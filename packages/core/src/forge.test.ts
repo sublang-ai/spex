@@ -61,6 +61,14 @@ test("repoStatus reports branch and dirty state from local git", async () => {
   assert.equal(withOrigin.originUrl, "git@github.com:sublang-ai/spex.git");
 });
 
+test("repoStatus names the real branch on a fresh repo with no commits", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-forge-fresh-"));
+  git(["init", "-q", "-b", "main", "."], dir);
+  const status = await repoStatus(dir);
+  assert.equal(status.branch, "main");
+  assert.equal(status.dirty, false);
+});
+
 test("createProjectRepo initializes a commit-ready repo", async () => {
   const dir = join(mkdtempSync(join(tmpdir(), "spex-create-")), "newproj");
   await createProjectRepo({ path: dir });
