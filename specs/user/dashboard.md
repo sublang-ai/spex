@@ -72,7 +72,10 @@ Resolving one entry shall not remove any other entry.
 While one or more project sessions are live, the Dashboard shall
 display a running-sessions overview listing, per session: the
 project name, the active playbook id (or an idle indicator when no
-engagement is active), the engagement's current state id, and the
+engagement is active), a human-readable state label for the
+engagement's current state — tinted by the state's tone, with the
+raw state id in the tooltip
+([DR-010](../decisions/010-interface-craft.md) §2) — and the
 elapsed time since the session started.
 The overview shall update as session records arrive, without a
 manual refresh.
@@ -114,8 +117,8 @@ render the section blank:
 | Section | Empty condition | Guidance |
 | --- | --- | --- |
 | Attention queue | no attention condition holds | an all-clear indication |
-| Running sessions | no live session | how to start a session from a project |
-| Next work | no bound project, or forge adapter not ready | forge setup steps per [DR-006](../decisions/006-projects-and-forge.md) |
+| Running sessions | no live session | how to start a session, with a navigation control to the Sessions surface |
+| Next work | no bound project, or forge adapter not ready | a plain-language note with a navigation control to the Projects surface, where GitHub is connected ([DR-006](../decisions/006-projects-and-forge.md)) |
 | Usage | no recorded usage | a statement that no usage has been recorded yet |
 
 ## Attention Badge
@@ -139,3 +142,14 @@ project with per-project counts, order items within each group by
 update recency, and show each item's labels. When the user selects
 a project filter, the Dashboard shall show only that project's
 items until the filter is cleared.
+
+## No Takeover
+
+### DASH-21
+
+While no project is registered, the Dashboard shall still render
+its sections with their per-section empty states
+([DASH-8](#dash-8)) and shall not replace the surface with a
+welcome takeover; first-run onboarding belongs to the Captain home
+as the single onboarding narrative
+([DR-010](../decisions/010-interface-craft.md) §1).

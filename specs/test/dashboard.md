@@ -76,3 +76,20 @@ fixture entries with titles and numbers, that a manual refresh
 invokes the stub again, and that a stub failure on refresh leaves
 the previously served lists in place with the failure and data age
 surfaced.
+
+## Empty-State and Label Coverage
+
+### DASH-22
+
+Verifies: [DASH-5](../user/dashboard.md#dash-5),
+[DASH-8](../user/dashboard.md#dash-8),
+[DASH-21](../user/dashboard.md#dash-21)
+
+Where Dashboard state is derived with no registered project, the
+test suite shall assert that the Dashboard renders its sections
+with their empty-state guidance rather than a welcome takeover,
+and that the next-work empty state offers an activatable
+navigation control to the Projects surface. Where a live session's
+view carries an engagement state id, the test suite shall assert
+that the running-sessions row renders the human-readable state
+label with the raw state id available in the tooltip.

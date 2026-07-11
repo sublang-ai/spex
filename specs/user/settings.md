@@ -125,3 +125,26 @@ Where the Settings surface presents an editable setting, the
 Settings surface shall accompany the setting with a short inline
 description of its effect; no setting shall appear as a bare,
 unexplained control.
+
+### SET-22
+
+While the notifications editor lists notification events, each
+event shall be labeled with a human-readable phrase from the app's
+notification label map rather than the wire event id
+([DR-010](../decisions/010-interface-craft.md) §2); the wire id
+shall remain available in the row's tooltip.
+
+### SET-23
+
+While a profile's readiness indicator reports not ready, the
+accompanying fix requirement ([SET-5](#set-5)) shall render in
+full, wrapping onto further lines as needed rather than
+truncating.
+
+### SET-24
+
+While the shared config file is missing or invalid, the Settings
+surface shall show the config file's path together with a
+secondary control that copies the path to the clipboard and
+briefly confirms the copy in place, so the user can open the file
+in an editor.

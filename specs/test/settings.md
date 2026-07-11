@@ -64,3 +64,19 @@ suite shall assert that the client receives the updated config
 state and an external-change notice, and that a subsequent save
 performed through the core service produces no external-change
 notice.
+
+## Presentation Coverage
+
+### SET-25
+
+Verifies: [SET-22](../user/settings.md#set-22),
+[SET-23](../user/settings.md#set-23),
+[SET-24](../user/settings.md#set-24)
+
+Where the Settings surface renders against fixture state, the test
+suite shall assert that each notification row shows its
+human-readable label with the wire event id in the row's tooltip,
+that a not-ready profile's long fix requirement renders without
+truncation, and that with an invalid config the copy control
+places the config file path on the clipboard and shows a transient
+copied confirmation.

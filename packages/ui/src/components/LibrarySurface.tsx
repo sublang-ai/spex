@@ -15,6 +15,8 @@ import type {
 
 import { getClient, useAppStore } from "../state/store.js";
 import { saveProfileEssentials, setPlaybookPlayer } from "../lib/config-ops.js";
+import { Icon } from "./Icon.js";
+import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
 import { ProfilePopover } from "./ProfilePopover.js";
 
@@ -113,13 +115,13 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
       </div>
       {artifacts.stateIds ? (
         <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
             states
           </span>
           {artifacts.stateIds.map((state) => (
             <span
               key={state}
-              className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+              className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
             >
               {state}
             </span>
@@ -148,12 +150,17 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
   );
 }
 
-export function LibrarySurface() {
+export function LibrarySurface({
+  onNavigate,
+}: {
+  onNavigate?: (surface: "Settings") => void;
+}) {
   const configState = useAppStore((state) => state.configState);
   const compileProgress = useAppStore((state) => state.compileProgress);
   const readiness = useAppStore((state) => state.readiness);
   const activeCompile = useAppStore((state) => state.activeCompile);
   const runCompile = useAppStore((state) => state.runCompile);
+  const abortCompile = useAppStore((state) => state.abortCompile);
   const connection = useAppStore((state) => state.connection);
 
   const [toolchain, setToolchain] = useState<Toolchain>();
@@ -183,8 +190,22 @@ export function LibrarySurface() {
   if (!configState || configState.status !== "valid") {
     return (
       <div className="m-auto max-w-md p-6 text-center text-sm text-neutral-500">
-        The Library needs a valid config — check{" "}
-        <span className="font-medium">Settings</span>.
+        <p>The Captain can only run playbooks listed here.</p>
+        <p className="mt-1">
+          Playbooks need a valid config — fix it in{" "}
+          {onNavigate ? (
+            <button
+              type="button"
+              onClick={() => onNavigate("Settings")}
+              className="text-indigo-600 hover:underline dark:text-indigo-300"
+            >
+              Settings
+            </button>
+          ) : (
+            <span className="font-medium">Settings</span>
+          )}
+          .
+        </p>
       </div>
     );
   }
@@ -286,34 +307,23 @@ export function LibrarySurface() {
                 {openPipeline === playbook.id ? "Hide pipeline" : "Pipeline"}
               </button>
               {confirmDelete === playbook.id ? (
-                <span className="flex items-center gap-1 text-xs">
-                  remove from config?
-                  <button
-                    type="button"
-                    className="rounded border border-red-300 px-1.5 py-0.5 text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
-                    onClick={() => {
-                      setConfirmDelete(undefined);
-                      edit({ kind: "playbook.delete", playbookId: playbook.id });
-                    }}
-                  >
-                    yes
-                  </button>
-                  <button
-                    type="button"
-                    className="text-neutral-500 hover:underline"
-                    onClick={() => setConfirmDelete(undefined)}
-                  >
-                    no
-                  </button>
-                </span>
+                <InlineConfirm
+                  question="remove from config?"
+                  onConfirm={() => {
+                    setConfirmDelete(undefined);
+                    edit({ kind: "playbook.delete", playbookId: playbook.id });
+                  }}
+                  onCancel={() => setConfirmDelete(undefined)}
+                />
               ) : (
                 <button
                   type="button"
                   title="Remove from the config (compiled artifacts stay in the library)"
+                  aria-label={`Remove /${playbook.command} from the config`}
                   onClick={() => setConfirmDelete(playbook.id)}
-                  className="text-neutral-400 hover:text-red-500"
+                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
                 >
-                  ✕
+                  <Icon name="close" />
                 </button>
               )}
             </div>
@@ -336,6 +346,7 @@ export function LibrarySurface() {
                   <button
                     type="button"
                     title={`Switch or tweak the ${role} profile in place`}
+                    aria-label={`Configure ${role}`}
                     onClick={() =>
                       setRolePopover((current) =>
                         current?.playbookId === playbook.id &&
@@ -344,9 +355,9 @@ export function LibrarySurface() {
                           : { playbookId: playbook.id, role },
                       )
                     }
-                    className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                    className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                   >
-                    ⚙
+                    <Icon name="gear" />
                   </button>
                   {rolePopover?.playbookId === playbook.id &&
                   rolePopover.role === role ? (
@@ -366,10 +377,13 @@ export function LibrarySurface() {
                 </span>
               ))}
               <span
-                className="ml-auto max-w-[16rem] truncate font-mono text-[10px] text-neutral-400"
-                title={playbook.from}
+                className="ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-400"
+                title={`Source this playbook was loaded from: ${playbook.from}`}
               >
-                {playbook.from}
+                <span>from</span>
+                <span className="max-w-[16rem] truncate font-mono">
+                  {playbook.from}
+                </span>
               </span>
             </div>
             {openPipeline === playbook.id ? (
@@ -499,13 +513,26 @@ export function LibrarySurface() {
                   "runs slc with your configured coding agent")}
             </span>
           </div>
-          {progressLines.length > 0 ? (
-            <pre
-              data-testid="compile-progress"
-              className="col-span-2 max-h-48 overflow-y-auto rounded bg-neutral-100 p-2 font-mono text-[11px] text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400"
-            >
-              {progressLines.join("\n")}
-            </pre>
+          {compiling || progressLines.length > 0 ? (
+            <div className="col-span-2 flex flex-col items-start gap-1.5">
+              {progressLines.length > 0 ? (
+                <pre
+                  data-testid="compile-progress"
+                  className="max-h-48 w-full overflow-y-auto rounded bg-neutral-100 p-2 font-mono text-[11px] text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400"
+                >
+                  {progressLines.join("\n")}
+                </pre>
+              ) : null}
+              {compiling ? (
+                <button
+                  type="button"
+                  onClick={() => void abortCompile()}
+                  className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  Cancel
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </section>

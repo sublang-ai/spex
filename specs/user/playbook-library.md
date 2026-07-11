@@ -6,8 +6,10 @@
 ## Intent
 
 This spec defines user-visible behavior of the Spex Library
-surface: browsing and enabling configured playbooks, mapping
-playbook roles to player profiles, and compiling new playbooks.
+surface — presented to the user as **Playbooks**
+([PBLIB-26](#pblib-26)): browsing and enabling configured
+playbooks, mapping playbook roles to player profiles, and
+compiling new playbooks.
 
 The Library is a workspace surface of the Spex desktop app
 ([DR-002](../decisions/002-desktop-app-architecture.md)).
@@ -132,3 +134,45 @@ Where a stage artifact cannot be located for a playbook, when the
 pipeline view is opened, the Library shall show which stages are
 available and name the missing ones, keeping the available stages
 readable.
+
+## Naming and Copy
+
+### PBLIB-26
+
+The Library surface shall be presented to the user as "Playbooks":
+the navigation entry and the surface's user-facing copy shall say
+"Playbooks" or "playbook", reserving the word "library" for the
+on-disk compiled-artifact store
+([DR-010](../decisions/010-interface-craft.md) §2).
+
+### PBLIB-29
+
+While a configured playbook is listed, the Library shall label the
+playbook's registry source path with a muted "from" prefix that
+stays visible outside any truncation, and shall expose the full,
+untruncated path — introduced as the source the playbook was
+loaded from — in the entry's tooltip.
+
+## Compile Cancellation
+
+### PBLIB-27
+
+While a compile is running, the Library shall render a secondary
+cancel control beside the streamed compile progress; when the user
+activates it, the Library shall request that the core abort the
+compile ([DR-010](../decisions/010-interface-craft.md) §5), and
+the compile progress log shall record the cancellation. The
+compile start control shall remain disabled for the whole time the
+compile runs.
+
+## Config Gate
+
+### PBLIB-28
+
+While the shared config is missing or invalid, the Library shall
+replace its content with a gate that (1) explains that the Captain
+can only run playbooks listed on this surface, (2) states that
+playbooks need a valid config and directs the user to fix it in
+Settings, and (3) renders "Settings" as a navigation control when
+the host app provides surface navigation, falling back to plain
+text otherwise.

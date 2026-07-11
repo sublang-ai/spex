@@ -80,3 +80,27 @@ assert the response carries the source markdown, the gears
 markdown, the FSM code, and the derived state ids; where a stage
 file is removed, the test suite shall assert the response names the
 missing stage while still serving the others.
+
+## Cancellation and Gate Coverage
+
+### PBLIB-30
+
+Verifies: [PBLIB-27](../user/playbook-library.md#pblib-27)
+
+While a compile driven through the app store is running, the test
+suite shall assert that a cancel control is rendered beside the
+compile progress output, that activating it issues the compile
+abort command for the running playbook id, that the recorded
+cancellation appears in the progress log, and that the compile
+start control stays disabled until the compile settles.
+
+### PBLIB-31
+
+Verifies: [PBLIB-28](../user/playbook-library.md#pblib-28)
+
+Where the shared config state is missing or invalid, the test
+suite shall assert that the Library renders the config gate — the
+Captain-scope explanation and the fix-it-in-Settings direction —
+with "Settings" as an activatable navigation control when a
+navigation callback is supplied and as plain text when it is not,
+and that no playbook list or compile form is rendered.

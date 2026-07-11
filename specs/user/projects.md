@@ -128,3 +128,36 @@ unmodified.
 While the project has a live session, the Projects surface shall
 refuse removal with a message stating that the session must be
 finished or closed first.
+
+## Labels and Vocabulary
+
+### PROJ-22
+
+The registration form shall label its mode choices "Add an
+existing repo" and "Create a new project", and its submit control
+shall mirror the selected mode: "Add project" for an existing
+repo, "Create project" for a new one.
+
+### PROJ-23
+
+While a project has a live session, the project card's open
+control shall be a secondary bordered button labeled "Open live
+session" carrying a small pulsing emerald dot as the liveness
+indicator; the emerald color shall carry status only, and the
+button's interactive styling shall stay in the neutral/indigo
+interaction palette
+([DR-010](../decisions/010-interface-craft.md) §8).
+
+### PROJ-24
+
+Where the creation form offers the specs-scaffold option, the
+option shall be labeled "Scaffold specs", and its tooltip shall
+explain what the scaffold creates: the specs/ tree (user, dev,
+test), CLAUDE.md/AGENTS.md agent instructions, and a LICENSE if
+missing — committed as the initial commit.
+
+### PROJ-25
+
+User-facing copy on the Projects surface shall say "GitHub" and
+shall not use the internal adapter term "forge"
+([DR-010](../decisions/010-interface-craft.md) §2).

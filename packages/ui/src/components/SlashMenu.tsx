@@ -38,12 +38,17 @@ export function SlashMenuList({
   return (
     <div
       data-testid="slash-menu"
+      role="listbox"
+      id="slash-listbox"
       className="absolute bottom-full left-0 z-10 mb-1 w-full overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
     >
       {items.map((playbook, index) => (
         <button
           key={playbook.id}
           type="button"
+          role="option"
+          id={`slash-option-${index}`}
+          aria-selected={index === activeIndex}
           onMouseDown={(event) => {
             // Fire before the textarea loses focus.
             event.preventDefault();
@@ -64,6 +69,9 @@ export function SlashMenuList({
       {onCompileNew ? (
         <button
           type="button"
+          role="option"
+          id="slash-option-compile-new"
+          aria-selected={false}
           data-testid="slash-compile-new"
           onMouseDown={(event) => {
             event.preventDefault();

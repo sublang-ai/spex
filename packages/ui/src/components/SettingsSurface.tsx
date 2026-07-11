@@ -14,6 +14,7 @@ import {
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
+import { NOTIFICATION_LABELS } from "../lib/labels.js";
 
 const ADAPTERS = ["claude", "codex", "gemini", "opencode"] as const;
 const EFFORTS = ["", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -237,6 +238,7 @@ export function SettingsSurface() {
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [error, setError] = useState<string>();
+  const [copied, setCopied] = useState(false);
 
   if (!configState) {
     return (
@@ -252,7 +254,20 @@ export function SettingsSurface() {
               ? "Config file missing"
               : "Config file invalid"}
           </div>
-          <div className="mt-1 font-mono text-xs">{configState.path}</div>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="font-mono text-xs">{configState.path}</span>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(configState.path);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+              className="rounded border border-red-300 px-1.5 py-0.5 text-[11px] hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
+            >
+              {copied ? "Copied" : "Copy path"}
+            </button>
+          </div>
           {configState.status === "invalid" ? (
             <ul className="mt-2 list-disc pl-5">
               {configState.errors.map((entry) => (
@@ -308,14 +323,14 @@ export function SettingsSurface() {
             onClick={() => void refreshReadiness()}
             className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
           >
-            re-check readiness
+            Re-check readiness
           </button>
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="ml-auto rounded-md border border-indigo-300 px-2 py-0.5 text-xs text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:hover:bg-indigo-950"
+            className="ml-auto rounded-md border border-indigo-300 px-2 py-0.5 text-xs text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
           >
-            + add profile
+            Add profile
           </button>
         </div>
         {adding ? (
@@ -344,7 +359,7 @@ export function SettingsSurface() {
               </span>
               <ReadinessBadge entry={readinessById.get(profile.id)} />
               {readinessById.get(profile.id)?.requirement ? (
-                <span className="truncate text-[11px] text-neutral-400">
+                <span className="min-w-0 flex-1 text-[11px] text-neutral-400">
                   {readinessById.get(profile.id)?.requirement}
                 </span>
               ) : null}
@@ -354,14 +369,14 @@ export function SettingsSurface() {
                   onClick={() => setEditing(profile.id)}
                   className="text-xs text-indigo-600 hover:underline dark:text-indigo-300"
                 >
-                  edit
+                  Edit
                 </button>
                 {confirmDelete === profile.id ? (
                   <span className="flex items-center gap-1 text-xs">
                     delete?
                     <button
                       type="button"
-                      className="text-red-600 hover:underline"
+                      className="text-red-600 hover:underline dark:text-red-400"
                       onClick={() => {
                         setConfirmDelete(null);
                         edit({ kind: "profile.delete", id: profile.id });
@@ -383,7 +398,7 @@ export function SettingsSurface() {
                     onClick={() => setConfirmDelete(profile.id)}
                     className="text-xs text-neutral-400 hover:text-red-500"
                   >
-                    delete
+                    Delete
                   </button>
                 )}
               </span>
@@ -423,7 +438,9 @@ export function SettingsSurface() {
         <div className="flex flex-col gap-1.5">
           {NOTIFICATION_EVENTS.map((event) => (
             <div key={event} className="flex items-center gap-3 text-sm">
-              <span className="w-36 font-mono text-xs">{event}</span>
+              <span className="w-56 text-xs" title={event}>
+                {NOTIFICATION_LABELS[event] ?? event}
+              </span>
               <select
                 value={summary.notifications?.[event] ?? "off"}
                 onChange={(changeEvent) =>

@@ -4,11 +4,12 @@
 // Dashboard surface (DASH-1..9, DASH-20): attention first, then
 // running sessions, work lists grouped by project, usage rollups.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ForgeItem } from "@sublang/spex-core/protocol";
 
 import { deriveAttention, type AttentionItem } from "../state/dashboard.js";
 import { getClient, useAppStore } from "../state/store.js";
+import { stateLabel, type StatusTone } from "../lib/labels.js";
 import type { Surface } from "../App.js";
 
 const KIND_STYLE: Record<AttentionItem["kind"], string> = {
@@ -23,6 +24,15 @@ const KIND_LABEL: Record<AttentionItem["kind"], string> = {
   question: "needs your reply",
   failure: "failed",
   idle: "awaiting direction",
+};
+
+/** Session-state chip classes per tone (DR-010 §8: indigo stays
+ * interactive, so status chips tint amber/red/neutral only). */
+const TONE_CHIP: Record<StatusTone, string> = {
+  amber: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  red: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+  emerald: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
+  neutral: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
 };
 
 function elapsed(since: number, now: number): string {
@@ -49,7 +59,7 @@ function WorkList({
 }: {
   title: string;
   groups: ProjectItems[];
-  emptyText: string;
+  emptyText: ReactNode;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const nonEmpty = groups.filter((group) => group.items.length > 0);
@@ -68,7 +78,7 @@ function WorkList({
               <div key={group.projectId}>
                 <div className="mb-1 flex items-center gap-2 text-xs font-medium text-neutral-600 dark:text-neutral-300">
                   {group.projectName}
-                  <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] text-neutral-500 dark:bg-neutral-800">
+                  <span className="rounded-full bg-neutral-100 px-1.5 text-[11px] text-neutral-500 dark:bg-neutral-800">
                     {group.items.length}
                   </span>
                 </div>
@@ -83,7 +93,7 @@ function WorkList({
                         href={item.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-blue-600 hover:underline dark:text-blue-400"
+                        className="text-indigo-600 hover:underline dark:text-indigo-300"
                       >
                         #{item.number}
                       </a>{" "}
@@ -91,7 +101,7 @@ function WorkList({
                       {item.labels?.map((label) => (
                         <span
                           key={label}
-                          className="ml-1 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                          className="ml-1 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
                         >
                           {label}
                         </span>
@@ -180,35 +190,6 @@ export function DashboardSurface({
     items: [...(projectMeta[project.id]?.forge?.prs ?? [])].sort(byRecency),
   }));
 
-  if (projects.length === 0) {
-    return (
-      <div className="m-auto flex max-w-md flex-col items-center gap-3 p-8 text-center">
-        <h1 className="text-lg font-semibold">Welcome to Spex</h1>
-        <p className="text-sm text-neutral-500">
-          Spex runs playbooks — state-machine agents that drive AI coding
-          agents — inside your git repositories. Start by picking a project
-          folder.
-        </p>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => onNavigate("Sessions")}
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
-          >
-            Start a session
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("Playbooks")}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-          >
-            Browse playbooks
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 overflow-y-auto p-6">
       <section>
@@ -250,6 +231,12 @@ export function DashboardSurface({
         <div className="flex flex-col gap-2">
           {live.map((session) => {
             const view = views[session.id];
+            const label = view?.fsmState
+              ? stateLabel(view.fsmState, {
+                  pendingQuestion: view.pendingQuestion !== undefined,
+                  turnActive: view.turnActive,
+                })
+              : undefined;
             return (
               <button
                 key={session.id}
@@ -260,9 +247,12 @@ export function DashboardSurface({
                 <span className="font-medium" title={session.projectPath}>
                   {session.projectPath.split("/").pop()}
                 </span>
-                {view?.fsmState ? (
-                  <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-mono text-[11px] text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
-                    {view.fsmState}
+                {label ? (
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[11px] ${TONE_CHIP[label.tone]}`}
+                    title={view?.fsmState}
+                  >
+                    {label.text}
                   </span>
                 ) : null}
                 {view?.turnActive ? (
@@ -311,12 +301,24 @@ export function DashboardSurface({
           <WorkList
             title="Issues to do"
             groups={issueGroups}
-            emptyText="No open issues across bound projects — bind a GitHub origin and sign in to gh (Projects → Issues & PRs)."
+            emptyText={
+              <>
+                No open issues yet — connect GitHub in{" "}
+                <button
+                  type="button"
+                  onClick={() => onNavigate("Projects")}
+                  className="text-indigo-600 hover:underline dark:text-indigo-300"
+                >
+                  Projects
+                </button>
+                .
+              </>
+            }
           />
           <WorkList
             title="PRs to review"
             groups={prGroups}
-            emptyText="No open pull requests across bound projects."
+            emptyText="No open pull requests yet."
           />
         </div>
       </section>

@@ -79,3 +79,20 @@ removed and the core service is restarted, the test suite shall
 assert that no project card or registry entry for it remains after
 the restart, and that the repository directory's files and git
 state are identical to their state before removal.
+
+## Label Coverage
+
+### PROJ-26
+
+Verifies: [PROJ-22](../user/projects.md#proj-22),
+[PROJ-23](../user/projects.md#proj-23),
+[PROJ-25](../user/projects.md#proj-25)
+
+Where the Projects surface renders with one project holding a live
+session and one without, the test suite shall assert that the mode
+choices read "Add an existing repo" and "Create a new project"
+with the submit label mirroring the selected mode, that the live
+project's open control reads "Open live session" and carries the
+pulsing status dot while the other project's reads "Open session",
+and that no user-facing string on the surface contains the word
+"forge".

@@ -46,7 +46,7 @@ body {
   @apply mt-3 mb-1 font-semibold;
 }
 .markdown a {
-  @apply text-blue-600 underline dark:text-blue-400;
+  @apply text-indigo-600 underline dark:text-indigo-300;
 }
 .markdown table {
   @apply my-2 border-collapse text-sm;

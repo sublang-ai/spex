@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 import type { ForgeItem } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
+import { Icon } from "./Icon.js";
+import { InlineConfirm } from "./InlineConfirm.js";
 
 function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
   const [expanded, setExpanded] = useState(false);
@@ -24,7 +26,7 @@ function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
               href={item.url}
               target="_blank"
               rel="noreferrer"
-              className="text-blue-600 hover:underline dark:text-blue-400"
+              className="text-indigo-600 hover:underline dark:text-indigo-300"
             >
               #{item.number}
             </a>{" "}
@@ -57,7 +59,7 @@ function ForgePanel({ meta }: { meta?: ProjectMeta }) {
   if (meta?.forgeError) {
     return (
       <div className="text-xs text-red-500">
-        Couldn't load forge data: {meta.forgeError}
+        Couldn't load GitHub data: {meta.forgeError}
       </div>
     );
   }
@@ -65,7 +67,9 @@ function ForgePanel({ meta }: { meta?: ProjectMeta }) {
   if (!forge) {
     return (
       <div className="text-xs text-neutral-400">
-        {meta?.loading ? "loading forge state…" : "no forge data yet — refresh ↻"}
+        {meta?.loading
+          ? "loading GitHub state…"
+          : "no GitHub data yet — refresh the card"}
       </div>
     );
   }
@@ -125,8 +129,10 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
 
 export function ProjectsSurface({
   onOpenSession,
+  onNavigate,
 }: {
   onOpenSession: (sessionId: string) => void;
+  onNavigate?: (surface: "Sessions") => void;
 }) {
   const projects = useAppStore((state) => state.projects);
   const projectMeta = useAppStore((state) => state.projectMeta);
@@ -196,7 +202,7 @@ export function ProjectsSurface({
               checked={mode === "register"}
               onChange={() => setMode("register")}
             />
-            Register existing repo
+            Add an existing repo
           </label>
           <label className="flex items-center gap-1.5">
             <input
@@ -204,16 +210,19 @@ export function ProjectsSurface({
               checked={mode === "create"}
               onChange={() => setMode("create")}
             />
-            Create new
+            Create a new project
           </label>
           {mode === "create" ? (
-            <label className="ml-auto flex items-center gap-1.5 text-xs text-neutral-500">
+            <label
+              className="ml-auto flex items-center gap-1.5 text-xs text-neutral-500"
+              title="Creates the specs/ tree (user, dev, test), CLAUDE.md/AGENTS.md agent instructions, and a LICENSE if missing — committed as the initial commit."
+            >
               <input
                 type="checkbox"
                 checked={scaffold}
                 onChange={(event) => setScaffold(event.target.checked)}
               />
-              scaffold specs (spex)
+              Scaffold specs
             </label>
           ) : null}
         </div>
@@ -253,7 +262,7 @@ export function ProjectsSurface({
             disabled={!path.trim() || busy}
             onClick={submit}
           >
-            {busy ? "Working…" : mode === "register" ? "Register" : "Create"}
+            {busy ? "Working…" : mode === "register" ? "Add project" : "Create project"}
           </button>
         </div>
         {error ? (
@@ -287,20 +296,25 @@ export function ProjectsSurface({
                 </div>
                 <button
                   type="button"
-                  title="Refresh status and forge data"
+                  title="Refresh status and GitHub data"
+                  aria-label={`Refresh ${project.name}`}
                   disabled={meta?.loading}
-                  className="text-neutral-400 hover:text-neutral-700 disabled:animate-pulse dark:hover:text-neutral-200"
+                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 disabled:animate-pulse dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                   onClick={() => void loadProjectMeta(project.id, true)}
                 >
-                  ↻
+                  <Icon name="refresh" />
                 </button>
                 {liveSession ? (
                   <button
                     type="button"
                     onClick={() => onOpenSession(liveSession.id)}
-                    className="rounded-md border border-emerald-300 px-2.5 py-1 text-sm text-emerald-600 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                    className="flex items-center gap-1.5 rounded-md border border-neutral-300 px-2.5 py-1 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                   >
-                    session live →
+                    <span
+                      className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"
+                      aria-hidden="true"
+                    />
+                    Open live session
                   </button>
                 ) : (
                   <button
@@ -313,31 +327,19 @@ export function ProjectsSurface({
                   </button>
                 )}
                 {confirmRemove === project.id ? (
-                  <span className="flex items-center gap-1 text-xs">
-                    remove?
-                    <button
-                      type="button"
-                      className="rounded border border-red-300 px-1.5 py-0.5 text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
-                      onClick={() => {
-                        setConfirmRemove(undefined);
-                        removeProject(project.id).catch((cause: Error) =>
-                          setCardError((current) => ({
-                            ...current,
-                            [project.id]: cause.message,
-                          })),
-                        );
-                      }}
-                    >
-                      yes
-                    </button>
-                    <button
-                      type="button"
-                      className="text-neutral-500 hover:underline"
-                      onClick={() => setConfirmRemove(undefined)}
-                    >
-                      no
-                    </button>
-                  </span>
+                  <InlineConfirm
+                    question="remove?"
+                    onConfirm={() => {
+                      setConfirmRemove(undefined);
+                      removeProject(project.id).catch((cause: Error) =>
+                        setCardError((current) => ({
+                          ...current,
+                          [project.id]: cause.message,
+                        })),
+                      );
+                    }}
+                    onCancel={() => setConfirmRemove(undefined)}
+                  />
                 ) : (
                   <button
                     type="button"
@@ -346,11 +348,12 @@ export function ProjectsSurface({
                         ? "End the live session before removing"
                         : "Remove from Spex (repo stays on disk)"
                     }
+                    aria-label={`Remove ${project.name}`}
                     disabled={Boolean(liveSession)}
-                    className="text-neutral-400 hover:text-red-500 disabled:opacity-30"
+                    className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-red-500 disabled:opacity-30 dark:hover:bg-neutral-800"
                     onClick={() => setConfirmRemove(project.id)}
                   >
-                    ✕
+                    <Icon name="close" />
                   </button>
                 )}
               </div>
@@ -372,8 +375,19 @@ export function ProjectsSurface({
         })}
         {projects.length === 0 ? (
           <li className="rounded-lg border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500 dark:border-neutral-700">
-            Register a local git repository to run playbooks in it — or just
-            start from the Sessions surface.
+            Add a local git repo to run playbooks in it — or just{" "}
+            {onNavigate ? (
+              <button
+                type="button"
+                onClick={() => onNavigate("Sessions")}
+                className="text-indigo-600 hover:underline dark:text-indigo-300"
+              >
+                start from Sessions
+              </button>
+            ) : (
+              "start from Sessions"
+            )}
+            .
           </li>
         ) : null}
       </ul>

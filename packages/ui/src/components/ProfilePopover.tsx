@@ -49,6 +49,22 @@ export function ProfilePopover(props: ProfilePopoverProps) {
     setEffort(selected?.reasoningEffort ?? "");
   }, [selected?.id, selected?.model, selected?.reasoningEffort]);
 
+  // Focus discipline (DR-010 §6): move focus into the dialog on
+  // mount — the current option, else the first focusable — and hand
+  // it back to the opener on unmount.
+  useEffect(() => {
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const root = rootRef.current;
+    const target =
+      root?.querySelector<HTMLElement>("[data-current='true']") ??
+      root?.querySelector<HTMLElement>("button, input, select");
+    target?.focus();
+    return () => opener?.focus();
+  }, []);
+
   useEffect(() => {
     const close = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -90,6 +106,8 @@ export function ProfilePopover(props: ProfilePopoverProps) {
   return (
     <div
       ref={rootRef}
+      role="dialog"
+      aria-label={props.title}
       data-testid="profile-popover"
       className={`absolute right-0 z-20 w-80 rounded-lg border border-neutral-200 bg-white p-2 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900 ${
         props.direction === "down" ? "top-full mt-1" : "bottom-full mb-1"
@@ -108,6 +126,7 @@ export function ProfilePopover(props: ProfilePopoverProps) {
               key={profile.id}
               type="button"
               data-testid={`profile-option-${profile.id}`}
+              data-current={profile.id === currentRef ? "true" : undefined}
               onClick={() => {
                 setError(undefined);
                 void Promise.resolve(props.onSelect(profile.id)).catch(
@@ -143,17 +162,37 @@ export function ProfilePopover(props: ProfilePopoverProps) {
             </button>
           );
         })}
-        {SHORTHANDS.includes(currentRef) ? (
-          <div className="flex items-center gap-2 rounded-md bg-indigo-50 px-2 py-1.5 dark:bg-indigo-950">
-            <span className="font-mono text-xs font-semibold">
-              {currentRef}
-            </span>
-            <span className="text-xs text-neutral-500">
-              (adapter shorthand — defaults)
-            </span>
-            <span className="ml-auto text-indigo-500">✓</span>
-          </div>
-        ) : null}
+        {SHORTHANDS.includes(currentRef)
+          ? (() => {
+              // Readiness entries for shorthand refs arrive keyed by
+              // the shorthand itself; render no dot when absent.
+              const entry = readiness.find(
+                (item) => item.profileId === currentRef,
+              );
+              return (
+                <div className="flex items-center gap-2 rounded-md bg-indigo-50 px-2 py-1.5 dark:bg-indigo-950">
+                  <span className="font-mono text-xs font-semibold">
+                    {currentRef}
+                  </span>
+                  <span className="text-xs text-neutral-500">
+                    (adapter shorthand — defaults)
+                  </span>
+                  <span className="ml-auto">
+                    {entry?.ready === true ? (
+                      <span className="text-emerald-500" title="ready">
+                        ●
+                      </span>
+                    ) : entry?.ready === false ? (
+                      <span className="text-red-500" title={entry.requirement}>
+                        ●
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-indigo-500">✓</span>
+                </div>
+              );
+            })()
+          : null}
       </div>
 
       {selected ? (
