@@ -49,6 +49,7 @@ meta.md     The spec of specs
 | IR-009 | [009-library-compile.md](iterations/009-library-compile.md) | Implement the Library and slc compile flow per the PBLIB package |
 | IR-010 | [010-hardening.md](iterations/010-hardening.md) | Real-shell verification, docs, and deferred-work inventory |
 | IR-011 | [011-ux-round.md](iterations/011-ux-round.md) | Conversational start, native picker, pipeline view, organized work lists |
+| IR-012 | [012-captain-chat-home.md](iterations/012-captain-chat-home.md) | IM-style Captain home: greeting, chip menu with silent init, quick start, slash menu |
 
 ## Packages
 

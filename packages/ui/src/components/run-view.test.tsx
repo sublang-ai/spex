@@ -51,6 +51,14 @@ function renderRun(entries: typeof FULL_RUN) {
   );
 }
 
+describe("RUN-30: boss messages echo as user bubbles", () => {
+  test("the submitted turn text renders as a boss bubble", () => {
+    renderRun(TURN_ONE);
+    const bubble = screen.getByTestId("boss-bubble");
+    expect(bubble.textContent).toContain("/code fix the bug");
+  });
+});
+
 describe("RUN-19: pane structure from the fixture stream", () => {
   test("captain pane and both player panes render with content", () => {
     renderRun(TURN_ONE);

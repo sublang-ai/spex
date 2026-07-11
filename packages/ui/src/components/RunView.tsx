@@ -4,7 +4,7 @@
 // The project session run view (RUN-1..12): Captain column with the
 // Boss composer docked below, player panes for the visible roster.
 
-import type { SessionInfo } from "@sublang/spex-core/protocol";
+import type { PlaybookSummary, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { SessionView } from "../state/reducer.js";
 import type { ComposerState } from "../state/store.js";
@@ -18,6 +18,7 @@ export function RunView({
   composer,
   connected,
   error,
+  playbooks,
   onSubmit,
   onAbort,
   onRemoveQueued,
@@ -28,6 +29,7 @@ export function RunView({
   composer: ComposerState;
   connected: boolean;
   error?: string;
+  playbooks?: PlaybookSummary[];
   onSubmit: (text: string) => Promise<void>;
   onAbort: () => void;
   onRemoveQueued: (index: number) => void;
@@ -47,6 +49,7 @@ export function RunView({
           composer={composer}
           connected={connected}
           error={error}
+          playbooks={playbooks}
           onSubmit={onSubmit}
           onAbort={onAbort}
           onRemoveQueued={onRemoveQueued}

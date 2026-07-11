@@ -6,15 +6,18 @@
 // Failed submissions keep the draft and surface the error here.
 
 import { useEffect, useRef, useState } from "react";
+import type { PlaybookSummary } from "@sublang/spex-core/protocol";
 
 import type { ComposerState } from "../state/store.js";
 import type { SessionView } from "../state/reducer.js";
+import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 
 export function Composer({
   view,
   composer,
   connected,
   error,
+  playbooks = [],
   onSubmit,
   onAbort,
   onRemoveQueued,
@@ -24,6 +27,7 @@ export function Composer({
   composer: ComposerState;
   connected: boolean;
   error?: string;
+  playbooks?: PlaybookSummary[];
   onSubmit: (text: string) => Promise<void>;
   onAbort: () => void;
   onRemoveQueued: (index: number) => void;
@@ -31,7 +35,15 @@ export function Composer({
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const slash = slashMatches(text, playbooks);
+
+  function insertCommand(command: string) {
+    setText(`/${command} `);
+    setSlashIndex(0);
+    textareaRef.current?.focus();
+  }
 
   const awaiting = view.pendingQuestion !== undefined;
 
@@ -107,15 +119,46 @@ export function Composer({
           ))}
         </div>
       ) : null}
-      <div className="flex items-end gap-2">
+      <div className="relative flex items-end gap-2">
+        {slash ? (
+          <SlashMenuList
+            items={slash}
+            activeIndex={Math.min(slashIndex, slash.length - 1)}
+            onPick={(playbook) => insertCommand(playbook.command)}
+          />
+        ) : null}
         <textarea
           ref={textareaRef}
           data-testid="boss-composer"
           autoFocus
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value);
+            setSlashIndex(0);
+          }}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+            if (slash) {
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setSlashIndex((index) => (index + 1) % slash.length);
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setSlashIndex(
+                  (index) => (index - 1 + slash.length) % slash.length,
+                );
+                return;
+              }
+              if (event.key === "Tab" || event.key === "Enter") {
+                event.preventDefault();
+                insertCommand(
+                  slash[Math.min(slashIndex, slash.length - 1)].command,
+                );
+                return;
+              }
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               submit();

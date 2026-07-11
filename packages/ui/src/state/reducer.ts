@@ -53,7 +53,8 @@ export interface PlayerView {
 }
 
 export interface CaptainLine {
-  kind: "status" | "speech" | "error";
+  /** boss: the user's own message, echoed into the thread (RUN-30). */
+  kind: "status" | "speech" | "error" | "boss";
   text: string;
   turnId: number | null;
   at: number;
@@ -225,7 +226,14 @@ export function applyRecord(
   switch (r.type) {
     case "turn_started": {
       view.turnActive = true;
-      view.currentTurnId = (r.turn as { id: number }).id;
+      const turn = r.turn as { id: number; prompt: string };
+      view.currentTurnId = turn.id;
+      pushCaptain(view, {
+        kind: "boss",
+        text: turn.prompt,
+        turnId: turn.id,
+        at: r.timestamp,
+      });
       break;
     }
     case "turn_finished": {

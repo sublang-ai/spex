@@ -7,9 +7,9 @@
 import { useMemo, useState } from "react";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 
-import { getClient, useAppStore } from "./state/store.js";
+import { useAppStore } from "./state/store.js";
 import { RunView } from "./components/RunView.js";
-import { StartView } from "./components/StartView.js";
+import { CaptainHome } from "./components/CaptainHome.js";
 import { ProjectsSurface } from "./components/ProjectsSurface.js";
 import { DashboardSurface } from "./components/DashboardSurface.js";
 import { LibrarySurface } from "./components/LibrarySurface.js";
@@ -71,7 +71,7 @@ export function tabTitles(sessions: SessionInfo[]): Map<string, string> {
   return titles;
 }
 
-function SessionsSurface() {
+function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => void }) {
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
   const composers = useAppStore((state) => state.composers);
@@ -104,7 +104,7 @@ function SessionsSurface() {
     configState?.status === "valid" ? configState.summary : undefined;
 
   const startView = (
-    <StartView
+    <CaptainHome
       projects={projects}
       playbooks={summary?.playbooks ?? []}
       captainRef={summary?.captain ?? ""}
@@ -117,12 +117,8 @@ function SessionsSurface() {
           : undefined
       }
       onRegisterPath={registerProject}
-      onCreateProject={createProject}
-      onCaptainChange={(ref) => {
-        void getClient()
-          .command("config.edit", { op: { kind: "captain.set", ref } })
-          .catch(() => {});
-      }}
+      onInitProject={(path) => createProject(path, false)}
+      onOpenSettings={() => onNavigate("Settings")}
       onStart={async (projectId, text) => {
         const session = await openSession(projectId);
         await submitBossText(session.id, text);
@@ -210,6 +206,7 @@ function SessionsSurface() {
             session={active}
             view={view}
             composer={composer}
+            playbooks={summary?.playbooks ?? []}
             connected={connection === "open"}
             error={runErrors[active.id]}
             onSubmit={(text) => submitBossText(active.id, text)}
@@ -285,7 +282,7 @@ export function App() {
               onNavigate={setSurface}
             />
           ) : (
-            <SessionsSurface />
+            <SessionsSurface onNavigate={setSurface} />
           )}
         </main>
       </div>
