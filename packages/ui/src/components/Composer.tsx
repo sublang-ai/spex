@@ -3,8 +3,9 @@
 
 // The single Boss composer (RUN-3/6/7/8): free text and /commands,
 // queueing while a turn is active, awaitBossReply banner, abort.
+// Failed submissions keep the draft and surface the error here.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ComposerState } from "../state/store.js";
 import type { SessionView } from "../state/reducer.js";
@@ -12,27 +13,67 @@ import type { SessionView } from "../state/reducer.js";
 export function Composer({
   view,
   composer,
+  connected,
+  error,
   onSubmit,
   onAbort,
+  onRemoveQueued,
+  onDismissError,
 }: {
   view: SessionView;
   composer: ComposerState;
-  onSubmit: (text: string) => void;
+  connected: boolean;
+  error?: string;
+  onSubmit: (text: string) => Promise<void>;
   onAbort: () => void;
+  onRemoveQueued: (index: number) => void;
+  onDismissError: () => void;
 }) {
   const [text, setText] = useState("");
-
-  function submit() {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    onSubmit(trimmed);
-    setText("");
-  }
+  const [sending, setSending] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const awaiting = view.pendingQuestion !== undefined;
 
+  // Keep the composer ready to type: focus on mount and the moment a
+  // player question arrives.
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [awaiting]);
+
+  function submit() {
+    const trimmed = text.trim();
+    if (!trimmed || sending || !connected) return;
+    setSending(true);
+    onSubmit(trimmed)
+      .then(() => setText(""))
+      .catch(() => {
+        // Draft is kept; the error strip explains what happened.
+      })
+      .finally(() => {
+        setSending(false);
+        textareaRef.current?.focus();
+      });
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
+      {error ? (
+        <div
+          data-testid="run-error"
+          className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+        >
+          <span className="min-w-0 flex-1">{error}</span>
+          <button
+            type="button"
+            onClick={onDismissError}
+            className="text-red-400 hover:text-red-600"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
       {awaiting ? (
         <div
           data-testid="boss-reply-banner"
@@ -50,19 +91,31 @@ export function Composer({
           {composer.queued.map((entry, index) => (
             <span
               key={index}
-              className="rounded-full bg-neutral-200 px-2 py-0.5 dark:bg-neutral-800"
+              title={entry}
+              className="flex items-center gap-1 rounded-full bg-neutral-200 px-2 py-0.5 dark:bg-neutral-800"
             >
               queued: {entry.length > 40 ? `${entry.slice(0, 40)}…` : entry}
+              <button
+                type="button"
+                title="Remove from queue"
+                onClick={() => onRemoveQueued(index)}
+                className="text-neutral-400 hover:text-red-500"
+              >
+                ✕
+              </button>
             </span>
           ))}
         </div>
       ) : null}
       <div className="flex items-end gap-2">
         <textarea
+          ref={textareaRef}
           data-testid="boss-composer"
+          autoFocus
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               submit();
@@ -70,18 +123,22 @@ export function Composer({
           }}
           rows={2}
           placeholder={
-            awaiting
-              ? "Answer the question (or give a new directive)…"
-              : "Message the Captain — free text or /command…"
+            !connected
+              ? "Reconnecting to the Spex core…"
+              : awaiting
+                ? "Answer the question (or give a new directive)…"
+                : "Message the Captain — free text or /command…"
           }
-          className="min-h-[3rem] flex-1 resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 dark:border-neutral-700 dark:bg-neutral-900"
+          disabled={!connected}
+          className="max-h-[40vh] min-h-[3rem] flex-1 resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
         />
         <div className="flex flex-col gap-1">
           <button
             type="button"
             onClick={submit}
             className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
-            disabled={text.trim().length === 0}
+            disabled={text.trim().length === 0 || sending || !connected}
+            title={!connected ? "not connected" : undefined}
           >
             {view.turnActive ? "Queue" : "Send"}
           </button>

@@ -11,6 +11,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  ipcMain,
   Notification as ElectronNotification,
 } from "electron";
 import { CoreService } from "@sublang/spex-core";
@@ -74,6 +75,15 @@ async function main(): Promise<void> {
     }
   };
 
+  // Native bridge (DR-008): OS pickers only, one invoke channel.
+  ipcMain.handle("spex:pick-directory", async () => {
+    if (!window) return null;
+    const result = await dialog.showOpenDialog(window, {
+      properties: ["openDirectory", "createDirectory"],
+    });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
   window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -82,6 +92,7 @@ async function main(): Promise<void> {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      preload: join(app.getAppPath(), "preload.cjs"),
     },
   });
 

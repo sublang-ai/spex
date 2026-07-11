@@ -5,19 +5,21 @@
 // repo-state cards from local git, forge panels via the adapter.
 
 import { useEffect, useState } from "react";
-import type { ForgeItem, ForgeState } from "@sublang/spex-core/protocol";
+import type { ForgeItem } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 
 function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? items : items.slice(0, 8);
   return (
     <div className="min-w-0 flex-1">
       <div className="mb-1 text-xs font-semibold text-neutral-500">
         {label} ({items.length})
       </div>
       <ul className="flex flex-col gap-1">
-        {items.slice(0, 8).map((item) => (
-          <li key={item.number} className="truncate text-sm">
+        {shown.map((item) => (
+          <li key={item.url} className="truncate text-sm">
             <a
               href={item.url}
               target="_blank"
@@ -32,6 +34,17 @@ function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
             ) : null}
           </li>
         ))}
+        {items.length > shown.length ? (
+          <li>
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="text-xs text-indigo-600 hover:underline dark:text-indigo-300"
+            >
+              +{items.length - shown.length} more
+            </button>
+          </li>
+        ) : null}
         {items.length === 0 ? (
           <li className="text-xs text-neutral-400">none open</li>
         ) : null}
@@ -40,9 +53,21 @@ function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
   );
 }
 
-function ForgePanel({ forge }: { forge?: ForgeState }) {
+function ForgePanel({ meta }: { meta?: ProjectMeta }) {
+  if (meta?.forgeError) {
+    return (
+      <div className="text-xs text-red-500">
+        Couldn't load forge data: {meta.forgeError}
+      </div>
+    );
+  }
+  const forge = meta?.forge;
   if (!forge) {
-    return <div className="text-xs text-neutral-400">loading forge state…</div>;
+    return (
+      <div className="text-xs text-neutral-400">
+        {meta?.loading ? "loading forge state…" : "no forge data yet — refresh ↻"}
+      </div>
+    );
   }
   if (forge.guidance && forge.authenticated !== true) {
     return (
@@ -67,6 +92,16 @@ function ForgePanel({ forge }: { forge?: ForgeState }) {
 }
 
 function StatusBadges({ meta }: { meta?: ProjectMeta }) {
+  if (meta?.statusError) {
+    return (
+      <span
+        className="text-[11px] text-red-500"
+        title={meta.statusError}
+      >
+        repo unreadable — does the path still exist?
+      </span>
+    );
+  }
   const status = meta?.status;
   if (!status) return null;
   return (
@@ -88,7 +123,11 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
   );
 }
 
-export function ProjectsSurface() {
+export function ProjectsSurface({
+  onOpenSession,
+}: {
+  onOpenSession: (sessionId: string) => void;
+}) {
   const projects = useAppStore((state) => state.projects);
   const projectMeta = useAppStore((state) => state.projectMeta);
   const sessions = useAppStore((state) => state.sessions);
@@ -104,6 +143,9 @@ export function ProjectsSurface() {
   const [scaffold, setScaffold] = useState(true);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [cardError, setCardError] = useState<Record<string, string>>({});
+  const [cardBusy, setCardBusy] = useState<Record<string, boolean>>({});
+  const [confirmRemove, setConfirmRemove] = useState<string>();
 
   useEffect(() => {
     if (connection === "open") {
@@ -116,7 +158,7 @@ export function ProjectsSurface() {
 
   function submit() {
     const trimmed = path.trim();
-    if (!trimmed) return;
+    if (!trimmed || busy) return;
     setError(undefined);
     setBusy(true);
     const action =
@@ -127,6 +169,19 @@ export function ProjectsSurface() {
       .then(() => setPath(""))
       .catch((cause: Error) => setError(cause.message))
       .finally(() => setBusy(false));
+  }
+
+  function open(projectId: string) {
+    setCardError((current) => ({ ...current, [projectId]: "" }));
+    setCardBusy((current) => ({ ...current, [projectId]: true }));
+    openSession(projectId)
+      .then((session) => onOpenSession(session.id))
+      .catch((cause: Error) =>
+        setCardError((current) => ({ ...current, [projectId]: cause.message })),
+      )
+      .finally(() =>
+        setCardBusy((current) => ({ ...current, [projectId]: false })),
+      );
   }
 
   return (
@@ -163,16 +218,32 @@ export function ProjectsSurface() {
           ) : null}
         </div>
         <div className="flex gap-2">
+          {window.spexNative ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                void window.spexNative!.pickDirectory().then((picked) => {
+                  if (picked) setPath(picked);
+                });
+              }}
+              className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              Choose folder…
+            </button>
+          ) : null}
           <input
             value={path}
             onChange={(event) => setPath(event.target.value)}
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing || event.keyCode === 229)
+                return;
               if (event.key === "Enter") submit();
             }}
             placeholder={
               mode === "register"
-                ? "/absolute/path/to/a/git/repo"
-                : "/absolute/path/for/the/new/project"
+                ? "~/path/to/a/git/repo"
+                : "~/path/for/the/new/project"
             }
             className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950"
           />
@@ -194,7 +265,7 @@ export function ProjectsSurface() {
 
       <ul className="flex flex-col gap-3">
         {projects.map((project) => {
-          const live = sessions.some(
+          const liveSession = sessions.find(
             (session) => session.live && session.projectId === project.id,
           );
           const meta = projectMeta[project.id];
@@ -217,44 +288,83 @@ export function ProjectsSurface() {
                 <button
                   type="button"
                   title="Refresh status and forge data"
-                  className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                  disabled={meta?.loading}
+                  className="text-neutral-400 hover:text-neutral-700 disabled:animate-pulse dark:hover:text-neutral-200"
                   onClick={() => void loadProjectMeta(project.id, true)}
                 >
                   ↻
                 </button>
-                {live ? (
-                  <span className="text-xs text-emerald-600 dark:text-emerald-400">
-                    session live
+                {liveSession ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenSession(liveSession.id)}
+                    className="rounded-md border border-emerald-300 px-2.5 py-1 text-sm text-emerald-600 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                  >
+                    session live →
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={cardBusy[project.id]}
+                    className="rounded-md border border-indigo-300 px-2.5 py-1 text-sm text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                    onClick={() => open(project.id)}
+                  >
+                    {cardBusy[project.id] ? "Opening…" : "Open session"}
+                  </button>
+                )}
+                {confirmRemove === project.id ? (
+                  <span className="flex items-center gap-1 text-xs">
+                    remove?
+                    <button
+                      type="button"
+                      className="rounded border border-red-300 px-1.5 py-0.5 text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
+                      onClick={() => {
+                        setConfirmRemove(undefined);
+                        removeProject(project.id).catch((cause: Error) =>
+                          setCardError((current) => ({
+                            ...current,
+                            [project.id]: cause.message,
+                          })),
+                        );
+                      }}
+                    >
+                      yes
+                    </button>
+                    <button
+                      type="button"
+                      className="text-neutral-500 hover:underline"
+                      onClick={() => setConfirmRemove(undefined)}
+                    >
+                      no
+                    </button>
                   </span>
                 ) : (
                   <button
                     type="button"
-                    className="rounded-md border border-indigo-300 px-2.5 py-1 text-sm text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:hover:bg-indigo-950"
-                    onClick={() => {
-                      setError(undefined);
-                      openSession(project.id).catch((cause: Error) =>
-                        setError(cause.message),
-                      );
-                    }}
+                    title={
+                      liveSession
+                        ? "End the live session before removing"
+                        : "Remove from Spex (repo stays on disk)"
+                    }
+                    disabled={Boolean(liveSession)}
+                    className="text-neutral-400 hover:text-red-500 disabled:opacity-30"
+                    onClick={() => setConfirmRemove(project.id)}
                   >
-                    Open session
+                    ✕
                   </button>
                 )}
-                <button
-                  type="button"
-                  title="Remove from Spex (repo stays on disk)"
-                  className="text-neutral-400 hover:text-red-500"
-                  onClick={() => void removeProject(project.id)}
-                >
-                  ✕
-                </button>
               </div>
+              {cardError[project.id] ? (
+                <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                  {cardError[project.id]}
+                </div>
+              ) : null}
               <details className="group">
                 <summary className="cursor-pointer select-none text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300">
                   Issues &amp; PRs
                 </summary>
                 <div className="mt-2">
-                  <ForgePanel forge={meta?.forge} />
+                  <ForgePanel meta={meta} />
                 </div>
               </details>
             </li>
@@ -262,7 +372,8 @@ export function ProjectsSurface() {
         })}
         {projects.length === 0 ? (
           <li className="rounded-lg border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500 dark:border-neutral-700">
-            Register a local git repository to run playbooks in it.
+            Register a local git repository to run playbooks in it — or just
+            start from the Sessions surface.
           </li>
         ) : null}
       </ul>

@@ -48,6 +48,7 @@ describe("DASH-15: attention derivation and ordering", () => {
       kind: "error",
       text: "runtime exploded",
       turnId: 1,
+      at: 1,
     });
 
     const items = deriveAttention(

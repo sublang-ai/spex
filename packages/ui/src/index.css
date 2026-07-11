@@ -8,6 +8,10 @@
     ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+:root {
+  color-scheme: light dark;
+}
+
 html,
 body,
 #root {

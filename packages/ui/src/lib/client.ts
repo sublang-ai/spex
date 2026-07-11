@@ -44,6 +44,7 @@ export class SpexClient {
   private nextId = 0;
   private readonly pending = new Map<string, Pending>();
   private closedByUser = false;
+  private mismatched = false;
 
   constructor(options: SpexClientOptions) {
     this.options = options;
@@ -60,6 +61,10 @@ export class SpexClient {
       const message = JSON.parse(String(event.data)) as ServerMessage;
       if (message.type === "hello") {
         if (message.protocolVersion !== PROTOCOL_VERSION) {
+          // A version skew never heals by retrying; halt reconnection
+          // so the UI can show an actionable mismatch state.
+          this.closedByUser = true;
+          this.mismatched = true;
           this.options.onStatus("mismatch");
           socket.close();
           return;
@@ -84,7 +89,7 @@ export class SpexClient {
         pending.reject(new SpexCommandError("closed", "connection closed"));
       }
       this.pending.clear();
-      this.options.onStatus("closed");
+      if (!this.mismatched) this.options.onStatus("closed");
       const backoff = this.options.reconnectMs ?? 1000;
       if (!this.closedByUser && backoff > 0) {
         setTimeout(() => this.connect(), backoff);

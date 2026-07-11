@@ -16,14 +16,22 @@ export function RunView({
   session,
   view,
   composer,
+  connected,
+  error,
   onSubmit,
   onAbort,
+  onRemoveQueued,
+  onDismissError,
 }: {
   session: SessionInfo;
   view: SessionView;
   composer: ComposerState;
-  onSubmit: (text: string) => void;
+  connected: boolean;
+  error?: string;
+  onSubmit: (text: string) => Promise<void>;
   onAbort: () => void;
+  onRemoveQueued: (index: number) => void;
+  onDismissError: () => void;
 }) {
   const visible = view.visible.length
     ? view.visible
@@ -37,13 +45,17 @@ export function RunView({
         <Composer
           view={view}
           composer={composer}
+          connected={connected}
+          error={error}
           onSubmit={onSubmit}
           onAbort={onAbort}
+          onRemoveQueued={onRemoveQueued}
+          onDismissError={onDismissError}
         />
       </div>
       <div
         data-testid="player-grid"
-        className="flex min-h-0 min-w-0 flex-1 gap-3"
+        className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"
       >
         {visible.map((playerId) => (
           <PlayerPane

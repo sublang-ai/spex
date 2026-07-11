@@ -14,26 +14,36 @@ export interface UsageView {
   totalCostUsd?: number;
 }
 
-export type TranscriptSegment =
-  | { kind: "prompt"; text: string }
-  | { kind: "text"; text: string; streaming: boolean }
-  | { kind: "thinking"; summary: string }
-  | {
-      kind: "tool";
-      toolName: string;
-      toolUseId: string;
-      input: unknown;
-      status?: "success" | "error" | "denied";
-      output?: unknown;
-      durationMs?: number;
-    }
-  | { kind: "error"; message: string }
-  | {
-      kind: "result";
-      status: "ok" | "aborted" | "error";
-      error?: string;
-      usage?: UsageView;
-    };
+/** Stable identity + wall-clock for every transcript entry. */
+export interface SegmentMeta {
+  /** Record seq that created the segment (stable React key). */
+  seq: number;
+  /** Record timestamp, ms epoch. */
+  at: number;
+}
+
+export type TranscriptSegment = SegmentMeta &
+  (
+    | { kind: "prompt"; text: string }
+    | { kind: "text"; text: string; streaming: boolean }
+    | { kind: "thinking"; summary: string }
+    | {
+        kind: "tool";
+        toolName: string;
+        toolUseId: string;
+        input: unknown;
+        status?: "success" | "error" | "denied";
+        output?: unknown;
+        durationMs?: number;
+      }
+    | { kind: "error"; message: string }
+    | {
+        kind: "result";
+        status: "ok" | "aborted" | "error";
+        error?: string;
+        usage?: UsageView;
+      }
+  );
 
 export interface PlayerView {
   id: string;
@@ -46,6 +56,7 @@ export interface CaptainLine {
   kind: "status" | "speech" | "error";
   text: string;
   turnId: number | null;
+  at: number;
   data?: unknown;
 }
 
@@ -57,6 +68,8 @@ export interface SessionView {
   visible: string[];
   turnActive: boolean;
   currentTurnId: number | null;
+  /** True while a history replay is loading after (re)subscription. */
+  loading?: boolean;
   fsmState?: string;
   captainMode?: string;
   /** Set while the playbook is parked awaiting a Boss reply. */
@@ -109,6 +122,7 @@ interface AgentEventLike {
 function applyAgentEvent(
   target: PlayerView,
   event: AgentEventLike,
+  meta: SegmentMeta,
 ): UsageView | undefined {
   const segments = target.segments;
   switch (event.type) {
@@ -118,19 +132,20 @@ function applyAgentEvent(
       if (last && last.kind === "text" && last.streaming) {
         last.text += delta;
       } else {
-        segments.push({ kind: "text", text: delta, streaming: true });
+        segments.push({ ...meta, kind: "text", text: delta, streaming: true });
       }
       return undefined;
     }
     case "text": {
       closeStreamingText(segments);
       const content = (event.payload as { content?: string })?.content ?? "";
-      segments.push({ kind: "text", text: content, streaming: false });
+      segments.push({ ...meta, kind: "text", text: content, streaming: false });
       return undefined;
     }
     case "thinking": {
       closeStreamingText(segments);
       segments.push({
+        ...meta,
         kind: "thinking",
         summary: (event.payload as { summary?: string })?.summary ?? "",
       });
@@ -144,6 +159,7 @@ function applyAgentEvent(
         input?: unknown;
       };
       segments.push({
+        ...meta,
         kind: "tool",
         toolName: payload?.toolName ?? "tool",
         toolUseId: payload?.toolUseId ?? "",
@@ -175,6 +191,7 @@ function applyAgentEvent(
     case "error": {
       closeStreamingText(segments);
       segments.push({
+        ...meta,
         kind: "error",
         message:
           (event.payload as { message?: string })?.message ?? "agent error",
@@ -201,7 +218,9 @@ export function applyRecord(
   const r = record as unknown as Record<string, unknown> & {
     type: string;
     turnId: number | null;
+    timestamp: number;
   };
+  const meta: SegmentMeta = { seq, at: r.timestamp };
 
   switch (r.type) {
     case "turn_started": {
@@ -220,6 +239,7 @@ export function applyRecord(
         kind: "status",
         text: `◆ turn aborted${reason}`,
         turnId: r.turnId,
+        at: r.timestamp,
       });
       break;
     }
@@ -227,12 +247,12 @@ export function applyRecord(
       const target = player(view, String(r.playerId));
       target.running = true;
       target.turnUsage = undefined;
-      target.segments.push({ kind: "prompt", text: String(r.prompt) });
+      target.segments.push({ ...meta, kind: "prompt", text: String(r.prompt) });
       break;
     }
     case "player_event": {
       const target = player(view, String(r.playerId));
-      const usage = applyAgentEvent(target, r.event as AgentEventLike);
+      const usage = applyAgentEvent(target, r.event as AgentEventLike, meta);
       if (usage) target.turnUsage = usage;
       break;
     }
@@ -244,6 +264,7 @@ export function applyRecord(
         error?: string;
       };
       target.segments.push({
+        ...meta,
         kind: "result",
         status: result.status,
         ...(result.error ? { error: result.error } : {}),
@@ -268,7 +289,7 @@ export function applyRecord(
       const result = r.result as { finalText?: string; status: string };
       const text = result.finalText ?? view.captainDraft;
       if (text) {
-        pushCaptain(view, { kind: "speech", text, turnId: r.turnId });
+        pushCaptain(view, { kind: "speech", text, turnId: r.turnId, at: r.timestamp });
       }
       view.captainDraft = "";
       break;
@@ -278,6 +299,7 @@ export function applyRecord(
         kind: "status",
         text: String(r.message),
         turnId: r.turnId,
+        at: r.timestamp,
         data: r.data,
       });
       break;
@@ -311,6 +333,7 @@ export function applyRecord(
         kind: "error",
         text: String(r.message),
         turnId: r.turnId,
+        at: r.timestamp,
       });
       break;
     }

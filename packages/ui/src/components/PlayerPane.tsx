@@ -4,13 +4,17 @@
 // Read-only streaming player transcript (RUN-2/4/5): markdown text,
 // collapsed tool-use cards, collapsed thinking, per-turn usage.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.js";
 import { Markdown } from "./Markdown.js";
 
 const RENDER_WINDOW = 200;
+
+function timeTitle(at: number): string {
+  return Number.isFinite(at) ? new Date(at).toLocaleString() : "";
+}
 
 function Usage({ usage }: { usage: UsageView }) {
   return (
@@ -27,8 +31,16 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
   switch (segment.kind) {
     case "prompt":
       return (
-        <details className="rounded border border-neutral-200 bg-neutral-100/60 px-2 py-1 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900/60 dark:text-neutral-400">
-          <summary className="cursor-pointer select-none">Prompt</summary>
+        <details
+          title={timeTitle(segment.at)}
+          className="rounded border border-neutral-200 bg-neutral-100/60 px-2 py-1 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900/60 dark:text-neutral-400"
+        >
+          <summary className="cursor-pointer select-none">
+            Prompt
+            <span className="ml-2 text-[10px] text-neutral-400">
+              {new Date(segment.at).toLocaleTimeString()}
+            </span>
+          </summary>
           <pre className="mt-1 whitespace-pre-wrap font-mono text-[11px]">
             {segment.text}
           </pre>
@@ -88,7 +100,10 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
       );
     case "result":
       return (
-        <div className="flex items-center gap-2 border-t border-neutral-200 pt-1 text-xs dark:border-neutral-800">
+        <div
+          title={timeTitle(segment.at)}
+          className="flex items-center gap-2 border-t border-neutral-200 pt-1 text-xs dark:border-neutral-800"
+        >
           <span
             className={
               segment.status === "ok"
@@ -119,18 +134,19 @@ export function PlayerPane({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   });
 
-  const segments = view.segments.slice(-RENDER_WINDOW);
+  const segments = view.segments.slice(-windowSize);
 
   return (
     <section
       data-testid={`player-pane-${view.id}`}
-      className="flex min-h-0 min-w-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      className="flex min-h-0 min-w-[280px] flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
       <header className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
         <span className="font-mono text-sm font-semibold">{view.id}</span>
@@ -160,13 +176,21 @@ export function PlayerPane({
         }}
         className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
       >
-        {view.segments.length > RENDER_WINDOW ? (
-          <div className="text-center text-[11px] text-neutral-400">
-            {view.segments.length - RENDER_WINDOW} earlier entries not shown
-          </div>
+        {view.segments.length > windowSize ? (
+          <button
+            type="button"
+            onClick={() => {
+              stick.current = false;
+              setWindowSize((size) => size + RENDER_WINDOW);
+            }}
+            className="text-center text-[11px] text-neutral-400 hover:text-indigo-500"
+          >
+            show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)} of{" "}
+            {view.segments.length - windowSize} earlier entries
+          </button>
         ) : null}
-        {segments.map((segment, index) => (
-          <Segment key={index} segment={segment} />
+        {segments.map((segment) => (
+          <Segment key={segment.seq} segment={segment} />
         ))}
         {view.segments.length === 0 ? (
           <div className="m-auto text-xs text-neutral-400">

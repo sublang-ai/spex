@@ -2,7 +2,7 @@
   "name": "spex-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Spex — the desktop app for running playbooks",
+  "description": "Spex \u2014 the desktop app for running playbooks",
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
@@ -37,6 +37,7 @@
     },
     "files": [
       "dist/**/*.js",
+      "preload.cjs",
       "!dist/**/*.test.js",
       "ui-dist/**"
     ],

@@ -42,8 +42,11 @@ function renderRun(entries: typeof FULL_RUN) {
       session={SESSION}
       view={view}
       composer={{ queued: [], answering: false }}
-      onSubmit={() => {}}
+      connected
+      onSubmit={async () => {}}
       onAbort={() => {}}
+      onRemoveQueued={() => {}}
+      onDismissError={() => {}}
     />,
   );
 }

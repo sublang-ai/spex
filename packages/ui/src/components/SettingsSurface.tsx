@@ -5,7 +5,7 @@
 // playbook config. Every save round-trips through the core, which
 // refuses launcher-invalid states and preserves file comments.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   ConfigEditOpInput,
   ProfileSummary,
@@ -97,7 +97,12 @@ function ProfileEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
+    <div
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onCancel?.();
+      }}
+      className="flex flex-col gap-2 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 dark:border-indigo-900 dark:bg-indigo-950/30"
+    >
       <div className="grid grid-cols-2 gap-2 text-sm">
         <label className="flex flex-col gap-0.5">
           <span className="text-xs text-neutral-500">Profile id</span>
@@ -197,11 +202,39 @@ function ProfileEditor({
   );
 }
 
+function ThemeInput({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    if (draft.trim() !== value) onCommit(draft.trim());
+  };
+  return (
+    <input
+      value={draft}
+      placeholder="auto"
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") commit();
+      }}
+      className="w-48 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
+    />
+  );
+}
+
 export function SettingsSurface() {
   const configState = useAppStore((state) => state.configState);
   const readiness = useAppStore((state) => state.readiness);
+  const refreshReadiness = useAppStore((state) => state.refreshReadiness);
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [error, setError] = useState<string>();
 
   if (!configState) {
@@ -261,8 +294,16 @@ export function SettingsSurface() {
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-neutral-500">Profiles</h2>
+          <button
+            type="button"
+            title="Re-run adapter readiness checks (e.g. after signing in)"
+            onClick={() => void refreshReadiness()}
+            className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
+          >
+            re-check readiness
+          </button>
           <button
             type="button"
             onClick={() => setAdding(true)}
@@ -305,19 +346,40 @@ export function SettingsSurface() {
                 <button
                   type="button"
                   onClick={() => setEditing(profile.id)}
-                  className="text-xs text-indigo-600 hover:underline"
+                  className="text-xs text-indigo-600 hover:underline dark:text-indigo-300"
                 >
                   edit
                 </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    edit({ kind: "profile.delete", id: profile.id })
-                  }
-                  className="text-xs text-neutral-400 hover:text-red-500"
-                >
-                  delete
-                </button>
+                {confirmDelete === profile.id ? (
+                  <span className="flex items-center gap-1 text-xs">
+                    delete?
+                    <button
+                      type="button"
+                      className="text-red-600 hover:underline"
+                      onClick={() => {
+                        setConfirmDelete(null);
+                        edit({ kind: "profile.delete", id: profile.id });
+                      }}
+                    >
+                      yes
+                    </button>
+                    <button
+                      type="button"
+                      className="text-neutral-500 hover:underline"
+                      onClick={() => setConfirmDelete(null)}
+                    >
+                      no
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(profile.id)}
+                    className="text-xs text-neutral-400 hover:text-red-500"
+                  >
+                    delete
+                  </button>
+                )}
               </span>
             </div>
           ),
@@ -381,16 +443,11 @@ export function SettingsSurface() {
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">Theme</h2>
         <div className="flex items-center gap-2 text-sm">
-          <input
-            defaultValue={summary.theme ?? ""}
-            placeholder="auto"
-            onBlur={(event) => {
-              const value = event.target.value.trim();
-              if (value !== (summary.theme ?? "")) {
-                edit({ kind: "theme.set", theme: value || null });
-              }
-            }}
-            className="w-48 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
+          <ThemeInput
+            value={summary.theme ?? ""}
+            onCommit={(value) =>
+              edit({ kind: "theme.set", theme: value || null })
+            }
           />
           <span className="text-xs text-neutral-500">
             Pane theme carried to tmux-play (e.g. a catppuccin flavor or

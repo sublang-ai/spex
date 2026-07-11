@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Dashboard surface (DASH-1..9): attention first, then running
-// sessions, next work from the forge, and usage rollups.
+// Dashboard surface (DASH-1..9, DASH-20): attention first, then
+// running sessions, work lists grouped by project, usage rollups.
 
 import { useEffect, useState } from "react";
+import type { ForgeItem } from "@sublang/spex-core/protocol";
 
 import { deriveAttention, type AttentionItem } from "../state/dashboard.js";
 import { getClient, useAppStore } from "../state/store.js";
+import type { Surface } from "../App.js";
 
 const KIND_STYLE: Record<AttentionItem["kind"], string> = {
   question:
@@ -23,17 +25,111 @@ const KIND_LABEL: Record<AttentionItem["kind"], string> = {
   idle: "awaiting direction",
 };
 
-function elapsed(since: number): string {
-  const minutes = Math.floor((Date.now() - since) / 60_000);
+function elapsed(since: number, now: number): string {
+  const minutes = Math.floor((now - since) / 60_000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+type ProjectItems = {
+  projectId: string;
+  projectName: string;
+  items: ForgeItem[];
+};
+
+function byRecency(a: ForgeItem, b: ForgeItem): number {
+  return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+}
+
+function WorkList({
+  title,
+  groups,
+  emptyText,
+}: {
+  title: string;
+  groups: ProjectItems[];
+  emptyText: string;
+}) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const nonEmpty = groups.filter((group) => group.items.length > 0);
+  return (
+    <div className="min-w-0">
+      <h2 className="mb-2 text-sm font-semibold text-neutral-500">{title}</h2>
+      {nonEmpty.length === 0 ? (
+        <div className="text-xs text-neutral-400">{emptyText}</div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {nonEmpty.map((group) => {
+            const shown = expanded[group.projectId]
+              ? group.items
+              : group.items.slice(0, 6);
+            return (
+              <div key={group.projectId}>
+                <div className="mb-1 flex items-center gap-2 text-xs font-medium text-neutral-600 dark:text-neutral-300">
+                  {group.projectName}
+                  <span className="rounded-full bg-neutral-100 px-1.5 text-[10px] text-neutral-500 dark:bg-neutral-800">
+                    {group.items.length}
+                  </span>
+                </div>
+                <ul className="flex flex-col gap-1">
+                  {shown.map((item) => (
+                    <li
+                      key={`${group.projectId}:${item.url}`}
+                      className="truncate text-sm"
+                      title={item.title}
+                    >
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        #{item.number}
+                      </a>{" "}
+                      {item.title}
+                      {item.labels?.map((label) => (
+                        <span
+                          key={label}
+                          className="ml-1 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </li>
+                  ))}
+                  {group.items.length > shown.length ? (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpanded((current) => ({
+                            ...current,
+                            [group.projectId]: true,
+                          }))
+                        }
+                        className="text-xs text-indigo-600 hover:underline dark:text-indigo-300"
+                      >
+                        +{group.items.length - shown.length} more
+                      </button>
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DashboardSurface({
   onOpenSession,
+  onNavigate,
 }: {
   onOpenSession: (sessionId: string) => void;
+  onNavigate: (surface: Surface) => void;
 }) {
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
@@ -41,34 +137,77 @@ export function DashboardSurface({
   const projectMeta = useAppStore((state) => state.projectMeta);
   const connection = useAppStore((state) => state.connection);
 
-  const [usageDays, setUsageDays] = useState<
-    { day: string; totals: { totalCostUsd: number; inputTokens: number; outputTokens: number } }[]
-  >([]);
+  const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [now, setNow] = useState(() => Date.now());
+  const [usage, setUsage] = useState<{
+    state: "loading" | "ready" | "error";
+    days: {
+      day: string;
+      totals: { totalCostUsd: number; inputTokens: number; outputTokens: number };
+    }[];
+  }>({ state: "loading", days: [] });
+
+  // Keep elapsed labels honest during quiet periods.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (connection === "open") {
       getClient()
         .command("usage.days", {})
-        .then(setUsageDays)
-        .catch(() => {});
+        .then((days) => setUsage({ state: "ready", days }))
+        .catch(() => setUsage({ state: "error", days: [] }));
     }
   }, [connection, sessions]);
 
   const attention = deriveAttention(sessions, views);
   const live = sessions.filter((session) => session.live);
 
-  const issues = projects.flatMap((project) =>
-    (projectMeta[project.id]?.forge?.issues ?? []).map((item) => ({
-      ...item,
-      project: project.name,
-    })),
-  );
-  const prs = projects.flatMap((project) =>
-    (projectMeta[project.id]?.forge?.prs ?? []).map((item) => ({
-      ...item,
-      project: project.name,
-    })),
-  );
+  const filtered =
+    projectFilter === "all"
+      ? projects
+      : projects.filter((project) => project.id === projectFilter);
+  const issueGroups: ProjectItems[] = filtered.map((project) => ({
+    projectId: project.id,
+    projectName: project.name,
+    items: [...(projectMeta[project.id]?.forge?.issues ?? [])].sort(byRecency),
+  }));
+  const prGroups: ProjectItems[] = filtered.map((project) => ({
+    projectId: project.id,
+    projectName: project.name,
+    items: [...(projectMeta[project.id]?.forge?.prs ?? [])].sort(byRecency),
+  }));
+
+  if (projects.length === 0) {
+    return (
+      <div className="m-auto flex max-w-md flex-col items-center gap-3 p-8 text-center">
+        <h1 className="text-lg font-semibold">Welcome to Spex</h1>
+        <p className="text-sm text-neutral-500">
+          Spex runs playbooks — state-machine agents that drive AI coding
+          agents — inside your git repositories. Start by picking a project
+          folder.
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onNavigate("Sessions")}
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+          >
+            Start a session
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate("Library")}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          >
+            Browse playbooks
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 overflow-y-auto p-6">
@@ -88,7 +227,10 @@ export function DashboardSurface({
                 {KIND_LABEL[item.kind]}
               </span>
               <span className="min-w-0 flex-1 truncate">{item.text}</span>
-              <span className="font-mono text-[11px] opacity-70">
+              <span
+                className="font-mono text-[11px] opacity-70"
+                title={item.projectPath}
+              >
                 {item.projectPath.split("/").pop()}
               </span>
             </button>
@@ -115,7 +257,7 @@ export function DashboardSurface({
                 onClick={() => onOpenSession(session.id)}
                 className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm dark:border-neutral-800 dark:bg-neutral-900"
               >
-                <span className="font-medium">
+                <span className="font-medium" title={session.projectPath}>
                   {session.projectPath.split("/").pop()}
                 </span>
                 {view?.fsmState ? (
@@ -127,95 +269,88 @@ export function DashboardSurface({
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
                 ) : null}
                 <span className="ml-auto text-xs text-neutral-400">
-                  started {elapsed(session.createdAt)} ago
+                  started {elapsed(session.createdAt, now)} ago
                 </span>
               </button>
             );
           })}
           {live.length === 0 ? (
             <div className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700">
-              No live sessions.
+              No live sessions —{" "}
+              <button
+                type="button"
+                onClick={() => onNavigate("Sessions")}
+                className="text-indigo-600 hover:underline dark:text-indigo-300"
+              >
+                start one
+              </button>
+              .
             </div>
           ) : null}
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-4">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold text-neutral-500">
-            Issues to do
-          </h2>
-          <ul className="flex flex-col gap-1.5">
-            {issues.slice(0, 10).map((item) => (
-              <li key={item.url} className="truncate text-sm">
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  #{item.number}
-                </a>{" "}
-                {item.title}
-                <span className="text-xs text-neutral-400"> · {item.project}</span>
-              </li>
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-neutral-500">Next work</h2>
+          <select
+            value={projectFilter}
+            onChange={(event) => setProjectFilter(event.target.value)}
+            className="ml-auto rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+            title="Filter by project"
+          >
+            <option value="all">all projects</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
             ))}
-            {issues.length === 0 ? (
-              <li className="text-xs text-neutral-400">
-                No open issues across bound projects.
-              </li>
-            ) : null}
-          </ul>
+          </select>
         </div>
-        <div>
-          <h2 className="mb-2 text-sm font-semibold text-neutral-500">
-            PRs to review
-          </h2>
-          <ul className="flex flex-col gap-1.5">
-            {prs.slice(0, 10).map((item) => (
-              <li key={item.url} className="truncate text-sm">
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  #{item.number}
-                </a>{" "}
-                {item.title}
-                <span className="text-xs text-neutral-400"> · {item.project}</span>
-              </li>
-            ))}
-            {prs.length === 0 ? (
-              <li className="text-xs text-neutral-400">
-                No open pull requests across bound projects.
-              </li>
-            ) : null}
-          </ul>
+        <div className="grid grid-cols-2 gap-6">
+          <WorkList
+            title="Issues to do"
+            groups={issueGroups}
+            emptyText="No open issues across bound projects — bind a GitHub origin and sign in to gh (Projects → Issues & PRs)."
+          />
+          <WorkList
+            title="PRs to review"
+            groups={prGroups}
+            emptyText="No open pull requests across bound projects."
+          />
         </div>
       </section>
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-neutral-500">Usage</h2>
         <div className="flex flex-wrap gap-2">
-          {usageDays.slice(0, 7).map((entry) => (
-            <div
-              key={entry.day}
-              className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs dark:border-neutral-800 dark:bg-neutral-900"
-            >
-              <div className="font-mono text-neutral-500">{entry.day}</div>
-              <div className="mt-0.5 font-medium">
-                ${entry.totals.totalCostUsd.toFixed(2)}
-              </div>
-              <div className="text-neutral-400">
-                {entry.totals.inputTokens.toLocaleString()}→
-                {entry.totals.outputTokens.toLocaleString()} tok
-              </div>
+          {usage.state === "loading" ? (
+            <div className="text-xs text-neutral-400">loading usage…</div>
+          ) : usage.state === "error" ? (
+            <div className="text-xs text-red-500">
+              usage could not be loaded — is the core connected?
             </div>
-          ))}
-          {usageDays.length === 0 ? (
-            <div className="text-xs text-neutral-400">No usage recorded yet.</div>
-          ) : null}
+          ) : usage.days.length === 0 ? (
+            <div className="text-xs text-neutral-400">
+              No usage recorded yet — costs appear after your first turn.
+            </div>
+          ) : (
+            usage.days.slice(0, 7).map((entry) => (
+              <div
+                key={entry.day}
+                className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs dark:border-neutral-800 dark:bg-neutral-900"
+              >
+                <div className="font-mono text-neutral-500">{entry.day}</div>
+                <div className="mt-0.5 font-medium">
+                  ${entry.totals.totalCostUsd.toFixed(2)}
+                </div>
+                <div className="text-neutral-400">
+                  {entry.totals.inputTokens.toLocaleString()}→
+                  {entry.totals.outputTokens.toLocaleString()} tok
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </div>

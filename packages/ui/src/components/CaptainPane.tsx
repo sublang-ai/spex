@@ -50,6 +50,7 @@ export function CaptainPane({ view }: { view: SessionView }) {
           line.kind === "status" ? (
             <div
               key={index}
+              title={new Date(line.at).toLocaleString()}
               className="whitespace-pre-wrap font-mono text-xs text-neutral-600 dark:text-neutral-400"
             >
               {line.text}
@@ -57,12 +58,13 @@ export function CaptainPane({ view }: { view: SessionView }) {
           ) : line.kind === "error" ? (
             <div
               key={index}
+              title={new Date(line.at).toLocaleString()}
               className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
             >
               {line.text}
             </div>
           ) : (
-            <div key={index}>
+            <div key={index} title={new Date(line.at).toLocaleString()}>
               <Markdown text={line.text} />
             </div>
           ),

@@ -4,6 +4,8 @@
 // App store: wires the protocol client into view state. Composer
 // submissions queue client-side while a turn is active and dispatch
 // when it ends (RUN-8); the core enforces one turn at a time.
+// Reconnects re-subscribe every live session and backfill missed
+// records via history afterSeq, so panes never silently freeze.
 
 import { create } from "zustand";
 import type {
@@ -32,6 +34,15 @@ export interface ComposerState {
 export interface ProjectMeta {
   status?: RepoStatusInfo;
   forge?: ForgeState;
+  statusError?: string;
+  forgeError?: string;
+  loading?: boolean;
+}
+
+export interface CompileTracker {
+  playbookId: string;
+  running: boolean;
+  ok?: boolean;
 }
 
 export interface AppState {
@@ -41,22 +52,37 @@ export interface AppState {
   projects: ProjectInfo[];
   projectMeta: Record<string, ProjectMeta>;
   compileProgress: Record<string, string[]>;
+  activeCompile?: CompileTracker;
   sessions: SessionInfo[];
   views: Record<string, SessionView>;
   composers: Record<string, ComposerState>;
+  /** Per-session command failures shown above the composer. */
+  runErrors: Record<string, string>;
   activeSessionId?: string;
 
   connect(url?: string): void;
   refresh(): Promise<void>;
+  refreshReadiness(): Promise<void>;
   registerProject(path: string): Promise<ProjectInfo>;
   createProject(path: string, scaffold: boolean): Promise<ProjectInfo>;
-  loadProjectMeta(projectId: string, refresh?: boolean): Promise<void>;
   removeProject(projectId: string): Promise<void>;
+  loadProjectMeta(projectId: string, refresh?: boolean): Promise<void>;
   openSession(projectId: string): Promise<SessionInfo>;
   focusSession(sessionId: string): Promise<void>;
   disposeSession(sessionId: string): Promise<void>;
   submitBossText(sessionId: string, text: string): Promise<void>;
+  removeQueued(sessionId: string, index: number): void;
   abortTurn(sessionId: string): Promise<void>;
+  clearRunError(sessionId: string): void;
+  runCompile(input: {
+    playbookId: string;
+    sourceText?: string;
+    sourcePath?: string;
+    roles: string[];
+    command: string;
+    intent: string;
+    players: Record<string, string>;
+  }): Promise<void>;
 }
 
 let client: SpexClient | undefined;
@@ -67,6 +93,40 @@ export function getClient(): SpexClient {
 }
 
 export const useAppStore = create<AppState>((set, get) => {
+  function setRunError(sessionId: string, message: string): void {
+    set({ runErrors: { ...get().runErrors, [sessionId]: message } });
+  }
+
+  /** Subscribe and backfill a session's view (idempotent). */
+  async function ensureSubscribed(sessionId: string): Promise<void> {
+    const state = get();
+    const session = state.sessions.find((s) => s.id === sessionId);
+    let view = state.views[sessionId];
+    if (!view) {
+      view = initialSessionView(
+        session?.players ?? [],
+        session?.initialVisible ?? [],
+      );
+      view.loading = true;
+      set({ views: { ...state.views, [sessionId]: view } });
+    }
+    await getClient().subscribe({ kind: "session", sessionId });
+    const history = await getClient().command("history.get", {
+      sessionId,
+      afterSeq: view.lastSeq,
+    });
+    const fresh = get();
+    const target = fresh.views[sessionId];
+    if (!target) return;
+    for (const entry of history.records) {
+      if (entry.seq > target.lastSeq) {
+        applyRecord(target, entry.seq, entry.record);
+      }
+    }
+    target.loading = false;
+    set({ views: { ...fresh.views, [sessionId]: { ...target } } });
+  }
+
   function handleMessage(message: ServerMessage): void {
     switch (message.type) {
       case "config.state":
@@ -77,11 +137,13 @@ export const useAppStore = create<AppState>((set, get) => {
         break;
       case "compile.progress": {
         const progress = get().compileProgress;
-        const lines = progress[message.playbookId] ?? [];
         set({
           compileProgress: {
             ...progress,
-            [message.playbookId]: [...lines.slice(-199), message.line],
+            [message.playbookId]: [
+              ...(progress[message.playbookId] ?? []),
+              message.line,
+            ],
           },
         });
         break;
@@ -125,7 +187,9 @@ export const useAppStore = create<AppState>((set, get) => {
             };
             void getClient()
               .command("turn.submit", { sessionId, text: next })
-              .catch(() => {});
+              .catch((cause: Error) =>
+                setRunError(sessionId, `queued submission failed: ${cause.message}`),
+              );
           }
         }
         set(updates);
@@ -145,6 +209,7 @@ export const useAppStore = create<AppState>((set, get) => {
     sessions: [],
     views: {},
     composers: {},
+    runErrors: {},
 
     connect(url?: string): void {
       client = new SpexClient({
@@ -169,10 +234,20 @@ export const useAppStore = create<AppState>((set, get) => {
       for (const project of projects) {
         void get().loadProjectMeta(project.id);
       }
+      // Re-subscribe every live session (fresh connection or reconnect)
+      // and backfill anything missed while disconnected.
       const live = sessions.filter((session) => session.live);
       for (const session of live) {
-        await get().focusSession(session.id);
+        await ensureSubscribed(session.id).catch(() => {});
       }
+      const active = get().activeSessionId;
+      if (!active && live.length > 0) {
+        set({ activeSessionId: live[0].id });
+      }
+    },
+
+    async refreshReadiness(): Promise<void> {
+      set({ readiness: await getClient().command("readiness.get", {}) });
     },
 
     async registerProject(path: string): Promise<ProjectInfo> {
@@ -192,26 +267,29 @@ export const useAppStore = create<AppState>((set, get) => {
       return project;
     },
 
-    async loadProjectMeta(projectId: string, refresh = false): Promise<void> {
-      const [status, forge] = await Promise.all([
-        getClient()
-          .command("project.status", { projectId })
-          .catch(() => undefined),
-        getClient()
-          .command("forge.items", { projectId, refresh })
-          .catch(() => undefined),
-      ]);
-      set({
-        projectMeta: {
-          ...get().projectMeta,
-          [projectId]: { status, forge },
-        },
-      });
-    },
-
     async removeProject(projectId: string): Promise<void> {
       await getClient().command("project.remove", { projectId });
       set({ projects: await getClient().command("project.list", {}) });
+    },
+
+    async loadProjectMeta(projectId: string, refresh = false): Promise<void> {
+      const before = get();
+      set({
+        projectMeta: {
+          ...before.projectMeta,
+          [projectId]: { ...before.projectMeta[projectId], loading: true },
+        },
+      });
+      const [status, forge] = await Promise.allSettled([
+        getClient().command("project.status", { projectId }),
+        getClient().command("forge.items", { projectId, refresh }),
+      ]);
+      const meta: ProjectMeta = { loading: false };
+      if (status.status === "fulfilled") meta.status = status.value;
+      else meta.statusError = (status.reason as Error).message;
+      if (forge.status === "fulfilled") meta.forge = forge.value;
+      else meta.forgeError = (forge.reason as Error).message;
+      set({ projectMeta: { ...get().projectMeta, [projectId]: meta } });
     },
 
     async openSession(projectId: string): Promise<SessionInfo> {
@@ -228,38 +306,23 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async focusSession(sessionId: string): Promise<void> {
-      const state = get();
-      const session = state.sessions.find((s) => s.id === sessionId);
-      if (!state.views[sessionId]) {
-        const view = initialSessionView(
-          session?.players ?? [],
-          session?.initialVisible ?? [],
-        );
-        set({ views: { ...state.views, [sessionId]: view } });
-        await getClient().subscribe({ kind: "session", sessionId });
-        const history = await getClient().command("history.get", {
-          sessionId,
-        });
-        const fresh = get();
-        const target = fresh.views[sessionId];
-        if (target) {
-          for (const entry of history.records) {
-            if (entry.seq > target.lastSeq) {
-              applyRecord(target, entry.seq, entry.record);
-            }
-          }
-          set({
-            views: { ...fresh.views, [sessionId]: { ...target } },
-            activeSessionId: sessionId,
-          });
-          return;
-        }
+      if (!get().views[sessionId]) {
+        await ensureSubscribed(sessionId);
       }
       set({ activeSessionId: sessionId });
     },
 
     async disposeSession(sessionId: string): Promise<void> {
-      await getClient().command("session.dispose", { sessionId });
+      try {
+        await getClient().command("session.dispose", { sessionId });
+      } catch (cause) {
+        const error = cause as { code?: string; message: string };
+        // Already gone: reflect reality instead of erroring.
+        if (error.code !== "not_found") {
+          setRunError(sessionId, `end session failed: ${error.message}`);
+          throw cause;
+        }
+      }
     },
 
     async submitBossText(sessionId: string, text: string): Promise<void> {
@@ -278,11 +341,65 @@ export const useAppStore = create<AppState>((set, get) => {
         });
         return;
       }
-      await getClient().command("turn.submit", { sessionId, text });
+      try {
+        await getClient().command("turn.submit", { sessionId, text });
+      } catch (cause) {
+        setRunError(sessionId, (cause as Error).message);
+        throw cause;
+      }
+    },
+
+    removeQueued(sessionId: string, index: number): void {
+      const composer = get().composers[sessionId];
+      if (!composer) return;
+      set({
+        composers: {
+          ...get().composers,
+          [sessionId]: {
+            ...composer,
+            queued: composer.queued.filter((_, i) => i !== index),
+          },
+        },
+      });
     },
 
     async abortTurn(sessionId: string): Promise<void> {
-      await getClient().command("turn.abort", { sessionId });
+      try {
+        await getClient().command("turn.abort", { sessionId });
+      } catch (cause) {
+        setRunError(sessionId, `abort failed: ${(cause as Error).message}`);
+      }
+    },
+
+    clearRunError(sessionId: string): void {
+      const { [sessionId]: _, ...rest } = get().runErrors;
+      set({ runErrors: rest });
+    },
+
+    async runCompile(input): Promise<void> {
+      const playbookId = input.playbookId;
+      set({
+        activeCompile: { playbookId, running: true },
+        compileProgress: { ...get().compileProgress, [playbookId]: [] },
+      });
+      const appendLine = (line: string) => {
+        const progress = get().compileProgress;
+        set({
+          compileProgress: {
+            ...progress,
+            [playbookId]: [...(progress[playbookId] ?? []), line],
+          },
+        });
+      };
+      try {
+        await getClient().command("compile.run", input);
+        appendLine("✓ compiled and registered — see Configured playbooks");
+        set({ activeCompile: { playbookId, running: false, ok: true } });
+      } catch (cause) {
+        appendLine(`✗ ${(cause as Error).message}`);
+        set({ activeCompile: { playbookId, running: false, ok: false } });
+        throw cause;
+      }
     },
   };
 });
