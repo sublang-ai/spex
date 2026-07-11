@@ -4,8 +4,8 @@
 // RUN-19/20/21 component coverage: the run view rendered from the
 // fixture stream shows the expected panes and never hidden content.
 
-import { afterEach, describe, expect, test } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 afterEach(cleanup);
 
@@ -19,7 +19,10 @@ import {
   TURN_ONE,
   TURN_TWO_QUESTION,
 } from "../fixtures/sample-run.js";
-import type { SessionInfo } from "@sublang/spex-core/protocol";
+import type {
+  SessionInfo,
+  TmuxPlayRecord,
+} from "@sublang/spex-core/protocol";
 
 const SESSION: SessionInfo = {
   id: "s1",
@@ -79,18 +82,116 @@ describe("RUN-20: hidden records never appear", () => {
   });
 });
 
-describe("RUN-21: awaitBossReply banner", () => {
-  test("banner shows the pending question above the composer", () => {
+describe("RUN-21: awaitBossReply as a first-class chat moment", () => {
+  test("the question renders as an incoming bubble from the player", () => {
+    renderRun([...TURN_ONE, ...TURN_TWO_QUESTION]);
+    const bubble = screen.getByTestId("question-bubble");
+    expect(bubble.textContent).toContain("code-reviewer");
+    expect(bubble.textContent).toContain(
+      "Which auth flow should I prioritize?",
+    );
+    // The runtime's status-line echo of the same question is replaced
+    // by the bubble, not duplicated.
+    expect(
+      screen.queryByText(/asks: Which auth flow/, { exact: false }),
+    ).toBeNull();
+  });
+
+  test("the banner names the player without repeating the question", () => {
     renderRun([...TURN_ONE, ...TURN_TWO_QUESTION]);
     const banner = screen.getByTestId("boss-reply-banner");
     expect(banner.textContent).toContain(
-      "Which auth flow should I prioritize?",
+      "code-reviewer is waiting for your reply",
     );
   });
 
   test("banner clears after the reply turn", () => {
     renderRun(FULL_RUN);
     expect(screen.queryByTestId("boss-reply-banner")).toBeNull();
+  });
+});
+
+const TURN_ONLY_STARTED = [
+  {
+    seq: 1,
+    record: {
+      type: "turn_started",
+      turnId: 9,
+      timestamp: 1,
+      turn: { id: 9, prompt: "go", timestamp: 1 },
+    } as unknown as TmuxPlayRecord,
+  },
+];
+
+describe("RUN-37: the thread stays alive while a turn runs", () => {
+  test("a working indicator shows when the captain is silent", () => {
+    renderRun(TURN_ONLY_STARTED);
+    expect(screen.getByTestId("working-indicator").textContent).toContain(
+      "Captain is thinking…",
+    );
+  });
+});
+
+describe("RUN-38: queued messages read as pending, not sent", () => {
+  test("queue entries render full text with the delivery caption", () => {
+    const view = applyRecords(
+      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      TURN_ONLY_STARTED,
+    );
+    render(
+      <RunView
+        session={SESSION}
+        view={view}
+        composer={{ queued: ["also update the changelog please"] }}
+        connected
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    const queue = screen.getByTestId("queue-indicator");
+    expect(queue.textContent).toContain("also update the changelog please");
+    expect(queue.textContent).toContain("sends when this turn ends");
+  });
+});
+
+describe("RUN-39: drafts come from the store", () => {
+  test("the composer renders the stored draft and reports edits", () => {
+    const view = applyRecords(
+      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      TURN_ONE,
+    );
+    const onDraftChange = vi.fn();
+    render(
+      <RunView
+        session={SESSION}
+        view={view}
+        composer={{ queued: [], draft: "half-typed reply" }}
+        connected
+        onDraftChange={onDraftChange}
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    const composer = screen.getByTestId(
+      "boss-composer",
+    ) as HTMLTextAreaElement;
+    expect(composer.value).toBe("half-typed reply");
+    fireEvent.change(composer, { target: { value: "half-typed reply!" } });
+    expect(onDraftChange).toHaveBeenCalledWith("half-typed reply!");
+  });
+});
+
+describe("RUN-40: abort acknowledges instantly", () => {
+  test("clicking Abort disables it and relabels to Aborting…", () => {
+    renderRun(TURN_ONLY_STARTED);
+    const abort = screen.getByTestId("abort-button") as HTMLButtonElement;
+    fireEvent.click(abort);
+    expect(abort.disabled).toBe(true);
+    expect(abort.textContent).toContain("Aborting…");
   });
 });
 

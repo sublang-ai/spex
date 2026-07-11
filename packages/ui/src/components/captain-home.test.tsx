@@ -13,7 +13,10 @@ import { CaptainHome, QUICK_START_KEY } from "./CaptainHome.js";
 
 const PROJECT = { id: "p1", path: "/tmp/demo", name: "demo", registeredAt: 0 };
 
-import type { PlaybookSummary } from "@sublang/spex-core/protocol";
+import type {
+  PlaybookSummary,
+  ReadinessEntry,
+} from "@sublang/spex-core/protocol";
 
 const PLAYBOOKS: PlaybookSummary[] = [
   {
@@ -45,6 +48,11 @@ function renderHome({
   onSelectCaptain = vi.fn(async () => {}),
   onSaveProfile = vi.fn(async () => {}),
   onOpenPast = vi.fn(),
+  onNavigate = vi.fn(),
+  onRecheckReadiness = undefined as (() => Promise<unknown>) | undefined,
+  readiness = [] as ReadinessEntry[],
+  configStatus = undefined as "valid" | "invalid" | "missing" | undefined,
+  configErrors = undefined as string[] | undefined,
   pastSessions = [] as { id: string; projectName: string; endedAt: number | null }[],
   storage = memoryStorage(),
 } = {}) {
@@ -54,11 +62,14 @@ function renderHome({
       playbooks={PLAYBOOKS}
       captainRef="claude-opus"
       profiles={[{ id: "claude-opus", adapter: "claude", model: "claude-opus-4-8" }]}
-      readiness={[]}
+      readiness={readiness}
       connected
+      configStatus={configStatus}
+      configErrors={configErrors}
+      onRecheckReadiness={onRecheckReadiness}
       onRegisterPath={vi.fn()}
       onInitProject={vi.fn()}
-      onNavigate={vi.fn()}
+      onNavigate={onNavigate}
       onSelectCaptain={onSelectCaptain}
       onSaveProfile={onSaveProfile}
       pastSessions={pastSessions}
@@ -67,7 +78,15 @@ function renderHome({
       storage={storage}
     />,
   );
-  return { onStart, onSelectCaptain, onSaveProfile, onOpenPast, storage, view };
+  return {
+    onStart,
+    onSelectCaptain,
+    onSaveProfile,
+    onOpenPast,
+    onNavigate,
+    storage,
+    view,
+  };
 }
 
 describe("RUN-29: captain home structure and one-motion start", () => {
@@ -170,6 +189,94 @@ describe("RUN-35: in-place captain profile popover", () => {
     );
     // Never navigated anywhere: the home is still mounted.
     expect(screen.getByTestId("captain-home")).toBeTruthy();
+  });
+});
+
+describe("RUN-42: keyboard-only session start", () => {
+  test("Enter opens the menu; arrows highlight; Enter picks; focus stays", async () => {
+    const { onStart } = renderHome();
+    const composer = screen.getByTestId(
+      "start-composer",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "fix the bug" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    expect(screen.getByTestId("project-menu")).toBeTruthy();
+    expect(onStart).not.toHaveBeenCalled();
+    // The single project is highlighted at index 0; Enter picks it.
+    fireEvent.keyDown(composer, { key: "Enter" });
+    expect(screen.queryByTestId("project-menu")).toBeNull();
+    expect(screen.getByTestId("project-chip").textContent).toContain("demo");
+    // A second Enter now starts the session.
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await vi.waitFor(() =>
+      expect(onStart).toHaveBeenCalledWith("p1", "fix the bug"),
+    );
+  });
+
+  test("Escape closes the menu without touching the draft", () => {
+    renderHome();
+    const composer = screen.getByTestId(
+      "start-composer",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "do it" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    expect(screen.getByTestId("project-menu")).toBeTruthy();
+    fireEvent.keyDown(composer, { key: "Escape" });
+    expect(screen.queryByTestId("project-menu")).toBeNull();
+    expect(composer.value).toBe("do it");
+  });
+});
+
+describe("RUN-43: Escape hides the slash menu, never the draft", () => {
+  test("Escape dismisses; typing brings the menu back", () => {
+    renderHome();
+    const composer = screen.getByTestId(
+      "start-composer",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "/co" } });
+    expect(screen.getByTestId("slash-menu")).toBeTruthy();
+    fireEvent.keyDown(composer, { key: "Escape" });
+    expect(screen.queryByTestId("slash-menu")).toBeNull();
+    expect(composer.value).toBe("/co");
+    fireEvent.change(composer, { target: { value: "/cod" } });
+    expect(screen.getByTestId("slash-menu")).toBeTruthy();
+  });
+});
+
+describe("RUN-44: broken config surfaces in the thread", () => {
+  test("an invalid config renders the errors and a Settings link", () => {
+    const { onNavigate } = renderHome({
+      configStatus: "invalid",
+      configErrors: ["profiles.claude-opus: unknown adapter"],
+    });
+    expect(
+      screen.getByText(/config file has errors/).textContent,
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/unknown adapter/, { exact: false }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByText("Open Settings →"));
+    expect(onNavigate).toHaveBeenCalledWith("Settings");
+  });
+});
+
+describe("RUN-45: readiness heals at hand", () => {
+  test("the heads-up bubble offers a working re-check", async () => {
+    const onRecheckReadiness = vi.fn(async () => {});
+    renderHome({
+      onRecheckReadiness,
+      readiness: [
+        {
+          profileId: "claude-opus",
+          adapter: "claude",
+          ready: false,
+          requirement: "set ANTHROPIC_API_KEY or sign in with Claude Code",
+        },
+      ],
+    });
+    expect(screen.getByText(/aren't ready yet/)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("recheck-readiness"));
+    await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalled());
   });
 });
 

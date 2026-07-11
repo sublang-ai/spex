@@ -5,7 +5,11 @@
 
 import { describe, expect, test } from "vitest";
 
-import { applyRecords, initialSessionView } from "./reducer.js";
+import {
+  applyRecords,
+  initialSessionView,
+  resolvePlayerId,
+} from "./reducer.js";
 import {
   FULL_RUN,
   HIDDEN_LEAK,
@@ -61,18 +65,63 @@ describe("RUN-20: hidden records never surface", () => {
 });
 
 describe("RUN-21: awaitBossReply banner and reply routing", () => {
-  test("question parks the composer into answering state", () => {
+  test("question parks the view with the player identified", () => {
     const view = applyRecords(fresh(), [...TURN_ONE, ...TURN_TWO_QUESTION]);
     expect(view.fsmState).toBe("awaitBossReply");
-    expect(view.pendingQuestion).toBe(
-      "code-reviewer asks: Which auth flow should I prioritize?",
-    );
+    expect(view.pendingQuestion).toBe("Which auth flow should I prioritize?");
+    expect(view.pendingQuestionPlayer).toBe("code-reviewer");
+  });
+
+  test("the question becomes a bubble, replacing its status echo", () => {
+    const view = applyRecords(fresh(), [...TURN_ONE, ...TURN_TWO_QUESTION]);
+    const questions = view.captain.filter((line) => line.kind === "question");
+    expect(questions).toHaveLength(1);
+    expect(questions[0].text).toBe("Which auth flow should I prioritize?");
+    expect(questions[0].player).toBe("code-reviewer");
+    // The "◆ … asks:" status narration is replaced, not duplicated.
+    expect(
+      view.captain.some(
+        (line) => line.kind === "status" && line.text.includes("asks:"),
+      ),
+    ).toBe(false);
+  });
+
+  test("a status echo arriving after the telemetry is also dropped", () => {
+    const view = applyRecords(fresh(), [...TURN_ONE, ...TURN_TWO_QUESTION]);
+    applyRecords(view, [
+      {
+        seq: 900,
+        record: {
+          type: "captain_status",
+          turnId: 2,
+          timestamp: 900,
+          message:
+            "◆ code-reviewer asks: Which auth flow should I prioritize?",
+        } as unknown as TmuxPlayRecord,
+      },
+    ]);
+    expect(
+      view.captain.filter(
+        (line) => line.kind === "status" && line.text.includes("asks:"),
+      ),
+    ).toHaveLength(0);
   });
 
   test("the reply clears the pending question", () => {
     const view = applyRecords(fresh(), FULL_RUN);
     expect(view.fsmState).toBe("review");
     expect(view.pendingQuestion).toBeUndefined();
+    expect(view.pendingQuestionPlayer).toBeUndefined();
+  });
+});
+
+describe("one name per agent: runtime roles resolve to pane ids", () => {
+  test("a bare role name resolves to the suffix-matching pane", () => {
+    const view = fresh();
+    expect(resolvePlayerId(view, "coder")).toBe("code-coder");
+    expect(resolvePlayerId(view, "code-reviewer")).toBe("code-reviewer");
+    expect(resolvePlayerId(view, "committer")).toBe("committer");
+    expect(resolvePlayerId(view, undefined)).toBeUndefined();
   });
 });
 

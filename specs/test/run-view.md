@@ -115,3 +115,51 @@ and one live session awaiting a Boss reply, the test suite shall
 assert the Captain home lists the ended session, opening it renders
 the transcript read-only with an ended notice, and the Sessions
 navigation badge shows the count 1.
+
+### RUN-52
+
+Verifies: [RUN-9](../user/run-view.md#run-9)
+
+When the awaitBossReply fixture stream is replayed, the test suite
+shall assert the question renders as one incoming bubble naming the
+asking player (resolved to its pane id, including from a bare role
+name), that no status-line duplicate of the question survives — in
+either arrival order of the narration and the telemetry — and that
+the banner names the player without repeating the question.
+
+### RUN-53
+
+Verifies: [RUN-37](../user/run-view.md#run-37),
+[RUN-38](../user/run-view.md#run-38),
+[RUN-39](../user/run-view.md#run-39),
+[RUN-40](../user/run-view.md#run-40)
+
+While a fixture turn is active, the test suite shall assert the
+Captain thread shows the working indicator, queued entries render
+in full with the sends-when-this-turn-ends caption, the composer
+renders a store-provided draft and reports edits to the store, and
+activating Abort disables it with an "Aborting…" label.
+
+### RUN-54
+
+Verifies: [RUN-41](../user/run-view.md#run-41),
+[RUN-42](../user/run-view.md#run-42),
+[RUN-43](../user/run-view.md#run-43)
+
+The test suite shall assert time separators appear before the first
+line, after >10-minute gaps, and on day changes; that known states
+map to human labels with unknown ids humanized; that the project
+menu is driven end-to-end by keyboard (Enter opens, arrows
+highlight, Enter picks, Escape closes with the draft intact); and
+that Escape hides the slash menu without touching the draft.
+
+### RUN-55
+
+Verifies: [RUN-44](../user/run-view.md#run-44),
+[RUN-45](../user/run-view.md#run-45)
+
+Where a fixture config is invalid, the test suite shall assert the
+Captain home thread lists the errors with a Settings link; where a
+fixture readiness entry is not ready, the test suite shall assert
+the heads-up bubble offers a re-check that invokes the readiness
+refresh.

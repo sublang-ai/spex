@@ -22,6 +22,8 @@ export function RunView({
   readOnly,
   onStartNew,
   onCompileNew,
+  onRetryLoad,
+  onDraftChange,
   onSubmit,
   onAbort,
   onRemoveQueued,
@@ -37,6 +39,9 @@ export function RunView({
   readOnly?: boolean;
   onStartNew?: () => void;
   onCompileNew?: () => void;
+  /** Retry a failed transcript load (read-only view). */
+  onRetryLoad?: () => void;
+  onDraftChange?: (draft: string) => void;
   onSubmit: (text: string) => Promise<void>;
   onAbort: () => void;
   onRemoveQueued: (index: number) => void;
@@ -52,21 +57,42 @@ export function RunView({
       <div className="flex w-[34%] min-w-[320px] flex-col gap-2">
         <CaptainPane view={view} />
         {readOnly ? (
-          <div
-            data-testid="ended-notice"
-            className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900"
-          >
-            This session has ended — transcript is read-only.
-            {onStartNew ? (
-              <button
-                type="button"
-                onClick={onStartNew}
-                className="ml-auto rounded-md border border-indigo-300 px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
+          <>
+            {error ? (
+              // A failed history load must not read as an empty run
+              // (DR-010 §5): name it and offer the retry.
+              <div
+                data-testid="past-load-error"
+                className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
               >
-                Start a new session
-              </button>
+                <span className="min-w-0 flex-1">{error}</span>
+                {onRetryLoad ? (
+                  <button
+                    type="button"
+                    onClick={onRetryLoad}
+                    className="font-medium text-indigo-600 hover:underline dark:text-indigo-300"
+                  >
+                    Retry
+                  </button>
+                ) : null}
+              </div>
             ) : null}
-          </div>
+            <div
+              data-testid="ended-notice"
+              className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900"
+            >
+              This session has ended — transcript is read-only.
+              {onStartNew ? (
+                <button
+                  type="button"
+                  onClick={onStartNew}
+                  className="ml-auto rounded-md border border-indigo-300 px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                >
+                  Start a new session
+                </button>
+              ) : null}
+            </div>
+          </>
         ) : (
           <Composer
             view={view}
@@ -75,6 +101,7 @@ export function RunView({
             error={error}
             playbooks={playbooks}
             onCompileNew={onCompileNew}
+            onDraftChange={onDraftChange}
             onSubmit={onSubmit}
             onAbort={onAbort}
             onRemoveQueued={onRemoveQueued}

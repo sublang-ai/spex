@@ -16,6 +16,7 @@ import type {
 
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { ProfilePopover } from "./ProfilePopover.js";
+import { Icon } from "./Icon.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
 
@@ -33,6 +34,14 @@ export interface CaptainHomeProps {
   readiness: ReadinessEntry[];
   connected: boolean;
   pastSessions?: PastSessionEntry[];
+  /** Invalid/missing config surfaces in the thread (DR-010 §5). */
+  configStatus?: "valid" | "invalid" | "missing";
+  configErrors?: string[];
+  /** Draft lives in the store so surface switches keep it. */
+  draft?: string;
+  onDraftChange?: (draft: string) => void;
+  /** Re-check agent readiness at hand (DR-009). */
+  onRecheckReadiness?: () => Promise<unknown>;
   /** Native picker when the shell bridge exists (DR-008). */
   onPickFolder?: () => Promise<string | null>;
   onRegisterPath: (path: string) => Promise<ProjectInfo>;
@@ -50,13 +59,25 @@ export interface CaptainHomeProps {
   storage?: Pick<Storage, "getItem" | "setItem">;
 }
 
-function CaptainBubble({ children }: { children: React.ReactNode }) {
+function CaptainBubble({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "error";
+}) {
   return (
     <div className="flex items-start gap-2">
       <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
         C
       </span>
-      <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-2 text-sm dark:bg-neutral-800">
+      <div
+        className={`max-w-[85%] rounded-2xl rounded-bl-md px-3 py-2 text-sm ${
+          tone === "error"
+            ? "border border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+            : "bg-neutral-200/60 dark:bg-neutral-800"
+        }`}
+      >
         {children}
       </div>
     </div>
@@ -69,10 +90,17 @@ export function CaptainHome(props: CaptainHomeProps) {
   const storage = props.storage ?? window.localStorage;
 
   const [projectId, setProjectId] = useState<string>();
-  const [text, setText] = useState("");
+  const [localText, setLocalText] = useState("");
+  // Draft lives in the store when the host wires it (DR-010: surface
+  // switches never eat text); local state covers standalone renders.
+  const text = props.onDraftChange ? (props.draft ?? "") : localText;
+  const setText = props.onDraftChange ?? setLocalText;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuIndex, setMenuIndex] = useState(0);
   const [pathDraft, setPathDraft] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const [rechecking, setRechecking] = useState(false);
   const [quickStartHidden, setQuickStartHidden] = useState(
     () => storage.getItem(QUICK_START_KEY) === "1",
   );
@@ -90,7 +118,10 @@ export function CaptainHome(props: CaptainHomeProps) {
     (entry) => entry.profileId === captainRef,
   );
   const notReady = readiness.filter((entry) => entry.ready === false);
-  const slash = slashMatches(text, playbooks);
+  const slashItems = slashMatches(text, playbooks);
+  const slash = slashDismissed ? undefined : slashItems;
+  const configBroken =
+    props.configStatus === "invalid" || props.configStatus === "missing";
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -99,8 +130,17 @@ export function CaptainHome(props: CaptainHomeProps) {
         setMenuOpen(false);
       }
     };
+    // Escape closes the menu even when it was opened by mouse and
+    // focus never left the composer (DR-010 §6).
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
     window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", escape);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", escape);
+    };
   }, [menuOpen]);
 
   async function addFolder(path: string): Promise<void> {
@@ -129,10 +169,64 @@ export function CaptainHome(props: CaptainHomeProps) {
     }
   }
 
+  /** Keyboard model for the project menu (DR-010 §6): focus stays in
+   * the composer; arrows drive a highlight over the entries, Enter
+   * picks, Escape closes — the slash-menu idiom. */
+  const menuActions: { label: string; run: () => void }[] = [
+    ...projects.map((project) => ({
+      label: project.name,
+      run: () => {
+        setProjectId(project.id);
+        setMenuOpen(false);
+        composerRef.current?.focus();
+      },
+    })),
+    ...(props.onPickFolder
+      ? [
+          {
+            label: "Open folder…",
+            run: () => {
+              void props.onPickFolder?.().then((path) => {
+                if (path) return addFolder(path);
+              });
+            },
+          },
+        ]
+      : []),
+  ];
+
+  function menuKeydown(event: React.KeyboardEvent): boolean {
+    if (!menuOpen || menuActions.length === 0) return false;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setMenuIndex((index) => (index + 1) % menuActions.length);
+      return true;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setMenuIndex(
+        (index) => (index - 1 + menuActions.length) % menuActions.length,
+      );
+      return true;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      menuActions[Math.min(menuIndex, menuActions.length - 1)]?.run();
+      return true;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMenuOpen(false);
+      return true;
+    }
+    return false;
+  }
+
   async function start(): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || busy || !connected) return;
     if (!selected) {
+      setMenuIndex(0);
       setMenuOpen(true);
       return;
     }
@@ -154,12 +248,28 @@ export function CaptainHome(props: CaptainHomeProps) {
     composerRef.current?.focus();
   }
 
+  // A fresh canvas centers the whole cluster — greeting, quick start,
+  // project chip, composer — instead of hugging the bottom fifth of
+  // an empty window (DR-010 §8). Any real content reverts to the IM
+  // bottom-docked layout.
+  const emptyCanvas =
+    (props.pastSessions?.length ?? 0) === 0 &&
+    notReady.length === 0 &&
+    !configBroken &&
+    !error;
+
   return (
     <div
       data-testid="captain-home"
-      className="mx-auto flex w-full max-w-2xl flex-1 flex-col p-6"
+      className={`mx-auto flex w-full max-w-2xl flex-1 flex-col p-6 ${
+        emptyCanvas ? "justify-center" : ""
+      }`}
     >
-      <div className="flex flex-1 flex-col justify-end gap-3 overflow-y-auto">
+      <div
+        className={`flex flex-col gap-3 overflow-y-auto ${
+          emptyCanvas ? "" : "flex-1 justify-end"
+        }`}
+      >
         <CaptainBubble>
           <p>
             Hello! I'm your Captain. Pick a project below, then tell me what
@@ -170,6 +280,31 @@ export function CaptainHome(props: CaptainHomeProps) {
             playbooks, or just describe the task in your own words.
           </p>
         </CaptainBubble>
+
+        {configBroken ? (
+          <CaptainBubble tone="error">
+            <p className="text-xs font-semibold">
+              Your config file has errors — playbooks are unavailable.
+            </p>
+            {props.configErrors && props.configErrors.length > 0 ? (
+              <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[11px]">
+                {props.configErrors.slice(0, 3).map((entry, index) => (
+                  <li key={index}>{entry}</li>
+                ))}
+                {props.configErrors.length > 3 ? (
+                  <li>… and {props.configErrors.length - 3} more</li>
+                ) : null}
+              </ul>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => props.onNavigate("Settings")}
+              className="mt-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-300"
+            >
+              Open Settings →
+            </button>
+          </CaptainBubble>
+        ) : null}
 
         {notReady.length > 0 ? (
           <CaptainBubble>
@@ -186,6 +321,26 @@ export function CaptainHome(props: CaptainHomeProps) {
                 </li>
               ))}
             </ul>
+            <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+              Signing in from a terminal is picked up on re-check; a
+              newly exported env var needs a Spex restart.
+            </p>
+            {props.onRecheckReadiness ? (
+              <button
+                type="button"
+                data-testid="recheck-readiness"
+                disabled={rechecking}
+                onClick={() => {
+                  setRechecking(true);
+                  void props
+                    .onRecheckReadiness?.()
+                    .finally(() => setRechecking(false));
+                }}
+                className="mt-1 text-xs font-medium text-indigo-600 hover:underline disabled:opacity-50 dark:text-indigo-300"
+              >
+                {rechecking ? "Checking…" : "I've set this up — re-check"}
+              </button>
+            ) : null}
           </CaptainBubble>
         ) : null}
 
@@ -202,13 +357,14 @@ export function CaptainHome(props: CaptainHomeProps) {
                 type="button"
                 data-testid="quick-start-dismiss"
                 title="Hide quick start (playbooks stay under / in the composer)"
+                aria-label="Hide the quick-start card"
                 onClick={() => {
                   storage.setItem(QUICK_START_KEY, "1");
                   setQuickStartHidden(true);
                 }}
-                className="ml-auto text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                className="ml-auto flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
-                ✕
+                <Icon name="close" className="h-3.5 w-3.5" />
               </button>
             </div>
             {playbooks.slice(0, 4).map((playbook) => (
@@ -288,23 +444,26 @@ export function CaptainHome(props: CaptainHomeProps) {
             <button
               type="button"
               data-testid="project-chip"
-              onClick={() => setMenuOpen((open) => !open)}
+              onClick={() => {
+                setMenuIndex(0);
+                setMenuOpen((open) => !open);
+              }}
               className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
                 selected
                   ? "border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-200"
                   : "border-indigo-400 font-medium text-indigo-600 dark:border-indigo-600 dark:text-indigo-300"
               } hover:bg-neutral-100 dark:hover:bg-neutral-800`}
             >
-              <span aria-hidden>📁</span>
+              <Icon name="folder" className="h-3.5 w-3.5" />
               {selected ? selected.name : "Choose a project"}
-              <span className="text-neutral-400">▾</span>
+              <Icon name="caretDown" className="h-3 w-3 text-neutral-400" />
             </button>
             {menuOpen ? (
               <div
                 data-testid="project-menu"
                 className="absolute bottom-full left-0 z-10 mb-1 w-72 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
               >
-                {projects.map((project) => (
+                {projects.map((project, index) => (
                   <button
                     key={project.id}
                     type="button"
@@ -314,9 +473,16 @@ export function CaptainHome(props: CaptainHomeProps) {
                       setMenuOpen(false);
                       composerRef.current?.focus();
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                      menuIndex === index
+                        ? "bg-neutral-100 dark:bg-neutral-800"
+                        : ""
+                    }`}
                   >
-                    <span aria-hidden>📁</span>
+                    <Icon
+                      name="folder"
+                      className="h-3.5 w-3.5 text-neutral-500"
+                    />
                     <span className="truncate">{project.name}</span>
                     {project.id === selected?.id ? (
                       <span className="ml-auto text-indigo-500">✓</span>
@@ -335,7 +501,11 @@ export function CaptainHome(props: CaptainHomeProps) {
                         if (path) return addFolder(path);
                       });
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-neutral-600 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-neutral-600 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-800 ${
+                      menuIndex === projects.length
+                        ? "bg-neutral-100 dark:bg-neutral-800"
+                        : ""
+                    }`}
                   >
                     Open folder…
                   </button>
@@ -380,7 +550,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             <span className="font-mono">
               {captainProfile
                 ? `${captainProfile.id}${captainProfile.model ? ` (${captainProfile.model})` : ""}`
-                : captainRef}
+                : captainRef || "not set"}
             </span>
             {captainReadiness?.ready === false ? (
               <span
@@ -395,10 +565,11 @@ export function CaptainHome(props: CaptainHomeProps) {
               type="button"
               data-testid="captain-settings"
               title="Switch or tweak the captain profile"
+              aria-label="Configure the Captain profile"
               onClick={() => setCaptainPopover((open) => !open)}
-              className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+              className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
-              ⚙
+              <Icon name="gear" className="h-3.5 w-3.5" />
             </button>
             {captainPopover ? (
               <ProfilePopover
@@ -437,10 +608,12 @@ export function CaptainHome(props: CaptainHomeProps) {
               onChange={(event) => {
                 setText(event.target.value);
                 setSlashIndex(0);
+                setSlashDismissed(false);
               }}
               onKeyDown={(event) => {
                 if (event.nativeEvent.isComposing || event.keyCode === 229)
                   return;
+                if (menuKeydown(event)) return;
                 if (slash) {
                   if (event.key === "ArrowDown") {
                     event.preventDefault();
@@ -460,7 +633,9 @@ export function CaptainHome(props: CaptainHomeProps) {
                     return;
                   }
                   if (event.key === "Escape") {
-                    setText("");
+                    // Hide the menu, never the draft (DR-010 §4).
+                    event.preventDefault();
+                    setSlashDismissed(true);
                     return;
                   }
                 }

@@ -4,10 +4,11 @@
 // Read-only streaming player transcript (RUN-2/4/5): markdown text,
 // collapsed tool-use cards, collapsed thinking, per-turn usage.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.js";
+import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { Markdown } from "./Markdown.js";
 
 const RENDER_WINDOW = 200;
@@ -37,7 +38,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
         >
           <summary className="cursor-pointer select-none">
             Prompt
-            <span className="ml-2 text-[10px] text-neutral-400">
+            <span className="ml-2 text-xs text-neutral-400">
               {new Date(segment.at).toLocaleTimeString()}
             </span>
           </summary>
@@ -132,14 +133,10 @@ export function PlayerPane({
   view: PlayerView;
   meta?: SessionInfo["players"][number];
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  });
+  const { scrollRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
+    view.segments.length,
+  );
 
   const segments = view.segments.slice(-windowSize);
 
@@ -167,35 +164,38 @@ export function PlayerPane({
           ) : null}
         </span>
       </header>
-      <div
-        ref={scrollRef}
-        onScroll={(event) => {
-          const el = event.currentTarget;
-          stick.current =
-            el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-        }}
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
-      >
-        {view.segments.length > windowSize ? (
-          <button
-            type="button"
-            onClick={() => {
-              stick.current = false;
-              setWindowSize((size) => size + RENDER_WINDOW);
-            }}
-            className="text-center text-[11px] text-neutral-400 hover:text-indigo-500"
-          >
-            show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)} of{" "}
-            {view.segments.length - windowSize} earlier entries
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
+        >
+          {view.segments.length > windowSize ? (
+            <button
+              type="button"
+              onClick={() => {
+                stuckRef.current = false;
+                setWindowSize((size) => size + RENDER_WINDOW);
+              }}
+              className="text-center text-[11px] text-neutral-400 hover:text-indigo-500"
+            >
+              show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)}{" "}
+              of {view.segments.length - windowSize} earlier entries
+            </button>
+          ) : null}
+          {segments.map((segment) => (
+            <Segment key={segment.seq} segment={segment} />
+          ))}
+          {view.segments.length === 0 ? (
+            <div className="m-auto text-xs text-neutral-400">
+              waiting for the first prompt
+            </div>
+          ) : null}
+        </div>
+        {newBelow ? (
+          <button type="button" onClick={jump} className={jumpPillClasses()}>
+            ↓ latest
           </button>
-        ) : null}
-        {segments.map((segment) => (
-          <Segment key={segment.seq} segment={segment} />
-        ))}
-        {view.segments.length === 0 ? (
-          <div className="m-auto text-xs text-neutral-400">
-            waiting for the first prompt
-          </div>
         ) : null}
       </div>
     </section>

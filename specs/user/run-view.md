@@ -102,12 +102,15 @@ queued submission.
 
 ### RUN-9
 
-While an engagement awaits a Boss reply, the run view shall display
-the asking player's question prominently above the Boss composer
-and inside the asking player's pane. While an engagement awaits a
-Boss reply, when the Boss submits, the Boss composer shall send the
-submission as the reply to the waiting question — not as a new Boss
-prompt — and clear the question display.
+While an engagement awaits a Boss reply, the Captain thread shall
+render the question as a first-class incoming message bubble naming
+the asking player (one identity: the player's pane id), replacing —
+not duplicating — the runtime's status-line narration of the same
+question, and a compact banner above the Boss composer shall name
+the waiting player without repeating the question. While an
+engagement awaits a Boss reply, when the Boss submits, the Boss
+composer shall send the submission as the reply to the waiting
+question — not as a new Boss prompt — and clear the banner.
 
 ## Turn Control
 
@@ -204,9 +207,13 @@ the current surface.
 
 The Captain home shall list recent ended sessions with their
 project and end time. When the user opens an ended session, the run
-view shall show its full transcript read-only, say that the session
-has ended, and offer starting a new session for the same project,
-per [DR-009](../decisions/009-at-hand-interaction.md).
+view shall show a loading note while the transcript loads, then the
+full transcript read-only, say that the session has ended, and
+offer starting a new session for the same project, per
+[DR-009](../decisions/009-at-hand-interaction.md). When the
+transcript fails to load, the run view shall say so and offer a
+retry that reloads it — a failed load shall never present as an
+empty run.
 
 ### RUN-34
 
@@ -214,5 +221,128 @@ While any session needs a human (a pending Boss question or a
 failure), the Sessions navigation entry shall show a badge with the
 count, derived from the same attention rules as the Dashboard
 ([DASH-11](../dev/dashboard.md#dash-11)). The slash menu shall end
-with a compile-a-new-playbook entry that opens the Library's
-compile flow.
+with a compile-a-new-playbook entry that opens the Playbooks
+surface's compile flow.
+
+## Conversation Life (DR-010 §1/§3)
+
+### RUN-37
+
+While a turn is active and the Captain is not streaming speech, the
+Captain thread shall show a working indicator naming what runs
+("players working…" while any player runs, "Captain is thinking…"
+otherwise), so the thread is never inert mid-turn.
+
+### RUN-38
+
+Queued Boss submissions shall render as pending outgoing bubbles in
+full, each captioned that it sends when the turn ends and each
+individually removable; while a turn is active the composer
+placeholder shall say the message is delivered when the turn
+finishes — a queued message shall never read as sent.
+
+### RUN-39
+
+Composer drafts (per session and on the Captain home) shall survive
+switching tabs and surfaces, and shall clear only on send or when
+their session is ended by the user.
+
+### RUN-40
+
+When the abort control is activated, it shall acknowledge instantly
+— disabled with an "Aborting…" label until the turn ends or the
+failure is shown — and it shall be disabled while the core
+connection is down.
+
+### RUN-41
+
+The Captain thread shall render visible time separators before the
+first message, after gaps of more than ten minutes, and on day
+boundaries; exact timestamps stay available on hover. The session
+state chip shall show a human-readable label (amber while waiting
+on the Boss, red for failure) with the raw state id in its tooltip,
+never as the primary copy (DR-010 §2).
+
+### RUN-46
+
+When new content arrives below the fold of a scrolled-up Captain or
+player pane, the pane shall show a jump-to-latest pill that scrolls
+to the bottom and resumes following.
+
+## Keyboard and Guardrails (DR-010 §4/§6)
+
+### RUN-42
+
+The project chip menu shall be fully keyboard-operable from the
+composer: submitting without a project opens it, arrow keys move
+the highlight, Enter picks the highlighted entry, and Escape closes
+it, with focus staying in the composer throughout.
+
+### RUN-43
+
+Escape while a slash menu is open shall hide the menu and never
+touch the composer draft; typing reopens it. The slash menu shall
+expose listbox semantics (options with selection state reflected to
+assistive technology via the composer's active-descendant).
+
+### RUN-47
+
+Ending a live session shall always use the inline confirm (safe
+default focused, Escape cancels), naming the number of queued
+messages that would be discarded; the emergency abort control stays
+one-click. After a tab closes, focus shall move to a neighboring
+tab, never to the document body.
+
+### RUN-48
+
+Session tabs shall carry the shared attention signal: an amber dot
+for a waiting question and a red dot for a failure on background
+tabs (the active tab shows the banner instead), with the detail in
+the tab tooltip. The tab strip shall scroll horizontally when tabs
+overflow, keep the new-session control reachable, expose tab-list
+semantics, and keep the active tab scrolled into view.
+
+### RUN-49
+
+The app shall provide keyboard shortcuts implemented in the web UI
+(so they work identically in a browser, per
+[SHELL-10](../dev/app-shell.md#shell-10)): Cmd/Ctrl+1..5 switch
+surfaces, Cmd/Ctrl+, opens Settings, Cmd/Ctrl+N opens the new
+session tab, Cmd/Ctrl+Shift+[ and ] cycle live session tabs, and a
+printable key pressed outside any input refocuses the Boss
+composer.
+
+## First-Hour Integrity (DR-010 §5)
+
+### RUN-44
+
+While the shared config is invalid or missing, the Captain home
+shall say so in the thread — listing the actual errors — with an
+in-place link to Settings, and the captain identity shall never
+render blank.
+
+### RUN-45
+
+The not-ready heads-up shall offer an in-place re-check (and the
+app shall re-check readiness when its window regains focus while
+anything is not ready), with copy that is honest about env vars
+requiring a restart. Readiness shall cover adapter-shorthand
+references, not just named profiles.
+
+### RUN-50
+
+When the app is connected but its initial state failed to load, a
+banner shall say so and offer retry — never a silently empty app.
+One persistent polite live region shall announce a player waiting
+for a reply, connection loss and restoration, and attention-count
+increases to assistive technology. Icon-only controls shall carry
+accessible names and at-least-24px hit targets, and the navigation
+shall expose the current surface and badge meaning to assistive
+technology.
+
+### RUN-51
+
+Where the Captain home has no history (no past sessions, warnings,
+or errors), it shall center its whole cluster — greeting, quick
+start, project chip, and composer — on the canvas, reverting to the
+bottom-docked chat layout once real content exists.

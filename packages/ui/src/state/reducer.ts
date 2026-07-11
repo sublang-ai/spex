@@ -53,12 +53,16 @@ export interface PlayerView {
 }
 
 export interface CaptainLine {
-  /** boss: the user's own message, echoed into the thread (RUN-30). */
-  kind: "status" | "speech" | "error" | "boss";
+  /** boss: the user's own message, echoed into the thread (RUN-30).
+   * question: a player asking the Boss — a first-class incoming
+   * message, not a log line (RUN-9, DR-010 §1). */
+  kind: "status" | "speech" | "error" | "boss" | "question";
   text: string;
   turnId: number | null;
   at: number;
   data?: unknown;
+  /** question lines: the asking player (pane id when resolvable). */
+  player?: string;
 }
 
 export interface SessionView {
@@ -75,6 +79,8 @@ export interface SessionView {
   captainMode?: string;
   /** Set while the playbook is parked awaiting a Boss reply. */
   pendingQuestion?: string;
+  /** The asking player for the parked question (pane id). */
+  pendingQuestionPlayer?: string;
   lastSeq: number;
 }
 
@@ -111,19 +117,38 @@ function pushCaptain(view: SessionView, line: CaptainLine): void {
 }
 
 /** The runtime sends either a plain string or a structured object
- * ({player, question, ...}); render both as one line (RUN-9/30). */
-export function formatBossQuestion(value: unknown): string | undefined {
-  if (typeof value === "string") return value;
+ * ({player, question, ...}); normalize both (RUN-9/30). */
+export function parseBossQuestion(
+  value: unknown,
+): { question: string; player?: string } | undefined {
+  if (typeof value === "string") return { question: value };
   if (typeof value === "object" && value !== null) {
     const shaped = value as { player?: unknown; question?: unknown };
     const question =
       typeof shaped.question === "string" ? shaped.question : undefined;
     if (question === undefined) return undefined;
     return typeof shaped.player === "string"
-      ? `${shaped.player} asks: ${question}`
-      : question;
+      ? { question, player: shaped.player }
+      : { question };
   }
   return undefined;
+}
+
+/** One name per agent (DR-010 §2): the runtime's role name ("coder")
+ * resolves to the pane id the user sees ("code-coder") when one
+ * matches by equality or suffix. */
+export function resolvePlayerId(
+  view: SessionView,
+  player: string | undefined,
+): string | undefined {
+  if (!player) return undefined;
+  const ids = Object.keys(view.players);
+  const lower = player.toLowerCase();
+  return (
+    ids.find((id) => id.toLowerCase() === lower) ??
+    ids.find((id) => id.toLowerCase().endsWith(`-${lower}`)) ??
+    player
+  );
 }
 
 /** Abort reasons are runtime plumbing; translate the known ones. */
@@ -327,9 +352,19 @@ export function applyRecord(
       break;
     }
     case "captain_status": {
+      const message = String(r.message);
+      // The runtime narrates the parked question as a status line too;
+      // once it lives in the thread as a question bubble, the echo is
+      // noise (DR-010 §1).
+      if (
+        view.pendingQuestion !== undefined &&
+        message.includes(view.pendingQuestion)
+      ) {
+        break;
+      }
       pushCaptain(view, {
         kind: "status",
-        text: String(r.message),
+        text: message,
         turnId: r.turnId,
         at: r.timestamp,
         data: r.data,
@@ -346,12 +381,35 @@ export function applyRecord(
       if (topic === "playbook.fsm.state") {
         view.fsmState = payload?.to ?? payload?.state;
         if (view.fsmState === "awaitBossReply") {
-          view.pendingQuestion =
-            formatBossQuestion(payload?.pendingBossQuestion) ??
-            view.pendingQuestion ??
-            "";
+          const parsed = parseBossQuestion(payload?.pendingBossQuestion);
+          view.pendingQuestion = parsed?.question ?? view.pendingQuestion ?? "";
+          view.pendingQuestionPlayer = resolvePlayerId(view, parsed?.player);
+          if (parsed) {
+            // The status narration of the same question may have
+            // landed just before this record: replace it with the
+            // first-class question bubble.
+            for (let i = view.captain.length - 1; i >= 0; i -= 1) {
+              const line = view.captain[i];
+              if (line.kind === "boss") break;
+              if (
+                line.kind === "status" &&
+                line.text.includes(parsed.question)
+              ) {
+                view.captain.splice(i, 1);
+                break;
+              }
+            }
+            pushCaptain(view, {
+              kind: "question",
+              text: parsed.question,
+              player: view.pendingQuestionPlayer,
+              turnId: r.turnId,
+              at: r.timestamp,
+            });
+          }
         } else {
           view.pendingQuestion = undefined;
+          view.pendingQuestionPlayer = undefined;
         }
       } else if (topic === "playbook.captain.fsm.state") {
         view.captainMode = payload?.to;

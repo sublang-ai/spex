@@ -409,6 +409,16 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async disposeSession(sessionId: string): Promise<void> {
+      // The end-session confirm already named what gets discarded.
+      const composer = get().composers[sessionId];
+      if (composer?.draft) {
+        set({
+          composers: {
+            ...get().composers,
+            [sessionId]: { ...composer, draft: "" },
+          },
+        });
+      }
       try {
         await getClient().command("session.dispose", { sessionId });
       } catch (cause) {
@@ -536,7 +546,18 @@ export const useAppStore = create<AppState>((set, get) => {
         appendLine("✓ compiled and registered — see Configured playbooks");
         set({ activeCompile: { playbookId, running: false, ok: true } });
       } catch (cause) {
-        appendLine(`✗ ${(cause as Error).message}`);
+        const error = cause as { code?: string; message: string };
+        // A user cancel already ends the log with the ◇ line; a busy
+        // rejection means this very compile is still running.
+        if (error.code === "aborted") {
+          set({ activeCompile: { playbookId, running: false, ok: false } });
+          return;
+        }
+        if (error.code === "busy") {
+          appendLine(`… ${error.message}`);
+          return;
+        }
+        appendLine(`✗ ${error.message}`);
         set({ activeCompile: { playbookId, running: false, ok: false } });
         throw cause;
       }
