@@ -13,18 +13,18 @@ scenario review.
 
 ## Deliverables
 
-- [ ] Start view on Sessions per RUN-25..27 (composer, project
+- [x] Start view on Sessions per RUN-25..27 (composer, project
   selector with native picker, playbook chips, captain summary
   with switcher and readiness)
-- [ ] Native bridge in the desktop shell per SHELL-20
-- [ ] Playbook pipeline view per PBLIB-22..24 (Source / Gears /
+- [x] Native bridge in the desktop shell per SHELL-20
+- [x] Playbook pipeline view per PBLIB-22..24 (Source / Gears /
   State machine) with a `playbook.artifacts` protocol command
-- [ ] Dashboard work lists grouped by project with counts, recency
+- [x] Dashboard work lists grouped by project with counts, recency
   order, labels, and a project filter per DASH-20
-- [ ] Scenario-review fixes (compile progress visibility, attention
+- [x] Scenario-review fixes (compile progress visibility, attention
   navigation, reconnect/refresh correctness, dark-mode and
   keyboard polish)
-- [ ] Tests per RUN-29 and PBLIB-25; acceptance verification with
+- [x] Tests per RUN-29 and PBLIB-25; acceptance verification with
   screenshots via the shell's acceptance mode and the fake core
 
 ## Tasks
