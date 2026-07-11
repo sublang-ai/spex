@@ -84,9 +84,51 @@ async function main(): Promise<void> {
       nodeIntegration: false,
     },
   });
+
+  // Acceptance mode (SPEX_ACCEPTANCE=<png path>): render, report the
+  // renderer's real state, capture a screenshot, and exit — so "it
+  // boots" can never again pass for "it shows a white window".
+  const acceptancePath = process.env.SPEX_ACCEPTANCE;
+  const consoleErrors: string[] = [];
+  if (acceptancePath) {
+    window.webContents.on("console-message", (_event, level, message) => {
+      // The CSP advisory is dev-only noise; it disappears when packaged.
+      if (level >= 2 && !message.includes("Electron Security Warning")) {
+        consoleErrors.push(message);
+      }
+    });
+    window.webContents.on(
+      "did-fail-load",
+      (_event, code, description, url) => {
+        consoleErrors.push(`did-fail-load ${code} ${description} ${url}`);
+      },
+    );
+  }
+
   await window.loadFile(join(app.getAppPath(), "ui-dist", "index.html"), {
     query: { core: `ws://127.0.0.1:${service.port()}` },
   });
+
+  if (acceptancePath) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 1500));
+    const state = (await window.webContents.executeJavaScript(
+      `({
+        rootChildren: document.getElementById("root")?.children.length ?? 0,
+        bodyText: document.body.innerText.slice(0, 400),
+        title: document.title,
+      })`,
+    )) as { rootChildren: number; bodyText: string; title: string };
+    const image = await window.webContents.capturePage();
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(acceptancePath, image.toPNG());
+    console.log(
+      JSON.stringify({ acceptance: state, consoleErrors }, null, 2),
+    );
+    quitting = true;
+    await shutdown();
+    app.exit(consoleErrors.length > 0 || state.rootChildren === 0 ? 1 : 0);
+    return;
+  }
 
   app.on("before-quit", (event) => {
     if (quitting) return;

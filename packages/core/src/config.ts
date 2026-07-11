@@ -8,9 +8,10 @@
 // with the same error messages wherever the rule exists upstream.
 
 import { constants, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 
 import type { AdapterName, ConfigSummary } from "./protocol.js";
@@ -102,6 +103,38 @@ export interface ComposedConfig {
 }
 
 export type LoadModule = (specifier: string) => Promise<unknown>;
+
+/**
+ * Module loader with local-checkout fallback: when a bare specifier
+ * fails to resolve from Spex's own dependencies (e.g. a registry
+ * subpath that exists only in an unpublished build), try resolving
+ * from each directory in SPEX_MODULE_PATHS (colon-separated package
+ * checkouts; package self-reference resolves their exports).
+ */
+export function createModuleLoader(
+  env: NodeJS.ProcessEnv = process.env,
+): LoadModule {
+  const extraDirs = (env.SPEX_MODULE_PATHS ?? "")
+    .split(":")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return async (specifier: string): Promise<unknown> => {
+    try {
+      return await import(specifier);
+    } catch (error) {
+      for (const dir of extraDirs) {
+        try {
+          const requireFrom = createRequire(join(dir, "__spex_resolve__.js"));
+          const resolved = requireFrom.resolve(specifier);
+          return await import(pathToFileURL(resolved).href);
+        } catch {
+          // Try the next configured checkout.
+        }
+      }
+      throw error;
+    }
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Paths and seeding

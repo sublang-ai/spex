@@ -14,6 +14,7 @@ import type { AddressInfo } from "node:net";
 
 import {
   checkAdapterReadiness,
+  createModuleLoader,
   loadConfig,
   resolveConfigPath,
   seedConfig,
@@ -123,6 +124,9 @@ export class CoreService {
     this.home = options.home ?? this.env.HOME ?? homedir();
     this.configPath =
       options.configPath ?? resolveConfigPath(this.env, this.home);
+    if (!options.loadModule) {
+      this.options = { ...options, loadModule: createModuleLoader(this.env) };
+    }
     this.runCommand = options.runCommand ?? defaultRunCommand;
     this.forge =
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
