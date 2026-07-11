@@ -185,3 +185,34 @@ the user's submitted messages shall appear as their own chat
 bubbles in the Captain thread, Captain speech as counterpart
 bubbles, and shell status lines as compact system lines between
 them.
+
+## At-Hand Operations
+
+### RUN-32
+
+When the user opens the captain identity's editor control (or a
+profile reference's editor control elsewhere in the run view), the
+run view shall show an anchored popover in place — listing the
+profiles with model and readiness, switching the referenced profile
+on selection, and editing the selected profile's model and
+reasoning effort — writing changes through the shared
+configuration's validated edit path per
+[DR-009](../decisions/009-at-hand-interaction.md), without leaving
+the current surface.
+
+### RUN-33
+
+The Captain home shall list recent ended sessions with their
+project and end time. When the user opens an ended session, the run
+view shall show its full transcript read-only, say that the session
+has ended, and offer starting a new session for the same project,
+per [DR-009](../decisions/009-at-hand-interaction.md).
+
+### RUN-34
+
+While any session needs a human (a pending Boss question or a
+failure), the Sessions navigation entry shall show a badge with the
+count, derived from the same attention rules as the Dashboard
+([DASH-11](../dev/dashboard.md#dash-11)). The slash menu shall end
+with a compile-a-new-playbook entry that opens the Library's
+compile flow.

@@ -35,7 +35,7 @@ Accepted (revised 2026-07-11 after the owner's review of the first build)
 
 ### Captain identity
 
-- The Captain's profile and model appear compactly near the composer with a small gear that jumps to the profile in Settings; profile pickers elsewhere carry the same gear affordance.
+- The Captain's profile and model appear compactly near the composer with a small gear that opens an in-place editor popover per [DR-009](009-at-hand-interaction.md) — switching profiles and tweaking model or effort without leaving the conversation; profile references elsewhere carry the same affordance.
 
 ## Consequences
 

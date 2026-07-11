@@ -93,3 +93,25 @@ dismissed and the view is remounted, the test suite shall assert
 the card stays dismissed; when a fixture stream containing a boss
 turn is replayed, the test suite shall assert the submitted text
 renders as a user bubble in the Captain thread.
+
+### RUN-35
+
+Verifies: [RUN-32](../user/run-view.md#run-32)
+
+When the captain editor popover is opened from the Captain home
+with fixture profiles, the test suite shall assert it lists the
+profiles with models, that selecting another profile issues a
+captain change through the configuration edit path, and that
+editing the selected profile's model issues a profile save — all
+without a surface change.
+
+### RUN-36
+
+Verifies: [RUN-33](../user/run-view.md#run-33),
+[RUN-34](../user/run-view.md#run-34)
+
+Where a fixture holds one ended session with a stored transcript
+and one live session awaiting a Boss reply, the test suite shall
+assert the Captain home lists the ended session, opening it renders
+the transcript read-only with an ended notice, and the Sessions
+navigation badge shows the count 1.
