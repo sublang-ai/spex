@@ -147,30 +147,41 @@ following the OS appearance otherwise.
 ### RUN-25
 
 Where no session tab is active, when the Sessions surface is shown,
-the run view shall present the start view: a Captain composer as
-the primary element, a selector listing the registered projects, a
-control that adds a project by choosing a local folder (native
-picker when available per
-[DR-008](../decisions/008-native-shell-bridge.md), manual path
-entry otherwise), one chip per configured playbook showing its
-slash command and intent, and the captain's profile, model, and
-readiness state per
+the run view shall present the Captain home: a chat thread opened by
+a Captain greeting that offers two or three high-level hints (choose
+a project, type `/` for playbooks, or describe a task), a chat
+composer, a project chip listing the registered projects with an
+"Open folder…" entry (native picker when available per
+[DR-008](../decisions/008-native-shell-bridge.md), a path field in
+the menu otherwise), and the captain's profile and model with a
+gear control that opens the profile in Settings, per
 [DR-007](../decisions/007-conversational-session-start.md).
 
 ### RUN-26
 
-While the start view is shown and a project is selected, when the
+While the Captain home is shown and a project is chosen, when the
 user submits composer text, the run view shall create a session for
 that project, dispatch the text as the session's first Boss turn,
-and switch to the new session's tab. While no project is selected,
-the start view shall keep the composer's send action disabled and
-say why.
+and switch to the new session's tab. While no project is chosen,
+when the user submits, the run view shall open the project chip
+menu instead of dispatching.
 
 ### RUN-27
 
-While the start view is shown, when the user clicks a playbook
-chip, the run view shall insert the chip's slash command into the
-composer without dispatching it. When the user switches the captain
-profile in the start view, the run view shall write the change to
-the shared configuration as a captain change and reflect the
-updated readiness state.
+When the user picks a folder that is not a git repository, the run
+view shall initialize a git repository there and register it as a
+project without further prompts. When the user types `/` at the
+start of a composer, the run view shall show the configured
+playbooks filtered by the typed prefix, each with its intent as the
+hint, and insert the selected command into the composer without
+dispatching it. The Captain home shall show highlighted playbooks
+as a quick start card that the user can dismiss, and the dismissal
+shall persist across launches.
+
+### RUN-30
+
+The run view shall present conversations in instant-messaging form:
+the user's submitted messages shall appear as their own chat
+bubbles in the Captain thread, Captain speech as counterpart
+bubbles, and shell status lines as compact system lines between
+them.

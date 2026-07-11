@@ -74,8 +74,22 @@ Verifies: [RUN-25](../user/run-view.md#run-25),
 
 Where no session is live, when the Sessions surface renders with a
 fixture config of one project and one playbook, the test suite
-shall assert the start view shows the composer, the project
-selector, the playbook chip, and the captain summary; when text is
-submitted with the project selected, the test suite shall assert a
-session is created for that project and the text is dispatched as
-its first Boss turn.
+shall assert the Captain home shows the greeting with hints, the
+chat composer, the project chip, and the captain identity; when
+text is submitted with the project chosen, the test suite shall
+assert a session is created for that project and the text is
+dispatched as its first Boss turn.
+
+### RUN-31
+
+Verifies: [RUN-27](../user/run-view.md#run-27),
+[RUN-30](../user/run-view.md#run-30)
+
+When `/` is typed at the start of the Captain home composer, the
+test suite shall assert the slash menu lists the fixture playbook
+with its intent, filters as more is typed, and inserts the command
+without dispatching on selection; when the quick start card is
+dismissed and the view is remounted, the test suite shall assert
+the card stays dismissed; when a fixture stream containing a boss
+turn is replayed, the test suite shall assert the submitted text
+renders as a user bubble in the Captain thread.

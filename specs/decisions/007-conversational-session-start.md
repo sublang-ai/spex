@@ -5,38 +5,41 @@
 
 ## Status
 
-Accepted
+Accepted (revised 2026-07-11 after the owner's review of the first build)
 
 ## Context
 
 - v1 landed with Sessions empty until the user first visited Projects, registered a repo by typing an absolute path, and clicked "Open session" — three surfaces before the first conversation.
-- The product owner's review (2026-07-10): opening the app must feel like opening Claude Desktop or Codex Desktop — a Captain conversation front and center, where the user can naturally pick or add a project, see and invoke playbooks, and see or change the captain's agent/model.
-- All the needed capabilities already exist on the protocol (project register/create, session create, turn submit, config summary, readiness, config.edit); this is a presentation-layer decision ([DR-003](003-runtime-reuse.md) semantics are untouched).
+- The product owner's review (2026-07-10): opening the app must put a Captain conversation front and center, where the user can naturally pick or add a project, see and invoke playbooks, and see or change the captain's agent/model.
+- The first build (a composer with a form around it) drew a second review (2026-07-11): the Captain must show up **like a human chatting in an IM app** — greeting first, hints in its own words, no instruction labels; project picking should be a compact chip menu in the Claude Desktop style (without copying it); playbook chips do not scale and must become a dismissible quick start; discovery belongs in a `/` menu in the composer.
+- All the needed capabilities already exist on the protocol; this is presentation only ([DR-003](003-runtime-reuse.md) semantics untouched).
 
 ## Decision
 
-### Sessions is the landing surface, and it is never blank
+### Sessions is the landing surface, and it opens as a Captain chat
 
-- The app opens on **Sessions**.
-- While no live session exists (and whenever the active tab is the start tab), Sessions shows the **start view**: a Captain composer front and center, styled as the app's home.
-- The start view carries, around the composer:
+- The app opens on **Sessions**; with no live session (or on the "+" tab) it shows the **Captain home**: a chat thread, not a form.
+- The Captain opens the thread itself with a client-rendered greeting — a hello plus two or three high-level hints (pick a project, type `/` for playbooks, or just describe a task) — so the surface is never blank and needs no instruction copy.
+- Playbook runs read as an IM conversation everywhere: the user's messages appear as their own chat bubbles, Captain speech as counterpart bubbles, and shell status lines as small system lines between them.
 
-| Element | Behavior |
-| --- | --- |
-| Project selector | Registered projects in a dropdown; "Choose folder…" opens the native picker ([DR-008](008-native-shell-bridge.md)); a chosen unregistered folder is registered on start (git repos directly, with a create flow offered otherwise) |
-| Playbook chips | One chip per configured playbook: `/command — intent`; clicking inserts the slash command into the composer; an "add" chip links to the Library |
-| Captain summary | The captain's profile id and model with a profile switcher (writes `captain.set`) and its readiness state with fix instructions |
-| Readiness notices | Not-ready adapters used by the selected lineup surface before the first message, not after a failed turn |
+### Project chip
 
-- Submitting the first message performs one motion: create the session for the selected project, then dispatch the text as the first Boss turn.
+- A compact project chip sits in the composer toolbar (folder icon + name); clicking it opens a menu of registered projects plus **Open folder…** (native picker per [DR-008](008-native-shell-bridge.md); a path field inside the menu when the bridge is absent).
+- Choosing a folder that is not a git repository **initializes one silently** (git init, no scaffold, no dialog) and registers it — no branching flows, no branch/worktree options.
+- Sending with no project chosen opens the chip menu instead of erroring.
 
-### Session tabs
+### Quick start and discovery
 
-- Tabs are titled by project basename; colliding basenames are disambiguated with the parent directory.
-- A dedicated "+" tab returns to the start view to launch a session for another project.
+- Highlighted playbooks render as a **quick start card** in the thread (command + intent per row); the card is dismissible and stays dismissed across launches once the user knows the ropes.
+- Typing `/` at the start of any composer opens a **slash menu**: the configured playbooks filtered as the user types, each with its intent as the hint; selecting inserts the command.
+
+### Captain identity
+
+- The Captain's profile and model appear compactly near the composer with a small gear that jumps to the profile in Settings; profile pickers elsewhere carry the same gear affordance.
 
 ## Consequences
 
-- Zero-to-first-turn happens on one surface; Projects becomes a management view rather than a required doorway.
-- The start view duplicates small slices of Library/Settings (chips, captain switcher); acceptable — they are entry points, and the full editors stay canonical.
-- tmux-play has no equivalent surface; this is presentation only, so the verification-twin property of [DR-003](003-runtime-reuse.md) is unaffected.
+- Zero-to-first-turn happens inside one conversation; Projects becomes a management view rather than a required doorway.
+- The greeting is client-side (no LLM call), so the home is instant and free; the Captain's first real reply still comes from the runtime.
+- Quick-start dismissal is a UI preference (local store), not config.
+- tmux-play has no equivalent surface; the verification-twin property of [DR-003](003-runtime-reuse.md) is unaffected.
