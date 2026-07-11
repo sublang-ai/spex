@@ -52,6 +52,7 @@ meta.md     The spec of specs
 | IR-011 | [011-ux-round.md](iterations/011-ux-round.md) | Conversational start, native picker, pipeline view, organized work lists |
 | IR-012 | [012-captain-chat-home.md](iterations/012-captain-chat-home.md) | IM-style Captain home: greeting, chip menu with silent init, quick start, slash menu |
 | IR-013 | [013-at-hand-round.md](iterations/013-at-hand-round.md) | At-hand round: profile popover, nav badge, slash compile entry, past sessions |
+| IR-014 | [014-public-readiness.md](iterations/014-public-readiness.md) | Blockers/majors from the adversarial public-readiness review |
 
 ## Packages
 
