@@ -64,7 +64,9 @@ describe("RUN-21: awaitBossReply banner and reply routing", () => {
   test("question parks the composer into answering state", () => {
     const view = applyRecords(fresh(), [...TURN_ONE, ...TURN_TWO_QUESTION]);
     expect(view.fsmState).toBe("awaitBossReply");
-    expect(view.pendingQuestion).toBe("Which auth flow should I prioritize?");
+    expect(view.pendingQuestion).toBe(
+      "code-reviewer asks: Which auth flow should I prioritize?",
+    );
   });
 
   test("the reply clears the pending question", () => {

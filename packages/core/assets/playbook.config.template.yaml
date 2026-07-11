@@ -18,14 +18,15 @@ profiles:
     reasoningEffort: xhigh
     permissions:
       mode: auto        # protected auto mode for the Claude Coder
-  codex-gpt:
-    adapter: codex
-    model: gpt-5.5
-    reasoningEffort: xhigh
-    permissions:
-      mode: auto
-      writablePaths:
-        - .git          # allow git metadata writes under Codex auto mode
+  # Example second-vendor profile — uncomment if you use the Codex CLI:
+  # codex-gpt:
+  #   adapter: codex
+  #   model: gpt-5.5
+  #   reasoningEffort: xhigh
+  #   permissions:
+  #     mode: auto
+  #     writablePaths:
+  #       - .git        # allow git metadata writes under Codex auto mode
 
 # captain: the Judge agent that routes Boss input and drives playbooks.
 captain: claude-opus
@@ -44,5 +45,5 @@ playbooks:
     from: "@sublang/playbook/code/registry"
     players:
       coder: claude-opus-1m
-      reviewer: codex-gpt
+      reviewer: claude-opus   # single-vendor default; swap in codex-gpt if configured
     committer: coder      # which role commits - `coder` or `reviewer`

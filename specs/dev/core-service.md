@@ -98,3 +98,13 @@ through the WebSocket protocol against a scripted fake adapter that
 replays a predetermined record script, using no network access and
 no real agent credentials, so protocol behavior is verified
 deterministically in CI.
+
+## Endpoint Hardening
+
+### CORE-24
+
+The core package shall reject WebSocket handshakes that do not
+present the service's session token, and handshakes whose Origin
+header names a foreign web origin, so that neither arbitrary local
+web pages nor remote pages can drive the control plane; embedding
+shells receive the token at startup and pass it to the UI.

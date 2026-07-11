@@ -558,18 +558,31 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
       typeof top.captain === "string"
         ? top.captain
         : loaded.composed.captainAgent.adapter,
-    playbooks: loaded.composed.playbooks.map((playbook) => ({
-      id: playbook.id,
-      from: playbook.from,
-      command: playbook.command,
-      intent: playbook.intent,
-      players: Object.fromEntries(
-        Object.entries(playbook.players).map(([role, agent]) => [
-          role,
-          agent.model ?? agent.adapter,
-        ]),
-      ),
-    })),
+    playbooks: loaded.composed.playbooks.map((playbook) => {
+      const rawPlayers = isPlainObject(top.playbooks)
+        ? (top.playbooks as Record<string, unknown>)[playbook.id]
+        : undefined;
+      const rawRefs =
+        isPlainObject(rawPlayers) && isPlainObject(rawPlayers.players)
+          ? (rawPlayers.players as Record<string, unknown>)
+          : {};
+      return {
+        id: playbook.id,
+        from: playbook.from,
+        command: playbook.command,
+        intent: playbook.intent,
+        players: Object.fromEntries(
+          Object.entries(playbook.players).map(([role, agent]) => {
+            const display = agent.model ?? agent.adapter;
+            const raw = rawRefs[role];
+            return [
+              role,
+              { ref: typeof raw === "string" ? raw : display, display },
+            ];
+          }),
+        ),
+      };
+    }),
     ...(isPlainObject(top.notifications)
       ? { notifications: top.notifications as Record<string, string> }
       : {}),

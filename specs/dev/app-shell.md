@@ -64,3 +64,10 @@ affordances impossible from a sandboxed web page (v1: directory
 picking over one invoke channel), carrying no application feature,
 and absent by design in non-Electron deployments so the UI's
 feature detection selects the manual fallback.
+
+### SHELL-22
+
+The renderer shall enforce a content security policy that denies
+remote script, connection, and image loading (data: images
+excepted), and transcript markdown shall not fetch remote images,
+so untrusted agent output cannot beacon out of the app.

@@ -48,9 +48,9 @@ function MappingSelect({
 }
 
 const STAGES = [
-  { key: "source", label: "Source" },
-  { key: "gears", label: "Gears" },
-  { key: "fsm", label: "State machine" },
+  { key: "source", label: "Source", hint: "The workflow markdown the playbook was compiled from" },
+  { key: "gears", label: "Gears", hint: "One normative spec item per state behavior — the compiler's middle stage" },
+  { key: "fsm", label: "State machine", hint: "The compiled XState machine that drives the players" },
 ] as const;
 type StageKey = (typeof STAGES)[number]["key"];
 
@@ -95,7 +95,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
               title={
                 artifacts[entry.key] === null
                   ? `${entry.label} not found next to this playbook's registry`
-                  : undefined
+                  : entry.hint
               }
               onClick={() => setStage(entry.key)}
               className={`rounded-md px-2 py-0.5 text-xs ${
@@ -318,11 +318,11 @@ export function LibrarySurface() {
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
-              {Object.entries(playbook.players).map(([role, ref]) => (
+              {Object.entries(playbook.players).map(([role, player]) => (
                 <span key={role} className="relative flex items-center gap-1">
                   <span className="font-mono">{role}:</span>
                   <MappingSelect
-                    value={ref}
+                    value={player.ref}
                     profiles={profileIds}
                     onChange={(next) =>
                       edit({
@@ -352,9 +352,10 @@ export function LibrarySurface() {
                   rolePopover.role === role ? (
                     <ProfilePopover
                       title={`${role} profile`}
+                      direction="down"
                       profiles={summary.profiles}
                       readiness={readiness}
-                      currentRef={ref}
+                      currentRef={player.ref}
                       onSelect={(next) =>
                         setPlaybookPlayer(playbook.id, role, next)
                       }

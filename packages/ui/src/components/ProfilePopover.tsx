@@ -6,7 +6,7 @@
 // essentials without leaving the surface. Pure props so RUN-35 can
 // exercise it without a live core.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type {
   ProfileSummary,
   ReadinessEntry,
@@ -14,8 +14,14 @@ import type {
 
 const EFFORTS = ["", "minimal", "low", "medium", "high", "xhigh", "max"];
 
+const SHORTHANDS = ["claude", "codex"];
+
 export interface ProfilePopoverProps {
   title: string;
+  /** Open downward instead of upward (for anchors near a scroll top). */
+  direction?: "up" | "down";
+  /** The trigger element; clicks inside it are not outside-closes. */
+  anchorRef?: RefObject<HTMLElement | null>;
   profiles: ProfileSummary[];
   readiness: ReadinessEntry[];
   /** The currently referenced profile id (or adapter shorthand). */
@@ -45,7 +51,10 @@ export function ProfilePopover(props: ProfilePopoverProps) {
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) props.onClose();
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (props.anchorRef?.current?.contains(target)) return;
+      props.onClose();
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape") props.onClose();
@@ -82,7 +91,9 @@ export function ProfilePopover(props: ProfilePopoverProps) {
     <div
       ref={rootRef}
       data-testid="profile-popover"
-      className="absolute bottom-full right-0 z-20 mb-1 w-80 rounded-lg border border-neutral-200 bg-white p-2 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+      className={`absolute right-0 z-20 w-80 rounded-lg border border-neutral-200 bg-white p-2 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900 ${
+        props.direction === "down" ? "top-full mt-1" : "bottom-full mb-1"
+      }`}
     >
       <div className="px-1 pb-1 text-xs font-semibold text-neutral-500">
         {props.title}
@@ -132,6 +143,17 @@ export function ProfilePopover(props: ProfilePopoverProps) {
             </button>
           );
         })}
+        {SHORTHANDS.includes(currentRef) ? (
+          <div className="flex items-center gap-2 rounded-md bg-indigo-50 px-2 py-1.5 dark:bg-indigo-950">
+            <span className="font-mono text-xs font-semibold">
+              {currentRef}
+            </span>
+            <span className="text-xs text-neutral-500">
+              (adapter shorthand — defaults)
+            </span>
+            <span className="ml-auto text-indigo-500">✓</span>
+          </div>
+        ) : null}
       </div>
 
       {selected ? (

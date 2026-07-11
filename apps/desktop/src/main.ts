@@ -12,7 +12,9 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  Menu,
   Notification as ElectronNotification,
+  shell,
 } from "electron";
 import { CoreService } from "@sublang/spex-core";
 
@@ -37,8 +39,38 @@ if (!singleInstance) {
   void main();
 }
 
+function installApplicationMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(process.platform === "darwin"
+      ? [{ role: "appMenu" as const }]
+      : []),
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+    {
+      role: "help",
+      submenu: [
+        {
+          label: "Spex on GitHub",
+          click: () =>
+            void shell.openExternal("https://github.com/sublang-ai/spex"),
+        },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 async function main(): Promise<void> {
   await app.whenReady();
+
+  installApplicationMenu();
+  if (process.platform === "darwin") {
+    app.setAboutPanelOptions({
+      applicationName: "Spex",
+      applicationVersion: app.getVersion(),
+    });
+  }
 
   // Credentials exported in shell profiles must be visible before
   // any adapter readiness check (SHELL-12, DR-004).
@@ -56,7 +88,9 @@ async function main(): Promise<void> {
     if (process.platform === "darwin") app.setBadgeCount(badge);
     const prefs = service?.notificationPrefs() ?? {};
     const notification = notificationFor(envelope, prefs);
-    if (notification && ElectronNotification.isSupported()) {
+    if (notification?.sink === "bell") {
+      shell.beep();
+    } else if (notification && ElectronNotification.isSupported()) {
       const shown = new ElectronNotification({
         title: notification.title,
         body: notification.body,
@@ -96,6 +130,19 @@ async function main(): Promise<void> {
     },
   });
 
+  // The renderer only ever loads the bundled UI; anything else (window
+  // opens, markdown links) goes to the system browser or is dropped.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  window.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("file:")) {
+      event.preventDefault();
+      if (/^https?:/i.test(url)) void shell.openExternal(url);
+    }
+  });
+
   // Acceptance mode (SPEX_ACCEPTANCE=<png path>): render, report the
   // renderer's real state, capture a screenshot, and exit — so "it
   // boots" can never again pass for "it shows a white window".
@@ -117,7 +164,10 @@ async function main(): Promise<void> {
   }
 
   await window.loadFile(join(app.getAppPath(), "ui-dist", "index.html"), {
-    query: { core: `ws://127.0.0.1:${service.port()}` },
+    query: {
+      core: `ws://127.0.0.1:${service.port()}/?token=${service.token()}`,
+      version: app.getVersion(),
+    },
   });
 
   if (acceptancePath) {

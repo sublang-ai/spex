@@ -55,7 +55,7 @@ class Client {
   private nextId = 0;
 
   constructor(port: number) {
-    this.socket = new WebSocket(`ws://127.0.0.1:${port}`);
+    this.socket = new WebSocket(`ws://127.0.0.1:${port}/?token=test`);
     this.socket.on("message", (data) => {
       this.messages.push(JSON.parse(String(data)) as ServerMessage);
     });
@@ -186,6 +186,7 @@ async function startHarness(
   });
 
   const service = await CoreService.start({
+    token: "test",
     configPath,
     dbPath,
     adapterImports: imports,
@@ -446,6 +447,7 @@ test("CORE-22: records, order, and usage survive a service restart", async () =>
   await harness.service.stop();
 
   const restarted = await CoreService.start({
+    token: "test",
     configPath: join(harness.dir, "playbook.config.yaml"),
     dbPath: harness.dbPath,
     env: {},
@@ -583,6 +585,7 @@ test("real captain shell: bare /code reply and roster visibility", async () => {
   // No captainFactory: the service instantiates the REAL shell from
   // @sublang/playbook/playbook-captain with the core loadModule.
   const service = await CoreService.start({
+    token: "test",
     configPath,
     dbPath: join(dir, "spex.db"),
     adapterImports: imports,
@@ -656,5 +659,18 @@ test("CORE-13: invalid messages get error replies and the connection survives", 
   assert.deepEqual(projects, []);
 
   client.close();
+  await harness.service.stop();
+});
+
+test("CORE: handshake without the token is rejected before hello", async () => {
+  const harness = await startHarness();
+  const socket = new WebSocket(`ws://127.0.0.1:${harness.service.port()}`);
+  const outcome = await new Promise<string>((resolve) => {
+    socket.on("message", () => resolve("message"));
+    socket.on("close", () => resolve("closed"));
+    socket.on("error", () => resolve("closed"));
+    setTimeout(() => resolve("timeout"), 3000);
+  });
+  assert.equal(outcome, "closed");
   await harness.service.stop();
 });

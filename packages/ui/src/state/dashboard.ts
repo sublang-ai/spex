@@ -43,9 +43,14 @@ export function deriveAttention(
       });
       continue;
     }
+    // Only errors from the LATEST turn count as failures; a clean
+    // later turn clears the flag instead of pinning it forever.
     const lastError = [...view.captain]
       .reverse()
-      .find((line) => line.kind === "error");
+      .find(
+        (line) =>
+          line.kind === "error" && line.turnId === view.currentTurnId,
+      );
     if (view.fsmState === "failed" || (lastError && !view.turnActive)) {
       items.push({
         kind: "failure",

@@ -177,6 +177,10 @@ test("unknown agent fields and adapters are rejected", async () => {
 
 test("inline agent blocks extend a profile and drop the profile key", async () => {
   const top = baseConfig();
+  (top.profiles as Record<string, unknown>)["codex-gpt"] = {
+    adapter: "codex",
+    model: "gpt-5.5",
+  };
   const code = (top.playbooks as Record<string, Record<string, unknown>>).code;
   (code.players as Record<string, unknown>).reviewer = {
     profile: "codex-gpt",

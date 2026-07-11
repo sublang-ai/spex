@@ -194,7 +194,11 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
       from: "review",
       to: "awaitBossReply",
       event: "NEEDS_BOSS",
-      pendingBossQuestion: "Which auth flow should I prioritize?",
+      pendingBossQuestion: {
+        player: "code-reviewer",
+        question: "Which auth flow should I prioritize?",
+        resumeStateId: "review",
+      },
     },
   }),
   rec(19, { type: "turn_finished", turnId: 2, timestamp: t + 25 }),

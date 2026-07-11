@@ -42,7 +42,7 @@ playbooks:
 `;
 
 async function main(): Promise<void> {
-  const options: CoreServiceOptions = { port };
+  const options: CoreServiceOptions = { port, token: process.env.SPEX_TOKEN ?? "dev" };
 
   if (fake) {
     const dir = mkdtempSync(join(tmpdir(), "spex-dev-"));
@@ -98,7 +98,11 @@ async function main(): Promise<void> {
             from: "coding",
             to: "awaitBossReply",
             event: "NEEDS_BOSS",
-            pendingBossQuestion: "Should I also migrate the legacy sessions?",
+            pendingBossQuestion: {
+              player: "coder",
+              question: "Should I also migrate the legacy sessions?",
+              resumeStateId: "coding",
+            },
           },
         });
         return;
@@ -137,7 +141,7 @@ async function main(): Promise<void> {
   }
 
   const service = await CoreService.start(options);
-  console.log(`[dev-core] listening on ws://127.0.0.1:${service.port()}`);
+  console.log(`[dev-core] listening on ws://127.0.0.1:${service.port()}/?token=${service.token()}`);
   console.log(`[dev-core] config: ${JSON.stringify(service.configStateSnapshot().status)}`);
 
   process.on("SIGINT", () => {

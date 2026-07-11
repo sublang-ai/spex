@@ -264,7 +264,7 @@ export class SessionManager {
     if (entry.turnActive) {
       throw new CoreError(
         "busy",
-        "a boss turn is already active on this session",
+        "a turn is already running in this session",
       );
     }
     entry.turnActive = true;

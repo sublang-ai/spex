@@ -110,6 +110,28 @@ function pushCaptain(view: SessionView, line: CaptainLine): void {
   view.captain.push(line);
 }
 
+/** The runtime sends either a plain string or a structured object
+ * ({player, question, ...}); render both as one line (RUN-9/30). */
+export function formatBossQuestion(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value !== null) {
+    const shaped = value as { player?: unknown; question?: unknown };
+    const question =
+      typeof shaped.question === "string" ? shaped.question : undefined;
+    if (question === undefined) return undefined;
+    return typeof shaped.player === "string"
+      ? `${shaped.player} asks: ${question}`
+      : question;
+  }
+  return undefined;
+}
+
+/** Abort reasons are runtime plumbing; translate the known ones. */
+function friendlyAbortReason(reason: string): string {
+  if (reason === "runtime disposed") return "session ended";
+  return reason;
+}
+
 function closeStreamingText(segments: TranscriptSegment[]): void {
   const last = segments[segments.length - 1];
   if (last && last.kind === "text" && last.streaming) last.streaming = false;
@@ -242,7 +264,9 @@ export function applyRecord(
     }
     case "turn_aborted": {
       view.turnActive = false;
-      const reason = r.reason ? `: ${String(r.reason)}` : "";
+      const reason = r.reason
+        ? `: ${friendlyAbortReason(String(r.reason))}`
+        : "";
       pushCaptain(view, {
         kind: "status",
         text: `◆ turn aborted${reason}`,
@@ -317,13 +341,15 @@ export function applyRecord(
       const payload = r.payload as {
         to?: string;
         state?: string;
-        pendingBossQuestion?: string;
+        pendingBossQuestion?: unknown;
       };
       if (topic === "playbook.fsm.state") {
         view.fsmState = payload?.to ?? payload?.state;
         if (view.fsmState === "awaitBossReply") {
           view.pendingQuestion =
-            payload?.pendingBossQuestion ?? view.pendingQuestion ?? "";
+            formatBossQuestion(payload?.pendingBossQuestion) ??
+            view.pendingQuestion ??
+            "";
         } else {
           view.pendingQuestion = undefined;
         }

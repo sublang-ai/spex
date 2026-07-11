@@ -21,14 +21,14 @@ const PLAYBOOKS: PlaybookSummary[] = [
     from: "@sublang/playbook/code/registry",
     command: "code",
     intent: "software development workflow",
-    players: { coder: "claude-opus" },
+    players: { coder: { ref: "claude-opus", display: "claude-opus-4-8" } },
   },
   {
     id: "discuss",
     from: "@sublang/playbook/discuss/registry",
     command: "discuss",
     intent: "design discussion",
-    players: { host: "claude-opus" },
+    players: { host: { ref: "claude-opus", display: "claude-opus-4-8" } },
   },
 ];
 

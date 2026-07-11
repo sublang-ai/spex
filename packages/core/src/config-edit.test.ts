@@ -127,9 +127,12 @@ test("player mapping and option edits round-trip", async () => {
 
 test("profileReferences finds captain and player references", () => {
   const text = readFileSync(templatePath(), "utf8");
-  assert.deepEqual(profileReferences(text, "claude-opus"), ["captain"]);
-  assert.deepEqual(profileReferences(text, "codex-gpt"), [
+  assert.deepEqual(profileReferences(text, "claude-opus"), [
+    "captain",
     "playbooks.code.players.reviewer",
+  ]);
+  assert.deepEqual(profileReferences(text, "claude-opus-1m"), [
+    "playbooks.code.players.coder",
   ]);
   assert.deepEqual(profileReferences(text, "unused"), []);
 });
@@ -137,4 +140,32 @@ test("profileReferences finds captain and player references", () => {
 test("applyConfigOp on an empty file creates the mapping", () => {
   const text = applyConfigOp("", { kind: "captain.set", ref: "claude" });
   assert.match(text, /captain: claude/);
+});
+
+test("profile.patch merges without touching other fields or comments", () => {
+  const text = `profiles:
+  claude-opus:
+    adapter: claude
+    model: claude-opus-4-8
+    instruction: keep answers short  # hand-written
+    permissions:
+      mode: auto
+      shellExecute: ask
+captain: claude-opus
+playbooks:
+  code:
+    from: "@sublang/playbook/code/registry"
+    players:
+      coder: claude-opus
+`;
+  const patched = applyConfigOp(text, {
+    kind: "profile.patch",
+    id: "claude-opus",
+    patch: { reasoningEffort: "high" },
+  });
+  assert.match(patched, /reasoningEffort: high/);
+  assert.match(patched, /instruction: keep answers short/);
+  assert.match(patched, /# hand-written/);
+  assert.match(patched, /shellExecute: ask/);
+  assert.match(patched, /model: claude-opus-4-8/);
 });

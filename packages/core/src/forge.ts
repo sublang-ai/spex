@@ -133,13 +133,17 @@ export async function createProjectRepo(
         `scaffold failed: ${scaffoldRun.stderr.trim() || scaffoldRun.stdout.trim()}`,
       );
     }
+    // Commit only what scaffolding produced — never the user's
+    // pre-existing files (a picked folder may hold anything).
+    for (const path of ["specs", "CLAUDE.md", "AGENTS.md", "LICENSE"]) {
+      await run("git", ["add", "--", path], options.path);
+    }
+    await run(
+      "git",
+      ["commit", "-m", "chore: scaffold specs"],
+      options.path,
+    );
   }
-  await run("git", ["add", "-A"], options.path);
-  await run(
-    "git",
-    ["commit", "-m", "chore: initialize project", "--allow-empty"],
-    options.path,
-  );
   return { scaffolded };
 }
 

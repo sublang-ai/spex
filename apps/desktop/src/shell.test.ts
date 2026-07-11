@@ -3,6 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { mergeEnv, parseEnvOutput } from "./shell-env.js";
 import { AttentionTracker, notificationFor } from "./notifications.js";
@@ -34,7 +35,7 @@ test("mergeEnv never clobbers existing values", () => {
   assert.equal(target.NEW_KEY, "v");
 });
 
-test("notificationFor honors preferences and hidden records", () => {
+test("notificationFor honors sink preferences and hidden records", () => {
   assert.equal(
     notificationFor(envelope({ type: "turn_finished", turnId: 1 }), {
       turn_finished: "off",
@@ -43,10 +44,33 @@ test("notificationFor honors preferences and hidden records", () => {
   );
   const shown = notificationFor(envelope({ type: "turn_finished", turnId: 1 }), {});
   assert.equal(shown?.event, "turn_finished");
+  assert.equal(shown?.sink, "desktop");
+  const belled = notificationFor(envelope({ type: "turn_finished", turnId: 1 }), {
+    turn_finished: "bell",
+  });
+  assert.equal(belled?.sink, "bell");
   assert.equal(
     notificationFor(envelope({ type: "turn_finished", turnId: 1 }, true), {}),
     null,
   );
+});
+
+test("notificationFor maps player_finished behind its off-by-default pref", () => {
+  const record = {
+    type: "player_finished",
+    playerId: "coder",
+    result: { status: "succeeded" },
+  };
+  assert.equal(notificationFor(envelope(record), {}), null);
+  const shown = notificationFor(envelope(record), {
+    player_finished: "desktop",
+  });
+  assert.equal(shown?.event, "player_finished");
+  assert.equal(shown?.sink, "desktop");
+  assert.equal(shown?.title, "Player finished");
+  assert.equal(shown?.body, "coder succeeded");
+  const belled = notificationFor(envelope(record), { player_finished: "bell" });
+  assert.equal(belled?.sink, "bell");
 });
 
 test("notificationFor surfaces boss questions with the question text", () => {
@@ -59,7 +83,17 @@ test("notificationFor surfaces boss questions with the question text", () => {
     {},
   );
   assert.equal(notification?.event, "boss_question");
+  assert.equal(notification?.sink, "desktop");
   assert.equal(notification?.body, "Which flow?");
+});
+
+test("boss questions and failures are always desktop notifications", () => {
+  const failure = notificationFor(
+    envelope({ type: "runtime_error", message: "boom" }),
+    { turn_finished: "off", turn_aborted: "off", player_finished: "off" },
+  );
+  assert.equal(failure?.event, "failure");
+  assert.equal(failure?.sink, "desktop");
 });
 
 test("attention tracker counts parked sessions and clears on end", () => {
@@ -92,4 +126,38 @@ test("attention tracker counts parked sessions and clears on end", () => {
     }),
   );
   assert.equal(tracker.clear("s1"), 0);
+});
+
+test("attention tracker flags failures until the next turn starts", () => {
+  const tracker = new AttentionTracker();
+  assert.equal(tracker.apply(envelope({ type: "runtime_error", message: "boom" })), 1);
+  assert.equal(tracker.apply(envelope({ type: "turn_started", turnId: 2 })), 0);
+  assert.equal(
+    tracker.apply(
+      envelope({
+        type: "captain_telemetry",
+        topic: "playbook.fsm.state",
+        payload: { to: "failed" },
+      }),
+    ),
+    1,
+  );
+  // A failed session also awaiting a reply still counts once.
+  assert.equal(
+    tracker.apply(
+      envelope({
+        type: "captain_telemetry",
+        topic: "playbook.fsm.state",
+        payload: { to: "awaitBossReply" },
+      }),
+    ),
+    1,
+  );
+  assert.equal(tracker.clear("s1"), 0);
+});
+
+test("main process installs external-navigation guards", () => {
+  const source = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+  assert.match(source, /setWindowOpenHandler/);
+  assert.match(source, /will-navigate/);
 });

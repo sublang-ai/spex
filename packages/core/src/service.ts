@@ -7,6 +7,7 @@
 // channels filtered by visibility at this boundary (CORE-8/14).
 
 import { existsSync, readFileSync, statSync, watch, type FSWatcher } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { WebSocketServer, WebSocket } from "ws";
@@ -75,6 +76,12 @@ export interface CoreServiceOptions {
   scaffoldCommand?: string[];
   /** Compiled-playbook library directory (DR-005). */
   libraryDir?: string;
+  /**
+   * Handshake token required on the WS URL (?token=). Defaults to a
+   * random value; embedding shells pass it to the UI. Foreign
+   * browser origins are rejected regardless.
+   */
+  token?: string;
   /** Injectable line-streaming spawner for compile runs (tests). */
   compileSpawner?: LineSpawner;
 }
@@ -112,6 +119,7 @@ export class CoreService {
   private readonly store: Store;
   private readonly sessions: SessionManager;
   private readonly clients = new Set<ClientState>();
+  private authToken = "";
   readonly events: CoreServiceEvents = {};
   private wss?: WebSocketServer;
   private watcher?: FSWatcher;
@@ -136,6 +144,7 @@ export class CoreService {
     if (!options.loadModule) {
       this.options = { ...options, loadModule: createModuleLoader(this.env) };
     }
+    this.authToken = options.token ?? randomUUID();
     this.runCommand = options.runCommand ?? defaultRunCommand;
     this.forge =
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
@@ -270,8 +279,35 @@ export class CoreService {
 
   // -- websocket ------------------------------------------------------------
 
+  /** The handshake token clients must present (?token=). */
+  token(): string {
+    return this.authToken;
+  }
+
   private async listen(port: number): Promise<void> {
-    this.wss = new WebSocketServer({ host: "127.0.0.1", port });
+    this.wss = new WebSocketServer({
+      host: "127.0.0.1",
+      port,
+      verifyClient: (info: { origin?: string; req: { url?: string } }) => {
+        // Reject foreign browser origins outright: only the packaged
+        // file:// renderer (origin "file://" or "null") and
+        // non-browser clients (no Origin header) may connect.
+        const origin = info.origin;
+        if (
+          origin &&
+          origin !== "null" &&
+          !origin.startsWith("file://") &&
+          !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+        ) {
+          return false;
+        }
+        const query = new URL(
+          info.req.url ?? "/",
+          "ws://127.0.0.1",
+        ).searchParams;
+        return query.get("token") === this.authToken;
+      },
+    });
     this.wss.on("connection", (socket) => {
       const client: ClientState = { socket, channels: new Set() };
       this.clients.add(client);

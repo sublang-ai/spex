@@ -30,7 +30,22 @@ export interface ProfileSummary {
   adapter: AdapterName;
   model?: string;
   reasoningEffort?: string;
-  permissions?: { mode?: string; writablePaths?: string[] };
+  instruction?: string;
+  permissions?: {
+    mode?: string;
+    fileWrite?: string;
+    shellExecute?: string;
+    networkAccess?: string;
+    writablePaths?: string[];
+  };
+}
+
+export interface PlaybookPlayerRef {
+  /** The reference exactly as written in the config (profile id or
+   * adapter shorthand); inline blocks fall back to the display. */
+  ref: string;
+  /** Human-readable identity: pinned model, else adapter. */
+  display: string;
 }
 
 export interface PlaybookSummary {
@@ -38,7 +53,7 @@ export interface PlaybookSummary {
   from: string;
   command: string;
   intent: string;
-  players: Record<string, string>;
+  players: Record<string, PlaybookPlayerRef>;
 }
 
 export interface PlaybookArtifacts {
@@ -145,15 +160,27 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
       adapter: z.string().min(1),
       model: z.string().optional(),
       reasoningEffort: z.string().optional(),
+      instruction: z.string().optional(),
       permissions: z
         .object({
           mode: z.string().optional(),
+          fileWrite: z.string().optional(),
+          shellExecute: z.string().optional(),
+          networkAccess: z.string().optional(),
           writablePaths: z.array(z.string()).optional(),
         })
         .optional(),
     }),
   }),
   z.object({ kind: z.literal("profile.delete"), id: z.string().min(1) }),
+  z.object({
+    kind: z.literal("profile.patch"),
+    id: z.string().min(1),
+    patch: z.object({
+      model: z.string().optional(),
+      reasoningEffort: z.string().optional(),
+    }),
+  }),
   z.object({ kind: z.literal("captain.set"), ref: z.string().min(1) }),
   z.object({
     kind: z.literal("notifications.set"),

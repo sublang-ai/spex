@@ -24,23 +24,13 @@ export function setPlaybookPlayer(
   });
 }
 
-/** Save model/effort tweaks, preserving the profile's other fields. */
+/** Save model/effort tweaks via the merging patch op: every other
+ * field (instruction, permission policies, comments) is untouched. */
 export function saveProfileEssentials(
   profile: ProfileSummary,
   patch: { model?: string; reasoningEffort?: string },
 ): Promise<unknown> {
-  const model = patch.model ?? profile.model;
-  const reasoningEffort = patch.reasoningEffort ?? profile.reasoningEffort;
   return getClient().command("config.edit", {
-    op: {
-      kind: "profile.save",
-      id: profile.id,
-      profile: {
-        adapter: profile.adapter,
-        ...(model ? { model } : {}),
-        ...(reasoningEffort ? { reasoningEffort } : {}),
-        ...(profile.permissions ? { permissions: profile.permissions } : {}),
-      },
-    },
+    op: { kind: "profile.patch", id: profile.id, patch },
   });
 }

@@ -1,0 +1,45 @@
+name: App Release
+
+on:
+  push:
+    tags:
+      - "app-v*"
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#app-v}"
+          PKG_VERSION="$(node -p 'require("./apps/desktop/package.json").version')"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag $TAG_VERSION does not match apps/desktop/package.json $PKG_VERSION"
+            exit 1
+          fi
+
+      # Electron binaries are needed here (unlike the v* CLI channel),
+      # so ELECTRON_SKIP_BINARY_DOWNLOAD is deliberately not set.
+      - run: npm ci
+      - run: npm run build
+
+      - name: Package the desktop app (unsigned arm64 zip)
+        working-directory: apps/desktop
+        run: npx electron-builder --mac --arm64 zip
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/release/*.zip

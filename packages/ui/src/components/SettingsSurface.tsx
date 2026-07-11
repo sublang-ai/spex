@@ -6,10 +6,11 @@
 // refuses launcher-invalid states and preserves file comments.
 
 import { useEffect, useState } from "react";
-import type {
-  ConfigEditOpInput,
-  ProfileSummary,
-  ReadinessEntry,
+import {
+  PROTOCOL_VERSION,
+  type ConfigEditOpInput,
+  type ProfileSummary,
+  type ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
@@ -286,6 +287,11 @@ export function SettingsSurface() {
           <span className="font-mono">{summary.path}</span> — external edits
           appear here live.
         </p>
+        <p className="mt-0.5 text-[11px] text-neutral-400">
+          Spex {new URLSearchParams(window.location.search).get("version") ?? "dev"}
+          {" · protocol "}
+          {PROTOCOL_VERSION}
+        </p>
       </div>
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
@@ -405,7 +411,7 @@ export function SettingsSurface() {
             <option value="codex">codex (shorthand)</option>
           </select>
           <span className="text-xs text-neutral-500">
-            The Judge agent that routes your input and drives playbooks.
+            The agent that reads your messages and picks the playbook to run.
           </span>
         </div>
       </section>

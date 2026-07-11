@@ -34,7 +34,10 @@ declare global {
 
 function ConnectionBanner() {
   const connection = useAppStore((state) => state.connection);
+  const everConnected = useAppStore((state) => state.everConnected);
   if (connection === "open") return null;
+  // The first connect is not a "reconnect" — don't alarm a fresh boot.
+  if (!everConnected && connection !== "mismatch") return null;
   if (connection === "mismatch") {
     return (
       <div className="border-b border-red-300 bg-red-50 px-4 py-1.5 text-center text-xs text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
@@ -81,6 +84,7 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
   const connection = useAppStore((state) => state.connection);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
   const focusSession = useAppStore((state) => state.focusSession);
+  const loadPastSession = useAppStore((state) => state.loadPastSession);
   const disposeSession = useAppStore((state) => state.disposeSession);
   const submitBossText = useAppStore((state) => state.submitBossText);
   const removeQueued = useAppStore((state) => state.removeQueued);
@@ -96,6 +100,7 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
 
   const [onStartTab, setOnStartTab] = useState(false);
   const [pastId, setPastId] = useState<string>();
+  const [ending, setEnding] = useState<Record<string, boolean>>({});
 
   const live = sessions.filter((session) => session.live);
   const past = sessions
@@ -134,7 +139,7 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
       }))}
       onOpenPast={(sessionId) => {
         setPastId(sessionId);
-        void focusSession(sessionId);
+        void loadPastSession(sessionId).catch(() => {});
       }}
       onStart={async (projectId, text) => {
         const session = await openSession(projectId);
@@ -172,7 +177,7 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
           key={pastSession.id}
           session={pastSession}
           view={pastView}
-          composer={{ queued: [], answering: false }}
+          composer={{ queued: [] }}
           connected={connection === "open"}
           readOnly
           onStartNew={() => {
@@ -196,8 +201,8 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
 
   const view = active ? views[active.id] : undefined;
   const composer = active
-    ? (composers[active.id] ?? { queued: [], answering: false })
-    : { queued: [], answering: false };
+    ? (composers[active.id] ?? { queued: [] })
+    : { queued: [] };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -216,6 +221,7 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
               title={session.projectPath}
               onClick={() => {
                 setOnStartTab(false);
+                setPastId(undefined);
                 void focusSession(session.id);
               }}
               className="truncate hover:text-neutral-900 dark:hover:text-neutral-100"
@@ -224,7 +230,12 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
             </button>
             <button
               type="button"
-              title="End this session"
+              title={
+                ending[session.id]
+                  ? "Shutting down the agents…"
+                  : "End this session"
+              }
+              disabled={ending[session.id]}
               onClick={() => {
                 const running = views[session.id]?.turnActive;
                 if (
@@ -235,18 +246,29 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
                 ) {
                   return;
                 }
-                void disposeSession(session.id).catch(() => {});
+                setEnding((current) => ({ ...current, [session.id]: true }));
+                void disposeSession(session.id)
+                  .catch(() => {})
+                  .finally(() =>
+                    setEnding((current) => ({
+                      ...current,
+                      [session.id]: false,
+                    })),
+                  );
               }}
-              className="text-neutral-400 hover:text-red-500"
+              className="text-neutral-400 hover:text-red-500 disabled:animate-pulse"
             >
-              ✕
+              {ending[session.id] ? "…" : "✕"}
             </button>
           </span>
         ))}
         <button
           type="button"
           title="Start another session"
-          onClick={() => setOnStartTab(true)}
+          onClick={() => {
+            setPastId(undefined);
+            setOnStartTab(true);
+          }}
           className={`rounded-t-md px-3 py-1.5 text-sm ${
             showStart
               ? "border border-b-0 border-neutral-200 bg-white font-medium dark:border-neutral-800 dark:bg-neutral-900"

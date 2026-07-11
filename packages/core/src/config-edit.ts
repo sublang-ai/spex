@@ -27,6 +27,11 @@ export type ConfigEditOp =
       };
     }
   | { kind: "profile.delete"; id: string }
+  | {
+      kind: "profile.patch";
+      id: string;
+      patch: { model?: string; reasoningEffort?: string };
+    }
   | { kind: "captain.set"; ref: string }
   | { kind: "notifications.set"; prefs: Record<string, string> }
   | { kind: "theme.set"; theme: string | null }
@@ -62,6 +67,13 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
     }
     case "profile.delete": {
       doc.deleteIn(["profiles", op.id]);
+      break;
+    }
+    case "profile.patch": {
+      // Merge, never replace: unlisted fields and comments survive.
+      for (const [key, value] of Object.entries(op.patch)) {
+        if (value !== undefined) doc.setIn(["profiles", op.id, key], value);
+      }
       break;
     }
     case "captain.set": {

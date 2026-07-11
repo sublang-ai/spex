@@ -12,6 +12,22 @@ local projects. It is the GUI successor of cligent's `tmux-play`
 surface: the same headless runtime and Playbook Captain shell drive
 both, so tmux-play remains a behavioral verification twin.
 
+## Install
+
+Download the latest Spex zip (macOS Apple Silicon) from
+[GitHub Releases](https://github.com/sublang-ai/spex/releases) and
+unzip it. The build is not yet signed or notarized, so on first
+launch either right-click `Spex.app` → Open, or clear the quarantine
+flag:
+
+```sh
+xattr -dr com.apple.quarantine Spex.app
+```
+
+The first run seeds
+`~/.config/playbook/playbook.config.yaml` and needs a signed-in
+`claude` CLI (or `ANTHROPIC_API_KEY` exported in your shell profile).
+
 ## Surfaces
 
 | Surface | What it does |
@@ -34,7 +50,7 @@ under tmux-play, enforced by launcher-parity validation.
 | [`packages/cli`](packages/cli) | `@sublang/spex` — specs scaffold CLI | [npm](https://www.npmjs.com/package/@sublang/spex) (`v*` tags) |
 | [`packages/core`](packages/core) | Headless core service: config, sessions, embedded playbook runtime, SQLite store, WebSocket protocol | with the app |
 | [`packages/ui`](packages/ui) | Web UI (React + Vite + Tailwind) speaking only the protocol | with the app |
-| [`apps/desktop`](apps/desktop) | Electron shell: core in-process, sandboxed renderer, notifications, dock badge | GitHub Releases (`app-v*` tags, upcoming) |
+| [`apps/desktop`](apps/desktop) | Electron shell: core in-process, sandboxed renderer, notifications, dock badge | GitHub Releases (`app-v*` tags) |
 | [`specs/`](specs) | Specifications for everything above | — |
 
 The architecture is recorded in

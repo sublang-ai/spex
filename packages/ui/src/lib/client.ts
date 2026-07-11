@@ -116,6 +116,13 @@ export class SpexClient {
     const id = `ui-${(this.nextId += 1)}`;
     const promise = new Promise<unknown>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
+      // A lost reply must surface as an error, not an eternal spinner.
+      setTimeout(() => {
+        if (this.pending.has(id)) {
+          this.pending.delete(id);
+          reject(new SpexCommandError("timeout", `${type} timed out`));
+        }
+      }, 30_000);
     });
     socket.send(JSON.stringify({ type, id, ...fields }));
     return promise as Promise<CommandResults[T]>;
@@ -135,5 +142,5 @@ export function defaultCoreUrl(): string {
   const fromQuery = params.get("core");
   if (fromQuery) return fromQuery;
   const fromEnv = import.meta.env?.VITE_SPEX_CORE_URL as string | undefined;
-  return fromEnv ?? "ws://127.0.0.1:8137";
+  return fromEnv ?? "ws://127.0.0.1:8137/?token=dev";
 }

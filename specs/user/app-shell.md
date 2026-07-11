@@ -62,3 +62,10 @@ While the machine has no network connectivity, the app shall launch, open projec
 ### SHELL-9
 
 When the user opens the About dialog, the app shall display the application name Spex and the installed build's version (the `MAJOR.MINOR.PATCH` of its `app-v*` release tag; see [SHELL-14](../dev/app-shell.md#shell-14)).
+
+### SHELL-21
+
+When the user activates an external link anywhere in the app, the
+shell shall open it in the system browser and keep the app window
+on the app — the window shall never navigate to a remote page or
+open one in a child window.

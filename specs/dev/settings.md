@@ -83,3 +83,11 @@ results exclusively as WebSocket protocol messages and shall submit
 edits exclusively as protocol commands
 ([DR-002](../decisions/002-desktop-app-architecture.md)); it shall
 not read or write the filesystem or the process environment.
+
+### SET-21
+
+When an in-place editor saves a profile tweak, the core package
+shall apply it as a merging patch that alters only the provided
+keys, leaving every other field, unknown keys, and comments of the
+profile's config node intact, per
+[DR-009](../decisions/009-at-hand-interaction.md).

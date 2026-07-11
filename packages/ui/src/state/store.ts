@@ -27,8 +27,6 @@ import {
 
 export interface ComposerState {
   queued: string[];
-  /** True when the next submission answers a pending Boss question. */
-  answering: boolean;
 }
 
 export interface ProjectMeta {
@@ -47,6 +45,8 @@ export interface CompileTracker {
 
 export interface AppState {
   connection: ConnectionStatus;
+  /** True once a connection has ever opened (first-paint banner). */
+  everConnected: boolean;
   configState?: ConfigState;
   readiness: ReadinessEntry[];
   projects: ProjectInfo[];
@@ -69,6 +69,8 @@ export interface AppState {
   loadProjectMeta(projectId: string, refresh?: boolean): Promise<void>;
   openSession(projectId: string): Promise<SessionInfo>;
   focusSession(sessionId: string): Promise<void>;
+  /** Load an ended session's transcript without focusing tabs. */
+  loadPastSession(sessionId: string): Promise<void>;
   disposeSession(sessionId: string): Promise<void>;
   submitBossText(sessionId: string, text: string): Promise<void>;
   removeQueued(sessionId: string, index: number): void;
@@ -87,6 +89,14 @@ export interface AppState {
 
 let client: SpexClient | undefined;
 
+/** Sessions with a history backfill in flight: live records buffer
+ * here so a race can never skip the gap (they apply after the
+ * backfill in seq order). */
+const backfilling = new Map<
+  string,
+  { seq: number; record: import("@sublang/spex-core/protocol").TmuxPlayRecord }[]
+>();
+
 export function getClient(): SpexClient {
   if (!client) throw new Error("client not connected");
   return client;
@@ -97,7 +107,43 @@ export const useAppStore = create<AppState>((set, get) => {
     set({ runErrors: { ...get().runErrors, [sessionId]: message } });
   }
 
-  /** Subscribe and backfill a session's view (idempotent). */
+  /** Dispatch the next queued composer message when a turn is idle
+   * (RUN-8), from live records and backfills alike. */
+  function maybeDispatchQueued(sessionId: string): void {
+    const state = get();
+    const view = state.views[sessionId];
+    const composer = state.composers[sessionId];
+    const next = composer?.queued[0];
+    if (!view || view.turnActive || next === undefined) return;
+    const session = state.sessions.find((s) => s.id === sessionId);
+    if (session && !session.live) {
+      // The session ended underneath the queue: drop it with a notice
+      // instead of submitting into a disposed runtime.
+      set({
+        composers: { ...state.composers, [sessionId]: { queued: [] } },
+        runErrors: {
+          ...state.runErrors,
+          [sessionId]: `queued message was not sent — the session ended: "${next}"`,
+        },
+      });
+      return;
+    }
+    set({
+      composers: {
+        ...state.composers,
+        [sessionId]: { queued: composer!.queued.slice(1) },
+      },
+    });
+    void getClient()
+      .command("turn.submit", { sessionId, text: next })
+      .catch((cause: Error) =>
+        setRunError(sessionId, `queued submission failed: ${cause.message}`),
+      );
+  }
+
+  /** Subscribe and backfill a session's view (idempotent). Live
+   * records arriving mid-backfill buffer and apply afterwards, so a
+   * reconnect can never lose the gap. */
   async function ensureSubscribed(sessionId: string): Promise<void> {
     const state = get();
     const session = state.sessions.find((s) => s.id === sessionId);
@@ -110,21 +156,44 @@ export const useAppStore = create<AppState>((set, get) => {
       view.loading = true;
       set({ views: { ...state.views, [sessionId]: view } });
     }
-    await getClient().subscribe({ kind: "session", sessionId });
-    const history = await getClient().command("history.get", {
-      sessionId,
-      afterSeq: view.lastSeq,
-    });
-    const fresh = get();
-    const target = fresh.views[sessionId];
-    if (!target) return;
-    for (const entry of history.records) {
-      if (entry.seq > target.lastSeq) {
-        applyRecord(target, entry.seq, entry.record);
+    backfilling.set(sessionId, []);
+    try {
+      await getClient().subscribe({ kind: "session", sessionId });
+      const history = await getClient().command("history.get", {
+        sessionId,
+        afterSeq: view.lastSeq,
+      });
+      const fresh = get();
+      const target = fresh.views[sessionId];
+      if (!target) return;
+      for (const entry of history.records) {
+        if (entry.seq > target.lastSeq) {
+          applyRecord(target, entry.seq, entry.record);
+        }
       }
+      const buffered = backfilling.get(sessionId) ?? [];
+      for (const entry of buffered) {
+        if (entry.seq > target.lastSeq) {
+          applyRecord(target, entry.seq, entry.record);
+        }
+      }
+      target.loading = false;
+      set({ views: { ...fresh.views, [sessionId]: { ...target } } });
+      maybeDispatchQueued(sessionId);
+    } catch (cause) {
+      const failed = get().views[sessionId];
+      if (failed?.loading) {
+        failed.loading = false;
+        set({ views: { ...get().views, [sessionId]: { ...failed } } });
+      }
+      setRunError(
+        sessionId,
+        `transcript could not be loaded: ${(cause as Error).message}`,
+      );
+      throw cause;
+    } finally {
+      backfilling.delete(sessionId);
     }
-    target.loading = false;
-    set({ views: { ...fresh.views, [sessionId]: { ...target } } });
   }
 
   function handleMessage(message: ServerMessage): void {
@@ -159,6 +228,11 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       case "record": {
         const { sessionId, seq, record } = message;
+        const buffer = backfilling.get(sessionId);
+        if (buffer) {
+          buffer.push({ seq, record });
+          break;
+        }
         const state = get();
         const session = state.sessions.find((s) => s.id === sessionId);
         const view =
@@ -173,26 +247,11 @@ export const useAppStore = create<AppState>((set, get) => {
           views: { ...state.views, [sessionId]: { ...view } },
         };
 
+        set(updates);
         // Dispatch a queued submission when the turn ends (RUN-8).
         if (record.type === "turn_finished" || record.type === "turn_aborted") {
-          const composer = state.composers[sessionId];
-          const next = composer?.queued[0];
-          if (next !== undefined) {
-            updates.composers = {
-              ...state.composers,
-              [sessionId]: {
-                queued: composer.queued.slice(1),
-                answering: false,
-              },
-            };
-            void getClient()
-              .command("turn.submit", { sessionId, text: next })
-              .catch((cause: Error) =>
-                setRunError(sessionId, `queued submission failed: ${cause.message}`),
-              );
-          }
+          maybeDispatchQueued(sessionId);
         }
-        set(updates);
         break;
       }
       default:
@@ -202,6 +261,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
   return {
     connection: "closed",
+    everConnected: false,
     readiness: [],
     projects: [],
     projectMeta: {},
@@ -217,7 +277,10 @@ export const useAppStore = create<AppState>((set, get) => {
         onMessage: handleMessage,
         onStatus: (connection) => {
           set({ connection });
-          if (connection === "open") void get().refresh();
+          if (connection === "open") {
+            set({ everConnected: true });
+            void get().refresh();
+          }
         },
       });
       client.connect();
@@ -312,6 +375,12 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ activeSessionId: sessionId });
     },
 
+    async loadPastSession(sessionId: string): Promise<void> {
+      if (!get().views[sessionId]) {
+        await ensureSubscribed(sessionId);
+      }
+    },
+
     async disposeSession(sessionId: string): Promise<void> {
       try {
         await getClient().command("session.dispose", { sessionId });
@@ -328,23 +397,30 @@ export const useAppStore = create<AppState>((set, get) => {
     async submitBossText(sessionId: string, text: string): Promise<void> {
       const state = get();
       const view = state.views[sessionId];
-      if (view?.turnActive) {
-        const composer = state.composers[sessionId] ?? {
-          queued: [],
-          answering: false,
-        };
+      const enqueue = () => {
+        const composer = get().composers[sessionId] ?? { queued: [] };
         set({
           composers: {
-            ...state.composers,
-            [sessionId]: { ...composer, queued: [...composer.queued, text] },
+            ...get().composers,
+            [sessionId]: { queued: [...composer.queued, text] },
           },
         });
+      };
+      if (view?.turnActive) {
+        enqueue();
         return;
       }
       try {
         await getClient().command("turn.submit", { sessionId, text });
       } catch (cause) {
-        setRunError(sessionId, (cause as Error).message);
+        const error = cause as { code?: string; message: string };
+        if (error.code === "busy") {
+          // The view lagged reality (e.g. right after a reconnect):
+          // queueing is what the user meant.
+          enqueue();
+          return;
+        }
+        setRunError(sessionId, error.message);
         throw cause;
       }
     },

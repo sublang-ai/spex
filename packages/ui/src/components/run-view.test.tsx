@@ -41,7 +41,7 @@ function renderRun(entries: typeof FULL_RUN) {
     <RunView
       session={SESSION}
       view={view}
-      composer={{ queued: [], answering: false }}
+      composer={{ queued: [] }}
       connected
       onSubmit={async () => {}}
       onAbort={() => {}}
@@ -104,7 +104,7 @@ describe("RUN-36: ended sessions render read-only", () => {
       <RunView
         session={{ ...SESSION, live: false, endedAt: 5 }}
         view={view}
-        composer={{ queued: [], answering: false }}
+        composer={{ queued: [] }}
         connected
         readOnly
         onStartNew={() => {}}

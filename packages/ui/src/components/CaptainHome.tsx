@@ -81,6 +81,8 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [captainPopover, setCaptainPopover] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const gearRef = useRef<HTMLButtonElement>(null);
+  const [showAllPast, setShowAllPast] = useState(false);
 
   const selected = projects.find((project) => project.id === projectId);
   const captainProfile = profiles.find((profile) => profile.id === captainRef);
@@ -242,7 +244,10 @@ export function CaptainHome(props: CaptainHomeProps) {
             <span className="px-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
               Past sessions
             </span>
-            {props.pastSessions.slice(0, 5).map((entry) => (
+            {(showAllPast
+              ? props.pastSessions
+              : props.pastSessions.slice(0, 5)
+            ).map((entry) => (
               <button
                 key={entry.id}
                 type="button"
@@ -258,6 +263,15 @@ export function CaptainHome(props: CaptainHomeProps) {
                 </span>
               </button>
             ))}
+            {!showAllPast && props.pastSessions.length > 5 ? (
+              <button
+                type="button"
+                onClick={() => setShowAllPast(true)}
+                className="px-2 py-1 text-left text-[11px] text-indigo-600 hover:underline dark:text-indigo-300"
+              >
+                show all {props.pastSessions.length}
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -377,6 +391,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               </span>
             ) : null}
             <button
+              ref={gearRef}
               type="button"
               data-testid="captain-settings"
               title="Switch or tweak the captain profile"
@@ -388,6 +403,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             {captainPopover ? (
               <ProfilePopover
                 title="Captain profile"
+                anchorRef={gearRef}
                 profiles={profiles}
                 readiness={readiness}
                 currentRef={captainRef}
