@@ -167,6 +167,30 @@ interface MachineLike {
   config?: { initial?: unknown; states?: Record<string, { type?: string }> };
 }
 
+/** Bundle an FSM module and list every state id, or null on failure. */
+export async function listFsmStates(
+  fsmPath: string,
+): Promise<string[] | null> {
+  try {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const outfile = join(mkdtempSync(join(tmpdir(), "spex-fsm-")), "fsm.mjs");
+    await build({
+      entryPoints: [fsmPath],
+      outfile,
+      bundle: true,
+      format: "esm",
+      platform: "node",
+      logLevel: "silent",
+      nodePaths: bundleNodePaths(),
+    });
+    const machine = await importMachine(outfile);
+    return Object.keys(machine.config?.states ?? {});
+  } catch {
+    return null;
+  }
+}
+
 export function deriveStateIds(machine: MachineLike): {
   idleStateId: string;
   finalStateId: string;

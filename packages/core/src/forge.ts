@@ -157,7 +157,7 @@ export function parseGitHubRepo(originUrl: string): string | undefined {
   return match ? `${match[1]}/${match[2]}` : undefined;
 }
 
-const GH_ITEM_FIELDS = "number,title,url,author,updatedAt";
+const GH_ITEM_FIELDS = "number,title,url,author,updatedAt,labels";
 
 interface GhItem {
   number: number;
@@ -165,6 +165,7 @@ interface GhItem {
   url: string;
   author?: { login?: string };
   updatedAt?: string;
+  labels?: { name?: string }[];
 }
 
 function toForgeItems(json: string): ForgeItem[] {
@@ -176,6 +177,13 @@ function toForgeItems(json: string): ForgeItem[] {
       url: item.url,
       ...(item.author?.login ? { author: item.author.login } : {}),
       ...(item.updatedAt ? { updatedAt: item.updatedAt } : {}),
+      ...(item.labels?.length
+        ? {
+            labels: item.labels
+              .map((label) => label.name)
+              .filter((name): name is string => Boolean(name)),
+          }
+        : {}),
     }));
   } catch {
     return [];

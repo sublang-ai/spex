@@ -37,7 +37,21 @@ export interface PlaybookSummary {
   id: string;
   from: string;
   command: string;
+  intent: string;
   players: Record<string, string>;
+}
+
+export interface PlaybookArtifacts {
+  /** The workflow markdown the playbook was compiled from. */
+  source: string | null;
+  /** The GEARS spec items. */
+  gears: string | null;
+  /** The compiled XState FSM module code. */
+  fsm: string | null;
+  /** Every state id of the FSM, when derivable. */
+  stateIds: string[] | null;
+  /** Stage names that could not be located. */
+  missing: string[];
 }
 
 export interface ConfigSummary {
@@ -102,6 +116,7 @@ export interface ForgeItem {
   url: string;
   author?: string;
   updatedAt?: string;
+  labels?: string[];
 }
 
 export interface ForgeState {
@@ -216,6 +231,11 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("config.edit"), id, op: configEditOpSchema }),
   z.object({ type: z.literal("compile.check"), id }),
   z.object({
+    type: z.literal("playbook.artifacts"),
+    id,
+    playbookId: z.string().min(1),
+  }),
+  z.object({
     type: z.literal("compile.run"),
     id,
     playbookId: z.string().regex(/^[a-z][a-z0-9_-]*$/),
@@ -271,6 +291,7 @@ export interface CommandResults {
     slc: { ok: boolean; command: string[]; guidance?: string };
   };
   "compile.run": ConfigState;
+  "playbook.artifacts": PlaybookArtifacts;
 }
 
 // ---------------------------------------------------------------------------

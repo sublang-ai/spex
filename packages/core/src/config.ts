@@ -105,6 +105,38 @@ export interface ComposedConfig {
 export type LoadModule = (specifier: string) => Promise<unknown>;
 
 /**
+ * Resolve a registry specifier to its file path, honoring the same
+ * SPEX_MODULE_PATHS fallback as createModuleLoader. Absolute paths
+ * and file URLs pass through; bare specifiers resolve from Spex's
+ * dependencies first, then from configured checkouts.
+ */
+export function resolveModulePath(
+  specifier: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  if (specifier.startsWith("file:")) return fileURLToPath(specifier);
+  if (specifier.startsWith("/") || /^[A-Za-z]:[\\/]/.test(specifier)) {
+    return specifier;
+  }
+  const dirs = [
+    dirname(fileURLToPath(import.meta.url)),
+    ...(env.SPEX_MODULE_PATHS ?? "")
+      .split(":")
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  ];
+  for (const dir of dirs) {
+    try {
+      const requireFrom = createRequire(join(dir, "__spex_resolve__.js"));
+      return requireFrom.resolve(specifier);
+    } catch {
+      // Try the next base.
+    }
+  }
+  return undefined;
+}
+
+/**
  * Module loader with local-checkout fallback: when a bare specifier
  * fails to resolve from Spex's own dependencies (e.g. a registry
  * subpath that exists only in an unpublished build), try resolving
@@ -530,6 +562,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
       id: playbook.id,
       from: playbook.from,
       command: playbook.command,
+      intent: playbook.intent,
       players: Object.fromEntries(
         Object.entries(playbook.players).map(([role, agent]) => [
           role,

@@ -48,6 +48,7 @@ import {
   profileReferences,
   type ConfigEditOp,
 } from "./config-edit.js";
+import { resolveArtifacts } from "./artifacts.js";
 import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
 import type { ForgeState } from "./protocol.js";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
@@ -87,6 +88,14 @@ interface ClientState {
 
 function channelKey(channel: Channel): string {
   return `${channel.kind}:${channel.sessionId}`;
+}
+
+/** Expand a leading ~ so the most natural path spelling works. */
+function expandPath(input: string, home: string): string {
+  const trimmed = input.trim();
+  if (trimmed === "~") return home;
+  if (trimmed.startsWith("~/")) return resolve(home, trimmed.slice(2));
+  return resolve(trimmed);
 }
 
 export interface CoreServiceEvents {
@@ -353,7 +362,7 @@ export class CoreService {
       case "project.list":
         return this.store.listProjects();
       case "project.register": {
-        const path = resolve(command.path);
+        const path = expandPath(command.path, this.home);
         if (!existsSync(path) || !statSync(path).isDirectory()) {
           throw new CoreError(
             "invalid_request",
@@ -369,7 +378,7 @@ export class CoreService {
         return this.store.registerProject(path, basename(path), Date.now());
       }
       case "project.create": {
-        const path = resolve(command.path);
+        const path = expandPath(command.path, this.home);
         if (this.store.getProjectByPath(path)) {
           throw new CoreError("conflict", `${path} is already registered`);
         }
@@ -497,6 +506,24 @@ export class CoreService {
       }
       case "compile.check":
         return checkToolchain(this.env, this.options.compileSpawner);
+      case "playbook.artifacts": {
+        if (this.configState.status !== "valid" || !this.composed) {
+          throw new CoreError("invalid_config", "config is not valid");
+        }
+        const playbook = this.composed.playbooks.find(
+          (entry) => entry.id === command.playbookId,
+        );
+        if (!playbook) {
+          throw new CoreError(
+            "not_found",
+            `no configured playbook ${command.playbookId}`,
+          );
+        }
+        return resolveArtifacts(
+          { id: playbook.id, from: playbook.from },
+          this.env,
+        );
+      }
       case "compile.run": {
         if (!existsSync(this.configPath)) {
           throw new CoreError("invalid_config", "config file is missing");
