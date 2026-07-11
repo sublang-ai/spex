@@ -199,7 +199,7 @@ export function DashboardSurface({
           </button>
           <button
             type="button"
-            onClick={() => onNavigate("Library")}
+            onClick={() => onNavigate("Playbooks")}
             className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
             Browse playbooks

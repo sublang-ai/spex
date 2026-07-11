@@ -27,6 +27,8 @@ import {
 
 export interface ComposerState {
   queued: string[];
+  /** Unsent composer text — survives tab and surface switches. */
+  draft?: string;
 }
 
 export interface ProjectMeta {
@@ -59,6 +61,10 @@ export interface AppState {
   /** Per-session command failures shown above the composer. */
   runErrors: Record<string, string>;
   activeSessionId?: string;
+  /** Draft for the Captain-home start composer. */
+  homeDraft: string;
+  /** Bootstrap refresh failure — connected but app state missing. */
+  refreshError?: string;
 
   connect(url?: string): void;
   refresh(): Promise<void>;
@@ -69,13 +75,17 @@ export interface AppState {
   loadProjectMeta(projectId: string, refresh?: boolean): Promise<void>;
   openSession(projectId: string): Promise<SessionInfo>;
   focusSession(sessionId: string): Promise<void>;
-  /** Load an ended session's transcript without focusing tabs. */
-  loadPastSession(sessionId: string): Promise<void>;
+  /** Load an ended session's transcript without focusing tabs.
+   * `force` retries after a failed load (clears the stale view). */
+  loadPastSession(sessionId: string, force?: boolean): Promise<void>;
   disposeSession(sessionId: string): Promise<void>;
   submitBossText(sessionId: string, text: string): Promise<void>;
   removeQueued(sessionId: string, index: number): void;
   abortTurn(sessionId: string): Promise<void>;
   clearRunError(sessionId: string): void;
+  setDraft(sessionId: string, draft: string): void;
+  setHomeDraft(draft: string): void;
+  abortCompile(): Promise<void>;
   runCompile(input: {
     playbookId: string;
     sourceText?: string;
@@ -270,6 +280,7 @@ export const useAppStore = create<AppState>((set, get) => {
     views: {},
     composers: {},
     runErrors: {},
+    homeDraft: "",
 
     connect(url?: string): void {
       client = new SpexClient({
@@ -279,7 +290,16 @@ export const useAppStore = create<AppState>((set, get) => {
           set({ connection });
           if (connection === "open") {
             set({ everConnected: true });
-            void get().refresh();
+            // A failed bootstrap must not present as an empty app
+            // (DR-010 §5): surface it with a retry.
+            void get()
+              .refresh()
+              .then(() => set({ refreshError: undefined }))
+              .catch((cause: Error) =>
+                set({
+                  refreshError: `app state failed to load: ${cause.message}`,
+                }),
+              );
           }
         },
       });
@@ -375,7 +395,14 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ activeSessionId: sessionId });
     },
 
-    async loadPastSession(sessionId: string): Promise<void> {
+    async loadPastSession(sessionId: string, force = false): Promise<void> {
+      if (force) {
+        // Retry after a failed load: the stale view would otherwise
+        // short-circuit this into a no-op.
+        const { [sessionId]: _, ...views } = get().views;
+        set({ views });
+        get().clearRunError(sessionId);
+      }
       if (!get().views[sessionId]) {
         await ensureSubscribed(sessionId);
       }
@@ -452,6 +479,41 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ runErrors: rest });
     },
 
+    setDraft(sessionId: string, draft: string): void {
+      const composer = get().composers[sessionId] ?? { queued: [] };
+      set({
+        composers: {
+          ...get().composers,
+          [sessionId]: { ...composer, draft },
+        },
+      });
+    },
+
+    setHomeDraft(draft: string): void {
+      set({ homeDraft: draft });
+    },
+
+    async abortCompile(): Promise<void> {
+      const active = get().activeCompile;
+      if (!active?.running) return;
+      try {
+        await getClient().command("compile.abort", {
+          playbookId: active.playbookId,
+        });
+      } catch (cause) {
+        const progress = get().compileProgress;
+        set({
+          compileProgress: {
+            ...progress,
+            [active.playbookId]: [
+              ...(progress[active.playbookId] ?? []),
+              `✗ cancel failed: ${(cause as Error).message}`,
+            ],
+          },
+        });
+      }
+    },
+
     async runCompile(input): Promise<void> {
       const playbookId = input.playbookId;
       set({
@@ -468,7 +530,9 @@ export const useAppStore = create<AppState>((set, get) => {
         });
       };
       try {
-        await getClient().command("compile.run", input);
+        // Compiles legitimately run for minutes: no client timeout
+        // (DR-010 §5) — a dropped socket still rejects the call.
+        await getClient().command("compile.run", input, { timeoutMs: 0 });
         appendLine("✓ compiled and registered — see Configured playbooks");
         set({ activeCompile: { playbookId, running: false, ok: true } });
       } catch (cause) {

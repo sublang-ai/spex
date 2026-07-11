@@ -247,7 +247,7 @@ export function LibrarySurface() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 overflow-y-auto p-6">
-      <h1 className="text-lg font-semibold">Library</h1>
+      <h1 className="text-lg font-semibold">Playbooks</h1>
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           {error}

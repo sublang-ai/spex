@@ -108,21 +108,28 @@ export class SpexClient {
   async command<T extends Command["type"]>(
     type: T,
     fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    options?: { timeoutMs?: number },
   ): Promise<CommandResults[T]> {
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       throw new SpexCommandError("closed", "not connected");
     }
     const id = `ui-${(this.nextId += 1)}`;
+    // Timeouts are sized per command class (DR-010 §5): a lost reply
+    // must surface as an error, but a long-running command (compile)
+    // must never falsely fail — 0 disables the timer, and the close
+    // handler still rejects every pending call if the socket drops.
+    const timeoutMs = options?.timeoutMs ?? 30_000;
     const promise = new Promise<unknown>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      // A lost reply must surface as an error, not an eternal spinner.
-      setTimeout(() => {
-        if (this.pending.has(id)) {
-          this.pending.delete(id);
-          reject(new SpexCommandError("timeout", `${type} timed out`));
-        }
-      }, 30_000);
+      if (timeoutMs > 0) {
+        setTimeout(() => {
+          if (this.pending.has(id)) {
+            this.pending.delete(id);
+            reject(new SpexCommandError("timeout", `${type} timed out`));
+          }
+        }, timeoutMs);
+      }
     });
     socket.send(JSON.stringify({ type, id, ...fields }));
     return promise as Promise<CommandResults[T]>;

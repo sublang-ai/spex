@@ -38,7 +38,7 @@ export interface CaptainHomeProps {
   onRegisterPath: (path: string) => Promise<ProjectInfo>;
   /** Silent git init + register for non-repo folders (RUN-27). */
   onInitProject: (path: string) => Promise<ProjectInfo>;
-  onNavigate: (surface: "Settings" | "Library") => void;
+  onNavigate: (surface: "Settings" | "Playbooks") => void;
   onSelectCaptain: (ref: string) => Promise<unknown>;
   onSaveProfile: (
     profile: ProfileSummary,
@@ -425,7 +425,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               items={slash}
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
-              onCompileNew={() => props.onNavigate("Library")}
+              onCompileNew={() => props.onNavigate("Playbooks")}
             />
           ) : null}
           <div className="flex items-end gap-2 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-indigo-400 dark:border-neutral-700 dark:bg-neutral-900">

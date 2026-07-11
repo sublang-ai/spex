@@ -21,7 +21,7 @@ const SURFACES = [
   "Sessions",
   "Dashboard",
   "Projects",
-  "Library",
+  "Playbooks",
   "Settings",
 ] as const;
 export type Surface = (typeof SURFACES)[number];
@@ -370,7 +370,7 @@ export function App() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {surface === "Projects" ? (
             <ProjectsSurface onOpenSession={openSessionAndShow} />
-          ) : surface === "Library" ? (
+          ) : surface === "Playbooks" ? (
             <LibrarySurface />
           ) : surface === "Settings" ? (
             <SettingsSurface />
