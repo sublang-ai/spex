@@ -11,30 +11,30 @@ per-project spec view.
 
 ## Deliverables
 
-- [ ] Core: `specs.get` (packages/items/records parse per DR-011
+- [x] Core: `specs.get` (packages/items/records parse per DR-011
   data rules) and `specs.read` (confined record fetch), with
   fixture-tree tests covering nested directories, group subsets,
   prefix mismatches, path-inconsistent basenames, empty and
   malformed files
-- [ ] Spec view UI: outline tree with per-group counts, package
+- [x] Spec view UI: outline tree with per-group counts, package
   expansion with section-preserving item lists, one-line item rows
   expanding to full markdown, group filters + text search,
   citation jumps + Verifies backlinks + copy-ID, records reader,
   freshness triggers, view-state persistence, empty/degraded
   states
-- [ ] Workspace IA: nav renamed Workspace with the Projects
+- [x] Workspace IA: nav renamed Workspace with the Projects
   surface dissolved into the Repo tab + palette; project bar +
   centered palette (filtering, add/create/open-folder, live-state
   rows, keyboard contract); first-turn tab titles; per-project
   last-active-tab memory; scoped past sessions with all-projects
   toggle; shortcuts (Cmd/Ctrl+P, Cmd/Ctrl+Shift+S, amended tab
   cycling)
-- [ ] Store: `currentProjectId` contract (palette / focusSession /
+- [x] Store: `currentProjectId` contract (palette / focusSession /
   boot persistence), bootstrap activation within the current
   project, attention routing that focuses the needy session
-- [ ] Dev harness: fake dev-core seeds a demo `specs/` tree
+- [x] Dev harness: fake dev-core seeds a demo `specs/` tree
   (nested directory, mixed group coverage) so the view demos live
-- [ ] Specs: DR-011 recorded; SPECV package (user/dev/test); RUN
+- [x] Specs: DR-011 recorded; SPECV package (user/dev/test); RUN
   and PROJ amendments; map.md rows
 
 ## Acceptance criteria
