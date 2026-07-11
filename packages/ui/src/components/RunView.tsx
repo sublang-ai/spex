@@ -19,6 +19,9 @@ export function RunView({
   connected,
   error,
   playbooks,
+  readOnly,
+  onStartNew,
+  onCompileNew,
   onSubmit,
   onAbort,
   onRemoveQueued,
@@ -30,6 +33,10 @@ export function RunView({
   connected: boolean;
   error?: string;
   playbooks?: PlaybookSummary[];
+  /** Ended-session transcript browsing (RUN-33): input replaced. */
+  readOnly?: boolean;
+  onStartNew?: () => void;
+  onCompileNew?: () => void;
   onSubmit: (text: string) => Promise<void>;
   onAbort: () => void;
   onRemoveQueued: (index: number) => void;
@@ -44,17 +51,36 @@ export function RunView({
     <div className="flex min-h-0 flex-1 gap-3 p-3">
       <div className="flex w-[34%] min-w-[320px] flex-col gap-2">
         <CaptainPane view={view} />
-        <Composer
-          view={view}
-          composer={composer}
-          connected={connected}
-          error={error}
-          playbooks={playbooks}
-          onSubmit={onSubmit}
-          onAbort={onAbort}
-          onRemoveQueued={onRemoveQueued}
-          onDismissError={onDismissError}
-        />
+        {readOnly ? (
+          <div
+            data-testid="ended-notice"
+            className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900"
+          >
+            This session has ended — transcript is read-only.
+            {onStartNew ? (
+              <button
+                type="button"
+                onClick={onStartNew}
+                className="ml-auto rounded-md border border-indigo-300 px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
+              >
+                Start a new session
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <Composer
+            view={view}
+            composer={composer}
+            connected={connected}
+            error={error}
+            playbooks={playbooks}
+            onCompileNew={onCompileNew}
+            onSubmit={onSubmit}
+            onAbort={onAbort}
+            onRemoveQueued={onRemoveQueued}
+            onDismissError={onDismissError}
+          />
+        )}
       </div>
       <div
         data-testid="player-grid"

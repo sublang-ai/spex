@@ -27,10 +27,13 @@ export function SlashMenuList({
   items,
   activeIndex,
   onPick,
+  onCompileNew,
 }: {
   items: PlaybookSummary[];
   activeIndex: number;
   onPick: (playbook: PlaybookSummary) => void;
+  /** Discoverable creation entry (DR-009, RUN-34). */
+  onCompileNew?: () => void;
 }) {
   return (
     <div
@@ -58,6 +61,19 @@ export function SlashMenuList({
           </span>
         </button>
       ))}
+      {onCompileNew ? (
+        <button
+          type="button"
+          data-testid="slash-compile-new"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            onCompileNew();
+          }}
+          className="flex w-full items-baseline gap-2 border-t border-neutral-100 px-3 py-1.5 text-left text-xs text-neutral-500 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800"
+        >
+          + Compile a new playbook…
+        </button>
+      ) : null}
     </div>
   );
 }

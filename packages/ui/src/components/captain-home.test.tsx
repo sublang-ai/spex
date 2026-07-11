@@ -42,6 +42,10 @@ function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
 
 function renderHome({
   onStart = vi.fn(async () => {}),
+  onSelectCaptain = vi.fn(async () => {}),
+  onSaveProfile = vi.fn(async () => {}),
+  onOpenPast = vi.fn(),
+  pastSessions = [] as { id: string; projectName: string; endedAt: number | null }[],
   storage = memoryStorage(),
 } = {}) {
   const view = render(
@@ -54,12 +58,16 @@ function renderHome({
       connected
       onRegisterPath={vi.fn()}
       onInitProject={vi.fn()}
-      onOpenSettings={vi.fn()}
+      onNavigate={vi.fn()}
+      onSelectCaptain={onSelectCaptain}
+      onSaveProfile={onSaveProfile}
+      pastSessions={pastSessions}
+      onOpenPast={onOpenPast}
       onStart={onStart}
       storage={storage}
     />,
   );
-  return { onStart, storage, view };
+  return { onStart, onSelectCaptain, onSaveProfile, onOpenPast, storage, view };
 }
 
 describe("RUN-29: captain home structure and one-motion start", () => {
@@ -134,5 +142,49 @@ describe("RUN-31: slash menu and quick start dismissal", () => {
     first.view.unmount();
     renderHome({ storage });
     expect(screen.queryByTestId("quick-start")).toBeNull();
+  });
+});
+
+describe("RUN-35: in-place captain profile popover", () => {
+  test("gear opens the popover; selecting switches; editing saves", async () => {
+    const { onSelectCaptain, onSaveProfile } = renderHome();
+    fireEvent.click(screen.getByTestId("captain-settings"));
+    const popover = screen.getByTestId("profile-popover");
+    expect(popover.textContent).toContain("claude-opus");
+    expect(popover.textContent).toContain("claude-opus-4-8");
+
+    fireEvent.click(screen.getByTestId("profile-option-claude-opus"));
+    await vi.waitFor(() =>
+      expect(onSelectCaptain).toHaveBeenCalledWith("claude-opus"),
+    );
+
+    fireEvent.change(screen.getByTestId("popover-model"), {
+      target: { value: "claude-opus-4-8[1m]" },
+    });
+    fireEvent.click(screen.getByTestId("popover-save"));
+    await vi.waitFor(() =>
+      expect(onSaveProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "claude-opus" }),
+        expect.objectContaining({ model: "claude-opus-4-8[1m]" }),
+      ),
+    );
+    // Never navigated anywhere: the home is still mounted.
+    expect(screen.getByTestId("captain-home")).toBeTruthy();
+  });
+});
+
+describe("RUN-36: past sessions are listed and openable", () => {
+  test("ended sessions render with project and time; click opens", () => {
+    const onOpenPast = vi.fn();
+    renderHome({
+      onOpenPast,
+      pastSessions: [
+        { id: "s-old", projectName: "demo", endedAt: 1700000000000 },
+      ],
+    });
+    const list = screen.getByTestId("past-sessions");
+    expect(list.textContent).toContain("demo");
+    fireEvent.click(screen.getByTestId("past-session-s-old"));
+    expect(onOpenPast).toHaveBeenCalledWith("s-old");
   });
 });

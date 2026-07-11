@@ -51,6 +51,7 @@ meta.md     The spec of specs
 | IR-010 | [010-hardening.md](iterations/010-hardening.md) | Real-shell verification, docs, and deferred-work inventory |
 | IR-011 | [011-ux-round.md](iterations/011-ux-round.md) | Conversational start, native picker, pipeline view, organized work lists |
 | IR-012 | [012-captain-chat-home.md](iterations/012-captain-chat-home.md) | IM-style Captain home: greeting, chip menu with silent init, quick start, slash menu |
+| IR-013 | [013-at-hand-round.md](iterations/013-at-hand-round.md) | At-hand round: profile popover, nav badge, slash compile entry, past sessions |
 
 ## Packages
 

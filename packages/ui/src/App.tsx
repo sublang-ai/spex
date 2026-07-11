@@ -8,6 +8,8 @@ import { useMemo, useState } from "react";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "./state/store.js";
+import { deriveAttention } from "./state/dashboard.js";
+import { saveProfileEssentials, setCaptain } from "./lib/config-ops.js";
 import { RunView } from "./components/RunView.js";
 import { CaptainHome } from "./components/CaptainHome.js";
 import { ProjectsSurface } from "./components/ProjectsSurface.js";
@@ -93,8 +95,12 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
   const openSession = useAppStore((state) => state.openSession);
 
   const [onStartTab, setOnStartTab] = useState(false);
+  const [pastId, setPastId] = useState<string>();
 
   const live = sessions.filter((session) => session.live);
+  const past = sessions
+    .filter((session) => !session.live)
+    .sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0));
   const titles = useMemo(() => tabTitles(live), [live]);
   const active =
     live.find((session) => session.id === activeSessionId) ?? live[0];
@@ -118,15 +124,72 @@ function SessionsSurface({ onNavigate }: { onNavigate: (surface: Surface) => voi
       }
       onRegisterPath={registerProject}
       onInitProject={(path) => createProject(path, false)}
-      onOpenSettings={() => onNavigate("Settings")}
+      onNavigate={onNavigate}
+      onSelectCaptain={setCaptain}
+      onSaveProfile={saveProfileEssentials}
+      pastSessions={past.map((session) => ({
+        id: session.id,
+        projectName: session.projectPath.split("/").pop() ?? session.projectPath,
+        endedAt: session.endedAt,
+      }))}
+      onOpenPast={(sessionId) => {
+        setPastId(sessionId);
+        void focusSession(sessionId);
+      }}
       onStart={async (projectId, text) => {
         const session = await openSession(projectId);
         await submitBossText(session.id, text);
         setOnStartTab(false);
+        setPastId(undefined);
       }}
     />
   );
 
+  const pastSession = past.find((session) => session.id === pastId);
+  const pastView = pastId ? views[pastId] : undefined;
+  const pastTranscript =
+    pastSession && pastView ? (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-neutral-200 px-4 py-2 text-sm dark:border-neutral-800">
+          <button
+            type="button"
+            onClick={() => setPastId(undefined)}
+            className="text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+          >
+            ← Back
+          </button>
+          <span className="font-medium">
+            {pastSession.projectPath.split("/").pop()}
+          </span>
+          <span className="text-xs text-neutral-400">
+            ended{" "}
+            {pastSession.endedAt
+              ? new Date(pastSession.endedAt).toLocaleString()
+              : ""}
+          </span>
+        </div>
+        <RunView
+          key={pastSession.id}
+          session={pastSession}
+          view={pastView}
+          composer={{ queued: [], answering: false }}
+          connected={connection === "open"}
+          readOnly
+          onStartNew={() => {
+            setPastId(undefined);
+            void openSession(pastSession.projectId).catch(() => {});
+          }}
+          onSubmit={async () => {}}
+          onAbort={() => {}}
+          onRemoveQueued={() => {}}
+          onDismissError={() => {}}
+        />
+      </div>
+    ) : null;
+
+  if (pastTranscript && (live.length === 0 || onStartTab)) {
+    return pastTranscript;
+  }
   if (live.length === 0) {
     return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;
   }
@@ -224,6 +287,11 @@ export function App() {
   const [surface, setSurface] = useState<Surface>("Sessions");
   const configState = useAppStore((state) => state.configState);
   const focusSession = useAppStore((state) => state.focusSession);
+  const sessions = useAppStore((state) => state.sessions);
+  const views = useAppStore((state) => state.views);
+  const attentionCount = deriveAttention(sessions, views).filter(
+    (item) => item.kind !== "idle",
+  ).length;
 
   const openSessionAndShow = (sessionId: string) => {
     void focusSession(sessionId);
@@ -250,6 +318,14 @@ export function App() {
               }`}
             >
               {name}
+              {name === "Sessions" && attentionCount > 0 ? (
+                <span
+                  data-testid="nav-attention-badge"
+                  className="ml-2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                >
+                  {attentionCount}
+                </span>
+              ) : null}
             </button>
           ))}
           <div className="mt-auto px-1 text-[11px]">

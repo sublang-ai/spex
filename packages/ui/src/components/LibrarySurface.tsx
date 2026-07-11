@@ -14,7 +14,9 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
+import { saveProfileEssentials, setPlaybookPlayer } from "../lib/config-ops.js";
 import { Markdown } from "./Markdown.js";
+import { ProfilePopover } from "./ProfilePopover.js";
 
 type Toolchain = CommandResults["compile.check"];
 
@@ -149,6 +151,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
 export function LibrarySurface() {
   const configState = useAppStore((state) => state.configState);
   const compileProgress = useAppStore((state) => state.compileProgress);
+  const readiness = useAppStore((state) => state.readiness);
   const activeCompile = useAppStore((state) => state.activeCompile);
   const runCompile = useAppStore((state) => state.runCompile);
   const connection = useAppStore((state) => state.connection);
@@ -157,6 +160,10 @@ export function LibrarySurface() {
   const [error, setError] = useState<string>();
   const [openPipeline, setOpenPipeline] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState<string>();
+  const [rolePopover, setRolePopover] = useState<{
+    playbookId: string;
+    role: string;
+  }>();
 
   // Compile form state.
   const [playbookId, setPlaybookId] = useState("");
@@ -312,7 +319,7 @@ export function LibrarySurface() {
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
               {Object.entries(playbook.players).map(([role, ref]) => (
-                <label key={role} className="flex items-center gap-1">
+                <span key={role} className="relative flex items-center gap-1">
                   <span className="font-mono">{role}:</span>
                   <MappingSelect
                     value={ref}
@@ -326,7 +333,36 @@ export function LibrarySurface() {
                       })
                     }
                   />
-                </label>
+                  <button
+                    type="button"
+                    title={`Switch or tweak the ${role} profile in place`}
+                    onClick={() =>
+                      setRolePopover((current) =>
+                        current?.playbookId === playbook.id &&
+                        current.role === role
+                          ? undefined
+                          : { playbookId: playbook.id, role },
+                      )
+                    }
+                    className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                  >
+                    ⚙
+                  </button>
+                  {rolePopover?.playbookId === playbook.id &&
+                  rolePopover.role === role ? (
+                    <ProfilePopover
+                      title={`${role} profile`}
+                      profiles={summary.profiles}
+                      readiness={readiness}
+                      currentRef={ref}
+                      onSelect={(next) =>
+                        setPlaybookPlayer(playbook.id, role, next)
+                      }
+                      onSaveProfile={saveProfileEssentials}
+                      onClose={() => setRolePopover(undefined)}
+                    />
+                  ) : null}
+                </span>
               ))}
               <span
                 className="ml-auto max-w-[16rem] truncate font-mono text-[10px] text-neutral-400"

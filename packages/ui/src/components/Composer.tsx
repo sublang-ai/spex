@@ -18,6 +18,7 @@ export function Composer({
   connected,
   error,
   playbooks = [],
+  onCompileNew,
   onSubmit,
   onAbort,
   onRemoveQueued,
@@ -28,6 +29,7 @@ export function Composer({
   connected: boolean;
   error?: string;
   playbooks?: PlaybookSummary[];
+  onCompileNew?: () => void;
   onSubmit: (text: string) => Promise<void>;
   onAbort: () => void;
   onRemoveQueued: (index: number) => void;
@@ -125,6 +127,7 @@ export function Composer({
             items={slash}
             activeIndex={Math.min(slashIndex, slash.length - 1)}
             onPick={(playbook) => insertCommand(playbook.command)}
+            onCompileNew={onCompileNew}
           />
         ) : null}
         <textarea

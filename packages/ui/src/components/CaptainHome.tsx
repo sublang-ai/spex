@@ -15,8 +15,15 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
+import { ProfilePopover } from "./ProfilePopover.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
+
+export interface PastSessionEntry {
+  id: string;
+  projectName: string;
+  endedAt: number | null;
+}
 
 export interface CaptainHomeProps {
   projects: ProjectInfo[];
@@ -25,12 +32,19 @@ export interface CaptainHomeProps {
   profiles: ProfileSummary[];
   readiness: ReadinessEntry[];
   connected: boolean;
+  pastSessions?: PastSessionEntry[];
   /** Native picker when the shell bridge exists (DR-008). */
   onPickFolder?: () => Promise<string | null>;
   onRegisterPath: (path: string) => Promise<ProjectInfo>;
   /** Silent git init + register for non-repo folders (RUN-27). */
   onInitProject: (path: string) => Promise<ProjectInfo>;
-  onOpenSettings: () => void;
+  onNavigate: (surface: "Settings" | "Library") => void;
+  onSelectCaptain: (ref: string) => Promise<unknown>;
+  onSaveProfile: (
+    profile: ProfileSummary,
+    patch: { model?: string; reasoningEffort?: string },
+  ) => Promise<unknown>;
+  onOpenPast?: (sessionId: string) => void;
   onStart: (projectId: string, text: string) => Promise<void>;
   /** Storage for the quick-start dismissal (tests inject a stub). */
   storage?: Pick<Storage, "getItem" | "setItem">;
@@ -64,6 +78,7 @@ export function CaptainHome(props: CaptainHomeProps) {
   );
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [captainPopover, setCaptainPopover] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -219,6 +234,33 @@ export function CaptainHome(props: CaptainHomeProps) {
           </div>
         ) : null}
 
+        {props.pastSessions && props.pastSessions.length > 0 ? (
+          <div
+            data-testid="past-sessions"
+            className="ml-8 flex max-w-[85%] flex-col gap-0.5"
+          >
+            <span className="px-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+              Past sessions
+            </span>
+            {props.pastSessions.slice(0, 5).map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                data-testid={`past-session-${entry.id}`}
+                onClick={() => props.onOpenPast?.(entry.id)}
+                className="flex items-baseline gap-2 rounded-md px-2 py-1 text-left text-xs text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+              >
+                <span className="font-medium">{entry.projectName}</span>
+                <span className="text-neutral-400">
+                  {entry.endedAt
+                    ? new Date(entry.endedAt).toLocaleString()
+                    : "ended"}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {error ? (
           <div className="ml-8 max-w-[85%] rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
             {error}
@@ -319,7 +361,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             ) : null}
           </div>
 
-          <span className="ml-auto flex items-center gap-1 text-xs text-neutral-500">
+          <span className="relative ml-auto flex items-center gap-1 text-xs text-neutral-500">
             Captain:{" "}
             <span className="font-mono">
               {captainProfile
@@ -337,12 +379,27 @@ export function CaptainHome(props: CaptainHomeProps) {
             <button
               type="button"
               data-testid="captain-settings"
-              title="Configure the captain profile in Settings"
-              onClick={props.onOpenSettings}
+              title="Switch or tweak the captain profile"
+              onClick={() => setCaptainPopover((open) => !open)}
               className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
             >
               ⚙
             </button>
+            {captainPopover ? (
+              <ProfilePopover
+                title="Captain profile"
+                profiles={profiles}
+                readiness={readiness}
+                currentRef={captainRef}
+                onSelect={props.onSelectCaptain}
+                onSaveProfile={props.onSaveProfile}
+                onOpenSettings={() => {
+                  setCaptainPopover(false);
+                  props.onNavigate("Settings");
+                }}
+                onClose={() => setCaptainPopover(false)}
+              />
+            ) : null}
           </span>
         </div>
 
@@ -352,6 +409,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               items={slash}
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
+              onCompileNew={() => props.onNavigate("Library")}
             />
           ) : null}
           <div className="flex items-end gap-2 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-indigo-400 dark:border-neutral-700 dark:bg-neutral-900">

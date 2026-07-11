@@ -93,3 +93,31 @@ describe("RUN-21: awaitBossReply banner", () => {
     expect(screen.queryByTestId("boss-reply-banner")).toBeNull();
   });
 });
+
+describe("RUN-36: ended sessions render read-only", () => {
+  test("readOnly hides the composer and shows the ended notice", () => {
+    const view = applyRecords(
+      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      TURN_ONE,
+    );
+    render(
+      <RunView
+        session={{ ...SESSION, live: false, endedAt: 5 }}
+        view={view}
+        composer={{ queued: [], answering: false }}
+        connected
+        readOnly
+        onStartNew={() => {}}
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("ended-notice").textContent).toContain(
+      "read-only",
+    );
+    expect(screen.queryByTestId("boss-composer")).toBeNull();
+    expect(screen.getByText("Start a new session")).toBeTruthy();
+  });
+});
