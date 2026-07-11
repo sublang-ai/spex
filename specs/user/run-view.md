@@ -149,25 +149,25 @@ following the OS appearance otherwise.
 
 ### RUN-25
 
-Where no session tab is active, when the Sessions surface is shown,
-the run view shall present the Captain home: a chat thread opened by
-a Captain greeting that offers two or three high-level hints (choose
-a project, type `/` for playbooks, or describe a task), a chat
-composer, a project chip listing the registered projects with an
-"Open folder…" entry (native picker when available per
-[DR-008](../decisions/008-native-shell-bridge.md), a path field in
-the menu otherwise), and the captain's profile and model with a
-gear control that opens the profile in Settings, per
-[DR-007](../decisions/007-conversational-session-start.md).
+Where no session tab is active, when the Workspace is shown, the
+run view shall present the Captain home: a chat thread opened by a
+Captain greeting that names the current project (or points at the
+project bar when none is chosen), a chat composer, and the
+captain's profile and model with a gear control opening the
+in-place profile popover, per
+[DR-007](../decisions/007-conversational-session-start.md) and
+[DR-011](../decisions/011-project-workspace.md); project choice
+lives in the project bar and palette, not in the composer row.
 
 ### RUN-26
 
-While the Captain home is shown and a project is chosen, when the
-user submits composer text, the run view shall create a session for
-that project, dispatch the text as the session's first Boss turn,
-and switch to the new session's tab. While no project is chosen,
-when the user submits, the run view shall open the project chip
-menu instead of dispatching.
+While the Captain home is shown and the workspace has a current
+project, when the user submits composer text, the run view shall
+create a session for that project, dispatch the text as the
+session's first Boss turn, and switch to the new session's tab.
+While no project is chosen, when the user submits, the workspace
+shall open the project palette instead of dispatching, keeping the
+draft intact.
 
 ### RUN-27
 
@@ -205,23 +205,26 @@ the current surface.
 
 ### RUN-33
 
-The Captain home shall list recent ended sessions with their
-project and end time. When the user opens an ended session, the run
-view shall show a loading note while the transcript loads, then the
-full transcript read-only, say that the session has ended, and
-offer starting a new session for the same project, per
-[DR-009](../decisions/009-at-hand-interaction.md). When the
-transcript fails to load, the run view shall say so and offer a
-retry that reloads it — a failed load shall never present as an
-empty run.
+The Captain home shall list recent ended sessions of the current
+project with their end time, with an "all projects" toggle that
+widens the list across projects — nothing the user produced
+becomes unreachable ([DR-009](../decisions/009-at-hand-interaction.md)).
+When the user opens an ended session, the run view shall show a
+loading note while the transcript loads, then the full transcript
+read-only, say that the session has ended, and offer starting a
+new session for the same project. When the transcript fails to
+load, the run view shall say so and offer a retry that reloads it
+— a failed load shall never present as an empty run.
 
 ### RUN-34
 
 While any session needs a human (a pending Boss question or a
-failure), the Sessions navigation entry shall show a badge with the
-count, derived from the same attention rules as the Dashboard
-([DASH-11](../dev/dashboard.md#dash-11)). The slash menu shall end
-with a compile-a-new-playbook entry that opens the Playbooks
+failure), the Workspace navigation entry shall show a badge with
+the count across all projects, derived from the same attention
+rules as the Dashboard ([DASH-11](../dev/dashboard.md#dash-11));
+while a non-current project needs a human, the project bar's chip
+shall carry a dot in the most severe color. The slash menu shall
+end with a compile-a-new-playbook entry that opens the Playbooks
 surface's compile flow.
 
 ## Conversation Life (DR-010 §1/§3)
@@ -273,10 +276,13 @@ to the bottom and resumes following.
 
 ### RUN-42
 
-The project chip menu shall be fully keyboard-operable from the
-composer: submitting without a project opens it, arrow keys move
-the highlight, Enter picks the highlighted entry, and Escape closes
-it, with focus staying in the composer throughout.
+The project palette shall be fully keyboard-operable: it opens
+from Cmd/Ctrl+P, the project bar, or submitting a composer with no
+project chosen; its filter input holds focus; arrow keys move the
+highlight over project rows and "Open folder…"; Enter picks;
+Escape closes and returns focus to the opener with any composer
+draft intact, never auto-sending
+([DR-011](../decisions/011-project-workspace.md)).
 
 ### RUN-43
 
@@ -295,10 +301,15 @@ tab, never to the document body.
 
 ### RUN-48
 
-Session tabs shall carry the shared attention signal: an amber dot
-for a waiting question and a red dot for a failure on background
-tabs (the active tab shows the banner instead), with the detail in
-the tab tooltip. The tab strip shall scroll horizontally when tabs
+The tab strip shall show only the current project's live sessions.
+Session tabs shall be titled by the session's first Boss turn
+(truncated; "new session" before the first turn) with the full
+prompt and start time in the tooltip — never by the project name,
+which lives in the bar ([DR-011](../decisions/011-project-workspace.md)).
+Tabs shall carry the shared attention signal: an amber dot for a
+waiting question and a red dot for a failure on background tabs
+(the active tab shows the banner instead), with the detail in the
+tab tooltip. The strip shall scroll horizontally when tabs
 overflow, keep the new-session control reachable, expose tab-list
 semantics, and keep the active tab scrolled into view.
 
@@ -306,11 +317,13 @@ semantics, and keep the active tab scrolled into view.
 
 The app shall provide keyboard shortcuts implemented in the web UI
 (so they work identically in a browser, per
-[SHELL-10](../dev/app-shell.md#shell-10)): Cmd/Ctrl+1..5 switch
-surfaces, Cmd/Ctrl+, opens Settings, Cmd/Ctrl+N opens the new
-session tab, Cmd/Ctrl+Shift+[ and ] cycle live session tabs, and a
-printable key pressed outside any input refocuses the Boss
-composer.
+[SHELL-10](../dev/app-shell.md#shell-10)): Cmd/Ctrl+1..4 switch
+surfaces, Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project
+palette, Cmd/Ctrl+N opens the new-session tab (or the palette when
+no project is chosen), Cmd/Ctrl+Shift+S toggles the Specs tab with
+the previous tab, Cmd/Ctrl+Shift+[ and ] cycle the current
+project's tabs including the pinned ones, and a printable key
+pressed outside any input refocuses the Boss composer.
 
 ## First-Hour Integrity (DR-010 §5)
 
@@ -346,3 +359,31 @@ Where the Captain home has no history (no past sessions, warnings,
 or errors), it shall center its whole cluster — greeting, quick
 start, project chip, and composer — on the canvas, reverting to the
 bottom-docked chat layout once real content exists.
+
+## Project Workspace (DR-011)
+
+### RUN-56
+
+The Workspace shall carry a project bar naming the current project;
+activating it opens the project palette. The bar shall render in
+every workspace state; while no project is chosen, the tab strip
+(including pinned tabs) shall be absent and the bar plus the
+Captain home's guidance shall be the whole surface.
+
+### RUN-57
+
+Each project shall remember its last-active workspace tab (a
+session, the start tab, Specs, or Repo), restored when the project
+becomes current again; the current project shall persist across
+launches. When the user arrives via an attention affordance (a
+Dashboard row or a palette row with a needs-you signal), the
+workspace shall focus the session that needs the human instead of
+the remembered tab.
+
+### RUN-58
+
+The tab strip shall end with pinned Specs and Repo tabs — one spec
+view and one repo view per project — that participate in the tab
+list and the tab-cycling shortcut. Switching projects swaps the
+whole strip; sessions of other projects keep running and stay
+reachable through the palette's live-state rows and the Dashboard.

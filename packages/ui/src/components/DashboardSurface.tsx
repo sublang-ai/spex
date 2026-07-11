@@ -269,7 +269,7 @@ export function DashboardSurface({
               No live sessions —{" "}
               <button
                 type="button"
-                onClick={() => onNavigate("Sessions")}
+                onClick={() => onNavigate("Workspace")}
                 className="text-indigo-600 hover:underline dark:text-indigo-300"
               >
                 start one
@@ -303,13 +303,13 @@ export function DashboardSurface({
             groups={issueGroups}
             emptyText={
               <>
-                No open issues yet — connect GitHub in{" "}
+                No open issues yet — connect GitHub in the project's{" "}
                 <button
                   type="button"
-                  onClick={() => onNavigate("Projects")}
+                  onClick={() => onNavigate("Workspace")}
                   className="text-indigo-600 hover:underline dark:text-indigo-300"
                 >
-                  Projects
+                  Repo tab
                 </button>
                 .
               </>

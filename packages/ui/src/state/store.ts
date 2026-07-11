@@ -16,6 +16,7 @@ import type {
   RepoStatusInfo,
   ServerMessage,
   SessionInfo,
+  SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
 import { SpexClient, defaultCoreUrl, type ConnectionStatus } from "../lib/client.js";
@@ -61,6 +62,16 @@ export interface AppState {
   /** Per-session command failures shown above the composer. */
   runErrors: Record<string, string>;
   activeSessionId?: string;
+  /** The workspace's project context (DR-011): set only by the
+   * palette, focusSession, or boot restoration. */
+  currentProjectId?: string;
+  /** Per-project last-active workspace tab: a session id, "start",
+   * "specs", or "repo" (DR-011 workspace memory). */
+  workspaceTabs: Record<string, string>;
+  /** Parsed specs trees per project (specs.get). */
+  specTrees: Record<string, SpecTreeState>;
+  /** Spec-view load failures per project. */
+  specErrors: Record<string, string>;
   /** Draft for the Captain-home start composer. */
   homeDraft: string;
   /** Bootstrap refresh failure — connected but app state missing. */
@@ -68,6 +79,13 @@ export interface AppState {
 
   connect(url?: string): void;
   refresh(): Promise<void>;
+  setCurrentProject(projectId: string | undefined): void;
+  setWorkspaceTab(projectId: string, tab: string): void;
+  /** Register a folder, silently git-initializing non-repos
+   * (RUN-27); the palette and any surface share this one action. */
+  addProjectByPath(path: string): Promise<ProjectInfo>;
+  loadSpecs(projectId: string): Promise<void>;
+  readSpecRecord(projectId: string, path: string): Promise<string>;
   refreshReadiness(): Promise<void>;
   registerProject(path: string): Promise<ProjectInfo>;
   createProject(path: string, scaffold: boolean): Promise<ProjectInfo>;
@@ -98,6 +116,25 @@ export interface AppState {
 }
 
 let client: SpexClient | undefined;
+
+const CURRENT_PROJECT_KEY = "spex.currentProject";
+
+/** localStorage access that tolerates non-browser test environments. */
+function safeStorageGet(key: string): string | undefined {
+  try {
+    return window.localStorage.getItem(key) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeStorageSet(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Persistence is best-effort.
+  }
+}
 
 /** Sessions with a history backfill in flight: live records buffer
  * here so a race can never skip the gap (they apply after the
@@ -261,6 +298,11 @@ export const useAppStore = create<AppState>((set, get) => {
         // Dispatch a queued submission when the turn ends (RUN-8).
         if (record.type === "turn_finished" || record.type === "turn_aborted") {
           maybeDispatchQueued(sessionId);
+          // Agents may have rewritten specs during the turn: re-read
+          // any loaded tree for this project (DR-011 freshness).
+          if (session && get().specTrees[session.projectId]) {
+            void get().loadSpecs(session.projectId);
+          }
         }
         break;
       }
@@ -280,6 +322,9 @@ export const useAppStore = create<AppState>((set, get) => {
     views: {},
     composers: {},
     runErrors: {},
+    workspaceTabs: {},
+    specTrees: {},
+    specErrors: {},
     homeDraft: "",
 
     connect(url?: string): void {
@@ -323,10 +368,77 @@ export const useAppStore = create<AppState>((set, get) => {
       for (const session of live) {
         await ensureSubscribed(session.id).catch(() => {});
       }
-      const active = get().activeSessionId;
-      if (!active && live.length > 0) {
-        set({ activeSessionId: live[0].id });
+      // Boot the project context (DR-011): the persisted project when
+      // it still exists, else the first live session's project.
+      let current = get().currentProjectId;
+      if (!current) {
+        const persisted = safeStorageGet(CURRENT_PROJECT_KEY);
+        if (persisted && projects.some((p) => p.id === persisted)) {
+          current = persisted;
+        } else if (live.length > 0) {
+          current = live[0].projectId;
+        }
+        if (current) set({ currentProjectId: current });
       }
+      // Bootstrap session activation happens within the current
+      // project, never across it.
+      const active = get().activeSessionId;
+      const inProject = live.filter((s) => s.projectId === current);
+      if ((!active || !live.some((s) => s.id === active)) && inProject[0]) {
+        set({ activeSessionId: inProject[0].id });
+      }
+    },
+
+    setCurrentProject(projectId: string | undefined): void {
+      set({ currentProjectId: projectId });
+      if (projectId) safeStorageSet(CURRENT_PROJECT_KEY, projectId);
+    },
+
+    setWorkspaceTab(projectId: string, tab: string): void {
+      set({
+        workspaceTabs: { ...get().workspaceTabs, [projectId]: tab },
+      });
+    },
+
+    async addProjectByPath(path: string): Promise<ProjectInfo> {
+      let project: ProjectInfo;
+      try {
+        project = await get().registerProject(path);
+      } catch (cause) {
+        if (/not the root of a git work tree/.test((cause as Error).message)) {
+          // Not a repo yet: initialize one, no questions asked (RUN-27).
+          project = await get().createProject(path, false);
+        } else {
+          throw cause;
+        }
+      }
+      return project;
+    },
+
+    async loadSpecs(projectId: string): Promise<void> {
+      try {
+        const tree = await getClient().command("specs.get", { projectId });
+        const { [projectId]: _, ...errors } = get().specErrors;
+        set({
+          specTrees: { ...get().specTrees, [projectId]: tree },
+          specErrors: errors,
+        });
+      } catch (cause) {
+        set({
+          specErrors: {
+            ...get().specErrors,
+            [projectId]: (cause as Error).message,
+          },
+        });
+      }
+    },
+
+    async readSpecRecord(projectId: string, path: string): Promise<string> {
+      const reply = await getClient().command("specs.read", {
+        projectId,
+        path,
+      });
+      return reply.markdown;
     },
 
     async refreshReadiness(): Promise<void> {
@@ -393,6 +505,13 @@ export const useAppStore = create<AppState>((set, get) => {
         await ensureSubscribed(sessionId);
       }
       set({ activeSessionId: sessionId });
+      // Focusing a session always carries its project context along
+      // (DR-011): Dashboard rows and palette rows route through here.
+      const session = get().sessions.find((s) => s.id === sessionId);
+      if (session) {
+        get().setCurrentProject(session.projectId);
+        get().setWorkspaceTab(session.projectId, sessionId);
+      }
     },
 
     async loadPastSession(sessionId: string, force = false): Promise<void> {

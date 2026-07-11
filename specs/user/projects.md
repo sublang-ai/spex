@@ -5,46 +5,42 @@
 
 ## Intent
 
-This spec defines user-visible behavior of the Projects surface of
-the Spex desktop app: registering and creating local git projects,
-showing repository and forge state on project cards, and opening or
-removing projects.
-The Projects surface is the concept-model surface of
-[DR-002](../decisions/002-desktop-app-architecture.md); project
-identity, forge binding, and removal semantics follow
+This spec defines user-visible behavior of project management in
+the Spex desktop app: registering and creating local git projects
+in the project palette, and showing repository and GitHub state in
+the workspace's Repo tab, per
+[DR-011](../decisions/011-project-workspace.md).
+Project identity, forge binding, and removal semantics follow
 [DR-006](../decisions/006-projects-and-forge.md).
 
 ## Registration
 
 ### PROJ-1
 
-Where the Projects surface offers registration of an existing
-repository, when the user confirms, in the registration picker, a
-directory that is the top level of a git work tree, the Projects
-surface shall register the directory as a project and show its
-project card.
+When the user confirms, in the project palette, a directory that
+is the top level of a git work tree, the palette shall register
+the directory as a project and make it the workspace's current
+project.
 
-When the confirmed directory is not the top level of a git work
-tree, the Projects surface shall register nothing and show a
-message naming the failed check; when the directory lies inside a
-work tree below its top level, the message shall name the work
-tree's top-level path.
+When the confirmed directory is inside a work tree below its top
+level, the palette shall register nothing and show a message
+naming the work tree's top-level path; a directory that is no git
+work tree at all is initialized silently per
+[RUN-27](run-view.md#run-27).
 
 ### PROJ-2
 
 While a project is already registered for a path, when the user
-confirms that same path in the registration picker, the Projects
-surface shall focus the existing project card and shall not create
-a second project entry.
+confirms that same path in the project palette, the palette shall
+switch to the existing project and shall not create a second
+project entry.
 
 ## Creation
 
 ### PROJ-3
 
-Where the Projects surface offers creation of a new project, when
-the user submits the creation form with a project name, a parent
-directory, and the specs-scaffold option on or off, the Projects
-surface shall:
+When the user submits the project palette's create action with a
+path and the specs-scaffold option on or off, the palette shall:
 
 1. create the project directory under the parent directory,
 2. initialize a git repository in it,
@@ -52,18 +48,19 @@ surface shall:
    ([SCAF-1](scaffold.md#scaf-1)) in it when the scaffold option is
    on, and generate no scaffold when it is off,
 4. create an initial commit containing the generated files, and
-5. register the project and show its project card.
+5. register the project and make it the workspace's current
+   project.
 
-When any step fails, the Projects surface shall report the failure,
-shall not register the project, and shall leave already-created
-files on disk for inspection.
+When any step fails, the palette shall report the failure, shall
+not register the project, and shall leave already-created files on
+disk for inspection.
 
-## Project Cards
+## The Repo Tab
 
 ### PROJ-4
 
-While a project is registered, the project card shall show the
-repository state fields below:
+While a project is the workspace's current project, the Repo tab
+shall show the repository state fields below:
 
 | Field | Content |
 | --- | --- |
@@ -100,64 +97,55 @@ guidance naming the specific unmet condition — no GitHub `origin`
 remote, gh not installed, or gh not authenticated — instead of
 issue and pull-request lists.
 
-While the forge panel shows setup guidance, the project card shall
-keep showing repository state ([PROJ-4](#proj-4)), and its open and
-remove controls shall remain functional.
+While the GitHub panel shows setup guidance, the Repo tab shall
+keep showing repository state ([PROJ-4](#proj-4)), and its remove
+control shall remain functional.
 
 ## Session and Removal
 
 ### PROJ-8
 
-When the user activates the open control on a project card, the
-Projects surface shall bring that project's session view into
-focus, opening the view when the project has none.
-
-When the user activates the open control again, the Projects
-surface shall focus the same view and shall never open a second
-session view for the same project, per the
-one-live-session-per-project rule of
-[DR-002](../decisions/002-desktop-app-architecture.md).
+When the user picks a project from the palette or opens one of its
+sessions from the Dashboard, the workspace shall switch to that
+project, restoring its last-active tab — except when a session in
+it needs a human, in which case that session's tab shall be
+focused, per [DR-011](../decisions/011-project-workspace.md).
 
 ### PROJ-9
 
-When the user confirms removal of a project, the Projects surface
-shall remove the project card and forget the project, leaving the
-repository directory, its files, and its git state on disk
-unmodified.
+When the user confirms removal in the Repo tab, the workspace
+shall forget the project and clear it from the project bar,
+leaving the repository directory, its files, and its git state on
+disk unmodified.
 
-While the project has a live session, the Projects surface shall
-refuse removal with a message stating that the session must be
-finished or closed first.
+While the project has a live session, the Repo tab shall disable
+removal, stating that sessions must be ended first.
 
 ## Labels and Vocabulary
 
 ### PROJ-22
 
-The registration form shall label its mode choices "Add an
-existing repo" and "Create a new project", and its submit control
-shall mirror the selected mode: "Add project" for an existing
-repo, "Create project" for a new one.
+The project palette's path row shall offer distinct "Add" (an
+existing repo) and "Create" (a new project) actions on the typed
+path, and the palette shall list projects with filter-as-you-type
+matching on name and path.
 
 ### PROJ-23
 
-While a project has a live session, the project card's open
-control shall be a secondary bordered button labeled "Open live
-session" carrying a small pulsing emerald dot as the liveness
-indicator; the emerald color shall carry status only, and the
-button's interactive styling shall stay in the neutral/indigo
-interaction palette
-([DR-010](../decisions/010-interface-craft.md) §8).
+While a project has running sessions or sessions needing a human,
+its palette row shall show that state — a pulsing emerald dot with
+the running count, and an amber (question) or red (failure) dot
+with the needs-you count — with text labels alongside the colors
+([DR-010](../decisions/010-interface-craft.md) §7/§8).
 
 ### PROJ-24
 
-Where the creation form offers the specs-scaffold option, the
-option shall be labeled "Scaffold specs", and its tooltip shall
-explain what the scaffold creates: the specs/ tree (user, dev,
-test), CLAUDE.md/AGENTS.md agent instructions, and a LICENSE if
-missing — committed as the initial commit.
+Where the palette's create action offers the specs-scaffold
+option, the option shall be labeled to say it applies when
+creating, and the palette shall default it to on.
 
 ### PROJ-25
 
-User-facing copy on the Projects surface shall say "GitHub" and
-shall not use the internal adapter term "forge"
+User-facing copy in the palette and the Repo tab shall say
+"GitHub" and shall not use the internal adapter term "forge"
 ([DR-010](../decisions/010-interface-craft.md) §2).

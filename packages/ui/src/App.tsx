@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// App shell: Sessions-first navigation (DR-007), session tabs with a
-// "+" start tab, connection banner, keyboard shortcuts (DR-010 §6),
-// and cross-surface navigation.
+// App shell (DR-011): project-first Workspace — a project bar over
+// the project's session tabs plus pinned Specs and Repo tabs — with
+// Dashboard, Playbooks, and Settings alongside. Keyboard shortcuts
+// live renderer-side so the UI runs unmodified in a browser
+// (SHELL-10).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
@@ -11,22 +13,23 @@ import type { SessionInfo } from "@sublang/spex-core/protocol";
 import { useAppStore } from "./state/store.js";
 import { deriveAttention } from "./state/dashboard.js";
 import { saveProfileEssentials, setCaptain } from "./lib/config-ops.js";
+import type { SessionView } from "./state/reducer.js";
 import { RunView } from "./components/RunView.js";
 import { CaptainHome } from "./components/CaptainHome.js";
-import { ProjectsSurface } from "./components/ProjectsSurface.js";
 import { DashboardSurface } from "./components/DashboardSurface.js";
 import { LibrarySurface } from "./components/LibrarySurface.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
+import { RepoTab } from "./components/ProjectsSurface.js";
+import { ProjectPalette } from "./components/ProjectPalette.js";
+import {
+  SpecView,
+  initialSpecViewState,
+  type SpecViewState,
+} from "./components/SpecView.js";
 import { InlineConfirm } from "./components/InlineConfirm.js";
 import { Icon } from "./components/Icon.js";
 
-const SURFACES = [
-  "Sessions",
-  "Dashboard",
-  "Projects",
-  "Playbooks",
-  "Settings",
-] as const;
+const SURFACES = ["Workspace", "Dashboard", "Playbooks", "Settings"] as const;
 export type Surface = (typeof SURFACES)[number];
 
 declare global {
@@ -130,36 +133,30 @@ function Announcer() {
   );
 }
 
-/** Tab titles: basename, disambiguated by parent dir on collisions. */
-export function tabTitles(sessions: SessionInfo[]): Map<string, string> {
-  const base = (path: string) => path.split("/").filter(Boolean).pop() ?? path;
-  const counts = new Map<string, number>();
-  for (const session of sessions) {
-    const name = base(session.projectPath);
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-  }
-  const titles = new Map<string, string>();
-  for (const session of sessions) {
-    const parts = session.projectPath.split("/").filter(Boolean);
-    const name = parts.pop() ?? session.projectPath;
-    titles.set(
-      session.id,
-      (counts.get(name) ?? 0) > 1 && parts.length > 0
-        ? `${name} — ${parts[parts.length - 1]}`
-        : name,
-    );
-  }
-  return titles;
+/** Session tab identity (DR-011): the first Boss turn names the tab
+ * — the project name lives in the bar, not on tabs. */
+export function sessionTitle(view: SessionView | undefined): string {
+  const first = view?.captain.find((line) => line.kind === "boss");
+  if (!first) return "new session";
+  const flat = first.text.replace(/\s+/g, " ").trim();
+  return flat.length > 26 ? `${flat.slice(0, 26)}…` : flat;
 }
 
-function SessionsSurface({
+function sessionTooltip(
+  session: SessionInfo,
+  view: SessionView | undefined,
+): string {
+  const first = view?.captain.find((line) => line.kind === "boss");
+  const started = new Date(session.createdAt).toLocaleString();
+  return first ? `${first.text}\nstarted ${started}` : `started ${started}`;
+}
+
+function WorkspaceSurface({
   onNavigate,
-  onStartTab,
-  setOnStartTab,
+  onOpenPalette,
 }: {
   onNavigate: (surface: Surface) => void;
-  onStartTab: boolean;
-  setOnStartTab: (value: boolean) => void;
+  onOpenPalette: () => void;
 }) {
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
@@ -178,31 +175,55 @@ function SessionsSurface({
   const homeDraft = useAppStore((state) => state.homeDraft);
   const setHomeDraft = useAppStore((state) => state.setHomeDraft);
   const refreshReadiness = useAppStore((state) => state.refreshReadiness);
-
   const configState = useAppStore((state) => state.configState);
   const readiness = useAppStore((state) => state.readiness);
   const projects = useAppStore((state) => state.projects);
-  const registerProject = useAppStore((state) => state.registerProject);
-  const createProject = useAppStore((state) => state.createProject);
   const openSession = useAppStore((state) => state.openSession);
+  const currentProjectId = useAppStore((state) => state.currentProjectId);
+  const setCurrentProject = useAppStore((state) => state.setCurrentProject);
+  const workspaceTabs = useAppStore((state) => state.workspaceTabs);
+  const setWorkspaceTab = useAppStore((state) => state.setWorkspaceTab);
+  const specTrees = useAppStore((state) => state.specTrees);
+  const specErrors = useAppStore((state) => state.specErrors);
+  const loadSpecs = useAppStore((state) => state.loadSpecs);
+  const readSpecRecord = useAppStore((state) => state.readSpecRecord);
 
   const [pastId, setPastId] = useState<string>();
+  const [pastScope, setPastScope] = useState<"project" | "all">("project");
   const [ending, setEnding] = useState<Record<string, boolean>>({});
   const [confirmClose, setConfirmClose] = useState<string>();
+  const [specViewStates, setSpecViewStates] = useState<
+    Record<string, SpecViewState>
+  >({});
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  const live = sessions.filter((session) => session.live);
+  const project = projects.find((entry) => entry.id === currentProjectId);
+  const live = sessions.filter(
+    (session) => session.live && session.projectId === currentProjectId,
+  );
   const past = sessions
     .filter((session) => !session.live)
+    .filter(
+      (session) =>
+        pastScope === "all" || session.projectId === currentProjectId,
+    )
     .sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0));
-  const titles = useMemo(() => tabTitles(live), [live]);
-  const active =
-    live.find((session) => session.id === activeSessionId) ?? live[0];
-  const showStart = onStartTab || !active;
 
-  // Attention dots on background tabs close the badge → surface → tab
-  // chain (DR-009/DR-010): same derivation as the nav badge, so the
-  // signals never disagree.
+  // The workspace tab: per-project memory with live fallbacks.
+  const remembered = currentProjectId
+    ? workspaceTabs[currentProjectId]
+    : undefined;
+  const tab =
+    remembered === "start" || remembered === "specs" || remembered === "repo"
+      ? remembered
+      : remembered && live.some((session) => session.id === remembered)
+        ? remembered
+        : (live.find((session) => session.id === activeSessionId)?.id ??
+          live[0]?.id ??
+          "start");
+
+  // Attention dots on background tabs (DR-009/DR-011): the same
+  // derivation as the nav badge, so the signals never disagree.
   const attention = useMemo(
     () => deriveAttention(sessions, views),
     [sessions, views],
@@ -212,22 +233,50 @@ function SessionsSurface({
       .filter((item) => item.kind !== "idle")
       .map((item) => [item.sessionId, item]),
   );
+  const otherAttention = attention.filter((item) => {
+    if (item.kind === "idle") return false;
+    const session = sessions.find((s) => s.id === item.sessionId);
+    return session && session.projectId !== currentProjectId;
+  });
+  const otherWorst = otherAttention.some((item) => item.kind === "failure")
+    ? "failure"
+    : otherAttention[0]?.kind;
 
   // Keep the active tab reachable when the strip scrolls.
-  const activeId = active?.id;
   useEffect(() => {
-    if (!activeId) return;
     tabRefs.current
-      .get(activeId)
+      .get(tab)
       ?.scrollIntoView({ inline: "nearest", block: "nearest" });
-  }, [activeId]);
+  }, [tab]);
+
+  // Spec freshness (DR-011): re-read on tab activation and window
+  // focus while the Specs tab is up; turn ends refresh via the store.
+  useEffect(() => {
+    if (tab !== "specs" || !currentProjectId) return;
+    void loadSpecs(currentProjectId);
+    const onFocus = () => void loadSpecs(currentProjectId);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, currentProjectId]);
 
   const summary =
     configState?.status === "valid" ? configState.summary : undefined;
 
+  function pickTab(next: string): void {
+    if (!currentProjectId) return;
+    setPastId(undefined);
+    if (next !== "start" && next !== "specs" && next !== "repo") {
+      void focusSession(next);
+    } else {
+      setWorkspaceTab(currentProjectId, next);
+    }
+  }
+
   const startView = (
     <CaptainHome
-      projects={projects}
+      hasProject={Boolean(project)}
+      projectName={project?.name}
       playbooks={summary?.playbooks ?? []}
       captainRef={summary?.captain ?? ""}
       profiles={summary?.profiles ?? []}
@@ -242,29 +291,28 @@ function SessionsSurface({
       draft={homeDraft}
       onDraftChange={setHomeDraft}
       onRecheckReadiness={refreshReadiness}
-      onPickFolder={
-        window.spexNative
-          ? () => window.spexNative!.pickDirectory()
-          : undefined
-      }
-      onRegisterPath={registerProject}
-      onInitProject={(path) => createProject(path, false)}
-      onNavigate={onNavigate}
+      onOpenPalette={onOpenPalette}
+      onNavigate={(surface) => onNavigate(surface)}
       onSelectCaptain={setCaptain}
       onSaveProfile={saveProfileEssentials}
       pastSessions={past.map((session) => ({
         id: session.id,
-        projectName: session.projectPath.split("/").pop() ?? session.projectPath,
+        projectName:
+          session.projectPath.split("/").pop() ?? session.projectPath,
         endedAt: session.endedAt,
       }))}
+      pastScope={pastScope}
+      onTogglePastScope={() =>
+        setPastScope((scope) => (scope === "project" ? "all" : "project"))
+      }
       onOpenPast={(sessionId) => {
         setPastId(sessionId);
         void loadPastSession(sessionId).catch(() => {});
       }}
-      onStart={async (projectId, text) => {
-        const session = await openSession(projectId);
+      onStart={async (text) => {
+        if (!currentProjectId) return;
+        const session = await openSession(currentProjectId);
         await submitBossText(session.id, text);
-        setOnStartTab(false);
         setPastId(undefined);
       }}
     />
@@ -322,18 +370,6 @@ function SessionsSurface({
       </div>
     ) : null;
 
-  if (pastTranscript && (live.length === 0 || onStartTab)) {
-    return pastTranscript;
-  }
-  if (live.length === 0) {
-    return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;
-  }
-
-  const view = active ? views[active.id] : undefined;
-  const composer = active
-    ? (composers[active.id] ?? { queued: [] })
-    : { queued: [] };
-
   function closeSession(session: SessionInfo): void {
     setConfirmClose(undefined);
     setEnding((current) => ({ ...current, [session.id]: true }));
@@ -348,113 +384,159 @@ function SessionsSurface({
       });
   }
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-neutral-800">
-        <div
-          role="tablist"
-          aria-label="Live sessions"
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-        >
-          {live.map((session) => {
-            const attentionItem = attentionBySession.get(session.id);
-            const isActive = !showStart && session.id === active?.id;
-            const queuedCount = composers[session.id]?.queued.length ?? 0;
-            return (
-              <span
-                key={session.id}
-                className={`flex min-w-[6rem] max-w-[14rem] items-center gap-1 rounded-t-md px-3 py-1.5 text-sm ${
-                  isActive
-                    ? "border border-b-0 border-neutral-200 bg-white font-medium dark:border-neutral-800 dark:bg-neutral-900"
-                    : "text-neutral-500"
-                }`}
-              >
-                {confirmClose === session.id ? (
-                  <InlineConfirm
-                    question={
-                      (views[session.id]?.turnActive
-                        ? "A turn is running — end?"
-                        : "End session?") +
-                      (queuedCount > 0
-                        ? ` ${queuedCount} queued message${queuedCount === 1 ? "" : "s"} will be discarded.`
-                        : "")
+  const bar = (
+    <div className="flex items-center gap-2 border-b border-neutral-200 bg-white px-3 py-1.5 dark:border-neutral-800 dark:bg-neutral-900">
+      <button
+        type="button"
+        data-testid="project-bar-chip"
+        onClick={onOpenPalette}
+        title={
+          project
+            ? `${project.path} — switch project (⌘P)`
+            : "Choose a project (⌘P)"
+        }
+        className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm ${
+          project
+            ? "border-neutral-300 font-medium text-neutral-700 dark:border-neutral-700 dark:text-neutral-200"
+            : "border-indigo-400 font-medium text-indigo-600 dark:border-indigo-600 dark:text-indigo-300"
+        } hover:bg-neutral-100 dark:hover:bg-neutral-800`}
+      >
+        <Icon name="folder" className="h-3.5 w-3.5" />
+        {project ? project.name : "Choose a project"}
+        <Icon name="caretDown" className="h-3 w-3 text-neutral-400" />
+        {otherAttention.length > 0 ? (
+          <span
+            data-testid="other-project-attention"
+            aria-label={`${otherAttention.length} session${otherAttention.length === 1 ? "" : "s"} in other projects need you`}
+            title={`${otherAttention.length} session${otherAttention.length === 1 ? "" : "s"} in other projects need you`}
+            className={`ml-0.5 h-2 w-2 rounded-full ${
+              otherWorst === "failure" ? "bg-red-500" : "bg-amber-500"
+            }`}
+          />
+        ) : null}
+      </button>
+    </div>
+  );
+
+  if (!project) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {bar}
+        {pastTranscript ?? (
+          <div className="flex min-h-0 flex-1 flex-col">{startView}</div>
+        )}
+      </div>
+    );
+  }
+
+  const view =
+    tab !== "start" && tab !== "specs" && tab !== "repo"
+      ? views[tab]
+      : undefined;
+  const activeSession = live.find((session) => session.id === tab);
+  const composer = activeSession
+    ? (composers[activeSession.id] ?? { queued: [] })
+    : { queued: [] };
+
+  const strip = (
+    <div className="flex items-center gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-neutral-800">
+      <div
+        role="tablist"
+        aria-label="Sessions and project views"
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+      >
+        {live.map((session) => {
+          const attentionItem = attentionBySession.get(session.id);
+          const isActive = session.id === tab;
+          const queuedCount = composers[session.id]?.queued.length ?? 0;
+          const title = sessionTitle(views[session.id]);
+          return (
+            <span
+              key={session.id}
+              className={`flex min-w-[6rem] max-w-[14rem] items-center gap-1 rounded-t-md px-3 py-1.5 text-sm ${
+                isActive
+                  ? "border border-b-0 border-neutral-200 bg-white font-medium dark:border-neutral-800 dark:bg-neutral-900"
+                  : "text-neutral-500"
+              }`}
+            >
+              {confirmClose === session.id ? (
+                <InlineConfirm
+                  question={
+                    (views[session.id]?.turnActive
+                      ? "A turn is running — end?"
+                      : "End session?") +
+                    (queuedCount > 0
+                      ? ` ${queuedCount} queued message${queuedCount === 1 ? "" : "s"} will be discarded.`
+                      : "")
+                  }
+                  confirmLabel="end"
+                  cancelLabel="keep"
+                  onConfirm={() => closeSession(session)}
+                  onCancel={() => setConfirmClose(undefined)}
+                />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    ref={(element) => {
+                      if (element) tabRefs.current.set(session.id, element);
+                      else tabRefs.current.delete(session.id);
+                    }}
+                    title={
+                      attentionItem
+                        ? `${sessionTooltip(session, views[session.id])}\n${attentionItem.text}`
+                        : sessionTooltip(session, views[session.id])
                     }
-                    confirmLabel="end"
-                    cancelLabel="keep"
-                    onConfirm={() => closeSession(session)}
-                    onCancel={() => setConfirmClose(undefined)}
-                  />
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      ref={(element) => {
-                        if (element) tabRefs.current.set(session.id, element);
-                        else tabRefs.current.delete(session.id);
-                      }}
-                      title={
-                        attentionItem
-                          ? `${session.projectPath} — ${attentionItem.text}`
-                          : session.projectPath
-                      }
-                      onClick={() => {
-                        setOnStartTab(false);
-                        setPastId(undefined);
-                        void focusSession(session.id);
-                      }}
-                      className="flex min-w-0 items-center gap-1.5 hover:text-neutral-900 dark:hover:text-neutral-100"
-                    >
-                      {attentionItem && !isActive ? (
-                        <span
-                          data-testid={`tab-attention-${session.id}`}
-                          aria-hidden
-                          className={`h-2 w-2 shrink-0 rounded-full ${
-                            attentionItem.kind === "failure"
-                              ? "bg-red-500"
-                              : "bg-amber-500"
-                          }`}
-                        />
-                      ) : null}
-                      <span className="truncate">
-                        {titles.get(session.id)}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      title={
-                        ending[session.id]
-                          ? "Shutting down the agents…"
-                          : "End this session"
-                      }
-                      aria-label={`End session ${titles.get(session.id)}`}
-                      disabled={ending[session.id]}
-                      onClick={() => setConfirmClose(session.id)}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 disabled:animate-pulse dark:hover:bg-neutral-800"
-                    >
-                      {ending[session.id] ? (
-                        "…"
-                      ) : (
-                        <Icon name="close" className="h-3 w-3" />
-                      )}
-                    </button>
-                  </>
-                )}
-              </span>
-            );
-          })}
-        </div>
+                    onClick={() => pickTab(session.id)}
+                    className="flex min-w-0 items-center gap-1.5 hover:text-neutral-900 dark:hover:text-neutral-100"
+                  >
+                    {attentionItem && !isActive ? (
+                      <span
+                        data-testid={`tab-attention-${session.id}`}
+                        aria-hidden
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          attentionItem.kind === "failure"
+                            ? "bg-red-500"
+                            : "bg-amber-500"
+                        }`}
+                      />
+                    ) : null}
+                    <span className="truncate">{title}</span>
+                  </button>
+                  <button
+                    type="button"
+                    title={
+                      ending[session.id]
+                        ? "Shutting down the agents…"
+                        : "End this session"
+                    }
+                    aria-label={`End session ${title}`}
+                    disabled={ending[session.id]}
+                    onClick={() => setConfirmClose(session.id)}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 disabled:animate-pulse dark:hover:bg-neutral-800"
+                  >
+                    {ending[session.id] ? (
+                      "…"
+                    ) : (
+                      <Icon name="close" className="h-3 w-3" />
+                    )}
+                  </button>
+                </>
+              )}
+            </span>
+          );
+        })}
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === "start" && live.length > 0}
           title="Start another session"
           aria-label="Start another session"
-          onClick={() => {
-            setPastId(undefined);
-            setOnStartTab(true);
-          }}
+          onClick={() => pickTab("start")}
           className={`shrink-0 rounded-t-md px-3 py-1.5 text-sm ${
-            showStart
+            tab === "start"
               ? "border border-b-0 border-neutral-200 bg-white font-medium dark:border-neutral-800 dark:bg-neutral-900"
               : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
           }`}
@@ -462,27 +544,82 @@ function SessionsSurface({
           +
         </button>
       </div>
-      {showStart ? (
+      {(["specs", "repo"] as const).map((pinned) => (
+        <button
+          key={pinned}
+          type="button"
+          role="tab"
+          aria-selected={tab === pinned}
+          data-testid={`workspace-tab-${pinned}`}
+          ref={(element) => {
+            if (element) tabRefs.current.set(pinned, element);
+            else tabRefs.current.delete(pinned);
+          }}
+          title={
+            pinned === "specs"
+              ? "The project's spec packages (⌘⇧S)"
+              : "Repo state, issues and PRs"
+          }
+          onClick={() => pickTab(pinned)}
+          className={`shrink-0 rounded-t-md px-3 py-1.5 text-sm ${
+            tab === pinned
+              ? "border border-b-0 border-neutral-200 bg-white font-medium dark:border-neutral-800 dark:bg-neutral-900"
+              : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+          }`}
+        >
+          {pinned === "specs" ? "Specs" : "Repo"}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {bar}
+      {strip}
+      {pastTranscript && tab === "start" ? (
+        pastTranscript
+      ) : tab === "start" ? (
         startView
-      ) : active && view ? (
+      ) : tab === "specs" ? (
+        <SpecView
+          tree={specTrees[project.id]}
+          loading={!specTrees[project.id] && !specErrors[project.id]}
+          error={specErrors[project.id]}
+          onRefresh={() => void loadSpecs(project.id)}
+          onReadRecord={(path) => readSpecRecord(project.id, path)}
+          viewState={specViewStates[project.id] ?? initialSpecViewState}
+          onViewState={(next) =>
+            setSpecViewStates((current) => ({
+              ...current,
+              [project.id]: next,
+            }))
+          }
+        />
+      ) : tab === "repo" ? (
+        <RepoTab
+          projectId={project.id}
+          onRemoved={() => setCurrentProject(undefined)}
+        />
+      ) : activeSession && view ? (
         view.loading ? (
           <div className="m-auto text-sm text-neutral-400">
             loading transcript…
           </div>
         ) : (
           <RunView
-            key={active.id}
-            session={active}
+            key={activeSession.id}
+            session={activeSession}
             view={view}
             composer={composer}
             playbooks={summary?.playbooks ?? []}
             connected={connection === "open"}
-            error={runErrors[active.id]}
-            onDraftChange={(draft) => setDraft(active.id, draft)}
-            onSubmit={(text) => submitBossText(active.id, text)}
-            onAbort={() => void abortTurn(active.id)}
-            onRemoveQueued={(index) => removeQueued(active.id, index)}
-            onDismissError={() => clearRunError(active.id)}
+            error={runErrors[activeSession.id]}
+            onDraftChange={(draft) => setDraft(activeSession.id, draft)}
+            onSubmit={(text) => submitBossText(activeSession.id, text)}
+            onAbort={() => void abortTurn(activeSession.id)}
+            onRemoveQueued={(index) => removeQueued(activeSession.id, index)}
+            onDismissError={() => clearRunError(activeSession.id)}
           />
         )
       ) : null}
@@ -491,19 +628,40 @@ function SessionsSurface({
 }
 
 export function App() {
-  const [surface, setSurface] = useState<Surface>("Sessions");
-  const [onStartTab, setOnStartTab] = useState(false);
+  const [surface, setSurface] = useState<Surface>("Workspace");
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const configState = useAppStore((state) => state.configState);
-  const focusSession = useAppStore((state) => state.focusSession);
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
+  const projects = useAppStore((state) => state.projects);
+  const currentProjectId = useAppStore((state) => state.currentProjectId);
+  const focusSession = useAppStore((state) => state.focusSession);
   const attentionCount = deriveAttention(sessions, views).filter(
     (item) => item.kind !== "idle",
   ).length;
+  // Last non-Specs tab per project, for the Specs toggle shortcut.
+  const prevTabRef = useRef<Record<string, string>>({});
 
   const openSessionAndShow = (sessionId: string) => {
     void focusSession(sessionId);
-    setSurface("Sessions");
+    setSurface("Workspace");
+  };
+
+  // Picking a project with parked attention lands on the session that
+  // needs the human (DR-011), not the last-active tab.
+  const pickProject = (projectId: string) => {
+    const state = useAppStore.getState();
+    const needy = deriveAttention(state.sessions, state.views).find((item) => {
+      if (item.kind === "idle") return false;
+      const session = state.sessions.find((s) => s.id === item.sessionId);
+      return session?.projectId === projectId;
+    });
+    if (needy) {
+      void state.focusSession(needy.sessionId);
+    } else {
+      state.setCurrentProject(projectId);
+    }
+    setSurface("Workspace");
   };
 
   // Returning from a terminal sign-in self-heals readiness (DR-009).
@@ -521,14 +679,13 @@ export function App() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  // Application shortcuts (DR-010 §6), renderer-side so the UI runs
-  // unmodified in a browser (SHELL-10): Cmd/Ctrl+1..5 surfaces,
-  // Cmd/Ctrl+, settings, Cmd/Ctrl+N new session, Cmd/Ctrl+Shift+[ ]
-  // cycles session tabs, and typing outside an input refocuses the
-  // composer.
+  // Application shortcuts (DR-010 §6, DR-011), renderer-side so the
+  // UI runs unmodified in a browser (SHELL-10).
   useEffect(() => {
     const onKeydown = (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
+      const state = useAppStore.getState();
+      const projectId = state.currentProjectId;
       if (meta && !event.shiftKey && !event.altKey) {
         const index = Number.parseInt(event.key, 10);
         if (index >= 1 && index <= SURFACES.length) {
@@ -541,28 +698,61 @@ export function App() {
           setSurface("Settings");
           return;
         }
+        if (event.key.toLowerCase() === "p") {
+          event.preventDefault();
+          setPaletteOpen((open) => !open);
+          return;
+        }
         if (event.key.toLowerCase() === "n") {
           event.preventDefault();
-          setSurface("Sessions");
-          setOnStartTab(true);
+          setSurface("Workspace");
+          if (projectId) state.setWorkspaceTab(projectId, "start");
+          else setPaletteOpen(true);
           return;
         }
       }
       if (meta && event.shiftKey) {
-        if (event.code === "BracketLeft" || event.code === "BracketRight") {
-          const state = useAppStore.getState();
-          const live = state.sessions.filter((session) => session.live);
-          if (live.length < 2) return;
+        if (event.code === "KeyS") {
+          // Specs ↔ previous tab, one keystroke each way (DR-011).
+          if (!projectId) return;
           event.preventDefault();
+          setSurface("Workspace");
+          const current = state.workspaceTabs[projectId];
+          if (current === "specs") {
+            state.setWorkspaceTab(
+              projectId,
+              prevTabRef.current[projectId] ?? "start",
+            );
+          } else {
+            prevTabRef.current[projectId] = current ?? "start";
+            state.setWorkspaceTab(projectId, "specs");
+          }
+          return;
+        }
+        if (event.code === "BracketLeft" || event.code === "BracketRight") {
+          if (!projectId) return;
+          const live = state.sessions.filter(
+            (session) => session.live && session.projectId === projectId,
+          );
+          const order = [
+            ...live.map((session) => session.id),
+            "start",
+            "specs",
+            "repo",
+          ];
+          event.preventDefault();
+          setSurface("Workspace");
           const current = Math.max(
             0,
-            live.findIndex((session) => session.id === state.activeSessionId),
+            order.indexOf(state.workspaceTabs[projectId] ?? order[0]),
           );
           const delta = event.code === "BracketRight" ? 1 : -1;
-          const next = live[(current + delta + live.length) % live.length];
-          setSurface("Sessions");
-          setOnStartTab(false);
-          void state.focusSession(next.id);
+          const next = order[(current + delta + order.length) % order.length];
+          if (live.some((session) => session.id === next)) {
+            void state.focusSession(next);
+          } else {
+            state.setWorkspaceTab(projectId, next);
+          }
           return;
         }
       }
@@ -572,7 +762,8 @@ export function App() {
         !meta &&
         !event.altKey &&
         event.key.length === 1 &&
-        surface === "Sessions"
+        surface === "Workspace" &&
+        !paletteOpen
       ) {
         const target = event.target as HTMLElement | null;
         const tag = target?.tagName;
@@ -591,18 +782,38 @@ export function App() {
     };
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  }, [surface]);
+  }, [surface, paletteOpen]);
 
   const playbookCount =
     configState?.status === "valid"
       ? configState.summary.playbooks.length
       : undefined;
 
+  const addProjectByPath = useAppStore((state) => state.addProjectByPath);
+  const createProject = useAppStore((state) => state.createProject);
+
   return (
     <div className="flex h-full flex-col">
       <ConnectionBanner />
       <RefreshErrorBanner />
       <Announcer />
+      {paletteOpen ? (
+        <ProjectPalette
+          projects={projects}
+          sessions={sessions}
+          views={views}
+          currentProjectId={currentProjectId}
+          onPickFolder={
+            window.spexNative
+              ? () => window.spexNative!.pickDirectory()
+              : undefined
+          }
+          onPick={pickProject}
+          onAddPath={addProjectByPath}
+          onCreatePath={(path, scaffold) => createProject(path, scaffold)}
+          onClose={() => setPaletteOpen(false)}
+        />
+      ) : null}
       <div className="flex min-h-0 flex-1">
         <nav className="flex w-44 flex-col gap-1 border-r border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
           <div className="mb-2 px-1">
@@ -615,8 +826,8 @@ export function App() {
               onClick={() => setSurface(name)}
               aria-current={surface === name ? "page" : undefined}
               aria-label={
-                name === "Sessions" && attentionCount > 0
-                  ? `Sessions — ${attentionCount} need${attentionCount === 1 ? "s" : ""} your attention`
+                name === "Workspace" && attentionCount > 0
+                  ? `Workspace — ${attentionCount} need${attentionCount === 1 ? "s" : ""} your attention`
                   : undefined
               }
               className={`rounded-md px-2.5 py-1.5 text-left text-sm ${
@@ -626,7 +837,7 @@ export function App() {
               }`}
             >
               {name}
-              {name === "Sessions" && attentionCount > 0 ? (
+              {name === "Workspace" && attentionCount > 0 ? (
                 <span
                   data-testid="nav-attention-badge"
                   aria-hidden
@@ -658,12 +869,7 @@ export function App() {
           </div>
         </nav>
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {surface === "Projects" ? (
-            <ProjectsSurface
-              onOpenSession={openSessionAndShow}
-              onNavigate={setSurface}
-            />
-          ) : surface === "Playbooks" ? (
+          {surface === "Playbooks" ? (
             <LibrarySurface onNavigate={setSurface} />
           ) : surface === "Settings" ? (
             <SettingsSurface />
@@ -673,10 +879,9 @@ export function App() {
               onNavigate={setSurface}
             />
           ) : (
-            <SessionsSurface
+            <WorkspaceSurface
               onNavigate={setSurface}
-              onStartTab={onStartTab}
-              setOnStartTab={setOnStartTab}
+              onOpenPalette={() => setPaletteOpen(true)}
             />
           )}
         </main>

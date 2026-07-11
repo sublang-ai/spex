@@ -49,6 +49,8 @@ function renderHome({
   onSaveProfile = vi.fn(async () => {}),
   onOpenPast = vi.fn(),
   onNavigate = vi.fn(),
+  onOpenPalette = vi.fn(),
+  hasProject = true,
   onRecheckReadiness = undefined as (() => Promise<unknown>) | undefined,
   readiness = [] as ReadinessEntry[],
   configStatus = undefined as "valid" | "invalid" | "missing" | undefined,
@@ -58,7 +60,8 @@ function renderHome({
 } = {}) {
   const view = render(
     <CaptainHome
-      projects={[PROJECT]}
+      hasProject={hasProject}
+      projectName={hasProject ? PROJECT.name : undefined}
       playbooks={PLAYBOOKS}
       captainRef="claude-opus"
       profiles={[{ id: "claude-opus", adapter: "claude", model: "claude-opus-4-8" }]}
@@ -67,8 +70,7 @@ function renderHome({
       configStatus={configStatus}
       configErrors={configErrors}
       onRecheckReadiness={onRecheckReadiness}
-      onRegisterPath={vi.fn()}
-      onInitProject={vi.fn()}
+      onOpenPalette={onOpenPalette}
       onNavigate={onNavigate}
       onSelectCaptain={onSelectCaptain}
       onSaveProfile={onSaveProfile}
@@ -84,44 +86,41 @@ function renderHome({
     onSaveProfile,
     onOpenPast,
     onNavigate,
+    onOpenPalette,
     storage,
     view,
   };
 }
 
 describe("RUN-29: captain home structure and one-motion start", () => {
-  test("greeting, composer, project chip, and captain identity render", () => {
+  test("greeting, composer, and captain identity render", () => {
     renderHome();
-    expect(screen.getByText(/Hello! I'm your Captain/).textContent).toBeTruthy();
+    expect(screen.getByText(/Hello! This is demo/).textContent).toBeTruthy();
     expect(screen.getByTestId("start-composer")).toBeTruthy();
-    expect(screen.getByTestId("project-chip").textContent).toContain(
-      "Choose a project",
-    );
     expect(screen.getByText(/claude-opus \(claude-opus-4-8\)/)).toBeTruthy();
     expect(screen.getByTestId("captain-settings")).toBeTruthy();
   });
 
-  test("submitting with a chosen project starts the session with the text", async () => {
+  test("submitting in the bar's project starts with the text", async () => {
     const { onStart } = renderHome();
-    fireEvent.click(screen.getByTestId("project-chip"));
-    fireEvent.click(screen.getByText("demo"));
     fireEvent.change(screen.getByTestId("start-composer"), {
       target: { value: "fix the bug" },
     });
     fireEvent.click(screen.getByTestId("start-send"));
-    await vi.waitFor(() =>
-      expect(onStart).toHaveBeenCalledWith("p1", "fix the bug"),
-    );
+    await vi.waitFor(() => expect(onStart).toHaveBeenCalledWith("fix the bug"));
   });
 
-  test("submitting without a project opens the chip menu instead", () => {
-    const { onStart } = renderHome();
-    fireEvent.change(screen.getByTestId("start-composer"), {
-      target: { value: "do it" },
-    });
-    fireEvent.click(screen.getByTestId("start-send"));
+  test("submitting without a project opens the palette, draft intact", () => {
+    const { onStart, onOpenPalette } = renderHome({ hasProject: false });
+    expect(screen.getByText(/Pick a project up top/)).toBeTruthy();
+    const composer = screen.getByTestId(
+      "start-composer",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "do it" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
     expect(onStart).not.toHaveBeenCalled();
-    expect(screen.getByTestId("project-menu")).toBeTruthy();
+    expect(onOpenPalette).toHaveBeenCalled();
+    expect(composer.value).toBe("do it");
   });
 });
 
@@ -189,41 +188,6 @@ describe("RUN-35: in-place captain profile popover", () => {
     );
     // Never navigated anywhere: the home is still mounted.
     expect(screen.getByTestId("captain-home")).toBeTruthy();
-  });
-});
-
-describe("RUN-42: keyboard-only session start", () => {
-  test("Enter opens the menu; arrows highlight; Enter picks; focus stays", async () => {
-    const { onStart } = renderHome();
-    const composer = screen.getByTestId(
-      "start-composer",
-    ) as HTMLTextAreaElement;
-    fireEvent.change(composer, { target: { value: "fix the bug" } });
-    fireEvent.keyDown(composer, { key: "Enter" });
-    expect(screen.getByTestId("project-menu")).toBeTruthy();
-    expect(onStart).not.toHaveBeenCalled();
-    // The single project is highlighted at index 0; Enter picks it.
-    fireEvent.keyDown(composer, { key: "Enter" });
-    expect(screen.queryByTestId("project-menu")).toBeNull();
-    expect(screen.getByTestId("project-chip").textContent).toContain("demo");
-    // A second Enter now starts the session.
-    fireEvent.keyDown(composer, { key: "Enter" });
-    await vi.waitFor(() =>
-      expect(onStart).toHaveBeenCalledWith("p1", "fix the bug"),
-    );
-  });
-
-  test("Escape closes the menu without touching the draft", () => {
-    renderHome();
-    const composer = screen.getByTestId(
-      "start-composer",
-    ) as HTMLTextAreaElement;
-    fireEvent.change(composer, { target: { value: "do it" } });
-    fireEvent.keyDown(composer, { key: "Enter" });
-    expect(screen.getByTestId("project-menu")).toBeTruthy();
-    fireEvent.keyDown(composer, { key: "Escape" });
-    expect(screen.queryByTestId("project-menu")).toBeNull();
-    expect(composer.value).toBe("do it");
   });
 });
 

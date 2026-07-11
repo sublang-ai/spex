@@ -72,13 +72,15 @@ that the queued submission is dispatched and the indicator clears.
 Verifies: [RUN-25](../user/run-view.md#run-25),
 [RUN-26](../user/run-view.md#run-26)
 
-Where no session is live, when the Sessions surface renders with a
+Where no session is live, when the Workspace renders with a
 fixture config of one project and one playbook, the test suite
-shall assert the Captain home shows the greeting with hints, the
-chat composer, the project chip, and the captain identity; when
-text is submitted with the project chosen, the test suite shall
+shall assert the Captain home shows the greeting naming the
+current project, the chat composer, and the captain identity; when
+text is submitted with a current project, the test suite shall
 assert a session is created for that project and the text is
-dispatched as its first Boss turn.
+dispatched as its first Boss turn; when text is submitted with no
+project chosen, the test suite shall assert the palette opens and
+the draft survives.
 
 ### RUN-31
 
@@ -113,7 +115,7 @@ Verifies: [RUN-33](../user/run-view.md#run-33),
 Where a fixture holds one ended session with a stored transcript
 and one live session awaiting a Boss reply, the test suite shall
 assert the Captain home lists the ended session, opening it renders
-the transcript read-only with an ended notice, and the Sessions
+the transcript read-only with an ended notice, and the Workspace
 navigation badge shows the count 1.
 
 ### RUN-52
@@ -149,9 +151,10 @@ Verifies: [RUN-41](../user/run-view.md#run-41),
 The test suite shall assert time separators appear before the first
 line, after >10-minute gaps, and on day changes; that known states
 map to human labels with unknown ids humanized; that the project
-menu is driven end-to-end by keyboard (Enter opens, arrows
-highlight, Enter picks, Escape closes with the draft intact); and
-that Escape hides the slash menu without touching the draft.
+palette is driven end-to-end by keyboard (opens focused, arrows
+highlight, Enter picks, Escape closes with the composer draft
+intact) and its rows carry running and needs-you state; and that
+Escape hides the slash menu without touching the draft.
 
 ### RUN-55
 

@@ -127,6 +127,14 @@ meta.md     The spec of specs
 | dev | [scaffold.md](dev/scaffold.md) | Directory creation, template copying, root LICENSE copy, localization overlays, update prechecks, framework pristine/modified classification and warning, file-history manifest contract, agent spec appending |
 | test | [scaffold.md](test/scaffold.md) | Update state-matrix, framework warn-before-replace, top-level LICENSE emission, localization, and over-eager-indicator regression coverage |
 
+### SPECV
+
+| Group | File | Summary |
+| --- | --- | --- |
+| user | [spec-view.md](user/spec-view.md) | Package tree with per-group counts, item rows, filters + search, citation jumps, records reader, freshness |
+| dev | [spec-view.md](dev/spec-view.md) | specs.get parse contract (keys, order, short forms, notices), specs.read confinement, degradation |
+| test | [spec-view.md](test/spec-view.md) | Fixture-tree parser coverage: nesting, group subsets, mismatches, records, confinement |
+
 ### SET
 
 | Group | File | Summary |
