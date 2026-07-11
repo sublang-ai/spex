@@ -279,6 +279,14 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     playbookId: z.string().min(1),
   }),
+  z.object({ type: z.literal("specs.get"), id, projectId: z.string().min(1) }),
+  z.object({
+    type: z.literal("specs.read"),
+    id,
+    projectId: z.string().min(1),
+    /** Path relative to the project's specs/ directory. */
+    path: z.string().min(1),
+  }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -325,6 +333,74 @@ export interface CommandResults {
   "compile.run": ConfigState;
   "compile.abort": null;
   "playbook.artifacts": PlaybookArtifacts;
+  "specs.get": SpecTreeState;
+  "specs.read": { markdown: string };
+}
+
+// ---------------------------------------------------------------------------
+// Spec view data (SPECV, DR-011)
+// ---------------------------------------------------------------------------
+
+export interface SpecItemInfo {
+  /** Item ID, e.g. "RUN-9". */
+  id: string;
+  group: "user" | "dev" | "test";
+  /** Nearest `##` section heading above the item (Intent excluded). */
+  section?: string;
+  /** One-line digest: the item's first sentence. */
+  firstLine: string;
+  /** Full markdown body of the item. */
+  text: string;
+  /** Item IDs cited on a test item's Verifies line. */
+  verifies: string[];
+}
+
+export interface SpecGroupFile {
+  /** Path relative to the project root. */
+  path: string;
+  /** First paragraph of the file's `## Intent` section. */
+  intent?: string;
+  /** Items in document order — never sorted by ID. */
+  items: SpecItemInfo[];
+  /** Parse-failure notice; items may be partial when set. */
+  error?: string;
+}
+
+export interface SpecPackageInfo {
+  /** Package key: relative dir + basename, e.g. "auth/login". */
+  key: string;
+  /** Directory part of the key ("" for top-level packages). */
+  dir: string;
+  basename: string;
+  /** Shared item-ID prefix, e.g. "RUN"; absent when no items. */
+  shortForm?: string;
+  /** Consistency notices (prefix disagreements, path mismatches). */
+  notices: string[];
+  groups: {
+    user?: SpecGroupFile;
+    dev?: SpecGroupFile;
+    test?: SpecGroupFile;
+  };
+}
+
+export interface SpecRecordInfo {
+  /** Record ID, e.g. "DR-011" or "IR-016". */
+  id: string;
+  title: string;
+  /** Path relative to the project's specs/ directory. */
+  path: string;
+}
+
+export interface SpecTreeState {
+  /** False when the project has no specs/ directory. */
+  present: boolean;
+  packages: SpecPackageInfo[];
+  decisions: SpecRecordInfo[];
+  iterations: SpecRecordInfo[];
+  /** Tree-level notices (unknown top-level entries, etc.). */
+  notices: string[];
+  /** When the tree was read, ms epoch. */
+  readAt: number;
 }
 
 // ---------------------------------------------------------------------------

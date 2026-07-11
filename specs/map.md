@@ -34,6 +34,7 @@ meta.md     The spec of specs
 | DR-008 | [008-native-shell-bridge.md](decisions/008-native-shell-bridge.md) | Feature-detected `window.spexNative` bridge for OS pickers only |
 | DR-009 | [009-at-hand-interaction.md](decisions/009-at-hand-interaction.md) | At-hand interaction: no forced surface switches; in-place popovers; global attention badge; browsable history |
 | DR-010 | [010-interface-craft.md](decisions/010-interface-craft.md) | Interface craft: conversation-first, human status, honest async, guardrails, keyboard, accessibility, one visual grammar |
+| DR-011 | [011-project-workspace.md](decisions/011-project-workspace.md) | Project-first workspace: four-surface taxonomy, project palette, per-project tabs + Specs/Repo, interactive spec view |
 
 ## Iterations
 
@@ -55,6 +56,7 @@ meta.md     The spec of specs
 | IR-013 | [013-at-hand-round.md](iterations/013-at-hand-round.md) | At-hand round: profile popover, nav badge, slash compile entry, past sessions |
 | IR-014 | [014-public-readiness.md](iterations/014-public-readiness.md) | Blockers/majors from the adversarial public-readiness review |
 | IR-015 | [015-interface-craft.md](iterations/015-interface-craft.md) | DR-010 applied: 51 audit findings across chat, async, keyboard, visual grammar, microcopy |
+| IR-016 | [016-project-workspace.md](iterations/016-project-workspace.md) | DR-011 implemented: workspace IA, project palette, spec view |
 
 ## Packages
 
