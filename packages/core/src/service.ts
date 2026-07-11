@@ -52,6 +52,7 @@ import {
   type ConfigEditOp,
 } from "./config-edit.js";
 import { resolveArtifacts } from "./artifacts.js";
+import { parseSpecTree, resolveSpecPath } from "./specs.js";
 import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
 import type { ForgeState } from "./protocol.js";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
@@ -692,6 +693,22 @@ export class CoreService {
           line: "◇ compile canceled",
         });
         return null;
+      }
+      case "specs.get": {
+        const project = this.store.getProject(command.projectId);
+        if (!project) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        return parseSpecTree(project.path);
+      }
+      case "specs.read": {
+        const project = this.store.getProject(command.projectId);
+        if (!project) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        const resolved = resolveSpecPath(project.path, command.path);
+        if (!resolved.ok) throw new CoreError(resolved.code, resolved.message);
+        return { markdown: readFileSync(resolved.path, "utf8") };
       }
     }
   }
