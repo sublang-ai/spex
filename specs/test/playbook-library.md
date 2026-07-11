@@ -68,3 +68,15 @@ and then re-enabled, the test suite shall assert after each write
 that comments and unrelated entries are byte-identical to the
 original and that the list reflects the new state, and after the
 round trip that the playbook's entry is enabled again.
+
+### PBLIB-25
+
+Verifies: [PBLIB-22](../user/playbook-library.md#pblib-22),
+[PBLIB-24](../dev/playbook-library.md#pblib-24)
+
+Where a playbook was compiled into the library directory, when its
+artifacts are requested over the protocol, the test suite shall
+assert the response carries the source markdown, the gears
+markdown, the FSM code, and the derived state ids; where a stage
+file is removed, the test suite shall assert the response names the
+missing stage while still serving the others.

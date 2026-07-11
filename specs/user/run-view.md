@@ -141,3 +141,36 @@ weights; where no layout is configured, the run view shall apply
 built-in default weights. The run view shall provide light and dark
 color themes, selecting the configured theme when one is set and
 following the OS appearance otherwise.
+
+## Session Start
+
+### RUN-25
+
+Where no session tab is active, when the Sessions surface is shown,
+the run view shall present the start view: a Captain composer as
+the primary element, a selector listing the registered projects, a
+control that adds a project by choosing a local folder (native
+picker when available per
+[DR-008](../decisions/008-native-shell-bridge.md), manual path
+entry otherwise), one chip per configured playbook showing its
+slash command and intent, and the captain's profile, model, and
+readiness state per
+[DR-007](../decisions/007-conversational-session-start.md).
+
+### RUN-26
+
+While the start view is shown and a project is selected, when the
+user submits composer text, the run view shall create a session for
+that project, dispatch the text as the session's first Boss turn,
+and switch to the new session's tab. While no project is selected,
+the start view shall keep the composer's send action disabled and
+say why.
+
+### RUN-27
+
+While the start view is shown, when the user clicks a playbook
+chip, the run view shall insert the chip's slash command into the
+composer without dispatching it. When the user switches the captain
+profile in the start view, the run view shall write the change to
+the shared configuration as a captain change and reflect the
+updated readiness state.

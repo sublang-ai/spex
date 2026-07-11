@@ -52,3 +52,15 @@ The shell shall write no app-only state to the shared config file or into projec
 [2]: https://www.electronjs.org/docs/latest/tutorial/asar-archives "Electron ASAR archives"
 [3]: https://www.electron.build/ "electron-builder documentation"
 [4]: https://www.electronjs.org/docs/latest/api/app "Electron app API"
+
+## Native Bridge
+
+### SHELL-20
+
+The desktop package shall expose the native bridge of
+[DR-008](../decisions/008-native-shell-bridge.md) as a
+`contextBridge` API from a sandboxed preload, limited to OS
+affordances impossible from a sandboxed web page (v1: directory
+picking over one invoke channel), carrying no application feature,
+and absent by design in non-Electron deployments so the UI's
+feature detection selects the manual fallback.

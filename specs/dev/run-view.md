@@ -69,3 +69,14 @@ recompute the pane set to exactly the players the record marks
 visible, creating panes for newly visible players and removing
 panes for players no longer visible. The pane manager shall not
 route records carrying `hidden` visibility to any pane.
+
+## Session Start
+
+### RUN-28
+
+The start view shall obtain projects, playbooks, captain identity,
+and readiness exclusively through existing protocol commands and
+broadcasts, and shall detect the native picker by feature-testing
+the shell bridge ([SHELL-20](app-shell.md#shell-20)), falling back
+to manual path entry when the bridge is absent so the identical
+build serves browser deployments.

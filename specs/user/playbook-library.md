@@ -114,3 +114,21 @@ When a compiled playbook is registered, the Library shall list it
 with its registry fields and enabled state, and shall indicate
 that project sessions started before registration must be
 restarted before the playbook is available in them.
+
+## Pipeline Artifacts
+
+### PBLIB-22
+
+When the user opens a configured playbook's pipeline view, the
+Library shall present the playbook's compilation stages as three
+tabs — Source (the workflow markdown the playbook was compiled
+from), Gears (the GEARS spec items), and State machine (the
+compiled FSM with its derived state list) — rendering markdown
+stages as formatted text and the FSM as code.
+
+### PBLIB-23
+
+Where a stage artifact cannot be located for a playbook, when the
+pipeline view is opened, the Library shall show which stages are
+available and name the missing ones, keeping the available stages
+readable.

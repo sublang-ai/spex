@@ -30,6 +30,8 @@ meta.md     The spec of specs
 | DR-004 | [004-config-and-persistence.md](decisions/004-config-and-persistence.md) | Shared playbook config ownership, app-local SQLite store, readiness |
 | DR-005 | [005-compilation-integration.md](decisions/005-compilation-integration.md) | slc as external toolchain; in-app registry generation |
 | DR-006 | [006-projects-and-forge.md](decisions/006-projects-and-forge.md) | Projects as local git repos; gh-CLI GitHub forge adapter |
+| DR-007 | [007-conversational-session-start.md](decisions/007-conversational-session-start.md) | Sessions lands on a Captain-first start view; one motion to the first turn |
+| DR-008 | [008-native-shell-bridge.md](decisions/008-native-shell-bridge.md) | Feature-detected `window.spexNative` bridge for OS pickers only |
 
 ## Iterations
 
@@ -46,6 +48,7 @@ meta.md     The spec of specs
 | IR-008 | [008-settings.md](iterations/008-settings.md) | Implement Settings over the shared config per the SET package |
 | IR-009 | [009-library-compile.md](iterations/009-library-compile.md) | Implement the Library and slc compile flow per the PBLIB package |
 | IR-010 | [010-hardening.md](iterations/010-hardening.md) | Real-shell verification, docs, and deferred-work inventory |
+| IR-011 | [011-ux-round.md](iterations/011-ux-round.md) | Conversational start, native picker, pipeline view, organized work lists |
 
 ## Packages
 

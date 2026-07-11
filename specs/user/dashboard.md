@@ -128,3 +128,14 @@ desktop shell's dock badge
 ([DR-002](../decisions/002-desktop-app-architecture.md)).
 When the queue changes, the published count shall update to the new
 queue size.
+
+## Work-List Organization
+
+### DASH-20
+
+When the next-work lists render with items from more than one
+project, the Dashboard shall group issues and pull requests by
+project with per-project counts, order items within each group by
+update recency, and show each item's labels. When the user selects
+a project filter, the Dashboard shall show only that project's
+items until the filter is cleared.

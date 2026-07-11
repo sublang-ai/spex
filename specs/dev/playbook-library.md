@@ -109,3 +109,15 @@ preserve comments, key order, and formatting of untouched content
 byte-for-byte, shall modify only the targeted keys, and shall
 replace the file atomically so an interrupted write cannot leave
 a partially written config.
+
+## Pipeline Artifacts
+
+### PBLIB-24
+
+When a client requests a playbook's artifacts, the core package
+shall resolve them from the registry module's location: the
+compiled library layout (`<id>.md`, `<id>.playbook/<id>.gears.md`,
+`<id>.playbook/<id>.fsm.ts`) and the published-package layout used
+by `@sublang/playbook` registries, serving each stage's content and
+the state ids derived from the FSM over the protocol, and naming
+absent stages without failing the request.

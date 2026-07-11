@@ -66,3 +66,16 @@ the submission is queued with a visible queued indicator and that
 no Boss prompt is dispatched over the protocol. When the
 turn-finished record is then delivered, the test suite shall assert
 that the queued submission is dispatched and the indicator clears.
+
+### RUN-29
+
+Verifies: [RUN-25](../user/run-view.md#run-25),
+[RUN-26](../user/run-view.md#run-26)
+
+Where no session is live, when the Sessions surface renders with a
+fixture config of one project and one playbook, the test suite
+shall assert the start view shows the composer, the project
+selector, the playbook chip, and the captain summary; when text is
+submitted with the project selected, the test suite shall assert a
+session is created for that project and the text is dispatched as
+its first Boss turn.
