@@ -17,15 +17,22 @@ import {
   type LoadModule,
 } from "./config.js";
 
+// Mirrors the real @sublang/playbook/code/registry entry shape: the
+// Playbook Captain shell load contract is id/command/intent/requiredRoleIds/
+// validateOptions/createRuntime (+ optional summaryPolicy). It carries no
+// idle/final/park state ids — the earlier stub fabricated them, which masked
+// the fact that the real module fails a state-id-requiring validator.
 function registryEntry(overrides: Record<string, unknown> = {}) {
   return {
     id: "code",
     command: "code",
     intent: "software development / SDLC coding workflow",
     requiredRoleIds: ["coder", "reviewer"],
-    idleStateId: "ready",
-    finalStateId: "done",
-    parkStateIds: ["failed", "awaitBossReply"],
+    summaryPolicy: {
+      stateCountLabels: {},
+      copyPasteGuardNames: [],
+      savedCountsLine: () => "",
+    },
     validateOptions: () => ({}),
     createRuntime: () => ({}),
     ...overrides,
