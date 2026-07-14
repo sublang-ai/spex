@@ -17,9 +17,10 @@ The `specs/` directory shall contain the following subdirectories and files:
 | --------- | ------- | ------ |
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
-| `packages/` | spec packages, one item file per package | [\<path\>/]\<kebab-case\>.md |
-| `interactions/` | cross-package behaviors, scenarios, and their tests | [\<path\>/]\<kebab-case\>.md |
-| `map.md` | spec index for navigation | - |
+| `user/` | item files for user-visible behavior | [\<path\>/]\<kebab-case\>.md |
+| `dev/` | item files for implementation requirements | [\<path\>/]\<kebab-case\>.md |
+| `test/` | item files for acceptance testing | [\<path\>/]\<kebab-case\>.md |
+| `map.md` | spec index for navigation with item files organized by packages | - |
 | `meta.md` | the spec of specs | - |
 
 <!-- spex-i18n-source: META-3 sha256-12d340f3809b0e5b716d164ba2e81ee7189d22ecb18331f8910277f65203efc6 -->
@@ -30,9 +31,6 @@ The `specs/` directory shall contain the following subdirectories and files:
 ### META-21
 
 Test items shall focus on integration and system testing.
-
-A package's `## Verification` section shall hold test items that check that package's own claims.
-Test items that involve multiple spec packages shall live in `interactions/` files.
 
 Unit tests shall be part of the implementation and shall not be specified as spec items.
 
@@ -110,36 +108,19 @@ A spec item shall describe behavior as observable outcomes (e.g., file state, ex
 
 ### META-9
 
-A spec package shall be a single item file under `packages/`, so one read covers the whole package.
-Related packages may be grouped into subdirectories of `packages/` for navigation convenience.
+A spec package shall consist of one to three coordinated item files sharing the same relative path and basename under `user/`, `dev/`, or `test/`.
 
 ### META-10
 
-A spec package shall have a basename \<kebab-case\>.md unique across `specs/packages/` and `specs/interactions/`, with a short form \<ALLCAPS\> unique across the same set.
+A spec package shall have a basename \<kebab-case\>.md unique across `specs/user/`, `specs/dev/`, and `specs/test/`, with a short form \<ALLCAPS\>.
 
 Example: `package-management.md` has short form `PKGMGT`.
-
-### META-28
-
-Each package file shall contain only the following `##` sections, in this order:
-
-| Section | Presence | Content |
-| ------- | -------- | ------- |
-| `## Intent` | required | the package's purpose ([META-3](#meta-3)) |
-| `## External Behavior` | optional | user-visible behavior: what the system does |
-| `## Internal Behavior` | optional | implementation requirements: how the system is built |
-| `## Verification` | optional | test items checking this package's claims ([META-21](#meta-21)) |
-| `## References` | optional | external sources ([META-19](#meta-19)) |
-
-At least one of `## External Behavior` and `## Internal Behavior` shall be present.
-Topic subsections (`###`) and item headings (`###` or `####`) live inside the behavior and Verification sections.
-Localized scaffolds translate these section headings; the bundled templates define the active names.
 
 ### META-11
 
 Each item shall have an ID unique within `specs/`, following \<PACK\>-\<N...\> format (e.g., AUTH-11, URL-3) as a markdown heading for anchor linking.
 
-Note: \<PACK\> refers to the short form of the containing file's name.
+Note: \<PACK\> refers to the short form of the package name.
 
 ### META-12
 
@@ -156,14 +137,6 @@ The precondition and trigger clauses (Where, While, When; see [META-6](#meta-6))
 ### META-15
 
 Each spec package shall minimize references to the containing project. When a project-specific reference is essential to a package's intent, it shall be documented in the package's `## Intent` section.
-
-### META-31
-
-Files under `interactions/` shall describe how multiple spec packages work together.
-
-- Each file shall cover one behavior or scenario and be named after it; file names shall not be concatenations of package names.
-- Each file shall follow the item-file conventions: an H1 with a short form ([META-10](#meta-10)), an `## Intent` section ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6)); other sections are free-form.
-- Integration and acceptance test items that span multiple packages shall live here, each carrying a `Verifies:` line ([META-20](#meta-20)) citing items from two or more packages.
 
 ## Citation
 
@@ -188,7 +161,7 @@ IRs shall not be cited by any spec except `map.md`.
 
 Each test item shall include one `Verifies:` metadata line immediately below its item ID heading.
 
-The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the behavior items that the test item verifies: same-file anchors for a package's own Verification items, and `packages/` citations for interaction test items.
+The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the user or dev items that the test item verifies.
 
 ## Authoring language
 

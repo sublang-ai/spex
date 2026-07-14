@@ -1,0 +1,17 @@
+{
+  "specs/dev/git.md": [
+    "sha256-1b194304866d05580de8b2d0caa3454aa772e876fb3dee1f6c5d637c9e9a42b2"
+  ],
+  "specs/dev/licensing.md": [
+    "sha256-ff6ce317bf51fb2f4a20dde8790a79f2a1237f6b5835c74e619f6e3d1647ab50",
+    "sha256-f0690fbe5613097f3d0d1196fec5323a21a6b62bc3875068c38d09c74c5658c4",
+    "sha256-3ea1ba444666c05895c05d7f33056137b5dab8f6cdbdb80eb057a338fdf8eb4b"
+  ],
+  "specs/test/licensing.md": [
+    "sha256-075e5782e80c7068deb55c21bfc43a1214a85945ed535d95f6ceadbbc9fa187f"
+  ],
+  "specs/user/.gitkeep": [
+    "sha256-01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  ]
+}

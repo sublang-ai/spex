@@ -10,8 +10,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `spex lint` checks the specs tree: layout, package file sections,
+  item ID uniqueness and prefixes, `Verifies:` lines, citations (files
+  and anchors), reference markers, record sections, and the `map.md`
+  index. Errors exit non-zero; warnings do not.
+- `spex scaffold --update` migrates the legacy `specs/user`/`dev`/`test`
+  layout to the new structure: each package's item files are merged
+  into a single `specs/packages/<name>.md` (`## External Behavior`,
+  `## Internal Behavior`, `## Verification` sections; heading levels
+  demoted; reference markers renumbered), citations across `specs/`
+  are rewritten to the new paths, a customized `map.md` is
+  restructured in place, and a prompt for filling
+  `specs/interactions/` with cross-package behavior is printed for
+  your AI agent.
+
 ### Changed
 
+- The spec structure (DR-000, META-1/9/10/20/21, new META-28/31) now
+  has two item directories: `specs/packages/` (one file per spec
+  package) and `specs/interactions/` (cross-package behaviors,
+  scenarios, and the integration/acceptance tests that span packages).
+  Fresh scaffolds create the new layout; bundled seeds moved to
+  `specs/packages/git.md` and `specs/packages/licensing.md`.
+- `spex scaffold --update` now also refreshes the managed specs
+  section of an existing `CLAUDE.md`/`AGENTS.md` (absent files are not
+  created).
+- The CLI now depends on unified/remark-parse/remark-gfm and
+  github-slugger to parse Markdown reliably during migration and
+  linting; it is no longer dependency-free.
 - The release workflow now gates publishing on CI: it waits for and
   requires the CI workflow (`ci.yml`) to conclude successfully for the
   tagged commit before publishing to npm or creating the GitHub

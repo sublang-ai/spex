@@ -69,20 +69,25 @@ the file stays portable between the app and the CLI.
 ## The scaffold CLI
 
 `@sublang/spex` seeds the spec convention used across the SubLang
-repos — decision records, iteration records, and user/dev/test spec
-items that AI agents build against:
+repos — decision records, iteration records, spec packages (one file
+per package with External Behavior / Internal Behavior / Verification
+sections), and cross-package interaction specs that AI agents build
+against:
 
 ```sh
 npx @sublang/spex scaffold            # seed specs/ in the current repo
-npx @sublang/spex scaffold --update   # refresh framework files later
+npx @sublang/spex scaffold --update   # refresh templates, migrate legacy layouts
+npx @sublang/spex lint                # check structure, IDs, and citations
 ```
 
-It is dependency-free and idempotent: existing spec files are never
-overwritten (`CLAUDE.md`/`AGENTS.md` only get their managed specs
-section added or refreshed). `--update` requires a clean `specs/` tree
-and warns when it replaces locally modified framework files, so your
-previous version stays recoverable in git history. `--lang zh` selects
-the bundled Chinese templates.
+It is idempotent: existing spec files are never overwritten
+(`CLAUDE.md`/`AGENTS.md` only get their managed specs section added or
+refreshed). `--update` requires a clean `specs/` tree, migrates the
+legacy `user/`/`dev/`/`test/` layout into `specs/packages/` +
+`specs/interactions/` (merging files and rewriting citations with a
+real Markdown parser), and warns when it replaces locally modified
+framework files, so your previous version stays recoverable in git
+history. `--lang zh` selects the bundled Chinese templates.
 
 ## Monorepo layout
 
