@@ -2,13 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import { lint } from "./lint.js";
 import { scaffold } from "./scaffold.js";
 
 const USAGE = `Usage: spex <command> [options]
 
 Commands:
   scaffold [--lang <code>] [<path>]   Create specs directory structure
-  scaffold --update                  Refresh scaffold-provided specs templates`;
+  scaffold --update                  Refresh scaffold-provided specs templates
+                                     and migrate legacy layouts
+  lint [<path>]                      Check the specs tree structure, item IDs,
+                                     and citations`;
 
 function main(): void {
   const args = process.argv.slice(2);
@@ -22,6 +26,9 @@ function main(): void {
   switch (command) {
     case "scaffold":
       scaffold(args.slice(1));
+      break;
+    case "lint":
+      lint(args.slice(1));
       break;
     default:
       console.error(`Unknown command: ${command}\n`);

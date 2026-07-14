@@ -19,9 +19,8 @@ const EXPECTED_DIRS = [
   "specs",
   "specs/decisions",
   "specs/iterations",
-  "specs/user",
-  "specs/dev",
-  "specs/test",
+  "specs/packages",
+  "specs/interactions",
 ];
 
 describe("createSpecsStructure", () => {
@@ -36,6 +35,10 @@ describe("createSpecsStructure", () => {
       createSpecsStructure(dir);
       for (const d of EXPECTED_DIRS) {
         assert.ok(existsSync(join(dir, d)), `missing: ${d}`);
+      }
+      // The legacy group directories are gone from fresh scaffolds.
+      for (const legacy of ["specs/user", "specs/dev", "specs/test"]) {
+        assert.ok(!existsSync(join(dir, legacy)), `unexpected: ${legacy}`);
       }
     } finally {
       rmSync(dir, { recursive: true });

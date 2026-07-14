@@ -92,8 +92,16 @@ function processFile(
  * exists, only that file is updated. Section replacement uses
  * case-sensitive match on "## Specs (Source of Truth)".
  * SCAF-5: replace in place or skip when identical.
+ *
+ * With `createMissing: false` (the --update flow), absent files stay
+ * absent; only existing agent files get their managed section
+ * refreshed.
  */
-export function appendAgentSpecs(basePath: string): void {
+export function appendAgentSpecs(
+  basePath: string,
+  options: { createMissing?: boolean } = {},
+): void {
+  const createMissing = options.createMissing ?? true;
   const scaffoldDir = getScaffoldDir();
   const specsContent = readFileSync(
     join(scaffoldDir, "agent-specs.txt"),
@@ -107,7 +115,7 @@ export function appendAgentSpecs(basePath: string): void {
     const fileName = AGENT_FILES[i];
     const filePath = join(basePath, fileName);
     const fileExists = presence[i];
-    const shouldCreate = neitherExists;
+    const shouldCreate = createMissing && neitherExists;
 
     const result = processFile(filePath, specsContent, fileExists, shouldCreate);
 

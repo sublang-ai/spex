@@ -41,6 +41,46 @@ function listBundledManifestFiles(): string[] {
   return files.sort();
 }
 
+describe("legacy file-history manifest", () => {
+  const manifestPath = join(REPO_ROOT, "scaffold", ".legacy-file-history.json");
+
+  it("holds only paths that no longer ship, with non-empty histories", () => {
+    const legacy = JSON.parse(readFileSync(manifestPath, "utf-8")) as Record<
+      string,
+      string[]
+    >;
+    const bundled = new Set(listBundledManifestFiles());
+    assert.ok(Object.keys(legacy).length > 0, "legacy manifest is empty");
+    for (const [relPath, hashes] of Object.entries(legacy)) {
+      assert.ok(!bundled.has(relPath), `${relPath} still ships in the bundle`);
+      assert.equal(
+        existsSync(join(SCAFFOLD_ROOT, relPath)),
+        false,
+        `${relPath} exists on disk but is in the legacy manifest`,
+      );
+      assert.ok(hashes.length > 0, `${relPath}: empty history`);
+      assert.equal(
+        new Set(hashes).size,
+        hashes.length,
+        `${relPath}: duplicate hash entries`,
+      );
+    }
+  });
+
+  it("is disjoint from the live manifest", () => {
+    const legacy = JSON.parse(readFileSync(manifestPath, "utf-8")) as Record<
+      string,
+      string[]
+    >;
+    const live = JSON.parse(
+      readFileSync(join(REPO_ROOT, "scaffold", ".file-history.json"), "utf-8"),
+    ) as Record<string, string[]>;
+    for (const relPath of Object.keys(legacy)) {
+      assert.ok(!(relPath in live), `${relPath} is in both manifests`);
+    }
+  });
+});
+
 describe("file-history manifest (SCAF-21)", () => {
   it("matches the bundled scaffold/specs file set", () => {
     const manifestPath = join(REPO_ROOT, "scaffold", ".file-history.json");

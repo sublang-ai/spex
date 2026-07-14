@@ -3,7 +3,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execSync, spawnSync } from "node:child_process";
+import { execFileSync, execSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -21,6 +21,7 @@ import {
   canonicalContentHash,
   getFileHistory,
   getFrameworkSpecFiles,
+  getLegacyFileHistory,
 } from "./copy-templates.js";
 
 const CLI = resolve(
@@ -36,6 +37,7 @@ const PRE_LOCALIZATION_META = resolve(
   "__fixtures__",
   "pre-localization-meta.md",
 );
+const LEGACY_SCAFFOLD = resolve(ROOT, "src", "__fixtures__", "legacy-scaffold");
 
 function run(
   args: string[],
@@ -91,12 +93,57 @@ function overlayPath(language: string, relPath: string): string {
   return join(ROOT, "scaffold", "i18n", language, relPath);
 }
 
+function legacyFixture(relPath: string): string {
+  return join(LEGACY_SCAFFOLD, relPath);
+}
+
+function write(dir: string, relPath: string, content: string | Buffer): void {
+  const target = join(dir, relPath);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, content);
+}
+
 function writeBundledFrameworkFileSet(dir: string): void {
   for (const relPath of getFrameworkSpecFiles()) {
-    const target = join(dir, relPath);
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, readFileSync(bundledPath(relPath)));
+    write(dir, relPath, readFileSync(bundledPath(relPath)));
   }
+}
+
+/** A committed repo on the legacy user/dev/test layout, from fixtures. */
+function makeLegacyRepo(): string {
+  const dir = makeTmp();
+  initGit(dir);
+  write(dir, "specs/meta.md", readFileSync(legacyFixture("specs/meta.md")));
+  write(dir, "specs/map.md", readFileSync(legacyFixture("specs/map.md")));
+  write(
+    dir,
+    "specs/iterations/000-spdx-headers.md",
+    readFileSync(legacyFixture("specs/iterations/000-spdx-headers.md")),
+  );
+  write(
+    dir,
+    "specs/dev/git.md",
+    readFileSync(legacyFixture("specs/dev/git.md")),
+  );
+  write(
+    dir,
+    "specs/dev/licensing.md",
+    readFileSync(legacyFixture("specs/dev/licensing.md")),
+  );
+  write(
+    dir,
+    "specs/test/licensing.md",
+    readFileSync(legacyFixture("specs/test/licensing.md")),
+  );
+  write(dir, "specs/user/.gitkeep", "");
+  // Frameworks are refreshed unconditionally, so the current bundled
+  // DR-000 stands in for whatever old version the repo carried.
+  write(
+    dir,
+    "specs/decisions/000-spec-structure-format.md",
+    readFileSync(bundledPath("specs/decisions/000-spec-structure-format.md")),
+  );
+  return dir;
 }
 
 function toCrlf(text: string): string {
@@ -119,16 +166,25 @@ describe("CLI integration", () => {
       assert.ok(existsSync(join(dir, "specs")));
       assert.ok(existsSync(join(dir, "specs", "decisions")));
       assert.ok(existsSync(join(dir, "specs", "iterations")));
-      assert.ok(existsSync(join(dir, "specs", "user")));
-      assert.ok(existsSync(join(dir, "specs", "dev")));
-      assert.ok(existsSync(join(dir, "specs", "test")));
+      assert.ok(existsSync(join(dir, "specs", "packages")));
+      assert.ok(existsSync(join(dir, "specs", "interactions")));
+      for (const legacy of ["user", "dev", "test"]) {
+        assert.ok(
+          !existsSync(join(dir, "specs", legacy)),
+          `legacy specs/${legacy} must not be created`,
+        );
+      }
 
       // Template files
       assert.ok(existsSync(join(dir, "specs", "map.md")));
       assert.ok(existsSync(join(dir, "specs", "meta.md")));
-      assert.ok(existsSync(join(dir, "specs", "user", ".gitkeep")));
+      assert.ok(existsSync(join(dir, "specs", "packages", "git.md")));
+      assert.ok(existsSync(join(dir, "specs", "packages", "licensing.md")));
+      assert.ok(existsSync(join(dir, "specs", "interactions", ".gitkeep")));
       assert.ok(
-        existsSync(join(dir, "specs", "decisions", "000-spec-structure-format.md")),
+        existsSync(
+          join(dir, "specs", "decisions", "000-spec-structure-format.md"),
+        ),
       );
 
       // Agent files
@@ -136,6 +192,21 @@ describe("CLI integration", () => {
       assert.ok(existsSync(join(dir, "AGENTS.md")));
       const claude = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(claude.includes("## Specs (Source of Truth)"));
+      assert.ok(claude.includes("@specs/packages"));
+      assert.ok(claude.includes("@specs/interactions"));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // A freshly scaffolded tree satisfies the linter by construction.
+  it("scaffold output lints clean", () => {
+    const dir = makeTmp();
+    try {
+      assert.equal(run(["scaffold", dir]).exitCode, 0);
+      const result = run(["lint", dir]);
+      assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+      assert.match(result.stdout, /no problems found/);
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -224,18 +295,18 @@ describe("CLI integration", () => {
     assert.ok(result.stderr.includes("Unknown command"));
   });
 
-  // Acceptance: --help exits zero
+  // Acceptance: --help exits zero and lists both commands
   it("--help prints usage and exits zero", () => {
     const result = run(["--help"]);
     assert.equal(result.exitCode, 0);
     assert.ok(result.stdout.includes("scaffold"));
+    assert.ok(result.stdout.includes("lint"));
   });
 
   // Acceptance: scaffold without path in git repo uses repo root
   it("scaffold without path resolves to git repo root", () => {
     const dir = makeTmp();
     try {
-      // Init a git repo in the temp dir
       initGit(dir);
 
       const result = run(["scaffold"], { cwd: dir });
@@ -260,8 +331,8 @@ describe("CLI integration", () => {
         readFileSync(overlayPath("zh", "specs/map.md")),
       );
       assert.deepEqual(
-        readFileSync(join(dir, "specs", "dev", "git.md")),
-        readFileSync(bundledPath("specs/dev/git.md")),
+        readFileSync(join(dir, "specs", "packages", "git.md")),
+        readFileSync(bundledPath("specs/packages/git.md")),
       );
       assert.ok(
         readFileSync(join(dir, "specs", "meta.md"), "utf-8").includes(
@@ -293,7 +364,9 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--lang", "en", dir]);
       assert.notEqual(result.exitCode, 0);
-      assert.ok(result.stderr.includes("does not match existing authoring language zh"));
+      assert.ok(
+        result.stderr.includes("does not match existing authoring language zh"),
+      );
       assert.deepEqual(readFileSync(join(dir, "specs", "map.md")), before);
     } finally {
       rmSync(dir, { recursive: true });
@@ -303,7 +376,9 @@ describe("CLI integration", () => {
   it("scaffold --update rejects --lang", () => {
     const dir = makeTmp();
     try {
-      const result = run(["scaffold", "--update", "--lang", "zh"], { cwd: dir });
+      const result = run(["scaffold", "--update", "--lang", "zh"], {
+        cwd: dir,
+      });
       assert.notEqual(result.exitCode, 0);
       assert.ok(result.stderr.includes("--update does not accept --lang"));
     } finally {
@@ -324,11 +399,59 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.equal(parseIndicators(result.stdout).get("specs/map.md"), "updated");
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/map.md"),
+        "updated",
+      );
       assert.deepEqual(
         readFileSync(join(dir, "specs", "map.md")),
         readFileSync(overlayPath("zh", "specs/map.md")),
       );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // A zh legacy tree migrates to the zh overlays and new packages.
+  it("update: zh legacy tree migrates to zh overlays and bundled packages", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      write(
+        dir,
+        "specs/meta.md",
+        readFileSync(legacyFixture("i18n/zh/specs/meta.md")),
+      );
+      write(
+        dir,
+        "specs/map.md",
+        readFileSync(legacyFixture("i18n/zh/specs/map.md")),
+      );
+      write(
+        dir,
+        "specs/dev/git.md",
+        readFileSync(legacyFixture("specs/dev/git.md")),
+      );
+      gitCommit(dir, "zh legacy tree");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "meta.md")),
+        readFileSync(overlayPath("zh", "specs/meta.md")),
+      );
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "map.md")),
+        readFileSync(overlayPath("zh", "specs/map.md")),
+      );
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "packages", "git.md")),
+        readFileSync(bundledPath("specs/packages/git.md")),
+      );
+      assert.equal(existsSync(join(dir, "specs", "dev")), false);
+
+      const lint = run(["lint", dir]);
+      assert.equal(lint.exitCode, 0, lint.stdout);
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -347,7 +470,10 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "unchanged");
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/meta.md"),
+        "unchanged",
+      );
       assert.deepEqual(readFileSync(target), before);
     } finally {
       rmSync(dir, { recursive: true });
@@ -368,16 +494,17 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "unchanged");
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/meta.md"),
+        "unchanged",
+      );
       assert.deepEqual(readFileSync(target), before);
     } finally {
       rmSync(dir, { recursive: true });
     }
   });
 
-  // SCAF-24 cell: framework, hash not in history (user-modified). SCAF-35:
-  // overwrite still happens, but a warning names the file and points to
-  // reviewing/reconciling the replaced content.
+  // SCAF-24 cell: framework, hash not in history (user-modified).
   it("update: framework user-modified → (overwritten — user-modified), warns, bytes equal bundled", () => {
     const dir = makeTmp();
     try {
@@ -395,7 +522,10 @@ describe("CLI integration", () => {
         parseIndicators(result.stdout).get("specs/meta.md"),
         "overwritten — user-modified",
       );
-      assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/meta.md")));
+      assert.deepEqual(
+        readFileSync(target),
+        readFileSync(bundledPath("specs/meta.md")),
+      );
 
       // SCAF-18: a warning names the replaced file and points to reconciliation.
       assert.match(result.stderr, /WARNING/);
@@ -407,13 +537,10 @@ describe("CLI integration", () => {
   });
 
   // SCAF-24 cell: framework, hash in history but not current (older pristine).
-  // SCAF-35: a pre-localization specs tree (no authoring-language declaration)
-  // updates cleanly — resolves to en, refreshes quietly, and does not warn.
+  // SCAF-35: a pre-localization specs tree updates cleanly without warning.
   it("update: pre-localization framework (older pristine) → (updated), no warning", () => {
     const dir = makeTmp();
     try {
-      // The fixture is a genuine prior bundled meta.md: recognized in history,
-      // not the current version, and predating the authoring-language marker.
       const fixture = readFileSync(PRE_LOCALIZATION_META);
       const fixtureHash = canonicalContentHash(fixture);
       const history = getFileHistory("specs/meta.md");
@@ -439,8 +566,14 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "updated");
-      assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/meta.md")));
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/meta.md"),
+        "updated",
+      );
+      assert.deepEqual(
+        readFileSync(target),
+        readFileSync(bundledPath("specs/meta.md")),
+      );
 
       // Updated cleanly: no replaced-user-content warning.
       assert.doesNotMatch(result.stderr, /WARNING/);
@@ -457,13 +590,13 @@ describe("CLI integration", () => {
       run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
-      const target = join(dir, "specs", "dev", "git.md");
+      const target = join(dir, "specs", "packages", "git.md");
       const before = readFileSync(target);
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/dev/git.md"),
+        parseIndicators(result.stdout).get("specs/packages/git.md"),
         "unchanged",
       );
       assert.deepEqual(readFileSync(target), before);
@@ -479,7 +612,7 @@ describe("CLI integration", () => {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
 
-      const target = join(dir, "specs", "dev", "git.md");
+      const target = join(dir, "specs", "packages", "git.md");
       writeFileSync(target, toCrlf(readFileSync(target, "utf-8")));
       gitCommit(dir, "initial specs with crlf seed");
       const before = readFileSync(target);
@@ -487,7 +620,7 @@ describe("CLI integration", () => {
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/dev/git.md"),
+        parseIndicators(result.stdout).get("specs/packages/git.md"),
         "unchanged",
       );
       assert.deepEqual(readFileSync(target), before);
@@ -496,24 +629,27 @@ describe("CLI integration", () => {
     }
   });
 
-  // SCAF-24 cell: seed, hash in history but not current. .gitkeep history is
-  // [prior 1-byte "\n", current 0-byte ""] — set the working tree to the prior.
+  // SCAF-24 cell: seed, hash in history but not current. The map.md
+  // history holds the legacy-layout versions.
   it("update: seed at prior bundled version → (updated), bytes equal bundled current", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
-      const target = join(dir, "specs", "user", ".gitkeep");
-      writeFileSync(target, "\n");
-      gitCommit(dir, "initial specs with prior gitkeep");
+      const target = join(dir, "specs", "map.md");
+      writeFileSync(target, readFileSync(legacyFixture("specs/map.md")));
+      gitCommit(dir, "initial specs with prior map");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        parseIndicators(result.stdout).get("specs/user/.gitkeep"),
+        parseIndicators(result.stdout).get("specs/map.md"),
         "updated",
       );
-      assert.deepEqual(readFileSync(target), readFileSync(bundledPath("specs/user/.gitkeep")));
+      assert.deepEqual(
+        readFileSync(target),
+        readFileSync(bundledPath("specs/map.md")),
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -554,8 +690,6 @@ describe("CLI integration", () => {
       run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
-      // specs/iterations/ was never in the legacy items layout, so this
-      // exercises (created) without a combined migration indicator.
       const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
       execSync("git rm specs/iterations/000-spdx-headers.md", {
         cwd: dir,
@@ -580,207 +714,379 @@ describe("CLI integration", () => {
     }
   });
 
-  it("update: legacy specs/items layout migrates to flat item directories", () => {
+  // The interactions .gitkeep is never resurrected into a filled dir.
+  it("update: removed interactions/.gitkeep stays removed when files exist", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
-      mkdirSync(join(dir, "specs", "decisions"), { recursive: true });
-      mkdirSync(join(dir, "specs", "iterations"), { recursive: true });
-      mkdirSync(join(dir, "specs", "items", "dev"), { recursive: true });
-      mkdirSync(join(dir, "specs", "items", "user", "custom"), {
-        recursive: true,
-      });
-
-      writeFileSync(
-        join(dir, "specs", "meta.md"),
-        readFileSync(bundledPath("specs/meta.md")),
+      run(["scaffold"], { cwd: dir });
+      rmSync(join(dir, "specs", "interactions", ".gitkeep"));
+      write(
+        dir,
+        "specs/interactions/login-flow.md",
+        "# LF: Login Flow\n\n## Intent\n\nEnd-to-end login.\n",
       );
-      writeFileSync(
-        join(dir, "specs", "decisions", "000-spec-structure-format.md"),
-        readFileSync(
-          bundledPath("specs/decisions/000-spec-structure-format.md"),
-        ),
-      );
-      writeFileSync(
-        join(dir, "specs", "items", "dev", "git.md"),
-        readFileSync(bundledPath("specs/dev/git.md")),
-      );
-      writeFileSync(
-        join(dir, "specs", "items", "user", "custom", "thing.md"),
-        "# Custom thing\n",
-      );
-      gitCommit(dir, "legacy scaffold layout");
+      gitCommit(dir, "filled interactions");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        existsSync(join(dir, "specs", "interactions", ".gitkeep")),
+        false,
+        ".gitkeep must not be resurrected",
+      );
+      assert.equal(
+        parseIndicators(result.stdout).has("specs/interactions/.gitkeep"),
+        false,
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // Package-layout migration: pristine legacy seeds take the bundled
+  // fast path with a combined indicator.
+  it("update: pristine legacy seeds → bundled packages, combined indicator", () => {
+    const dir = makeLegacyRepo();
+    try {
+      const gitHash = canonicalContentHash(
+        readFileSync(legacyFixture("specs/dev/git.md")),
+      );
+      assert.ok(
+        getLegacyFileHistory("specs/dev/git.md").includes(gitHash),
+        "fixture must be a recognized legacy bundled version",
+      );
+      gitCommit(dir, "legacy tree");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+
+      const indicators = parseIndicators(result.stdout);
+      assert.equal(
+        indicators.get("specs/packages/git.md"),
+        "migrated from specs/dev/git.md",
+      );
+      assert.equal(
+        indicators.get("specs/packages/licensing.md"),
+        "migrated from specs/dev/licensing.md, specs/test/licensing.md",
+      );
       assert.deepEqual(
-        result.stdout
-          .split("\n")
-          .filter((line) => line.includes("specs/dev/git.md")),
-        ["  specs/dev/git.md (migrated from specs/items/dev/git.md)"],
+        readFileSync(join(dir, "specs", "packages", "git.md")),
+        readFileSync(bundledPath("specs/packages/git.md")),
       );
-      const customMigrationLine =
-        "  specs/user/custom/thing.md (migrated from specs/items/user/custom/thing.md)";
-      assert.ok(result.stdout.includes(customMigrationLine));
-      assert.ok(
-        result.stdout.indexOf(customMigrationLine) <
-          result.stdout.indexOf("  specs/meta.md"),
+      assert.deepEqual(
+        readFileSync(join(dir, "specs", "packages", "licensing.md")),
+        readFileSync(bundledPath("specs/packages/licensing.md")),
       );
-      assert.ok(result.stdout.trimEnd().endsWith("```"));
-      assert.ok(!result.stdout.includes("Legacy specs/items layout migrated:"));
+      // Legacy dirs are gone, including the pristine .gitkeep.
+      for (const legacy of ["user", "dev", "test"]) {
+        assert.equal(existsSync(join(dir, "specs", legacy)), false, legacy);
+      }
+
+      const lint = run(["lint", dir]);
+      assert.equal(lint.exitCode, 0, lint.stdout);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // Package-layout migration: customized legacy files merge into one
+  // package file; citations and the map are rewritten.
+  it("update: custom packages merge with citation rewrite and map restructure", () => {
+    const dir = makeLegacyRepo();
+    try {
+      write(
+        dir,
+        "specs/user/auth.md",
+        `# AUTH: User-Facing Auth Behavior
+
+## Intent
+
+User-visible auth behavior.
+
+## Login
+
+### AUTH-1
+
+When credentials are valid, the system shall create a session.
+`,
+      );
+      write(
+        dir,
+        "specs/dev/auth.md",
+        `# AUTH: Auth Implementation Requirements
+
+## Intent
+
+Auth implementation requirements.
+
+## Store
+
+### AUTH-2
+
+Where a session exists per [AUTH-1](../user/auth.md#auth-1), the store shall persist it.
+`,
+      );
+      write(
+        dir,
+        "specs/test/auth.md",
+        `# AUTH: Auth Acceptance Tests
+
+## Intent
+
+Auth acceptance coverage.
+
+## Coverage
+
+### AUTH-3
+Verifies: [AUTH-1](../user/auth.md#auth-1), [AUTH-2](../dev/auth.md#auth-2)
+
+The suite shall assert login persists a session.
+`,
+      );
+      write(
+        dir,
+        "specs/decisions/001-auth.md",
+        `# DR-001: Auth Approach
+
+## Status
+
+Accepted
+
+## Context
+
+See [AUTH-1](../user/auth.md#auth-1).
+
+## Decision
+
+Use sessions.
+
+## Consequences
+
+None.
+`,
+      );
+      // A customized map on the legacy shape gets restructured in place.
+      write(
+        dir,
+        "specs/map.md",
+        `# Spec Map
+
+## Layout
+
+\`\`\`text
+decisions/  Decision records (DRs)
+iterations/ Iteration records (IRs)
+user/       User-visible item files
+dev/        Implementation item files
+test/       Acceptance test item files
+map.md      This index
+meta.md     The spec of specs
+\`\`\`
+
+## Decisions
+
+| ID | File | Summary |
+| --- | --- | --- |
+| DR-001 | [001-auth.md](decisions/001-auth.md) | Auth approach |
+
+## Packages
+
+### AUTH
+
+| Group | File | Summary |
+| --- | --- | --- |
+| user | [auth.md](user/auth.md) | Login behavior |
+| dev | [auth.md](dev/auth.md) | Session store |
+| test | [auth.md](test/auth.md) | Login coverage |
+`,
+      );
+      gitCommit(dir, "legacy tree with custom auth package");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+
+      const indicators = parseIndicators(result.stdout);
+      assert.equal(
+        indicators.get("specs/packages/auth.md"),
+        "migrated from specs/user/auth.md, specs/dev/auth.md, specs/test/auth.md",
+      );
+      assert.equal(
+        indicators.get("specs/decisions/001-auth.md"),
+        "citations rewritten",
+      );
+      assert.equal(
+        indicators.get("specs/map.md"),
+        "restructured for the packages layout",
+      );
+
+      const merged = readFileSync(
+        join(dir, "specs", "packages", "auth.md"),
+        "utf-8",
+      );
+      // Sections in order with demoted topics and items.
+      const sections = [...merged.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
+      assert.deepEqual(sections, [
+        "Intent",
+        "External Behavior",
+        "Internal Behavior",
+        "Verification",
+      ]);
+      assert.match(merged, /\n#### AUTH-1\n/);
+      // Citations collapsed to same-file anchors.
+      assert.match(merged, /\[AUTH-1\]\(#auth-1\), \[AUTH-2\]\(#auth-2\)/);
+
+      // The DR cites the new location.
+      assert.match(
+        readFileSync(join(dir, "specs", "decisions", "001-auth.md"), "utf-8"),
+        /\(\.\.\/packages\/auth\.md#auth-1\)/,
+      );
+
+      // Map: layout block and package table reshaped, Interactions added.
+      const map = readFileSync(join(dir, "specs", "map.md"), "utf-8");
+      assert.match(map, /packages\/ {5}Spec packages/);
+      assert.doesNotMatch(map, /^user\/ /m);
+      assert.match(
+        map,
+        /\| \[auth\.md\]\(packages\/auth\.md\) \| Login behavior; Session store; Login coverage \|/,
+      );
+      assert.match(map, /^## Interactions$/m);
+
+      // The interactions prompt is printed after a migration.
       assert.ok(
-        !result.stdout.includes("Seeds written from bundled templates"),
+        result.stdout.includes(readBundledMarkdown("interactions-prompt.md")),
+      );
+
+      const lint = run(["lint", dir]);
+      assert.equal(lint.exitCode, 0, lint.stdout);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // Conflicts: an existing target keeps the legacy sources untouched.
+  it("update: package migration preserves conflicting targets", () => {
+    const dir = makeLegacyRepo();
+    try {
+      write(dir, "specs/user/auth.md", "# AUTH: Auth\n\n## Intent\n\nA.\n");
+      write(
+        dir,
+        "specs/packages/auth.md",
+        "# AUTH: Auth\n\n## Intent\n\nExisting target.\n\n## External Behavior\n\n### AUTH-1\n\nX shall Y.\n",
+      );
+      gitCommit(dir, "conflicting target");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/user/auth.md"),
+        "kept — target exists at specs/packages/auth.md",
+      );
+      assert.equal(
+        readFileSync(join(dir, "specs", "user", "auth.md"), "utf-8"),
+        "# AUTH: Auth\n\n## Intent\n\nA.\n",
+      );
+      assert.match(
+        readFileSync(join(dir, "specs", "packages", "auth.md"), "utf-8"),
+        /Existing target/,
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // The chained migration: specs/items → flat → packages in one run.
+  it("update: legacy specs/items chains through to packages with one indicator", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      writeBundledFrameworkFileSet(dir);
+      write(
+        dir,
+        "specs/items/dev/git.md",
+        readFileSync(legacyFixture("specs/dev/git.md")),
+      );
+      write(dir, "specs/items/user/custom/thing.md", "# Custom thing\n");
+      gitCommit(dir, "items layout");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+
+      const indicators = parseIndicators(result.stdout);
+      assert.equal(
+        indicators.get("specs/packages/git.md"),
+        "migrated from specs/items/dev/git.md",
+      );
+      assert.equal(
+        indicators.get("specs/packages/custom/thing.md"),
+        "migrated from specs/items/user/custom/thing.md",
       );
       assert.equal(existsSync(join(dir, "specs", "items")), false);
+      assert.equal(existsSync(join(dir, "specs", "user")), false);
       assert.deepEqual(
-        readFileSync(join(dir, "specs", "dev", "git.md")),
-        readFileSync(bundledPath("specs/dev/git.md")),
-      );
-      assert.equal(
-        readFileSync(join(dir, "specs", "user", "custom", "thing.md"), "utf-8"),
-        "# Custom thing\n",
+        readFileSync(join(dir, "specs", "packages", "git.md")),
+        readFileSync(bundledPath("specs/packages/git.md")),
       );
     } finally {
       rmSync(dir, { recursive: true });
     }
   });
 
-  it("update: migrated current seed reports migration once", () => {
+  // Customized legacy seed content merges instead of being replaced.
+  it("update: customized legacy seed merges and reports kept — user-modified", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
       writeBundledFrameworkFileSet(dir);
-      mkdirSync(join(dir, "specs", "items", "dev"), { recursive: true });
-      writeFileSync(
-        join(dir, "specs", "items", "dev", "git.md"),
-        readFileSync(bundledPath("specs/dev/git.md")),
+      write(
+        dir,
+        "specs/dev/git.md",
+        "# GIT: Git Workflow\n\n## Intent\n\nCustom git rules.\n\n## Commits\n\n### GIT-1\n\nCommits shall be signed.\n",
       );
-      gitCommit(dir, "legacy scaffold layout with current seed");
+      gitCommit(dir, "customized git seed");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.deepEqual(
-        result.stdout
-          .split("\n")
-          .filter((line) => line.includes("specs/dev/git.md")),
-        ["  specs/dev/git.md (migrated from specs/items/dev/git.md)"],
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/packages/git.md"),
+        "migrated from specs/dev/git.md; kept — user-modified",
       );
-      assert.deepEqual(
-        readFileSync(join(dir, "specs", "dev", "git.md")),
-        readFileSync(bundledPath("specs/dev/git.md")),
+      const merged = readFileSync(
+        join(dir, "specs", "packages", "git.md"),
+        "utf-8",
       );
+      assert.match(merged, /Custom git rules\./);
+      assert.match(merged, /## Internal Behavior/);
+      assert.match(merged, /#### GIT-1/);
+      assert.match(merged, /Commits shall be signed\./);
     } finally {
       rmSync(dir, { recursive: true });
     }
   });
 
-  it("update: migrated stale pristine seed reports migration and refresh once", () => {
-    const dir = makeTmp();
+  // A second run after migration is a no-op.
+  it("update: second run after migration reports no changes", () => {
+    const dir = makeLegacyRepo();
     try {
-      initGit(dir);
-      writeBundledFrameworkFileSet(dir);
-      mkdirSync(join(dir, "specs", "items", "user"), { recursive: true });
-
-      writeFileSync(join(dir, "specs", "items", "user", ".gitkeep"), "\n");
-      gitCommit(dir, "legacy scaffold layout with old gitkeep");
+      write(
+        dir,
+        "specs/user/auth.md",
+        "# AUTH: Auth\n\n## Intent\n\nA.\n\n## Login\n\n### AUTH-1\n\nX shall Y.\n",
+      );
+      gitCommit(dir, "legacy tree");
+      assert.equal(run(["scaffold", "--update"], { cwd: dir }).exitCode, 0);
+      gitCommit(dir, "migrated");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.deepEqual(
-        result.stdout
-          .split("\n")
-          .filter((line) => line.includes("specs/user/.gitkeep")),
-        [
-          "  specs/user/.gitkeep (migrated from specs/items/user/.gitkeep; updated)",
-        ],
-      );
-      assert.deepEqual(
-        readFileSync(join(dir, "specs", "user", ".gitkeep")),
-        readFileSync(bundledPath("specs/user/.gitkeep")),
-      );
-    } finally {
-      rmSync(dir, { recursive: true });
-    }
-  });
-
-  it("update: migrated customized seed reports migration and kept once", () => {
-    const dir = makeTmp();
-    try {
-      initGit(dir);
-      writeBundledFrameworkFileSet(dir);
-      mkdirSync(join(dir, "specs", "items", "dev"), { recursive: true });
-      writeFileSync(
-        join(dir, "specs", "items", "dev", "git.md"),
-        "# Custom git\n",
-      );
-      gitCommit(dir, "legacy scaffold layout with customized seed");
-
-      const result = run(["scaffold", "--update"], { cwd: dir });
-      assert.equal(result.exitCode, 0, result.stderr);
-      assert.deepEqual(
-        result.stdout
-          .split("\n")
-          .filter((line) => line.includes("specs/dev/git.md")),
-        [
-          "  specs/dev/git.md (migrated from specs/items/dev/git.md; kept — user-modified)",
-        ],
-      );
-      assert.equal(
-        readFileSync(join(dir, "specs", "dev", "git.md"), "utf-8"),
-        "# Custom git\n",
-      );
-    } finally {
-      rmSync(dir, { recursive: true });
-    }
-  });
-
-  it("update: legacy specs/items migration preserves conflicting flat targets", () => {
-    const dir = makeTmp();
-    try {
-      initGit(dir);
-      mkdirSync(join(dir, "specs", "decisions"), { recursive: true });
-      mkdirSync(join(dir, "specs", "dev"), { recursive: true });
-      mkdirSync(join(dir, "specs", "items", "dev"), { recursive: true });
-
-      writeFileSync(
-        join(dir, "specs", "meta.md"),
-        readFileSync(bundledPath("specs/meta.md")),
-      );
-      writeFileSync(
-        join(dir, "specs", "decisions", "000-spec-structure-format.md"),
-        readFileSync(
-          bundledPath("specs/decisions/000-spec-structure-format.md"),
-        ),
-      );
-      writeFileSync(join(dir, "specs", "dev", "git.md"), "# Flat target\n");
-      writeFileSync(
-        join(dir, "specs", "items", "dev", "git.md"),
-        "# Legacy source\n",
-      );
-      gitCommit(dir, "legacy and flat scaffold layout");
-
-      const result = run(["scaffold", "--update"], { cwd: dir });
-      assert.equal(result.exitCode, 0, result.stderr);
-      const conflictLine =
-        "  specs/items/dev/git.md (kept — target exists at specs/dev/git.md)";
-      assert.ok(result.stdout.includes(conflictLine));
-      assert.ok(
-        result.stdout.indexOf(conflictLine) <
-          result.stdout.indexOf("  specs/meta.md"),
-      );
-      assert.ok(
-        !result.stdout.includes(
-          "Legacy paths left in place because flat targets already exist:",
-        ),
-      );
-      assert.equal(
-        readFileSync(join(dir, "specs", "dev", "git.md"), "utf-8"),
-        "# Flat target\n",
-      );
-      assert.equal(
-        readFileSync(join(dir, "specs", "items", "dev", "git.md"), "utf-8"),
-        "# Legacy source\n",
-      );
+      const indicators = parseIndicators(result.stdout);
+      for (const [path, indicator] of indicators) {
+        assert.ok(
+          indicator === "unchanged" || indicator === "skipped",
+          `${path}: unexpected indicator (${indicator}) on a migrated tree`,
+        );
+      }
+      assert.doesNotMatch(result.stdout, /migrated from/);
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -804,6 +1110,35 @@ describe("CLI integration", () => {
           `${path} reported (updated) on a freshly scaffolded repo`,
         );
       }
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // --update refreshes existing agent files but creates none.
+  it("update: refreshes the managed section of an existing CLAUDE.md only", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      writeFileSync(
+        join(dir, "CLAUDE.md"),
+        "# Project\n\n## Specs (Source of Truth)\n\nStale section.\n\n## Other\n\nKept.\n",
+      );
+      rmSync(join(dir, "AGENTS.md"));
+      gitCommit(dir, "initial specs");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      const claude = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
+      assert.ok(claude.includes("@specs/packages"));
+      assert.ok(!claude.includes("Stale section."));
+      assert.ok(claude.includes("## Other"));
+      assert.equal(
+        existsSync(join(dir, "AGENTS.md")),
+        false,
+        "--update must not create agent files",
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -864,7 +1199,10 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.equal(parseIndicators(result.stdout).get("specs/meta.md"), "updated");
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/meta.md"),
+        "updated",
+      );
       assert.equal(
         parseIndicators(result.stdout).get(
           "specs/decisions/000-spec-structure-format.md",
@@ -875,18 +1213,9 @@ describe("CLI integration", () => {
         readFileSync(join(dir, "specs", "meta.md")),
         readFileSync(bundledPath("specs/meta.md")),
       );
-      assert.deepEqual(
-        readFileSync(
-          join(dir, "specs", "decisions", "000-spec-structure-format.md"),
-        ),
-        readFileSync(
-          bundledPath("specs/decisions/000-spec-structure-format.md"),
-        ),
-      );
-      assert.equal(readFileSync(join(dir, "specs", "spec-map.md"), "utf-8"), "# Old map\n");
       assert.equal(
-        readFileSync(join(dir, "specs", "user", "meta.md"), "utf-8"),
-        "# Old meta\n",
+        readFileSync(join(dir, "specs", "spec-map.md"), "utf-8"),
+        "# Old map\n",
       );
       assert.equal(
         readFileSync(
@@ -895,38 +1224,106 @@ describe("CLI integration", () => {
         ),
         "# Old decision\n",
       );
+      // user/meta.md is an unrecognized .md under a legacy dir: it
+      // migrates to packages/ rather than being lost.
+      assert.ok(
+        readFileSync(
+          join(dir, "specs", "packages", "meta.md"),
+          "utf-8",
+        ).includes("Old meta"),
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }
   });
 
-  it("scaffold --update creates missing framework parent directories", () => {
+  // lint CLI: clean and failing trees, plus target resolution.
+  it("lint reports errors with file:line and exits non-zero", () => {
     const dir = makeTmp();
     try {
-      initGit(dir);
-      mkdirSync(join(dir, "specs", "user"), { recursive: true });
-      writeFileSync(join(dir, "specs", "spec-map.md"), "# Old map\n");
-      writeFileSync(join(dir, "specs", "user", "meta.md"), "# Old meta\n");
-      gitCommit(dir, "old scaffold specs without decisions");
+      write(
+        dir,
+        "specs/packages/auth.md",
+        "# AUTH: Auth\n\n## Intent\n\nSee [gone](missing.md).\n\n## External Behavior\n\n### OTHER-1\n\nX shall Y.\n",
+      );
+      write(
+        dir,
+        "specs/meta.md",
+        "# META: Spec Definition\n\n## Intent\n\nX.\n",
+      );
+      write(dir, "specs/map.md", "# Spec Map\n");
 
-      const result = run(["scaffold", "--update"], { cwd: dir });
-      assert.equal(result.exitCode, 0, result.stderr);
-      assert.equal(
-        parseIndicators(result.stdout).get(
-          "specs/decisions/000-spec-structure-format.md",
-        ),
-        "updated",
+      const result = run(["lint", dir]);
+      assert.equal(result.exitCode, 1);
+      assert.match(
+        result.stdout,
+        /specs\/packages\/auth\.md:\d+: error cite\/broken-link/,
       );
-      assert.deepEqual(
-        readFileSync(
-          join(dir, "specs", "decisions", "000-spec-structure-format.md"),
-        ),
-        readFileSync(
-          bundledPath("specs/decisions/000-spec-structure-format.md"),
-        ),
-      );
+      assert.match(result.stdout, /error id\/prefix/);
+      assert.match(result.stdout, /\d+ errors?, \d+ warnings?/);
     } finally {
       rmSync(dir, { recursive: true });
     }
+  });
+
+  it("lint flags legacy trees and exits non-zero", () => {
+    const dir = makeLegacyRepo();
+    try {
+      const result = run(["lint", dir]);
+      assert.equal(result.exitCode, 1);
+      assert.match(result.stdout, /structure\/legacy-layout/);
+      assert.match(result.stdout, /spex scaffold --update/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("lint exits non-zero without a specs tree", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["lint", dir]);
+      assert.equal(result.exitCode, 1);
+      assert.match(result.stdout, /no specs\/ directory/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // Packaging: the new bundled assets ship with the npm package.
+  it("npm pack ships the manifests, prompts, and interactions seed", () => {
+    const output = execFileSync("npm", ["pack", "--dry-run", "--json"], {
+      cwd: ROOT,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const [{ files }] = JSON.parse(output) as [{ files: { path: string }[] }];
+    const paths = new Set(files.map((f) => f.path));
+    for (const required of [
+      "scaffold/.file-history.json",
+      "scaffold/.legacy-file-history.json",
+      "scaffold/interactions-prompt.md",
+      "scaffold/update-merge-prompt.md",
+      "scaffold/specs/interactions/.gitkeep",
+      "scaffold/specs/packages/git.md",
+      "scaffold/specs/packages/licensing.md",
+    ]) {
+      assert.ok(paths.has(required), `${required} missing from npm pack`);
+    }
+  });
+
+  // Dogfood: this repository's own specs tree lints clean. Skipped
+  // when the monorepo specs are absent (standalone package checkout).
+  it("repo specs lint clean", (t) => {
+    const repoSpecs = resolve(ROOT, "..", "..", "specs");
+    if (!existsSync(repoSpecs)) {
+      t.skip("monorepo specs/ not present");
+      return;
+    }
+    if (existsSync(join(repoSpecs, "user"))) {
+      t.skip("repo specs not yet migrated to the packages layout");
+      return;
+    }
+    const result = run(["lint", resolve(ROOT, "..", "..")]);
+    assert.equal(result.exitCode, 0, result.stdout);
   });
 });

@@ -27,10 +27,9 @@ const FRAMEWORK_FILES = [
 const SEED_FILES = [
   "specs/map.md",
   "specs/iterations/000-spdx-headers.md",
-  "specs/dev/git.md",
-  "specs/dev/licensing.md",
-  "specs/test/licensing.md",
-  "specs/user/.gitkeep",
+  "specs/packages/git.md",
+  "specs/packages/licensing.md",
+  "specs/interactions/.gitkeep",
 ] as const;
 
 const LEGACY_ITEM_DIRS = [
@@ -54,6 +53,12 @@ export type LegacyItemLayoutResult = {
 type RefreshPristineSeedsOptions = {
   migratedFrom?: ReadonlyMap<string, string>;
   language?: ScaffoldLanguage;
+  /**
+   * Replacement indicator text for user-modified seeds that this run
+   * transformed in place (e.g. a restructured map.md), so one line
+   * reports the seed's true outcome.
+   */
+  indicatorOverrides?: ReadonlyMap<string, string>;
 };
 
 export function isSupportedLanguage(code: string): code is ScaffoldLanguage {
@@ -72,7 +77,7 @@ function getOverlayBase(scaffoldDir: string, language: ScaffoldLanguage): string
   return join(scaffoldDir, "i18n", language);
 }
 
-function listFiles(dir: string): string[] {
+export function listFiles(dir: string): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(dir)) {
     if (entry === ".DS_Store") continue;
@@ -242,6 +247,31 @@ export function getFileHistory(relPath: string): string[] {
   return manifest[relPath] ?? [];
 }
 
+// Hash histories of bundled files that no longer ship (the legacy
+// user/dev/test seeds), so migration can tell an untouched old seed
+// from user-authored content.
+export function getLegacyFileHistory(relPath: string): string[] {
+  const manifestPath = join(getScaffoldDir(), ".legacy-file-history.json");
+  if (!existsSync(manifestPath)) return [];
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Record<
+    string,
+    string[]
+  >;
+  return manifest[relPath] ?? [];
+}
+
+/** isPristine over the legacy manifest (removed bundled paths). */
+export function isLegacyPristine(
+  basePath: string,
+  relPath: string,
+): PristineState {
+  const target = join(basePath, relPath);
+  if (!existsSync(target)) return "missing";
+  return getLegacyFileHistory(relPath).includes(hashFile(target))
+    ? "pristine"
+    : "modified";
+}
+
 function getRecognizedFileHistory(
   relPath: string,
   language: ScaffoldLanguage,
@@ -314,7 +344,7 @@ export function overwriteFrameworkSpecFiles(
 // SCAF-23.
 function formatSeedIndicator(
   relPath: string,
-  indicator: SeedIndicator,
+  indicator: SeedIndicator | string,
   migratedFrom?: ReadonlyMap<string, string>,
 ): string {
   const legacyRelPath = migratedFrom?.get(relPath);
@@ -330,10 +360,20 @@ export function refreshPristineSeeds(
   const language = options.language ?? "en";
   for (const relPath of SEED_FILES) {
     const state = isPristine(basePath, relPath, language);
+    // A .gitkeep only holds its directory open: never resurrect one
+    // after the user filled the directory and removed it.
+    if (
+      state === "missing" &&
+      relPath.endsWith("/.gitkeep") &&
+      existsSync(join(basePath, dirname(relPath))) &&
+      readdirSync(join(basePath, dirname(relPath))).length > 0
+    ) {
+      continue;
+    }
     if (state === "modified") {
       const indicator = formatSeedIndicator(
         relPath,
-        "kept — user-modified",
+        options.indicatorOverrides?.get(relPath) ?? "kept — user-modified",
         options.migratedFrom,
       );
       console.log(`  ${relPath} (${indicator})`);
