@@ -24,19 +24,19 @@ forge adapter, and usage/cost rollups.
 ## Tasks
 
 1. **Core usage rollup** — store.usageByDay + `usage.days` protocol
-   command ([DASH-6](../user/dashboard.md#dash-6)).
+   command ([DASH-6](../packages/dashboard.md#dash-6)).
 
 2. **Attention derivation** — pure UI selector over sessions and
    views, ranked question > failure > idle review
-   ([DASH-1..3](../user/dashboard.md),
-   [DASH-11](../dev/dashboard.md#dash-11)).
+   ([DASH-1..3](../packages/dashboard.md),
+   [DASH-11](../packages/dashboard.md#dash-11)).
 
 3. **Dashboard surface** — attention queue linking into sessions,
    running overview, next-work lists, usage cards
-   ([DASH-4..9](../user/dashboard.md)).
+   ([DASH-4..9](../packages/dashboard.md)).
 
 4. **Tests** — attention fixtures incl. ordering and clearing;
-   day-rollup store test ([DASH-15..18](../test/dashboard.md)).
+   day-rollup store test ([DASH-15..18](../packages/dashboard.md)).
 
 ## Acceptance criteria
 

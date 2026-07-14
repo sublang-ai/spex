@@ -10,6 +10,7 @@ Accepted
 ## Context
 
 Specifications (specs) need a standardized format and structure to support iterative development and collaboration between AI and humans.
+Earlier revisions of this record split each spec package across up to three files (`user/`, `dev/`, `test/`), which forced a reader to open several files to understand one package.
 
 ## Decision
 
@@ -40,15 +41,14 @@ Spex creates the default `specs/` directory under the repo root, with the follow
 | --------- | ------- | ------ |
 | `decisions/` | DRs. Design decisions and rationale. | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | IRs. Implementation plans. | \<NNN\>-\<kebab-case\>.md |
-| `user/` | item files for user-visible behavior. What the system does. | [\<path\>/]\<kebab-case\>.md |
-| `dev/` | item files for system internal behavior. How the system is built. | [\<path\>/]\<kebab-case\>.md |
-| `test/` | item files for acceptance testing. Quality guard for user and dev items. | [\<path\>/]\<kebab-case\>.md |
+| `packages/` | Spec packages: one item file per package. | [\<path\>/]\<kebab-case\>.md |
+| `interactions/` | Cross-package behaviors, scenarios, and their tests. | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
 ### Item syntax
 
-The active `meta.md` defines the GEARS item pattern, clause forms, and GWT mapping.
+The active `meta.md` defines the GEARS [[2]] item pattern, clause forms, and GWT mapping.
 This keeps localized scaffolds aligned with the same framework without restating English-only syntax here.
 
 ### Spec packages
@@ -56,18 +56,21 @@ This keeps localized scaffolds aligned with the same framework without restating
 A spec package is a coherent set of spec items for a *single* intent.
 It is the basic unit for spec composition, reuse, and extension.
 
-A spec package consists of one to three coordinated item files sharing the same relative path and basename.
-The item files are located in `user/`, `dev/`, or `test/` according to their category.
+A spec package is one file under `packages/`, so a developer reads one file to understand one package.
+Each package file carries the sections defined by [META-28](../meta.md#meta-28):
 
-For example, a spec package for generating short URLs may be named `gen-url` and consist of:
+- `## External Behavior` for user-visible behavior — what the system does.
+- `## Internal Behavior` for implementation requirements — how the system is built.
+- `## Verification` for test items that check the package's own claims.
 
-- `specs/user/signing/gen-url.md` for user-facing behaviors (e.g., basic operations, URL format)
-- `specs/dev/signing/gen-url.md` for internal-implementation behaviors (e.g., algorithms)
-- `specs/test/signing/gen-url.md` for tests covering the corresponding user and dev items
+For example, a spec package for generating short URLs may be `specs/packages/signing/gen-url.md`, where `signing/` is a local collection of related packages for development convenience.
 
-Here, `signing/` is a local collection of related spec packages for development convenience.
+### Interactions
 
-`map.md` organizes item files by package.
+Behavior that emerges from multiple packages working together lives in `interactions/`, organized by behavior or scenario per [META-31](../meta.md#meta-31) — never as a concatenation of package names.
+Integration and acceptance tests that span packages are specified there; unit tests are never specified ([META-21](../meta.md#meta-21)).
+
+`map.md` indexes packages and interactions.
 
 ### Citations
 
@@ -78,8 +81,10 @@ IRs may be temporary and must not be cited by DRs or items.
 ## Consequences
 
 - Consistent structure and format across development cycles
-- Clear positions of directories and files
+- One file per package: a single read covers a package's external behavior, internal behavior, and verification
+- Cross-package behavior has a dedicated home instead of being implicit
 - Flexible expression of design and implementation
+- Legacy `user/`/`dev/`/`test/` trees migrate via `spex scaffold --update`
 
 ## References
 

@@ -9,7 +9,7 @@ Accepted
 
 ## Context
 
-- [SHELL-5](../user/app-shell.md#shell-5) mandates native file/directory pickers, but the SHELL dev items keep every app feature on the WebSocket protocol with no Electron IPC — and a sandboxed web page cannot open a native directory dialog or learn an absolute path from a browser picker.
+- [SHELL-5](../packages/app-shell.md#shell-5) mandates native file/directory pickers, but the SHELL dev items keep every app feature on the WebSocket protocol with no Electron IPC — and a sandboxed web page cannot open a native directory dialog or learn an absolute path from a browser picker.
 - v1 shipped manual path entry as the only way to add a project, which the product owner rejected as a critical UX gap.
 
 ## Decision
@@ -27,5 +27,5 @@ Accepted
 ## Consequences
 
 - The renderer stays sandboxed with context isolation; the preload adds one `ipcRenderer.invoke` channel (`spex:pick-directory`) handled by `dialog.showOpenDialog` in the main process.
-- The "no Electron coupling of app features" rule of the SHELL package is preserved in spirit and amended in letter; [SHELL-20](../dev/app-shell.md#shell-20) records the constraint.
+- The "no Electron coupling of app features" rule of the SHELL package is preserved in spirit and amended in letter; [SHELL-20](../packages/app-shell.md#shell-20) records the constraint.
 - Future OS affordances (e.g. drag-and-drop of folders, file reveal) must clear the same bar: impossible from the web platform, feature-detected, no app logic.

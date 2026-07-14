@@ -49,4 +49,4 @@ for the next cycle.
 
 - Root build/test green including the real-shell test.
 - README accurately describes the current feature set
-  ([RELEASE-14](../dev/release.md#release-14) spirit for the app).
+  ([RELEASE-14](../packages/release.md#release-14) spirit for the app).
