@@ -28,23 +28,23 @@ macOS arm64 packaging.
 
 1. **Package scaffolding** — `apps/desktop` with Electron + builder
    devDeps, tsc build for the main process, UI dist staging script
-   ([SHELL-10](../dev/app-shell.md#shell-10)).
+   ([SHELL-10](../packages/app-shell.md#shell-10)).
 
 2. **Main process** — env capture
-   ([SHELL-12](../dev/app-shell.md#shell-12)), core boot with
+   ([SHELL-12](../packages/app-shell.md#shell-12)), core boot with
    userData store path, sandboxed window loading the UI with the
    core URL, single instance
-   ([SHELL-1](../user/app-shell.md#shell-1)), quit safety
-   ([SHELL-6](../user/app-shell.md#shell-6)).
+   ([SHELL-1](../packages/app-shell.md#shell-1)), quit safety
+   ([SHELL-6](../packages/app-shell.md#shell-6)).
 
 3. **Notifications and badge** — record-driven notifications per
    config preferences and attention badge
-   ([SHELL-2..4](../user/app-shell.md#shell-2)); core exposes a
+   ([SHELL-2..4](../packages/app-shell.md#shell-2)); core exposes a
    local event hook for the embedding shell.
 
 4. **Packaging** — electron-builder macOS arm64 unsigned target,
    asar-unpacked agent SDK binaries
-   ([SHELL-13](../dev/app-shell.md#shell-13)); CI env skips
+   ([SHELL-13](../packages/app-shell.md#shell-13)); CI env skips
    Electron binary download.
 
 5. **Unit tests** — env-output parsing and notification mapping.

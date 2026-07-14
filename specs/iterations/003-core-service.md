@@ -32,44 +32,44 @@ Playbook Captain shell behind the WebSocket protocol.
 
 2. **Protocol module** — zod schemas + TS types for every
    client→core command and core→client message
-   ([CORE-12](../dev/core-service.md#core-12),
-   [CORE-13](../dev/core-service.md#core-13)); hello/version
-   handshake shape ([CORE-1](../user/core-service.md#core-1)).
+   ([CORE-12](../packages/core-service.md#core-12),
+   [CORE-13](../packages/core-service.md#core-13)); hello/version
+   handshake shape ([CORE-1](../packages/core-service.md#core-1)).
 
 3. **Config module** — XDG path resolution, YAML load, fail-closed
    validation with launcher parity
-   ([CORE-16](../dev/core-service.md#core-16)), starter seeding
-   ([CORE-3](../user/core-service.md#core-3)), file watch + reload
-   ([CORE-2](../user/core-service.md#core-2)), composition to
+   ([CORE-16](../packages/core-service.md#core-16)), starter seeding
+   ([CORE-3](../packages/core-service.md#core-3)), file watch + reload
+   ([CORE-2](../packages/core-service.md#core-2)), composition to
    runtime options with `<id>-<role>` namespacing; unit tests.
 
 4. **Store module** — better-sqlite3 schema and persistence API for
    sessions, turns, records, usage
-   ([CORE-15](../dev/core-service.md#core-15),
-   [CORE-10](../user/core-service.md#core-10)); unit tests.
+   ([CORE-15](../packages/core-service.md#core-15),
+   [CORE-10](../packages/core-service.md#core-10)); unit tests.
 
 5. **Fake adapter fixture** — scripted cligent adapter driving
    deterministic records incl. hidden ones and usage payloads
-   ([CORE-18](../dev/core-service.md#core-18)).
+   ([CORE-18](../packages/core-service.md#core-18)).
 
 6. **Session manager** — one runtime per project session, captain
    shell with injected loadModule
-   ([CORE-17](../dev/core-service.md#core-17)), record bus with
+   ([CORE-17](../packages/core-service.md#core-17)), record bus with
    hidden filtering at the channel boundary
-   ([CORE-14](../dev/core-service.md#core-14),
-   [CORE-7](../user/core-service.md#core-7),
-   [CORE-8](../user/core-service.md#core-8)), boss turn
+   ([CORE-14](../packages/core-service.md#core-14),
+   [CORE-7](../packages/core-service.md#core-7),
+   [CORE-8](../packages/core-service.md#core-8)), boss turn
    serialization and abort
-   ([CORE-5](../user/core-service.md#core-5),
-   [CORE-6](../user/core-service.md#core-6)).
+   ([CORE-5](../packages/core-service.md#core-5),
+   [CORE-6](../packages/core-service.md#core-6)).
 
 7. **WebSocket server** — loopback endpoint, hello, subscriptions
    (session + debug channels), command dispatch, readiness
-   reporting ([CORE-1](../user/core-service.md#core-1),
-   [CORE-9](../user/core-service.md#core-9)).
+   reporting ([CORE-1](../packages/core-service.md#core-1),
+   [CORE-9](../packages/core-service.md#core-9)).
 
 8. **Integration tests** — end-to-end coverage per
-   [CORE-19..23](../test/core-service.md) over a real WebSocket
+   [CORE-19..23](../packages/core-service.md) over a real WebSocket
    client against the fake adapter.
 
 ## Acceptance criteria

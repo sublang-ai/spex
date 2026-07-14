@@ -31,19 +31,19 @@ scenario review.
 
 1. **Core artifacts command** — resolve stage files next to the
    registry module for both layouts
-   ([PBLIB-24](../dev/playbook-library.md#pblib-24)).
+   ([PBLIB-24](../packages/playbook-library.md#pblib-24)).
 
 2. **Desktop bridge** — preload + `spex:pick-directory` invoke
-   channel ([SHELL-20](../dev/app-shell.md#shell-20)).
+   channel ([SHELL-20](../packages/app-shell.md#shell-20)).
 
 3. **Start view** — Sessions landing per
-   [RUN-25..27](../user/run-view.md#run-25), tab bar with "+".
+   [RUN-25..27](../packages/run-view.md#run-25), tab bar with "+".
 
 4. **Library pipeline view** — stage tabs with availability
-   degradation ([PBLIB-22/23](../user/playbook-library.md#pblib-22)).
+   degradation ([PBLIB-22/23](../packages/playbook-library.md#pblib-22)).
 
 5. **Dashboard organization** — grouping, labels, filter
-   ([DASH-20](../user/dashboard.md#dash-20)).
+   ([DASH-20](../packages/dashboard.md#dash-20)).
 
 6. **Scenario fixes** — from the parallel UX review findings.
 

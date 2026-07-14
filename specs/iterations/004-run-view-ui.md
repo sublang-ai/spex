@@ -27,7 +27,7 @@ core WebSocket protocol.
 1. **Package scaffolding** — Vite + React + TypeScript + Tailwind,
    vitest + testing-library, workspace dependency on
    `@sublang/spex-core` for protocol types
-   ([RUN-13](../dev/run-view.md#run-13)).
+   ([RUN-13](../packages/run-view.md#run-13)).
 
 2. **Protocol client** — WebSocket client with hello/version check,
    promise-based commands, subscription streams, reconnect.
@@ -35,12 +35,12 @@ core WebSocket protocol.
 3. **Record reducer** — fold records into captain lines, per-player
    transcript segments (text deltas, tool use, thinking, cost),
    visible panes, composer state
-   ([RUN-14..18](../dev/run-view.md)).
+   ([RUN-14..18](../packages/run-view.md)).
 
 4. **Run view components** — Captain pane with glyph stream, player
    panes as read-only transcripts, single Boss composer with queue
    indicator, awaitBossReply banner, abort control
-   ([RUN-1..12](../user/run-view.md)).
+   ([RUN-1..12](../packages/run-view.md)).
 
 5. **App shell** — navigation rail, session tabs, connection state,
    light/dark theme.
@@ -49,7 +49,7 @@ core WebSocket protocol.
    scripted mode for UI development and screenshots.
 
 7. **Fixture tests** — reducer and component tests per
-   [RUN-19..23](../test/run-view.md).
+   [RUN-19..23](../packages/run-view.md).
 
 ## Acceptance criteria
 

@@ -10,13 +10,12 @@ Code can be inconsistent with specs during development.
 ## Layout
 
 ```text
-decisions/  Decision records (DRs)
-iterations/ Iteration records (IRs)
-user/       User-visible item files
-dev/        Implementation item files
-test/       Acceptance test item files
-map.md      This index
-meta.md     The spec of specs
+decisions/    Decision records (DRs)
+iterations/   Iteration records (IRs)
+packages/     Spec packages (one file per package)
+interactions/ Cross-package behaviors and tests
+map.md        This index
+meta.md       The spec of specs
 ```
 
 ## Decisions
@@ -35,6 +34,7 @@ meta.md     The spec of specs
 | DR-009 | [009-at-hand-interaction.md](decisions/009-at-hand-interaction.md) | At-hand interaction: no forced surface switches; in-place popovers; global attention badge; browsable history |
 | DR-010 | [010-interface-craft.md](decisions/010-interface-craft.md) | Interface craft: conversation-first, human status, honest async, guardrails, keyboard, accessibility, one visual grammar |
 | DR-011 | [011-project-workspace.md](decisions/011-project-workspace.md) | Project-first workspace: four-surface taxonomy, project palette, per-project tabs + Specs/Repo, interactive spec view |
+| DR-012 | [012-spec-package-files.md](decisions/012-spec-package-files.md) | One-file spec packages + interactions; mechanical migration; spec linter |
 
 ## Iterations
 
@@ -57,96 +57,92 @@ meta.md     The spec of specs
 | IR-014 | [014-public-readiness.md](iterations/014-public-readiness.md) | Blockers/majors from the adversarial public-readiness review |
 | IR-015 | [015-interface-craft.md](iterations/015-interface-craft.md) | DR-010 applied: 51 audit findings across chat, async, keyboard, visual grammar, microcopy |
 | IR-016 | [016-project-workspace.md](iterations/016-project-workspace.md) | DR-011 implemented: workspace IA, project palette, spec view |
+| IR-017 | [017-spec-structure-refactor.md](iterations/017-spec-structure-refactor.md) | DR-012 implemented: packages/interactions layout, migration, linter, repo migration |
 
 ## Packages
 
 ### CORE
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [core-service.md](user/core-service.md) | WebSocket endpoint, config load/seed/reload, session lifecycle, boss turns, record streaming, readiness, persistence |
-| dev | [core-service.md](dev/core-service.md) | Package layout, protocol ownership, hidden-record filtering boundary, store schema, launcher parity, fake-adapter contract tests |
-| test | [core-service.md](test/core-service.md) | Fake-adapter end-to-end session, visibility, config rejection, restart persistence, readiness coverage |
+| File | Summary |
+| --- | --- |
+| [core-service.md](packages/core-service.md) | Headless core service: WebSocket protocol, config load/seed/reload, session lifecycle, record streaming, persistence, readiness — with fake-adapter end-to-end coverage |
 
 ### DASH
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [dashboard.md](user/dashboard.md) | Ranked attention queue, running sessions, issues/PRs work lists, usage rollups, badge count |
-| dev | [dashboard.md](dev/dashboard.md) | Deterministic attention derivation, store/live split, bounded forge caching |
-| test | [dashboard.md](test/dashboard.md) | Attention ordering and clearing, usage rollups, stubbed-forge coverage |
+| File | Summary |
+| --- | --- |
+| [dashboard.md](packages/dashboard.md) | Dashboard: ranked attention queue, running sessions, forge work lists, usage rollups; deterministic derivation from the record stream and store |
 
 ### GIT
 
-| Group | File | Summary |
-| --- | --- | --- |
-| dev | [git.md](dev/git.md) | Commit message format and AI co-authorship trailers |
+| File | Summary |
+| --- | --- |
+| [git.md](packages/git.md) | Commit message format and AI co-authorship trailers |
 
 ### LIC
 
-| Group | File | Summary |
-| --- | --- | --- |
-| dev | [licensing.md](dev/licensing.md) | SPDX header requirements and file-scope rules |
-| test | [licensing.md](test/licensing.md) | Copyright and license header presence checks |
+| File | Summary |
+| --- | --- |
+| [licensing.md](packages/licensing.md) | SPDX header requirements, file-scope rules, and header presence checks |
+
+### LINT
+
+| File | Summary |
+| --- | --- |
+| [lint.md](packages/lint.md) | `spex lint`: structure, package sections, item IDs, Verifies lines, citations and anchors, reference markers, records, map listing |
 
 ### PBLIB
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [playbook-library.md](user/playbook-library.md) | Playbook list, enable/disable, role–profile mapping, compile flow, toolchain guidance |
-| dev | [playbook-library.md](dev/playbook-library.md) | Library-directory compiles, FSM introspection, registry validation, comment-preserving config writes |
-| test | [playbook-library.md](test/playbook-library.md) | Stub-slc compile, missing toolchain, invalid registry, config round-trip coverage |
+| File | Summary |
+| --- | --- |
+| [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, role–profile mapping, slc compile pipeline, registry validation, comment-preserving config writes |
 
 ### PROJ
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [projects.md](user/projects.md) | Register/create projects, repo state cards, forge binding, issues/PRs lists, removal |
-| dev | [projects.md](dev/projects.md) | Store-backed registry, local-git state refresh, adapter-only forge access, gh shell-outs |
-| test | [projects.md](test/projects.md) | Fixture-repo registration, create flow, stubbed-gh forge panels, removal coverage |
+| File | Summary |
+| --- | --- |
+| [projects.md](packages/projects.md) | Projects: register/create local git repos, repo state, gh forge binding and work lists, safe removal |
 
 ### RELEASE
 
-| Group | File | Summary |
-| --- | --- | --- |
-| dev | [release.md](dev/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene |
+| File | Summary |
+| --- | --- |
+| [release.md](packages/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene |
 
 ### RUN
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [run-view.md](user/run-view.md) | Captain pane, read-only player transcripts, Boss composer, awaitBossReply, abort, layout, theme |
-| dev | [run-view.md](dev/run-view.md) | Protocol-only rendering, virtualization, delta coalescing, glyph mapping, composer states |
-| test | [run-view.md](test/run-view.md) | Fixture-stream rendering, hidden-record absence, reply routing, abort coverage |
+| File | Summary |
+| --- | --- |
+| [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, protocol-only rendering, fixture-stream coverage |
 
 ### SCAF
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [scaffold.md](user/scaffold.md) | Target resolution, idempotency, top-level LICENSE emission, update mode, framework warn-before-replace, language selection, agent instructions, error handling |
-| dev | [scaffold.md](dev/scaffold.md) | Directory creation, template copying, root LICENSE copy, localization overlays, update prechecks, framework pristine/modified classification and warning, file-history manifest contract, agent spec appending |
-| test | [scaffold.md](test/scaffold.md) | Update state-matrix, framework warn-before-replace, top-level LICENSE emission, localization, and over-eager-indicator regression coverage |
+| File | Summary |
+| --- | --- |
+| [scaffold.md](packages/scaffold.md) | Scaffold CLI: target resolution, idempotent seeding, LICENSE emission, language selection, --update with legacy-layout migration, citation rewrite, map restructure, prompts |
 
 ### SPECV
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [spec-view.md](user/spec-view.md) | Package tree with per-group counts, item rows, filters + search, citation jumps, records reader, freshness |
-| dev | [spec-view.md](dev/spec-view.md) | specs.get parse contract (keys, order, short forms, notices), specs.read confinement, degradation |
-| test | [spec-view.md](test/spec-view.md) | Fixture-tree parser coverage: nesting, group subsets, mismatches, records, confinement |
+| File | Summary |
+| --- | --- |
+| [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader; specs.get/specs.read parse contract (pre-DR-012 layout; adaptation deferred per IR-017) |
 
 ### SET
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [settings.md](user/settings.md) | Profile editor with launcher-equivalent validation, captain selection, readiness indicators, layout/notification/theme preferences |
-| dev | [settings.md](dev/settings.md) | Shared validation module, comment-preserving YAML round-trip, readiness parity, protocol-driven UI |
-| test | [settings.md](test/settings.md) | Profile CRUD round-trip, validation parity, readiness fixtures, external-edit coverage |
+| File | Summary |
+| --- | --- |
+| [settings.md](packages/settings.md) | Settings: profile editor with launcher-parity validation, captain selection, readiness, comment-preserving YAML round-trip |
 
 ### SHELL
 
-| Group | File | Summary |
-| --- | --- | --- |
-| user | [app-shell.md](user/app-shell.md) | Single-instance window, native notifications, dock badge, native dialogs, quit safety |
-| dev | [app-shell.md](dev/app-shell.md) | Core-in-main over WebSocket, login-shell env capture, asar unpacking, sandboxed renderer, app packaging |
-| test | [app-shell.md](test/app-shell.md) | Packaged-app session, single instance, notification, env-capture coverage |
+| File | Summary |
+| --- | --- |
+| [app-shell.md](packages/app-shell.md) | Desktop shell: single-instance window, notifications, dock badge, core-in-main over WebSocket, packaging; packaged-app acceptance |
+
+## Interactions
+
+| File | Summary |
+| --- | --- |
+| [desktop-session.md](interactions/desktop-session.md) | DESK: a Boss session in the packaged app — shell process topology, core streaming, run-view rendering, one protocol |
+| [forge-work-lists.md](interactions/forge-work-lists.md) | FORGE: Repo tab and Dashboard render the same forge-adapter data |
+| [shared-config-roundtrip.md](interactions/shared-config-roundtrip.md) | CONF: one config file, one fail-closed rule set across Settings, core, and Library |
