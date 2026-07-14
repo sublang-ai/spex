@@ -11,9 +11,8 @@ const DIRS = [
   "specs",
   "specs/decisions",
   "specs/iterations",
-  "specs/user",
-  "specs/dev",
-  "specs/test",
+  "specs/packages",
+  "specs/interactions",
 ];
 
 /**

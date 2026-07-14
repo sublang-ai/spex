@@ -17,12 +17,13 @@ Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing
 ## Layout
 
 ```text
-decisions/    Decision records (DRs)
-iterations/   Iteration records (IRs)
-packages/     Spec packages (one file per package)
-interactions/ Cross-package behaviors and tests
-map.md        This index
-meta.md       The spec of specs
+decisions/  Decision records (DRs)
+iterations/ Iteration records (IRs)
+user/       User-visible behavior
+dev/        Implementation requirements
+test/       Acceptance testing
+map.md      This index
+meta.md     The spec of specs
 ```
 
 ## Decisions
@@ -41,16 +42,13 @@ meta.md       The spec of specs
 
 ### GIT
 
-| File | Summary |
-| --- | --- |
-| [git.md](packages/git.md) | Commit message format and AI co-authorship trailers |
+| Group | File | Summary |
+| --- | --- | --- |
+| dev | [git.md](dev/git.md) | Commit message format and AI co-authorship trailers |
 
 ### LIC
 
-| File | Summary |
-| --- | --- |
-| [licensing.md](packages/licensing.md) | SPDX header requirements and verification checks |
-
-## Interactions
-
-None yet. Add files under `interactions/` as packages start working together.
+| Group | File | Summary |
+| --- | --- | --- |
+| dev | [licensing.md](dev/licensing.md) | SPDX header requirements and file-scope rules |
+| test | [licensing.md](test/licensing.md) | Copyright and license header presence checks |
