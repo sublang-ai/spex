@@ -7,89 +7,91 @@
 
 This spec defines release workflow rules for the project.
 
-## Versioning
+## Internal Behavior
 
-### RELEASE-1
+### Versioning
+
+#### RELEASE-1
 
 The project shall follow Semantic Versioning [[1]]: `MAJOR.MINOR.PATCH` where MAJOR indicates breaking changes, MINOR indicates new features, and PATCH indicates bug fixes.
 
-### RELEASE-2
+#### RELEASE-2
 
 The version in the released package's `package.json` (`packages/cli/package.json`) shall match the git tag (without the `v` prefix). The release workflow shall verify this match before publishing.
 
-## Changelog
+### Changelog
 
-### RELEASE-3
+#### RELEASE-3
 
 All notable changes to the released package shall be documented in its `CHANGELOG.md` (`packages/cli/CHANGELOG.md`) following the Keep a Changelog [[2]] format.
 
-### RELEASE-4
+#### RELEASE-4
 
 When preparing a release, the developer/agent shall review all commits since the last release and ensure all notable changes are documented in the `[Unreleased]` section of `CHANGELOG.md`.
 
-### RELEASE-5
+#### RELEASE-5
 
 When creating a release tag, the developer/agent shall move items from `[Unreleased]` to a new version section in `CHANGELOG.md` with the release date, and update the comparison links at the bottom of the file.
 
-### RELEASE-6
+#### RELEASE-6
 
 Changelog entries shall be grouped under these headings (in order): `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 
-## Release Process
+### Release Process
 
-### RELEASE-7
+#### RELEASE-7
 
 Releases shall be triggered by pushing a git tag matching the pattern `vMAJOR.MINOR.PATCH` (e.g., `v1.0.0`).
 
-### RELEASE-8
+#### RELEASE-8
 
 When a release tag is pushed, the release workflow shall verify the tag version matches `package.json` version, build and validate the package, and extract release notes from `CHANGELOG.md`.
 
-### RELEASE-9
+#### RELEASE-9
 
 When the release workflow publishes to npm, it shall use the `--provenance` flag for supply chain security, generating a signed attestation linking the package to its source repository and build. Authentication shall use npm OIDC trusted publishing — static npm tokens shall not be used.
 
-### RELEASE-10
+#### RELEASE-10
 
 When the release workflow publishes a scoped package, it shall use `--access public` to ensure public availability.
 
-### RELEASE-11
+#### RELEASE-11
 
 When the release workflow completes publishing, it shall create a GitHub release with the extracted changelog notes.
 
-### RELEASE-18
+#### RELEASE-18
 
 When a release tag is pushed, the release workflow shall confirm the CI workflow concluded `success` for the tagged commit before publishing to npm or creating a GitHub release, waiting up to a bounded timeout for the CI workflow to complete. When the CI workflow concludes with any result other than `success`, or the timeout elapses without a successful conclusion, the release workflow shall fail without publishing to npm or creating a GitHub release.
 
-### RELEASE-19
+#### RELEASE-19
 
 Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), tags matching `vMAJOR.MINOR.PATCH` shall release only the `@sublang/spex` package from `packages/cli`, and desktop app releases shall use the disjoint `app-v*` tag namespace.
 
-## Package Hygiene
+### Package Hygiene
 
-### RELEASE-12
+#### RELEASE-12
 
 The `package.json` `files` field shall exclude test files and build artifacts not required at runtime from the published tarball. The `prepublishOnly` script shall build and run tests before publishing.
 
-### RELEASE-13
+#### RELEASE-13
 
 Where the release workflow validates the package, it shall verify that the tarball contains no test files and no source files that are not required at runtime.
 
-### RELEASE-14
+#### RELEASE-14
 
 The published package shall include a `README.md` that documents what the tool does, how to install it, and how to use it. The README shall be kept up to date with the current feature set before each release.
 
-## Pre-release Checklist
+### Pre-release Checklist
 
-### RELEASE-15
+#### RELEASE-15
 
 When preparing a release tag, the developer/agent shall verify that all tests pass and all changes are committed and pushed to `main`.
 
-### RELEASE-16
+#### RELEASE-16
 
 When preparing a release tag, the developer/agent shall verify that `CHANGELOG.md` is updated with the new version and date, and `package.json` version is bumped.
 
-### RELEASE-17
+#### RELEASE-17
 
 When preparing a release tag, the developer/agent shall verify that the tarball contains only production files (e.g., via `npm pack --dry-run`).
 

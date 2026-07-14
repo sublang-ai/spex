@@ -12,13 +12,13 @@ SCAF spec package.
 
 - [x] Node.js project setup (package.json, tsconfig.json, .gitignore updates)
 - [x] CLI entry point with `scaffold` subcommand routing
-- [x] `createSpecsStructure()` per [SCAF-7](../dev/scaffold.md#scaf-7)
-- [x] `copyTemplates()` per [SCAF-8](../dev/scaffold.md#scaf-8), [SCAF-9](../dev/scaffold.md#scaf-9)
-- [x] `appendAgentSpecs()` per [SCAF-10](../dev/scaffold.md#scaf-10)
-- [x] Target resolution per [SCAF-1](../user/scaffold.md#scaf-1), [SCAF-2](../user/scaffold.md#scaf-2), [SCAF-3](../user/scaffold.md#scaf-3)
-- [x] Idempotency per [SCAF-4](../user/scaffold.md#scaf-4)
-- [x] Agent instructions per [SCAF-5](../user/scaffold.md#scaf-5)
-- [x] Error handling per [SCAF-6](../user/scaffold.md#scaf-6)
+- [x] `createSpecsStructure()` per [SCAF-7](../packages/scaffold.md#scaf-7)
+- [x] `copyTemplates()` per [SCAF-8](../packages/scaffold.md#scaf-8), [SCAF-9](../packages/scaffold.md#scaf-9)
+- [x] `appendAgentSpecs()` per [SCAF-10](../packages/scaffold.md#scaf-10)
+- [x] Target resolution per [SCAF-1](../packages/scaffold.md#scaf-1), [SCAF-2](../packages/scaffold.md#scaf-2), [SCAF-3](../packages/scaffold.md#scaf-3)
+- [x] Idempotency per [SCAF-4](../packages/scaffold.md#scaf-4)
+- [x] Agent instructions per [SCAF-5](../packages/scaffold.md#scaf-5)
+- [x] Error handling per [SCAF-6](../packages/scaffold.md#scaf-6)
 - [x] Update-mode indicator reporting refinements:
   absent seeds report `(created)`, post-prompt path summaries are
   omitted, and same-run legacy seed migrations report migration plus
@@ -35,26 +35,26 @@ SCAF spec package.
    `scaffold [<path>]` subcommand dispatching to the scaffold module
 
 3. **Target resolution** — Resolve base path: explicit `<path>` →
-   git repo root → cwd ([SCAF-1](../user/scaffold.md#scaf-1),
-   [SCAF-2](../user/scaffold.md#scaf-2),
-   [SCAF-3](../user/scaffold.md#scaf-3))
+   git repo root → cwd ([SCAF-1](../packages/scaffold.md#scaf-1),
+   [SCAF-2](../packages/scaffold.md#scaf-2),
+   [SCAF-3](../packages/scaffold.md#scaf-3))
 
 4. **createSpecsStructure()** — Create `specs/` and subdirectories
-   ([SCAF-7](../dev/scaffold.md#scaf-7)), skip existing with
-   `(already exists)` ([SCAF-4](../user/scaffold.md#scaf-4))
+   ([SCAF-7](../packages/scaffold.md#scaf-7)), skip existing with
+   `(already exists)` ([SCAF-4](../packages/scaffold.md#scaf-4))
 
 5. **getScaffoldDir() + copyTemplates()** — Resolve bundled
-   `scaffold/` path from `dist/` ([SCAF-9](../dev/scaffold.md#scaf-9)),
+   `scaffold/` path from `dist/` ([SCAF-9](../packages/scaffold.md#scaf-9)),
    recursively copy template files without overwriting
-   ([SCAF-8](../dev/scaffold.md#scaf-8))
+   ([SCAF-8](../packages/scaffold.md#scaf-8))
 
 6. **appendAgentSpecs()** — Read `scaffold/agent-specs.txt`,
    create/update `CLAUDE.md` and `AGENTS.md` with section
-   replacement logic ([SCAF-10](../dev/scaffold.md#scaf-10),
-   [SCAF-5](../user/scaffold.md#scaf-5))
+   replacement logic ([SCAF-10](../packages/scaffold.md#scaf-10),
+   [SCAF-5](../packages/scaffold.md#scaf-5))
 
 7. **Error handling** — Non-zero exit on unrecoverable errors with
-   stderr messages ([SCAF-6](../user/scaffold.md#scaf-6))
+   stderr messages ([SCAF-6](../packages/scaffold.md#scaf-6))
 
 8. **Build & smoke test** — `npm run build` succeeds; manual
    `mkdir -p /tmp/test-target && npx spex scaffold /tmp/test-target`

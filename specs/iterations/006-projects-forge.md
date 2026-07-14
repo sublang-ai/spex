@@ -26,23 +26,23 @@ GitHub forge adapter behind the adapter interface (DR-006).
 
 1. **Core git + forge modules** — injectable command runner;
    registration validates a git work-tree root
-   ([PROJ-1](../user/projects.md#proj-1)); status from local git
-   ([PROJ-3](../user/projects.md#proj-3),
-   [PROJ-11](../dev/projects.md#proj-11)); gh adapter with JSON
+   ([PROJ-1](../packages/projects.md#proj-1)); status from local git
+   ([PROJ-3](../packages/projects.md#proj-3),
+   [PROJ-11](../packages/projects.md#proj-11)); gh adapter with JSON
    output and no credential storage
-   ([PROJ-13](../dev/projects.md#proj-13)).
+   ([PROJ-13](../packages/projects.md#proj-13)).
 
 2. **Protocol + service handlers** — project.create/status and
    forge.items with bounded caching
-   ([PROJ-12](../dev/projects.md#proj-12)).
+   ([PROJ-12](../packages/projects.md#proj-12)).
 
 3. **Projects UI** — cards with branch/dirty/ahead-behind, forge
    panel (issues/PRs or setup guidance), create-new flow
-   ([PROJ-2..8](../user/projects.md)).
+   ([PROJ-2..8](../packages/projects.md)).
 
 4. **Tests** — fixture-repo registration and status, create flow,
    stubbed-gh forge states, removal keeps disk
-   ([PROJ-16..19](../test/projects.md)).
+   ([PROJ-16..19](../packages/projects.md)).
 
 ## Acceptance criteria
 

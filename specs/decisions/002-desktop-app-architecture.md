@@ -31,7 +31,7 @@ Accepted
   It exposes one typed WebSocket API and serves no HTML.
 - **UI** (`packages/ui`): a pure web SPA (React + Vite + Tailwind + shadcn/ui) that renders core state and sends commands over the WebSocket API.
   It never imports Node-only modules; everything it knows arrives through the protocol.
-- **Shell** (`apps/desktop`): an Electron wrapper that boots the core in-process, loads the built UI, and adds OS integration (notifications, dock badge, file dialogs, login-shell environment capture).
+- **Shell** (`apps/desktop`): an Electron [[1]] wrapper that boots the core in-process, loads the built UI, and adds OS integration (notifications, dock badge, file dialogs, login-shell environment capture).
 - The cloud port is the same core behind a server socket and the same UI served as static assets; only the shell layer is replaced.
   Multi-tenant auth for the cloud variant is explicitly out of scope here.
 
@@ -74,7 +74,7 @@ Spex
 - The root `package.json` becomes a private workspace root; `specs/` stays at the repo root and covers all packages.
 - The CLI keeps its npm identity, bin, files whitelist, tests, and `CHANGELOG.md` (which moves with it to `packages/cli/`).
 - `v*` tags keep releasing the CLI exactly as today; the release workflow is updated to build, validate, version-check, and publish from `packages/cli`.
-  The CI-green gate ([RELEASE-18](../dev/release.md#release-18)) is unchanged and now covers all workspaces.
+  The CI-green gate ([RELEASE-18](../packages/release.md#release-18)) is unchanged and now covers all workspaces.
 - Desktop app releases use a distinct tag namespace (`app-v*`) added in a later iteration, so CLI and app release cadences stay independent.
 
 ## Consequences
@@ -82,7 +82,7 @@ Spex
 - The UI is portable by construction; the cloud web app is a deployment task, not a rewrite.
 - Everything the panes show comes from one observer stream, so tmux-play and Spex render the same truth — tmux-play remains a faithful verification twin.
 - Electron adds ~120 MB download weight; accepted for v1 in exchange for zero-glue reuse of the Node ecosystem (cligent, playbook, agent SDKs).
-- Two release channels live in one repo; tag namespaces (`v*` vs `app-v*`) and workspace-scoped workflows must stay disjoint.
+- Two release channels live in one npm-workspaces [[2]] repo; tag namespaces (`v*` vs `app-v*`) and workspace-scoped workflows must stay disjoint.
 - The scaffold CLI move to `packages/cli` touches the release workflow; the npm tarball must be verified equivalent before the first post-move release.
 - Native binaries spawned by agent SDKs constrain Electron packaging (asar unpacking); handled in the shell layer.
 
