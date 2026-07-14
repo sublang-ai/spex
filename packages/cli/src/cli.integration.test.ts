@@ -3,7 +3,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, execSync, spawnSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -1291,7 +1291,8 @@ meta.md     The spec of specs
 
   // Packaging: the new bundled assets ship with the npm package.
   it("npm pack ships the manifests, prompts, and interactions seed", () => {
-    const output = execFileSync("npm", ["pack", "--dry-run", "--json"], {
+    // execSync (a shell) so Windows resolves npm.cmd.
+    const output = execSync("npm pack --dry-run --json", {
       cwd: ROOT,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"],
