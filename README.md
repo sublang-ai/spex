@@ -94,6 +94,7 @@ history. `--lang zh` selects the bundled Chinese templates.
 | Path | What | Distribution |
 | --- | --- | --- |
 | [`packages/cli`](packages/cli) | `@sublang/spex` — specs scaffold CLI | [npm](https://www.npmjs.com/package/@sublang/spex) (`v*` tags) |
+| [`scaffold/`](scaffold) | Template bundle the CLI ships (staged into `packages/cli` at build) | with the CLI |
 | [`packages/core`](packages/core) | Headless core service: config, sessions, embedded playbook runtime, SQLite store, WebSocket protocol | with the app |
 | [`packages/ui`](packages/ui) | Web UI (React + Vite + Tailwind) speaking only the protocol | with the app |
 | [`apps/desktop`](apps/desktop) | Electron shell: core in-process, sandboxed renderer, notifications, dock badge | GitHub Releases (`app-v*` tags) |
