@@ -104,15 +104,25 @@ export function rewriteLegacyCitations(
     const span = text.slice(start, endOffset(node));
     // Locate the raw URL inside the node span; skip on any encoding
     // mismatch rather than risk a bad edit (the linter reports
-    // leftover legacy links). Definitions search forward from the
-    // label (a quoted title could repeat the URL); links/images
-    // search backward (the link text could repeat the URL).
+    // leftover legacy links). Both the preceding link text and a
+    // trailing quoted title can repeat the URL, so search forward
+    // from where the destination starts and take the first match.
     let urlIndex: number;
     if (node.type === "definition") {
       const label = span.match(/^\[[^\]]*\]:\s*/);
       urlIndex = label === null ? -1 : span.indexOf(url, label[0].length);
     } else {
-      urlIndex = span.lastIndexOf(url);
+      const children = (node as unknown as { children?: Node[] }).children;
+      let searchFrom: number;
+      if (children !== undefined && children.length > 0) {
+        // Links: the destination follows the last text child.
+        searchFrom = endOffset(children[children.length - 1]) - start;
+      } else {
+        // Images and empty link text: skip past the "](" opener.
+        const opener = span.indexOf("](");
+        searchFrom = opener === -1 ? 0 : opener + 1;
+      }
+      urlIndex = span.indexOf(url, Math.max(searchFrom, 0));
     }
     if (urlIndex === -1) return;
     edits.push({

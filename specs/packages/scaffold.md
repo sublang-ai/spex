@@ -80,12 +80,12 @@ working tree is clean, the CLI shall:
    creating framework files that are missing in older specs trees.
    When the framework file being replaced holds content that matches no
    recognized bundled version — a genuine user modification rather than
-   an older pristine version — the CLI shall still replace it but warn
+   an older pristine version — the CLI shall still replace it, report
+   it with an `(overwritten — user-modified)` indicator, and warn
    clearly before completing, naming the file and pointing the user to
    where the change can be reviewed and reconciled. Unmodified and
    older-pristine framework files shall be replaced without this
-   warning, and the replaced file shall be reported with an
-   `(overwritten — user-modified)` indicator.
+   warning or indicator.
 4. For every **seed file**, refresh it with the bundled template
    when the user has not customized it — that is, when the
    working-tree content matches a previously distributed bundled
@@ -169,13 +169,15 @@ shall migrate that legacy layout into `specs/packages/`:
 - When every present source matches a recognized legacy bundled
   version, the target shall be the current bundled package seed and
   the combined indicator of [SCAF-11](#scaf-11) shall name the
-  sources (e.g. `migrated from specs/dev/git.md,
+  sources (e.g. `migrated from specs/dev/licensing.md,
   specs/test/licensing.md`).
 - Otherwise the sources shall be merged per [SCAF-44](#scaf-44) and
   reported as `(migrated from <sources>)`.
 - When the target already exists, every source shall be kept
   unmodified and reported as
-  `(kept — target exists at <target>)`.
+  `(kept — target exists at <target>)`; a source that arrived via
+  the same run's item-layout migration reports both steps in that
+  one line (`migrated from <items path>; kept — …`).
 - Non-markdown files under the legacy directories shall move to the
   same relative path under `specs/packages/`, except a `.gitkeep`
   matching a recognized bundled version, which shall be deleted.

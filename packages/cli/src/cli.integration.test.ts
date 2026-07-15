@@ -1027,6 +1027,14 @@ meta.md     The spec of specs
         readFileSync(join(dir, "specs", "packages", "git.md")),
         readFileSync(bundledPath("specs/packages/git.md")),
       );
+      // Custom content survives the merge transform.
+      assert.match(
+        readFileSync(
+          join(dir, "specs", "packages", "custom", "thing.md"),
+          "utf-8",
+        ),
+        /Custom thing/,
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }
