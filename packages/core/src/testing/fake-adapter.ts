@@ -134,12 +134,17 @@ export function fakeAdapterImports(
     }
   }
 
-  const load = async () =>
-    FakeAdapter as unknown as Awaited<
-      ReturnType<PlayerAdapterImports["claude"]>
-    >;
-  return {
-    imports: { claude: load, codex: load, gemini: load, opencode: load },
-    stats,
-  };
+  // One fake constructor serves every adapter slot. cligent's
+  // PlayerAdapterImports parameterizes each loader by adapter name (each slot
+  // wants an AgentAdapter over that adapter's own effort vocabulary), so the
+  // single fake loader is assigned through one object-level cast rather than
+  // matching four distinct per-adapter signatures.
+  const load = async () => FakeAdapter;
+  const imports = {
+    claude: load,
+    codex: load,
+    gemini: load,
+    opencode: load,
+  } as unknown as PlayerAdapterImports;
+  return { imports, stats };
 }

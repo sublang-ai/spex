@@ -315,14 +315,21 @@ function toResolvedAgent(
 // Registry entry structural check (parity with shell/launcher)
 // ---------------------------------------------------------------------------
 
+// The load contract mirrors the Playbook Captain shell's own
+// `isValidRegistryEntry` (playbook-captain: PlaybookCaptainRegistryEntry):
+// id, command, intent, requiredRoleIds, validateOptions, createRuntime,
+// with an optional summaryPolicy. State ids (idle/final/park) are NOT part
+// of the shell's load contract — the shell derives park/idle/final from
+// runtime state tags (`playbook.parked`, quiescence), not per-entry fields.
+// Requiring them here rejected the real `@sublang/playbook/code/registry`
+// entry, which carries none. Spex's own compiler still derives state ids for
+// its introspection preview (PBLIB-13), but they are optional metadata, not a
+// gate.
 export interface RegistryEntryLike {
   id: string;
   command: string;
   intent: string;
   requiredRoleIds: readonly string[];
-  idleStateId: string;
-  finalStateId: string;
-  parkStateIds: readonly string[];
   validateOptions(captainOptions: unknown): unknown;
   createRuntime(options: unknown): unknown;
 }
@@ -336,10 +343,7 @@ export function isValidRegistryEntry(
     typeof entry.id === "string" &&
     typeof entry.command === "string" &&
     typeof entry.intent === "string" &&
-    typeof entry.idleStateId === "string" &&
-    typeof entry.finalStateId === "string" &&
     Array.isArray(entry.requiredRoleIds) &&
-    Array.isArray(entry.parkStateIds) &&
     typeof entry.validateOptions === "function" &&
     typeof entry.createRuntime === "function"
   );

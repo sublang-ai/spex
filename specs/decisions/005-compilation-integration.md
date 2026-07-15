@@ -14,7 +14,7 @@ Accepted
   `slc playbook <src.md> --link <runtime-contract.ts>` emits a `<name>.playbook/` directory containing `<name>.gears.md`, `<name>.fsm.ts` (XState v5), and `<name>.playbook.ts`, plus verification tests.
 - slc dynamic-imports its `.ts` artifacts through Node's built-in type stripping, which requires system Node >= 23.6 [[1]]; the Node bundled into Electron does not provide it.
 - Compilation itself is agent-driven: slc drives a credentialed coding agent configured in its own config, so compiles need network access and agent credentials.
-- The embedded Playbook Captain shell ([DR-003](003-runtime-reuse.md)) loads playbooks through registry entries (`id`, `command`, `intent`, `requiredRoleIds`, `idleStateId`, `finalStateId`, `parkStateIds`, optional `summaryPolicy`, `validateOptions`, `createRuntime`) and validates them fail-closed; slc does not emit this manifest.
+- The embedded Playbook Captain shell ([DR-003](003-runtime-reuse.md)) loads playbooks through registry entries and validates them fail-closed. Its load contract is `id`, `command`, `intent`, `requiredRoleIds`, `validateOptions`, `createRuntime`, plus an optional `summaryPolicy`; it derives idle/park/final behavior from runtime state tags (`playbook.parked`, quiescence), not per-entry state ids. slc does not emit this manifest.
 - Playbooks are enabled through `playbooks.<id>` blocks in the shared config file ([DR-004](004-config-and-persistence.md)).
 
 ## Decision
@@ -35,8 +35,8 @@ Accepted
 
 - slc emits gears, FSM, and runtime modules but not the registry manifest the Captain shell requires.
 - Spex generates `<name>.registry.ts` itself:
-  - state ids (`idleStateId`, `finalStateId`, `parkStateIds`) are derived by introspecting the compiled FSM;
-  - judgment fields (`command`, `intent`, `summaryPolicy`) are collected from the user in a small form.
+  - judgment fields (`command`, `intent`, `summaryPolicy`) are collected from the user in a small form;
+  - state ids (`idleStateId`, `finalStateId`, `parkStateIds`) are derived by introspecting the compiled FSM and emitted as optional introspection metadata — they are not part of the Captain shell's load contract, so validation must not require them.
 - The generated registry is validated against the Captain shell's fail-closed loading rules ([DR-003](003-runtime-reuse.md)) before the playbook is registered.
 - Upstreaming registry emission into slc is flagged as future work; when it lands, Spex generation reduces to the judgment-field form.
 
