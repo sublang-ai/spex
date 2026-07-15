@@ -3,3 +3,4 @@ dist/
 node_modules/
 apps/desktop/ui-dist/
 apps/desktop/release/
+packages/cli/scaffold/

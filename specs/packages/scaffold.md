@@ -315,6 +315,13 @@ Where `getScaffoldDir()` resolves the bundled scaffold path, it
 shall navigate from the `dist/` output directory up to the package
 root and return the `scaffold/` directory path.
 
+In this repository the bundle's source of truth is the top-level
+`scaffold/` directory — CLI implementation detail, kept outside both
+the package sources and `specs/`.
+The package build shall stage it into `packages/cli/scaffold/`
+(gitignored) so the npm `files` entry can ship it; the resolver and
+tests read the staged copy.
+
 #### SCAF-37
 
 Where `copyRootLicense(basePath)` is called, it shall copy the bundled

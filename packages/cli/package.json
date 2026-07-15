@@ -29,10 +29,10 @@
     "scaffold/"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/stage-scaffold.mjs",
     "prepublishOnly": "npm run build && npm test",
-    "test": "node scripts/run-tests.cjs",
-    "test:integration": "node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
+    "test": "node scripts/stage-scaffold.mjs && node scripts/run-tests.cjs",
+    "test:integration": "node scripts/stage-scaffold.mjs && node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
   },
   "engines": {
     "node": ">=20"
