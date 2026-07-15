@@ -108,6 +108,15 @@ describe("rewriteLegacyCitations", () => {
     assert.equal(result, `[user/auth.md](packages/auth.md)\n`);
   });
 
+  it("rewrites the URL, not a quoted title that repeats it", () => {
+    const text = `See [the spec](user/foo.md "user/foo.md") for details.\n`;
+    const result = rewriteLegacyCitations("specs/map.md", text, options());
+    assert.equal(
+      result,
+      `See [the spec](packages/foo.md "user/foo.md") for details.\n`,
+    );
+  });
+
   it("skips fenced code blocks", () => {
     const text = "# X\n\n```md\n[a](../user/auth.md)\n```\n";
     assert.equal(

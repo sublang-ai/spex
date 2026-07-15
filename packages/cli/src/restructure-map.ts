@@ -175,7 +175,7 @@ export function restructureMap(
     `^##\\s+(${strings.interactionsHeading}|Interactions)\\s*$`,
     "m",
   ).test(result);
-  if (!hasInteractions && edits.length > 0) {
+  if (!hasInteractions) {
     result =
       result.trimEnd() +
       `\n\n## ${strings.interactionsHeading}\n\n${strings.interactionsEmpty}\n`;

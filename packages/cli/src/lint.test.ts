@@ -206,6 +206,30 @@ describe("lintSpecs", () => {
     assert.ok(rules(findings).includes("interaction/single-package"));
   });
 
+  it("errors on an interaction file without an Intent section", () => {
+    const findings = findingsFor({
+      "specs/interactions/login-flow.md":
+        "# LF: Login Flow\n\n## Scenario\n\n### LF-1\n\nX shall Y.\n",
+    });
+    assert.ok(rules(findings).includes("interaction/sections"));
+  });
+
+  it("warns on a Verifies line outside the Verification section", () => {
+    const findings = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\nVerifies: [A-2](#a-2)\n\nX shall Y.\n\n### A-2\n\nZ shall W.\n",
+    });
+    assert.ok(rules(findings).includes("verify/outside"));
+  });
+
+  it("does not flag external URLs on Verifies lines as cross-package", () => {
+    const findings = findingsFor({
+      "specs/packages/a.md":
+        '# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y.\n\n## Verification\n\n### A-2\nVerifies: [A-1](#a-1), [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110)\n\nChecks A-1 against the RFC.\n',
+    });
+    assert.ok(!rules(findings).includes("verify/cross-package"));
+  });
+
   it("accepts a proper interaction file", () => {
     const findings = findingsFor({
       "specs/packages/auth.md": CLEAN_PACKAGE,

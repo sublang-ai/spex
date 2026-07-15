@@ -89,7 +89,7 @@ describe("restructureMap", () => {
     assert.match(result, /\n## 交互\n\n暂无。/);
   });
 
-  it("leaves non-group tables and prose verbatim", () => {
+  it("leaves non-group tables and prose verbatim, still adding Interactions", () => {
     const custom = `# Map
 
 ## Notes
@@ -100,7 +100,11 @@ Some prose.
 | --- | --- |
 | login | alice |
 `;
-    assert.equal(restructureMap(custom, "en"), null);
+    const result = restructureMap(custom, "en");
+    assert.ok(result !== null);
+    // Everything is preserved; only the Interactions section is added.
+    assert.ok(result.startsWith(custom.trimEnd()));
+    assert.match(result, /\n## Interactions\n\nNone yet\./);
   });
 
   it("does not append Interactions when one exists", () => {

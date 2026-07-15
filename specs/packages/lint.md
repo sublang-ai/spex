@@ -83,7 +83,7 @@ file's short form, an item ID defined more than once across
 `specs/`, and a short form used by more than one file
 ([META-10](../meta.md#meta-10), [META-11](../meta.md#meta-11)).
 A warning shall be reported for an item sitting inside an Intent or
-References section.
+References section of a package or interaction file.
 
 #### LINT-7
 
