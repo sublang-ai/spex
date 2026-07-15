@@ -31,5 +31,5 @@ Accepted
 ## Consequences
 
 - Popovers duplicate slices of Settings; the shared validation path (one `config.edit` protocol op) keeps them consistent.
-- The nav badge derives from the same attention rules as the Dashboard ([DASH-11](../dev/dashboard.md#dash-11)), so the two never disagree.
+- The nav badge derives from the same attention rules as the Dashboard ([DASH-11](../packages/dashboard.md#dash-11)), so the two never disagree.
 - Read-only transcripts reuse the run view with input disabled rather than a separate viewer.

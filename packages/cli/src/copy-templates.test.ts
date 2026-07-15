@@ -66,13 +66,13 @@ describe("copyTemplates", () => {
         "specs/decisions/000-spec-structure-format.md should be copied",
       );
       assert.ok(
-        existsSync(join(dir, "specs", "dev", "git.md")),
-        "specs/dev/git.md should be copied",
+        existsSync(join(dir, "specs", "packages", "git.md")),
+        "specs/packages/git.md should be copied",
       );
       // Tracked dotfiles must not be skipped (SCAF-8)
       assert.ok(
-        existsSync(join(dir, "specs", "user", ".gitkeep")),
-        "specs/user/.gitkeep should be copied",
+        existsSync(join(dir, "specs", "interactions", ".gitkeep")),
+        "specs/interactions/.gitkeep should be copied",
       );
 
       // Verify content matches the source
@@ -194,8 +194,8 @@ describe("copyTemplates", () => {
         ),
       );
       assert.equal(
-        readFileSync(join(dir, "specs", "dev", "git.md"), "utf-8"),
-        readFileSync(join(getScaffoldDir(), "specs", "dev", "git.md"), "utf-8"),
+        readFileSync(join(dir, "specs", "packages", "git.md"), "utf-8"),
+        readFileSync(join(getScaffoldDir(), "specs", "packages", "git.md"), "utf-8"),
       );
     } finally {
       rmSync(dir, { recursive: true });

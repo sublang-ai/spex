@@ -29,22 +29,22 @@ playbooks load in the app's runtime.
 ## Tasks
 
 1. **Compile module** — toolchain checks
-   ([PBLIB-11](../dev/playbook-library.md#pblib-11)), slc run with
+   ([PBLIB-11](../packages/playbook-library.md#pblib-11)), slc run with
    progress, esbuild packaging, FSM introspection, registry
    generation and validation
-   ([PBLIB-12..15](../dev/playbook-library.md)).
+   ([PBLIB-12..15](../packages/playbook-library.md)).
 
 2. **Protocol + handlers** — compile.check and compile.run commands,
    compile.progress broadcasts; registration via the existing
    playbook.add config op.
 
 3. **Library UI** — list/mapping per
-   [PBLIB-1..4](../user/playbook-library.md), compile flow per
-   [PBLIB-5..10](../user/playbook-library.md).
+   [PBLIB-1..4](../packages/playbook-library.md), compile flow per
+   [PBLIB-5..10](../packages/playbook-library.md).
 
 4. **Tests** — stub-slc pipeline to a runnable registry, missing
    toolchain guidance, invalid registry rejection
-   ([PBLIB-17..21](../test/playbook-library.md)).
+   ([PBLIB-17..21](../packages/playbook-library.md)).
 
 ## Acceptance criteria
 

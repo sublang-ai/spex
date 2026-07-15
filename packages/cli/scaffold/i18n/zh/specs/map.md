@@ -17,13 +17,12 @@
 ## 目录结构
 
 ```text
-decisions/  决策记录（DRs）
-iterations/ 迭代记录（IRs）
-user/       用户可见行为
-dev/        实现要求
-test/       验收测试
-map.md      本索引
-meta.md     规约的规约
+decisions/    决策记录（DRs）
+iterations/   迭代记录（IRs）
+packages/     规约包（每包一个文件）
+interactions/ 跨包行为与测试
+map.md        本索引
+meta.md       规约的规约
 ```
 
 ## 决策
@@ -42,13 +41,16 @@ meta.md     规约的规约
 
 ### GIT
 
-| 分组 | 文件 | 摘要 |
-| --- | --- | --- |
-| dev | [git.md](dev/git.md) | 提交信息格式和 AI 共同作者 trailers |
+| 文件 | 摘要 |
+| --- | --- |
+| [git.md](packages/git.md) | 提交信息格式和 AI 共同作者 trailers |
 
 ### LIC
 
-| 分组 | 文件 | 摘要 |
-| --- | --- | --- |
-| dev | [licensing.md](dev/licensing.md) | SPDX 头要求和文件范围规则 |
-| test | [licensing.md](test/licensing.md) | 版权和许可证头存在性检查 |
+| 文件 | 摘要 |
+| --- | --- |
+| [licensing.md](packages/licensing.md) | SPDX 头要求与验证检查 |
+
+## 交互
+
+暂无。当多个包开始协作时，在 `interactions/` 下添加文件。

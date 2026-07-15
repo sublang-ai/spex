@@ -23,7 +23,7 @@ Accepted
 - `--lang` defaults to `en`; the initial supported codes are `{en, zh}`.
 - In this first cut, `zh` means Simplified Chinese (`zh-Hans` [[2]]).
 - Unsupported codes abort non-zero and list the supported codes.
-- The authoring language is set by the first scaffold. In create mode, absent `specs/meta.md` uses the explicit `--lang`, or `en` when omitted. An existing `specs/meta.md` makes its META-27 declaration active, or `en` when the file predates META-27. An explicit `--lang` that mismatches the active language aborts non-zero rather than silently skipping the existing file under [SCAF-4](../user/scaffold.md#scaf-4).
+- The authoring language is set by the first scaffold. In create mode, absent `specs/meta.md` uses the explicit `--lang`, or `en` when omitted. An existing `specs/meta.md` makes its META-27 declaration active, or `en` when the file predates META-27. An explicit `--lang` that mismatches the active language aborts non-zero rather than silently skipping the existing file under [SCAF-4](../packages/scaffold.md#scaf-4).
 - Switching an existing scaffold's language is out of scope and reserved for a future migration.
 - `spex scaffold --update` rejects `--lang` and reads the language from the existing META-27 declaration (see [Language as a spec item](#language-as-a-spec-item)).
 
@@ -78,7 +78,7 @@ Localized for `zh` in the first cut:
 ### File-history manifest
 
 - Localized overlay files are recorded in `scaffold/.file-history.json` under their overlay paths (for example, `i18n/zh/specs/map.md`). This extends SCAF-21 from `scaffold/specs/` to `i18n/<lang>/` while preserving its per-path rule for base and overlay entries: the final hash equals that file's current bundled content.
-- `--update` pristine detection ([SCAF-22](../dev/scaffold.md#scaf-22)) becomes language-aware: a target is pristine when it matches a recognized version under its English base path or active-language overlay path.
+- `--update` pristine detection ([SCAF-22](../packages/scaffold.md#scaf-22)) becomes language-aware: a target is pristine when it matches a recognized version under its English base path or active-language overlay path.
 
 ## Consequences
 

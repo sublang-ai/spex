@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { appendAgentSpecs } from "./append-agent-specs.js";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
@@ -10,15 +10,24 @@ import {
   copyRootLicense,
   copyTemplates,
   formatSupportedLanguages,
+  getFrameworkSpecFiles,
   getSeedSpecFiles,
+  isPristine,
   isSupportedLanguage,
+  listFiles,
   migrateLegacyItemLayout,
   overwriteFrameworkSpecFiles,
   refreshPristineSeeds,
   type ScaffoldLanguage,
 } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
+import {
+  migratePackageLayout,
+  rewriteAllSpecCitations,
+  type PackageMigrationOutcome,
+} from "./migrate-package-layout.js";
 import { resolveBase } from "./resolve-base.js";
+import { restructureMap } from "./restructure-map.js";
 
 type ScaffoldOptions =
   | { mode: "create"; pathArg?: string; language?: ScaffoldLanguage }
@@ -108,10 +117,6 @@ function assertCleanSpecsTree(basePath: string): void {
   }
 }
 
-function readUpdateMergePrompt(): string {
-  return readBundledMarkdown("update-merge-prompt.md");
-}
-
 function readActiveLanguage(basePath: string): ScaffoldLanguage {
   const metaPath = join(basePath, "specs", "meta.md");
   if (!existsSync(metaPath)) return "en";
@@ -160,47 +165,208 @@ function warnReplacedFrameworkFiles(replaced: string[]): void {
   );
 }
 
+function warnAnchorCollisions(
+  collisions: PackageMigrationOutcome["anchorCollisions"],
+): void {
+  if (collisions.length === 0) return;
+  console.warn("");
+  console.warn(
+    "NOTE: merging created duplicate section anchors; rename one of each pair",
+  );
+  console.warn("so citations stay unambiguous:");
+  for (const { targetRelPath, slugs } of collisions) {
+    console.warn(`  - ${targetRelPath}: #${slugs.join(", #")}`);
+  }
+}
+
+/** Pristine framework/seed paths, sampled before any byte edits. */
+function snapshotPristinePaths(
+  basePath: string,
+  language: ScaffoldLanguage,
+): Set<string> {
+  const pristine = new Set<string>();
+  for (const relPath of [...getFrameworkSpecFiles(), ...getSeedSpecFiles()]) {
+    if (isPristine(basePath, relPath, language) === "pristine") {
+      pristine.add(relPath);
+    }
+  }
+  return pristine;
+}
+
+function hasMarkdownFiles(dir: string): boolean {
+  if (!existsSync(dir)) return false;
+  return listFiles(dir).some((file) => file.endsWith(".md"));
+}
+
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
   const language = readActiveLanguage(basePath);
+
+  // Classify framework/seed files before any byte edits: recognized
+  // bundled versions get replaced wholesale below, so the citation
+  // rewrite and map restructure must leave them alone.
+  const pristineSnapshot = snapshotPristinePaths(basePath, language);
+
   const legacyResults = migrateLegacyItemLayout(basePath);
-  const seedPaths = new Set(getSeedSpecFiles());
-  const migratedSeedSources = new Map<string, string>();
+  const provenance = new Map<string, string>();
   for (const result of legacyResults) {
-    if (result.status === "migrated" && seedPaths.has(result.targetRelPath)) {
-      migratedSeedSources.set(result.targetRelPath, result.legacyRelPath);
+    if (result.status === "migrated") {
+      provenance.set(result.targetRelPath, result.legacyRelPath);
     }
   }
+
+  const packageOutcome = migratePackageLayout(basePath, {
+    language,
+    provenance,
+  });
+
+  const rewritten = rewriteAllSpecCitations(basePath, pristineSnapshot);
+
+  let mapRestructured = false;
+  const mapPath = join(basePath, "specs", "map.md");
+  if (
+    packageOutcome.migratedPackages &&
+    !pristineSnapshot.has("specs/map.md") &&
+    existsSync(mapPath)
+  ) {
+    const restructured = restructureMap(
+      readFileSync(mapPath, "utf-8"),
+      language,
+    );
+    if (restructured !== null) {
+      writeFileSync(mapPath, restructured);
+      mapRestructured = true;
+    }
+  }
+
+  // Reporting: one indicator line per path (SCAF-11). The items→flat
+  // step reports only paths the package migration did not consume;
+  // package targets on seed paths fold into the seed refresh line.
+  const seedPaths = new Set<string>(getSeedSpecFiles());
+  const frameworkPaths = new Set<string>(getFrameworkSpecFiles());
+  const migratedSeedSources = new Map<string, string>();
+  const reportedPaths = new Set<string>();
+
+  // One indicator line per path (SCAF-11): a file that migrated from
+  // specs/items/ and then hit a package-migration conflict reports
+  // both steps on its single conflict line.
+  const conflictSources = new Set<string>();
+  for (const result of packageOutcome.results) {
+    if (result.status !== "conflict") continue;
+    for (const source of result.sourceRelPaths) conflictSources.add(source);
+  }
+
   for (const result of legacyResults) {
     if (result.status === "conflict") {
       console.log(
         `  ${result.legacyRelPath} (kept — target exists at ${result.targetRelPath})`,
       );
-    } else if (!seedPaths.has(result.targetRelPath)) {
+    } else if (
+      existsSync(join(basePath, result.targetRelPath)) &&
+      !conflictSources.has(result.targetRelPath)
+    ) {
+      // Still at the flat path: the package migration left it there.
       console.log(
         `  ${result.targetRelPath} (migrated from ${result.legacyRelPath})`,
       );
     }
   }
+
+  for (const result of packageOutcome.results) {
+    const sources = result.sourceRelPaths.join(", ");
+    if (result.status === "conflict") {
+      for (const source of result.sourceRelPaths) {
+        const origin = provenance.get(source);
+        const steps =
+          origin === undefined ? "" : `migrated from ${origin}; `;
+        console.log(
+          `  ${source} (${steps}kept — target exists at ${result.targetRelPath})`,
+        );
+      }
+      continue;
+    }
+    if (seedPaths.has(result.targetRelPath)) {
+      migratedSeedSources.set(result.targetRelPath, sources);
+      continue;
+    }
+    console.log(`  ${result.targetRelPath} (migrated from ${sources})`);
+    reportedPaths.add(result.targetRelPath);
+  }
+
+  for (const relPath of rewritten) {
+    if (
+      seedPaths.has(relPath) ||
+      frameworkPaths.has(relPath) ||
+      reportedPaths.has(relPath)
+    ) {
+      continue;
+    }
+    console.log(`  ${relPath} (citations rewritten)`);
+  }
+
   const replacedFramework = overwriteFrameworkSpecFiles(basePath, language);
+
+  const indicatorOverrides = new Map<string, string>();
+  if (mapRestructured) {
+    indicatorOverrides.set(
+      "specs/map.md",
+      "restructured for the packages layout",
+    );
+  }
+  for (const relPath of rewritten) {
+    if (seedPaths.has(relPath) && !indicatorOverrides.has(relPath)) {
+      indicatorOverrides.set(
+        relPath,
+        "kept — user-modified; citations rewritten",
+      );
+    }
+  }
   refreshPristineSeeds(basePath, {
     language,
     migratedFrom: migratedSeedSources,
+    indicatorOverrides,
   });
+
+  appendAgentSpecs(basePath, { createMissing: false });
+
   warnReplacedFrameworkFiles(replacedFramework);
+  warnAnchorCollisions(packageOutcome.anchorCollisions);
+
   console.log("");
   console.log("spex scaffold --update completed.");
   console.log(
-    "Review the file indicators above and inspect changes (e.g., `git diff -- specs`).",
+    "Review the file indicators above and inspect changes (e.g., `git diff -- specs`),",
   );
+  console.log("then run `spex lint` to check the specs tree.");
   console.log(
     "Optionally, share this prompt with your AI agent to reconcile citations and local extensions:",
   );
   console.log("");
   console.log("```");
-  console.log(readUpdateMergePrompt());
+  console.log(readBundledMarkdown("update-merge-prompt.md"));
   console.log("```");
+
+  const interactionsEmpty = !hasMarkdownFiles(
+    join(basePath, "specs", "interactions"),
+  );
+  const packagesPresent = hasMarkdownFiles(
+    join(basePath, "specs", "packages"),
+  );
+  if (
+    packageOutcome.migratedPackages ||
+    (interactionsEmpty && packagesPresent)
+  ) {
+    console.log("");
+    console.log(
+      "specs/interactions/ is where cross-package behavior lives. Share this",
+    );
+    console.log("prompt with your AI agent to fill it in:");
+    console.log("");
+    console.log("```");
+    console.log(readBundledMarkdown("interactions-prompt.md"));
+    console.log("```");
+  }
 }
 
 /**
