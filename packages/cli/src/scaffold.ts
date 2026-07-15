@@ -248,12 +248,24 @@ function updateScaffoldTemplates(): void {
   const migratedSeedSources = new Map<string, string>();
   const reportedPaths = new Set<string>();
 
+  // One indicator line per path (SCAF-11): a file that migrated from
+  // specs/items/ and then hit a package-migration conflict reports
+  // both steps on its single conflict line.
+  const conflictSources = new Set<string>();
+  for (const result of packageOutcome.results) {
+    if (result.status !== "conflict") continue;
+    for (const source of result.sourceRelPaths) conflictSources.add(source);
+  }
+
   for (const result of legacyResults) {
     if (result.status === "conflict") {
       console.log(
         `  ${result.legacyRelPath} (kept — target exists at ${result.targetRelPath})`,
       );
-    } else if (existsSync(join(basePath, result.targetRelPath))) {
+    } else if (
+      existsSync(join(basePath, result.targetRelPath)) &&
+      !conflictSources.has(result.targetRelPath)
+    ) {
       // Still at the flat path: the package migration left it there.
       console.log(
         `  ${result.targetRelPath} (migrated from ${result.legacyRelPath})`,
@@ -265,8 +277,11 @@ function updateScaffoldTemplates(): void {
     const sources = result.sourceRelPaths.join(", ");
     if (result.status === "conflict") {
       for (const source of result.sourceRelPaths) {
+        const origin = provenance.get(source);
+        const steps =
+          origin === undefined ? "" : `migrated from ${origin}; `;
         console.log(
-          `  ${source} (kept — target exists at ${result.targetRelPath})`,
+          `  ${source} (${steps}kept — target exists at ${result.targetRelPath})`,
         );
       }
       continue;

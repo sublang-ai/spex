@@ -311,16 +311,28 @@ function computeEdits(
     });
   }
 
+  const setextRewrites = new Set<TextEdit>();
   for (const section of source.bodySections) {
     for (const heading of source.headings) {
       const offset = startOffset(heading);
       if (offset < section.start || offset >= section.end) continue;
       const edit = demotionEdit(source.text, heading);
-      if (edit !== null) edits.push(edit);
+      if (edit === null) continue;
+      edits.push(edit);
+      // A setext rewrite replaces the whole heading span; other
+      // edits inside it would overlap and abort the merge.
+      if (edit.end > edit.start) setextRewrites.add(edit);
     }
   }
 
-  return edits;
+  if (setextRewrites.size === 0) return edits;
+  return edits.filter(
+    (edit) =>
+      setextRewrites.has(edit) ||
+      ![...setextRewrites].some(
+        (span) => edit.start >= span.start && edit.end <= span.end,
+      ),
+  );
 }
 
 /** Slice [start, end) of the text with the contained edits applied. */

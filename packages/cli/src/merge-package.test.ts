@@ -135,6 +135,21 @@ describe("mergePackageSources", () => {
     assert.doesNotMatch(result.content, /-----/);
   });
 
+  it("survives a renumbered reference inside a setext heading", () => {
+    // The setext rewrite replaces the whole heading span; a reference
+    // renumbering edit inside it must not abort the merge.
+    const result = mergePackageSources("s", {
+      user: {
+        text: `# S: S\n\n## Intent\n\nUses [[1]].\n\n## A\n\n### S-1\n\nX.\n\n## References\n\n[1]: https://one.example "One"\n`,
+      },
+      dev: {
+        text: `# S: S\n\n## Intent\n\nD.\n\nTopic [[1]]\n-----------\n\n### S-2\n\nY.\n\n## References\n\n[1]: https://two.example "Two"\n`,
+      },
+    });
+    assert.match(result.content, /\n### Topic \[\[1\]\]\n/);
+    assert.match(result.content, /\[2\]: https:\/\/two\.example "Two"/);
+  });
+
   it("normalizes CRLF sources to LF", () => {
     const result = mergePackageSources("c", {
       dev: {

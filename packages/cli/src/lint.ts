@@ -552,6 +552,17 @@ function verifiesLine(file: SpecFile, heading: HeadingInfo): number | null {
   return null;
 }
 
+/**
+ * Resolve a relative citation URL against its file, or null for
+ * scheme/absolute/empty URLs that cannot target a spec file.
+ */
+function resolveCitation(file: SpecFile, url: string): string | null {
+  const path = url.split("#")[0];
+  if (path === "" || SCHEME_RE.test(path)) return null;
+  if (path.startsWith("/") || path.startsWith("//")) return null;
+  return posix.normalize(posix.join(posix.dirname(file.relPath), path));
+}
+
 function sectionOf(file: SpecFile, heading: HeadingInfo): string | null {
   let current: string | null = null;
   for (const candidate of file.headings) {
@@ -583,7 +594,7 @@ function lintVerifies(ctx: LintContext, items: ItemInfo[]): void {
       );
     }
     if (
-      inPackages &&
+      (inPackages || inInteractions) &&
       (section === "Intent" || section === "References")
     ) {
       report(
@@ -610,11 +621,8 @@ function lintVerifies(ctx: LintContext, items: ItemInfo[]): void {
       // belongs in interactions/ (META-21).
       for (const link of item.file.links) {
         if (link.line !== verifies) continue;
-        const path = link.url.split("#")[0];
-        if (path === "") continue;
-        const resolved = posix.normalize(
-          posix.join(posix.dirname(item.file.relPath), path),
-        );
+        const resolved = resolveCitation(item.file, link.url);
+        if (resolved === null) continue;
         if (
           resolved.startsWith("specs/packages/") &&
           resolved !== item.file.relPath
@@ -636,10 +644,10 @@ function lintVerifies(ctx: LintContext, items: ItemInfo[]): void {
       const cited = new Set<string>();
       for (const link of item.file.links) {
         if (link.line !== verifies) continue;
-        const resolved = posix.normalize(
-          posix.join(posix.dirname(item.file.relPath), link.url.split("#")[0]),
-        );
-        if (resolved.startsWith("specs/packages/")) cited.add(resolved);
+        const resolved = resolveCitation(item.file, link.url);
+        if (resolved !== null && resolved.startsWith("specs/packages/")) {
+          cited.add(resolved);
+        }
       }
       if (cited.size === 1) {
         report(
