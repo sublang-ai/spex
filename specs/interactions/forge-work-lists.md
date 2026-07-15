@@ -28,7 +28,7 @@ second fetch path
 ## Tests
 
 ### FORGE-2
-Verifies: [PROJ-19](../packages/projects.md#proj-19), [DASH-6](../packages/dashboard.md#dash-6)
+Verifies: [PROJ-6](../packages/projects.md#proj-6), [PROJ-15](../packages/projects.md#proj-15), [DASH-6](../packages/dashboard.md#dash-6)
 
 Where a registered fixture repository is bound to GitHub and a stub
 `gh` executable returns fixture issues and pull requests, the

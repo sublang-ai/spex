@@ -745,6 +745,9 @@ shall run the real CLI and cover at least:
   collapse to same-file anchors;
 - a conflicting target: every legacy source is kept byte-identical
   and reported, and the existing target is untouched;
+- indicator ordering: migration, conflict, and citation-rewrite
+  lines precede framework and seed indicator lines
+  ([SCAF-11](#scaf-11) step 7);
 - a second run after migration: no `migrated from` indicator and no
   byte changes;
 - a zh tree: overlays refresh from the active language and the

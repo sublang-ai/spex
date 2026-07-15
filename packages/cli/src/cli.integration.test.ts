@@ -920,6 +920,19 @@ meta.md     The spec of specs
         "restructured for the packages layout",
       );
 
+      // Migration and citation-rewrite lines precede framework and
+      // seed indicator lines (SCAF-11 step 7).
+      assert.ok(
+        result.stdout.indexOf("specs/packages/auth.md (migrated") <
+          result.stdout.indexOf("specs/meta.md ("),
+        "migration lines must precede framework indicators",
+      );
+      assert.ok(
+        result.stdout.indexOf("specs/decisions/001-auth.md (citations") <
+          result.stdout.indexOf("specs/meta.md ("),
+        "citation-rewrite lines must precede framework indicators",
+      );
+
       const merged = readFileSync(
         join(dir, "specs", "packages", "auth.md"),
         "utf-8",
