@@ -73,6 +73,15 @@ shell shall open it in the system browser and keep the app window
 on the app — the window shall never navigate to a remote page or
 open one in a child window.
 
+### App Icon
+
+#### SHELL-23
+
+Where the app is built for distribution, the packaged app shall
+carry the SubLang monogram
+([DR-013](../decisions/013-sublang-brand.md)) as its application
+icon, so the dock, app switcher, and installer show the brand mark.
+
 ## Internal Behavior
 
 ### Process Topology

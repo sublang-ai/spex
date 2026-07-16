@@ -5,7 +5,9 @@
 
 ## Status
 
-Accepted
+Accepted.
+§8's interaction hue is amended by
+[DR-013](013-sublang-brand.md): brand purple replaces indigo.
 
 ## Context
 
