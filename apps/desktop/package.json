@@ -55,6 +55,7 @@
           ]
         }
       ],
+      "icon": "build/icon.icns",
       "identity": null,
       "category": "public.app-category.developer-tools"
     }

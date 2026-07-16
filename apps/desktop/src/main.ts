@@ -13,6 +13,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeTheme,
   Notification as ElectronNotification,
   shell,
 } from "electron";
@@ -69,7 +70,13 @@ async function main(): Promise<void> {
     app.setAboutPanelOptions({
       applicationName: "Spex",
       applicationVersion: app.getVersion(),
+      copyright: "© 2026 SubLang International",
     });
+    // Packaged builds get the bundle icon from electron-builder
+    // (SHELL-23); dev runs need the dock icon set explicitly.
+    if (!app.isPackaged) {
+      app.dock?.setIcon(join(app.getAppPath(), "build", "icon-512.png"));
+    }
   }
 
   // Credentials exported in shell profiles must be visible before
@@ -122,6 +129,9 @@ async function main(): Promise<void> {
     width: 1440,
     height: 900,
     title: "Spex",
+    // First paint matches the UI's page surface (DR-013) so launch
+    // and reload never flash stock white.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#f7f4ef",
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
