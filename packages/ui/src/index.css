@@ -3,13 +3,69 @@
 
 @import "tailwindcss";
 
+/* SubLang brand tokens (DR-013). Interaction rides the brand ramp
+   anchored at the design system's accent #890FBC (600) and deep
+   #27063D (950); the wordmark's bright #A416EF is artwork-only and
+   deliberately absent. Light neutrals shift to the system's warm
+   paper values; dark steps stay stock. */
 @theme {
+  --font-sans:
+    "Euclid Circular A", ui-sans-serif, system-ui, sans-serif;
   --font-mono:
     ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-brand-50: #faf4fe;
+  --color-brand-100: #f3e4fc;
+  --color-brand-200: #e7c9fa;
+  --color-brand-300: #d4a4f4;
+  --color-brand-400: #bb6ee9;
+  --color-brand-500: #a337da;
+  --color-brand-600: #890fbc;
+  --color-brand-700: #6e0c98;
+  --color-brand-800: #550975;
+  --color-brand-900: #3e0754;
+  --color-brand-950: #27063d;
+
+  --color-neutral-50: #f7f4ef;
+  --color-neutral-100: #efeae2;
+  --color-neutral-200: #e3ded5;
+  --color-neutral-300: #d8d2c6;
+
+  /* Warm paper is darker than stock neutral-50, so light-theme
+     muted text drops one step to hold WCAG AA (DR-010 §7). */
+  --color-neutral-500: #696969;
 }
 
 :root {
   color-scheme: light dark;
+  accent-color: var(--color-brand-600);
+}
+
+/* Dark surfaces are stock, so muted text reverts to stock there. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-neutral-500: #737373;
+  }
+}
+
+/* One focus ring (DR-013): brand outline on :focus-visible. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+}
+@media (prefers-color-scheme: dark) {
+  :focus-visible {
+    outline-color: var(--color-brand-400);
+  }
+}
+
+::selection {
+  background: var(--color-brand-200);
+}
+@media (prefers-color-scheme: dark) {
+  ::selection {
+    background: var(--color-brand-800);
+  }
 }
 
 html,
@@ -46,7 +102,7 @@ body {
   @apply mt-3 mb-1 font-semibold;
 }
 .markdown a {
-  @apply text-indigo-600 underline dark:text-indigo-300;
+  @apply text-brand-600 underline dark:text-brand-300;
 }
 .markdown table {
   @apply my-2 border-collapse text-sm;

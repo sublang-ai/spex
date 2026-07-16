@@ -50,5 +50,5 @@ export function useStickToBottom(contentKey: unknown) {
 /** Floating "new content below" pill; render inside a relative parent
  * wrapping the scroll container. */
 export function jumpPillClasses(): string {
-  return "absolute bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white shadow hover:bg-indigo-500";
+  return "absolute bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-full bg-brand-600 px-3 py-1 text-xs font-medium text-white shadow hover:bg-brand-500";
 }

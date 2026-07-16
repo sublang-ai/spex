@@ -272,7 +272,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               data-testid="palette-add"
               disabled={!pathDraft.trim() || busy}
               onClick={() => void runAdd(false)}
-              className="rounded border border-indigo-300 px-2 py-1 text-xs text-indigo-600 disabled:opacity-40 dark:border-indigo-800 dark:text-indigo-300"
+              className="rounded border border-brand-300 px-2 py-1 text-xs text-brand-600 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300"
             >
               Add
             </button>

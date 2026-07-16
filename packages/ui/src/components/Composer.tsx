@@ -135,7 +135,7 @@ export function Composer({
           {composer.queued.map((entry, index) => (
             <div
               key={index}
-              className="flex max-w-[85%] flex-col rounded-2xl rounded-br-md border border-indigo-300 px-3 py-1.5 text-sm text-indigo-700 dark:border-indigo-700 dark:text-indigo-300"
+              className="flex max-w-[85%] flex-col rounded-2xl rounded-br-md border border-brand-300 px-3 py-1.5 text-sm text-brand-700 dark:border-brand-700 dark:text-brand-300"
             >
               <span className="whitespace-pre-wrap">{entry}</span>
               <span className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-400">
@@ -226,13 +226,13 @@ export function Composer({
                   : "Message the Captain — free text or /command…"
           }
           disabled={!connected}
-          className="max-h-[40vh] min-h-[3rem] flex-1 resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
+          className="max-h-[40vh] min-h-[3rem] flex-1 resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
         />
         <div className="flex flex-col gap-1">
           <button
             type="button"
             onClick={submit}
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             disabled={text.trim().length === 0 || sending || !connected}
             title={!connected ? "not connected" : undefined}
           >

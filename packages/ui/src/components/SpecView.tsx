@@ -49,8 +49,9 @@ export { initialSpecViewState };
 export type { SpecViewState };
 
 // Group colors are fixed by DR-011: user sky, dev fuchsia, test teal —
-// three hues outside the status palette (DR-010 §8: emerald, amber,
-// red, indigo keep their meanings). Color is never the only channel:
+// three hues outside the status palette (DR-010 §8 with DR-013:
+// emerald, amber, red, brand purple keep their meanings). Color is
+// never the only channel:
 // every chip and count carries the group word and an aria-label.
 const GROUP_CHIP: Record<SpecGroup, string> = {
   user: "text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950",
@@ -67,7 +68,7 @@ const MUTED_CHIP =
   "bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500";
 
 const LINK_CLASS =
-  "text-indigo-600 hover:underline dark:text-indigo-300";
+  "text-brand-600 hover:underline dark:text-brand-300";
 
 function itemDomId(id: string): string {
   return `specv-item-${id}`;
@@ -869,7 +870,7 @@ function ItemRow({
       id={itemDomId(item.id)}
       data-testid={`item-${item.id}`}
       className={`rounded ${
-        flashed ? "ring-2 ring-indigo-400 dark:ring-indigo-500" : ""
+        flashed ? "ring-2 ring-brand-400 dark:ring-brand-500" : ""
       }`}
     >
       <div className="flex items-center gap-2 py-0.5">

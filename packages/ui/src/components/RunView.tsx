@@ -70,7 +70,7 @@ export function RunView({
                   <button
                     type="button"
                     onClick={onRetryLoad}
-                    className="font-medium text-indigo-600 hover:underline dark:text-indigo-300"
+                    className="font-medium text-brand-600 hover:underline dark:text-brand-300"
                   >
                     Retry
                   </button>
@@ -86,7 +86,7 @@ export function RunView({
                 <button
                   type="button"
                   onClick={onStartNew}
-                  className="ml-auto rounded-md border border-indigo-300 px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                  className="ml-auto rounded-md border border-brand-300 px-2.5 py-1 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
                 >
                   Start a new session
                 </button>

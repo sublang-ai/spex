@@ -56,7 +56,7 @@ export function SlashMenuList({
           }}
           className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm ${
             index === activeIndex
-              ? "bg-indigo-50 dark:bg-indigo-950"
+              ? "bg-brand-50 dark:bg-brand-950"
               : "hover:bg-neutral-50 dark:hover:bg-neutral-800"
           }`}
         >

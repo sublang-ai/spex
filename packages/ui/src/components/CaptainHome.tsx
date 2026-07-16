@@ -69,7 +69,7 @@ function CaptainBubble({
 }) {
   return (
     <div className="flex items-start gap-2">
-      <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+      <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[11px] font-bold text-white">
         C
       </span>
       <div
@@ -205,7 +205,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             <button
               type="button"
               onClick={() => props.onNavigate("Settings")}
-              className="mt-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-300"
+              className="mt-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-300"
             >
               Open Settings →
             </button>
@@ -242,7 +242,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                     .onRecheckReadiness?.()
                     .finally(() => setRechecking(false));
                 }}
-                className="mt-1 text-xs font-medium text-indigo-600 hover:underline disabled:opacity-50 dark:text-indigo-300"
+                className="mt-1 text-xs font-medium text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-300"
               >
                 {rechecking ? "Checking…" : "I've set this up — re-check"}
               </button>
@@ -310,7 +310,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                   type="button"
                   data-testid="past-scope-toggle"
                   onClick={props.onTogglePastScope}
-                  className="font-normal normal-case tracking-normal text-indigo-600 hover:underline dark:text-indigo-300"
+                  className="font-normal normal-case tracking-normal text-brand-600 hover:underline dark:text-brand-300"
                 >
                   {props.pastScope === "all"
                     ? "this project only"
@@ -341,7 +341,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               <button
                 type="button"
                 onClick={() => setShowAllPast(true)}
-                className="px-2 py-1 text-left text-[11px] text-indigo-600 hover:underline dark:text-indigo-300"
+                className="px-2 py-1 text-left text-[11px] text-brand-600 hover:underline dark:text-brand-300"
               >
                 show all {props.pastSessions.length}
               </button>
@@ -412,7 +412,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               onCompileNew={() => props.onNavigate("Playbooks")}
             />
           ) : null}
-          <div className="flex items-end gap-2 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-indigo-400 dark:border-neutral-700 dark:bg-neutral-900">
+          <div className="flex items-end gap-2 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-brand-400 dark:border-neutral-700 dark:bg-neutral-900">
             <textarea
               ref={composerRef}
               data-testid="start-composer"
@@ -471,7 +471,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               disabled={busy || !connected || text.trim().length === 0}
               onClick={() => void start()}
               title={props.hasProject ? undefined : "Pick a project first (⌘P)"}
-              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
               {busy ? "Starting…" : "Send"}
             </button>

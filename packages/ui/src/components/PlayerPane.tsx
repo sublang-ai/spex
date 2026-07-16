@@ -177,7 +177,7 @@ export function PlayerPane({
                 stuckRef.current = false;
                 setWindowSize((size) => size + RENDER_WINDOW);
               }}
-              className="text-center text-[11px] text-neutral-400 hover:text-indigo-500"
+              className="text-center text-[11px] text-neutral-400 hover:text-brand-500"
             >
               show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)}{" "}
               of {view.segments.length - windowSize} earlier entries

@@ -103,7 +103,7 @@ function ProfileEditor({
       onKeyDown={(event) => {
         if (event.key === "Escape") onCancel?.();
       }}
-      className="flex flex-col gap-2 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 dark:border-indigo-900 dark:bg-indigo-950/30"
+      className="flex flex-col gap-2 rounded-lg border border-brand-200 bg-brand-50/40 p-3 dark:border-brand-900 dark:bg-brand-950/30"
     >
       <div className="grid grid-cols-2 gap-2 text-sm">
         <label className="flex flex-col gap-0.5">
@@ -186,7 +186,7 @@ function ProfileEditor({
           type="button"
           disabled={busy || !id.trim()}
           onClick={save}
-          className="rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+          className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
           Save
         </button>
@@ -328,7 +328,7 @@ export function SettingsSurface() {
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="ml-auto rounded-md border border-indigo-300 px-2 py-0.5 text-xs text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
+            className="ml-auto rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
           >
             Add profile
           </button>
@@ -367,7 +367,7 @@ export function SettingsSurface() {
                 <button
                   type="button"
                   onClick={() => setEditing(profile.id)}
-                  className="text-xs text-indigo-600 hover:underline dark:text-indigo-300"
+                  className="text-xs text-brand-600 hover:underline dark:text-brand-300"
                 >
                   Edit
                 </button>

@@ -26,8 +26,9 @@ const KIND_LABEL: Record<AttentionItem["kind"], string> = {
   idle: "awaiting direction",
 };
 
-/** Session-state chip classes per tone (DR-010 §8: indigo stays
- * interactive, so status chips tint amber/red/neutral only). */
+/** Session-state chip classes per tone (DR-010 §8 as amended by
+ * DR-013: brand purple stays interactive, so status chips tint
+ * amber/red/neutral only). */
 const TONE_CHIP: Record<StatusTone, string> = {
   amber: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   red: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
@@ -93,7 +94,7 @@ function WorkList({
                         href={item.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-indigo-600 hover:underline dark:text-indigo-300"
+                        className="text-brand-600 hover:underline dark:text-brand-300"
                       >
                         #{item.number}
                       </a>{" "}
@@ -118,7 +119,7 @@ function WorkList({
                             [group.projectId]: true,
                           }))
                         }
-                        className="text-xs text-indigo-600 hover:underline dark:text-indigo-300"
+                        className="text-xs text-brand-600 hover:underline dark:text-brand-300"
                       >
                         +{group.items.length - shown.length} more
                       </button>
@@ -270,7 +271,7 @@ export function DashboardSurface({
               <button
                 type="button"
                 onClick={() => onNavigate("Workspace")}
-                className="text-indigo-600 hover:underline dark:text-indigo-300"
+                className="text-brand-600 hover:underline dark:text-brand-300"
               >
                 start one
               </button>
@@ -307,7 +308,7 @@ export function DashboardSurface({
                 <button
                   type="button"
                   onClick={() => onNavigate("Workspace")}
-                  className="text-indigo-600 hover:underline dark:text-indigo-300"
+                  className="text-brand-600 hover:underline dark:text-brand-300"
                 >
                   Repo tab
                 </button>

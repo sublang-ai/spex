@@ -27,7 +27,7 @@ function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
               href={item.url}
               target="_blank"
               rel="noreferrer"
-              className="text-indigo-600 hover:underline dark:text-indigo-300"
+              className="text-brand-600 hover:underline dark:text-brand-300"
             >
               #{item.number}
             </a>{" "}
@@ -42,7 +42,7 @@ function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="text-xs text-indigo-600 hover:underline dark:text-indigo-300"
+              className="text-xs text-brand-600 hover:underline dark:text-brand-300"
             >
               +{items.length - shown.length} more
             </button>

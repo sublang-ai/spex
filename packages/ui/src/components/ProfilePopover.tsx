@@ -135,7 +135,7 @@ export function ProfilePopover(props: ProfilePopoverProps) {
               }}
               className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left ${
                 profile.id === currentRef
-                  ? "bg-indigo-50 dark:bg-indigo-950"
+                  ? "bg-brand-50 dark:bg-brand-950"
                   : "hover:bg-neutral-50 dark:hover:bg-neutral-800"
               }`}
             >
@@ -157,7 +157,7 @@ export function ProfilePopover(props: ProfilePopoverProps) {
                 ) : null}
               </span>
               {profile.id === currentRef ? (
-                <span className="text-indigo-500">✓</span>
+                <span className="text-brand-500">✓</span>
               ) : null}
             </button>
           );
@@ -170,7 +170,7 @@ export function ProfilePopover(props: ProfilePopoverProps) {
                 (item) => item.profileId === currentRef,
               );
               return (
-                <div className="flex items-center gap-2 rounded-md bg-indigo-50 px-2 py-1.5 dark:bg-indigo-950">
+                <div className="flex items-center gap-2 rounded-md bg-brand-50 px-2 py-1.5 dark:bg-brand-950">
                   <span className="font-mono text-xs font-semibold">
                     {currentRef}
                   </span>
@@ -188,7 +188,7 @@ export function ProfilePopover(props: ProfilePopoverProps) {
                       </span>
                     ) : null}
                   </span>
-                  <span className="text-indigo-500">✓</span>
+                  <span className="text-brand-500">✓</span>
                 </div>
               );
             })()
@@ -226,7 +226,7 @@ export function ProfilePopover(props: ProfilePopoverProps) {
                 data-testid="popover-save"
                 disabled={!dirty || busy}
                 onClick={save}
-                className="ml-auto rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+                className="ml-auto rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
               >
                 {busy ? "Saving…" : "Save"}
               </button>

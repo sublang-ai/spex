@@ -19,7 +19,7 @@ function Line({ line }: { line: CaptainLine }) {
         <div className="flex justify-end" title={time}>
           <div
             data-testid="boss-bubble"
-            className="max-w-[85%] rounded-2xl rounded-br-md bg-indigo-600 px-3 py-1.5 text-sm text-white"
+            className="max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3 py-1.5 text-sm text-white"
           >
             <span className="whitespace-pre-wrap">{line.text}</span>
           </div>
@@ -135,7 +135,7 @@ export function CaptainPane({ view }: { view: SessionView }) {
       className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
       <header className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[11px] font-bold text-white">
           C
         </span>
         <span className="text-sm font-semibold">Captain</span>

@@ -102,7 +102,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
               onClick={() => setStage(entry.key)}
               className={`rounded-md px-2 py-0.5 text-xs ${
                 stage === entry.key
-                  ? "bg-indigo-100 font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                  ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                   : artifacts[entry.key] === null
                     ? "text-neutral-300 line-through dark:text-neutral-600"
                     : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
@@ -197,7 +197,7 @@ export function LibrarySurface({
             <button
               type="button"
               onClick={() => onNavigate("Settings")}
-              className="text-indigo-600 hover:underline dark:text-indigo-300"
+              className="text-brand-600 hover:underline dark:text-brand-300"
             >
               Settings
             </button>
@@ -500,7 +500,7 @@ export function LibrarySurface({
               type="button"
               disabled={compiling || missingRequirement !== undefined}
               onClick={startCompile}
-              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
               {compiling
                 ? "Compiling… (agent-driven, this takes a while)"

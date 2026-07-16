@@ -28,6 +28,7 @@ import {
 } from "./components/SpecView.js";
 import { InlineConfirm } from "./components/InlineConfirm.js";
 import { Icon } from "./components/Icon.js";
+import monogram from "./assets/sublang-monogram.png";
 
 const SURFACES = ["Workspace", "Dashboard", "Playbooks", "Settings"] as const;
 export type Surface = (typeof SURFACES)[number];
@@ -80,7 +81,7 @@ function RefreshErrorBanner() {
               }),
             )
         }
-        className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+        className="font-medium text-brand-700 hover:underline dark:text-brand-300"
       >
         Retry
       </button>
@@ -398,7 +399,7 @@ function WorkspaceSurface({
         className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm ${
           project
             ? "border-neutral-300 font-medium text-neutral-700 dark:border-neutral-700 dark:text-neutral-200"
-            : "border-indigo-400 font-medium text-indigo-600 dark:border-indigo-600 dark:text-indigo-300"
+            : "border-brand-400 font-medium text-brand-600 dark:border-brand-600 dark:text-brand-300"
         } hover:bg-neutral-100 dark:hover:bg-neutral-800`}
       >
         <Icon name="folder" className="h-3.5 w-3.5" />
@@ -816,7 +817,8 @@ export function App() {
       ) : null}
       <div className="flex min-h-0 flex-1">
         <nav className="flex w-44 flex-col gap-1 border-r border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
-          <div className="mb-2 px-1">
+          <div className="mb-2 flex items-center gap-2 px-1">
+            <img src={monogram} alt="" className="h-5 w-5" />
             <span className="text-base font-bold tracking-tight">Spex</span>
           </div>
           {SURFACES.map((name) => (
@@ -832,7 +834,7 @@ export function App() {
               }
               className={`rounded-md px-2.5 py-1.5 text-left text-sm ${
                 surface === name
-                  ? "bg-indigo-50 font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                  ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                   : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
               }`}
             >
