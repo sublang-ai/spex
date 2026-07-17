@@ -1,0 +1,179 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
+
+# CAT: Course Catalog
+
+## Intent
+
+This spec covers courses and their syllabi: public browsing, the
+admin course manager, publication state, and the syllabus
+structure of ordered sections and lessons, per
+[DR-000](../../decisions/000-product-scope.md).
+A lesson may carry one media attachment as an opaque reference;
+this package does not define what media is — the deployment binds
+a media provider to the slot, and the catalog never interprets or
+manages the referenced assets.
+Admin-only surfaces are guarded by the access guard of
+[ROLE](../identity/access-control.md).
+
+## External Behavior
+
+### Browsing
+
+#### CAT-1
+
+When any visitor opens the course list, the catalog shall show
+every published course — title and summary — newest publication
+first, and shall not show unpublished courses.
+
+#### CAT-2
+
+When a visitor opens a published course, the course page shall
+show the course title, its description, and the full syllabus:
+sections in their defined order, each with its lessons in their
+defined order, and lesson entries carrying a media attachment
+marked as playable.
+When a visitor opens a lesson from the syllabus, the lesson view
+shall show the lesson title, its course and section context,
+and — where the lesson carries a media attachment — the media
+area delegated to the deployment's media provider.
+
+#### CAT-3
+
+When a request targets a course or lesson that does not exist, or
+one that is unpublished while the requester holds no admin
+session, the site shall respond not-found, making an unpublished
+course indistinguishable from a nonexistent one to non-admins.
+
+### Management
+
+#### CAT-4
+
+Where the course manager is designated admin-only
+([ROLE-2](../identity/access-control.md#role-2)), when the admin
+creates a course with a title, the catalog shall create it
+unpublished.
+While no course exists, the course manager shall present course
+creation as its primary action.
+
+#### CAT-5
+
+When the admin edits a course's syllabus, the course manager
+shall support adding, renaming, reordering, and removing sections
+and lessons, and the course page shall reflect exactly the
+arranged order.
+When the admin removes a section, the course manager shall ask
+for confirmation naming the count of lessons removed with it.
+
+#### CAT-6
+
+When the admin publishes a course, the course shall appear in the
+course list ([CAT-1](#cat-1)) and its page shall become publicly
+reachable; when the admin unpublishes it, the course shall return
+to the unpublished state and public requests shall again see
+not-found ([CAT-3](#cat-3)).
+
+#### CAT-7
+
+When a save would leave a required field empty — a course title,
+section name, or lesson title — the course manager shall keep the
+entered state, mark the offending field, and save nothing.
+
+### The Media Slot
+
+#### CAT-8
+
+When the admin uses a lesson's attach, replace, or remove media
+action, the course manager shall delegate asset selection to the
+deployment's media provider and store the returned reference on
+the lesson — at most one reference per lesson — without
+interpreting it; the remove action shall clear the reference
+only.
+
+## Internal Behavior
+
+### Identity
+
+#### CAT-9
+
+When a course is created, the catalog shall assign it a URL slug
+derived from its title, made unique by suffixing on collision;
+the slug shall not change thereafter — renaming the course keeps
+the slug — so shared course links keep resolving.
+
+### Structure Integrity
+
+#### CAT-10
+
+When a course is deleted, the catalog shall delete its sections,
+lessons, and stored media references in the same operation, and
+shall not delete or alter any asset of the media provider —
+references are the catalog's, assets are not.
+
+#### CAT-11
+
+Where section and lesson order is stored, it shall be stored as
+explicit positions independent of names and timestamps, so a
+rename or a re-save never reorders a syllabus.
+
+### Draft Isolation
+
+#### CAT-12
+
+Where catalog data is read for a requester without an admin
+session, unpublished courses and their content shall be excluded
+at the data-access layer, so no response payload — page markup or
+data request — carries unpublished content to non-admins.
+
+## Verification
+
+### Browsing and Publication Coverage
+
+#### CAT-13
+Verifies: [CAT-1](#cat-1), [CAT-2](#cat-2), [CAT-3](#cat-3), [CAT-6](#cat-6)
+
+Where fixture data holds two published courses with known
+publication times and one unpublished course, the test suite
+shall assert: the course list shows exactly the published two,
+newest publication first; a published course page shows its
+syllabus in the defined order with attachment-carrying lessons
+marked playable; the unpublished course's URL responds not-found
+without an admin session; and publishing then unpublishing it
+flips the list and the URL between the two states.
+
+### Management Coverage
+
+#### CAT-14
+Verifies: [CAT-4](#cat-4), [CAT-5](#cat-5), [CAT-7](#cat-7), [CAT-11](#cat-11)
+
+Where an admin session drives the course manager from an empty
+catalog, the test suite shall assert: creation is presented as
+the primary action; a created course starts unpublished; added
+sections and lessons appear in the arranged order, and after
+reordering and renaming plus a reload, the order matches the
+explicit positions; removing a section asks for confirmation
+naming its lesson count; and a save with an empty required field
+marks the field, keeps the entered state, and persists nothing.
+
+### Identity and Boundary Coverage
+
+#### CAT-15
+Verifies: [CAT-8](#cat-8), [CAT-9](#cat-9), [CAT-10](#cat-10)
+
+Where a stub media provider returns fixed references, the test
+suite shall assert: attach, replace, and remove store, swap, and
+clear the lesson's single reference without the catalog reading
+the referenced asset; a course's slug survives a title change and
+collides into a suffixed form; and deleting a course removes its
+sections, lessons, and references while the stub provider's
+assets remain untouched.
+
+### Isolation Coverage
+
+#### CAT-16
+Verifies: [CAT-12](#cat-12)
+
+Where fixture data holds an unpublished course with a distinctive
+title, the test suite shall assert that no response to signed-out
+or member-session requests — page markup or data request —
+contains the unpublished course's title or slug.
