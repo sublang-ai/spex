@@ -18,6 +18,9 @@ dev runs.
   accent; AA-safe muted ink on paper
 - [x] Desktop: monogram `icon.icns` for electron-builder; dev dock
   icon
+- [x] Logo v2: the owner-supplied product logo, recolored onto the
+  brand ramp, replaces the monogram as sidebar mark, favicon, and
+  app icon
 
 ## Tasks
 
@@ -28,6 +31,8 @@ dev runs.
    and favicon.
 3. Generate the monogram icns; point the electron-builder mac
    config at it and set the dev dock icon.
+4. Recolor the owner's product logo onto the brand ramp per
+   DR-013; swap the sidebar mark and regenerate favicon and icns.
 
 ## Acceptance criteria
 

@@ -48,10 +48,16 @@ Accepted
 - **Type.** Sans stack prefers Euclid Circular A when installed and
   falls back to the platform sans.
   The licensed font files are not bundled into this public repo.
-- **Logo.** The SubLang monogram is the app icon and the in-app
+- **Logo.** The Spex product logo — the owner-supplied circular
+  beach-rabbit badge — is the app icon, favicon, and the in-app
   mark beside the Spex name.
-  Logo assets come from the design-system project unmodified —
-  never redrawn or re-typeset.
+  Its warm original palette is recolored onto the brand ramp by a
+  luminance gradient map anchored at the source palette's measured
+  luminances: fronds `#27063D`, trunk brand-800, ring and sky-top
+  `#890FBC`, one `#A416EF` glow mid-sky, rabbit white.
+  The SubLang monogram and wordmarks remain the Lab's marks; those
+  assets come from the design-system project unmodified — never
+  redrawn or re-typeset.
 - **Interaction details.** One focus ring — a 2px brand outline at
   2px offset on `:focus-visible`; native control accents and text
   selection ride the brand ramp.
