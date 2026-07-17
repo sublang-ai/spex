@@ -28,7 +28,7 @@ import {
 } from "./components/SpecView.js";
 import { InlineConfirm } from "./components/InlineConfirm.js";
 import { Icon } from "./components/Icon.js";
-import monogram from "./assets/sublang-monogram.png";
+import logo from "./assets/spex-logo.png";
 
 const SURFACES = ["Workspace", "Dashboard", "Playbooks", "Settings"] as const;
 export type Surface = (typeof SURFACES)[number];
@@ -818,7 +818,7 @@ export function App() {
       <div className="flex min-h-0 flex-1">
         <nav className="flex w-44 flex-col gap-1 border-r border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
           <div className="mb-2 flex items-center gap-2 px-1">
-            <img src={monogram} alt="" className="h-5 w-5" />
+            <img src={logo} alt="" className="h-6 w-6" />
             <span className="text-base font-bold tracking-tight">Spex</span>
           </div>
           {SURFACES.map((name) => (
