@@ -7,10 +7,11 @@
 
 This spec covers the frame every page shares: the header and its
 entries, error and loading surfaces, and responsive behavior.
-The shell hosts controls owned by other packages — the account
-menu of [AUTH](../identity/github-login.md) — and varies its
-entries by the roles of [ROLE](../identity/access-control.md);
-the visual-system binding is a stack decision
+The header's navigation entries, session control, and admin
+entry are open slots the deployment binds to its own surfaces,
+so the shell knows no product noun; the roles gating the admin
+entry come from [ROLE](../identity/access-control.md), and the
+visual-system binding is a stack decision
 ([DR-001](../../decisions/001-web-stack.md)).
 
 ## External Behavior
@@ -20,18 +21,16 @@ the visual-system binding is a stack decision
 #### SHELL-1
 
 Every page shall carry the shared header — the site name linking
-to the home page, a Courses entry linking to the course list, and
-the account menu
-([AUTH-4](../identity/github-login.md#auth-4)) — and a footer
-naming the site.
+to the home page, the deployment's navigation entries, and the
+deployment's session control — and a footer naming the site.
 
 #### SHELL-2
 
 While an admin-role session is active
 ([ROLE-1](../identity/access-control.md#role-1)), the header
-shall show an Admin entry leading to the course manager; while a
-member session or no session is active, the header shall contain
-no admin entry.
+shall include the deployment's admin entry; while a member
+session or no session is active, the header shall contain no
+admin entry.
 
 #### SHELL-3
 
@@ -57,22 +56,12 @@ or internal identifier.
 
 ## Internal Behavior
 
-### One Visual System
-
-#### SHELL-6
-
-Where a surface uses interactive primitives — buttons, inputs,
-dialogs, menus — they shall come from the single shared component
-kit and token set of
-[DR-001](../../decisions/001-web-stack.md), with no per-page
-variants of the same primitive.
-
 ### Server-Resolved Chrome
 
 #### SHELL-7
 
-Where a page's chrome varies by session or role — the account
-menu and the admin entry — the variance shall be resolved
+Where a page's chrome varies by session or role — the session
+control and the admin entry — the variance shall be resolved
 server-side before first paint, so no page flashes another role's
 chrome and no served markup carries entries the requester's role
 denies.
@@ -85,11 +74,12 @@ denies.
 Verifies: [SHELL-1](#shell-1), [SHELL-2](#shell-2), [SHELL-3](#shell-3)
 
 Where fixture sessions exist for an admin, a member, and a
-signed-out visitor, the test suite shall assert: every fixture
-page carries the header with home link, Courses entry, account
-menu, and footer; the Admin entry appears for the admin session
-and for no other; and an unknown URL returns the not-found page
-with HTTP status 404.
+signed-out visitor, and fixture surfaces are bound to the
+header's slots, the test suite shall assert: every fixture page
+carries the header with the home link, the bound navigation
+entries, the bound session control, and the footer; the admin
+entry appears for the admin session and for no other; and an
+unknown URL returns the not-found page with HTTP status 404.
 
 ### Fit and Feedback Coverage
 
@@ -110,5 +100,5 @@ Verifies: [SHELL-7](#shell-7)
 
 Where member and signed-out fixture sessions request every
 fixture page, the test suite shall assert the served markup
-contains no admin entry, and that the account menu's served
+contains no admin entry, and that the session control's served
 state matches the session without a client-side correction pass.

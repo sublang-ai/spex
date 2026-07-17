@@ -31,8 +31,9 @@ first, and shall not show unpublished courses.
 When a visitor opens a published course, the course page shall
 show the course title, its description, and the full syllabus:
 sections in their defined order, each with its lessons in their
-defined order, and lesson entries carrying a media attachment
-marked as playable.
+defined order, and a lesson entry marked as playable exactly
+when it carries a media attachment that the deployment's media
+provider resolves.
 When a visitor opens a lesson from the syllabus, the lesson view
 shall show the lesson title, its course and section context,
 and — where the lesson carries a media attachment — the media
@@ -44,6 +45,9 @@ When a request targets a course or lesson that does not exist, or
 one that is unpublished while the requester holds no admin
 session, the site shall respond not-found, making an unpublished
 course indistinguishable from a nonexistent one to non-admins.
+While an admin session is active, when a request targets an
+unpublished course or one of its lessons, the site shall show
+the page, marked as unpublished.
 
 ### Management
 
@@ -72,12 +76,31 @@ course list ([CAT-1](#cat-1)) and its page shall become publicly
 reachable; when the admin unpublishes it, the course shall return
 to the unpublished state and public requests shall again see
 not-found ([CAT-3](#cat-3)).
+Publishing — including republishing after an unpublish — shall
+set the publication time that orders the course list
+([CAT-1](#cat-1)).
 
 #### CAT-7
 
 When a save would leave a required field empty — a course title,
 section name, or lesson title — the course manager shall keep the
 entered state, mark the offending field, and save nothing.
+
+#### CAT-17
+
+When the admin deletes a course, the course manager shall ask
+for confirmation naming the counts of sections and lessons
+removed with it; when the admin confirms, the course shall leave
+the course list and its page shall respond not-found
+([CAT-3](#cat-3)).
+
+#### CAT-18
+
+When the admin saves a course's details — the title and an
+optional description — the course manager shall store them; the
+course page shall show the description ([CAT-2](#cat-2)), and
+the course list shall show the description's first paragraph as
+the course's summary ([CAT-1](#cat-1)).
 
 ### The Media Slot
 
@@ -90,9 +113,7 @@ the lesson — at most one reference per lesson — without
 interpreting it; the remove action shall clear the reference
 only.
 
-## Internal Behavior
-
-### Identity
+### Addresses
 
 #### CAT-9
 
@@ -101,14 +122,16 @@ derived from its title, made unique by suffixing on collision;
 the slug shall not change thereafter — renaming the course keeps
 the slug — so shared course links keep resolving.
 
+## Internal Behavior
+
 ### Structure Integrity
 
 #### CAT-10
 
-When a course is deleted, the catalog shall delete its sections,
-lessons, and stored media references in the same operation, and
-shall not delete or alter any asset of the media provider —
-references are the catalog's, assets are not.
+When a course is deleted ([CAT-17](#cat-17)), the catalog shall
+delete its sections, lessons, and stored media references in the
+same operation, and shall not delete or alter any asset of the
+media provider — references are the catalog's, assets are not.
 
 #### CAT-11
 
@@ -136,37 +159,42 @@ Where fixture data holds two published courses with known
 publication times and one unpublished course, the test suite
 shall assert: the course list shows exactly the published two,
 newest publication first; a published course page shows its
-syllabus in the defined order with attachment-carrying lessons
+syllabus in the defined order with resolvable-attachment lessons
 marked playable; the unpublished course's URL responds not-found
-without an admin session; and publishing then unpublishing it
-flips the list and the URL between the two states.
+without an admin session while an admin session sees its page
+marked as unpublished; publishing then unpublishing it flips the
+list and the URL between the two states; and republishing places
+the course first in the list under its new publication time.
 
 ### Management Coverage
 
 #### CAT-14
-Verifies: [CAT-4](#cat-4), [CAT-5](#cat-5), [CAT-7](#cat-7), [CAT-11](#cat-11)
+Verifies: [CAT-4](#cat-4), [CAT-5](#cat-5), [CAT-7](#cat-7), [CAT-11](#cat-11), [CAT-18](#cat-18)
 
 Where an admin session drives the course manager from an empty
 catalog, the test suite shall assert: creation is presented as
-the primary action; a created course starts unpublished; added
-sections and lessons appear in the arranged order, and after
-reordering and renaming plus a reload, the order matches the
-explicit positions; removing a section asks for confirmation
-naming its lesson count; and a save with an empty required field
-marks the field, keeps the entered state, and persists nothing.
+the primary action; a created course starts unpublished; a saved
+description appears on the course page with its first paragraph
+as the list summary; added sections and lessons appear in the
+arranged order, and after reordering and renaming plus a reload,
+the order matches the explicit positions; removing a section
+asks for confirmation naming its lesson count; and a save with
+an empty required field marks the field, keeps the entered
+state, and persists nothing.
 
 ### Identity and Boundary Coverage
 
 #### CAT-15
-Verifies: [CAT-8](#cat-8), [CAT-9](#cat-9), [CAT-10](#cat-10)
+Verifies: [CAT-8](#cat-8), [CAT-9](#cat-9), [CAT-10](#cat-10), [CAT-17](#cat-17)
 
 Where a stub media provider returns fixed references, the test
 suite shall assert: attach, replace, and remove store, swap, and
 clear the lesson's single reference without the catalog reading
 the referenced asset; a course's slug survives a title change and
-collides into a suffixed form; and deleting a course removes its
-sections, lessons, and references while the stub provider's
-assets remain untouched.
+collides into a suffixed form; and deleting a course — after a
+confirmation naming its section and lesson counts — removes the
+course from the list, its sections, lessons, and references,
+while the stub provider's assets remain untouched.
 
 ### Isolation Coverage
 

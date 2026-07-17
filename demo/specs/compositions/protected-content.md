@@ -50,11 +50,12 @@ Verifies: [GUARD-1](#guard-1), [GUARD-2](#guard-2), [ROLE-2](../packages/identit
 
 Where a seeded deployment holds published and unpublished
 fixture courses, when the acceptance suite sweeps the map's page
-and data routes as a signed-out visitor and as a member — by
-direct URL and by in-app navigation — the suite shall assert
-every response matches the map's cell for that audience, and
-that no response body carries unpublished content or admin
-markup.
+and data routes as a signed-out visitor, as a member, and as the
+admin — by direct URL and by in-app navigation — the suite shall
+assert every response matches the map's cell for that audience,
+including the unpublished pages shown to the admin marked as
+unpublished, and that no non-admin response body carries
+unpublished content or admin markup.
 
 ### GUARD-4
 Verifies: [GUARD-1](#guard-1), [GUARD-2](#guard-2), [AUTH-8](../packages/identity/github-login.md#auth-8), [VID-7](../packages/catalog/video-library.md#vid-7), [VID-8](../packages/catalog/video-library.md#vid-8)
@@ -63,5 +64,7 @@ Where a fixture asset is attached to a published lesson, the
 acceptance suite shall assert: direct stored-content requests
 without a grant, with an expired grant, and with a tampered
 grant are denied for all three audiences; a member's playback
-request obtains a grant and plays; and the granted URL is scoped
-to that one asset and stops working after its expiry.
+request obtains a grant and plays; the grant is scoped to that
+one asset and stops working after its expiry; and every session
+cookie observed during the sweep is marked HTTP-only, readable
+by no page script.

@@ -68,6 +68,15 @@ signed-in session is active, the player shall show a
 sign-in-required state in place of playback and shall request no
 media content.
 
+### Resolution
+
+#### VID-14
+
+Where a host surface holds a stored asset identifier, when the
+host queries the library for that identifier, the library shall
+report whether it resolves to a listed asset — unresolvable once
+the asset is deleted.
+
 ## Internal Behavior
 
 ### Storage
@@ -81,12 +90,13 @@ regardless of the requester's session state.
 
 #### VID-8
 
-When the player starts playback, the server shall verify the
-request's session
-([AUTH-9](../identity/github-login.md#auth-9)) and only then
-issue a short-lived access grant scoped to that one asset (a
-signed URL bounded by the configured expiry); an expired or
-tampered grant shall be denied.
+While a playback request carries a session verified per
+[AUTH-9](../identity/github-login.md#auth-9), when the player
+starts playback, the server shall issue a short-lived access
+grant scoped to that one asset and bounded by the configured
+expiry; the server shall deny a playback request without a
+verified session and any content request bearing an expired or
+tampered grant.
 
 ### Asset Identity
 
@@ -135,11 +145,16 @@ with a signed-in session.
 ### Identity and Deletion Coverage
 
 #### VID-13
-Verifies: [VID-4](#vid-4), [VID-9](#vid-9), [VID-10](#vid-10)
+Verifies: [VID-4](#vid-4), [VID-9](#vid-9), [VID-10](#vid-10), [VID-14](#vid-14)
 
 Where the same fixture content is uploaded twice, the test suite
 shall assert two assets exist with distinct stable identifiers;
-when one is deleted after confirmation, the suite shall assert
-its content is no longer served while the other still plays, and
-that a stub host's stored reference to the deleted asset remains
-unread and unmodified by the library.
+when the admin edits one asset's title, the suite shall assert
+the list shows the new title with the asset's size and upload
+date after a reload; when one asset is deleted after
+confirmation, the suite shall assert its content is no longer
+served while the other still plays, that a stub host's stored
+reference to the deleted asset remains unread and unmodified by
+the library, and that the stub host's resolution query reports
+the deleted asset's identifier unresolvable while the remaining
+asset's still resolves.

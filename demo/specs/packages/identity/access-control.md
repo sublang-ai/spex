@@ -47,9 +47,10 @@ content.
 
 #### ROLE-3
 
-When an account completes sign-in, the role store shall set the
-role on that account's user record
-([AUTH-7](github-login.md#auth-7)) from the current
+Where the identity store maintains a user record for the
+account ([AUTH-7](github-login.md#auth-7)), when the account
+completes sign-in, the role store shall record the account's
+role, keyed by the account's stable ID, from the current
 configuration — admin on a match, member otherwise — so a
 configuration change takes effect at each account's next
 sign-in, with no separate migration step.

@@ -16,7 +16,8 @@ the full composition suite green — the release acceptance.
 - [ ] Private storage with short-lived access grants (VID)
 - [ ] Embedded player with signed-in gating (VID)
 - [ ] Media-slot binding: library picker in the lesson editor, dangling-reference handling (PUB)
-- [ ] Full composition acceptance green (PUB, PLAY, GUARD)
+- [ ] Header-slot and home-page bindings complete (NAV)
+- [ ] Full composition acceptance green (NAV, PUB, PLAY, GUARD)
 
 ## Tasks
 
@@ -32,6 +33,6 @@ the full composition suite green — the release acceptance.
 ## Acceptance criteria
 
 - VID-11 through VID-13 pass.
-- PUB-4, PUB-5, PLAY-3, PLAY-4, GUARD-3, and GUARD-4 pass
-  against a fresh preview deployment — the product's release
-  acceptance.
+- NAV-3, PUB-4, PUB-5, PLAY-3, PLAY-4, GUARD-3, and GUARD-4
+  pass against a fresh preview deployment — the product's
+  release acceptance.

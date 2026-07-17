@@ -59,7 +59,7 @@ navigation collections with no semantics
 
 | Short | File | Summary |
 | --- | --- | --- |
-| SHELL | [web-shell.md](packages/site/web-shell.md) | Shared frame, role-aware entries, not-found, responsive fit; one visual system, server-resolved chrome |
+| SHELL | [web-shell.md](packages/site/web-shell.md) | Shared frame with slot-bound entries, not-found, responsive fit; server-resolved chrome |
 
 ### ops/
 
@@ -72,6 +72,7 @@ navigation collections with no semantics
 | Short | File | Summary |
 | --- | --- | --- |
 | BOOT | [admin-bootstrap.md](compositions/admin-bootstrap.md) | Day zero: fresh deployment to working admin in one sign-in |
+| NAV | [site-navigation.md](compositions/site-navigation.md) | Binds the shell's header slots and the home page to the product's surfaces |
 | PUB | [course-publishing.md](compositions/course-publishing.md) | Assemble and release a course; binds the media slot to the video library |
 | PLAY | [lesson-playback.md](compositions/lesson-playback.md) | The member journey: browse, sign in, watch — the flagship acceptance scenario |
 | GUARD | [protected-content.md](compositions/protected-content.md) | The gating map across all audiences and paths, and its independence from client-side hiding |

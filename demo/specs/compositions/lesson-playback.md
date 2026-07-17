@@ -45,11 +45,11 @@ Verifies: [PLAY-1](#play-1), [PLAY-2](#play-2), [CAT-1](../packages/catalog/cour
 Where a deployment is seeded with a published fixture course
 whose lesson carries a fixture asset, and a stub GitHub provider
 is configured, when the acceptance suite walks from the home
-page to the course list, opens the course, and opens the lesson,
-the suite shall assert the player shows the sign-in-required
-state; when the suite signs in from that lesson, it shall assert
-the site returns to the same lesson and the media element
-reaches the playing state through a granted URL.
+page's course list, opens the course, and opens the lesson, the
+suite shall assert the player shows the sign-in-required state;
+when the suite signs in from that lesson, it shall assert the
+site returns to the same lesson and the media element reaches
+the playing state through a fresh access grant.
 
 ### PLAY-4
 Verifies: [PLAY-1](#play-1), [SHELL-4](../packages/site/web-shell.md#shell-4), [VID-5](../packages/catalog/video-library.md#vid-5)

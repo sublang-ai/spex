@@ -22,10 +22,9 @@ favors a server-rendered stack.
 - Server components by default; mutations via server actions;
   no separate API service.
 - Tailwind CSS for styling; shadcn/ui as the owned component
-  kit — components are vendored into the repo, so the kit and
-  token set of
-  [SHELL-6](../packages/site/web-shell.md#shell-6) is one
-  in-repo source.
+  kit — components are vendored into the repo, one in-repo kit
+  and token set; interactive primitives come from this kit, with
+  no per-page variants of the same primitive.
 - Native HTML5 video element for playback; no player framework.
 
 ## Consequences

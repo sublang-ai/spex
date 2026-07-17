@@ -40,7 +40,7 @@ compositions, which say how the packages add up to the product.
 | `compositions/` replaces `interactions/` | [META-31](specs/meta.md#meta-31) |
 | Collection directories carry no semantics | [META-32](specs/meta.md#meta-32); `packages/identity/`, `packages/catalog/`, … |
 | Packages never cite compositions | [META-33](specs/meta.md#meta-33) |
-| Compositions may hold binding items | [PUB-1](specs/compositions/course-publishing.md#pub-1) |
+| Compositions may hold binding items | [PUB-1](specs/compositions/course-publishing.md#pub-1), [NAV-1](specs/compositions/site-navigation.md#nav-1) |
 | Composition tests verify their own scenario items too | [PLAY-3](specs/compositions/lesson-playback.md#play-3) |
 
 ## Research pointers
@@ -49,5 +49,5 @@ compositions, which say how the packages add up to the product.
 | --- | --- |
 | Package boundary; self-containment | [course-catalog.md](specs/packages/catalog/course-catalog.md) vs [video-library.md](specs/packages/catalog/video-library.md): CAT-8/CAT-10 mirror VID-9/VID-10 across the boundary |
 | External vs internal behavior | AUTH-1 vs AUTH-10; CAT-12; SHELL-7 |
-| Reuse | `github-login.md`, `access-control.md`, `video-library.md` carry no product nouns; ROLE-2 is cited from CAT-4, VID-1, and three compositions |
+| Reuse | `github-login.md`, `access-control.md`, `video-library.md`, and `web-shell.md` carry no product nouns; ROLE-2 is cited from CAT-4, VID-1, and the BOOT and GUARD compositions; the shell's header slots are bound in `site-navigation.md` |
 | Acceptance from compositions | [lesson-playback.md](specs/compositions/lesson-playback.md), [protected-content.md](specs/compositions/protected-content.md) |

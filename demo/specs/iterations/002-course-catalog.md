@@ -22,7 +22,7 @@ skeleton of IR-001.
 1. Add the schema migration for courses, sections, and lessons with explicit positions and slugs.
 2. Implement the public course list and course pages over published data only.
 3. Implement lesson views with the media area left as an unbound slot.
-4. Implement the course manager: creation as empty-state primary action, syllabus editing, confirmation on section removal.
+4. Implement the course manager: creation as empty-state primary action, course details, syllabus editing, confirmations on section removal and course deletion.
 5. Implement publish and unpublish, wired to list visibility and not-found masking.
 6. Enforce draft isolation in the data-access layer for non-admin reads.
 7. Stand up the CAT verification suite and the BOOT acceptance tests.

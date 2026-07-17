@@ -81,10 +81,10 @@ shall exist that bypasses the repository.
 Verifies: [DELIV-1](#deliv-1), [DELIV-2](#deliv-2)
 
 Where a fixture pull request carries a failing check, the audit
-suite shall assert the required checks are reported on it and the
-branch protection blocks its merge; where the fixture's build
-passes, the suite shall assert a preview deployment link appears
-on the pull request.
+suite shall assert the required checks are reported on it and
+that merging it into the default branch is blocked; where the
+fixture's build passes, the suite shall assert a preview
+deployment link appears on the pull request.
 
 ### Deployment Coverage
 
