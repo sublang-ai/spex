@@ -23,8 +23,7 @@ favors a server-rendered stack.
   no separate API service.
 - Tailwind CSS for styling; shadcn/ui as the owned component
   kit — components are vendored into the repo, one in-repo kit
-  and token set; interactive primitives come from this kit, with
-  no per-page variants of the same primitive.
+  and token set.
 - Native HTML5 video element for playback; no player framework.
 
 ## Consequences

@@ -10,8 +10,6 @@ preview deployments, production deployment, secret handling, and
 schema migrations.
 Its user is the developer-operator; external behavior is what
 they observe on the repository and its deployments.
-The hosting and CI bindings are a deployment decision
-([DR-002](../../decisions/002-platform-and-devops.md)).
 
 ## External Behavior
 

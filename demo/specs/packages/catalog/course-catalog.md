@@ -7,14 +7,11 @@
 
 This spec covers courses and their syllabi: public browsing, the
 admin course manager, publication state, and the syllabus
-structure of ordered sections and lessons, per
-[DR-000](../../decisions/000-product-scope.md).
+structure of ordered sections and lessons.
 A lesson may carry one media attachment as an opaque reference;
 this package does not define what media is — the deployment binds
 a media provider to the slot, and the catalog never interprets or
 manages the referenced assets.
-Admin-only surfaces are guarded by the access guard of
-[ROLE](../identity/access-control.md).
 
 ## External Behavior
 

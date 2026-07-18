@@ -6,15 +6,14 @@
 ## Intent
 
 This spec covers authorization: the two roles — admin and
-member — how the initial admin is designated, and the guard that
-denies requests lacking a required role, per
-[DR-003](../../decisions/003-admin-designation.md).
-It builds on the identity records of [AUTH](github-login.md) and
-knows nothing about what guarded surfaces contain; other packages
-designate their own surfaces admin-only and cite the guard.
+member — how the initial admin is designated by deployment
+configuration, and the guard that denies requests lacking a
+required role.
+It knows nothing about what guarded surfaces contain; other
+packages designate their own surfaces admin-only and cite the
+guard.
 Role administration beyond the configured designation — role
-lists, promotion flows — is out of scope per
-[DR-000](../../decisions/000-product-scope.md).
+lists, promotion flows — is out of scope.
 
 ## External Behavior
 

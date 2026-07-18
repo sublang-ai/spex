@@ -6,16 +6,11 @@
 ## Intent
 
 This spec covers protected video assets: admin upload, the
-library listing, deletion, and playback gated by short-lived
-access grants, per
-[DR-000](../../decisions/000-product-scope.md).
-The package has no notion of courses or lessons: host surfaces
-embed its picker and player, and what a reference means to the
-host is the host's business.
-Upload surfaces are guarded by
-[ROLE](../identity/access-control.md); the storage binding is a
-deployment decision
-([DR-002](../../decisions/002-platform-and-devops.md)).
+library listing, deletion, reference resolution, and playback
+gated by short-lived access grants.
+The package has no notion of what its assets illustrate: host
+surfaces embed its picker and player, and what a stored
+reference means to the host is the host's business.
 
 ## External Behavior
 

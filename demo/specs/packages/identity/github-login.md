@@ -6,15 +6,10 @@
 ## Intent
 
 This spec covers authentication: GitHub OAuth sign-in as the only
-method, session lifecycle, and the account menu, per
-[DR-000](../../decisions/000-product-scope.md).
+method, session lifecycle, and the account menu.
 The package knows who the user is and nothing else — it has no
-notion of roles, courses, or media — so it can back any site that
-wants GitHub-only sign-in.
-Roles build on the identity records it maintains
-([ROLE](access-control.md)); the identity-provider binding is a
-deployment decision
-([DR-002](../../decisions/002-platform-and-devops.md)).
+notion of roles or of what the site shows — so it can back any
+site that wants GitHub-only sign-in.
 
 ## External Behavior
 

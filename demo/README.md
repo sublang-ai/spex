@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# Demo: Coursebook
+# Demo: Academy
 
 A complete `specs/` tree for a small, real product — written to be
 ready for code generation, with no code in this directory.
@@ -15,7 +15,7 @@ It serves two purposes:
 
 ## The product
 
-Coursebook is a minimal online course website:
+Academy is a minimal online course website:
 
 - Anyone can browse published courses and their syllabi.
 - Sign-in is GitHub OAuth, and nothing else.
@@ -32,6 +32,8 @@ Coursebook is a minimal online course website:
 Start at [specs/map.md](specs/map.md).
 Read packages first — each is self-contained in one file — then
 compositions, which say how the packages add up to the product.
+The organization rules this tree demonstrates are stated in
+[guidelines.md](guidelines.md).
 
 ## Where this tree deviates from current Spex conventions
 
@@ -42,6 +44,8 @@ compositions, which say how the packages add up to the product.
 | Packages never cite compositions | [META-33](specs/meta.md#meta-33) |
 | Compositions may hold binding items | [PUB-1](specs/compositions/course-publishing.md#pub-1), [NAV-1](specs/compositions/site-navigation.md#nav-1) |
 | Composition tests verify their own scenario items too | [PLAY-3](specs/compositions/lesson-playback.md#play-3) |
+| Package Intents are standalone, carrying no citations | [META-15](specs/meta.md#meta-15) |
+| DRs carry no implementation details | [META-24](specs/meta.md#meta-24) |
 
 ## Research pointers
 

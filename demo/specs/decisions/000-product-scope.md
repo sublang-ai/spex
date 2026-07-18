@@ -9,7 +9,7 @@ Accepted
 
 ## Context
 
-Coursebook is the smallest online course site worth deploying.
+Academy is the smallest online course site worth deploying.
 "Minimal" must be a specified boundary, not a mood, or every
 package quietly grows features.
 

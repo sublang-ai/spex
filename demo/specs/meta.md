@@ -70,8 +70,10 @@ A DR shall specify design decisions and constraints, not duplicate
 implementation logic.
 A DR is sufficient when an implementer can generate or audit code
 from the design intent, constraints, and tradeoffs.
-Implementation details shall be included only when they are part
-of the design contract.
+DRs shall carry no implementation details: a detail that code
+generation requires shall be a spec item with its observable
+outcome stated ([META-26](#meta-26)); a detail that code
+generation does not require shall appear in no spec.
 
 ### META-25
 
@@ -197,10 +199,13 @@ subjects and behaviors from other spec packages.
 ### META-15
 
 Each spec package shall minimize references to the containing
-project.
-When a project-specific reference is essential to a package's
-intent, it shall be documented in the package's `## Intent`
-section.
+project and stand alone: its `## Intent` section shall be
+self-contained prose carrying no citations.
+Dependencies on other packages shall appear only as item-level
+precondition citations ([META-14](#meta-14)); bindings of
+abstract subjects to concrete services shall live in decision
+records, which cite the items they bind
+([META-17](#meta-17)).
 
 ### META-31
 

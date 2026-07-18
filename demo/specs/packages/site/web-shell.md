@@ -9,10 +9,7 @@ This spec covers the frame every page shares: the header and its
 entries, error and loading surfaces, and responsive behavior.
 The header's navigation entries, session control, and admin
 entry are open slots the deployment binds to its own surfaces,
-so the shell knows no product noun; the roles gating the admin
-entry come from [ROLE](../identity/access-control.md), and the
-visual-system binding is a stack decision
-([DR-001](../../decisions/001-web-stack.md)).
+so the shell knows no product noun.
 
 ## External Behavior
 
