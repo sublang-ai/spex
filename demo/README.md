@@ -42,14 +42,12 @@ The organization rules this tree demonstrates are stated in
 | Change | See |
 | --- | --- |
 | `compositions/` replaces `interactions/` | [META-31](specs/meta.md#meta-31) |
-| Collection directories carry no semantics | [META-32](specs/meta.md#meta-32); `packages/identity/`, `packages/catalog/`, … |
-| Packages never cite compositions | [META-33](specs/meta.md#meta-33) |
-| Compositions may hold binding items | [PUB-1](specs/compositions/course-publishing.md#pub-1), [NAV-1](specs/compositions/site-navigation.md#nav-1) |
-| Supply bindings are composition items; DRs keep the choice | [META-15](specs/meta.md#meta-15), [PLAT-1](specs/compositions/platform-services.md#plat-1) |
-| Composition files follow a fixed section grammar | [META-34](specs/meta.md#meta-34) |
-| Composition tests verify their own scenario items too | [PLAY-3](specs/compositions/lesson-playback.md#play-3) |
-| Package Intents are standalone, carrying no citations | [META-15](specs/meta.md#meta-15) |
-| DRs carry no implementation details | [META-24](specs/meta.md#meta-24) |
+
+Everything else this tree demonstrates — binding items and supply
+bindings, the [META-34](specs/meta.md#meta-34) section grammar,
+standalone Intents, DRs without implementation detail — is now
+the scaffold convention (`scaffold/specs/meta.md`); only the
+directory rename awaits CLI support.
 
 ## Research pointers
 

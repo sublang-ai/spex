@@ -18,7 +18,7 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | spec packages, one item file per package | [\<path\>/]\<kebab-case\>.md |
-| `interactions/` | cross-package behaviors, scenarios, and their tests | [\<path\>/]\<kebab-case\>.md |
+| `interactions/` | cross-package interactions: scenarios, bindings, and their tests | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
@@ -56,7 +56,7 @@ DRs and IRs shall be written in concise language, including only what is needed 
 
 A DR shall specify design decisions and constraints, not duplicate implementation logic.
 A DR is sufficient when an implementer can generate or audit code from the design intent, constraints, and tradeoffs.
-Implementation details shall be included only when they are part of the design contract.
+DRs shall carry no implementation details: a detail that code generation requires shall be a spec item with its observable outcome stated ([META-26](#meta-26)); a detail that code generation does not require shall appear in no spec.
 
 ### META-25
 
@@ -111,7 +111,7 @@ A spec item shall describe behavior as observable outcomes (e.g., file state, ex
 ### META-9
 
 A spec package shall be a single item file under `packages/`, so one read covers the whole package.
-Related packages may be grouped into subdirectories of `packages/` for navigation convenience.
+Packages may be grouped into subdirectories of `packages/` for navigation convenience ([META-32](#meta-32)).
 
 ### META-10
 
@@ -127,7 +127,7 @@ Each package file shall contain only the following `##` sections, in this order:
 | ------- | -------- | ------- |
 | `## Intent` | required | the package's purpose ([META-3](#meta-3)) |
 | `## External Behavior` | optional | user-visible behavior: what the system does |
-| `## Internal Behavior` | optional | implementation requirements: how the system is built |
+| `## Internal Behavior` | optional | system-facing constraints not exposed to the package's user |
 | `## Verification` | optional | test items checking this package's claims ([META-21](#meta-21)) |
 | `## References` | optional | external sources ([META-19](#meta-19)) |
 
@@ -147,7 +147,7 @@ Item IDs shall not be modified once released; new items shall use higher IDs per
 
 ### META-13
 
-A spec package shall define a closed set of subjects and their behaviors for a single intent. The shall clause (see [META-6](#meta-6)) of any item shall only involve subjects and behaviors within its own package.
+A spec package shall define a closed set of subjects and their behaviors for a single intent. The shall clause (see [META-6](#meta-6)) of any item shall only involve subjects and behaviors within its own package; where a package leaves an open slot for another party (e.g., "the deployment's media provider"), the slot shall be named abstractly, and its binding shall live in an interaction file ([META-31](#meta-31)).
 
 ### META-14
 
@@ -155,15 +155,45 @@ The precondition and trigger clauses (Where, While, When; see [META-6](#meta-6))
 
 ### META-15
 
-Each spec package shall minimize references to the containing project. When a project-specific reference is essential to a package's intent, it shall be documented in the package's `## Intent` section.
+Each spec package shall minimize references to the containing project and stand alone: its `## Intent` section shall be self-contained prose carrying no citations.
+Dependencies on other packages shall appear only as item-level precondition citations ([META-14](#meta-14)); bindings of abstract subjects — to another package or to an external service — shall be binding items under `interactions/` ([META-31](#meta-31)), and the decision record that chooses the bound party shall cite those binding items ([META-17](#meta-17)).
 
 ### META-31
 
 Files under `interactions/` shall describe how multiple spec packages work together.
 
-- Each file shall cover one behavior or scenario and be named after it; file names shall not be concatenations of package names.
-- Each file shall follow the item-file conventions: an H1 with a short form ([META-10](#meta-10)), an `## Intent` section ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6)); other sections are free-form.
-- Integration and acceptance test items that span multiple packages shall live here, each carrying a `Verifies:` line ([META-20](#meta-20)) citing items from two or more packages.
+- Each file shall cover one integrated behavior, scenario, or binding concern and be named after it; file names shall not be concatenations of package names.
+- Each file shall follow the item-file conventions: an H1 with a short form ([META-10](#meta-10)), an `## Intent` section ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6)), with sections per [META-34](#meta-34).
+- Interaction items may take the composed system as their subject, and may bind an open slot one package leaves to a surface another package provides (a binding item). Where no product user observes the seam, a binding item may bind an abstract subject to an external service instead (a supply binding); its tests are inspections of a deployment rather than user journeys.
+- Integration and acceptance test items shall live here, each carrying a `Verifies:` line ([META-20](#meta-20)) citing the same-file scenario or binding items it executes plus the package items it directly checks; a scenario test shall cite items from two or more packages.
+
+### META-32
+
+Subdirectories under `packages/` and `interactions/` shall be navigation collections only, with no semantic meaning: no spec, tool, or reader shall infer package relationships, layering, or ownership from directory placement.
+A file's identity is its basename and short form ([META-10](#meta-10)); moving a file between collections changes relative citation paths but shall change no item ID, short form, or anchor.
+
+### META-33
+
+Files under `packages/` shall not cite files under `interactions/`.
+Interaction files cite package items; packages stay ignorant of the interactions built on them, so a package can be moved to another project without dragging scenario context along.
+
+### META-34
+
+Each interaction file shall contain only the following `##` sections, in this order:
+
+| Section | Presence | Content |
+| ------- | -------- | ------- |
+| `## Intent` | required | the concern's purpose ([META-3](#meta-3)) |
+| `## Binding` | optional | binding items ([META-31](#meta-31)) |
+| `## Scenario` | optional | integrated-behavior items over the composed system |
+| `## Tests` | required | test items with `Verifies:` lines ([META-20](#meta-20)) |
+| `## References` | optional | external sources ([META-19](#meta-19)) |
+
+At least one of `## Binding` and `## Scenario` shall be present.
+A file may hold bindings alone; whether its tests are acceptance journeys or deployment inspections follows from its seams' audience ([META-31](#meta-31)), not from the file's section shape.
+Where both sections are present, each binding item shall be cited by at least one same-file scenario item whose outcome depends on it — a binding no same-file scenario depends on, or one that serves several files' concerns, shall live in a bindings-only file.
+Binding conformance and scenario acceptance may share one test item but need not.
+Localized scaffolds translate these section headings; the bundled templates define the active names.
 
 ## Citation
 
@@ -188,7 +218,7 @@ IRs shall not be cited by any spec except `map.md`.
 
 Each test item shall include one `Verifies:` metadata line immediately below its item ID heading.
 
-The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the behavior items that the test item verifies: same-file anchors for a package's own Verification items, and `packages/` citations for interaction test items.
+The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the behavior items that the test item verifies: same-file anchors for a package's own Verification items, and `packages/` citations plus same-file scenario or binding anchors for interaction test items ([META-31](#meta-31)).
 
 ## Authoring language
 

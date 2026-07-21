@@ -219,8 +219,8 @@ packages work together.
   be concatenations of package names.
 - Each file shall follow the item-file conventions: an H1 with a
   short form ([META-10](#meta-10)), an `## Intent` section
-  ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6));
-  other sections are free-form.
+  ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6)),
+  with sections per [META-34](#meta-34).
 - Composition items may take the composed system as their
   subject, and may bind an open slot one package leaves to a
   surface another package provides (a binding item).
@@ -228,13 +228,11 @@ packages work together.
   bind an abstract subject to an external service instead (a
   supply binding); its tests are inspections of a deployment
   rather than user journeys.
-- Integration and acceptance test items that span multiple
-  packages shall live here, each carrying a `Verifies:` line
-  ([META-20](#meta-20)) citing items from two or more
-  packages — for a file whose bindings are all supply bindings,
-  from every package whose seams it binds; a test item shall
-  also cite the same-file scenario or binding items it
-  executes.
+- Integration and acceptance test items shall live here, each
+  carrying a `Verifies:` line ([META-20](#meta-20)) citing the
+  same-file scenario or binding items it executes plus the
+  package items it directly checks; a scenario test shall cite
+  items from two or more packages.
 
 ### META-34
 
@@ -313,8 +311,9 @@ immediately below its item ID heading.
 The `Verifies:` line shall contain one or more comma-separated
 [citations](#meta-16) to the behavior items that the test item
 verifies: same-file anchors for a package's own Verification
-items, and `packages/` citations plus same-file scenario anchors
-for composition test items ([META-31](#meta-31)).
+items, and `packages/` citations plus same-file scenario or
+binding anchors for composition test items
+([META-31](#meta-31)).
 
 ## Authoring language
 

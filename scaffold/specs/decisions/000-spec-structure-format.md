@@ -42,7 +42,7 @@ Spex creates the default `specs/` directory under the repo root, with the follow
 | `decisions/` | DRs. Design decisions and rationale. | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | IRs. Implementation plans. | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | Spec packages: one item file per package. | [\<path\>/]\<kebab-case\>.md |
-| `interactions/` | Cross-package behaviors, scenarios, and their tests. | [\<path\>/]\<kebab-case\>.md |
+| `interactions/` | Cross-package interactions: scenarios, bindings, and their tests. | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 

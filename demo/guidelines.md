@@ -166,7 +166,7 @@ integrated.
   Deny paths are inherently cross-package, so security
   acceptance lands in compositions naturally.
 - **Composition tests cite what they execute: their own scenario
-  items plus items from at least two packages**
+  or binding items plus items from at least two packages**
   ([META-20](specs/meta.md#meta-20),
   [META-31](specs/meta.md#meta-31)).
   These Verifies lines make coverage mechanically auditable —
@@ -184,87 +184,61 @@ integrated.
 
 ## 5. Split composition from supply by audience
 
-Guideline 2's split recurs between packages, and both kinds of
-seam end as items in `compositions/`
+Guideline 2's split recurs between packages, and every seam is
+a binding item in `compositions/`
 ([META-13](specs/meta.md#meta-13),
 [META-15](specs/meta.md#meta-15)).
-Composition is the external relationship: the seam is part of
-what the product's user walks through.
-Supply is the internal one: a client package consumes a
-supplier's external behavior as pure implementation, invisible
-to the client's own user.
+Composition is the external relationship: the product's user
+walks the seam, so it gets scenario items and acceptance tests.
+Supply is the internal one: a client consumes a supplier's
+external behavior as pure implementation, so it gets a binding
+item and inspection tests.
 A supplier may be a vendor or an in-house package; the client
-cannot tell, which is the point — the audience only picks the
-kind of item the seam gets, and the decision record keeps the
-why ([META-24](specs/meta.md#meta-24)).
+cannot tell, which is the point.
 
-- **A seam the product's user walks is a composition, with
-  scenario items and acceptance tests.**
+- **Every seam is an item; the decision record keeps the why**
+  ([META-24](specs/meta.md#meta-24)).
   [PUB-1](specs/compositions/course-publishing.md#pub-1) binds
   the catalog's media slot
   ([CAT-8](specs/packages/catalog/course-catalog.md#cat-8)) to
-  the video library because the admin crosses the seam in
-  person — upload, pick, attach, publish
-  ([PUB-4](specs/compositions/course-publishing.md#pub-4)) — and
-  the member plays through it
-  ([PLAY-3](specs/compositions/lesson-playback.md#play-3)).
-  The joint behavior has outcomes a product user observes, so
-  scenarios exist to be written
-  ([META-26](specs/meta.md#meta-26),
-  [META-31](specs/meta.md#meta-31)).
-- **A seam only the implementation touches is a supply binding:
-  the deployment's internal behavior, with inspection tests.**
-  The video library states private storage and short-lived
-  grants
-  ([VID-7](specs/packages/catalog/video-library.md#vid-7),
-  [VID-8](specs/packages/catalog/video-library.md#vid-8)) and
-  names no vendor;
+  the video library — the admin crosses that seam in person
+  ([PUB-4](specs/compositions/course-publishing.md#pub-4)).
   [PLAT-3](specs/compositions/platform-services.md#plat-3)
-  binds them to a private Supabase Storage bucket with signed
-  URLs, and
+  binds the library's private storage and grants
+  ([VID-7](specs/packages/catalog/video-library.md#vid-7),
+  [VID-8](specs/packages/catalog/video-library.md#vid-8)) to
+  Supabase Storage — no user observes that seam
+  ([META-26](specs/meta.md#meta-26)), so
   [PLAT-6](specs/compositions/platform-services.md#plat-6)
-  inspects a deployment for exactly that.
-  Zero items in either package, and no scenario to write — no
-  product user observes the seam
-  ([META-26](specs/meta.md#meta-26)); what changes is only the
-  kind of test the binding gets.
-- **What code generation requires is an item; the record keeps
-  the choice** ([META-24](specs/meta.md#meta-24)).
-  [DR-002](specs/decisions/002-platform-and-devops.md) once
-  carried "private bucket, signed URLs" as table prose —
-  codegen-required detail in the why layer, against META-24's
-  own rule.
-  Item-izing the bindings gave them IDs, citations, and
-  `Verifies:`-grade audit, which promptly surfaced a hole the
-  prose table hid: the role store
+  inspects a deployment instead.
+  [DR-002](specs/decisions/002-platform-and-devops.md) only
+  chooses the vendors, citing the PLAT items; when its table
+  carried "private bucket, signed URLs" as prose, that
+  codegen-required detail sat in the why layer and hid a hole —
+  the role store
   ([ROLE-3](specs/packages/identity/access-control.md#role-3))
   was bound nowhere.
   [PLAT-2](specs/compositions/platform-services.md#plat-2)
-  closes it, and guideline 4's walk-the-citations audit now
-  covers every platform socket.
+  closes it.
 - **The litmus is the swap.**
-  Rebind a supplier and every package item reads unchanged —
-  swapping Supabase is a new DR plus rewritten PLAT items and
-  nothing else, and compositions are product-bound anyway, so
-  portability loses nothing
-  ([META-33](specs/meta.md#meta-33) still holds: packages cite
-  no compositions).
+  Rebind a supplier and every package item reads unchanged:
+  swapping Supabase is a new DR plus rewritten PLAT items,
+  nothing else.
   Rebind a composition and the product changes: aim the media
   slot at a different library and
   [PUB-4](specs/compositions/course-publishing.md#pub-4) walks
   a different journey.
-  The known exception stays one: GitHub is named in
+  GitHub in
   [AUTH-2](specs/packages/identity/github-login.md#auth-2)
-  because swapping it visibly changes sign-in — a user-visible
-  counterparty with no package of its own is named in items
-  (guideline 3), not supplied silently.
+  stays the exception: a user-visible counterparty with no
+  package of its own is named in items (guideline 3), not
+  supplied silently.
 - **A client never names its supplier — not even in a
   precondition.**
   Citation is for behavior the client's own user lives through:
   [CAT-4](specs/packages/catalog/course-catalog.md#cat-4) cites
   [ROLE-2](specs/packages/identity/access-control.md#role-2)
-  because a member who opens the course manager experiences that
-  denial.
+  because a member experiences that denial.
   A supplier appears in no clause of its client: the client
   states an abstract subject — "the identity store"
   ([AUTH-7](specs/packages/identity/github-login.md#auth-7)),
@@ -273,27 +247,44 @@ why ([META-24](specs/meta.md#meta-24)).
   deployment's binding item does the naming
   ([PLAT-1](specs/compositions/platform-services.md#plat-1),
   [META-15](specs/meta.md#meta-15)).
-- **An in-house supplier gets the same item, with citations on
-  both ends.**
-  Every supplier in the demo happens to be a vendor; nothing
-  requires that.
-  Were the component kit a spec package with observable
-  behavior of its own, its supply binding would cite the kit's
-  external items exactly as
+- **An in-house supplier gets the same item, citable on both
+  ends.**
+  Every demo supplier happens to be a vendor; were the
+  component kit a package with observable behavior of its own,
+  its supply binding would cite the kit's items exactly as
   [PUB-1](specs/compositions/course-publishing.md#pub-1) cites
-  [VID-4](specs/packages/catalog/video-library.md#vid-4) — the
-  same item shape PLAT uses, with the supplier's side citable
-  because it has items.
-  The kit itself stays guideline 2's cautionary tale: no
-  observable behavior of its own, so no package, and no binding
-  item — one line in
-  [DR-001](specs/decisions/001-web-stack.md) and nothing else.
-  Verification needs no scenario either: the client drives a
-  double of the supplied subject
+  [VID-4](specs/packages/catalog/video-library.md#vid-4).
+  Each side still tests alone: the client drives a double of
+  the supplied subject
   ([VID-11](specs/packages/catalog/video-library.md#vid-11)'s
-  storage test double), the deployment's sweep inspects the
-  real binding
-  ([PLAT-6](specs/compositions/platform-services.md#plat-6)),
-  and an in-house supplier tests against a stub of its host
+  storage test double), the supplier a stub of its host
   ([VID-13](specs/packages/catalog/video-library.md#vid-13)) —
-  guideline 1's boundary discipline intact from both sides.
+  no scenario required.
+- **Files take four shapes; audience picks the test kind, never
+  the residence** ([META-34](specs/meta.md#meta-34)).
+  Scenario-only
+  ([PLAY](specs/compositions/lesson-playback.md),
+  [GUARD](specs/compositions/protected-content.md),
+  [BOOT](specs/compositions/admin-bootstrap.md)); binding-only
+  with walked seams
+  ([NAV](specs/compositions/site-navigation.md),
+  acceptance-tested); binding-only supply
+  ([PLAT](specs/compositions/platform-services.md),
+  inspection-tested); and mixed
+  ([PUB](specs/compositions/course-publishing.md)).
+  NAV and PLAT share one shape with opposite audiences — which
+  is why no declared "binding file type" exists.
+- **Colocate a binding with scenarios only where a scenario
+  depends on it** ([META-34](specs/meta.md#meta-34)).
+  In a mixed file, each binding item is cited by a same-file
+  scenario
+  ([PUB-2](specs/compositions/course-publishing.md#pub-2)
+  cites [PUB-1](specs/compositions/course-publishing.md#pub-1));
+  conformance and acceptance may share one test
+  ([PUB-4](specs/compositions/course-publishing.md#pub-4)) but
+  need not.
+  A binding no same-file scenario depends on, or one serving
+  several concerns — every journey needs storage — lives in a
+  bindings-only file: that is what keeps
+  [PLAT-2](specs/compositions/platform-services.md#plat-2) out
+  of [PUB](specs/compositions/course-publishing.md).
