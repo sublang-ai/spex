@@ -20,11 +20,12 @@ Several product choices must be fixed before the behavior is precise enough to g
 - One initial administrator is selected by a configured immutable GitHub numeric subject ID.
   Login order, username, and email do not grant administration.
 - There is no role-management UI in this version.
-- A draft course contains a title, unique slug, summary, ordered sections, and ordered lessons.
+- A draft course contains a title, syntactically valid proposed slug, summary, ordered sections, and ordered lessons.
+  The slug is reserved globally and locked to that course only on its first successful publication; later publication candidates for that course must retain the locked slug.
   Every lesson has a title, optional description, and exactly one attached content reference before publication.
 - Publication creates an immutable catalog release from the current draft.
   Later draft edits remain invisible until another successful publication.
-- Video is the only bound lesson-content kind in this project.
+- Video is the only lesson-content kind installed by [PUBLISH-10](../compositions/authoring/publish-course.md#publish-10) in this project.
   The syllabus contract nevertheless treats lesson content as an opaque reference so another system can bind documents, audio, or exercises without changing the syllabus package.
 - Accepted uploads are at most 1 GiB and use either MP4 with H.264 video plus optional AAC-LC audio, or WebM with VP8/VP9 video plus optional Vorbis/Opus audio.
   Before upload, the administrator's browser must read positive duration/dimensions and successfully decode the selected file; the administrator is trusted to supply only one of the declared codec profiles.

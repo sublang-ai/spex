@@ -10,15 +10,15 @@ Apply [LIC-1](../packages/licensing.md#lic-1), [LIC-2](../packages/licensing.md#
 ## Deliverables
 
 - [ ] Add SPDX headers to in-scope files missing them
-- [ ] Add a `### Format` subsection to the Internal Behavior of [`packages/licensing.md`](../packages/licensing.md) with the project's actual license and copyright
+- [ ] Add `LIC-8` to the User Behavior of [`packages/licensing.md`](../packages/licensing.md) with the project's actual header format, license, and copyright
 
 ## Tasks
 
-1. Resolve scope: detect a project-root license file per [License File Detection](../packages/licensing.md#license-file-detection); enumerate in-scope files per [Exclusions](../packages/licensing.md#exclusions).
+1. Resolve scope: detect a project-root license file per [LIC-7](../packages/licensing.md#lic-7); enumerate in-scope files per [LIC-6](../packages/licensing.md#lic-6).
 
 2. Insert SPDX lines in each file's first comment block (after any shebang), using the file's native comment syntax.
 
-3. Append a `### Format` subsection to the `## Internal Behavior` section of [`packages/licensing.md`](../packages/licensing.md) showing the concrete header per comment style. Example for a single Apache-2.0 `LICENSE`:
+3. Add `LIC-8` to the `## User Behavior` section of [`packages/licensing.md`](../packages/licensing.md), showing the concrete header per comment style. Example for a single Apache-2.0 `LICENSE`:
 
    ```markdown
    <!-- SPDX-License-Identifier: Apache-2.0 -->

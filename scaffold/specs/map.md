@@ -11,16 +11,16 @@ Code can be inconsistent with specs during development.
 
 Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing a DR, IR, or item.
 
-- DRs and IRs: see [Organization](meta.md#organization), [Record format](meta.md#record-format), and [Citation](meta.md#citation).
-- Items: see [Organization](meta.md#organization), [Item syntax](meta.md#item-syntax), [Spec packages](meta.md#spec-packages), and [Citation](meta.md#citation).
+- DRs and IRs: see [Organization](meta.md#organization), [Records](meta.md#records), and [Citations and dependencies](meta.md#citations-and-dependencies).
+- Items: see [Item syntax](meta.md#item-syntax), [Packages](meta.md#packages), [Compositions](meta.md#compositions), and [Verification](meta.md#verification).
 
 ## Layout
 
 ```text
 decisions/    Decision records (DRs)
 iterations/   Iteration records (IRs)
-packages/     Spec packages (one file per package)
-interactions/ Cross-package behaviors and tests
+packages/     Standalone package contracts
+compositions/ Installed bindings, integrated scenarios, and verification
 map.md        This index
 meta.md       The spec of specs
 ```
@@ -51,6 +51,6 @@ meta.md       The spec of specs
 | --- | --- |
 | [licensing.md](packages/licensing.md) | SPDX header requirements and verification checks |
 
-## Interactions
+## Compositions
 
-None yet. Add files under `interactions/` as packages start working together.
+None yet. Add files under `compositions/` when packages need installed bindings or integrated scenarios.

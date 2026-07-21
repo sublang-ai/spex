@@ -6,7 +6,7 @@
 - Whenever your changes involve any spec, or you make a decision worth recording, keep the specs in sync — don't let them drift.
 - Keep specs:
   - Complete & coherent: sufficient for you to reimplement code.
-  - Right level: each package file in @specs/packages holds user-visible behavior (## External Behavior), implementation requirements (## Internal Behavior), and tests of its own claims (## Verification); behavior and tests spanning multiple packages go in @specs/interactions. Specify integration/system testing, not unit testing.
+  - Right level: each file in @specs/packages is a standalone contract using the applicable ## User Behavior, ## Collaborator Behavior, ## Internal Behavior, and ## Verification sections. Installed public roles, supplier selections, and integrated scenarios go in @specs/compositions; package files contain no peer or installation annotations. Specify contract, binding-conformance, integration, and acceptance verification, not unit tests.
   - Minimal: essential and concise; also check against other spec items to avoid overlap.
   - Well organized: spec packages are finely scoped, with high cohesion and low coupling.
 - Run `spex lint` to check structure, item IDs, and citations after editing specs.

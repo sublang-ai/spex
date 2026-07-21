@@ -11,16 +11,16 @@
 
 在编写、修改或审阅 DR、IR 或条目前，先了解 [`meta.md`](meta.md) 中的规则。
 
-- DR 和 IR：见 [Organization](meta.md#organization)、[Record format](meta.md#record-format) 和 [Citation](meta.md#citation)。
-- 条目：见 [Organization](meta.md#organization)、[Item syntax](meta.md#item-syntax)、[Spec packages](meta.md#spec-packages) 和 [Citation](meta.md#citation)。
+- DR 和 IR：见 [Organization](meta.md#organization)、[Records](meta.md#records) 和 [Citations and dependencies](meta.md#citations-and-dependencies)。
+- 条目：见 [Item syntax](meta.md#item-syntax)、[Packages](meta.md#packages)、[Compositions](meta.md#compositions) 和 [Verification](meta.md#verification)。
 
 ## 目录结构
 
 ```text
 decisions/    决策记录（DRs）
 iterations/   迭代记录（IRs）
-packages/     规约包（每包一个文件）
-interactions/ 跨包行为与测试
+packages/     独立完整的包契约
+compositions/ 已安装绑定、集成场景与验证
 map.md        本索引
 meta.md       规约的规约
 ```
@@ -51,6 +51,6 @@ meta.md       规约的规约
 | --- | --- |
 | [licensing.md](packages/licensing.md) | SPDX 头要求与验证检查 |
 
-## 交互
+## 组合
 
-暂无。当多个包开始协作时，在 `interactions/` 下添加文件。
+暂无。当包需要已安装绑定或集成场景时，在 `compositions/` 下添加文件。

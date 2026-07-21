@@ -30,7 +30,7 @@ Spex uses two forms of specs to balance unification and flexibility.
 Decisions and iterations are stored as records.
   - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]], with active section titles defined by [META-4](../meta.md#meta-4).
   - Iteration records (IRs) contain the sections defined by [META-5](../meta.md#meta-5).
-- **Items** must follow the active GEARS pattern defined by [META-6](../meta.md#meta-6) to specify behaviors and constraints.
+- **Items** use the active GEARS pattern defined by [META-6](../meta.md#meta-6) for their normative behavior statements; structural metadata and trace lines follow `meta.md`.
 Each item file must include the active intent section defined by [META-3](../meta.md#meta-3).
 
 ### Organization
@@ -41,8 +41,8 @@ Spex creates the default `specs/` directory under the repo root, with the follow
 | --------- | ------- | ------ |
 | `decisions/` | DRs. Design decisions and rationale. | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | IRs. Implementation plans. | \<NNN\>-\<kebab-case\>.md |
-| `packages/` | Spec packages: one item file per package. | [\<path\>/]\<kebab-case\>.md |
-| `interactions/` | Cross-package behaviors, scenarios, and their tests. | [\<path\>/]\<kebab-case\>.md |
+| `packages/` | Standalone package contracts: one item file per package. | [\<path\>/]\<kebab-case\>.md |
+| `compositions/` | Installed bindings, integrated scenarios, and verification. | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
@@ -59,30 +59,39 @@ It is the basic unit for spec composition, reuse, and extension.
 A spec package is one file under `packages/`, so a developer reads one file to understand one package.
 Each package file carries the sections defined by [META-28](../meta.md#meta-28):
 
-- `## External Behavior` for user-visible behavior — what the system does.
-- `## Internal Behavior` for implementation requirements — how the system is built.
-- `## Verification` for test items that check the package's own claims.
+- `## User Behavior` for human-visible outcomes.
+- `## Collaborator Behavior` for outputs or guarantees offered to peers and hosts.
+- `## Internal Behavior` for provider-neutral consumed requirements and private semantic invariants.
+- `## Verification` for package-local contract checks with controlled collaborators.
+
+Package sources contain no selected peer or installation annotations.
+A reusable package stays unchanged across compatible installations.
 
 For example, a spec package for generating short URLs may be `specs/packages/signing/gen-url.md`, where `signing/` is a local collection of related packages for development convenience.
 
-### Interactions
+### Compositions
 
-Behavior that emerges from multiple packages working together lives in `interactions/`, organized by behavior or scenario per [META-31](../meta.md#meta-31) — never as a concatenation of package names.
-Integration and acceptance tests that span packages are specified there; unit tests are never specified ([META-21](../meta.md#meta-21)).
+System-instantiation files live in `compositions/` per [META-31](../meta.md#meta-31).
+A `Binding` item installs either a public role across User/Collaborator Behavior or Collaborator Behavior/a named service for a package's Internal requirement; a `Scenario` item describes a human- or operator-meaningful outcome from public behavior across packages.
+One cohesive file may contain either or both, without a file-type flag.
 
-`map.md` indexes packages and interactions.
+Bindings are authoritative outside packages and may be projected back as read-only installed overlays.
+Scenarios carry integrated acceptance while package-local invariants remain in package Verification ([META-21](../meta.md#meta-21)).
+
+`map.md` indexes packages and compositions.
 
 ### Citations
 
-DRs and items are persistent and may cite each other.
+DRs and items are persistent and may cite each other only where `meta.md` permits; reusable packages in particular contain no project-decision or peer-package citations.
 IRs may be temporary and must not be cited by DRs or items.
 `map.md` may cite IRs, as it indexes all spec files and is kept in sync as files change.
 
 ## Consequences
 
 - Consistent structure and format across development cycles
-- One file per package: a single read covers a package's external behavior, internal behavior, and verification
-- Cross-package behavior has a dedicated home instead of being implicit
+- One file per package: a single read covers its complete standalone contract
+- Installed dependencies and integrated outcomes have distinct item kinds and one explicit home
+- Package source remains reusable while derived installed views keep bindings easy to navigate
 - Flexible expression of design and implementation
 - Legacy `user/`/`dev/`/`test/` trees migrate via `spex scaffold --update`
 

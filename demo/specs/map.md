@@ -3,146 +3,135 @@
 
 # Course Website Spec Map
 
-This is the navigation and traceability index for the specification-only course website demo.
-Normative truth lives in cited decision, package, and composition items.
+This index is navigation only; normative truth lives in cited items.
+See [Writing Strong Spex Specs](../guidelines.md) for authoring guidance and [META](meta.md) for the format.
 
 ## Product
 
-The product is a private, minimal video-course website with GitHub-only membership and one configured initial administrator.
-The administrator authors ordered syllabi, uploads videos, and publishes immutable releases; authenticated members browse releases and watch their entitled private videos.
-Scope and exclusions are fixed in [DR-000](decisions/000-minimal-course-scope.md).
+The product is a private minimal video-course website with GitHub-only membership and one configured initial administrator.
+The administrator authors ordered syllabi, uploads videos, and publishes immutable releases; members browse releases and watch entitled private videos.
+[DR-000](decisions/000-minimal-course-scope.md) fixes scope and exclusions.
 
 ## Layout
 
 ```text
 decisions/     Durable choices and rationale
-packages/      Self-contained package contracts
-compositions/  Cross-package scenarios and acceptance verification
+packages/      Standalone package contracts
+compositions/  Installed bindings, integrated scenarios, and verification
 map.md         This index
-meta.md        Proposed format rules
+meta.md        Format rules
 ```
 
-Subdirectories inside `packages/` and `compositions/` are collections only.
-For example, moving `packages/media/video-library.md` under another collection would change navigation and citation paths, but not package meaning, ownership, or visibility ([META-2](meta.md#meta-2)).
+Subdirectories inside `packages/` and `compositions/` are collections only ([META-2](meta.md#meta-2)).
 
 ## Decisions
 
 | Record | Choice |
 | --- | --- |
-| [DR-000](decisions/000-minimal-course-scope.md) | private minimal scope, one configured admin, draft/release lifecycle, direct browser-playable video, explicit exclusions |
-| [DR-001](decisions/001-web-platform.md) | Next.js/TypeScript/Tailwind/shadcn, Vercel, Supabase Auth/Postgres/Storage, trust/access matrix, fixture previews, staged production delivery |
-| [DR-002](decisions/002-course-media-boundary.md) | mutable syllabus, immutable catalog release, and video asset remain separate reusable contracts |
+| [DR-000](decisions/000-minimal-course-scope.md) | private minimal scope, one configured administrator, draft/release lifecycle, and direct browser-playable video |
+| [DR-001](decisions/001-web-platform.md) | Next.js/TypeScript/Tailwind/shadcn, Vercel, Supabase, GitHub delivery, trust policy, and environment profiles |
+| [DR-002](decisions/002-course-media-boundary.md) | separate mutable syllabus, immutable catalog release, and video contracts |
 
-## Package contracts
+## Packages
 
-| Package | Human language | Owns | Main provided contract | Main required contract | Portability |
-| --- | --- | --- | --- | --- | --- |
-| [GHID](packages/access/github-identity.md) | visitor/member sign-in and session | GitHub account, identity mapping, active session | `IdentityView`, trusted `Principal`/`DataAccessIdentity`, `SessionState` | verified GitHub Auth user/session, safe destination | public candidate |
-| [ROLE](packages/access/role-access.md) | member/admin access and denial | bootstrap binding and capabilities | `RoleView`, `DataRoleProjection`, server-only `AuthorizationDecision` | trusted `Principal`/`DataAccessIdentity`, configured subject, capability request | public candidate |
-| [SYLL](packages/learning/course-syllabus.md) | administrator syllabus editor | mutable ordered draft and snapshot | draft views/results, publication candidate with immutable `SyllabusSnapshot` | author context, trusted `ContentDescriptor`, publication result | public candidate |
-| [VIDS](packages/media/video-library.md) | upload and entitled playback | exact upload capability and private asset lifecycle | video/upload/playback views, `ContentDescriptor`, `VideoRef`, `PlaybackGrant` | manage context, generic asset authorization, availability observation | public candidate |
-| [CAT](packages/learning/course-catalog.md) | publish, browse, course detail | immutable releases and current catalog | catalog views, publication result, request-scoped entitlement | publish/consume decisions, data-role projection, trusted snapshot | public candidate |
-| [SITE](packages/web/application-shell.md) | routes, navigation, page states | product route and layout language | safe destination, shell/unavailable views | exact package-owned views/results | project-local |
-| [LIVE](packages/operations/production-runtime.md) | operator readiness | environment profiles, credential inventory, readiness | readiness, smoke target/result, service revisions/compatibility | deployment/configuration records, provider health, role readiness | template candidate |
-| [PIPE](packages/operations/github-delivery.md) | pull request, preview, promote, rollback | delivery evidence, mutations, and gates | checks, fixture/candidate/deployment records, evidence/rollback decision | commit, migrations/config, readiness/smoke/revision results | template candidate |
+| Package | Owns | Reuse scope |
+| --- | --- | --- |
+| [GHID](packages/access/github-identity.md) | GitHub identity, accounts, and sessions | applications offering a GitHub identity path |
+| [ROLE](packages/access/role-access.md) | member/administrator policy and course capabilities | course sites using the same two-role policy |
+| [SYLL](packages/learning/course-syllabus.md) | mutable drafts and immutable publication snapshots | authoring systems with compatible content and publication collaborators |
+| [VIDS](packages/media/video-library.md) | Supabase video upload, lifecycle, and private playback | Supabase applications accepting the stated media contract |
+| [CAT](packages/learning/course-catalog.md) | immutable releases, catalog selection, and lesson entitlement | course-delivery systems using the same snapshot semantics |
+| [SITE](packages/web/application-shell.md) | this website's routes, navigation, states, and accessibility | project-local |
+| [LIVE](packages/operations/production-runtime.md) | environment readiness, isolation, and service continuity | compatible Vercel–Supabase applications |
+| [PIPE](packages/operations/github-delivery.md) | review gates, previews, promotion evidence, and rollback | the declared GitHub–Next.js–Vercel–Supabase delivery stack |
 
-## Concrete bindings
+Each package defines its own meanings and contains no peer, Binding, or Scenario citation.
+`VIDS` is still reusable even though it is intentionally Supabase-specific; `SITE` honestly declares itself project-local.
 
-The course/media cycle is intentional and semantic, not a source dependency cycle:
+## Installed bindings
+
+Bindings install public roles or select suppliers for package Internal requirements without modifying either package.
+
+| Home | Installed seams |
+| --- | --- |
+| [ENTRY](compositions/access/enter-site.md#binding) | GHID visible sign-in states → SITE login and protected-entry roles |
+| [ACCESS](compositions/access/install-course-access.md) | GHID → ROLE, SITE → GHID destination, GHID + ROLE → SITE, ROLE → SYLL/CAT/VIDS, ROLE → LIVE readiness |
+| [PLAT](compositions/operations/install-platform.md) | production and fixture identity authorities, Postgres, Storage, runtime, and delivery control planes |
+| [PUBLISH](compositions/authoring/publish-course.md#binding) | VIDS → SYLL description, SYLL → CAT snapshot, CAT → SYLL result |
+| [LEARN](compositions/learning/browse-and-watch.md#binding) | CAT current-lesson authorization → VIDS playback authorization |
+| [SHIP](compositions/operations/deliver-change.md#binding) | PIPE attestation/candidate → LIVE and LIVE evidence → PIPE |
+
+The important course/media cycle is:
 
 ```mermaid
 flowchart LR
-    GHID["GHID: Principal"] --> ROLE["ROLE: AuthorizationDecision"]
-    ROLE --> SYLL["SYLL: CourseDraft"]
-    ROLE --> VIDS["VIDS: VideoAsset"]
-    ROLE --> CAT["CAT: CourseRelease"]
-    VIDS -- "VideoRef as ContentRef" --> SYLL
-    SYLL -- "SyllabusSnapshot" --> CAT
-    CAT -- "PlaybackEntitlement as AssetPlaybackAuthorization" --> VIDS
-    GHID --> SITE["SITE: routes and pages"]
-    ROLE --> SITE
-    SYLL --> SITE
-    CAT --> SITE
-    VIDS --> SITE
-    PIPE["PIPE: delivery"] --> LIVE["LIVE: runtime readiness"]
-    LIVE --> PIPE
+    ROLE["ROLE decisions"] -- "ACCESS-4" --> SYLL["SYLL drafts"]
+    ROLE -- "ACCESS-4" --> CAT["CAT releases"]
+    ROLE -- "ACCESS-4" --> VIDS["VIDS assets"]
+    VIDS -- "PUBLISH-10 description" --> SYLL
+    SYLL -- "PUBLISH-11 snapshot" --> CAT
+    CAT -- "PUBLISH-12 result" --> SYLL
+    CAT -- "LEARN-10 authorization" --> VIDS
 ```
 
-- [PUBLISH-1](compositions/authoring/publish-course.md#publish-1) binds a ready `VideoRef`/`ContentDescriptor` into a lesson `ContentRef`, then supplies the complete `SyllabusSnapshot` to the catalog.
-- [LEARN-1](compositions/learning/browse-and-watch.md#learn-1) maps a fresh opaque current-release entitlement to VIDS's course-agnostic asset authorization for one request.
-- Neither `SYLL` nor `VIDS` needs the other's domain vocabulary; the cross-package outcome is visible only in those compositions.
+These arrows are installed semantic bindings, not source imports.
+For example, [SYLL-13](packages/learning/course-syllabus.md#syll-13) defines the content description it needs without naming VIDS; [PUBLISH-10](compositions/authoring/publish-course.md#publish-10) selects [VIDS-10](packages/media/video-library.md#vids-10) as this installation's supplier.
 
-The `Composes:` line on each scenario cites only user-visible External Behavior.
-The separate `Binds:` mapping list cites stable package Binding items such as [CAT-0](packages/learning/course-catalog.md#cat-0) and [VIDS-0](packages/media/video-library.md#vids-0), so the real collaborator handoff is traceable without making [CAT-13](packages/learning/course-catalog.md#cat-13) or [VIDS-11](packages/media/video-library.md#vids-11) part of another package's contract.
+`ACCESS-4` also demonstrates that Binding items are not one-to-one: one ROLE policy supplies three client packages and four scoped capability meanings.
+`PLAT-1` and `PLAT-2` bind the same GHID requirement to different authorities in disjoint production and test scopes.
 
-## Compositions and acceptance
+## Scenarios and acceptance
 
-| Composition | Integrated outcome | Acceptance items |
+| Composition | Integrated outcome | Verification |
 | --- | --- | --- |
-| [ENTRY](compositions/access/enter-site.md) | GitHub-only entry, safe return, cancellation and session-expiry recovery | ENTRY-20, ENTRY-21 |
-| [BOOT](compositions/access/bootstrap-admin.md) | deterministic initial administrator and fail-closed bootstrap | BOOT-20, BOOT-21 |
-| [PUBLISH](compositions/authoring/publish-course.md) | ordered draft + ready videos become one coherent release, including conflicts and integrated accessibility | PUBLISH-20–PUBLISH-23 |
-| [LEARN](compositions/learning/browse-and-watch.md) | full entry-to-play journey, private renewal/recovery, reuse, and integrated accessibility | LEARN-20–LEARN-23 |
-| [GUARD](compositions/security/protect-course-content.md) | routes, direct data/storage access, stale entitlement, and sign-out cannot bypass the protection chain | GUARD-20–GUARD-24 |
-| [SHIP](compositions/operations/deliver-change.md) | fixture preview, verified staged candidate, safe promotion/rollback, and real-provider smoke | SHIP-20–SHIP-23 |
+| [ENTRY](compositions/access/enter-site.md) | GitHub-only entry, safe return, cancellation, and re-entry | ENTRY-20–22 |
+| [BOOT](compositions/access/bootstrap-admin.md) | deterministic initial administrator and fail-closed readiness | BOOT-20–21 |
+| [PUBLISH](compositions/authoring/publish-course.md) | draft + ready videos become one coherent release | PUBLISH-20–24 |
+| [LEARN](compositions/learning/browse-and-watch.md) | catalog-to-play journey, renewal, recovery, and reuse | LEARN-20–24 |
+| [GUARD](compositions/security/protect-course-content.md) | route, data, storage, stale-entitlement, and sign-out protection | GUARD-20–24 |
+| [SHIP](compositions/operations/deliver-change.md) | fixture preview, staged promotion, rollback, and real-provider smoke | SHIP-20–24 |
 
-Each scenario has a `Composes:` edge to at least two package External Behavior items and a `Binds:` edge to the participating package Binding contracts.
-Each acceptance item has a `Verifies:` edge to its scenario, producing the visible trace:
+`ACCESS` and `PLAT` are binding-only because their seams are cross-cutting.
+`ENTRY`, `PUBLISH`, `LEARN`, and `SHIP` mix Binding and Scenario because each binding directly serves the same file's outcome.
+`BOOT` and `GUARD` are scenario-only and cite shared bindings through `Bindings:`.
+
+All 31 Scenario items have acceptance coverage.
+All 19 Binding items have audience-appropriate coverage in their authoritative files.
+The eight packages retain 27 local Verification items for validation matrices, private invariants, races, replay, and provider boundaries.
+
+The two traces are complementary:
 
 ```text
-package External Behavior -> composition scenario -> acceptance item -> future CI evidence
+package User/Collaborator Behavior -> Composes -> Scenario -> Verifies -> acceptance evidence
+supplier User/Collaborator Behavior -> Binding -> public client role
+supplier Collaborator Behavior or selected service -> Binding -> package Internal requirement
 ```
 
-The six composition files contain 31 integrated scenarios and 21 acceptance items.
-All 31 scenarios are cited by acceptance verification.
-The eight packages retain 27 package-local verification items for validation matrices, trust-boundary attacks, and hidden invariants that should not leak into acceptance scenarios.
+## External and internal behavior
 
-Compositions intentionally cover most, not all, verification.
-They cover complete journeys, cross-package consistency, denials, recovery, accessibility in real integrated controls, direct data/storage attacks, and deployed operation.
-Package Verification retains cases such as canonical GitHub subject parsing, draft revision arithmetic, release idempotence, upload finalization races, cache isolation, and delivery evidence reconciliation because those do not require another package to fail correctly.
+[SYLL-2](packages/learning/course-syllabus.md#syll-2) is User Behavior: an author sees save results.
+[SYLL-11](packages/learning/course-syllabus.md#syll-11) is Collaborator Behavior: an installed publisher may rely on the snapshot.
+[SYLL-13](packages/learning/course-syllabus.md#syll-13) is Internal Behavior: SYLL requires a provider-neutral content description, and only a Binding may select its supplier.
+[SYLL-10](packages/learning/course-syllabus.md#syll-10) is also Internal Behavior, but it is a private invariant rather than a consumed requirement.
 
-## Reuse inside this project
-
-One package is referenced from multiple outcomes without copying its requirements:
-
-| Package | Referencing compositions |
-| --- | --- |
-| GHID | ENTRY, BOOT, LEARN, GUARD, SHIP |
-| ROLE | ENTRY, BOOT, PUBLISH, LEARN, GUARD, SHIP |
-| SYLL | PUBLISH, LEARN, GUARD |
-| VIDS | PUBLISH, LEARN, GUARD |
-| CAT | ENTRY, PUBLISH, LEARN, GUARD, SHIP |
-| SITE | ENTRY, BOOT, PUBLISH, LEARN, GUARD, SHIP |
-| LIVE | BOOT, SHIP |
-| PIPE | SHIP |
-
-[LEARN-2](compositions/learning/browse-and-watch.md#learn-2) also uses one `VIDS` asset instance in two `SYLL` lesson positions through the same `VideoRef`, demonstrating data-level reuse without duplicating the package or asset.
-[PUBLISH-1](compositions/authoring/publish-course.md#publish-1), [PUBLISH-3](compositions/authoring/publish-course.md#publish-3), and [LEARN-2](compositions/learning/browse-and-watch.md#learn-2) also reference the same `SYLL`, `CAT`, and `VIDS` contracts multiple times for first publication, republishing, and reused video without copying package requirements.
-The same package behavior set is exercised against deterministic local providers and the production provider binding declared by [DR-001](decisions/001-web-platform.md); received configuration and test adapters vary, while package contracts do not.
-
-## Binding contract and hidden behavior
-
-[VIDS](packages/media/video-library.md) is a concrete self-contained boundary: it names every human user, owns upload attempts/assets/grants/player outcomes, receives management authorization, a provider-neutral data-role projection, a generic request-scoped asset authorization, and trusted storage-availability observations, provides reusable descriptors/references/views/grants, explicitly excludes course structure and progress, and verifies all of its external and hidden behavior locally.
-Nothing outside `VIDS` needs to know how [VIDS-10](packages/media/video-library.md#vids-10) validates readiness, how [VIDS-15](packages/media/video-library.md#vids-15) makes finalization idempotent, or how cleanup is organized.
-
-That hiding is enforceable rather than stylistic: [META-17](meta.md#meta-17) forbids packages from citing another package's Internal Behavior.
-For example, `CAT` provides the request-scoped entitlement meaning at [CAT-0](packages/learning/course-catalog.md#cat-0); the host maps it to the course-agnostic authorization received by [VIDS-0](packages/media/video-library.md#vids-0); and [LEARN-3](compositions/learning/browse-and-watch.md#learn-3) records the binding.
-The hidden entitlement recomputation and grant-consumption rules can change independently as long as those two binding contracts and the visible scenario remain true.
+A peer package and a Scenario may never cite Internal Behavior.
+A Binding may cite it only as a client, while its supplier side cites Collaborator Behavior.
+Public Bindings instead join User or Collaborator roles, as [ENTRY-10](compositions/access/enter-site.md#entry-10) does.
+An installed package overlay can show those reverse links, but it is derived and never written into the package file ([META-27](meta.md#meta-27)).
 
 ## Requirement coverage
 
-| Requested requirement | Owning specs | Integrated acceptance |
+| Requested requirement | Owning specs | Integrated proof |
 | --- | --- | --- |
-| minimal online course website | [DR-000](decisions/000-minimal-course-scope.md), [SYLL](packages/learning/course-syllabus.md), [CAT](packages/learning/course-catalog.md), [VIDS](packages/media/video-library.md), [SITE](packages/web/application-shell.md) | PUBLISH, LEARN, GUARD |
-| GitHub login only | [GHID-1](packages/access/github-identity.md#ghid-1), [GHID-12](packages/access/github-identity.md#ghid-12), [LIVE-11](packages/operations/production-runtime.md#live-11) | ENTRY, GUARD, SHIP |
-| initial admin authors syllabus and uploads video | [ROLE-1](packages/access/role-access.md#role-1), [SYLL-1](packages/learning/course-syllabus.md#syll-1)–[SYLL-5](packages/learning/course-syllabus.md#syll-5), [VIDS-1](packages/media/video-library.md#vids-1)–[VIDS-3](packages/media/video-library.md#vids-3) | BOOT, PUBLISH |
-| users log in and view courses/videos | [GHID](packages/access/github-identity.md), [CAT-1](packages/learning/course-catalog.md#cat-1), [CAT-2](packages/learning/course-catalog.md#cat-2), [VIDS-4](packages/media/video-library.md#vids-4) | ENTRY, LEARN, GUARD |
-| Next.js App Router + TypeScript + Tailwind + shadcn/ui | [DR-001](decisions/001-web-platform.md), [SITE](packages/web/application-shell.md) | ENTRY, LEARN, SHIP |
-| Vercel + Supabase Auth/Postgres/Storage | [DR-001](decisions/001-web-platform.md), [LIVE](packages/operations/production-runtime.md), provider-specific hidden behavior in GHID, ROLE, SYLL, CAT, VIDS, and SITE | BOOT, GUARD, SHIP |
-| DevOps on GitHub | [PIPE](packages/operations/github-delivery.md) | SHIP |
+| minimal online course website | [DR-000](decisions/000-minimal-course-scope.md), SYLL, CAT, VIDS, SITE | PUBLISH, LEARN, GUARD |
+| GitHub login only | [DR-001](decisions/001-web-platform.md), [PLAT-1](compositions/operations/install-platform.md#plat-1), GHID | ENTRY, SHIP |
+| initial administrator authors syllabi and uploads video | ROLE, SYLL, VIDS | BOOT, PUBLISH |
+| members view courses and videos | GHID, CAT, VIDS | ENTRY, LEARN, GUARD |
+| Next.js App Router + TypeScript + Tailwind + shadcn/ui | [DR-001](decisions/001-web-platform.md), SITE | ENTRY, LEARN, SHIP |
+| Vercel + Supabase Auth/Postgres/Storage | [DR-001](decisions/001-web-platform.md), [PLAT](compositions/operations/install-platform.md), LIVE, PIPE | GUARD, SHIP |
+| DevOps on GitHub | PIPE, [PLAT-6](compositions/operations/install-platform.md#plat-6) | SHIP |
 
 ## Code-generation readiness
 
-The demo fixes the actors, role bootstrap and drift rule, scope exclusions, routes, draft and release models, slug behavior/conflicts, media profiles and lifecycle, semantic package inputs/outputs, identity/session/entitlement provenance, data-access matrix, cache and signed-URL limits, provider placement, fixture/production profiles, CI/CD mutation gates, visible failure behavior, and acceptance evidence.
-An implementation plan may now divide work by package and use compositions as integration milestones without inventing product behavior.
-No iteration records are included because implementation ordering was not requested and is temporary planning rather than product truth.
+The specs fix actors, routes, states, limits, ordering, trust sources, lifecycle and conflict rules, installed seams, platform scopes, visible failure behavior, and acceptance evidence.
+Implementation may now vary source structure and replaceable code dependencies without inventing product policy or cross-package wiring.

@@ -40,6 +40,9 @@ The remaining placement choices affect authorization, large uploads, environment
   No exposed table, view, function, or Storage policy may broaden this matrix.
   A revoked application session with an otherwise unexpired Auth JWT is treated as anonymous by every row, view, and RPC policy.
   Upload capabilities, TUS upload URLs, and playback grants become transferable bearer credentials after issuance; possession permits only their exact object operation, while issuance and finalization still require an active authorized account.
+
+  The concrete capability-to-client mapping is installed once by [ACCESS-4](../compositions/access/install-course-access.md#access-4).
+  This record explains the selected fail-closed data policy but is not a second source for that binding.
 - Supabase Storage on a Pro-or-higher project holds video objects in a private bucket with a 1 GiB project and bucket limit.
   Large uploads use its resumable direct-upload facility so video bytes do not pass through a Vercel request handler [[4]][[10]].
   Each upload uses a new immutable object key and a signed capability scoped to that exact key with overwrite disabled.
@@ -62,7 +65,7 @@ The remaining placement choices affect authorization, large uploads, environment
   Production mutation is serialized and non-cancelable from its first mutation through evidence capture.
   Web rollback reassigns a retained deployment but does not roll back Postgres, Auth, or Storage state; the retained deployment must first prove compatibility with their current revisions.
 - Runtime code receives the provider-configuration attestation but no Supabase or GitHub control-plane management credential.
-  Runtime readiness checks its own binding and functional provider health; protected delivery alone reads or changes plan, Auth-provider, callback, redirect, and global Storage settings.
+  Runtime readiness checks its own environment configuration and functional provider health; protected delivery alone reads or changes plan, Auth-provider, callback, redirect, and global Storage settings.
 
 ## Consequences
 
