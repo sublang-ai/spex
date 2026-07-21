@@ -3,7 +3,7 @@
 
 # Spec Organization Guidelines
 
-Four guidelines for organizing spec items, distilled from building
+Five guidelines for organizing spec items, distilled from building
 the Academy demo.
 Each is stated as a rule, grounded in the demo's files, and named
 by the META items of [specs/meta.md](specs/meta.md) that encode it.
@@ -175,3 +175,97 @@ integrated.
   ([CAT-7](specs/packages/catalog/course-catalog.md#cat-7)) —
   lives in package Verification, which is why the release run
   includes both.
+
+## 5. Split composition from supply by audience
+
+Guideline 2's split recurs between packages, sorting the two
+binding paths the meta spec provides: an open slot bound in a
+composition ([META-13](specs/meta.md#meta-13)) and an abstract
+subject bound in a decision record
+([META-15](specs/meta.md#meta-15)).
+Composition is the external relationship: the seam is part of
+what the product's user walks through.
+Supply is the internal one: a client package consumes a
+supplier's external behavior as pure implementation, invisible
+to the client's own user.
+A supplier may be a vendor or an in-house package; the client
+cannot tell, which is the point.
+
+- **A seam the product's user walks is a composition, with
+  scenario items and acceptance tests.**
+  [PUB-1](specs/compositions/course-publishing.md#pub-1) binds
+  the catalog's media slot
+  ([CAT-8](specs/packages/catalog/course-catalog.md#cat-8)) to
+  the video library because the admin crosses the seam in
+  person — upload, pick, attach, publish
+  ([PUB-4](specs/compositions/course-publishing.md#pub-4)) — and
+  the member plays through it
+  ([PLAY-3](specs/compositions/lesson-playback.md#play-3)).
+  The joint behavior has outcomes a product user observes, so
+  composition items exist to be written
+  ([META-26](specs/meta.md#meta-26),
+  [META-31](specs/meta.md#meta-31)).
+- **A seam only the implementation touches is supply: one
+  binding row in a decision record, zero items anywhere.**
+  The video library states private storage and short-lived
+  grants
+  ([VID-7](specs/packages/catalog/video-library.md#vid-7),
+  [VID-8](specs/packages/catalog/video-library.md#vid-8)); the
+  binding table of
+  [DR-002](specs/decisions/002-platform-and-devops.md) names
+  Supabase Storage as their supplier.
+  A composition for that pair could say nothing: no outcome of
+  library-plus-Supabase is observable to a product user
+  ([META-26](specs/meta.md#meta-26)), and a scenario naming the
+  supplier would not survive the swap the decision layer exists
+  to allow.
+- **The litmus is the swap.**
+  Rebind a supplier and every spec item reads unchanged —
+  DR-002's consequences say exactly this, and rebinding
+  [DR-001](specs/decisions/001-web-stack.md)'s native video
+  element to a player framework would leave
+  [VID-5](specs/packages/catalog/video-library.md#vid-5)'s
+  stated controls as they are.
+  Rebind a composition and the product changes: aim the media
+  slot at a different library and
+  [PUB-1](specs/compositions/course-publishing.md#pub-1) itself
+  is rewritten.
+  The known exception stays one: GitHub is named in
+  [AUTH-2](specs/packages/identity/github-login.md#auth-2)
+  because swapping it visibly changes sign-in — a user-visible
+  counterparty with no package of its own is named in items
+  (guideline 3), not supplied silently.
+- **A client never names its supplier — not even in a
+  precondition.**
+  Citation is for behavior the client's own user lives through:
+  [CAT-4](specs/packages/catalog/course-catalog.md#cat-4) cites
+  [ROLE-2](specs/packages/identity/access-control.md#role-2)
+  because a member who opens the course manager experiences that
+  denial.
+  A supplier appears in no clause: the client states an abstract
+  subject — "the identity store"
+  ([AUTH-7](specs/packages/identity/github-login.md#auth-7)),
+  "the platform's environment configuration"
+  ([DELIV-5](specs/packages/ops/delivery.md#deliv-5)) — and the
+  decision's binding table does the naming
+  ([META-15](specs/meta.md#meta-15)).
+- **An in-house supplier sits in the same table and makes the
+  binding auditable.**
+  Every supplier in the demo happens to be a vendor; nothing
+  requires that.
+  Guideline 2's deleted item — "primitives come from the shared
+  component kit" — was never an outcome, but it was always a
+  choice, and [DR-001](specs/decisions/001-web-stack.md) records
+  it: one in-repo kit, cited by no item.
+  Were the kit a spec package with observable behavior of its
+  own, the same row would bind to that package and cite the
+  supplier's external items alongside the client's, extending
+  guideline 4's walk-the-citations audit across the seam.
+  Verification needs no composition either: the client drives a
+  double of the supplied subject — the library against a storage
+  test double in
+  [VID-11](specs/packages/catalog/video-library.md#vid-11) while
+  DR-002 binds the real storage — and an in-house supplier tests
+  against a stub of its host
+  ([VID-13](specs/packages/catalog/video-library.md#vid-13)),
+  guideline 1's boundary discipline intact from both sides.
