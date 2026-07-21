@@ -40,7 +40,10 @@ package:
   [PUB-1](specs/compositions/course-publishing.md#pub-1) binds
   the catalog's media slot to the video library;
   [NAV-1](specs/compositions/site-navigation.md#nav-1) binds the
-  shell's header slots to the product's surfaces.
+  shell's header slots to the product's surfaces; the platform
+  seams no user walks bind there too
+  ([PLAT-1](specs/compositions/platform-services.md#plat-1)) —
+  decisions only choose.
 - **Make the boundary itself testable from both sides.**
   [CAT-10](specs/packages/catalog/course-catalog.md#cat-10):
   deleting a course never deletes a provider asset.
@@ -97,14 +100,17 @@ drop into another product unchanged.
   A dependency worth stating is already an item-level
   precondition citation; repeating it in the Intent couples the
   package to its current neighbors.
-- **Packages name platforms abstractly; decisions bind them.**
-  The specs say "the identity provider", "an access grant",
-  "the pipeline"; the binding table of
-  [DR-002](specs/decisions/002-platform-and-devops.md) maps each
-  abstract subject to Supabase, Vercel, or GitHub and cites the
-  items it binds — never the reverse.
-  Swapping a vendor is a new decision record, not a spec
-  rewrite.
+- **Packages name platforms abstractly; decisions choose,
+  binding items wire.**
+  The specs say "the identity store", "an access grant",
+  "the pipeline";
+  [DR-002](specs/decisions/002-platform-and-devops.md) chooses
+  Supabase, Vercel, and GitHub, and the binding items of
+  [PLAT](specs/compositions/platform-services.md) wire each
+  subject to its service, citing the package items they bind —
+  never the reverse.
+  Swapping a vendor is a new decision record plus rewritten
+  binding items; package items stay unchanged.
   The exception proves the rule: GitHub appears in
   [AUTH](specs/packages/identity/github-login.md) items because
   the user sees GitHub; the technology is the behavior there.
@@ -178,18 +184,19 @@ integrated.
 
 ## 5. Split composition from supply by audience
 
-Guideline 2's split recurs between packages, sorting the two
-binding paths the meta spec provides: an open slot bound in a
-composition ([META-13](specs/meta.md#meta-13)) and an abstract
-subject bound in a decision record
-([META-15](specs/meta.md#meta-15)).
+Guideline 2's split recurs between packages, and both kinds of
+seam end as items in `compositions/`
+([META-13](specs/meta.md#meta-13),
+[META-15](specs/meta.md#meta-15)).
 Composition is the external relationship: the seam is part of
 what the product's user walks through.
 Supply is the internal one: a client package consumes a
 supplier's external behavior as pure implementation, invisible
 to the client's own user.
 A supplier may be a vendor or an in-house package; the client
-cannot tell, which is the point.
+cannot tell, which is the point — the audience only picks the
+kind of item the seam gets, and the decision record keeps the
+why ([META-24](specs/meta.md#meta-24)).
 
 - **A seam the product's user walks is a composition, with
   scenario items and acceptance tests.**
@@ -202,34 +209,50 @@ cannot tell, which is the point.
   the member plays through it
   ([PLAY-3](specs/compositions/lesson-playback.md#play-3)).
   The joint behavior has outcomes a product user observes, so
-  composition items exist to be written
+  scenarios exist to be written
   ([META-26](specs/meta.md#meta-26),
   [META-31](specs/meta.md#meta-31)).
-- **A seam only the implementation touches is supply: one
-  binding row in a decision record, zero items anywhere.**
+- **A seam only the implementation touches is a supply binding:
+  the deployment's internal behavior, with inspection tests.**
   The video library states private storage and short-lived
   grants
   ([VID-7](specs/packages/catalog/video-library.md#vid-7),
-  [VID-8](specs/packages/catalog/video-library.md#vid-8)); the
-  binding table of
-  [DR-002](specs/decisions/002-platform-and-devops.md) names
-  Supabase Storage as their supplier.
-  A composition for that pair could say nothing: no outcome of
-  library-plus-Supabase is observable to a product user
-  ([META-26](specs/meta.md#meta-26)), and a scenario naming the
-  supplier would not survive the swap the decision layer exists
-  to allow.
+  [VID-8](specs/packages/catalog/video-library.md#vid-8)) and
+  names no vendor;
+  [PLAT-3](specs/compositions/platform-services.md#plat-3)
+  binds them to a private Supabase Storage bucket with signed
+  URLs, and
+  [PLAT-6](specs/compositions/platform-services.md#plat-6)
+  inspects a deployment for exactly that.
+  Zero items in either package, and no scenario to write — no
+  product user observes the seam
+  ([META-26](specs/meta.md#meta-26)); what changes is only the
+  kind of test the binding gets.
+- **What code generation requires is an item; the record keeps
+  the choice** ([META-24](specs/meta.md#meta-24)).
+  [DR-002](specs/decisions/002-platform-and-devops.md) once
+  carried "private bucket, signed URLs" as table prose —
+  codegen-required detail in the why layer, against META-24's
+  own rule.
+  Item-izing the bindings gave them IDs, citations, and
+  `Verifies:`-grade audit, which promptly surfaced a hole the
+  prose table hid: the role store
+  ([ROLE-3](specs/packages/identity/access-control.md#role-3))
+  was bound nowhere.
+  [PLAT-2](specs/compositions/platform-services.md#plat-2)
+  closes it, and guideline 4's walk-the-citations audit now
+  covers every platform socket.
 - **The litmus is the swap.**
-  Rebind a supplier and every spec item reads unchanged —
-  DR-002's consequences say exactly this, and rebinding
-  [DR-001](specs/decisions/001-web-stack.md)'s native video
-  element to a player framework would leave
-  [VID-5](specs/packages/catalog/video-library.md#vid-5)'s
-  stated controls as they are.
+  Rebind a supplier and every package item reads unchanged —
+  swapping Supabase is a new DR plus rewritten PLAT items and
+  nothing else, and compositions are product-bound anyway, so
+  portability loses nothing
+  ([META-33](specs/meta.md#meta-33) still holds: packages cite
+  no compositions).
   Rebind a composition and the product changes: aim the media
   slot at a different library and
-  [PUB-1](specs/compositions/course-publishing.md#pub-1) itself
-  is rewritten.
+  [PUB-4](specs/compositions/course-publishing.md#pub-4) walks
+  a different journey.
   The known exception stays one: GitHub is named in
   [AUTH-2](specs/packages/identity/github-login.md#auth-2)
   because swapping it visibly changes sign-in — a user-visible
@@ -242,30 +265,35 @@ cannot tell, which is the point.
   [ROLE-2](specs/packages/identity/access-control.md#role-2)
   because a member who opens the course manager experiences that
   denial.
-  A supplier appears in no clause: the client states an abstract
-  subject — "the identity store"
+  A supplier appears in no clause of its client: the client
+  states an abstract subject — "the identity store"
   ([AUTH-7](specs/packages/identity/github-login.md#auth-7)),
   "the platform's environment configuration"
   ([DELIV-5](specs/packages/ops/delivery.md#deliv-5)) — and the
-  decision's binding table does the naming
-  ([META-15](specs/meta.md#meta-15)).
-- **An in-house supplier sits in the same table and makes the
-  binding auditable.**
+  deployment's binding item does the naming
+  ([PLAT-1](specs/compositions/platform-services.md#plat-1),
+  [META-15](specs/meta.md#meta-15)).
+- **An in-house supplier gets the same item, with citations on
+  both ends.**
   Every supplier in the demo happens to be a vendor; nothing
   requires that.
-  Guideline 2's deleted item — "primitives come from the shared
-  component kit" — was never an outcome, but it was always a
-  choice, and [DR-001](specs/decisions/001-web-stack.md) records
-  it: one in-repo kit, cited by no item.
-  Were the kit a spec package with observable behavior of its
-  own, the same row would bind to that package and cite the
-  supplier's external items alongside the client's, extending
-  guideline 4's walk-the-citations audit across the seam.
-  Verification needs no composition either: the client drives a
-  double of the supplied subject — the library against a storage
-  test double in
-  [VID-11](specs/packages/catalog/video-library.md#vid-11) while
-  DR-002 binds the real storage — and an in-house supplier tests
-  against a stub of its host
-  ([VID-13](specs/packages/catalog/video-library.md#vid-13)),
+  Were the component kit a spec package with observable
+  behavior of its own, its supply binding would cite the kit's
+  external items exactly as
+  [PUB-1](specs/compositions/course-publishing.md#pub-1) cites
+  [VID-4](specs/packages/catalog/video-library.md#vid-4) — the
+  same item shape PLAT uses, with the supplier's side citable
+  because it has items.
+  The kit itself stays guideline 2's cautionary tale: no
+  observable behavior of its own, so no package, and no binding
+  item — one line in
+  [DR-001](specs/decisions/001-web-stack.md) and nothing else.
+  Verification needs no scenario either: the client drives a
+  double of the supplied subject
+  ([VID-11](specs/packages/catalog/video-library.md#vid-11)'s
+  storage test double), the deployment's sweep inspects the
+  real binding
+  ([PLAT-6](specs/compositions/platform-services.md#plat-6)),
+  and an in-house supplier tests against a stub of its host
+  ([VID-13](specs/packages/catalog/video-library.md#vid-13)) —
   guideline 1's boundary discipline intact from both sides.

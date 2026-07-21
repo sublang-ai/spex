@@ -28,7 +28,7 @@ navigation collections with no semantics
 | --- | --- | --- |
 | DR-000 | [000-product-scope.md](decisions/000-product-scope.md) | Minimal course site: public catalog, gated playback, one admin, explicit out-of-scope list |
 | DR-001 | [001-web-stack.md](decisions/001-web-stack.md) | Next.js App Router + TypeScript, Tailwind CSS, vendored shadcn/ui kit, native video |
-| DR-002 | [002-platform-and-devops.md](decisions/002-platform-and-devops.md) | Vercel + Supabase (Auth, Postgres, Storage) + GitHub bindings for the packages' abstract subjects |
+| DR-002 | [002-platform-and-devops.md](decisions/002-platform-and-devops.md) | Chooses Vercel + Supabase (Auth, Postgres, Storage) + GitHub; the bindings themselves are PLAT's supply items |
 | DR-003 | [003-admin-designation.md](decisions/003-admin-designation.md) | Initial admin as configured GitHub username, recomputed at each sign-in |
 
 ## Iterations
@@ -73,6 +73,7 @@ navigation collections with no semantics
 | --- | --- | --- |
 | BOOT | [admin-bootstrap.md](compositions/admin-bootstrap.md) | Day zero: fresh deployment to working admin in one sign-in |
 | NAV | [site-navigation.md](compositions/site-navigation.md) | Binds the shell's header slots and the home page to the product's surfaces |
+| PLAT | [platform-services.md](compositions/platform-services.md) | Supply bindings: identity, data, media storage, hosting, and pipeline seams wired to Supabase, Vercel, and GitHub |
 | PUB | [course-publishing.md](compositions/course-publishing.md) | Assemble and release a course; binds the media slot to the video library |
 | PLAY | [lesson-playback.md](compositions/lesson-playback.md) | The member journey: browse, sign in, watch — the flagship acceptance scenario |
 | GUARD | [protected-content.md](compositions/protected-content.md) | The gating map across all audiences and paths, and its independence from client-side hiding |

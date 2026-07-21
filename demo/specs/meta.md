@@ -203,8 +203,10 @@ project and stand alone: its `## Intent` section shall be
 self-contained prose carrying no citations.
 Dependencies on other packages shall appear only as item-level
 precondition citations ([META-14](#meta-14)); bindings of
-abstract subjects to concrete services shall live in decision
-records, which cite the items they bind
+abstract subjects — to another package or to an external
+service — shall be binding items under `compositions/`
+([META-31](#meta-31)), and the decision record that chooses the
+bound party shall cite those binding items
 ([META-17](#meta-17)).
 
 ### META-31
@@ -212,9 +214,9 @@ records, which cite the items they bind
 Files under `compositions/` shall describe how multiple spec
 packages work together.
 
-- Each file shall cover one integrated behavior or scenario and
-  be named after it; file names shall not be concatenations of
-  package names.
+- Each file shall cover one integrated behavior, scenario, or
+  binding concern and be named after it; file names shall not
+  be concatenations of package names.
 - Each file shall follow the item-file conventions: an H1 with a
   short form ([META-10](#meta-10)), an `## Intent` section
   ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6));
@@ -222,11 +224,16 @@ packages work together.
 - Composition items may take the composed system as their
   subject, and may bind an open slot one package leaves to a
   surface another package provides (a binding item).
+  Where no product user observes the seam, a binding item may
+  bind an abstract subject to an external service instead (a
+  supply binding); its tests are inspections of a deployment
+  rather than user journeys.
 - Integration and acceptance test items that span multiple
   packages shall live here, each carrying a `Verifies:` line
-  ([META-20](#meta-20)) citing items from two or more packages;
-  a test item shall also cite the same-file scenario items it
-  executes.
+  ([META-20](#meta-20)) citing items from two or more
+  packages — for a supply-binding file, from every package
+  whose seams it binds; a test item shall also cite the
+  same-file scenario or binding items it executes.
 
 ### META-32
 
