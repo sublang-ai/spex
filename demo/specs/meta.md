@@ -255,6 +255,11 @@ A file may hold bindings alone; whether its tests are
 acceptance journeys or deployment inspections follows from its
 seams' audience ([META-31](#meta-31)), not from the file's
 section shape.
+Binding and Scenario may share a file when they form one
+concern: where both are present, each binding item shall be
+cited by a same-file test item that also cites a scenario
+item — a binding no same-file scenario exercises shall live in
+a bindings-only file.
 
 ### META-32
 
