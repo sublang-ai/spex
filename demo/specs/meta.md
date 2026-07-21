@@ -8,8 +8,8 @@
 This spec defines the structure and organization of specifications
 (specs) for this project.
 Cross-package behavior lives under `compositions/`
-([META-31](#meta-31)); the deviations from the current Spex
-conventions are listed in the demo [README](../README.md).
+([META-31](#meta-31)); the scaffold's meta carries the same
+conventions.
 
 ## Organization
 

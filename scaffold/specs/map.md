@@ -20,7 +20,7 @@ Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing
 decisions/    Decision records (DRs)
 iterations/   Iteration records (IRs)
 packages/     Spec packages (one file per package)
-interactions/ Cross-package behaviors and tests
+compositions/ Cross-package compositions: scenarios, bindings, tests
 map.md        This index
 meta.md       The spec of specs
 ```
@@ -51,6 +51,6 @@ meta.md       The spec of specs
 | --- | --- |
 | [licensing.md](packages/licensing.md) | SPDX header requirements and verification checks |
 
-## Interactions
+## Compositions
 
-None yet. Add files under `interactions/` as packages start working together.
+None yet. Add files under `compositions/` as packages start working together.

@@ -18,7 +18,7 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | spec packages, one item file per package | [\<path\>/]\<kebab-case\>.md |
-| `interactions/` | cross-package interactions: scenarios, bindings, and their tests | [\<path\>/]\<kebab-case\>.md |
+| `compositions/` | cross-package compositions: scenarios, bindings, and their tests | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
@@ -31,7 +31,7 @@ Each item file shall include an `## Intent` section stating its purpose.
 Test items shall focus on integration and system testing.
 
 A package's `## Verification` section shall hold test items that check that package's own claims.
-Test items that involve multiple spec packages shall live in `interactions/` files.
+Test items that involve multiple spec packages shall live in `compositions/` files.
 
 Unit tests shall be part of the implementation and shall not be specified as spec items.
 
@@ -110,7 +110,7 @@ Packages may be grouped into subdirectories of `packages/` for navigation conven
 
 ### META-10
 
-A spec package shall have a basename \<kebab-case\>.md unique across `specs/packages/` and `specs/interactions/`, with a short form \<ALLCAPS\> unique across the same set.
+A spec package shall have a basename \<kebab-case\>.md unique across `specs/packages/` and `specs/compositions/`, with a short form \<ALLCAPS\> unique across the same set.
 
 Example: `package-management.md` has short form `PKGMGT`.
 
@@ -142,7 +142,7 @@ Item IDs shall not be modified once released; new items shall use higher IDs per
 
 ### META-13
 
-A spec package shall define a closed set of subjects and their behaviors for a single intent. The shall clause (see [META-6](#meta-6)) of any item shall only involve subjects and behaviors within its own package; where a package leaves an open slot for another party (e.g., "the deployment's media provider"), the slot shall be named abstractly, and its binding shall live in an interaction file ([META-31](#meta-31)).
+A spec package shall define a closed set of subjects and their behaviors for a single intent. The shall clause (see [META-6](#meta-6)) of any item shall only involve subjects and behaviors within its own package; where a package leaves an open slot for another party (e.g., "the deployment's media provider"), the slot shall be named abstractly, and its binding shall live in a composition ([META-31](#meta-31)).
 
 ### META-14
 
@@ -151,31 +151,31 @@ The precondition and trigger clauses (Where, While, When; see [META-6](#meta-6))
 ### META-15
 
 Each spec package shall minimize references to the containing project and stand alone: its `## Intent` section shall be self-contained prose carrying no citations.
-Dependencies on other packages shall appear only as item-level precondition citations ([META-14](#meta-14)); bindings of abstract subjects — to another package or to an external service — shall be binding items under `interactions/` ([META-31](#meta-31)), and the decision record that chooses the bound party shall cite those binding items ([META-17](#meta-17)).
+Dependencies on other packages shall appear only as item-level precondition citations ([META-14](#meta-14)); bindings of abstract subjects — to another package or to an external service — shall be binding items under `compositions/` ([META-31](#meta-31)), and the decision record that chooses the bound party shall cite those binding items ([META-17](#meta-17)).
 
 ### META-31
 
-Files under `interactions/` shall describe how multiple spec packages work together.
+Files under `compositions/` shall describe how multiple spec packages work together.
 
 - Each file shall cover one integrated behavior, scenario, or binding concern and be named after it; file names shall not be concatenations of package names.
 - Each file shall follow the item-file conventions: an H1 with a short form ([META-10](#meta-10)), an `## Intent` section ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6)), with sections per [META-34](#meta-34).
-- Interaction items may take the composed system as their subject, and may bind an open slot one package leaves to a surface another package provides (a binding item). Where no product user observes the seam, a binding item may bind an abstract subject to an external service instead (a supply binding); its tests are inspections of a deployment rather than user journeys.
+- Composition items may take the composed system as their subject, and may bind an open slot one package leaves to a surface another package provides (a binding item). Where no product user observes the seam, a binding item may bind an abstract subject to an external service instead (a supply binding); its tests are inspections of a deployment rather than user journeys.
 - Each binding item shall carry a `Binds:` line immediately below its heading — `Binds: <clients> → <suppliers>` — citing the client items or naming the deployment surface it resolves, and citing the supplier items or naming the service satisfying them. Supplier-side citations shall be External Behavior — what the supplier offers its users — never another package's internal items. Each slot or abstract subject shall have exactly one effective binding per deployment, unless the client item itself defines aggregation or selection.
 - Integration and acceptance test items shall live here, each carrying a `Verifies:` line ([META-20](#meta-20)) citing the same-file scenario or binding items it executes plus the package items it directly checks; a scenario test shall cite items from two or more packages. Every binding and scenario item shall be cited by at least one same-file test item.
 
 ### META-32
 
-Subdirectories under `packages/` and `interactions/` shall be navigation collections only, with no semantic meaning: no spec, tool, or reader shall infer package relationships, layering, or ownership from directory placement.
+Subdirectories under `packages/` and `compositions/` shall be navigation collections only, with no semantic meaning: no spec, tool, or reader shall infer package relationships, layering, or ownership from directory placement.
 A file's identity is its basename and short form ([META-10](#meta-10)); moving a file between collections changes relative citation paths but shall change no item ID, short form, or anchor.
 
 ### META-33
 
-Files under `packages/` shall not cite files under `interactions/`.
-Interaction files cite package items; packages stay ignorant of the interactions built on them, so a package can be moved to another project without dragging scenario context along.
+Files under `packages/` shall not cite files under `compositions/`.
+Composition files cite package items; packages stay ignorant of the compositions built on them, so a package can be moved to another project without dragging scenario context along.
 
 ### META-34
 
-Each interaction file shall contain only the following `##` sections, in this order:
+Each composition file shall contain only the following `##` sections, in this order:
 
 | Section | Presence | Content |
 | ------- | -------- | ------- |
@@ -214,7 +214,7 @@ External references in specs shall cite authoritative sources (e.g., official do
 
 Each test item shall include one `Verifies:` metadata line immediately below its item ID heading.
 
-The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the behavior items that the test item verifies: same-file anchors for a package's own Verification items, and `packages/` citations plus same-file scenario or binding anchors for interaction test items ([META-31](#meta-31)).
+The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the behavior items that the test item verifies: same-file anchors for a package's own Verification items, and `packages/` citations plus same-file scenario or binding anchors for composition test items ([META-31](#meta-31)).
 
 ## Authoring language
 

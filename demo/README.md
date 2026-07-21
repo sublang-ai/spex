@@ -39,15 +39,11 @@ The organization rules this tree demonstrates are stated in
 
 ## Where this tree deviates from current Spex conventions
 
-| Change | See |
-| --- | --- |
-| `compositions/` replaces `interactions/` | [META-31](specs/meta.md#meta-31) |
-
-Everything else this tree demonstrates — binding items and supply
-bindings, the [META-34](specs/meta.md#meta-34) section grammar,
-standalone Intents, DRs without implementation detail — is now
-the scaffold convention (`scaffold/specs/meta.md`); only the
-directory rename awaits CLI support.
+Nowhere — the scaffold's `meta.md` carries the same conventions
+this tree demonstrates: `compositions/` with binding items and
+supply bindings, the [META-34](specs/meta.md#meta-34) section
+grammar, standalone Intents, and DRs without implementation
+detail.
 
 ## Research pointers
 

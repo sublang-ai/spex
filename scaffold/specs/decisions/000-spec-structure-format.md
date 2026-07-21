@@ -42,7 +42,7 @@ Spex creates the default `specs/` directory under the repo root, with the follow
 | `decisions/` | DRs. Design decisions and rationale. | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | IRs. Implementation plans. | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | Spec packages: one item file per package. | [\<path\>/]\<kebab-case\>.md |
-| `interactions/` | Cross-package interactions: scenarios, bindings, and their tests. | [\<path\>/]\<kebab-case\>.md |
+| `compositions/` | Cross-package compositions: scenarios, bindings, and their tests. | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
@@ -60,17 +60,17 @@ A spec package is one file under `packages/`, so a developer reads one file to u
 Each package file carries the sections defined by [META-28](../meta.md#meta-28):
 
 - `## External Behavior` for user-visible behavior — what the system does.
-- `## Internal Behavior` for implementation requirements — how the system is built.
+- `## Internal Behavior` for system-facing constraints not exposed to the package's user.
 - `## Verification` for test items that check the package's own claims.
 
 For example, a spec package for generating short URLs may be `specs/packages/signing/gen-url.md`, where `signing/` is a local collection of related packages for development convenience.
 
-### Interactions
+### Compositions
 
-Behavior that emerges from multiple packages working together lives in `interactions/`, organized by behavior or scenario per [META-31](../meta.md#meta-31) — never as a concatenation of package names.
+Behavior that emerges from multiple packages working together lives in `compositions/`, organized by behavior or scenario per [META-31](../meta.md#meta-31) — never as a concatenation of package names.
 Integration and acceptance tests that span packages are specified there; unit tests are never specified ([META-21](../meta.md#meta-21)).
 
-`map.md` indexes packages and interactions.
+`map.md` indexes packages and compositions.
 
 ### Citations
 

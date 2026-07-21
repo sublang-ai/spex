@@ -20,7 +20,7 @@
 decisions/    决策记录（DRs）
 iterations/   迭代记录（IRs）
 packages/     规约包（每包一个文件）
-interactions/ 跨包行为与测试
+compositions/ 跨包组合：场景、绑定与测试
 map.md        本索引
 meta.md       规约的规约
 ```
@@ -51,6 +51,6 @@ meta.md       规约的规约
 | --- | --- |
 | [licensing.md](packages/licensing.md) | SPDX 头要求与验证检查 |
 
-## 交互
+## 组合
 
-暂无。当多个包开始协作时，在 `interactions/` 下添加文件。
+暂无。当多个包开始协作时，在 `compositions/` 下添加文件。
