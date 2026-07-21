@@ -18,14 +18,17 @@ Options considered:
 - Seeded database row — rejected: a manual step outside the
   spec'd deployment path
   ([DELIV-7](../packages/ops/delivery.md#deliv-7)).
-- Configured GitHub username — chosen.
+- Configured GitHub username — rejected: usernames are mutable
+  and reusable, so a rename lets a squatter inherit the
+  designation at their next sign-in.
+- Configured stable GitHub account ID — chosen.
 
 ## Decision
 
-- The deployment configuration names exactly one GitHub username
-  as the initial admin.
+- The deployment configuration names exactly one GitHub account,
+  by its stable account ID, as the initial admin.
 - The stored role is recomputed from that configuration at every
-  sign-in, matching case-insensitively
+  sign-in, matching the account's stable ID
   ([ROLE-1](../packages/identity/access-control.md#role-1),
   [ROLE-3](../packages/identity/access-control.md#role-3)).
 - No role management UI exists

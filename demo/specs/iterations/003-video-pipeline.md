@@ -17,7 +17,8 @@ the full composition suite green — the release acceptance.
 - [ ] Embedded player with signed-in gating (VID)
 - [ ] Media-slot binding: library picker in the lesson editor, dangling-reference handling (PUB)
 - [ ] Header-slot and home-page bindings complete (NAV)
-- [ ] Full composition acceptance green (NAV, PUB, PLAY, GUARD)
+- [ ] Platform supply bindings audited on the deployed substrate (PLAT)
+- [ ] Full composition acceptance green (BOOT, NAV, PUB, PLAY, GUARD, PLAT)
 
 ## Tasks
 
@@ -28,11 +29,11 @@ the full composition suite green — the release acceptance.
 5. Bind the library picker into the lesson editor's media actions.
 6. Handle dangling references: no-media fallback in the lesson view, marking in the course manager.
 7. Stand up the VID verification suite.
-8. Stand up the PUB, PLAY, and GUARD acceptance tests as the release-acceptance run.
+8. Stand up the PUB, PLAY, and GUARD acceptance tests and the PLAT substrate inspections as the release-acceptance run.
 
 ## Acceptance criteria
 
 - VID-11 through VID-13 pass.
-- NAV-3, PUB-4, PUB-5, PLAY-3, PLAY-4, GUARD-3, and GUARD-4
-  pass against a fresh preview deployment — the product's
-  release acceptance.
+- BOOT-3, NAV-3, PUB-4, PUB-5, PLAY-3, PLAY-4, GUARD-3,
+  GUARD-4, PLAT-6, and PLAT-7 pass against a fresh preview
+  deployment — the product's release acceptance.

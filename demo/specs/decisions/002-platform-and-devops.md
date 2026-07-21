@@ -46,3 +46,10 @@ This record holds the choice of services and its tradeoffs.
 - Preview deployments bind to a non-production Supabase project
   ([PLAT-4](../compositions/platform-services.md#plat-4)),
   satisfying [DELIV-4](../packages/ops/delivery.md#deliv-4).
+- Supabase's SSR session model keeps its tokens readable to the
+  browser client
+  ([sessions](https://supabase.com/docs/guides/auth/sessions)),
+  so
+  [AUTH-8](../packages/identity/github-login.md#auth-8)
+  constrains cookie scope and credential lifetime rather than
+  mandating HTTP-only.

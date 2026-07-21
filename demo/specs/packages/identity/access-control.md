@@ -21,12 +21,12 @@ lists, promotion flows — is out of scope.
 
 #### ROLE-1
 
-Where the deployment configuration names a GitHub username as the
-initial admin, when an account completes sign-in
-([AUTH-2](github-login.md#auth-2)), the site shall hold the admin
-role for that session when the account's username matches the
-configured name case-insensitively, and the member role
-otherwise.
+Where the deployment configuration names a GitHub account by its
+stable account ID as the initial admin, when an account completes
+sign-in ([AUTH-2](github-login.md#auth-2)), the site shall hold
+the admin role for that session when the account's stable ID
+matches the configured one, and the member role otherwise —
+usernames are mutable and shall never designate.
 
 ### The Guard
 
@@ -73,9 +73,11 @@ Verifies: [ROLE-1](#role-1), [ROLE-3](#role-3)
 Where the configuration names a stub account as the initial
 admin, when that account and a second stub account sign in, the
 test suite shall assert the configured account holds the admin
-role and the other holds member; when the configured name changes
+role and the other holds member; when the configured ID changes
 to the second account and both sign in again, the suite shall
-assert the roles have swapped.
+assert the roles have swapped; and when a third account adopts
+the first account's former username and signs in, the suite
+shall assert it holds member.
 
 ### Guard Coverage
 

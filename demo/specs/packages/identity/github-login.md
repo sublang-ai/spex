@@ -5,11 +5,12 @@
 
 ## Intent
 
-This spec covers authentication: GitHub OAuth sign-in as the only
-method, session lifecycle, and the account menu.
+This spec covers authentication: GitHub OAuth sign-in, session
+lifecycle, and the account menu.
 The package knows who the user is and nothing else — it has no
-notion of roles or of what the site shows — so it can back any
-site that wants GitHub-only sign-in.
+notion of roles, of other sign-in methods, or of what the site
+shows — so it can back any site that offers GitHub sign-in;
+whether GitHub is the only method is the installation's policy.
 
 ## External Behavior
 
@@ -18,9 +19,7 @@ site that wants GitHub-only sign-in.
 #### AUTH-1
 
 When a signed-out visitor opens the sign-in page, the page shall
-offer exactly one authentication method — a "Continue with
-GitHub" action — and shall present no password, email, or other
-provider input.
+offer a "Continue with GitHub" action.
 
 #### AUTH-2
 
@@ -77,8 +76,9 @@ create another record.
 #### AUTH-8
 
 Where session state reaches the browser, it shall travel only in
-HTTP-only cookies scoped to the site's origin, so no page script
-can read a session token.
+cookies scoped to the site's origin and marked Secure, and page
+script shall obtain no credential beyond the identity provider's
+own session tokens and their bounded lifetimes.
 
 #### AUTH-9
 
@@ -86,13 +86,6 @@ Where a server-side handler decides whether a request is signed
 in, the decision shall come from verifying the request's session
 credential — never from client-supplied claims such as form
 fields, query parameters, or page state.
-
-#### AUTH-10
-
-The authentication configuration shall enable exactly one
-provider, GitHub OAuth; no other provider or password endpoint
-shall be enabled, so no request path can establish a session by
-another method.
 
 ## Verification
 
@@ -104,19 +97,17 @@ Verifies: [AUTH-1](#auth-1), [AUTH-2](#auth-2), [AUTH-4](#auth-4)
 Where a stub OAuth provider stands in for GitHub and honors the
 authorization-redirect contract, when the test suite drives
 sign-in from the sign-in page, the suite shall assert that the
-page offers exactly one method, that the browser is sent to the
+page offers the GitHub action, that the browser is sent to the
 stub's authorization URL, and that after the stub grants, the
 account menu shows the stub account's username and avatar on the
 page sign-in started from.
 
 #### AUTH-12
-Verifies: [AUTH-3](#auth-3), [AUTH-10](#auth-10)
+Verifies: [AUTH-3](#auth-3)
 
 Where the stub provider returns a denial, the test suite shall
 assert that the sign-in page shows the not-completed notice and
-that no session cookie is set; where requests target
-authentication endpoints of any non-GitHub method, the suite
-shall assert they are refused and no session results.
+that no session cookie is set.
 
 ### Session Coverage
 
@@ -128,9 +119,10 @@ assert: after sign-out, a signed-in-only fixture surface treats
 the requester as signed out; after the session is aged past the
 configured lifetime under test control, the same surface prompts
 for sign-in while a public fixture surface still serves; every
-session cookie is marked HTTP-only and page script reading
-cookies obtains no session token; and a request presenting a
-forged or absent session credential is treated as signed out.
+session cookie is scoped to the site's origin and marked Secure,
+with page script obtaining no credential beyond the provider's
+session tokens; and a request presenting a forged or absent
+session credential is treated as signed out.
 
 #### AUTH-14
 Verifies: [AUTH-7](#auth-7)

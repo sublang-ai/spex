@@ -20,17 +20,18 @@ what the deployment must wire.
 ## Binding
 
 ### PLAT-1
-Binds: [AUTH-2](../packages/identity/github-login.md#auth-2), [AUTH-9](../packages/identity/github-login.md#auth-9), [AUTH-10](../packages/identity/github-login.md#auth-10) → Supabase Auth
+Binds: [AUTH-2](../packages/identity/github-login.md#auth-2), [AUTH-9](../packages/identity/github-login.md#auth-9) → Supabase Auth
 
 Where sessions are established by GitHub sign-in
-([AUTH-2](../packages/identity/github-login.md#auth-2)),
+([AUTH-2](../packages/identity/github-login.md#auth-2)) and
 verified server-side
-([AUTH-9](../packages/identity/github-login.md#auth-9)), and
-the authentication configuration enables exactly one provider
-([AUTH-10](../packages/identity/github-login.md#auth-10)), the
+([AUTH-9](../packages/identity/github-login.md#auth-9)), the
 deployment shall issue and verify sessions with Supabase Auth,
 with GitHub OAuth as the one enabled provider and every other
-Supabase Auth method disabled.
+Supabase Auth method disabled, so the sign-in page offers
+GitHub as the only method — sign-in exclusivity is this
+installation's policy
+([DR-000](../decisions/000-product-scope.md)).
 
 ### PLAT-2
 Binds: [AUTH-7](../packages/identity/github-login.md#auth-7), [ROLE-3](../packages/identity/access-control.md#role-3), [CAT-11](../packages/catalog/course-catalog.md#cat-11), [CAT-12](../packages/catalog/course-catalog.md#cat-12) → Supabase Postgres
@@ -82,12 +83,13 @@ by GitHub Actions and merging gated by branch protection.
 ## Tests
 
 ### PLAT-6
-Verifies: [PLAT-1](#plat-1), [PLAT-2](#plat-2), [PLAT-3](#plat-3), [AUTH-10](../packages/identity/github-login.md#auth-10), [VID-7](../packages/catalog/video-library.md#vid-7)
+Verifies: [PLAT-1](#plat-1), [PLAT-2](#plat-2), [PLAT-3](#plat-3), [VID-7](../packages/catalog/video-library.md#vid-7)
 
 Where the audit suite inspects a deployed environment's
 configuration and network egress, the suite shall assert:
 session issuance and verification go through Supabase Auth with
-GitHub OAuth the only enabled method; user records, roles, and
+GitHub OAuth the only enabled method and the sign-in page
+offering no other; user records, roles, and
 catalog content live in that environment's Supabase Postgres
 project; asset content is served only from the private bucket
 through signed URLs that stop working at expiry; and no other

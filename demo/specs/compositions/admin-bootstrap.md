@@ -18,7 +18,7 @@ the path's value is that no manual step exists anywhere in it.
 
 Where a fresh production deployment is serving
 ([DELIV-3](../packages/ops/delivery.md#deliv-3)) with an
-initial-admin username configured
+initial-admin account configured
 ([ROLE-1](../packages/identity/access-control.md#role-1)) and no
 user record exists, when that account completes GitHub sign-in
 ([AUTH-2](../packages/identity/github-login.md#auth-2)), the
@@ -42,7 +42,7 @@ action deep: creation is the manager's primary action
 Verifies: [BOOT-1](#boot-1), [AUTH-2](../packages/identity/github-login.md#auth-2), [ROLE-1](../packages/identity/access-control.md#role-1), [ROLE-2](../packages/identity/access-control.md#role-2), [SHELL-2](../packages/site/web-shell.md#shell-2)
 
 Where a deployment with an empty database is configured with a
-stub GitHub provider and an initial-admin username, when the
+stub GitHub provider and an initial-admin account, when the
 acceptance suite signs in as the configured account, the suite
 shall assert the header carries the Admin entry and the course
 manager loads; when it signs in as another account, the suite

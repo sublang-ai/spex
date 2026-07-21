@@ -29,7 +29,7 @@ navigation collections with no semantics
 | DR-000 | [000-product-scope.md](decisions/000-product-scope.md) | Minimal course site: public catalog, gated playback, one admin, explicit out-of-scope list |
 | DR-001 | [001-web-stack.md](decisions/001-web-stack.md) | Next.js App Router + TypeScript, Tailwind CSS, vendored shadcn/ui kit, native video |
 | DR-002 | [002-platform-and-devops.md](decisions/002-platform-and-devops.md) | Chooses Vercel + Supabase (Auth, Postgres, Storage) + GitHub; the bindings themselves are PLAT's supply items |
-| DR-003 | [003-admin-designation.md](decisions/003-admin-designation.md) | Initial admin as configured GitHub username, recomputed at each sign-in |
+| DR-003 | [003-admin-designation.md](decisions/003-admin-designation.md) | Initial admin as configured GitHub account ID, recomputed at each sign-in |
 
 ## Iterations
 
@@ -45,7 +45,7 @@ navigation collections with no semantics
 
 | Short | File | Summary |
 | --- | --- | --- |
-| AUTH | [github-login.md](packages/identity/github-login.md) | GitHub-only sign-in, sessions, account menu; identity records, cookie and provider discipline |
+| AUTH | [github-login.md](packages/identity/github-login.md) | GitHub sign-in, sessions, account menu; identity records and credential discipline |
 | ROLE | [access-control.md](packages/identity/access-control.md) | Admin/member roles from configured designation; the admin-only guard and its check discipline |
 
 ### catalog/

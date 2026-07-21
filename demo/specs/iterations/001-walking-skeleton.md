@@ -21,8 +21,8 @@ guard, so every later iteration lands on a working pipeline.
 1. Scaffold the app with the component kit, strict TypeScript, and the CI workflow (lint, type check, test, build).
 2. Configure hosting: preview per pull request, production on the default branch, example environment file.
 3. Implement the shell frame: header, footer, not-found, loading and error surfaces.
-4. Integrate the identity provider with GitHub as the only enabled method; sessions and sign-out.
-5. Implement identity records and role derivation from the configured admin name.
+4. Integrate the identity provider with GitHub as this installation's only enabled method; sessions and sign-out.
+5. Implement identity records and role derivation from the configured admin account ID.
 6. Guard a placeholder admin surface and add the role-aware Admin entry.
 7. Stand up the verification suites for AUTH, ROLE, SHELL, and DELIV.
 
@@ -30,5 +30,7 @@ guard, so every later iteration lands on a working pipeline.
 
 - AUTH-11 through AUTH-14, ROLE-5, ROLE-6, SHELL-8 through
   SHELL-10, and DELIV-8 through DELIV-10 pass.
+- PLAT-7 passes: checks, previews, and production trace to the
+  bound delivery services.
 - A fresh preview deployment reaches a signed-in admin session
   with no manual step beyond configuration.

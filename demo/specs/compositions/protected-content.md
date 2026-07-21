@@ -66,5 +66,5 @@ without a grant, with an expired grant, and with a tampered
 grant are denied for all three audiences; a member's playback
 request obtains a grant and plays; the grant is scoped to that
 one asset and stops working after its expiry; and every session
-cookie observed during the sweep is marked HTTP-only, readable
-by no page script.
+cookie observed during the sweep is scoped to the site's origin
+and marked Secure.

@@ -59,15 +59,16 @@ language honest — still observable, but only by deliberately
 looking (payload inspection, security testing, restart survival).
 
 - **Write the strongest constraints as external/internal pairs.**
-  [AUTH-1](specs/packages/identity/github-login.md#auth-1)
-  (external): the sign-in page offers exactly one method.
-  [AUTH-10](specs/packages/identity/github-login.md#auth-10)
-  (internal): exactly one provider is enabled, so no request
-  path can mint a session another way.
-  Likewise [CAT-3](specs/packages/catalog/course-catalog.md#cat-3)
-  (drafts read as not-found) pairs with
+  [CAT-3](specs/packages/catalog/course-catalog.md#cat-3)
+  (external): drafts read as not-found.
   [CAT-12](specs/packages/catalog/course-catalog.md#cat-12)
-  (drafts are excluded at the data-access layer).
+  (internal): drafts are excluded at the data-access layer, so
+  no payload can leak one.
+  Likewise [SHELL-2](specs/packages/site/web-shell.md#shell-2)
+  (the admin entry appears only for admins) pairs with
+  [SHELL-7](specs/packages/site/web-shell.md#shell-7)
+  (chrome resolves server-side, so no served markup carries
+  another role's entries).
 - **The audience is per-package.** For the delivery package the
   user is the developer-operator: pull-request checks and
   preview links are external
@@ -158,7 +159,10 @@ integrated.
   ([NAV-3](specs/compositions/site-navigation.md#nav-3)), and
   the gating sweep
   ([GUARD-3](specs/compositions/protected-content.md#guard-3),
-  [GUARD-4](specs/compositions/protected-content.md#guard-4)).
+  [GUARD-4](specs/compositions/protected-content.md#guard-4)),
+  and the substrate inspections
+  ([PLAT-6](specs/compositions/platform-services.md#plat-6),
+  [PLAT-7](specs/compositions/platform-services.md#plat-7)).
 - **Specify matrix behavior as a map and sweep it.**
   [GUARD-1](specs/compositions/protected-content.md#guard-1)
   pins the whole gating surface as one audience-by-surface
@@ -237,6 +241,10 @@ cannot tell, which is the point.
   stays the exception: a user-visible counterparty with no
   package of its own is named in items (guideline 3), not
   supplied silently.
+  Exclusivity claims are installation policy, not package
+  behavior: AUTH offers GitHub sign-in, and only
+  [PLAT-1](specs/compositions/platform-services.md#plat-1)
+  makes it the sole method.
 - **A client never names its supplier — not even in a
   precondition.**
   Citation is for behavior the client's own user lives through:
