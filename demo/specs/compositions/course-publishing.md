@@ -32,7 +32,8 @@ slot's resolution queries shall be answered by the library
 ### PUB-2
 
 While an unpublished course carries sections and lessons with
-library assets attached, when the admin publishes it
+library assets attached ([PUB-1](#pub-1)), when the admin
+publishes it
 ([CAT-6](../packages/catalog/course-catalog.md#cat-6)), the
 course page shall mark exactly the lessons with resolvable
 attachments as playable

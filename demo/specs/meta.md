@@ -257,9 +257,12 @@ seams' audience ([META-31](#meta-31)), not from the file's
 section shape.
 Binding and Scenario may share a file when they form one
 concern: where both are present, each binding item shall be
-cited by a same-file test item that also cites a scenario
-item — a binding no same-file scenario exercises shall live in
-a bindings-only file.
+cited by at least one same-file scenario item whose outcome
+depends on it — a binding no same-file scenario depends on, or
+one that serves several files' concerns, shall live in a
+bindings-only file.
+Binding conformance and scenario acceptance may share one test
+item but need not.
 
 ### META-32
 
