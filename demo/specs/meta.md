@@ -231,9 +231,30 @@ packages work together.
 - Integration and acceptance test items that span multiple
   packages shall live here, each carrying a `Verifies:` line
   ([META-20](#meta-20)) citing items from two or more
-  packages — for a supply-binding file, from every package
-  whose seams it binds; a test item shall also cite the
-  same-file scenario or binding items it executes.
+  packages — for a file whose bindings are all supply bindings,
+  from every package whose seams it binds; a test item shall
+  also cite the same-file scenario or binding items it
+  executes.
+
+### META-34
+
+Each composition file shall contain only the following `##`
+sections, in this order:
+
+| Section | Presence | Content |
+| ------- | -------- | ------- |
+| `## Intent` | required | the concern's purpose ([META-3](#meta-3)) |
+| `## Binding` | optional | binding items ([META-31](#meta-31)) |
+| `## Scenario` | optional | integrated-behavior items over the composed system |
+| `## Tests` | required | test items with `Verifies:` lines ([META-20](#meta-20)) |
+| `## References` | optional | external sources ([META-19](#meta-19)) |
+
+At least one of `## Binding` and `## Scenario` shall be
+present.
+A file may hold bindings alone; whether its tests are
+acceptance journeys or deployment inspections follows from its
+seams' audience ([META-31](#meta-31)), not from the file's
+section shape.
 
 ### META-32
 
