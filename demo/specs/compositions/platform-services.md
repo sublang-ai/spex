@@ -20,6 +20,7 @@ what the deployment must wire.
 ## Binding
 
 ### PLAT-1
+Binds: [AUTH-2](../packages/identity/github-login.md#auth-2), [AUTH-9](../packages/identity/github-login.md#auth-9), [AUTH-10](../packages/identity/github-login.md#auth-10) → Supabase Auth
 
 Where sessions are established by GitHub sign-in
 ([AUTH-2](../packages/identity/github-login.md#auth-2)),
@@ -32,6 +33,7 @@ with GitHub OAuth as the one enabled provider and every other
 Supabase Auth method disabled.
 
 ### PLAT-2
+Binds: [AUTH-7](../packages/identity/github-login.md#auth-7), [ROLE-3](../packages/identity/access-control.md#role-3), [CAT-11](../packages/catalog/course-catalog.md#cat-11), [CAT-12](../packages/catalog/course-catalog.md#cat-12) → Supabase Postgres
 
 Where the identity store maintains user records
 ([AUTH-7](../packages/identity/github-login.md#auth-7)), the
@@ -45,6 +47,7 @@ deployment shall keep all of them in the environment's Supabase
 Postgres project.
 
 ### PLAT-3
+Binds: [VID-7](../packages/catalog/video-library.md#vid-7), [VID-8](../packages/catalog/video-library.md#vid-8) → Supabase Storage
 
 Where asset content is stored privately
 ([VID-7](../packages/catalog/video-library.md#vid-7)) and
@@ -55,6 +58,7 @@ bucket and realize each access grant as a signed URL whose
 expiry is the grant's configured expiry.
 
 ### PLAT-4
+Binds: [DELIV-2](../packages/ops/delivery.md#deliv-2), [DELIV-3](../packages/ops/delivery.md#deliv-3), [DELIV-4](../packages/ops/delivery.md#deliv-4) → Vercel
 
 Where the pipeline publishes previews and production
 deployments
@@ -66,6 +70,7 @@ deployment shall host on Vercel through its Git integration,
 with previews bound to a non-production Supabase project.
 
 ### PLAT-5
+Binds: [DELIV-1](../packages/ops/delivery.md#deliv-1), [DELIV-7](../packages/ops/delivery.md#deliv-7) → GitHub and GitHub Actions
 
 Where required checks gate merging
 ([DELIV-1](../packages/ops/delivery.md#deliv-1)) and every

@@ -220,6 +220,10 @@ cannot tell, which is the point.
   was bound nowhere.
   [PLAT-2](specs/compositions/platform-services.md#plat-2)
   closes it.
+  Every binding declares its endpoints in a `Binds:` line, and
+  its supplier side cites only offered behavior — External
+  items or a named service
+  ([META-31](specs/meta.md#meta-31)).
 - **The litmus is the swap.**
   Rebind a supplier and every package item reads unchanged:
   swapping Supabase is a new DR plus rewritten PLAT items,

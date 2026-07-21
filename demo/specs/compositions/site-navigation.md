@@ -15,6 +15,7 @@ and nowhere else.
 ## Binding
 
 ### NAV-1
+Binds: [SHELL-1](../packages/site/web-shell.md#shell-1), [SHELL-2](../packages/site/web-shell.md#shell-2) → [AUTH-4](../packages/identity/github-login.md#auth-4), [CAT-1](../packages/catalog/course-catalog.md#cat-1), [CAT-4](../packages/catalog/course-catalog.md#cat-4), [VID-4](../packages/catalog/video-library.md#vid-4)
 
 Where the shell's header carries the deployment's navigation
 entries, session control, and admin entry
@@ -32,6 +33,7 @@ video library
 ([VID-4](../packages/catalog/video-library.md#vid-4)).
 
 ### NAV-2
+Binds: the home page → [CAT-1](../packages/catalog/course-catalog.md#cat-1)
 
 When any visitor opens the home page, the site shall present the
 course list

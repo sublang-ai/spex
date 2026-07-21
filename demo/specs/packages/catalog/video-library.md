@@ -63,6 +63,15 @@ signed-in session is active, the player shall show a
 sign-in-required state in place of playback and shall request no
 media content.
 
+### Asset Identity
+
+#### VID-9
+
+When an upload completes, the library shall assign the asset an
+opaque identifier that is stable for the asset's lifetime and
+independent of its title and file name; uploading identical
+content twice shall create two distinct assets.
+
 ### Resolution
 
 #### VID-14
@@ -93,14 +102,7 @@ expiry; the server shall deny a playback request without a
 verified session and any content request bearing an expired or
 tampered grant.
 
-### Asset Identity
-
-#### VID-9
-
-When an upload completes, the library shall assign the asset an
-opaque identifier that is stable for the asset's lifetime and
-independent of its title and file name; uploading identical
-content twice shall create two distinct assets.
+### Deletion Boundary
 
 #### VID-10
 

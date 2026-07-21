@@ -228,11 +228,24 @@ packages work together.
   bind an abstract subject to an external service instead (a
   supply binding); its tests are inspections of a deployment
   rather than user journeys.
+- Each binding item shall carry a `Binds:` line immediately
+  below its heading — `Binds: <clients> → <suppliers>` — citing
+  the client items or naming the deployment surface it
+  resolves, and citing the supplier items or naming the
+  service satisfying them.
+  Supplier-side citations shall be External Behavior — what the
+  supplier offers its users — never another package's internal
+  items.
+  Each slot or abstract subject shall have exactly one
+  effective binding per deployment, unless the client item
+  itself defines aggregation or selection.
 - Integration and acceptance test items shall live here, each
   carrying a `Verifies:` line ([META-20](#meta-20)) citing the
   same-file scenario or binding items it executes plus the
   package items it directly checks; a scenario test shall cite
   items from two or more packages.
+  Every binding and scenario item shall be cited by at least
+  one same-file test item.
 
 ### META-34
 
@@ -261,6 +274,9 @@ one that serves several files' concerns, shall live in a
 bindings-only file.
 Binding conformance and scenario acceptance may share one test
 item but need not.
+Binding overlays, package-focused indexes, and other
+projections over these files shall be derived, read-only
+views — never a second source of truth.
 
 ### META-32
 

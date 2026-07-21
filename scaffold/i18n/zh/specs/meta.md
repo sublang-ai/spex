@@ -165,7 +165,8 @@ Files under `interactions/` shall describe how multiple spec packages work toget
 - Each file shall cover one integrated behavior, scenario, or binding concern and be named after it; file names shall not be concatenations of package names.
 - Each file shall follow the item-file conventions: an H1 with a short form ([META-10](#meta-10)), an `## Intent` section ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6)), with sections per [META-34](#meta-34).
 - Interaction items may take the composed system as their subject, and may bind an open slot one package leaves to a surface another package provides (a binding item). Where no product user observes the seam, a binding item may bind an abstract subject to an external service instead (a supply binding); its tests are inspections of a deployment rather than user journeys.
-- Integration and acceptance test items shall live here, each carrying a `Verifies:` line ([META-20](#meta-20)) citing the same-file scenario or binding items it executes plus the package items it directly checks; a scenario test shall cite items from two or more packages.
+- Each binding item shall carry a `Binds:` line immediately below its heading — `Binds: <clients> → <suppliers>` — citing the client items or naming the deployment surface it resolves, and citing the supplier items or naming the service satisfying them. Supplier-side citations shall be External Behavior — what the supplier offers its users — never another package's internal items. Each slot or abstract subject shall have exactly one effective binding per deployment, unless the client item itself defines aggregation or selection.
+- Integration and acceptance test items shall live here, each carrying a `Verifies:` line ([META-20](#meta-20)) citing the same-file scenario or binding items it executes plus the package items it directly checks; a scenario test shall cite items from two or more packages. Every binding and scenario item shall be cited by at least one same-file test item.
 
 ### META-32
 
@@ -193,6 +194,7 @@ At least one of `## Binding` and `## Scenario` shall be present.
 A file may hold bindings alone; whether its tests are acceptance journeys or deployment inspections follows from its seams' audience ([META-31](#meta-31)), not from the file's section shape.
 Where both sections are present, each binding item shall be cited by at least one same-file scenario item whose outcome depends on it — a binding no same-file scenario depends on, or one that serves several files' concerns, shall live in a bindings-only file.
 Binding conformance and scenario acceptance may share one test item but need not.
+Binding overlays, package-focused indexes, and other projections over these files shall be derived, read-only views — never a second source of truth.
 Localized scaffolds translate these section headings; the bundled templates define the active names.
 
 ## Citation

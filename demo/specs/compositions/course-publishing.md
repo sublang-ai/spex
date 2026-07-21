@@ -15,6 +15,7 @@ library here, and nowhere else.
 ## Binding
 
 ### PUB-1
+Binds: [CAT-8](../packages/catalog/course-catalog.md#cat-8) → [VID-4](../packages/catalog/video-library.md#vid-4), [VID-9](../packages/catalog/video-library.md#vid-9), [VID-14](../packages/catalog/video-library.md#vid-14)
 
 Where a lesson's media actions delegate asset selection to the
 deployment's media provider
