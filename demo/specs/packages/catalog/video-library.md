@@ -96,12 +96,22 @@ regardless of the requester's session state.
 
 While a playback request carries a session verified per
 [AUTH-9](../identity/github-login.md#auth-9) and the embedding
-host authorizes the asset for that requester, when the player
-starts playback, the server shall issue a short-lived access
+host authorizes it ([VID-15](#vid-15)), when the player starts
+playback, the server shall issue a short-lived access
 grant scoped to that one asset and bounded by the configured
 expiry; the server shall deny a playback request without a
 verified session and any content request bearing an expired or
 tampered grant.
+
+### Host Authorization
+
+#### VID-15
+
+Where a playback or stored-content request targets an asset,
+the server shall proceed only when the embedding host
+authorizes that asset for that requester; a request the host
+does not authorize shall be denied, with no grant issued and no
+content served.
 
 ### Deletion Boundary
 
@@ -138,7 +148,9 @@ no session, the player shows the sign-in-required state and no
 media request is made ([VID-6](#vid-6)); and direct
 stored-content requests without a grant ([VID-7](#vid-7)), with
 an expired grant, and with a tampered grant are all denied even
-with a signed-in session ([VID-8](#vid-8)).
+with a signed-in session ([VID-8](#vid-8)); and a request the
+stub host does not authorize is denied, with no grant issued
+([VID-15](#vid-15)).
 
 ### Identity and Deletion Coverage
 

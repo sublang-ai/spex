@@ -179,12 +179,13 @@ name.
 
 ### META-12
 
-Item IDs published by a previous release, and the concerns
-they identify, shall not be renumbered, reused, or reassigned;
-wording may change under such an ID only while it preserves
-the cited concern.
-IDs not yet published may be renumbered or overwritten to keep
-a file's numbering compact; new items take the next free ID.
+An item ID, and the concern it identifies, is reserved once it
+has appeared in any release; a reserved ID shall not be
+renumbered, reused, or reassigned, and wording may change under
+it only while it preserves the cited concern.
+Unreleased IDs may be renumbered or overwritten to keep a
+file's numbering compact; an ID that has appeared in no release
+may be reassigned, and new items take the next free ID.
 
 ### META-13
 
@@ -247,6 +248,13 @@ packages work together.
   precondition clauses cite the client items — or name the
   deployment surface — it serves, and its shall clause cites
   the supplier items or names the service.
+  This is the uniform GEARS reading — preconditions carry an
+  item's givens, the shall clause its provision; a binding's
+  given is the client's stated need.
+  A binding declares the installed relationship; whether the
+  deployment realizes it is its tests' question.
+  Citations to decision records in either clause are policy
+  references, not endpoints.
   Supplier-side citations shall be External Behavior — what the
   supplier offers its users — never another package's internal
   items.
@@ -340,6 +348,9 @@ at the assertion that verifies it: same-file anchors for a
 package's own Verification items, and `packages/` citations
 plus same-file scenario or binding anchors for composition test
 items ([META-31](#meta-31)).
+A citation binds its adjacent phrase: cite exactly the behavior
+that phrase directly relies on, exercises, or checks — never
+ambient, transitive, or merely invoked behavior.
 Spec items shall carry no metadata lines; the citations in an
 item's clauses are the single source of its relationships.
 

@@ -16,9 +16,9 @@ they add up to.
 
 ### GUARD-5
 
-Where the player issues grants only for playback its embedding
-host authorizes
-([VID-8](../packages/catalog/video-library.md#vid-8)), the
+Where the player serves only requests its embedding host
+authorizes
+([VID-15](../packages/catalog/video-library.md#vid-15)), the
 deployment shall authorize a requester without an admin session
 exactly for assets referenced by a lesson of a currently
 published course
