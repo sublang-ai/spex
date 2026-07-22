@@ -39,21 +39,28 @@ action deep: creation is the manager's primary action
 ## Tests
 
 ### BOOT-3
-Verifies: [BOOT-1](#boot-1), [AUTH-2](../packages/identity/github-login.md#auth-2), [ROLE-1](../packages/identity/access-control.md#role-1), [ROLE-2](../packages/identity/access-control.md#role-2), [SHELL-2](../packages/site/web-shell.md#shell-2)
 
 Where a deployment with an empty database is configured with a
 stub GitHub provider and an initial-admin account, when the
-acceptance suite signs in as the configured account, the suite
-shall assert the header carries the Admin entry and the course
-manager loads; when it signs in as another account, the suite
-shall assert no Admin entry appears and the course manager
-responds not-authorized.
+acceptance suite signs in as the configured account
+([AUTH-2](../packages/identity/github-login.md#auth-2),
+[ROLE-1](../packages/identity/access-control.md#role-1)), the
+suite shall assert the header carries the Admin entry
+([SHELL-2](../packages/site/web-shell.md#shell-2)) and the
+course manager loads ([BOOT-1](#boot-1)); when it signs in as
+another account, the suite shall assert no Admin entry appears
+and the course manager responds not-authorized
+([ROLE-2](../packages/identity/access-control.md#role-2)).
 
 ### BOOT-4
-Verifies: [BOOT-2](#boot-2), [AUTH-7](../packages/identity/github-login.md#auth-7), [ROLE-3](../packages/identity/access-control.md#role-3), [CAT-4](../packages/catalog/course-catalog.md#cat-4)
 
 Where the configured account signs in on the empty deployment,
-the acceptance suite shall assert exactly one user record exists,
-holding the admin role, and that the course manager presents
-creation as its primary action; after the admin creates the first
-course, the suite shall assert the manager lists it.
+the acceptance suite shall assert exactly one user record exists
+([AUTH-7](../packages/identity/github-login.md#auth-7)), holding
+the admin role
+([ROLE-3](../packages/identity/access-control.md#role-3)), and
+that the course manager presents creation as its primary action
+([BOOT-2](#boot-2),
+[CAT-4](../packages/catalog/course-catalog.md#cat-4)); after the
+admin creates the first course, the suite shall assert the
+manager lists it.

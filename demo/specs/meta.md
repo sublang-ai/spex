@@ -155,13 +155,16 @@ in this order:
 | Section | Presence | Content |
 | ------- | -------- | ------- |
 | `## Intent` | required | the package's purpose ([META-3](#meta-3)) |
-| `## External Behavior` | optional | user-visible behavior: what the system does |
-| `## Internal Behavior` | optional | system-facing constraints not exposed to the package's user |
+| `## External Behavior` | optional | outcomes and guarantees the package's users may rely on |
+| `## Internal Behavior` | optional | consumed requirements and private invariants, hidden from the package's users |
 | `## Verification` | optional | test items checking this package's claims ([META-21](#meta-21)) |
 | `## References` | optional | external sources ([META-19](#meta-19)) |
 
 At least one of `## External Behavior` and `## Internal Behavior`
 shall be present.
+A package's user is any human, host, or peer component using
+its contract; classification is package-relative, and a peer
+may rely only on External Behavior.
 Topic subsections (`###`) and item headings (`###` or `####`)
 live inside the behavior and Verification sections.
 
@@ -176,8 +179,12 @@ name.
 
 ### META-12
 
-Item IDs shall not be modified once released; new items shall use
-higher IDs per package.
+Item IDs published by a previous release, and the concerns
+they identify, shall not be renumbered, reused, or reassigned;
+wording may change under such an ID only while it preserves
+the cited concern.
+IDs not yet published may be renumbered or overwritten to keep
+a file's numbering compact; new items take the next free ID.
 
 ### META-13
 
@@ -193,8 +200,13 @@ abstractly, and its binding shall live in a composition
 ### META-14
 
 The precondition and trigger clauses (Where, While, When; see
-[META-6](#meta-6)) of items shall be allowed to reference
-subjects and behaviors from other spec packages.
+[META-6](#meta-6)) of items may cite another package's External
+Behavior where the reliance is an intentional, fixed semantic
+dependency of the package's contract; such citations shall
+never target a peer's Internal Behavior.
+Where the counterparty is selectable, the package shall state
+an abstract subject instead, bound in a composition
+([META-31](#meta-31)).
 
 ### META-15
 
@@ -208,6 +220,9 @@ service — shall be binding items under `compositions/`
 ([META-31](#meta-31)), and the decision record that chooses the
 bound party shall cite those binding items
 ([META-17](#meta-17)).
+A package shall claim no site-wide exclusivity for itself;
+exclusivity is an installation policy, stated by a binding item
+([META-31](#meta-31)).
 
 ### META-31
 
@@ -228,11 +243,10 @@ packages work together.
   bind an abstract subject to an external service instead (a
   supply binding); its tests are inspections of a deployment
   rather than user journeys.
-- Each binding item shall carry a `Binds:` line immediately
-  below its heading — `Binds: <clients> → <suppliers>` — citing
-  the client items or naming the deployment surface it
-  resolves, and citing the supplier items or naming the
-  service satisfying them.
+- A binding item declares its endpoints by clause: its
+  precondition clauses cite the client items — or name the
+  deployment surface — it serves, and its shall clause cites
+  the supplier items or names the service.
   Supplier-side citations shall be External Behavior — what the
   supplier offers its users — never another package's internal
   items.
@@ -240,10 +254,10 @@ packages work together.
   effective binding per deployment, unless the client item
   itself defines aggregation or selection.
 - Integration and acceptance test items shall live here, each
-  carrying a `Verifies:` line ([META-20](#meta-20)) citing the
-  same-file scenario or binding items it executes plus the
-  package items it directly checks; a scenario test shall cite
-  items from two or more packages.
+  citing ([META-20](#meta-20)) the same-file scenario or
+  binding items it executes plus the package items it directly
+  checks; a scenario test shall cite items from two or more
+  packages.
   Every binding and scenario item shall be cited by at least
   one same-file test item.
 
@@ -257,7 +271,7 @@ sections, in this order:
 | `## Intent` | required | the concern's purpose ([META-3](#meta-3)) |
 | `## Binding` | optional | binding items ([META-31](#meta-31)) |
 | `## Scenario` | optional | integrated-behavior items over the composed system |
-| `## Tests` | required | test items with `Verifies:` lines ([META-20](#meta-20)) |
+| `## Tests` | required | test items citing what they verify ([META-20](#meta-20)) |
 | `## References` | optional | external sources ([META-19](#meta-19)) |
 
 At least one of `## Binding` and `## Scenario` shall be
@@ -321,15 +335,13 @@ have no uncited entries.
 
 ### META-20
 
-Each test item shall include one `Verifies:` metadata line
-immediately below its item ID heading.
-
-The `Verifies:` line shall contain one or more comma-separated
-[citations](#meta-16) to the behavior items that the test item
-verifies: same-file anchors for a package's own Verification
-items, and `packages/` citations plus same-file scenario or
-binding anchors for composition test items
-([META-31](#meta-31)).
+A test item shall cite every behavior item it verifies, inline
+at the assertion that verifies it: same-file anchors for a
+package's own Verification items, and `packages/` citations
+plus same-file scenario or binding anchors for composition test
+items ([META-31](#meta-31)).
+Spec items shall carry no metadata lines; the citations in an
+item's clauses are the single source of its relationships.
 
 ## Authoring language
 

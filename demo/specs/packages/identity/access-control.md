@@ -68,26 +68,26 @@ client-supplied role claims shall never be honored.
 ### Grant Coverage
 
 #### ROLE-5
-Verifies: [ROLE-1](#role-1), [ROLE-3](#role-3)
 
 Where the configuration names a stub account as the initial
 admin, when that account and a second stub account sign in, the
 test suite shall assert the configured account holds the admin
-role and the other holds member; when the configured ID changes
-to the second account and both sign in again, the suite shall
-assert the roles have swapped; and when a third account adopts
-the first account's former username and signs in, the suite
-shall assert it holds member.
+role and the other holds member ([ROLE-1](#role-1)); when the
+configured ID changes to the second account and both sign in
+again, the suite shall assert the roles have swapped
+([ROLE-3](#role-3)); and when a third account adopts the first
+account's former username and signs in, the suite shall assert
+it holds member ([ROLE-1](#role-1)).
 
 ### Guard Coverage
 
 #### ROLE-6
-Verifies: [ROLE-2](#role-2), [ROLE-4](#role-4)
 
 Where a fixture surface is designated admin-only, the test suite
 shall assert: a signed-out request is sent to sign-in and returns
 to the target after stub sign-in; a member-session request
-receives a not-authorized response whose body carries none of the
-fixture surface's content; an admin-session request succeeds; and
-a member-session request carrying a forged client-side admin
-claim is still denied.
+receives a not-authorized response whose body carries none of
+the fixture surface's content ([ROLE-2](#role-2)); an
+admin-session request succeeds; and a member-session request
+carrying a forged client-side admin claim is still denied
+([ROLE-4](#role-4)).

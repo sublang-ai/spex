@@ -12,6 +12,20 @@ media alike.
 Each package guards its own door; this composition pins the map
 they add up to.
 
+## Binding
+
+### GUARD-5
+
+Where the player issues grants only for playback its embedding
+host authorizes
+([VID-8](../packages/catalog/video-library.md#vid-8)), the
+deployment shall authorize a requester without an admin session
+exactly for assets referenced by a lesson of a currently
+published course
+([CAT-2](../packages/catalog/course-catalog.md#cat-2),
+[CAT-3](../packages/catalog/course-catalog.md#cat-3)), so
+unpublishing a course revokes member playback of its media.
+
 ## Scenario
 
 ### GUARD-1
@@ -26,6 +40,7 @@ navigation, and data requests:
 | Lesson playback ([VID-5](../packages/catalog/video-library.md#vid-5), [VID-6](../packages/catalog/video-library.md#vid-6)) | sign-in-required state | plays | plays |
 | Unpublished course and lesson pages ([CAT-3](../packages/catalog/course-catalog.md#cat-3)) | not-found | not-found | shown |
 | Course manager and video library ([ROLE-2](../packages/identity/access-control.md#role-2), [CAT-4](../packages/catalog/course-catalog.md#cat-4), [VID-1](../packages/catalog/video-library.md#vid-1)) | sent to sign-in | not-authorized | shown |
+| Media of courses not currently published ([GUARD-5](#guard-5)) | denied | denied | plays on the unpublished page |
 | Stored media content without a valid grant ([VID-7](../packages/catalog/video-library.md#vid-7)) | denied | denied | denied |
 
 ### GUARD-2
@@ -37,7 +52,7 @@ reliance on hidden links: server-side session and role checks
 data-layer draft exclusion
 ([CAT-12](../packages/catalog/course-catalog.md#cat-12)),
 role-clean served markup
-([SHELL-7](../packages/site/web-shell.md#shell-7)), and
+([SHELL-6](../packages/site/web-shell.md#shell-6)), and
 grant-only media access
 ([VID-8](../packages/catalog/video-library.md#vid-8)) shall each
 hold independently, so removing every client-side hiding changes
@@ -46,25 +61,36 @@ nothing about what each audience can obtain.
 ## Tests
 
 ### GUARD-3
-Verifies: [GUARD-1](#guard-1), [GUARD-2](#guard-2), [ROLE-2](../packages/identity/access-control.md#role-2), [CAT-3](../packages/catalog/course-catalog.md#cat-3), [CAT-12](../packages/catalog/course-catalog.md#cat-12), [SHELL-7](../packages/site/web-shell.md#shell-7)
 
 Where a seeded deployment holds published and unpublished
 fixture courses, when the acceptance suite sweeps the map's page
 and data routes as a signed-out visitor, as a member, and as the
 admin — by direct URL and by in-app navigation — the suite shall
-assert every response matches the map's cell for that audience,
+assert every response matches the map's cell for that audience
+([GUARD-1](#guard-1), [GUARD-2](#guard-2),
+[ROLE-2](../packages/identity/access-control.md#role-2)),
 including the unpublished pages shown to the admin marked as
-unpublished, and that no non-admin response body carries
-unpublished content or admin markup.
+unpublished
+([CAT-3](../packages/catalog/course-catalog.md#cat-3)), and
+that no non-admin response body carries unpublished content or
+admin markup
+([CAT-12](../packages/catalog/course-catalog.md#cat-12),
+[SHELL-6](../packages/site/web-shell.md#shell-6)).
 
 ### GUARD-4
-Verifies: [GUARD-1](#guard-1), [GUARD-2](#guard-2), [AUTH-8](../packages/identity/github-login.md#auth-8), [VID-7](../packages/catalog/video-library.md#vid-7), [VID-8](../packages/catalog/video-library.md#vid-8)
 
 Where a fixture asset is attached to a published lesson, the
 acceptance suite shall assert: direct stored-content requests
 without a grant, with an expired grant, and with a tampered
-grant are denied for all three audiences; a member's playback
-request obtains a grant and plays; the grant is scoped to that
-one asset and stops working after its expiry; and every session
-cookie observed during the sweep is scoped to the site's origin
-and marked Secure.
+grant are denied for all three audiences ([GUARD-1](#guard-1),
+[VID-7](../packages/catalog/video-library.md#vid-7)); a
+member's playback request obtains a grant and plays; the grant
+is scoped to that one asset and stops working after its expiry
+([GUARD-2](#guard-2),
+[VID-8](../packages/catalog/video-library.md#vid-8)); a
+member's playback request for an asset referenced only by an
+unpublished fixture course is denied with no grant issued,
+while the admin's player on that unpublished lesson still plays
+([GUARD-5](#guard-5)); and every session cookie observed during
+the sweep is scoped to the site's origin and marked Secure
+([AUTH-8](../packages/identity/github-login.md#auth-8)).

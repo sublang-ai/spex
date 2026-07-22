@@ -28,8 +28,8 @@ guard, so every later iteration lands on a working pipeline.
 
 ## Acceptance criteria
 
-- AUTH-11 through AUTH-14, ROLE-5, ROLE-6, SHELL-8 through
-  SHELL-10, and DELIV-8 through DELIV-10 pass.
+- AUTH-10 through AUTH-13, ROLE-5, ROLE-6, SHELL-7 through
+  SHELL-9, and DELIV-8 through DELIV-10 pass.
 - PLAT-7 passes: checks, previews, and production trace to the
   bound delivery services.
 - A fresh preview deployment reaches a signed-in admin session

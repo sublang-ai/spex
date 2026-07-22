@@ -150,55 +150,58 @@ data request — carries unpublished content to non-admins.
 ### Browsing and Publication Coverage
 
 #### CAT-13
-Verifies: [CAT-1](#cat-1), [CAT-2](#cat-2), [CAT-3](#cat-3), [CAT-6](#cat-6)
 
 Where fixture data holds two published courses with known
 publication times and one unpublished course, the test suite
 shall assert: the course list shows exactly the published two,
-newest publication first; a published course page shows its
-syllabus in the defined order with resolvable-attachment lessons
-marked playable; the unpublished course's URL responds not-found
-without an admin session while an admin session sees its page
-marked as unpublished; publishing then unpublishing it flips the
-list and the URL between the two states; and republishing places
-the course first in the list under its new publication time.
+newest publication first ([CAT-1](#cat-1)); a published course
+page shows its syllabus in the defined order with
+resolvable-attachment lessons marked playable ([CAT-2](#cat-2));
+the unpublished course's URL responds not-found without an admin
+session while an admin session sees its page marked as
+unpublished ([CAT-3](#cat-3)); publishing then unpublishing it
+flips the list and the URL between the two states; and
+republishing places the course first in the list under its new
+publication time ([CAT-6](#cat-6)).
 
 ### Management Coverage
 
 #### CAT-14
-Verifies: [CAT-4](#cat-4), [CAT-5](#cat-5), [CAT-7](#cat-7), [CAT-11](#cat-11), [CAT-18](#cat-18)
 
 Where an admin session drives the course manager from an empty
 catalog, the test suite shall assert: creation is presented as
-the primary action; a created course starts unpublished; a saved
-description appears on the course page with its first paragraph
-as the list summary; added sections and lessons appear in the
+the primary action; a created course starts unpublished
+([CAT-4](#cat-4)); a saved description appears on the course
+page with its first paragraph as the list summary
+([CAT-18](#cat-18)); added sections and lessons appear in the
 arranged order, and after reordering and renaming plus a reload,
-the order matches the explicit positions; removing a section
-asks for confirmation naming its lesson count; and a save with
-an empty required field marks the field, keeps the entered
-state, and persists nothing.
+the order matches the explicit positions ([CAT-5](#cat-5),
+[CAT-11](#cat-11)); removing a section asks for confirmation
+naming its lesson count; and a save with an empty required field
+marks the field, keeps the entered state, and persists nothing
+([CAT-7](#cat-7)).
 
 ### Identity and Boundary Coverage
 
 #### CAT-15
-Verifies: [CAT-8](#cat-8), [CAT-9](#cat-9), [CAT-10](#cat-10), [CAT-17](#cat-17)
 
 Where a stub media provider returns fixed references, the test
 suite shall assert: attach, replace, and remove store, swap, and
 clear the lesson's single reference without the catalog reading
-the referenced asset; a course's slug survives a title change and
-collides into a suffixed form; and deleting a course — after a
-confirmation naming its section and lesson counts — removes the
-course from the list, its sections, lessons, and references,
-while the stub provider's assets remain untouched.
+the referenced asset ([CAT-8](#cat-8)); a course's slug survives
+a title change and collides into a suffixed form
+([CAT-9](#cat-9)); and deleting a course — after a confirmation
+naming its section and lesson counts ([CAT-17](#cat-17)) —
+removes the course from the list, its sections, lessons, and
+references, while the stub provider's assets remain untouched
+([CAT-10](#cat-10)).
 
 ### Isolation Coverage
 
 #### CAT-16
-Verifies: [CAT-12](#cat-12)
 
 Where fixture data holds an unpublished course with a distinctive
 title, the test suite shall assert that no response to signed-out
 or member-session requests — page markup or data request —
-contains the unpublished course's title or slug.
+contains the unpublished course's title or slug
+([CAT-12](#cat-12)).

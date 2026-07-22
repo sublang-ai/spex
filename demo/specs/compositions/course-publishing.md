@@ -15,7 +15,6 @@ library here, and nowhere else.
 ## Binding
 
 ### PUB-1
-Binds: [CAT-8](../packages/catalog/course-catalog.md#cat-8) → [VID-4](../packages/catalog/video-library.md#vid-4), [VID-9](../packages/catalog/video-library.md#vid-9), [VID-14](../packages/catalog/video-library.md#vid-14)
 
 Where a lesson's media actions delegate asset selection to the
 deployment's media provider
@@ -57,22 +56,29 @@ admin can reattach or clear it.
 ## Tests
 
 ### PUB-4
-Verifies: [PUB-1](#pub-1), [PUB-2](#pub-2), [CAT-5](../packages/catalog/course-catalog.md#cat-5), [CAT-8](../packages/catalog/course-catalog.md#cat-8), [VID-1](../packages/catalog/video-library.md#vid-1)
 
 Where the acceptance suite signs in as the admin on a seeded
 deployment, when it creates a course, adds a section and a
-lesson, uploads a fixture video, attaches it through the picker,
-and publishes, the suite shall assert the public course page
-shows the syllabus with that lesson — and only that lesson —
-marked playable, and that the lesson's stored reference equals
-the uploaded asset's identifier.
+lesson ([CAT-5](../packages/catalog/course-catalog.md#cat-5)),
+uploads a fixture video
+([VID-1](../packages/catalog/video-library.md#vid-1)), attaches
+it through the picker ([PUB-1](#pub-1)), and publishes, the
+suite shall assert the public course page shows the syllabus
+with that lesson — and only that lesson — marked playable
+([PUB-2](#pub-2)), and that the lesson's stored reference
+equals the uploaded asset's identifier
+([CAT-8](../packages/catalog/course-catalog.md#cat-8)).
 
 ### PUB-5
-Verifies: [PUB-3](#pub-3), [CAT-2](../packages/catalog/course-catalog.md#cat-2), [VID-10](../packages/catalog/video-library.md#vid-10), [VID-14](../packages/catalog/video-library.md#vid-14)
 
 Where a published lesson references a library asset, when the
-admin deletes that asset from the library, the acceptance suite
-shall assert the course page still shows the full syllabus with
-that lesson's playable marking gone, the lesson view shows the
-no-media presentation, and the course manager marks the dangling
-reference.
+admin deletes that asset from the library
+([VID-10](../packages/catalog/video-library.md#vid-10)), the
+acceptance suite shall assert the course page still shows the
+full syllabus with that lesson's playable marking gone
+([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
+lesson view shows the no-media presentation, and the course
+manager marks the dangling reference — the library reporting it
+unresolvable
+([VID-14](../packages/catalog/video-library.md#vid-14),
+[PUB-3](#pub-3)).

@@ -76,31 +76,32 @@ shall exist that bypasses the repository.
 ### Check Coverage
 
 #### DELIV-8
-Verifies: [DELIV-1](#deliv-1), [DELIV-2](#deliv-2)
 
 Where a fixture pull request carries a failing check, the audit
 suite shall assert the required checks are reported on it and
-that merging it into the default branch is blocked; where the
-fixture's build passes, the suite shall assert a preview
-deployment link appears on the pull request.
+that merging it into the default branch is blocked
+([DELIV-1](#deliv-1)); where the fixture's build passes, the
+suite shall assert a preview deployment link appears on the
+pull request ([DELIV-2](#deliv-2)).
 
 ### Deployment Coverage
 
 #### DELIV-9
-Verifies: [DELIV-3](#deliv-3), [DELIV-4](#deliv-4), [DELIV-6](#deliv-6)
 
 Where a preview environment rehearses deployment, the audit suite
 shall assert: a revision with a deliberately failing migration
-leaves the serving revision unchanged; a passing revision serves
-after its migrations apply; and the preview's backing-service
-endpoints are disjoint from production's.
+leaves the serving revision unchanged ([DELIV-6](#deliv-6)); a
+passing revision serves after its migrations apply
+([DELIV-3](#deliv-3)); and the preview's backing-service
+endpoints are disjoint from production's
+([DELIV-4](#deliv-4)).
 
 ### Hygiene Coverage
 
 #### DELIV-10
-Verifies: [DELIV-5](#deliv-5), [DELIV-7](#deliv-7)
 
 The audit suite shall assert a repository scan finds no secret
 values, the example environment file lists every required
-variable name with no values, and the serving production revision
-reports a commit identifier that exists on the default branch.
+variable name with no values ([DELIV-5](#deliv-5)), and the
+serving production revision reports a commit identifier that
+exists on the default branch ([DELIV-7](#deliv-7)).

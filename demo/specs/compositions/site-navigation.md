@@ -15,7 +15,6 @@ and nowhere else.
 ## Binding
 
 ### NAV-1
-Binds: [SHELL-1](../packages/site/web-shell.md#shell-1), [SHELL-2](../packages/site/web-shell.md#shell-2) → [AUTH-4](../packages/identity/github-login.md#auth-4), [CAT-1](../packages/catalog/course-catalog.md#cat-1), [CAT-4](../packages/catalog/course-catalog.md#cat-4), [VID-4](../packages/catalog/video-library.md#vid-4)
 
 Where the shell's header carries the deployment's navigation
 entries, session control, and admin entry
@@ -33,7 +32,6 @@ video library
 ([VID-4](../packages/catalog/video-library.md#vid-4)).
 
 ### NAV-2
-Binds: the home page → [CAT-1](../packages/catalog/course-catalog.md#cat-1)
 
 When any visitor opens the home page, the site shall present the
 course list
@@ -43,13 +41,19 @@ home page's content.
 ## Tests
 
 ### NAV-3
-Verifies: [NAV-1](#nav-1), [NAV-2](#nav-2), [SHELL-1](../packages/site/web-shell.md#shell-1), [SHELL-2](../packages/site/web-shell.md#shell-2), [AUTH-4](../packages/identity/github-login.md#auth-4), [CAT-1](../packages/catalog/course-catalog.md#cat-1), [CAT-4](../packages/catalog/course-catalog.md#cat-4), [VID-4](../packages/catalog/video-library.md#vid-4)
 
 Where fixture sessions exist for an admin, a member, and a
 signed-out visitor on a seeded deployment, the acceptance suite
-shall assert: the home page presents the course list; the
-header's "Courses" entry leads to the course list; the session
-control renders the account menu matching each session state;
-and for the admin session only, the "Admin" entry leads to the
+shall assert: the home page presents the course list
+([NAV-2](#nav-2),
+[CAT-1](../packages/catalog/course-catalog.md#cat-1)); the
+header's "Courses" entry leads to the course list
+([NAV-1](#nav-1),
+[SHELL-1](../packages/site/web-shell.md#shell-1)); the session
+control renders the account menu matching each session state
+([AUTH-4](../packages/identity/github-login.md#auth-4)); and
+for the admin session only, the "Admin" entry leads to the
 admin area with the course manager and the video library both
-reachable.
+reachable ([SHELL-2](../packages/site/web-shell.md#shell-2),
+[CAT-4](../packages/catalog/course-catalog.md#cat-4),
+[VID-4](../packages/catalog/video-library.md#vid-4)).

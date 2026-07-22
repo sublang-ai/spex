@@ -95,7 +95,8 @@ regardless of the requester's session state.
 #### VID-8
 
 While a playback request carries a session verified per
-[AUTH-9](../identity/github-login.md#auth-9), when the player
+[AUTH-9](../identity/github-login.md#auth-9) and the embedding
+host authorizes the asset for that requester, when the player
 starts playback, the server shall issue a short-lived access
 grant scoped to that one asset and bounded by the configured
 expiry; the server shall deny a playback request without a
@@ -116,42 +117,42 @@ is theirs to reconcile.
 ### Upload Coverage
 
 #### VID-11
-Verifies: [VID-1](#vid-1), [VID-2](#vid-2), [VID-3](#vid-3)
 
 Where an admin session drives the library against a storage test
 double, the test suite shall assert: an accepted fixture file
 uploads with visible progress and is then listed with its title
-defaulted from the file name; a wrong-format file and an
-oversize file are refused with the violated limit named, before
-any content request reaches the double; and an interrupted
-upload leaves no listed asset, with a retry starting from zero.
+defaulted from the file name ([VID-1](#vid-1)); a wrong-format
+file and an oversize file are refused with the violated limit
+named, before any content request reaches the double
+([VID-2](#vid-2)); and an interrupted upload leaves no listed
+asset, with a retry starting from zero ([VID-3](#vid-3)).
 
 ### Access Coverage
 
 #### VID-12
-Verifies: [VID-5](#vid-5), [VID-6](#vid-6), [VID-7](#vid-7), [VID-8](#vid-8)
 
 Where a fixture asset exists, the test suite shall assert: with
 a signed-in session, the embedded player obtains a grant and the
-media element reaches the playing state; with no session, the
-player shows the sign-in-required state and no media request is
-made; and direct stored-content requests without a grant, with
+media element reaches the playing state ([VID-5](#vid-5)); with
+no session, the player shows the sign-in-required state and no
+media request is made ([VID-6](#vid-6)); and direct
+stored-content requests without a grant ([VID-7](#vid-7)), with
 an expired grant, and with a tampered grant are all denied even
-with a signed-in session.
+with a signed-in session ([VID-8](#vid-8)).
 
 ### Identity and Deletion Coverage
 
 #### VID-13
-Verifies: [VID-4](#vid-4), [VID-9](#vid-9), [VID-10](#vid-10), [VID-14](#vid-14)
 
 Where the same fixture content is uploaded twice, the test suite
-shall assert two assets exist with distinct stable identifiers;
-when the admin edits one asset's title, the suite shall assert
-the list shows the new title with the asset's size and upload
-date after a reload; when one asset is deleted after
-confirmation, the suite shall assert its content is no longer
-served while the other still plays, that a stub host's stored
-reference to the deleted asset remains unread and unmodified by
-the library, and that the stub host's resolution query reports
-the deleted asset's identifier unresolvable while the remaining
-asset's still resolves.
+shall assert two assets exist with distinct stable identifiers
+([VID-9](#vid-9)); when the admin edits one asset's title, the
+suite shall assert the list shows the new title with the asset's
+size and upload date after a reload ([VID-4](#vid-4)); when one
+asset is deleted after confirmation, the suite shall assert its
+content is no longer served while the other still plays, that a
+stub host's stored reference to the deleted asset remains unread
+and unmodified by the library ([VID-10](#vid-10)), and that the
+stub host's resolution query reports the deleted asset's
+identifier unresolvable while the remaining asset's still
+resolves ([VID-14](#vid-14)).

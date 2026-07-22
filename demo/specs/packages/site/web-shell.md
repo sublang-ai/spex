@@ -55,7 +55,7 @@ or internal identifier.
 
 ### Server-Resolved Chrome
 
-#### SHELL-7
+#### SHELL-6
 
 Where a page's chrome varies by session or role — the session
 control and the admin entry — the variance shall be resolved
@@ -67,35 +67,36 @@ denies.
 
 ### Frame Coverage
 
-#### SHELL-8
-Verifies: [SHELL-1](#shell-1), [SHELL-2](#shell-2), [SHELL-3](#shell-3)
+#### SHELL-7
 
 Where fixture sessions exist for an admin, a member, and a
 signed-out visitor, and fixture surfaces are bound to the
 header's slots, the test suite shall assert: every fixture page
 carries the header with the home link, the bound navigation
-entries, the bound session control, and the footer; the admin
-entry appears for the admin session and for no other; and an
-unknown URL returns the not-found page with HTTP status 404.
+entries, the bound session control, and the footer
+([SHELL-1](#shell-1)); the admin entry appears for the admin
+session and for no other ([SHELL-2](#shell-2)); and an unknown
+URL returns the not-found page with HTTP status 404
+([SHELL-3](#shell-3)).
 
 ### Fit and Feedback Coverage
 
-#### SHELL-9
-Verifies: [SHELL-4](#shell-4), [SHELL-5](#shell-5)
+#### SHELL-8
 
 Where fixture pages render at a 360 px viewport, the test suite
-shall assert no horizontal overflow and an operable compact menu;
-where a fixture page's data is throttled, the suite shall assert
-a loading state precedes content; and where a request is forced
-to fail, the suite shall assert the error surface offers a retry
-and the response carries no stack trace.
+shall assert no horizontal overflow and an operable compact menu
+([SHELL-4](#shell-4)); where a fixture page's data is throttled,
+the suite shall assert a loading state precedes content; and
+where a request is forced to fail, the suite shall assert the
+error surface offers a retry and the response carries no stack
+trace ([SHELL-5](#shell-5)).
 
 ### Chrome Isolation Coverage
 
-#### SHELL-10
-Verifies: [SHELL-7](#shell-7)
+#### SHELL-9
 
 Where member and signed-out fixture sessions request every
 fixture page, the test suite shall assert the served markup
 contains no admin entry, and that the session control's served
-state matches the session without a client-side correction pass.
+state matches the session without a client-side correction pass
+([SHELL-6](#shell-6)).

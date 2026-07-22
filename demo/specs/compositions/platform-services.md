@@ -20,7 +20,6 @@ what the deployment must wire.
 ## Binding
 
 ### PLAT-1
-Binds: [AUTH-2](../packages/identity/github-login.md#auth-2), [AUTH-9](../packages/identity/github-login.md#auth-9) → Supabase Auth
 
 Where sessions are established by GitHub sign-in
 ([AUTH-2](../packages/identity/github-login.md#auth-2)) and
@@ -34,21 +33,18 @@ installation's policy
 ([DR-000](../decisions/000-product-scope.md)).
 
 ### PLAT-2
-Binds: [AUTH-7](../packages/identity/github-login.md#auth-7), [ROLE-3](../packages/identity/access-control.md#role-3), [CAT-11](../packages/catalog/course-catalog.md#cat-11), [CAT-12](../packages/catalog/course-catalog.md#cat-12) → Supabase Postgres
 
 Where the identity store maintains user records
 ([AUTH-7](../packages/identity/github-login.md#auth-7)), the
 role store records each account's role
 ([ROLE-3](../packages/identity/access-control.md#role-3)), and
-catalog content is stored with explicit ordering and draft
-isolation
-([CAT-11](../packages/catalog/course-catalog.md#cat-11),
-[CAT-12](../packages/catalog/course-catalog.md#cat-12)), the
-deployment shall keep all of them in the environment's Supabase
-Postgres project.
+catalog content is stored with explicit ordering
+([CAT-11](../packages/catalog/course-catalog.md#cat-11)), the
+deployment shall keep those stores in the environment's
+Supabase Postgres project — the binding allocates storage;
+each package's invariants over that storage remain its own.
 
 ### PLAT-3
-Binds: [VID-7](../packages/catalog/video-library.md#vid-7), [VID-8](../packages/catalog/video-library.md#vid-8) → Supabase Storage
 
 Where asset content is stored privately
 ([VID-7](../packages/catalog/video-library.md#vid-7)) and
@@ -59,7 +55,6 @@ bucket and realize each access grant as a signed URL whose
 expiry is the grant's configured expiry.
 
 ### PLAT-4
-Binds: [DELIV-2](../packages/ops/delivery.md#deliv-2), [DELIV-3](../packages/ops/delivery.md#deliv-3), [DELIV-4](../packages/ops/delivery.md#deliv-4) → Vercel
 
 Where the pipeline publishes previews and production
 deployments
@@ -71,7 +66,6 @@ deployment shall host on Vercel through its Git integration,
 with previews bound to a non-production Supabase project.
 
 ### PLAT-5
-Binds: [DELIV-1](../packages/ops/delivery.md#deliv-1), [DELIV-7](../packages/ops/delivery.md#deliv-7) → GitHub and GitHub Actions
 
 Where required checks gate merging
 ([DELIV-1](../packages/ops/delivery.md#deliv-1)) and every
@@ -83,25 +77,28 @@ by GitHub Actions and merging gated by branch protection.
 ## Tests
 
 ### PLAT-6
-Verifies: [PLAT-1](#plat-1), [PLAT-2](#plat-2), [PLAT-3](#plat-3), [VID-7](../packages/catalog/video-library.md#vid-7)
 
 Where the audit suite inspects a deployed environment's
 configuration and network egress, the suite shall assert:
 session issuance and verification go through Supabase Auth with
 GitHub OAuth the only enabled method and the sign-in page
-offering no other; user records, roles, and
+offering no other ([PLAT-1](#plat-1)); user records, roles, and
 catalog content live in that environment's Supabase Postgres
-project; asset content is served only from the private bucket
-through signed URLs that stop working at expiry; and no other
-identity, database, or storage service appears in the
-configuration or the observed egress.
+project ([PLAT-2](#plat-2)); asset content is served only from
+the private bucket
+([VID-7](../packages/catalog/video-library.md#vid-7)) through
+signed URLs that stop working at expiry ([PLAT-3](#plat-3));
+and no other identity, database, or storage service appears in
+the configuration or the observed egress.
 
 ### PLAT-7
-Verifies: [PLAT-4](#plat-4), [PLAT-5](#plat-5), [DELIV-4](../packages/ops/delivery.md#deliv-4), [DELIV-7](../packages/ops/delivery.md#deliv-7)
 
 Where a fixture pull request runs through the pipeline, the
 audit suite shall assert the required checks report from GitHub
-Actions, the preview publishes on Vercel against a
-non-production Supabase project disjoint from production's, and
-the serving production revision reports a commit that exists on
-the default branch of the GitHub repository.
+Actions ([PLAT-5](#plat-5)), the preview publishes on Vercel
+against a non-production Supabase project disjoint from
+production's ([PLAT-4](#plat-4),
+[DELIV-4](../packages/ops/delivery.md#deliv-4)), and the
+serving production revision reports a commit that exists on the
+default branch of the GitHub repository
+([DELIV-7](../packages/ops/delivery.md#deliv-7)).

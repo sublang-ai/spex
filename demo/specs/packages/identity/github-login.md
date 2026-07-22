@@ -58,8 +58,6 @@ the site shall treat requests as signed out: signed-in-only
 surfaces prompt for sign-in again, and public surfaces keep
 working unchanged.
 
-## Internal Behavior
-
 ### Identity Records
 
 #### AUTH-7
@@ -71,6 +69,17 @@ When the same account signs in again, the identity store shall
 update the username and avatar on that record and shall not
 create another record.
 
+### Credential Verification
+
+#### AUTH-9
+
+Where a server-side handler decides whether a request is signed
+in, the decision shall come from verifying the request's session
+credential — never from client-supplied claims such as form
+fields, query parameters, or page state.
+
+## Internal Behavior
+
 ### Session Mechanics
 
 #### AUTH-8
@@ -80,54 +89,46 @@ cookies scoped to the site's origin and marked Secure, and page
 script shall obtain no credential beyond the identity provider's
 own session tokens and their bounded lifetimes.
 
-#### AUTH-9
-
-Where a server-side handler decides whether a request is signed
-in, the decision shall come from verifying the request's session
-credential — never from client-supplied claims such as form
-fields, query parameters, or page state.
-
 ## Verification
 
 ### Sign-In Coverage
 
-#### AUTH-11
-Verifies: [AUTH-1](#auth-1), [AUTH-2](#auth-2), [AUTH-4](#auth-4)
+#### AUTH-10
 
 Where a stub OAuth provider stands in for GitHub and honors the
 authorization-redirect contract, when the test suite drives
 sign-in from the sign-in page, the suite shall assert that the
-page offers the GitHub action, that the browser is sent to the
-stub's authorization URL, and that after the stub grants, the
-account menu shows the stub account's username and avatar on the
-page sign-in started from.
+page offers the GitHub action ([AUTH-1](#auth-1)), that the
+browser is sent to the stub's authorization URL and returns
+signed in ([AUTH-2](#auth-2)), and that after the stub grants,
+the account menu shows the stub account's username and avatar
+on the page sign-in started from ([AUTH-4](#auth-4)).
 
-#### AUTH-12
-Verifies: [AUTH-3](#auth-3)
+#### AUTH-11
 
 Where the stub provider returns a denial, the test suite shall
 assert that the sign-in page shows the not-completed notice and
-that no session cookie is set.
+that no session cookie is set ([AUTH-3](#auth-3)).
 
 ### Session Coverage
 
-#### AUTH-13
-Verifies: [AUTH-5](#auth-5), [AUTH-6](#auth-6), [AUTH-8](#auth-8), [AUTH-9](#auth-9)
+#### AUTH-12
 
 While a stub-account session is active, the test suite shall
 assert: after sign-out, a signed-in-only fixture surface treats
-the requester as signed out; after the session is aged past the
-configured lifetime under test control, the same surface prompts
-for sign-in while a public fixture surface still serves; every
-session cookie is scoped to the site's origin and marked Secure,
-with page script obtaining no credential beyond the provider's
-session tokens; and a request presenting a forged or absent
-session credential is treated as signed out.
+the requester as signed out ([AUTH-5](#auth-5)); after the
+session is aged past the configured lifetime under test control,
+the same surface prompts for sign-in while a public fixture
+surface still serves ([AUTH-6](#auth-6)); every session cookie
+is scoped to the site's origin and marked Secure, with page
+script obtaining no credential beyond the provider's session
+tokens ([AUTH-8](#auth-8)); and a request presenting a forged or
+absent session credential is treated as signed out
+([AUTH-9](#auth-9)).
 
-#### AUTH-14
-Verifies: [AUTH-7](#auth-7)
+#### AUTH-13
 
 When the same stub account signs in twice with a changed username
 and avatar between the sign-ins, the test suite shall assert
 exactly one user record exists for the account's stable ID,
-carrying the latest username and avatar.
+carrying the latest username and avatar ([AUTH-7](#auth-7)).

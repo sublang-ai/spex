@@ -17,8 +17,10 @@ Self-contained means the shall clause never reaches into another
 package:
 
 - **Reference other packages only in preconditions.** A Where,
-  While, or When clause may cite another package's item; the
-  shall clause may not
+  While, or When clause may cite another package's External
+  Behavior — a fixed semantic dependency; a selectable
+  counterparty gets a slot instead — and the shall clause may
+  cite nothing
   ([META-13](specs/meta.md#meta-13),
   [META-14](specs/meta.md#meta-14)).
   [CAT-4](specs/packages/catalog/course-catalog.md#cat-4) is
@@ -53,10 +55,13 @@ package:
 
 ## 2. Split external from internal behavior by audience, and admit only observable behavior
 
-External behavior is the language the package speaks with its own
-user; internal behavior is the discipline that keeps that
-language honest — still observable, but only by deliberately
-looking (payload inspection, security testing, restart survival).
+External behavior is what a package's users — humans, hosts, or
+peer packages — may rely on; internal behavior is the package's
+consumed requirements and private invariants, which no outsider
+may cite.
+Observability grade is independent of the split: some external
+guarantees show only under deliberate inspection (payload
+inspection, security testing, restart survival).
 
 - **Write the strongest constraints as external/internal pairs.**
   [CAT-3](specs/packages/catalog/course-catalog.md#cat-3)
@@ -66,16 +71,21 @@ looking (payload inspection, security testing, restart survival).
   no payload can leak one.
   Likewise [SHELL-2](specs/packages/site/web-shell.md#shell-2)
   (the admin entry appears only for admins) pairs with
-  [SHELL-7](specs/packages/site/web-shell.md#shell-7)
+  [SHELL-6](specs/packages/site/web-shell.md#shell-6)
   (chrome resolves server-side, so no served markup carries
   another role's entries).
-- **The audience is per-package.** For the delivery package the
-  user is the developer-operator: pull-request checks and
-  preview links are external
+- **The audience is per-package, and peers count as users.**
+  For the delivery package the user is the developer-operator:
+  pull-request checks and preview links are external
   ([DELIV-1](specs/packages/ops/delivery.md#deliv-1)); secret
   storage and migration ordering are internal
   ([DELIV-5](specs/packages/ops/delivery.md#deliv-5),
   [DELIV-6](specs/packages/ops/delivery.md#deliv-6)).
+  [AUTH-9](specs/packages/identity/github-login.md#auth-9)'s
+  verification guarantee is external because
+  [VID-8](specs/packages/catalog/video-library.md#vid-8)
+  relies on it — what a peer may rely on is offered behavior
+  ([META-28](specs/meta.md#meta-28)).
 - **Every item, internal included, states an observable outcome**
   ([META-26](specs/meta.md#meta-26)).
   What no test or inspection could distinguish is not behavior.
@@ -173,9 +183,12 @@ integrated.
   or binding items plus items from at least two packages**
   ([META-20](specs/meta.md#meta-20),
   [META-31](specs/meta.md#meta-31)).
-  These Verifies lines make coverage mechanically auditable —
+  These inline citations make coverage mechanically auditable —
   in the demo's adversarial review, every stale citation and
   unverified map cell was caught by walking them.
+  Items carry no metadata lines; the citations in an item's
+  clauses are the single source of its relationships
+  ([META-20](specs/meta.md#meta-20)).
 - **Know what compositions do not cover.** Single-package
   behavior that is still acceptance-relevant — upload refusal
   ([VID-2](specs/packages/catalog/video-library.md#vid-2)),
@@ -224,9 +237,10 @@ cannot tell, which is the point.
   was bound nowhere.
   [PLAT-2](specs/compositions/platform-services.md#plat-2)
   closes it.
-  Every binding declares its endpoints in a `Binds:` line, and
-  its supplier side cites only offered behavior — External
-  items or a named service
+  Every binding declares its endpoints by clause — its
+  preconditions cite the clients, its shall clause the
+  suppliers — and the supplier side cites only offered
+  behavior: External items or a named service
   ([META-31](specs/meta.md#meta-31)).
 - **The litmus is the swap.**
   Rebind a supplier and every package item reads unchanged:
@@ -242,7 +256,8 @@ cannot tell, which is the point.
   package of its own is named in items (guideline 3), not
   supplied silently.
   Exclusivity claims are installation policy, not package
-  behavior: AUTH offers GitHub sign-in, and only
+  behavior ([META-15](specs/meta.md#meta-15)): AUTH offers
+  GitHub sign-in, and only
   [PLAT-1](specs/compositions/platform-services.md#plat-1)
   makes it the sole method.
 - **A client never names its supplier — not even in a

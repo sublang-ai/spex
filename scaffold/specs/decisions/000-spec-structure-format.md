@@ -59,8 +59,8 @@ It is the basic unit for spec composition, reuse, and extension.
 A spec package is one file under `packages/`, so a developer reads one file to understand one package.
 Each package file carries the sections defined by [META-28](../meta.md#meta-28):
 
-- `## External Behavior` for user-visible behavior — what the system does.
-- `## Internal Behavior` for system-facing constraints not exposed to the package's user.
+- `## External Behavior` for outcomes and guarantees the package's users may rely on.
+- `## Internal Behavior` for consumed requirements and private invariants, hidden from the package's users.
 - `## Verification` for test items that check the package's own claims.
 
 For example, a spec package for generating short URLs may be `specs/packages/signing/gen-url.md`, where `signing/` is a local collection of related packages for development convenience.

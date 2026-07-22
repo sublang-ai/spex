@@ -12,7 +12,7 @@ Accepted
 One small deployable, built and maintained by one developer with
 AI assistance.
 Gated content must never depend on client-side hiding
-([SHELL-7](../packages/site/web-shell.md#shell-7),
+([SHELL-6](../packages/site/web-shell.md#shell-6),
 [CAT-12](../packages/catalog/course-catalog.md#cat-12)), which
 favors a server-rendered stack.
 
@@ -29,7 +29,7 @@ favors a server-rendered stack.
 ## Consequences
 
 - Session- and role-dependent markup resolves on the server,
-  grounding [SHELL-7](../packages/site/web-shell.md#shell-7) and
+  grounding [SHELL-6](../packages/site/web-shell.md#shell-6) and
   [CAT-12](../packages/catalog/course-catalog.md#cat-12).
 - One build artifact deploys everywhere
   ([DELIV](../packages/ops/delivery.md)).
