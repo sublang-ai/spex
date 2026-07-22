@@ -27,21 +27,21 @@ The installation shall supply GHID only destinations that SITE has normalized an
 ### ACCESS-3
 Clients: `protected request context` = [SITE-10](../../packages/web/application-shell.md#site-10)
 Suppliers: `session evidence` = [GHID-11](../../packages/access/github-identity.md#ghid-11), `anonymous result` = [GHID-14](../../packages/access/github-identity.md#ghid-14), `access decision` = [ROLE-12](../../packages/access/role-access.md#role-12), `capability policy` = [ROLE-14](../../packages/access/role-access.md#role-14)
-Scope: every protected route, Route Handler, and Server Action in SITE's route map
+Scope: every administrator route, protected Route Handler, protected video action, and Server Action governed by SITE-10
 
-The installation shall make SITE gate each protected response with GHID's current session result and ROLE's decision for the same account and request.
+The installation shall make SITE gate each protected response or action with GHID's current session result and ROLE's decision for the same account, request, capability, and resource before returning protected data or a mutation result.
 
 ### ACCESS-4
-Clients: `course authoring` = [SYLL-14](../../packages/learning/course-syllabus.md#syll-14), `catalog access` = [CAT-17](../../packages/learning/course-catalog.md#cat-17), `video management` = [VIDS-19](../../packages/media/video-library.md#vids-19)
+Clients: `course authoring` = [SYLL-14](../../packages/learning/course-syllabus.md#syll-14), `lesson-content permission` = [CAT-24](../../packages/learning/course-catalog.md#cat-24), `course-publication permission` = [CAT-25](../../packages/learning/course-catalog.md#cat-25), `video management` = [VIDS-19](../../packages/media/video-library.md#vids-19)
 Suppliers: `access decision` = [ROLE-12](../../packages/access/role-access.md#role-12), `capability policy` = [ROLE-14](../../packages/access/role-access.md#role-14)
-Scope: every course-site domain request
+Scope: every protected course-site domain request; public catalog reads are outside this Binding
 
 The installation shall project ROLE decisions into the client requirements without changing their account, request, resource, freshness, or denial meaning:
 
 | ROLE capability | Client requirement |
 | --- | --- |
 | `course.author` | SYLL course-authoring permission |
-| `course.consume` | CAT course-consumption permission |
+| `video.watch` | CAT lesson-content permission |
 | `course.publish` | CAT course-publication permission |
 | `video.manage` | VIDS video-management authorization |
 
@@ -62,7 +62,7 @@ Where session, route, and role fixtures produce valid, expired, revoked, mismatc
 ### ACCESS-21
 Verifies: [ACCESS-4](#access-4)
 
-Where member and administrator sessions request every ROLE capability against each client package, when the installed policy is exercised, the conformance suite shall assert the four exact mappings, resource and request preservation, no browser-supplied decision, and denial of every unlisted capability.
+Where anonymous, member, and administrator requests exercise every ROLE capability against each client package and read the public catalog, when the installed policy is exercised, the conformance suite shall assert the four exact protected mappings, resource and request preservation, no browser-supplied decision, denial of every unlisted capability, and no ROLE decision or access Binding on the public catalog read.
 
 ### ACCESS-22
 Verifies: [ACCESS-5](#access-5)

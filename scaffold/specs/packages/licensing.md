@@ -9,7 +9,7 @@ This package lets contributors and reviewers identify the copyright and license 
 It owns header scope and content, not the project's license choice.
 It is project-local.
 
-## User Behavior
+## External Behavior
 
 ### LIC-6
 

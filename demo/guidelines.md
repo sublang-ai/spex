@@ -21,36 +21,48 @@ The course system separates:
 - [SITE](specs/packages/web/application-shell.md): this product's routes and presentation language.
 
 They participate in one feature but have different owners, failure modes, and reuse axes.
-A package is self-contained when its file alone defines what it promises, what it needs, and how it can be contract-tested with controlled collaborators.
+A package is self-contained when its file defines every package-owned meaning, makes any fixed peer dependency an exact External citation, and states how its contract can be checked with controlled collaborators.
 
-### 2. Divide behavior by audience and direction
+### 2. External and Internal are package-relative
 
 | Section | Meaning | Demo example |
 | --- | --- | --- |
-| User Behavior | outcome visible to a named human | [SYLL-2](specs/packages/learning/course-syllabus.md#syll-2) save result |
-| Collaborator Behavior | output or guarantee offered to another package or host | [SYLL-11](specs/packages/learning/course-syllabus.md#syll-11) publication snapshot |
+| External Behavior | outcome or guarantee a package user may rely on | [SYLL-2](specs/packages/learning/course-syllabus.md#syll-2) save result; [SYLL-11](specs/packages/learning/course-syllabus.md#syll-11) publication snapshot |
 | Internal Behavior | provider-neutral requirement consumed by the package, or a private semantic invariant | [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) required content description; [SYLL-10](specs/packages/learning/course-syllabus.md#syll-10) revision invariant |
 
 Internal does not mean implementation design.
 Do not specify classes, hooks, source files, algorithms, or replaceable library choices there.
-Classification follows who may rely on which direction of meaning, not code visibility or human visibility alone.
-Use User Behavior when the human is the contract audience and Collaborator Behavior when a peer or host relies on the output; invisibility alone never makes behavior Internal.
+The package boundary alone decides the section: External is what this package's user may rely on; Internal is hidden from that user.
+The user may be a human, host, component, or higher layer.
+Thus [PIPE-1](specs/packages/operations/github-delivery.md#pipe-1) is External to PIPE for a contributor, and [SYLL-11](specs/packages/learning/course-syllabus.md#syll-11) is External to SYLL for a publisher, although neither is visible to a learner.
+A component may be internal to the installed website while still being an external user of the package it calls.
+
+Keep only behavior that a contract test or inspection can distinguish.
+For example, [DR-001](specs/decisions/001-web-platform.md) selects shadcn/ui as a durable stack constraint, while [SITE-5](specs/packages/web/application-shell.md#site-5) owns the visible accessibility guarantee; “use a shared button primitive” is not a second Internal Behavior rule.
 
 Inside Internal Behavior, ask whether a controlled collaborator could satisfy the meaning.
 If yes, it is a consumed requirement and may be bound, as [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) is; if no, it is a private invariant and cannot be bound, as [SYLL-10](specs/packages/learning/course-syllabus.md#syll-10) is.
 Keep each consumed requirement in its own item with its rejection behavior, because a Binding cites the whole item anchor.
 
-There are two cases when package A uses package B:
+There are three cases when package A uses package B:
 
-- If A's specified contract depends on a semantic guarantee supplied by B, A defines one provider-neutral Internal requirement, B offers Collaborator Behavior, and an external Binding installs B; neither package names the other.
+- If B itself is an intentional fixed semantic dependency, A cites B's exact External Behavior. A may never cite B's Internal Behavior, and no Binding restates the fixed citation.
+- If A needs a meaning but the installed supplier is selectable, A defines a provider-neutral Internal requirement and a Binding selects B's External Behavior. A does not name B.
 - If B is only replaceable implementation allocation, A owns the relevant outcome and there is no spec dependency, Binding, or Scenario.
+
+The demo has no fixed package dependency: [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) / [PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) and [CAT-24](specs/packages/learning/course-catalog.md#cat-24) / [ACCESS-4](specs/compositions/access/install-course-access.md#access-4) are selectable supplies.
+Do not invent a direct citation merely to exercise the first case.
+
+For a selectable supply, test both endpoints independently: the client exercises its Internal requirement with a controlled supplier, the provider exercises its External guarantee with a controlled client, and Binding Verification checks the installed pair.
+[SYLL-21](specs/packages/learning/course-syllabus.md#syll-21), [VIDS-20](specs/packages/media/video-library.md#vids-20), and [PUBLISH-24](specs/compositions/authoring/publish-course.md#publish-24) demonstrate those three grades.
 
 This resolves the former `course.author` problem: [SYLL-14](specs/packages/learning/course-syllabus.md#syll-14) defines course-authoring permission completely in SYLL's language; [ACCESS-4](specs/compositions/access/install-course-access.md#access-4) selects ROLE as this system's supplier.
 
 ### 3. Reusable packages stay unchanged
 
-A reusable package is a polymorphic contract: it defines collaborator meanings and variation points, while each installed system supplies compatible bindings.
-The package source remains unchanged and contains no peer, project-decision, Binding, or Scenario citations.
+A reusable package remains unchanged wherever its stated contract and dependencies are accepted.
+A polymorphic package defines provider-neutral variation points and lets each installed system supply compatible bindings; a package with an intentional fixed dependency may instead cite that peer's External Behavior.
+Neither form cites peer Internal Behavior, project decisions, Bindings, or Scenarios.
 
 Reusable need not mean generic:
 
@@ -60,7 +72,7 @@ Reusable need not mean generic:
 - `SITE` honestly declares itself project-local.
 
 Intrinsic domain or provider specialization is useful when Intent states it clearly.
-An exact peer package is never imported into a reusable package spec: define the required meaning locally, then bind the installed supplier externally.
+Prefer a provider-neutral Internal requirement when supplier choice is real; use a direct External citation when changing the peer would change the package's declared meaning rather than merely its installation.
 
 Three reuse forms stay distinct: the same package source can be installed unchanged in another system; one system can name several instances in `Scope:`—as [PLAT-1](specs/compositions/operations/install-platform.md#plat-1) and [PLAT-2](specs/compositions/operations/install-platform.md#plat-2) do for production and verification GHID—and one supplied behavior can satisfy several client roles, as ROLE does in [ACCESS-4](specs/compositions/access/install-course-access.md#access-4).
 
@@ -79,18 +91,18 @@ Keep a package scoped to what it owns; state system-wide exclusivity in installe
 
 ### 5. Bindings select; Scenarios compose
 
-A Binding records an installed endpoint selection: either a public assembly role or a non-user-facing semantic supply relationship.
-A Scenario records a human- or operator-meaningful outcome produced by multiple packages.
+A Binding records an installed endpoint selection: either an External assembly role or a hidden semantic supply relationship.
+A Scenario records a system-user- or operator-meaningful outcome produced by multiple packages.
 They are different even when they share a file.
 
-[ENTRY-10](specs/compositions/access/enter-site.md#entry-10) is a public Binding: GHID's visible sign-in states fill SITE's login roles.
-[PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) is a supply Binding: VIDS's Collaborator Behavior satisfies SYLL's Internal requirement.
+[ENTRY-10](specs/compositions/access/enter-site.md#entry-10) is an assembly Binding: GHID's External sign-in states fill SITE's External login roles.
+[PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) is a supply Binding: VIDS's External Behavior satisfies SYLL's Internal requirement.
 The endpoint sections reveal the distinction; no `Kind:` or file-type flag repeats it.
 
 | Relationship | Authoritative home | Example |
 | --- | --- | --- |
 | required meaning | client package Internal Behavior | SYLL-13 content description |
-| provided meaning | supplier package Collaborator Behavior | VIDS-10 video description |
+| provided meaning | supplier package External Behavior | VIDS-10 video description |
 | installed selection | composition `Binding` item | [PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) |
 | integrated outcome | composition `Scenario` item | [PUBLISH-1](specs/compositions/authoring/publish-course.md#publish-1) |
 | replaceable code dependency | implementation artifacts | a revision library behind SYLL |
@@ -139,9 +151,13 @@ Scenarios should cover primary journeys, representative denials, dependency fail
 Package Verification keeps local validation matrices, private invariants, races, replay, idempotence, and provider-edge cases that one package can check with controlled collaborators.
 Binding Verification checks the selected endpoints and scope.
 Scenario Verification checks the integrated outcome.
-Public Binding Verification exercises the assembled human- or host-visible role at its public surface; supply Binding Verification may use conformance inspection.
+Assembly Binding Verification exercises the assembled package-user- or host-visible role at its external surface; supply Binding Verification may use conformance inspection.
 
 The demo has acceptance coverage for every Scenario and audience-appropriate coverage for every Binding, while substantial package-local Verification remains.
+
+When behavior has finite dimensions, keep one authoritative table beside its owning item and sweep every cell instead of repeating the policy in prose.
+[ROLE-14](specs/packages/access/role-access.md#role-14) owns the capability table; [ROLE-20](specs/packages/access/role-access.md#role-20) checks it locally and [GUARD-23](specs/compositions/security/protect-course-content.md#guard-23) exercises the installed boundary.
+Derive any additional audience-by-surface view from those sources rather than maintain a second matrix.
 
 ## Why `compositions/`
 
@@ -158,12 +174,12 @@ Moving a file changes paths, not ownership, visibility, dependency, runtime, or 
 2. Record durable scope, provider, and technology choices in decisions.
 3. Find concepts with distinct owners, lifecycles, consistency boundaries, and reuse axes.
 4. Write one package Intent per cohesive responsibility, including nearby exclusions and honest specialization.
-5. Write human-visible outcomes as User Behavior.
-6. Write outputs offered to hosts or peers as Collaborator Behavior.
-7. Write provider-neutral consumed requirements and private semantic invariants as Internal Behavior.
-8. Define every token, state, value shape, provenance, scope, and mismatch outcome locally.
+5. Write every outcome or guarantee on which a human, host, or component package user may rely as External Behavior.
+6. Write provider-neutral consumed requirements and private semantic invariants as Internal Behavior.
+7. Define every token, state, value shape, provenance, scope, and mismatch outcome locally.
+8. Cite a peer's External Behavior only for an intentional fixed dependency; otherwise expose a provider-neutral socket.
 9. Verify each package with controlled collaborators.
-10. Install public roles and concrete suppliers with Binding items outside the packages.
+10. Install External assembly roles and selectable suppliers with Binding items outside the packages.
 11. Write Scenarios for integrated outcomes and cite material bindings.
 12. Add binding conformance and scenario acceptance, then update the map.
 
@@ -176,10 +192,10 @@ A good package passes these tests:
 
 - Intent states purpose, contract audience when applicable, owned concepts, exclusions, and reuse scope.
 - Each shall-clause subject is package-owned.
-- One file defines all required domain meaning.
+- One file defines all package-owned domain meaning and links every intentional fixed dependency exactly.
 - The package can be contract-tested with controlled collaborators.
-- Replacing a compatible supplier does not require editing the package.
-- No project or peer package is needed to explain a token such as `course.author`.
+- Replacing a supplier for a provider-neutral socket does not require editing the package.
+- Every token such as `course-authoring permission` is defined locally; every intentional fixed peer dependency cites exact External Behavior.
 - Internal Behavior is semantic and testable, never a code design.
 
 Split when concepts have independent lifecycle, consistency, security, or reuse meaning.
@@ -195,18 +211,19 @@ Clients: `learning-content input` = [SYLL-13](../../packages/learning/course-syl
 Suppliers: `video reference and description` = [VIDS-10](../../packages/media/video-library.md#vids-10)
 Scope: lesson content in this course website, with `video` as the sole installed content kind
 
-For a chooser, the installation shall supply VIDS's unchanged descriptor set,
-requiring references for `ready` and `unavailable` but allowing omission for `uploading` and `failed`.
-For exact-reference status, it shall return the matching `ready` or `unavailable` description, or unavailable.
+The installation shall supply SYLL with VIDS's unchanged chooser descriptions and
+exact-reference status for the same active account and request, preserving the
+identity, lifecycle, reference-completeness, and unavailable-result meanings owned
+by the two endpoints.
 ```
 
 `Scope:` is required, even when its value is simply `all deployments`, because overlap and multi-instance reuse must be checkable without an implicit default.
 
 Check that:
 
-- a supply client cites Internal Behavior that states the complete consumed meaning and its package supplier cites Collaborator Behavior;
-- a public Binding uses User or Collaborator Behavior for its visible or host-visible roles;
-- public and Internal client roles are not mixed in one item;
+- a supply client cites Internal Behavior that states the complete consumed meaning and its package supplier cites External Behavior;
+- an assembly Binding uses External Behavior for its package-user- or host-visible roles;
+- External and Internal client roles are not mixed in one item;
 - a controlled collaborator could satisfy every consumed requirement, while no Binding targets a private invariant;
 - a private invariant or implementation allocation is never presented as a consumed endpoint;
 - a named external service's exact capability is selected by a cited decision and checked against the client meaning;
@@ -220,9 +237,11 @@ Check that:
 ## Writing a Scenario
 
 A Scenario is named after an outcome, not a pair of packages.
-Its `Composes:` line immediately follows the item heading and cites public behavior from at least two packages, including a User Behavior item that grounds the visible outcome.
+Its `Composes:` line immediately follows the item heading and cites behavior from at least two packages, including External Behavior that grounds the system-user- or operator-meaningful outcome.
+It may also cite Internal Behavior materially needed to state or inspect that integrated outcome; the citation does not expose the behavior or let another package depend on it.
 Its optional `Bindings:` line immediately follows `Composes:` and cites only installed seams materially used by the scenario.
 Its prose states shared preconditions, causal order, handoffs, visible result, and failure result in product language.
+[GUARD-5](specs/compositions/security/protect-course-content.md#guard-5) concretely cites the packages' Internal trust boundaries because its integrated direct-client matrix inspects them; its External items still ground the system security outcome.
 
 ```markdown
 ### PUBLISH-1
@@ -233,7 +252,7 @@ Where the administrator starts with no course, when ...,
 the website shall publish one coherent release and return its accepted baseline.
 ```
 
-Do not cite Internal Behavior, own a package entity, restate a Binding, or turn the file into a call graph.
+Do not cite an Internal item merely because code calls it, own a package entity, restate a Binding, or turn the file into a call graph.
 
 ## Verification traces
 
@@ -242,9 +261,9 @@ Composition Verification must cite a same-file Binding or Scenario; it may also 
 Every Binding and Scenario item must be covered, but one verification may cover several closely related items.
 
 ```text
-User/Collaborator Behavior -> Composes -> Scenario -> Verifies -> acceptance evidence
-User/Collaborator supplier -> Binding -> public client role
-Collaborator Behavior or selected service -> Binding -> Internal requirement
+External or materially relevant Internal Behavior -> Composes -> Scenario -> Verifies -> acceptance evidence
+External supplier -> Binding -> External client role
+External supplier or selected service -> Binding -> Internal requirement
 ```
 
 Verification must not invent an outcome absent from the item it cites.
@@ -280,17 +299,15 @@ Generated views are read-only, are never independent truth, and should be commit
 This package defines <cohesive capability> for <contract audience or purpose>.
 It owns <concepts>, excludes <nearby concerns>, and is <reuse scope>.
 
-## User Behavior
+## External Behavior
 
 ### SHORT-1
 
-Where ... when ... the <owned subject> shall <human-visible outcome>.
-
-## Collaborator Behavior
+Where ... when ... the <owned subject> shall <package-user-visible outcome or provided guarantee>.
 
 ### SHORT-10
 
-When ... the <owned provider> shall <provided semantic outcome>.
+When ... the <owned provider> shall <External guarantee offered to a component or host>.
 
 ## Internal Behavior
 
@@ -353,15 +370,15 @@ Where ... when ... the conformance suite shall ...
 
 ## Final audit
 
-- Does every package stand alone with no peer or installed-system citation?
-- Is each human-facing contract User, each peer/host guarantee Collaborator, and each consumed requirement/private invariant Internal?
-- Can a peer rely only on Collaborator Behavior?
+- Does every package define its meanings locally, cite only intentional peer External dependencies, and omit installed-system citations?
+- Is every package-user contract External and every hidden consumed requirement or private invariant Internal, regardless of whether the user is human or software?
+- Can a peer rely only on another package's External Behavior?
 - Is every undefined-looking token explained locally?
-- Does every installed public role or semantic dependency have one Binding source with explicit roles and scope?
+- Does every installed External assembly role or selectable semantic dependency have one Binding source with explicit roles and scope?
 - Are overlapping bindings absent unless aggregation, fallback, or runtime selection is defined?
 - Does every mixed-file Binding serve and get cited by a same-file Scenario?
 - Are cross-cutting bindings separated when that improves ownership and cadence?
-- Does every Scenario describe a meaningful human or operator outcome rather than a dependency graph?
+- Does every Scenario describe a meaningful system-user or operator outcome rather than a dependency graph?
 - Are all Binding and Scenario items verified at the right evidence grade?
 - Do Scenarios cover the important journeys, denials, recovery, security boundaries, accessibility, and deployment operation without duplicating package-local matrices?
 - Could code be generated without inventing policy, endpoint meaning, supplier selection, or failure behavior?

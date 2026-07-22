@@ -8,7 +8,7 @@
 This package turns reviewed GitHub commits for TypeScript Next.js applications into secret-free fixture previews and verified Vercel production changes backed by Supabase.
 It preserves the last good production service on failure and can be reused unchanged by repositories using the stated package/composition verification conventions and supplying their integration branch, review threshold, check names, provider policy, and smoke expectations.
 
-## User Behavior
+## External Behavior
 
 ### PIPE-1
 
@@ -54,8 +54,6 @@ It shall require a maintainer to bring the reviewed commit into a trusted reposi
 Where a promoted deployment is serving, when its exact authorized real-provider smoke report passes, the delivery status shall attach redacted passed evidence to that exact production deployment record and shall not store a provider token.
 When that report is canceled, the delivery status shall attach canceled evidence, mark real-provider evidence incomplete, keep current traffic unchanged, and require a later successful smoke before reporting the evidence passed.
 When that report fails, the delivery status shall attach failed evidence and shall reassign the exact previously serving deployment without rebuild only when fresh compatibility evidence covers every current service revision and retained evidence proves that deployment passed the same smoke contract at the current provider-configuration revision; otherwise it shall keep current traffic unchanged, mark production degraded, and require operator recovery without reporting real-provider evidence passed.
-
-## Collaborator Behavior
 
 ### PIPE-11
 

@@ -11,7 +11,7 @@ It can be reused unchanged by applications accepting this identity and session c
 It does not decide application roles, authorization, or route policy.
 A host may supply an already normalized, route-policy-approved safe destination for post-authentication navigation; validating that destination remains the host's responsibility.
 
-## User Behavior
+## External Behavior
 
 ### GHID-1
 
@@ -32,8 +32,6 @@ While a member has an active GitHub application session, when the member activat
 ### GHID-5
 
 While a member uses a protected surface, when the application session expires or becomes invalid, the session surface shall ask the member to sign in with GitHub again and preserve only the requested safe destination for the retry.
-
-## Collaborator Behavior
 
 ### GHID-10
 

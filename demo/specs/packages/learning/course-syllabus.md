@@ -11,7 +11,7 @@ It can be reused unchanged with any authorizer, content provider, and publisher 
 Course-authoring permission means fresh trusted authorization associated with the active account, exact authoring action, named draft when one exists, and exact request to list, read, create, or change course drafts or request publication candidates; it grants neither learning-content management nor release-publication authority.
 Each installation supplies that permission through a trusted authorizer.
 
-## User Behavior
+## External Behavior
 
 ### SYLL-1
 
@@ -48,6 +48,7 @@ Where a successful publication report has set a draft revision as the published 
 ### SYLL-7
 
 Where an author is allowed to author courses, when the author opens course authoring, the syllabus editor shall list every saved draft by title with its current revision, last-saved time, ready/not-ready state, and unpublished-changes state, and shall let the author resume any listed draft.
+While no saved draft exists, the syllabus editor shall show an empty state with `Create course` as its primary action.
 
 ### SYLL-8
 
@@ -57,8 +58,6 @@ Where a signed-in account is not allowed to author courses, when that account re
 
 Where a draft fails one or more publication-candidate rules, when its author requests a publication candidate, the syllabus editor shall keep the draft and its saved revision unchanged, show every validation result at the affected field or lesson, and report that the draft is not ready for publication.
 When a trusted publisher reports a slug conflict for the current candidate, the syllabus editor shall keep the draft and its saved revision unchanged and show the conflict at the slug field for correction.
-
-## Collaborator Behavior
 
 ### SYLL-11
 
@@ -114,7 +113,7 @@ It shall apply that same account context at its data-access boundary and use no 
 ### SYLL-20
 Verifies: [SYLL-1](#syll-1), [SYLL-2](#syll-2), [SYLL-3](#syll-3), [SYLL-7](#syll-7), [SYLL-10](#syll-10)
 
-Where an authorized author starts with no drafts and two editors can hold the same base revision, when the contract suite creates drafts titled `Hello, World!`, `A---B`, and `!!!`, exercises every structural operation, saves invalid fields, races accepted and stale saves, reports one draft first-published, and reloads authoring, the suite shall assert derived slugs `hello-world` and `a-b`, an empty proposed slug plus an explicit request for author input for `!!!`, the complete resumable draft list, stable identities, exact order, one revision advance only for each accepted save, a save conflict with no overwritten value for every stale save, confirmation behavior, preservation of the last valid revision, and a locked published slug.
+Where an authorized author starts with no drafts and two editors can hold the same base revision, when the contract suite opens authoring, follows its primary `Create course` action, creates drafts titled `Hello, World!`, `A---B`, and `!!!`, exercises every structural operation, saves invalid fields, races accepted and stale saves, reports one draft first-published, and reloads authoring, the suite shall assert the initial empty state, derived slugs `hello-world` and `a-b`, an empty proposed slug plus an explicit request for author input for `!!!`, the complete resumable draft list, stable identities, exact order, one revision advance only for each accepted save, a save conflict with no overwritten value for every stale save, confirmation behavior, preservation of the last valid revision, and a locked published slug.
 
 ### SYLL-21
 Verifies: [SYLL-4](#syll-4), [SYLL-5](#syll-5), [SYLL-9](#syll-9), [SYLL-11](#syll-11), [SYLL-12](#syll-12), [SYLL-13](#syll-13)

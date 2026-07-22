@@ -29,7 +29,7 @@ Clients: `private object service` = [VIDS-25](../../packages/media/video-library
 Suppliers: `object service` = [private Supabase Storage with TUS upload and signed download](../../decisions/001-web-platform.md)
 Scope: each provider-integrated environment's declared private video bucket
 
-The installation shall supply VIDS with one private Supabase Storage bucket supporting exact-path no-overwrite TUS creation and resumption for the declared 24-hour upload-URL window, complete metadata observation, five-minute signed playback, exact-object deletion, missing/unreadable/mismatched-object observation, separate expiry of incomplete TUS chunks, and the declared 1 GiB limits without a browser-visible service credential.
+The installation shall supply VIDS with the environment-scoped private object service selected by [DR-001](../../decisions/001-web-platform.md), satisfying [VIDS-25](../../packages/media/video-library.md#vids-25) for the declared bucket without broadening object, path, credential, or lifecycle scope or changing package-owned windows and limits.
 
 ### PLAT-5
 Clients: `web deployment` = [LIVE-19](../../packages/operations/production-runtime.md#live-19)

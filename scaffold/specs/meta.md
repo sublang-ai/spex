@@ -22,14 +22,15 @@ The `specs/` directory shall contain:
 | `map.md` | navigation index | — |
 | `meta.md` | the spec of specs | — |
 
-### META-2
-
-Directories below `packages/` and `compositions/` shall be navigation-only collections.
-Their names and nesting shall confer no semantic meaning.
-
 ### META-3
 
 Each item file shall include an `## Intent` section stating its purpose.
+
+### META-37
+
+Directories below `packages/` and `compositions/` shall be navigation-only collections.
+Their names and nesting shall confer no semantic meaning.
+Moving a file between navigation collections within the same root shall change only its path and affected relative citations, not its basename, short form, item IDs, anchors, ownership, or behavior.
 
 ## Records
 
@@ -72,7 +73,7 @@ Given-When-Then shall map Given to Where/While, When to When, and Then to the sh
 ### META-8
 
 Each item shall state every item-specific condition, value meaning, outcome, and failure in the item or an adjacent table it owns.
-It may use package-wide meaning defined in Intent or an exact same-package citation; it shall not rely on folder placement, file inventory, implicit context, or an undefined token.
+It may use package-wide meaning defined in Intent, an exact same-package citation, or an exact peer-package External Behavior citation allowed by [META-14](#meta-14); it shall not rely on folder placement, file inventory, implicit context, or an undefined token.
 
 ### META-26
 
@@ -83,12 +84,13 @@ Adjacent domain tables and trace lines are normative but are not behavior statem
 
 ### META-9
 
-A package shall be one item file under `packages/`, so one read covers its complete contract.
+A package shall be one item file under `packages/`, so one read covers its complete package-owned contract and exposes every fixed dependency by an exact link.
 
 ### META-10
 
 Each package and composition basename and `<ALLCAPS>` short form shall be globally unique across `packages/` and `compositions/`.
 Each H1 shall use `# <SHORT>: <Title>`.
+A short form is a stable mnemonic, not a derivation of the filename.
 
 ### META-28
 
@@ -97,13 +99,17 @@ Each package file shall use only these `##` sections, in order:
 | Section | Presence | Content |
 | --- | --- | --- |
 | `Intent` | required | purpose, ownership, exclusions, and honest reuse scope |
-| `User Behavior` | optional | outcomes visible to named humans |
-| `Collaborator Behavior` | optional | outputs or guarantees offered to peers or hosts |
+| `External Behavior` | optional | outcomes and guarantees on which the package's users may rely |
 | `Internal Behavior` | optional | provider-neutral consumed requirements and private semantic invariants |
 | `Verification` | optional | package-local contract verification |
 | `References` | optional | authoritative external sources |
 
 At least one behavior section shall be present.
+A package user is any human, host, or component using that package's contract.
+Classification is package-relative rather than based on human visibility: External Behavior is offered to a package user; Internal Behavior is hidden from package users.
+Internal does not mean source files, classes, algorithms, framework mechanics, or other replaceable implementation detail.
+A peer package may rely only on External Behavior.
+A Binding may cite Internal Behavior as a client requirement, and a Scenario may cite it only as allowed by [META-34](#meta-34); neither citation makes it External Behavior or exposes it to a package user.
 The active authoring-language overlay may localize these section headings; a heading with no localized label keeps the English label shown here.
 
 ### META-11
@@ -113,7 +119,8 @@ Each behavior, binding, scenario, and verification item shall have a globally un
 
 ### META-12
 
-Released item IDs shall not be renumbered or reused; new items shall use new IDs.
+Released item IDs and the normative concerns they identify shall not be renumbered, reused, or reassigned.
+Wording may change under an ID only when it preserves that cited concern; new concerns shall use higher unused IDs within the containing file.
 
 ### META-13
 
@@ -122,19 +129,15 @@ Every shall-clause subject in its behavior sections shall be package-owned.
 
 ### META-14
 
-User Behavior shall use the language exchanged by the package and named humans.
-Collaborator Behavior shall define provider outputs and guarantees on which a peer or host may rely.
-Internal Behavior shall define provider-neutral requirements consumed by the package and semantic invariants it keeps private.
-
-Internal does not mean source files, classes, algorithms, framework mechanics, or other replaceable implementation detail.
-Human visibility alone does not decide the boundary: reliance and direction do.
-A peer may rely only on Collaborator Behavior.
-A Binding may cite Internal Behavior as a client requirement; peers and Scenarios shall not cite it.
+The precondition and trigger clauses of an item may cite exact External Behavior from another package when that reliance is an intentional fixed semantic dependency of the package contract.
+Such a citation shall state the relied-on meaning and shall not cite the peer's Internal Behavior.
+Where supplier selection or reuse without that peer is intended, the client package shall instead state a provider-neutral consumed requirement as Internal Behavior and leave supplier selection to a composition Binding.
 
 ### META-15
 
-A reusable package shall define every operative meaning and variation point locally and shall remain understandable, contract-testable, and usable unchanged outside its source project.
-It shall not cite peer packages, bindings, compositions, or project decisions.
+A reusable package shall define every package-owned operative meaning and variation point locally and shall remain understandable, contract-testable, and usable unchanged outside its source project.
+It shall not cite bindings, compositions, or project decisions.
+It may cite peer External Behavior only for an intentional fixed semantic dependency under [META-14](#meta-14).
 Intrinsic domain or provider specialization is allowed when Intent states it honestly; a package tied to one product instance shall say that it is project-local.
 
 Package presence shall not imply a system-wide exclusivity rule.
@@ -147,9 +150,14 @@ Citations to items shall use relative Markdown links with exact anchors.
 
 ### META-17
 
+DRs and items may cite each other subject to the package restrictions in [META-15](#meta-15), the IR restriction in [META-18](#meta-18), and the behavior-section restrictions in [META-28](#meta-28).
+A citation shall not change whether cited behavior is External or Internal to its package.
+
+### META-38
+
 Package files shall contain no `Requires:`, `Uses:`, or `Binds:` relationship metadata.
-A package shall state a consumed collaborator requirement as Internal Behavior without naming its supplier.
-The installed supplier shall be recorded once by a Binding outside both packages.
+A fixed semantic package dependency shall be expressed by an exact peer External Behavior citation under [META-14](#meta-14).
+A selectable dependency shall be expressed as provider-neutral Internal Behavior without naming its supplier, with the installed supplier recorded once by a Binding outside both packages.
 
 A replaceable code dependency shall create neither a behavioral package dependency nor a Composition item.
 Its relevant guarantee belongs in the owning package; its concrete selection belongs in implementation artifacts or a DR when the rationale is durable.
@@ -174,8 +182,8 @@ A composition Verification item shall cite at least one same-file Binding or Sce
 
 Package Verification shall check the package contract, private invariants, and local failures with controlled collaborators.
 Binding Verification shall check installed endpoint compatibility, selection, and scope.
-Scenario Verification shall check integrated human or operator outcomes.
-Public Binding Verification shall exercise the assembled human- or host-visible role at its public surface; supply Binding Verification may use conformance inspection.
+Scenario Verification shall check integrated system outcomes.
+Assembly Binding Verification shall exercise the assembled package-user role at its external surface; supply Binding Verification may use conformance inspection.
 
 Every Binding and Scenario shall have same-file Verification coverage.
 One Verification item need not jointly cite both kinds in a mixed file.
@@ -205,7 +213,7 @@ Each Binding item shall carry these lines immediately below its heading:
 
 ```text
 Clients: <role> = <exact package behavior citation>, ...
-Suppliers: <role> = <exact package User or Collaborator Behavior citation or named external service selected by a cited DR>, ...
+Suppliers: <role> = <exact package External Behavior citation or named external service selected by a cited DR>, ...
 Scope: <package instances, environment, profile, request, resource, tenant, or other installation scope>
 ```
 
@@ -213,9 +221,9 @@ Every endpoint shall have an explicit role.
 The prose shall explain semantic compatibility without broadening, weakening, or translating either endpoint.
 Required conversion shall be owned by an adapter package.
 
-A supply Binding shall cite a complete provider-neutral Internal consumed meaning as its client and Collaborator Behavior or a selected service as its supplier; it shall not bind a private invariant or implementation allocation.
-A public Binding may cite User or Collaborator Behavior as its endpoints to install a human- or host-visible role; it does not let one package import another.
-A Binding shall not mix public and Internal client roles; split them because they have different audiences and evidence grades.
+A supply Binding shall cite a complete provider-neutral Internal consumed meaning as its client and External Behavior or a selected service as its supplier; it shall not bind a private invariant or implementation allocation.
+An assembly Binding shall cite External Behavior as its endpoints to install a package-user-visible role; it does not let one package import another.
+A Binding shall not mix External and Internal client roles; split them because they have different audiences and evidence grades.
 An Internal item cited as a client shall contain one complete consumed requirement and its rejection behavior, not an unrelated private invariant or second independently supplied requirement.
 If a controlled collaborator could satisfy the meaning, it is consumed and bindable; otherwise it is a private invariant and is not a Binding endpoint.
 For a named external service, the Binding shall name the exact selected capability, cite the selecting decision, and verify compatibility with the client meaning.
@@ -235,8 +243,9 @@ Package annotations, indexes, and overlays shall be derived rather than copied i
 
 ### META-34
 
-Each Scenario item shall carry a `Composes:` line immediately below its heading, citing User or Collaborator Behavior from at least two packages, including User Behavior that grounds the human- or operator-meaningful outcome.
-It shall cite no Internal Behavior and shall not list a package merely because code calls it.
+Each Scenario item shall carry a `Composes:` line immediately below its heading, citing materially necessary behavior from at least two packages and including at least one External Behavior item that grounds the integrated system outcome.
+It may additionally cite Internal Behavior only when that behavior is materially necessary to state or verify the cross-package outcome; the citation shall not expose that behavior to a package user.
+It shall not list a package merely because code calls it.
 
 When a Scenario materially depends on installed bindings, a `Bindings:` line citing them shall immediately follow `Composes:`.
 Scenario prose shall state the causal handoff in product language without redefining binding endpoints.
@@ -256,9 +265,10 @@ Every projection shall resolve deterministically from the authoritative items an
 The traces are:
 
 ```text
-package User or Collaborator Behavior -> Composes -> Scenario -> Verifies -> acceptance evidence
-supplier User or Collaborator Behavior -> Binding -> public client role
-supplier Collaborator Behavior or selected service -> Binding -> package Internal requirement
+package External Behavior -> Composes -> Scenario -> Verifies -> acceptance evidence
+material package Internal Behavior -> Composes -> Scenario (remains hidden from package users)
+supplier External Behavior -> assembly Binding -> External client role
+supplier External Behavior or selected service -> Binding -> package Internal requirement
 ```
 
 ## Authoring language

@@ -10,11 +10,11 @@ It owns course capability decisions but not authentication or protected course m
 It can be reused unchanged by course sites using the same two-role, one-initial-administrator policy.
 Each installation supplies the accepted identity providers' canonical immutable-subject rules as trusted configuration; this package compares provider and subject values exactly after that validation.
 
-## User Behavior
+## External Behavior
 
 ### ROLE-1
 
-Where the signed-in account is the configured initial administrator, the access surface shall identify it as `Administrator`, show course-authoring controls, and allow that account to browse courses, author syllabi, manage videos, and publish courses.
+Where the signed-in account is the configured initial administrator, the access surface shall identify it as `Administrator`, show course-authoring controls, and allow that account to watch videos, author syllabi, manage videos, and publish courses.
 
 ### ROLE-2
 
@@ -29,8 +29,6 @@ Where an initial administrator is configured, the access surface shall offer no 
 
 Where the initial-administrator provider or subject is absent, malformed under its declared provider rule, conflicts with the persisted bootstrap assignment, or more than one administrator assignment exists, the access surface shall show no administrator identity or authoring control and shall report role configuration not ready to operators.
 
-## Collaborator Behavior
-
 ### ROLE-11
 
 Where the bootstrap provider or subject is absent, malformed, changed after assignment, or conflicts with persisted role state, the role registry shall deny every administrator capability and shall report role configuration not ready to its host.
@@ -44,7 +42,7 @@ The authorization boundary shall accept no serialized identity, account context,
 ### ROLE-14
 
 When an unregistered authority user, inactive or mismatched trusted identity, missing persisted role assignment, or generic authority credential requests any capability, the authorization boundary shall deny it and shall provide no trusted application access context.
-For a registered member, it shall allow `course.consume` and deny `course.author`, `video.manage`, and `course.publish`.
+For a registered member, it shall allow `video.watch` and deny `course.author`, `video.manage`, and `course.publish`.
 For the administrator, it shall allow all four capabilities.
 It shall deny every capability outside that vocabulary.
 
@@ -52,7 +50,7 @@ The capability vocabulary is:
 
 | Capability | Meaning of an allow result for the active account and exact request |
 | --- | --- |
-| `course.consume` | list or read current published courses and request the exact content attached to a current lesson |
+| `video.watch` | request the exact content attached to a current lesson; public catalog, course, and lesson metadata requires no role capability |
 | `course.author` | list, create, read, or change course drafts and request publication candidates |
 | `video.manage` | list managed videos and create, resume, cancel, or finalize an upload owned by that account |
 | `course.publish` | publish a complete course version or unpublish a current release |
@@ -83,7 +81,7 @@ It shall treat missing, inactive, mismatched, browser-supplied, or generic autho
 ## Verification
 
 ### ROLE-20
-Verifies: [ROLE-1](#role-1), [ROLE-2](#role-2), [ROLE-3](#role-3), [ROLE-10](#role-10)
+Verifies: [ROLE-1](#role-1), [ROLE-2](#role-2), [ROLE-3](#role-3), [ROLE-10](#role-10), [ROLE-14](#role-14)
 
 Where the configured subject and two ordinary subjects authenticate in every login order, including concurrent first logins, when each capability is requested, the contract suite shall assert the capability policy in [ROLE-14](#role-14), one persisted administrator assignment, member assignments for the others, one visible role and trusted application access context per active registered account, no role-management control, and no login-order effect.
 

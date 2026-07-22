@@ -9,7 +9,7 @@ This package lets contributors and maintainers create auditable project commits 
 It owns commit preparation and message conventions, not branching, review, or release policy.
 It is project-local.
 
-## User Behavior
+## External Behavior
 
 ### GIT-1
 

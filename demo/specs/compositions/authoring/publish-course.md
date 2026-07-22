@@ -15,8 +15,7 @@ Clients: `learning-content input` = [SYLL-13](../../packages/learning/course-syl
 Suppliers: `video reference and description` = [VIDS-10](../../packages/media/video-library.md#vids-10)
 Scope: lesson content in this course website, with `video` as the sole installed content kind
 
-For a chooser request, the installation shall supply SYLL with VIDS's unchanged descriptor set for the same active account and request, including complete references for `ready` and formerly ready `unavailable` descriptions and allowing `uploading` or `failed` descriptions to omit them.
-For exact-reference status, it shall return VIDS's unchanged matching `ready` or `unavailable` description or unavailable result for the same active account, request, asset, and revision.
+The installation shall supply SYLL with VIDS's unchanged chooser descriptions and exact-reference status for the same active account and request, preserving every identity, lifecycle, reference-completeness, and unavailable-result meaning owned by the two endpoints.
 
 ### PUBLISH-11
 Clients: `publication snapshot input` = [CAT-15](../../packages/learning/course-catalog.md#cat-15)
@@ -35,10 +34,10 @@ The installation shall return CAT's unchanged success report to SYLL-15 or confl
 ## Scenario
 
 ### PUBLISH-1
-Composes: [ROLE-1](../../packages/access/role-access.md#role-1), [SYLL-1](../../packages/learning/course-syllabus.md#syll-1), [SYLL-2](../../packages/learning/course-syllabus.md#syll-2), [SYLL-3](../../packages/learning/course-syllabus.md#syll-3), [SYLL-4](../../packages/learning/course-syllabus.md#syll-4), [SYLL-5](../../packages/learning/course-syllabus.md#syll-5), [SYLL-6](../../packages/learning/course-syllabus.md#syll-6), [VIDS-1](../../packages/media/video-library.md#vids-1), [VIDS-3](../../packages/media/video-library.md#vids-3), [CAT-2](../../packages/learning/course-catalog.md#cat-2), [CAT-3](../../packages/learning/course-catalog.md#cat-3)
+Composes: [ROLE-1](../../packages/access/role-access.md#role-1), [SYLL-1](../../packages/learning/course-syllabus.md#syll-1), [SYLL-2](../../packages/learning/course-syllabus.md#syll-2), [SYLL-3](../../packages/learning/course-syllabus.md#syll-3), [SYLL-4](../../packages/learning/course-syllabus.md#syll-4), [SYLL-5](../../packages/learning/course-syllabus.md#syll-5), [SYLL-6](../../packages/learning/course-syllabus.md#syll-6), [SYLL-7](../../packages/learning/course-syllabus.md#syll-7), [VIDS-1](../../packages/media/video-library.md#vids-1), [VIDS-3](../../packages/media/video-library.md#vids-3), [CAT-2](../../packages/learning/course-catalog.md#cat-2), [CAT-3](../../packages/learning/course-catalog.md#cat-3)
 Bindings: [ACCESS-4](../access/install-course-access.md#access-4), [PUBLISH-10](#publish-10), [PUBLISH-11](#publish-11), [PUBLISH-12](#publish-12)
 
-Where the configured administrator starts with no course, when the administrator creates an ordered draft, uploads ready videos, attaches one ready reference to every lesson while reusing the same video for more than one lesson where chosen, and confirms publication, the website shall publish one release whose learner view contains the same title, summary, section order, lesson order, and attached videos, and shall return the accepted draft revision and locked slug to the authoring view as its published baseline.
+Where the configured administrator starts with no course, when the administrator opens course authoring, follows its primary `Create course` action, creates an ordered draft, uploads ready videos, attaches one ready reference to every lesson while reusing the same video for more than one lesson where chosen, and confirms publication, the website shall publish one release whose public learner view contains the same title, summary, section order, and lesson order, and shall return the accepted draft revision and locked slug to the authoring view as its published baseline.
 
 ### PUBLISH-2
 Composes: [ROLE-1](../../packages/access/role-access.md#role-1), [VIDS-1](../../packages/media/video-library.md#vids-1), [VIDS-2](../../packages/media/video-library.md#vids-2), [VIDS-3](../../packages/media/video-library.md#vids-3), [SYLL-4](../../packages/learning/course-syllabus.md#syll-4), [SYLL-5](../../packages/learning/course-syllabus.md#syll-5)
@@ -51,7 +50,7 @@ When the same intended upload later succeeds, it shall offer one ready reference
 Composes: [ROLE-1](../../packages/access/role-access.md#role-1), [SYLL-6](../../packages/learning/course-syllabus.md#syll-6), [CAT-2](../../packages/learning/course-catalog.md#cat-2), [CAT-4](../../packages/learning/course-catalog.md#cat-4)
 Bindings: [ACCESS-4](../access/install-course-access.md#access-4), [PUBLISH-11](#publish-11), [PUBLISH-12](#publish-12)
 
-Where a course is published, when the administrator edits and reorders its draft, members shall continue seeing the complete earlier release until the administrator publishes the later snapshot, after which new reads shall see the complete later release and no mixed revision and the authoring view shall mark that accepted revision as the new published baseline while retaining the locked slug.
+Where a course is published, when the administrator edits and reorders its draft, visitors shall continue seeing the complete earlier release until the administrator publishes the later snapshot, after which new public reads shall see the complete later release and no mixed revision and the authoring view shall mark that accepted revision as the new published baseline while retaining the locked slug.
 
 ### PUBLISH-4
 Composes: [ROLE-1](../../packages/access/role-access.md#role-1), [SYLL-5](../../packages/learning/course-syllabus.md#syll-5), [SYLL-9](../../packages/learning/course-syllabus.md#syll-9), [SYLL-12](../../packages/learning/course-syllabus.md#syll-12), [SITE-4](../../packages/web/application-shell.md#site-4)
@@ -77,7 +76,7 @@ Where the authoring pages are rendered at 360 CSS pixels and 200 percent zoom, w
 ### PUBLISH-20
 Verifies: [PUBLISH-1](#publish-1), [PUBLISH-3](#publish-3)
 
-Where separate administrator and member browsers use a clean acceptance environment, when the administrator builds a two-section, three-lesson course, uploads and reuses ready videos, publishes, edits the draft, and republishes, the acceptance suite shall assert exact learner order and attachments, one whole release at each stage, a receipt that establishes the accepted revision and locked slug in the authoring view, and no draft leakage between publications.
+Where separate administrator, anonymous-reader, and member browsers use a clean acceptance environment, when the administrator follows the fresh authoring state's primary creation action, builds a two-section, three-lesson course, uploads and reuses ready videos, publishes, the readers prime every public response, and the administrator edits the draft and republishes, the acceptance suite shall assert the empty-state affordance, the same exact public learner hierarchy for the anonymous reader and member, one whole current release at each stage with no stale shared response, a receipt that establishes the accepted revision and locked slug in the authoring view, and no draft leakage between publications.
 
 ### PUBLISH-21
 Verifies: [PUBLISH-2](#publish-2), [PUBLISH-4](#publish-4)

@@ -10,7 +10,7 @@ It remains independent of course structure and does not own authentication, auth
 It can be reused unchanged by Supabase applications accepting its media, upload, and bearer-playback contract.
 Each installation declares the version-pinned browser matrix on which every accepted media profile must pass package verification.
 
-## User Behavior
+## External Behavior
 
 ### VIDS-1
 
@@ -50,8 +50,6 @@ Where a signed-in account lacks video-management permission, when that account r
 
 Where a viewer is watching a video, when its five-minute authorization window ends, the playback surface shall stop loading with that access and resume only after fresh authorization for the same exact video.
 When the viewer signs out, the playback surface shall stop playback, request no renewal, and show the plain unavailable state; it shall not tell the viewer that expiry or sign-out erases video data already delivered to the browser.
-
-## Collaborator Behavior
 
 ### VIDS-10
 

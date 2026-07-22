@@ -8,7 +8,7 @@
 This package gives operators ready/not-ready behavior for Vercel environments, environment-scoped configuration, and Supabase Auth, Postgres, and Storage dependencies across non-production and production.
 It owns environment integrity rather than application behavior or delivery decisions and can be reused unchanged with different declared capabilities, provider policy, smoke checks, and privileged-operation inventory.
 
-## User Behavior
+## External Behavior
 
 ### LIVE-1
 
@@ -44,8 +44,6 @@ Where a `fixture-preview` is correctly configured, when an operator requests rea
 
 Where a `production-candidate` is correctly configured, when an operator requests readiness, the runtime status shall identify the exact unaliased deployment and immutable commit as the protected smoke target, confirm every production provider and policy revision in the readiness report, and keep the target unavailable to ordinary public traffic while allowing the authorized smoke identity.
 The reported target shall name its expected service revisions and scoped smoke-access requirement without containing a bypass credential.
-
-## Collaborator Behavior
 
 ### LIVE-13
 
