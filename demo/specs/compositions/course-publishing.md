@@ -72,7 +72,15 @@ equals the uploaded asset's identifier
 adds a second lesson and attaches the same asset there, the
 suite shall assert both lessons are marked playable with equal
 stored references and no second upload
-([VID-9](../packages/catalog/video-library.md#vid-9)).
+([VID-9](../packages/catalog/video-library.md#vid-9)); and when
+it deletes the course after the confirmation naming its section
+and lesson counts
+([CAT-17](../packages/catalog/course-catalog.md#cat-17)), the
+suite shall assert the course's routes respond not-found while
+the uploaded asset remains listed in the library, its content
+untouched by the deletion
+([CAT-10](../packages/catalog/course-catalog.md#cat-10),
+[VID-4](../packages/catalog/video-library.md#vid-4)).
 
 ### PUB-5
 

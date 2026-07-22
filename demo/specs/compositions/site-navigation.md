@@ -33,10 +33,11 @@ video library
 
 ### NAV-2
 
-When any visitor opens the home page, the site shall present the
-course list
+Where the shell's site name links to the home page
+([SHELL-1](../packages/site/web-shell.md#shell-1)), the
+deployment shall present the course list
 ([CAT-1](../packages/catalog/course-catalog.md#cat-1)) as the
-home page's content.
+home page's content for every visitor.
 
 ## Tests
 

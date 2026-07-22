@@ -16,16 +16,17 @@ they add up to.
 
 ### GUARD-5
 
-Where the player serves only requests its embedding host
-authorizes
+Where playback grants issue only for requests the embedding
+host authorizes
 ([VID-15](../packages/catalog/video-library.md#vid-15)), the
-deployment shall authorize a requester without an admin session
-exactly for assets referenced by a lesson of a currently
-published course
+deployment shall authorize an admin-session requester for any
+listed asset, and every other requester exactly for assets
+referenced by a lesson of a currently published course
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2),
 [CAT-3](../packages/catalog/course-catalog.md#cat-3)), so
-unpublishing a course stops new member grants for its media at
-once — a grant already issued lasts only to its expiry.
+unpublishing or deleting a course stops new non-admin grants
+for its media at once — a grant already issued lasts only to
+its expiry.
 
 ## Scenario
 
@@ -94,7 +95,10 @@ member's playback request for an asset referenced only by an
 unpublished fixture course is denied with no grant issued,
 while a grant the member obtained before the unpublish still
 plays until its expiry and the admin's player on that
-unpublished lesson still plays ([GUARD-5](#guard-5)); and every
+unpublished lesson still plays ([GUARD-5](#guard-5)); after a
+fixture course is deleted, a member playback request for its
+formerly referenced asset is likewise denied with no grant
+issued ([GUARD-5](#guard-5)); and every
 session cookie observed during the sweep is scoped to the
 site's origin and marked Secure
 ([AUTH-8](../packages/identity/github-login.md#auth-8)).

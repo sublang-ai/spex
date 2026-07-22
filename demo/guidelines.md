@@ -28,6 +28,11 @@ package:
   [ROLE-2](specs/packages/identity/access-control.md#role-2) in
   its Where clause, while its shall clause acts only on the
   course manager — a CAT subject.
+  And no clause leans on an undefined token: a phrase like
+  "the course's author" would name nothing — no package defines
+  authorship — which is why admin gating cites
+  [ROLE-2](specs/packages/identity/access-control.md#role-2)
+  rather than an imagined owner field.
 - **Leave open slots where another party must plug in, and name
   them abstractly.** The catalog stores "one media attachment as
   an opaque reference" from "the deployment's media provider"
@@ -340,16 +345,20 @@ cannot tell, which is the point.
   the residence** ([META-34](specs/meta.md#meta-34)).
   Scenario-only
   ([PLAY](specs/compositions/lesson-playback.md),
-  [GUARD](specs/compositions/protected-content.md),
   [BOOT](specs/compositions/admin-bootstrap.md)); binding-only
   with walked seams
   ([NAV](specs/compositions/site-navigation.md),
   acceptance-tested); binding-only supply
   ([PLAT](specs/compositions/platform-services.md),
   inspection-tested); and mixed
-  ([PUB](specs/compositions/course-publishing.md)).
+  ([PUB](specs/compositions/course-publishing.md),
+  [GUARD](specs/compositions/protected-content.md)).
   NAV and PLAT share one shape with opposite audiences — which
   is why no declared "binding file type" exists.
+  Any per-package overlay of these bindings — say
+  CAT-8 → PUB-1 → VID-4 — is a derived, read-only view
+  ([META-34](specs/meta.md#meta-34)): bindings are shared n:m
+  facts, and copies pushed into package files would drift.
 - **Colocate a binding with scenarios only where a scenario
   depends on it** ([META-34](specs/meta.md#meta-34)).
   In a mixed file, each binding item is cited by a same-file

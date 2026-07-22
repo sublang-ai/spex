@@ -104,17 +104,22 @@ verified session and any content request bearing an expired or
 tampered grant.
 Authorization is evaluated at issuance: an issued grant shall
 stay redeemable until its expiry regardless of later session or
-authorization changes — expiry is the only revocation.
+authorization changes — expiry is the only revocation of the
+grant itself, and deleting the asset removes the content it
+reaches ([VID-4](#vid-4)).
 
 ### Host Authorization
 
 #### VID-15
 
-Where a playback or stored-content request targets an asset,
-the server shall proceed only when the embedding host
-authorizes that asset for that requester; a request the host
-does not authorize shall be denied, with no grant issued and no
-content served.
+Where a playback request targets an asset, the server shall
+issue an access grant only when the embedding host authorizes
+that asset for that requester; a request the host does not
+authorize shall be denied, with no grant issued and no content
+served.
+Stored-content requests are governed by the grant alone
+([VID-7](#vid-7), [VID-8](#vid-8)); the host is not re-asked at
+redemption.
 
 ### Deletion Boundary
 

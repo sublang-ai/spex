@@ -376,10 +376,14 @@ items ([META-31](#meta-31)).
 A citation binds its adjacent phrase: cite exactly the behavior
 that phrase directly relies on, exercises, or checks — never
 ambient, transitive, or merely invoked behavior.
-Spec items shall carry no metadata lines — `Verifies:`,
-`Binds:`, `Composes:`, `Clients:`, `Suppliers:`, `Scope:`, or
-any other; the citations in an item's clauses are the single
-source of its relationships.
+Spec items shall carry no relationship-metadata lines —
+`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`,
+`Scope:`, or any other line declaring an item relationship; the
+citations in an item's clauses are the single source of its
+relationships.
+A machine-readable declaration an item itself defines — like
+the language marker of [META-27](#meta-27) — is item content,
+not relationship metadata.
 
 ## Authoring language
 

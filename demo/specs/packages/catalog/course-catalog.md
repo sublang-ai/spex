@@ -101,6 +101,15 @@ course page shall show the description ([CAT-2](#cat-2)), and
 the course list shall show the description's first paragraph as
 the course's summary ([CAT-1](#cat-1)).
 
+#### CAT-19
+
+When a save, a publication change, or a deletion of a course
+commits, the change shall be visible to the next read of every
+public and management view — a published course is one mutable
+record with no separate staged or draft copy — and the commit
+shall be atomic: a concurrent read sees the complete prior
+state or the complete new state, never a mixture.
+
 ### The Media Slot
 
 #### CAT-8
@@ -141,13 +150,6 @@ Where section and lesson order is stored, it shall be stored as
 explicit positions independent of names and timestamps, so a
 rename or a re-save never reorders a syllabus.
 
-#### CAT-19
-
-When a save, a publication change, or a deletion commits, the
-catalog shall apply it atomically: a concurrent read shall see
-the complete prior state or the complete new state of the
-course, never a mixture.
-
 ### Draft Isolation
 
 #### CAT-12
@@ -175,9 +177,11 @@ resolvable-attachment lessons marked playable ([CAT-2](#cat-2));
 the unpublished course's URL responds not-found without an admin
 session while an admin session sees its page marked as
 unpublished ([CAT-3](#cat-3)); publishing then unpublishing it
-flips the list and the URL between the two states; and
-republishing places the course first in the list under its new
-publication time ([CAT-6](#cat-6)).
+flips the list and the URL between the two states; republishing
+places the course first in the list under its new publication
+time ([CAT-6](#cat-6)); and a detail save to a published course
+is visible on the immediately following list and page reads
+([CAT-19](#cat-19)).
 
 ### Management Coverage
 
