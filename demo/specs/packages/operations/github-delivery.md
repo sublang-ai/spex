@@ -24,6 +24,7 @@ The required check set shall cover these outcomes, using the repository's config
 | composition tests | every automatable composition Verification suite passes; separately authorized real-provider smoke remains release evidence |
 | production build | the production Next.js build succeeds |
 | database recreation | migrations, policies, bucket configuration, generated types, and seed fixtures recreate a clean local Supabase environment |
+| credential hygiene | tracked content contains no runtime secret value, and a value-free inventory declares every required variable name and visibility class |
 | fixture preview | the secret-free Vercel preview renders its declared route, responsive, and accessibility smoke set and reports its fixture-only profile |
 
 ### PIPE-2
@@ -118,22 +119,29 @@ It shall reject missing, stale, replayed, browser-supplied, cross-deployment, cr
 When repository, deployment, database, or provider-configuration control-plane access is supplied, the control-plane intake shall accept only the configured GitHub repository and Actions environment, Vercel project, and Supabase project for the exact environment and delivery commit.
 It shall reject a cross-project, cross-environment, untrusted-ref, browser-supplied, or mismatched control plane and shall begin no protected mutation through it.
 
+### PIPE-23
+
+When delivery configuration declares runtime values, the credential-hygiene boundary shall require tracked content to contain no runtime secret value and shall require one tracked value-free inventory naming every public, server-only, and protected-control-plane variable and its applicable environment profiles.
+`public` means non-secret configuration that may reach a browser; `server-only` means configuration available only to the matching trusted application-runtime profile; `protected-control-plane` means configuration available only to the matching protected delivery job and never to application runtime, previews, or browsers.
+It shall accept every non-public value only at execution from the matching environment-scoped store and shall fail the required credential-hygiene check for a detected tracked secret, an undeclared runtime variable, a value present in the inventory, or a non-public value available to a nonmatching profile, surface, or untrusted ref.
+
 ## Verification
 
 ### PIPE-20
-Verifies: [PIPE-1](#pipe-1), [PIPE-2](#pipe-2), [PIPE-6](#pipe-6), [PIPE-10](#pipe-10), [PIPE-11](#pipe-11)
 
-Where repository fixtures cover branch updates, stale approvals, failed checks, same-repository changes, untrusted forks, and superseded commits, when pull-request delivery runs, the workflow contract suite shall assert the exact required-check results, fixture trust classification, and limited preview identity and capabilities; merge blocking; minimal permissions; complete protected-resource withholding for fork code; and cancellation of obsolete safe-to-cancel work.
+Where repository fixtures cover branch updates, stale approvals, failed checks, same-repository changes, untrusted forks, superseded commits, tracked sentinel secrets, missing and valued inventory entries, undeclared variables, and cross-profile protected values, when pull-request delivery runs, the workflow contract suite shall assert the [complete required-check results and secret-free fixture preview](#pipe-1), [enforced current-branch, approval, check, and resolved-review merge conditions](#pipe-2), and [complete withholding of protected resources and jobs from untrusted fork code](#pipe-6).
+It shall assert the [fixture preview identity, capability, status, trust classification, and lack of protected-provider access](#pipe-11); [least job permissions and cancellation only of obsolete safe-to-cancel work](#pipe-10); and the [complete value-free variable inventory with failure for every tracked secret, undeclared variable, embedded value, or cross-profile exposure](#pipe-23).
 
 ### PIPE-21
-Verifies: [PIPE-3](#pipe-3), [PIPE-4](#pipe-4), [PIPE-7](#pipe-7), [PIPE-12](#pipe-12), [PIPE-13](#pipe-13), [PIPE-14](#pipe-14), [PIPE-15](#pipe-15), [PIPE-17](#pipe-17), [PIPE-18](#pipe-18), [PIPE-19](#pipe-19)
 
-Where a fake deployment control plane, database model, provider-management model with both matching and changed provider configuration, and concurrent integration-branch commits exercise success, pre-mutation cancellation, forbidden post-mutation cancellation, overlap attempts, attestation tampering, failure at each production step, exact and forged/replayed/cross-deployment post-promotion results, and passed/canceled/failed real-provider smoke with compatible-current-evidence and incompatible/no-evidence retained targets, when delivery runs, the contract suite shall assert no mutation for matching configuration, exact versioned mutation for changed configuration, complete non-secret attestation in both cases, exact-prefix reconciliation, expand-first compatibility, transactional or declared recovery behavior, exclusive noncancelable mutation-through-evidence, matching candidate, smoke target, readiness, and smoke result, promotion without rebuild only on full pre-promotion success, acceptance of only the exact designated real-provider result, exact redacted evidence state including every required versioned browser or tool matrix, exact prior-artifact reassignment only with both current compatibility and same-contract/current-provider passing evidence, degraded current traffic otherwise, no provider-token storage, and complete delivery-to-deployment evidence linkage.
+Where a fake deployment control plane, database model, provider-management model with both matching and changed provider configuration, and concurrent integration-branch commits exercise success, pre-mutation cancellation, forbidden post-mutation cancellation, overlap attempts, attestation tampering, failure at each production step, exact and forged, replayed, or cross-deployment post-promotion results, and passed, canceled, or failed real-provider smoke with compatible-current-evidence and incompatible or absent-evidence retained targets, when delivery runs, the contract suite shall assert the [serialized candidate-to-readiness-to-smoke-to-promotion sequence without rebuild](#pipe-3), the [previous production deployment retained with secret-free actionable evidence after every failed step](#pipe-4), and [exclusive noncancelable production mutation through evidence](#pipe-10).
+It shall assert [exact-prefix expand-first migration with transactional application or a reviewed recovery procedure](#pipe-12), [no provider mutation for matching configuration and exact compatible versioned mutation plus complete credential-free attestation after a change](#pipe-15), and [acceptance only of the exact configured repository, environment, projects, and commit before protected mutation](#pipe-19).
+For the candidate and evidence path, it shall assert the [protected unaliased candidate, complete expected revisions, scoped smoke access, and domain assignment of the recorded deployment without rebuild](#pipe-13); [acceptance only of matching trusted readiness, smoke, current-service, and retained-compatibility evidence](#pipe-18); and [complete redacted delivery evidence including every required versioned browser or tool matrix](#pipe-14).
+For post-promotion smoke, it shall assert the [exact result shape, one-time identity, designated source, and rejection without traffic or evidence change of every forged, replayed, cross-deployment, stale, or unauthorized result](#pipe-17), followed by the [passed, canceled, failed, compatible-reassignment, or degraded traffic outcome without provider-token storage](#pipe-7).
 
 ### PIPE-22
-Verifies: [PIPE-5](#pipe-5), [PIPE-16](#pipe-16)
 
-Where retained compatible and incompatible production deployments exist against the current database migration, Auth/API/Storage configuration, secret-set, and durable-provider revisions, when rollback is confirmed for each, the workflow contract suite shall assert exact compatible-artifact reassignment without rebuild, no database/Auth/Storage rollback, complete allowed evidence, and a denied result with no traffic change for the incompatible target.
+Where retained compatible and incompatible production deployments exist against the current database migration, Auth/API/Storage configuration, secret-set, and durable-provider revisions, when rollback is confirmed for each, the workflow contract suite shall assert [exact compatible-artifact reassignment without rebuild with complete evidence, or denial without traffic change for an unproved revision](#pipe-5), while [leaving Postgres, Auth, and Storage unchanged and requiring compatibility with every current service revision](#pipe-16).
 
 ## References
 

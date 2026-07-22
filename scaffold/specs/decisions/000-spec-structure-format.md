@@ -30,7 +30,7 @@ Spex uses two forms of specs to balance unification and flexibility.
 Decisions and iterations are stored as records.
   - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]], with active section titles defined by [META-4](../meta.md#meta-4).
   - Iteration records (IRs) contain the sections defined by [META-5](../meta.md#meta-5).
-- **Items** use the active GEARS pattern defined by [META-6](../meta.md#meta-6) for their normative behavior statements; structural metadata and trace lines follow `meta.md`.
+- **Items** use the active GEARS pattern defined by [META-6](../meta.md#meta-6) for their normative behavior statements; structural metadata and inline citation semantics follow `meta.md`.
 Each item file must include the active intent section defined by [META-3](../meta.md#meta-3).
 
 ### Organization
@@ -59,7 +59,7 @@ It is the basic unit for spec composition, reuse, and extension.
 A spec package is one file under `packages/`, so one read covers its complete package-owned contract and exposes every fixed dependency by an exact link.
 Each package file carries the sections defined by [META-28](../meta.md#meta-28):
 
-- `## External Behavior` for outcomes and guarantees on which the package's human, host, or component users may rely.
+- `## External Behavior` for outcomes and guarantees on which the package's human, host, component, or higher-layer users may rely.
 - `## Internal Behavior` for behavior hidden from package users, including provider-neutral consumed requirements and private semantic invariants.
 - `## Verification` for package-local contract checks with controlled collaborators.
 
@@ -71,7 +71,7 @@ For example, a spec package for generating short URLs may be `specs/packages/sig
 
 ### Compositions
 
-System-instantiation files live in `compositions/` per [META-31](../meta.md#meta-31).
+System-instantiation files live in `compositions/` per [META-30](../meta.md#meta-30).
 A `Binding` item installs either an External assembly role across External Behavior or External Behavior/a named service for a package's Internal requirement; a `Scenario` item describes an integrated outcome from materially necessary behavior across packages, grounded by at least one External item.
 One cohesive file may contain either or both, without a file-type flag.
 

@@ -70,7 +70,7 @@ package-file rules.
 
 Where a file under `specs/interactions/` is linted, an error shall
 be reported for a missing H1 short form or `## Intent`; other
-sections are free-form ([META-31](../meta.md#meta-31)).
+sections are free-form ([META-30](../meta.md#meta-30)).
 A warning shall be reported when an interactions file name is a
 composition of existing package names or short forms.
 

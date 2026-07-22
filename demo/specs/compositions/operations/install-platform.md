@@ -22,14 +22,14 @@ Clients: `identity authority` = [GHID-18](../../packages/access/github-identity.
 Suppliers: `authority` = [deterministic fake GitHub OAuth and local Supabase Auth](../../decisions/001-web-platform.md)
 Scope: the `verification GHID` instance across local development and automated pull-request verification
 
-The installation shall supply the same GHID meanings as [PLAT-1](#plat-1) through deterministic non-production authorities carrying no production identity, data, or secret.
+The installation shall supply the same GHID meanings through deterministic non-production authorities carrying no production identity, data, or secret.
 
 ### PLAT-4
 Clients: `private object service` = [VIDS-25](../../packages/media/video-library.md#vids-25)
 Suppliers: `object service` = [private Supabase Storage with TUS upload and signed download](../../decisions/001-web-platform.md)
 Scope: each provider-integrated environment's declared private video bucket
 
-The installation shall supply VIDS with the environment-scoped private object service selected by [DR-001](../../decisions/001-web-platform.md), satisfying [VIDS-25](../../packages/media/video-library.md#vids-25) for the declared bucket without broadening object, path, credential, or lifecycle scope or changing package-owned windows and limits.
+The installation shall supply VIDS with the environment-scoped private object service selected by [DR-001](../../decisions/001-web-platform.md) for the declared bucket without broadening object, path, credential, or lifecycle scope or changing package-owned windows and limits.
 
 ### PLAT-5
 Clients: `web deployment` = [LIVE-19](../../packages/operations/production-runtime.md#live-19)
@@ -55,16 +55,13 @@ The installation shall supply LIVE with one environment-scoped Supabase project 
 ## Verification
 
 ### PLAT-20
-Verifies: [PLAT-1](#plat-1), [PLAT-2](#plat-2)
 
-Where production and deterministic fixture authorities are configured in turn, when their callbacks, redirect policies, subjects, sessions, provider inventories, and sentinel secrets are inspected, the platform conformance suite shall assert equivalent GHID contract meaning, GitHub-only production entry, and complete production isolation for the fixture authority.
+Where the [production identity authority](#plat-1) and [deterministic fixture authority](#plat-2) are configured in turn, when their callbacks, redirect policies, subjects, sessions, provider inventories, and sentinel secrets are inspected, the platform conformance suite shall assert equivalent GHID contract meaning, GitHub-only production entry, and complete production isolation for the fixture authority.
 
 ### PLAT-21
-Verifies: [PLAT-4](#plat-4), [PLAT-7](#plat-7)
 
-Where clean local and hosted Supabase projects expose Auth, Postgres, and Storage identities and revisions and exercise private object upload, 24-hour TUS resumption, playback, missing/unreadable/mismatched observation, completed-object cleanup, and incomplete-chunk expiry, when the two client contracts are checked against the selected services, the platform conformance suite shall assert environment isolation, complete service identity, durable revision reporting, private exact-object access, distinct cleanup and provider-expiry behavior, stated windows and limits, and no broadened client behavior.
+Where clean local and hosted Supabase projects expose the [installed durable runtime services](#plat-7) and exercise the [installed private object service](#plat-4) through upload, 24-hour TUS resumption, playback, missing/unreadable/mismatched observation, completed-object cleanup, and incomplete-chunk expiry, when the two client contracts are checked against those services, the platform conformance suite shall assert environment isolation, complete service identity, durable revision reporting, private exact-object access, distinct cleanup and provider-expiry behavior, stated windows and limits, and no broadened client behavior.
 
 ### PLAT-22
-Verifies: [PLAT-5](#plat-5), [PLAT-6](#plat-6)
 
-Where fixture, candidate, production, trusted-repository, and untrusted-fork profiles are inspected, when runtime and delivery configuration is resolved, the platform conformance suite shall assert exact project identity, request isolation, correct public/server credential inventory, protected control-plane access only in the matching trusted environment, and no production connection from fixture code.
+Where fixture, candidate, production, trusted-repository, and untrusted-fork profiles are inspected, when the [web runtime](#plat-5) and [delivery control planes](#plat-6) are resolved, the platform conformance suite shall assert exact project identity, request isolation, correct public/server credential inventory, protected control-plane access only in the matching trusted environment, and no production connection from fixture code.

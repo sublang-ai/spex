@@ -16,6 +16,7 @@ The administrator authors ordered syllabi, uploads videos, and publishes immutab
 
 ```text
 decisions/     Durable choices and rationale
+iterations/    Incremental implementation plans and acceptance targets
 packages/      Standalone package contracts
 compositions/  Installed bindings, integrated scenarios, and verification
 map.md         This index
@@ -31,6 +32,14 @@ Subdirectories inside `packages/` and `compositions/` are collections only ([MET
 | [DR-000](decisions/000-minimal-course-scope.md) | public published catalog, private playback, one configured administrator, draft/release lifecycle, and direct browser-playable video |
 | [DR-001](decisions/001-web-platform.md) | Next.js/TypeScript/Tailwind/shadcn, Vercel, Supabase, GitHub delivery, trust policy, and environment profiles |
 | [DR-002](decisions/002-course-media-boundary.md) | separate mutable syllabus, immutable catalog release, and video contracts |
+
+## Iterations
+
+| Record | Vertical slice |
+| --- | --- |
+| [IR-001](iterations/001-foundation-and-entry.md) | delivery foundation, runtime isolation, GitHub identity, access policy, and application shell |
+| [IR-002](iterations/002-author-and-publish.md) | administrator draft, resumable video upload, immutable publication, and bootstrap acceptance |
+| [IR-003](iterations/003-browse-watch-and-ship.md) | public discovery, private playback, security hardening, and protected production delivery |
 
 ## Packages
 
@@ -94,18 +103,21 @@ For example, [SYLL-13](packages/learning/course-syllabus.md#syll-13) defines the
 
 `ACCESS` and `PLAT` are binding-only because their seams are cross-cutting.
 `ENTRY`, `PUBLISH`, `LEARN`, and `SHIP` mix Binding and Scenario because each binding directly serves the same file's outcome.
-`BOOT` and `GUARD` are scenario-only and cite shared bindings through `Bindings:`.
+`BOOT` and `GUARD` are scenario-only and cite shared bindings inline at the handoffs they exercise.
 
 All 31 Scenario items have acceptance coverage.
 All 19 Binding items have audience-appropriate coverage in their authoritative files.
 The eight packages retain 27 local Verification items for validation matrices, private invariants, races, replay, and provider boundaries.
 
-The three traces are complementary:
+The traces are complementary:
 
 ```text
-package External or materially relevant Internal Behavior -> Composes -> Scenario -> Verifies -> acceptance evidence
+package Behavior -> inline package Verification citation -> contract evidence
+package External or materially relevant Internal Behavior -> inline Scenario citation -> Scenario -> inline Verification citation -> acceptance evidence
 supplier External Behavior -> Binding -> External client role
 supplier External Behavior or selected service -> Binding -> package Internal requirement
+Binding -> inline Scenario citation -> Scenario
+Binding -> inline Verification citation -> conformance evidence
 ```
 
 ## External and internal behavior
@@ -119,7 +131,7 @@ A peer package may rely on only another package's External Behavior.
 A Binding may cite Internal Behavior only as a client, while its supplier side cites External Behavior.
 Assembly Bindings join External roles, as [ENTRY-10](compositions/access/enter-site.md#entry-10) does.
 A Scenario may cite Internal Behavior when materially needed for an integrated outcome or inspection, but that citation does not expose it.
-An installed package overlay can show those reverse links, but it is derived and never written into the package file ([META-27](meta.md#meta-27)).
+An installed package overlay can show those reverse links, but it is derived and never written into the package file ([META-23](meta.md#meta-23)).
 
 ## Requirement coverage
 

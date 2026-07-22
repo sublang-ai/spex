@@ -114,24 +114,22 @@ It shall reject production services in a fixture profile, cross-project identiti
 ## Verification
 
 ### LIVE-20
-Verifies: [LIVE-1](#live-1), [LIVE-2](#live-2), [LIVE-6](#live-6), [LIVE-11](#live-11), [LIVE-13](#live-13), [LIVE-16](#live-16), [LIVE-17](#live-17), [LIVE-18](#live-18), [LIVE-19](#live-19), [LIVE-24](#live-24), [LIVE-25](#live-25)
 
-Where an environment fixture can vary every runtime value, trusted/stale/tampered provider attestation, schema/policy revision, declared application-capability status, application credential, functional health response, and exact/mismatched/replayed smoke observation without supplying control-plane credentials, when readiness and smoke result are requested for the valid production candidate and one fault at a time, the contract suite shall assert exact ready/not-ready capability, profile, commit, protected smoke target, acceptance only of the matching observation, redaction, correlation ID, and absence of probe-created data.
+Where an environment fixture can vary every runtime value, trusted, stale, or tampered provider attestation, schema or policy revision, declared application-capability status, application credential, functional health response, and exact, mismatched, or replayed smoke observation without supplying control-plane credentials, when readiness and smoke result are requested for the valid production candidate and one fault at a time, the contract suite shall assert the [complete profile, deployment, commit, capability, provider-revision, and redacted ready report](#live-1) or the [affected capability, environment, correlation ID, and secret-free not-ready report](#live-2), plus the [protected unaliased candidate target and scoped smoke-access requirement](#live-6).
+It shall assert [validation of the declared runtime, credential inventory, application capabilities, service revisions, functional private storage, and production provider policy without a management credential](#live-11), based only on an [accepted environment-scoped immutable web deployment](#live-19), [accepted environment-scoped durable services and revisions](#live-25), and [trusted complete provider-configuration attestation](#live-18).
+It shall also assert [trusted application-capability observation matching the current deployment and commit](#live-16); [acceptance only of the exact protected smoke target](#live-17); [non-mutating health probes and one matching, non-replayed smoke observation and result](#live-13); and [browser-inaccessible, exact-deployment readiness evidence without side effects](#live-24).
 
 ### LIVE-21
-Verifies: [LIVE-3](#live-3), [LIVE-5](#live-5), [LIVE-10](#live-10), [LIVE-12](#live-12)
 
-Where fixture-preview and production fixtures have sentinel secrets and data and each dependency can fail, when both deployments and their browser state, logs, and status are inspected, the contract suite shall assert typed degradation, continued unaffected status, accurate fixture-only capability reporting, and no production-provider connection or sentinel disclosure in preview.
+Where fixture-preview and production fixtures have sentinel secrets and data and each dependency can fail, when both deployments and their browser state, logs, and status are inspected, the contract suite shall assert [typed degradation with unaffected capability status preserved](#live-3), the [fixture-only profile with provider capabilities not applicable and no production connection](#live-5), the [strict fixture-versus-production provider association without production credentials in preview](#live-10), and [only the allowed browser-visible values with every provider secret and privileged credential absent from responses, builds, logs, and diagnostics](#live-12).
 
 ### LIVE-22
-Verifies: [LIVE-4](#live-4), [LIVE-14](#live-14)
 
-Where durable fixture data exists and deployment revisions declare compatible and incompatible schema ranges, when replacement, service-revision reporting, compatibility evaluation, and rollback are simulated, the contract suite shall assert an exact current-revision report, one revision-by-revision compatibility result per retained target, data and object continuity for compatible changes, and startup refusal without mutation for incompatible changes.
+Where durable fixture data exists and deployment revisions declare compatible and incompatible schema ranges, when replacement, service-revision reporting, compatibility evaluation, and rollback are simulated, the contract suite shall assert [record and object continuity across compatible web replacement and rollback](#live-4), and the [independent durable-service identity, exact redacted current-revision and retained-deployment compatibility reports, and startup refusal without mutation outside the declared compatible range](#live-14).
 
 ### LIVE-23
-Verifies: [LIVE-15](#live-15)
 
-Where every application operation is observed with distinct user-scoped and sentinel service-role clients, when ordinary and named privileged paths run, the contract suite shall assert user-scoped access for every ordinary operation, exact authorization and scope for each named privileged operation, and a failure report for any unlisted privileged call.
+Where every application operation is observed with distinct user-scoped and sentinel service-role clients, when ordinary and named privileged paths run, the contract suite shall assert [user-scoped access for every ordinary operation, exact authorization and scope for each named privileged operation, and a readiness and security failure for any unlisted privileged call](#live-15).
 
 ## References
 

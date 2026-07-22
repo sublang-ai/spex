@@ -55,16 +55,13 @@ The installation shall supply LIVE with ROLE-15's unchanged observation identity
 ## Verification
 
 ### ACCESS-20
-Verifies: [ACCESS-1](#access-1), [ACCESS-2](#access-2), [ACCESS-3](#access-3)
 
-Where session, route, and role fixtures produce valid, expired, revoked, mismatched, unsafe-destination, and denied cases, when the installed access seams are inspected and exercised, the conformance suite shall assert exact account/request association, safe-destination projection, denial on every mismatch, and no alternate provider path.
+Where session, route, and role fixtures produce valid, expired, revoked, mismatched, unsafe-destination, and denied cases, when the [role-identity](#access-1), [safe-destination](#access-2), and [protected-request](#access-3) seams are inspected and exercised, the conformance suite shall assert exact account/request association, safe-destination projection, denial on every mismatch, and no alternate provider path.
 
 ### ACCESS-21
-Verifies: [ACCESS-4](#access-4)
 
-Where anonymous, member, and administrator requests exercise every ROLE capability against each client package and read the public catalog, when the installed policy is exercised, the conformance suite shall assert the four exact protected mappings, resource and request preservation, no browser-supplied decision, denial of every unlisted capability, and no ROLE decision or access Binding on the public catalog read.
+Where anonymous, member, and administrator requests exercise every ROLE capability against each client package and read the public catalog, when the [installed capability projection](#access-4) is exercised, the conformance suite shall assert the four exact protected mappings, resource and request preservation, no browser-supplied decision, denial of every unlisted capability, and no ROLE decision or access Binding on the public catalog read.
 
 ### ACCESS-22
-Verifies: [ACCESS-5](#access-5)
 
-Where bootstrap state is ready, missing, malformed, changed, and duplicated in turn, when installed readiness is inspected, the conformance suite shall assert the same fail-closed conclusion and deployment revision at ROLE and LIVE.
+Where bootstrap state is ready, missing, malformed, changed, and duplicated in turn, when the [installed readiness seam](#access-5) is inspected, the conformance suite shall assert the same fail-closed conclusion and deployment revision at ROLE and LIVE.

@@ -46,11 +46,13 @@ Each preserved upstream line satisfies its respective [LIC-1](#lic-1)/[LIC-2](#l
 ## Verification
 
 ### LIC-3
-Verifies: [LIC-1](#lic-1), [LIC-6](#lic-6)
 
-Where the file has comment syntax and is not excluded by [LIC-6](#lic-6), while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-FileCopyrightText`.
+Where the file has comment syntax and is included by the [licensing scope](#lic-6), while git-tracked or `git add`-able, when checking its first comment block after any shebang, the verification shall assert the [copyright-header requirement](#lic-1) by finding `SPDX-FileCopyrightText`.
 
 ### LIC-4
-Verifies: [LIC-2](#lic-2), [LIC-6](#lic-6), [LIC-7](#lic-7)
 
-Where the file has comment syntax, is not excluded by [LIC-6](#lic-6), and a license file recognized by [LIC-7](#lic-7) exists at project root, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier`.
+Where the file has comment syntax, is included by the [licensing scope](#lic-6), and the [license-file detector](#lic-7) recognizes a project-root license, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the verification shall assert the [license-header requirement](#lic-2) by finding `SPDX-License-Identifier`.
+
+### LIC-8
+
+Where a file already contains upstream SPDX lines and the project license differs, when inclusion preparation runs, the verification shall assert [byte-for-byte preservation of every upstream line and use of upstream rather than project license data for any missing required line](#lic-5).

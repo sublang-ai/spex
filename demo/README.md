@@ -3,28 +3,39 @@
 
 # Course Website Spec Demo
 
-This directory is a specification-only example project for Spex.
-It describes a minimal course website with a public catalog and private video playback; it contains no application code.
-Open `demo/` as the project and `demo/specs/` as its spec tree.
+A complete `specs/` tree for a small real product, ready for code generation and containing no application code.
+It is both the concrete package-structure research instance and the initial example project for the Spex desktop app.
 
-The demo deliberately exercises a proposed next revision of the Spex convention:
+## Product
 
-- one cohesive file per package;
-- package-relative `External Behavior` for every guarantee a human, host, or component user may rely on;
-- `Internal Behavior` for provider-neutral consumed requirements and private semantic invariants hidden from package users, never source-code design;
-- human-readable domain shapes, policies, and state tables placed beside the behavior that needs them rather than collected in a machine-facing package manifest;
-- reusable package sources left free of installation annotations and peer-Internal citations, with exact peer-External citations reserved for intentional fixed dependencies;
-- `compositions/` rather than `interactions/` for installed bindings as well as cross-package outcomes;
-- one authoritative Binding item for each installed External assembly or Internal supply seam, with package overlays derived from those items;
-- Scenario items for system-user- or operator-meaningful outcomes, with `Composes:`, optional `Bindings:`, and acceptance `Verifies:` traces;
-- replaceable code dependencies omitted from behavioral specs;
-- nested directories under `packages/` and `compositions/` as navigation-only collections.
+- Anyone can browse the current published catalog, courses, and lesson information.
+- GitHub is the only sign-in method; starting or renewing private video playback requires an active GitHub-backed application session and fresh playback authorization.
+- One configured initial administrator authors syllabi, uploads videos, and publishes immutable releases.
+- The application uses Next.js App Router with TypeScript, Tailwind CSS, and shadcn/ui.
+- Vercel and Supabase Auth, Postgres, and Storage run the product; GitHub hosts its repository and delivery workflow.
 
-The current Spex linter and desktop parser do not yet implement this proposed revision.
-In particular, they know `interactions/`, not the `Binding`/`Scenario` grammar and derived overlays proposed here.
-This demo is therefore both product input and a concrete compatibility fixture for that follow-up work.
+The durable choices are in [decisions](specs/decisions/); the selected package and platform seams are in [compositions](specs/compositions/).
 
-`compositions/` is intentional: these files specify how independently understandable package contracts combine into system outcomes.
-The word `interactions` remains available for user-interface interaction design and is therefore less precise here.
+## Reading paths
 
-New spec authors should start with [the authoring guidelines](guidelines.md), then use [the spec map](specs/map.md) to follow packages into concrete compositions.
+For the product, start at the [spec map](specs/map.md), read each package as a standalone contract, then read compositions to see the installed product and its acceptance evidence.
+For implementation, follow the three [iterations](specs/iterations/) as vertical slices; their acceptance criteria link back to authoritative package and composition items.
+For spec authoring, start with [Writing Strong Spex Specs](guidelines.md); [META](specs/meta.md) is normative when the guide and format differ.
+
+## Research pointers
+
+| Question | Concrete examples |
+| --- | --- |
+| Package boundary and self-containment | [SYLL](specs/packages/learning/course-syllabus.md), [CAT](specs/packages/learning/course-catalog.md), and [VIDS](specs/packages/media/video-library.md) separate mutable drafts, immutable releases, and media lifecycle |
+| External versus Internal | [SYLL-11](specs/packages/learning/course-syllabus.md#syll-11) is a supplied External snapshot; [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) is a consumed Internal content requirement; [SYLL-10](specs/packages/learning/course-syllabus.md#syll-10) is a private invariant |
+| Reuse and dependency choice | [PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) and [ACCESS-4](specs/compositions/access/install-course-access.md#access-4) install selectable suppliers without changing their client packages |
+| Binding versus Scenario | [PLAT](specs/compositions/operations/install-platform.md) is binding-only; [GUARD](specs/compositions/security/protect-course-content.md) is scenario-only; [PUBLISH](specs/compositions/authoring/publish-course.md) cohesively contains both |
+| Acceptance coverage | [LEARN](specs/compositions/learning/browse-and-watch.md), [GUARD](specs/compositions/security/protect-course-content.md), and [SHIP](specs/compositions/operations/deliver-change.md) cover the main journey, trust boundaries, and deployed operation |
+
+## Convention status
+
+The demo and scaffold specify `compositions/` as the home of installed Bindings, integrated Scenarios, and Verification; nested directories remain navigation-only collections.
+`compositions/` is broader and less confusable with UX interactions than `interactions/`.
+
+The current Spex CLI and desktop parser still recognize the older `interactions/` layout and do not yet implement the Binding/Scenario grammar, inline trace semantics, or derived installed overlays.
+Until that tooling migration lands, this tree is also its concrete compatibility fixture.

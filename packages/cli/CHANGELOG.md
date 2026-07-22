@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The spec structure (DR-000, META-1/9/10/20/21, new META-28/31) now
+- The spec structure (DR-000, META-1/9/10/20/21, new META-28/30) now
   has two item directories: `specs/packages/` (one file per spec
   package) and `specs/interactions/` (cross-package behaviors,
   scenarios, and the integration/acceptance tests that span packages).

@@ -27,7 +27,7 @@ The `specs/` directory shall contain:
 
 每个条目文件应包含一个说明其目的的 `## 意图` 章节。
 
-### META-37
+### META-22
 
 Directories below `packages/` and `compositions/` shall be navigation-only collections.
 Their names and nesting shall confer no semantic meaning.
@@ -89,7 +89,7 @@ It may use package-wide meaning defined in Intent, an exact same-package citatio
 ### META-26
 
 A behavior item shall state observable semantic outcomes under named conditions, including when an outcome shall not occur.
-Adjacent domain tables and trace lines are normative but are not behavior statements.
+Adjacent domain tables are normative but are not behavior statements.
 
 ## Packages
 
@@ -116,11 +116,11 @@ Each package file shall use only these `##` sections, in order:
 | `References` | optional | authoritative external sources |
 
 At least one behavior section shall be present.
-A package user is any human, host, or component using that package's contract.
+A package user is any human, host, component, or higher layer using that package's contract.
 Classification is package-relative rather than based on human visibility: External Behavior is offered to a package user; Internal Behavior is hidden from package users.
 Internal does not mean source files, classes, algorithms, framework mechanics, or other replaceable implementation detail.
 A peer package may rely only on External Behavior.
-A Binding may cite Internal Behavior as a client requirement, and a Scenario may cite it only as allowed by [META-34](#meta-34); neither citation makes it External Behavior or exposes it to a package user.
+A Binding may cite Internal Behavior as a client requirement, and a Scenario may cite it only as allowed by [META-33](#meta-33); neither citation makes it External Behavior or exposes it to a package user.
 The active authoring-language overlay may localize these section headings; a heading with no localized label keeps the English label shown here.
 
 ### META-11
@@ -130,8 +130,9 @@ Each behavior, binding, scenario, and verification item shall have a globally un
 
 ### META-12
 
-Released item IDs and the normative concerns they identify shall not be renumbered, reused, or reassigned.
-Wording may change under an ID only when it preserves that cited concern; new concerns shall use higher unused IDs within the containing file.
+An item ID and the normative concern it identifies are reserved if they appeared in any prior release.
+A reserved ID shall not be renumbered, reused, or reassigned; wording under it may change only compatibly with the published concern.
+Before publication, provisional items may be renumbered, replaced, or removed, and an ID absent from every prior release may be reassigned.
 
 ### META-13
 
@@ -146,6 +147,7 @@ Where supplier selection or reuse without that peer is intended, the client pack
 
 ### META-15
 
+Each package Intent shall be self-contained prose without citations; exact fixed dependencies belong only at the item precondition or trigger that relies on them.
 A reusable package shall define every package-owned operative meaning and variation point locally and shall remain understandable, contract-testable, and usable unchanged outside its source project.
 It shall not cite bindings, compositions, or project decisions.
 It may cite peer External Behavior only for an intentional fixed semantic dependency under [META-14](#meta-14).
@@ -158,13 +160,16 @@ Package presence shall not imply a system-wide exclusivity rule.
 ### META-16
 
 Citations to items shall use relative Markdown links with exact anchors.
+Except for the Binding endpoint lines required by [META-31](#meta-31), every citation inside a normative item shall appear inline immediately after the exact phrase, table cell, or assertion whose meaning it supplies or checks.
+The trace lines `Composes:`, `Bindings:`, and `Verifies:` shall not be used.
+A normative item shall not cite another item for background, navigation, further reading, incidental or transitive context, or a mere code call.
 
 ### META-17
 
-DRs and items may cite each other subject to the package restrictions in [META-15](#meta-15), the IR restriction in [META-18](#meta-18), and the behavior-section restrictions in [META-28](#meta-28).
+DRs and items may cite each other subject to the package restrictions in [META-15](#meta-15), the IR restriction in [META-18](#meta-18), the behavior-section restrictions in [META-28](#meta-28), and the Scenario and Verification target restrictions in [META-20](#meta-20) and [META-33](#meta-33).
 A citation shall not change whether cited behavior is External or Internal to its package.
 
-### META-38
+### META-29
 
 Package files shall contain no `Requires:`, `Uses:`, or `Binds:` relationship metadata.
 A fixed semantic package dependency shall be expressed by an exact peer External Behavior citation under [META-14](#meta-14).
@@ -186,26 +191,29 @@ IRs shall not be cited by any spec except `map.md`.
 
 ### META-20
 
-Each Verification item shall carry one `Verifies:` line immediately below its heading.
-A package Verification item shall cite same-package behavior.
-A composition Verification item shall cite at least one same-file Binding or Scenario item; it may additionally cite an external Binding it directly checks.
+Each Verification item shall inline-cite at least one target item beside the exact assertion that directly checks it.
+In a package Verification item, item citations may target only same-package behavior.
+In a composition Verification item, item citations may target only a same-file Binding or Scenario, plus an external Binding it directly checks.
+Within Verification, every item citation denotes direct coverage of its target; setup, background, supporting, and merely transitive citations are prohibited.
 
 ### META-21
 
-Package Verification shall check the package contract, private invariants, and local failures with controlled collaborators.
+Package Verification shall check the package's offered contract, consumed requirements, private invariants, and local failures with controlled collaborators.
 Binding Verification shall check installed endpoint compatibility, selection, and scope.
 Scenario Verification shall check integrated system outcomes.
 Assembly Binding Verification shall exercise the assembled package-user role at its external surface; supply Binding Verification may use conformance inspection.
 
-Every Binding and Scenario shall have same-file Verification coverage.
+Every Binding and Scenario shall be inline-cited by at least one same-file Verification item.
 One Verification item need not jointly cite both kinds in a mixed file.
 Scenarios shall hold most product-level acceptance; unit tests remain implementation artifacts.
 
 ## Compositions
 
-### META-31
+### META-30
 
 `compositions/` shall contain system-instantiation files.
+Each file shall cover one cohesive installed concern and be named after that concern or outcome, not a concatenation of package names.
+Binding items may take the installation as their subject; Scenario items may take the composed system as their subject.
 Each file shall use only these `##` sections, in order:
 
 1. `Intent`
@@ -217,9 +225,9 @@ Each file shall use only these `##` sections, in order:
 At least one of `Binding` and `Scenario` shall be present.
 Section presence identifies the file's content; no file-level type flag shall duplicate it.
 The active authoring-language overlay may localize section headings; a heading with no localized label keeps the English label shown here.
-The metadata keys `Clients:`, `Suppliers:`, `Scope:`, `Composes:`, `Bindings:`, and `Verifies:` are language-neutral tokens.
+The metadata keys `Clients:`, `Suppliers:`, and `Scope:` are language-neutral tokens.
 
-### META-32
+### META-31
 
 Each Binding item shall carry these lines immediately below its heading:
 
@@ -229,6 +237,8 @@ Suppliers: <role> = <exact package External Behavior citation or named external 
 Scope: <package instances, environment, profile, request, resource, tenant, or other installation scope>
 ```
 
+`Clients:` and `Suppliers:` declare endpoint direction and roles; `Scope:` declares the installed instances and applicability.
+Ordinary citations cannot supply those facts, so these lines are authoritative Binding structure rather than duplicate trace lists.
 Every endpoint shall have an explicit role.
 The prose shall explain semantic compatibility without broadening, weakening, or translating either endpoint.
 Required conversion shall be owned by an adapter package.
@@ -240,7 +250,7 @@ An Internal item cited as a client shall contain one complete consumed requireme
 If a controlled collaborator could satisfy the meaning, it is consumed and bindable; otherwise it is a private invariant and is not a Binding endpoint.
 For a named external service, the Binding shall name the exact selected capability, cite the selecting decision, and verify compatibility with the client meaning.
 
-### META-33
+### META-32
 
 A Binding may group several clients or suppliers only when they form one atomic installation decision; bindings are not assumed to be one-to-one.
 The item shall state how its supplier roles collectively satisfy its client roles.
@@ -253,22 +263,22 @@ When one contract has several installed instances, `Scope:` shall assign each a 
 Each installed relationship shall have one authoritative Binding item.
 Package annotations, indexes, and overlays shall be derived rather than copied into package source.
 
+### META-33
+
+Each Scenario item shall inline-cite materially necessary behavior from at least two packages at the exact causal phrase, including at least one External Behavior item that grounds the integrated system outcome.
+A Scenario citation to package behavior denotes direct composition of that behavior.
+It may cite Internal Behavior only when materially necessary to state or inspect the integrated outcome; the citation shall not expose that behavior to a package user.
+A Scenario citation to a Binding denotes an installed handoff directly exercised by the adjacent phrase.
+A Scenario may cite only package behavior and Bindings and shall not cite ambient, transitive, supporting, or merely called behavior.
+Scenario prose shall state each causal handoff in product language without redefining binding endpoints.
+
 ### META-34
 
-Each Scenario item shall carry a `Composes:` line immediately below its heading, citing materially necessary behavior from at least two packages and including at least one External Behavior item that grounds the integrated system outcome.
-It may additionally cite Internal Behavior only when that behavior is materially necessary to state or verify the cross-package outcome; the citation shall not expose that behavior to a package user.
-It shall not list a package merely because code calls it.
-
-When a Scenario materially depends on installed bindings, a `Bindings:` line citing them shall immediately follow `Composes:`.
-Scenario prose shall state the causal handoff in product language without redefining binding endpoints.
-
-### META-35
-
 Binding and Scenario may share a file when they have one cohesive intent, owner, scope, and change cadence and the binding materially serves a same-file Scenario.
-Every Binding in a mixed file shall be cited by at least one same-file Scenario.
+Every Binding in a mixed file shall be inline-cited by at least one same-file Scenario.
 Cross-cutting or independently changing bindings shall live in a binding-only file and may be cited by Scenarios elsewhere.
 
-### META-36
+### META-35
 
 Authoritative package and Binding sources shall remain separate.
 A package-focused installed overlay, global binding index, and text projection may expose the installed graph, but all shall be read-only derived views.
@@ -277,10 +287,13 @@ Every projection shall resolve deterministically from the authoritative items an
 The traces are:
 
 ```text
-package External Behavior -> Composes -> Scenario -> Verifies -> acceptance evidence
-material package Internal Behavior -> Composes -> Scenario (remains hidden from package users)
+package Behavior -> inline package Verification citation -> contract evidence
+package External Behavior -> inline Scenario citation -> Scenario -> inline Verification citation -> acceptance evidence
+material package Internal Behavior -> inline Scenario citation -> Scenario (remains hidden from package users)
 supplier External Behavior -> assembly Binding -> External client role
 supplier External Behavior or selected service -> Binding -> package Internal requirement
+Binding -> inline Scenario citation -> Scenario
+Binding -> inline Verification citation -> conformance evidence
 ```
 
 ## Authoring language

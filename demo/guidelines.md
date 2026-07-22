@@ -3,289 +3,201 @@
 
 # Writing Strong Spex Specs
 
-This guide explains the normative [demo format](specs/meta.md) through the course website.
-If they disagree, `specs/meta.md` controls.
+These five rules explain the normative [demo format](specs/meta.md) through the course website.
+If the guide and META differ, META controls.
 
-## Key conclusions
+## 1. A package is a self-contained behavioral owner
 
-### 1. A package boundary is behavioral ownership
-
-A package owns one cohesive vocabulary, responsibility, and—when stateful—lifecycle.
+A package owns one cohesive vocabulary, responsibility, and—when stateful—lifecycle ([META-7](specs/meta.md#meta-7)).
 It is not automatically a screen, service, code module, database table, team, or directory.
 
 The course system separates:
 
 - [SYLL](specs/packages/learning/course-syllabus.md): mutable drafts and publication snapshots;
 - [CAT](specs/packages/learning/course-catalog.md): immutable releases and current learner selection;
-- [VIDS](specs/packages/media/video-library.md): video upload, lifecycle, and private playback; and
+- [VIDS](specs/packages/media/video-library.md): upload, media lifecycle, and private playback; and
 - [SITE](specs/packages/web/application-shell.md): this product's routes and presentation language.
 
-They participate in one feature but have different owners, failure modes, and reuse axes.
-A package is self-contained when its file defines every package-owned meaning, makes any fixed peer dependency an exact External citation, and states how its contract can be checked with controlled collaborators.
+Those packages participate in one feature but have different owners, failure modes, consistency boundaries, and reuse axes.
+One read should define every package-owned meaning, failure, and variation point and expose every intentional fixed dependency by an exact link ([META-9](specs/meta.md#meta-9)).
+The Intent is standalone prose without citations; it states purpose, nearby exclusions, and honest reuse scope.
 
-### 2. External and Internal are package-relative
+Reusable does not mean generic.
+`GHID` is GitHub-identity-specific, `VIDS` is Supabase-Storage-specific, `ROLE` owns this course site's two-role policy, and `SITE` is deliberately project-local.
+Specialization is healthy when Intent says so and the package remains unchanged wherever that contract applies.
 
-| Section | Meaning | Demo example |
+When package A appears to use package B, choose the relationship deliberately:
+
+| Relationship | Source form | Use when |
+| --- | --- | --- |
+| fixed semantic dependency | A's precondition or trigger cites B's exact External Behavior | replacing B would change A's declared contract |
+| selectable semantic supplier | A defines a provider-neutral Internal requirement; a Binding selects B's External Behavior | the installation chooses the supplier |
+| replaceable code allocation | no package dependency, Binding, or Scenario | only implementation structure changes |
+
+A peer may never rely on B's Internal Behavior.
+A reusable package never cites project decisions or compositions; an exact peer-External citation is itself the fixed dependency declaration, so no Binding restates it.
+The demo deliberately has no fixed package dependency: [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) is supplied through [PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10), and [CAT-24](specs/packages/learning/course-catalog.md#cat-24) through [ACCESS-4](specs/compositions/access/install-course-access.md#access-4).
+Do not invent a direct citation merely to demonstrate one.
+
+The litmus for a selectable supply is the swap: a compatible supplier can replace the installed one without editing the client package.
+If the client text must change, either the dependency was fixed or the abstraction was incomplete.
+
+Package inventory never implies exclusivity.
+Having only `GHID` does not mean other login methods are forbidden.
+[DR-001](specs/decisions/001-web-platform.md) selects GitHub-only entry; [PLAT-1](specs/compositions/operations/install-platform.md#plat-1) installs the authority and [ENTRY-1](specs/compositions/access/enter-site.md#entry-1) specifies the journey, while GHID remains reusable beside another identity package.
+
+## 2. The audience is per-package
+
+External and Internal are relative to the package boundary, not to whether a human sees the behavior ([META-10](specs/meta.md#meta-10), [META-11](specs/meta.md#meta-11)).
+
+| Section | Meaning | Example |
 | --- | --- | --- |
 | External Behavior | outcome or guarantee a package user may rely on | [SYLL-2](specs/packages/learning/course-syllabus.md#syll-2) save result; [SYLL-11](specs/packages/learning/course-syllabus.md#syll-11) publication snapshot |
-| Internal Behavior | provider-neutral requirement consumed by the package, or a private semantic invariant | [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) required content description; [SYLL-10](specs/packages/learning/course-syllabus.md#syll-10) revision invariant |
+| Internal Behavior | provider-neutral consumed requirement or private semantic invariant hidden from package users | [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) content requirement; [SYLL-10](specs/packages/learning/course-syllabus.md#syll-10) revision invariant |
 
-Internal does not mean implementation design.
-Do not specify classes, hooks, source files, algorithms, or replaceable library choices there.
-The package boundary alone decides the section: External is what this package's user may rely on; Internal is hidden from that user.
-The user may be a human, host, component, or higher layer.
-Thus [PIPE-1](specs/packages/operations/github-delivery.md#pipe-1) is External to PIPE for a contributor, and [SYLL-11](specs/packages/learning/course-syllabus.md#syll-11) is External to SYLL for a publisher, although neither is visible to a learner.
-A component may be internal to the installed website while still being an external user of the package it calls.
+A package user may be a human, host, component, or higher layer.
+[PIPE-1](specs/packages/operations/github-delivery.md#pipe-1) is External to PIPE for a contributor, and SYLL's snapshot is External to SYLL for a publisher, although neither is visible to a learner.
+A component can be internal to the installed website while remaining an external user of another package.
 
+Internal does not mean classes, hooks, source files, algorithms, framework mechanics, or replaceable library choices.
 Keep only behavior that a contract test or inspection can distinguish.
-For example, [DR-001](specs/decisions/001-web-platform.md) selects shadcn/ui as a durable stack constraint, while [SITE-5](specs/packages/web/application-shell.md#site-5) owns the visible accessibility guarantee; “use a shared button primitive” is not a second Internal Behavior rule.
+For example, [DR-001](specs/decisions/001-web-platform.md) selects shadcn/ui, while [SITE-5](specs/packages/web/application-shell.md#site-5) owns the accessibility outcome; “use a shared button primitive” is not another behavior item.
 
-Inside Internal Behavior, ask whether a controlled collaborator could satisfy the meaning.
-If yes, it is a consumed requirement and may be bound, as [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) is; if no, it is a private invariant and cannot be bound, as [SYLL-10](specs/packages/learning/course-syllabus.md#syll-10) is.
-Keep each consumed requirement in its own item with its rejection behavior, because a Binding cites the whole item anchor.
+Inside Internal Behavior, ask whether a controlled collaborator could satisfy the item:
 
-There are three cases when package A uses package B:
+- If yes, it is a consumed requirement and may be a Binding client. Give it one complete meaning and rejection rule.
+- If no, it is a private invariant. Verify it locally and never bind it.
 
-- If B itself is an intentional fixed semantic dependency, A cites B's exact External Behavior. A may never cite B's Internal Behavior, and no Binding restates the fixed citation.
-- If A needs a meaning but the installed supplier is selectable, A defines a provider-neutral Internal requirement and a Binding selects B's External Behavior. A does not name B.
-- If B is only replaceable implementation allocation, A owns the relevant outcome and there is no spec dependency, Binding, or Scenario.
+This distinction prevents a database choice from masquerading as domain behavior.
+Supabase Postgres does not supply CAT's slug ownership or SYLL's revision invariant; [PLAT-7](specs/compositions/operations/install-platform.md#plat-7) instead binds Supabase to LIVE's explicit runtime-service requirement.
 
-The demo has no fixed package dependency: [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) / [PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) and [CAT-24](specs/packages/learning/course-catalog.md#cat-24) / [ACCESS-4](specs/compositions/access/install-course-access.md#access-4) are selectable supplies.
-Do not invent a direct citation merely to exercise the first case.
+It also resolves undefined authorization tokens such as the former `course.author`.
+[SYLL-14](specs/packages/learning/course-syllabus.md#syll-14) defines course-authoring permission entirely in SYLL's vocabulary; [ACCESS-4](specs/compositions/access/install-course-access.md#access-4) selects ROLE as this installation's supplier.
 
-For a selectable supply, test both endpoints independently: the client exercises its Internal requirement with a controlled supplier, the provider exercises its External guarantee with a controlled client, and Binding Verification checks the installed pair.
-[SYLL-21](specs/packages/learning/course-syllabus.md#syll-21), [VIDS-20](specs/packages/media/video-library.md#vids-20), and [PUBLISH-24](specs/compositions/authoring/publish-course.md#publish-24) demonstrate those three grades.
+## 3. Bindings select; Scenarios compose
 
-This resolves the former `course.author` problem: [SYLL-14](specs/packages/learning/course-syllabus.md#syll-14) defines course-authoring permission completely in SYLL's language; [ACCESS-4](specs/compositions/access/install-course-access.md#access-4) selects ROLE as this system's supplier.
-
-### 3. Reusable packages stay unchanged
-
-A reusable package remains unchanged wherever its stated contract and dependencies are accepted.
-A polymorphic package defines provider-neutral variation points and lets each installed system supply compatible bindings; a package with an intentional fixed dependency may instead cite that peer's External Behavior.
-Neither form cites peer Internal Behavior, project decisions, Bindings, or Scenarios.
-
-Reusable need not mean generic:
-
-- `GHID` is intentionally GitHub-identity-specific.
-- `VIDS` is intentionally Supabase-Storage-specific.
-- `ROLE` is intentionally a two-role course policy.
-- `SITE` honestly declares itself project-local.
-
-Intrinsic domain or provider specialization is useful when Intent states it clearly.
-Prefer a provider-neutral Internal requirement when supplier choice is real; use a direct External citation when changing the peer would change the package's declared meaning rather than merely its installation.
-
-Three reuse forms stay distinct: the same package source can be installed unchanged in another system; one system can name several instances in `Scope:`—as [PLAT-1](specs/compositions/operations/install-platform.md#plat-1) and [PLAT-2](specs/compositions/operations/install-platform.md#plat-2) do for production and verification GHID—and one supplied behavior can satisfy several client roles, as ROLE does in [ACCESS-4](specs/compositions/access/install-course-access.md#access-4).
-
-### 4. Package presence never means “only”
-
-Absence is not normative.
-Having only `GHID` in a tree does not prove that the system rejects every other login method.
-
-The installed GitHub-only policy is explicit in:
-
-- [DR-001](specs/decisions/001-web-platform.md), which selects the provider policy;
-- [PLAT-1](specs/compositions/operations/install-platform.md#plat-1), which installs Supabase Auth with GitHub as the sole method; and
-- [ENTRY-1](specs/compositions/access/enter-site.md#entry-1), which requires one login action and no second method.
-
-Keep a package scoped to what it owns; state system-wide exclusivity in installed bindings and scenarios.
-
-### 5. Bindings select; Scenarios compose
-
-A Binding records an installed endpoint selection: either an External assembly role or a hidden semantic supply relationship.
+A Binding records one atomic installation decision, which may connect multiple endpoints.
 A Scenario records a system-user- or operator-meaningful outcome produced by multiple packages.
-They are different even when they share a file.
+They are separate item kinds even when they share a file ([META-16](specs/meta.md#meta-16)).
+Section presence expresses a composition file's shape; no file-kind flag repeats it.
 
-[ENTRY-10](specs/compositions/access/enter-site.md#entry-10) is an assembly Binding: GHID's External sign-in states fill SITE's External login roles.
-[PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) is a supply Binding: VIDS's External Behavior satisfies SYLL's Internal requirement.
-The endpoint sections reveal the distinction; no `Kind:` or file-type flag repeats it.
+Bindings have two forms:
 
-| Relationship | Authoritative home | Example |
-| --- | --- | --- |
-| required meaning | client package Internal Behavior | SYLL-13 content description |
-| provided meaning | supplier package External Behavior | VIDS-10 video description |
-| installed selection | composition `Binding` item | [PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) |
-| integrated outcome | composition `Scenario` item | [PUBLISH-1](specs/compositions/authoring/publish-course.md#publish-1) |
-| replaceable code dependency | implementation artifacts | a revision library behind SYLL |
-| installed package overlay | nowhere; derived view | SYLL's reverse links to PUBLISH-10 and ACCESS-4 |
+- An assembly Binding joins External roles visible through a package or host surface. [ENTRY-10](specs/compositions/access/enter-site.md#entry-10) installs GHID's sign-in states in SITE's login roles.
+- A supply Binding selects External Behavior or a named service for a client's Internal requirement. [PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) selects VIDS for SYLL's content socket.
 
-Package files contain no `Requires:`, `Uses:`, or `Binds:` metadata.
-The one authoritative Binding item carries `Clients:`, `Suppliers:`, and `Scope:`.
+Every Binding carries `Clients:`, `Suppliers:`, and `Scope:` ([META-18](specs/meta.md#meta-18)).
+They remain structured because citations alone cannot reveal endpoint direction, role pairing, cardinality, installed instances, or applicability; they are not duplicate trace lists.
+Endpoint role labels make n:m relationships explicit; list order never implies pairing.
+[ACCESS-4](specs/compositions/access/install-course-access.md#access-4) is one atomic policy decision supplying four capability meanings across SYLL, CAT, and VIDS.
+Do not mix External assembly clients with Internal supply clients in one item.
+A named service must identify the exact selected capability and cite its selecting decision; Binding prose explains compatibility without copying vendor protocols or endpoint mechanics.
 
-Do not mistake implementation allocation for supply.
-Supabase Postgres does not itself supply CAT's slug ownership or SYLL's revision rules, so no Binding points it at those private invariants; [PLAT-7](specs/compositions/operations/install-platform.md#plat-7) instead binds the selected Supabase service set to LIVE's explicit runtime-service requirement.
-
-### 6. A Binding is not one-to-one
-
-A Binding item may have several clients and suppliers when they form one atomic installation decision.
-[ACCESS-4](specs/compositions/access/install-course-access.md#access-4) binds one ROLE decision/policy pair to SYLL, CAT, and VIDS across four capability meanings.
-The listed suppliers collectively satisfy the listed clients according to the item's explicit role mapping; list order never implies pairing.
-Split an endpoint or scope when this installation's owner intends to select, change, or verify it independently; theoretical technical replaceability alone does not split one declared policy decision.
-
-Do not infer a seam from a recurring noun.
-Name every endpoint role and cite every affected item.
-For each client role and scope, require exactly one effective binding unless the client explicitly defines aggregation, fallback, or runtime selection.
-Identify that role by its cited item, role label, resolved package instance, and scope.
-[PLAT-1](specs/compositions/operations/install-platform.md#plat-1) and [PLAT-2](specs/compositions/operations/install-platform.md#plat-2) validly bind the same GHID requirement because their production and test scopes do not overlap.
-These are installation/link-time bindings; call a relationship dynamic only when its contract defines runtime selection.
+Split a Binding when the installation owner intends an endpoint or scope to be selected, changed, or verified independently—not merely because another technical split is imaginable.
+For each cited client role, resolved package instance, and scope, exactly one effective Binding must exist unless the client defines aggregation, fallback, or runtime selection ([META-19](specs/meta.md#meta-19)).
+[PLAT-1](specs/compositions/operations/install-platform.md#plat-1) and [PLAT-2](specs/compositions/operations/install-platform.md#plat-2) validly bind the same GHID requirement because their production and verification instances do not overlap.
 
 A Binding selects compatible meanings; it cannot broaden, weaken, or translate them.
-If conversion is needed, introduce an adapter package that owns the conversion.
+Required conversion belongs in an adapter package.
+These are installation-time bindings unless the contract explicitly defines runtime selection.
 
-### 7. Binding and Scenario may colocate
+A Scenario cites materially necessary behavior from at least two packages inline at the phrase where the handoff occurs, including External Behavior grounding the system outcome ([META-20](specs/meta.md#meta-20)).
+It may cite Internal Behavior only when the integrated outcome or inspection genuinely needs it; that citation does not expose the item or let another package depend on it.
+An inline Binding citation means the adjacent phrase directly exercises that installed handoff.
 
-Colocate them when they have one intent, owner, scope, and change cadence and the binding materially serves the same-file outcome.
+Every item citation in a Scenario is operative.
+Do not add a detached trace list or cite background, transitive behavior, package inventory, a mere code call, or “see also” context.
+If a large citation list cannot be placed naturally beside causal phrases, narrow the Scenario or remove ambient links.
 
-- [PUBLISH](specs/compositions/authoring/publish-course.md) is mixed: its content, snapshot, and result bindings directly enable its publication scenarios.
-- [PLAT](specs/compositions/operations/install-platform.md) is binding-only: platform services are cross-cutting and change independently of one journey.
-- [GUARD](specs/compositions/security/protect-course-content.md) is scenario-only and cites shared bindings defined elsewhere.
+Binding and Scenario may colocate when they share one intent, owner, scope, and change cadence and every same-file Binding is inline-cited by at least one same-file Scenario ([META-21](specs/meta.md#meta-21)).
 
-In a mixed file, every Binding must be cited by at least one same-file Scenario through `Bindings:`.
-Every Binding and Scenario must also be verified.
-Do not require one Verification item to cite both: endpoint compatibility may need an inspection while the Scenario needs a journey test.
-A non-user-facing supply Binding may still support a user journey; its audience does not make it irrelevant to acceptance.
+- [PUBLISH](specs/compositions/authoring/publish-course.md) is mixed because its content and publication bindings enable its journeys.
+- [PLAT](specs/compositions/operations/install-platform.md) is binding-only because platform selections are cross-cutting.
+- [GUARD](specs/compositions/security/protect-course-content.md) is scenario-only and cites bindings owned elsewhere.
 
-### 8. Compositions cover most acceptance, not all tests
-
-Scenarios should cover primary journeys, representative denials, dependency failure and recovery, cross-package consistency, integrated accessibility, security boundaries, and deployed operation.
-
-Package Verification keeps local validation matrices, private invariants, races, replay, idempotence, and provider-edge cases that one package can check with controlled collaborators.
-Binding Verification checks the selected endpoints and scope.
-Scenario Verification checks the integrated outcome.
-Assembly Binding Verification exercises the assembled package-user- or host-visible role at its external surface; supply Binding Verification may use conformance inspection.
-
-The demo has acceptance coverage for every Scenario and audience-appropriate coverage for every Binding, while substantial package-local Verification remains.
-
-When behavior has finite dimensions, keep one authoritative table beside its owning item and sweep every cell instead of repeating the policy in prose.
-[ROLE-14](specs/packages/access/role-access.md#role-14) owns the capability table; [ROLE-20](specs/packages/access/role-access.md#role-20) checks it locally and [GUARD-23](specs/compositions/security/protect-course-content.md#guard-23) exercises the installed boundary.
-Derive any additional audience-by-surface view from those sources rather than maintain a second matrix.
-
-## Why `compositions/`
-
-`compositions/` means system-instantiation modules: bindings, scenarios, or both.
-It is broader and less UX-confusable than `interactions/`.
-The section grammar, not a file-type flag or directory name, reveals what a file contains.
-
+Name a composition file after its installed concern or outcome, never a concatenation of package names.
 Directories below `packages/` and `compositions/` are navigation-only collections.
-Moving a file changes paths, not ownership, visibility, dependency, runtime, or test semantics.
+`compositions/` is preferred to `interactions/` because it includes supply and assembly as well as UX-facing journeys.
+
+## 4. Verification follows ownership and audience
+
+Verification has three grades:
+
+- Package Verification checks External contracts, consumed requirements, private invariants, and local failures using controlled collaborators.
+- Binding Verification checks endpoint compatibility, selection, and scope. Assembly bindings are exercised at the assembled External surface; supply bindings may use conformance or deployment inspection.
+- Scenario Verification checks the integrated system outcome through acceptance evidence.
+
+Every Binding and Scenario must be inline-cited beside an assertion in same-file Verification, but one Verification item need not cite both kinds merely because a file is mixed ([META-22](specs/meta.md#meta-22)).
+A journey may exercise a binding whose authoritative conformance check remains in another file.
+
+Citation meaning follows the source and target sections:
+
+| Source | Target | Meaning |
+| --- | --- | --- |
+| package Behavior | same-package Behavior or peer External Behavior | owned semantic reuse or fixed dependency |
+| Scenario | package Behavior | directly composed behavior |
+| Scenario | Binding | directly exercised installed handoff |
+| package Verification | same-package Behavior | directly checked package contract |
+| composition Verification | same-file Binding/Scenario or directly checked external Binding | directly checked installed or integrated target |
+
+Place each citation beside the exact phrase, table cell, or assertion it qualifies.
+Within Scenario and Verification, supporting or incidental item citations are invalid; rationale belongs in Intent or a decision.
+These inline composition and verification edges replace `Composes:`, `Bindings:`, and `Verifies:` and prevent prose and detached trace metadata from drifting.
+
+Scenarios should cover most product acceptance: primary journeys, representative denials, dependency failure and recovery, cross-package consistency, integrated accessibility, security boundaries, and deployed operation ([META-24](specs/meta.md#meta-24)).
+They should not absorb package-local validation matrices, races, replay, idempotence, or provider edge cases that one package can verify with a double.
+
+Keep finite policy matrices beside their owning behavior and sweep every cell.
+[ROLE-14](specs/packages/access/role-access.md#role-14) owns the capability table, [ROLE-20](specs/packages/access/role-access.md#role-20) checks it locally, and [GUARD-23](specs/compositions/security/protect-course-content.md#guard-23) exercises the installed boundary.
+
+The traces are complementary:
+
+```text
+Behavior -> inline package Verification citation -> contract evidence
+External or materially relevant Internal Behavior -> inline Scenario citation -> Scenario -> inline Verification citation -> acceptance evidence
+External supplier -> Binding -> External client role
+External supplier or selected service -> Binding -> Internal requirement
+Binding -> inline Scenario citation -> Scenario
+Binding -> inline Verification citation -> conformance evidence
+```
+
+This demo verifies every Scenario and Binding while retaining package-local suites for the behavior compositions should not duplicate.
+
+## 5. Reusable sources and installed views stay separate
+
+Raw package source answers “What does this package promise and require?”
+An installed view answers “Who supplies each requirement here?”
+
+Do not answer the second question by adding `Requires:`, `Uses:`, `Binds:`, or copied Binding annotations to package files.
+Bindings are n:m and shared; distributed copies drift.
+The authoritative package and Binding sources remain separate ([META-23](specs/meta.md#meta-23)).
+
+Tools may derive:
+
+- a package overlay such as `SYLL-13 → PUBLISH-10 → VIDS-10`;
+- a global binding explorer or socket index; and
+- deterministic Markdown or text for GitHub, CLI, CI, and agents.
+
+The desktop UI may be the best interactive view, but every projection must resolve from the same authoritative graph and remain read-only.
+Generated text should be committed only when reproducible and checked for staleness.
+
+Published source identity matters too.
+Before publication, compact provisional IDs freely; after an ID and concern appear in a release, never renumber, reuse, or re-mean them ([META-4](specs/meta.md#meta-4)).
+Moving a file between navigation collections changes paths and affected links, not its short form, anchors, ownership, or behavior.
 
 ## Authoring workflow
 
-1. Write concrete journeys and failures: concurrent draft saves, interrupted upload, reused video, stale playback grant, unsafe redirect, failed production candidate.
-2. Record durable scope, provider, and technology choices in decisions.
-3. Find concepts with distinct owners, lifecycles, consistency boundaries, and reuse axes.
-4. Write one package Intent per cohesive responsibility, including nearby exclusions and honest specialization.
-5. Write every outcome or guarantee on which a human, host, or component package user may rely as External Behavior.
-6. Write provider-neutral consumed requirements and private semantic invariants as Internal Behavior.
-7. Define every token, state, value shape, provenance, scope, and mismatch outcome locally.
-8. Cite a peer's External Behavior only for an intentional fixed dependency; otherwise expose a provider-neutral socket.
-9. Verify each package with controlled collaborators.
-10. Install External assembly roles and selectable suppliers with Binding items outside the packages.
-11. Write Scenarios for integrated outcomes and cite material bindings.
-12. Add binding conformance and scenario acceptance, then update the map.
+1. Write concrete journeys, failures, races, and recovery cases.
+2. Record durable product, provider, and technology choices in decisions.
+3. Split concepts by owner, lifecycle, consistency boundary, and reuse axis.
+4. Write one standalone package Intent and classify behavior by that package's audience.
+5. Define every value, state, provenance rule, scope, mismatch, and provider-neutral socket locally.
+6. Verify packages with controlled collaborators, then install assembly roles and selectable suppliers through Bindings.
+7. Write Scenarios for integrated outcomes and cite only material behavior and bindings.
+8. Add conformance and acceptance evidence, update the map, and confirm code generation need not invent policy or wiring.
 
 Starting from journeys is discovery, not ownership.
 After boundaries are chosen, each rule gets one authoritative home.
-
-## Package boundary tests
-
-A good package passes these tests:
-
-- Intent states purpose, contract audience when applicable, owned concepts, exclusions, and reuse scope.
-- Each shall-clause subject is package-owned.
-- One file defines all package-owned domain meaning and links every intentional fixed dependency exactly.
-- The package can be contract-tested with controlled collaborators.
-- Replacing a supplier for a provider-neutral socket does not require editing the package.
-- Every token such as `course-authoring permission` is defined locally; every intentional fixed peer dependency cites exact External Behavior.
-- Internal Behavior is semantic and testable, never a code design.
-
-Split when concepts have independent lifecycle, consistency, security, or reuse meaning.
-Merge when proposed packages merely divide one behavior by page, tier, team, or table.
-
-## Writing a Binding
-
-Use explicit endpoint roles because one item may be n:m:
-
-```markdown
-### PUBLISH-10
-Clients: `learning-content input` = [SYLL-13](../../packages/learning/course-syllabus.md#syll-13)
-Suppliers: `video reference and description` = [VIDS-10](../../packages/media/video-library.md#vids-10)
-Scope: lesson content in this course website, with `video` as the sole installed content kind
-
-The installation shall supply SYLL with VIDS's unchanged chooser descriptions and
-exact-reference status for the same active account and request, preserving the
-identity, lifecycle, reference-completeness, and unavailable-result meanings owned
-by the two endpoints.
-```
-
-`Scope:` is required, even when its value is simply `all deployments`, because overlap and multi-instance reuse must be checkable without an implicit default.
-
-Check that:
-
-- a supply client cites Internal Behavior that states the complete consumed meaning and its package supplier cites External Behavior;
-- an assembly Binding uses External Behavior for its package-user- or host-visible roles;
-- External and Internal client roles are not mixed in one item;
-- a controlled collaborator could satisfy every consumed requirement, while no Binding targets a private invariant;
-- a private invariant or implementation allocation is never presented as a consumed endpoint;
-- a named external service's exact capability is selected by a cited decision and checked against the client meaning;
-- Scope explicitly identifies package instances, environment, profile, request, resource, or tenant, even when it applies broadly;
-- prose explains semantic compatibility without redefining endpoints;
-- the item states how supplier roles satisfy client roles and groups only one atomic installation decision;
-- independently owned installation decisions are split;
-- no competing effective binding covers the same client role and scope; and
-- verification checks the selected provider and client together.
-
-## Writing a Scenario
-
-A Scenario is named after an outcome, not a pair of packages.
-Its `Composes:` line immediately follows the item heading and cites behavior from at least two packages, including External Behavior that grounds the system-user- or operator-meaningful outcome.
-It may also cite Internal Behavior materially needed to state or inspect that integrated outcome; the citation does not expose the behavior or let another package depend on it.
-Its optional `Bindings:` line immediately follows `Composes:` and cites only installed seams materially used by the scenario.
-Its prose states shared preconditions, causal order, handoffs, visible result, and failure result in product language.
-[GUARD-5](specs/compositions/security/protect-course-content.md#guard-5) concretely cites the packages' Internal trust boundaries because its integrated direct-client matrix inspects them; its External items still ground the system security outcome.
-
-```markdown
-### PUBLISH-1
-Composes: [SYLL-1](...), [VIDS-1](...), [CAT-3](...)
-Bindings: [ACCESS-4](...), [PUBLISH-10](#publish-10), [PUBLISH-11](#publish-11), [PUBLISH-12](#publish-12)
-
-Where the administrator starts with no course, when ...,
-the website shall publish one coherent release and return its accepted baseline.
-```
-
-Do not cite an Internal item merely because code calls it, own a package entity, restate a Binding, or turn the file into a call graph.
-
-## Verification traces
-
-Package Verification cites same-package behavior.
-Composition Verification must cite a same-file Binding or Scenario; it may also cite an external Binding that it directly checks.
-Every Binding and Scenario item must be covered, but one verification may cover several closely related items.
-
-```text
-External or materially relevant Internal Behavior -> Composes -> Scenario -> Verifies -> acceptance evidence
-External supplier -> Binding -> External client role
-External supplier or selected service -> Binding -> Internal requirement
-```
-
-Verification must not invent an outcome absent from the item it cites.
-An external Binding listed by a Scenario remains authoritatively verified in its defining file; the journey may additionally exercise it.
-
-## Derived installed views
-
-Reading a raw package answers: “What does this package promise and require?”
-Reading it as installed answers: “Who supplies each requirement here?”
-
-Do not solve the second question by editing package files or duplicating bindings beside every client item.
-Bindings are n:m and shared; copied annotations drift.
-
-Resolve authoritative package and Binding sources deterministically to produce:
-
-- a package-focused overlay such as `SYLL-13 → bound by PUBLISH-10 to VIDS-10`;
-- a global binding explorer or socket index; and
-- deterministic Markdown/text output for GitHub, CLI, CI, and agents.
-
-The desktop UI may be the best interactive view, but it must consume the same model as text tooling.
-All projections must agree on the installed graph.
-Generated views are read-only, are never independent truth, and should be committed only when reproducible and checked for staleness.
 
 ## Minimal skeletons
 
@@ -296,35 +208,31 @@ Generated views are read-only, are never independent truth, and should be commit
 
 ## Intent
 
-This package defines <cohesive capability> for <contract audience or purpose>.
-It owns <concepts>, excludes <nearby concerns>, and is <reuse scope>.
+This package defines <cohesive capability>, owns <concepts>, excludes
+<nearby concerns>, and is <honest reuse scope>.
 
 ## External Behavior
 
 ### SHORT-1
 
-Where ... when ... the <owned subject> shall <package-user-visible outcome or provided guarantee>.
-
-### SHORT-10
-
-When ... the <owned provider> shall <External guarantee offered to a component or host>.
+Where ... when ... the <owned subject> shall <guarantee offered to a package user>.
 
 ## Internal Behavior
 
-### SHORT-15
+### SHORT-10
 
 When ... the <owned subject> shall <consumed requirement or private invariant>.
 
 ## Verification
 
 ### SHORT-20
-Verifies: [SHORT-1](#short-1), [SHORT-10](#short-10), [SHORT-15](#short-15)
 
-Where ... when ... the contract suite shall ...
+Where ... when ... the contract suite shall assert the
+[offered guarantee](#short-1) and [private invariant](#short-10).
 ```
 
 Omit empty behavior sections.
-Never add package `Binding`, `Dependencies`, `Requires:`, `Uses:`, or `Binds:` content.
+Never add package Binding or relationship metadata.
 
 ### Composition
 
@@ -333,52 +241,37 @@ Never add package `Binding`, `Dependencies`, `Requires:`, `Uses:`, or `Binds:` c
 
 ## Intent
 
-This composition installs or verifies <one cohesive system concern>.
+This composition installs or composes <one cohesive system concern>.
 
 ## Binding
 
 ### OUTCOME-10
-Clients: `role` = [AAA-15](...)
-Suppliers: `role` = [BBB-10](...)
-Scope: <installation scope>
+Clients: `role` = [AAA-10](...)
+Suppliers: `role` = [BBB-1](...)
+Scope: <resolved package instances and installation scope>
 
 Where ... the installation shall ...
 
 ## Scenario
 
 ### OUTCOME-1
-Composes: [AAA-1](...), [BBB-1](...)
-Bindings: [OUTCOME-10](#outcome-10)
 
-Where ... when ... the system shall <integrated outcome>.
+Where [AAA behavior](...) holds, when the system exercises the
+[installed handoff](#outcome-10) with [BBB behavior](...), the system
+shall <integrated outcome>.
 
 ## Verification
 
 ### OUTCOME-20
-Verifies: [OUTCOME-1](#outcome-1)
 
-Where ... when ... the acceptance suite shall ...
+Where ... when the acceptance suite exercises the
+[integrated outcome](#outcome-1), it shall ...
 
 ### OUTCOME-21
-Verifies: [OUTCOME-10](#outcome-10)
 
-Where ... when ... the conformance suite shall ...
+Where ... when the conformance suite inspects the
+[installed handoff](#outcome-10), it shall ...
 ```
 
 `Binding` and `Scenario` are each optional; at least one is required.
 `Verification` is always required.
-
-## Final audit
-
-- Does every package define its meanings locally, cite only intentional peer External dependencies, and omit installed-system citations?
-- Is every package-user contract External and every hidden consumed requirement or private invariant Internal, regardless of whether the user is human or software?
-- Can a peer rely only on another package's External Behavior?
-- Is every undefined-looking token explained locally?
-- Does every installed External assembly role or selectable semantic dependency have one Binding source with explicit roles and scope?
-- Are overlapping bindings absent unless aggregation, fallback, or runtime selection is defined?
-- Does every mixed-file Binding serve and get cited by a same-file Scenario?
-- Are cross-cutting bindings separated when that improves ownership and cadence?
-- Does every Scenario describe a meaningful system-user or operator outcome rather than a dependency graph?
-- Are all Binding and Scenario items verified at the right evidence grade?
-- Do Scenarios cover the important journeys, denials, recovery, security boundaries, accessibility, and deployment operation without duplicating package-local matrices?
-- Could code be generated without inventing policy, endpoint meaning, supplier selection, or failure behavior?

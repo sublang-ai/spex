@@ -81,16 +81,14 @@ It shall treat missing, inactive, mismatched, browser-supplied, or generic autho
 ## Verification
 
 ### ROLE-20
-Verifies: [ROLE-1](#role-1), [ROLE-2](#role-2), [ROLE-3](#role-3), [ROLE-10](#role-10), [ROLE-14](#role-14)
 
-Where the configured subject and two ordinary subjects authenticate in every login order, including concurrent first logins, when each capability is requested, the contract suite shall assert the capability policy in [ROLE-14](#role-14), one persisted administrator assignment, member assignments for the others, one visible role and trusted application access context per active registered account, no role-management control, and no login-order effect.
+Where the configured subject and two ordinary subjects authenticate in every login order, including concurrent first logins, when each capability is requested, the contract suite shall assert [transactional assignment of the sole administrator only to the configured canonical subject, member assignment to the others, and no login-order effect](#role-10); the exact [four-capability allow and deny policy with one trusted access context per active registered account](#role-14); the [administrator label, controls, and allowed actions](#role-1); the [member label, omitted controls, redacted denial, and absent protected data](#role-2); and the [absence of every role-management control](#role-3).
 
 ### ROLE-21
-Verifies: [ROLE-4](#role-4), [ROLE-11](#role-11), [ROLE-12](#role-12), [ROLE-14](#role-14), [ROLE-15](#role-15), [ROLE-16](#role-16)
 
-Where bootstrap configuration is valid before first administrator login, missing, malformed, changed after assignment, duplicated in persisted state, or forged in client input and fixtures include an unregistered authority credential, an inactive-but-unexpired session credential, mismatched account/session evidence, and forged metadata, when readiness, every capability, and a protected mutation are requested, the contract suite shall assert ready-with-zero-admin only for the valid prelogin state without mutation, a not-ready report for configuration conflicts, denial at the trusted boundary, no trusted application access context or accepted browser decision, and no mutation.
+Where bootstrap configuration is valid before first administrator login, missing, malformed, changed after assignment, duplicated in persisted state, or forged in client input and fixtures include an unregistered authority credential, an inactive-but-unexpired session credential, mismatched account/session evidence, and forged metadata, when readiness, every capability, and a protected mutation are requested, the contract suite shall assert the [stable, redacted ready-with-zero-admin report only for the valid prelogin state and not-ready report without mutation for every conflict](#role-15); the [operator-visible not-ready state with no administrator identity or authoring control](#role-4); [denial of every administrator capability without selecting a replacement administrator](#role-11); and the [anonymous treatment of every untrusted or mismatched identity input](#role-16).
+For every request, it shall also assert a [server-only decision bound to the active account, capability, resource, and exact request, with no accepted browser claim](#role-12), the [closed capability policy and absence of an access context after denial](#role-14), and no protected mutation.
 
 ### ROLE-22
-Verifies: [ROLE-13](#role-13)
 
-Where the configured subject's profile login changes, when the updated account evidence is evaluated, the contract suite shall assert that the account remains the sole administrator.
+Where the configured subject's profile login changes, when the updated account evidence is evaluated, the contract suite shall assert that the [unchanged provider and immutable subject retain the same administrator assignment](#role-13).

@@ -82,19 +82,27 @@ When no accepted destination exists, it shall request the host's default destina
 When identity-authority behavior is supplied, the authority intake shall accept only a GitHub OAuth authority that can return a verified authority-user identifier, canonical GitHub subject, profile, and fresh authority-session identifier for an allow-listed callback; validate the current authority user and session online for each protected request; and end the exact authority session on sign-out.
 It shall reject a provider that derives the GitHub subject only from mutable user metadata, cannot distinguish invalid or revoked sessions, accepts an unlisted callback or redirect, or cannot terminate the requested authority session.
 
+### GHID-23
+
+When an application or identity-authority session credential is carried by the browser, the browser-credential boundary shall use only a `Secure`, host-only cookie with `SameSite=Lax` or stricter and `Path=/`.
+It shall expose no application, identity-authority, service, or control-plane credential through rendered content, general page data, browser history, or diagnostics; a credential that the configured identity-authority client must read remains bounded by that authority's declared lifetime and gains no broader application meaning.
+
 ## Verification
 
 ### GHID-20
-Verifies: [GHID-1](#ghid-1), [GHID-2](#ghid-2), [GHID-3](#ghid-3), [GHID-4](#ghid-4), [GHID-5](#ghid-5)
 
-Where the package is exercised against a deterministic fake GitHub OAuth authority, when success, cancellation, provider error, rejected identity reconciliation, sign-out, expiry, and a non-GitHub result routed to this package are run, the contract suite shall assert the `Continue with GitHub` action, the visible redacted state and session outcome for each case, and establishment of an application session only from a valid GitHub result.
+Where the package is exercised against a deterministic fake GitHub OAuth authority, when success, cancellation, provider error, rejected identity reconciliation, sign-out, expiry, and a non-GitHub result routed to this package are run, the contract suite shall assert the [`Continue with GitHub` action](#ghid-1); the [redacted retry state with no new session and the safe destination preserved](#ghid-2) for every unsuccessful attempt; the [current GitHub profile, authenticated state, and requested destination](#ghid-3) only after success; [complete sign-out](#ghid-4); and the [GitHub retry state with only the safe destination preserved](#ghid-5) after expiry.
 
 ### GHID-21
-Verifies: [GHID-10](#ghid-10), [GHID-13](#ghid-13)
 
-Where identity fixtures include one subject with changed profile attributes, leading-zero and nondecimal subjects, a value larger than JavaScript's safe integer, duplicate authority-user bindings, duplicate GitHub-subject bindings, and forged user metadata, when callbacks are handled, the contract suite shall assert one stable string-preserving identity only for valid fixtures, the latest profile attributes, atomic rejection of every collision or noncanonical subject, and no retained or exposed GitHub access token.
+Where identity fixtures include one subject with changed profile attributes, leading-zero and nondecimal subjects, a value larger than JavaScript's safe integer, duplicate authority-user bindings, duplicate GitHub-subject bindings, and forged user metadata, when callbacks are handled, the contract suite shall assert the [transactional one-to-one association, canonical string-preserving subject, stable account, current profile, and rejection without mutation](#ghid-10) for every applicable fixture, and shall confirm that the [persisted profile contains only the allowed fields and no retained or exposed GitHub access token](#ghid-13).
 
 ### GHID-22
-Verifies: [GHID-11](#ghid-11), [GHID-12](#ghid-12), [GHID-14](#ghid-14), [GHID-15](#ghid-15), [GHID-16](#ghid-16), [GHID-17](#ghid-17), [GHID-18](#ghid-18)
 
-Where callbacks and protected requests carry forged account claims, a non-GitHub identity result, a generic authenticated claim, an unlisted redirect, an invalid authorization response, an unknown authority session identifier, an inactive application session, a signed-out but unexpired authority credential, an attempted revoked-session reactivation, and accepted, absent, and browser-forged destinations, when the provider gate, session authority, and destination intake evaluate them, the contract suite shall assert an anonymous outcome with no application or data-access identity and no account or session mutation for every invalid case, one new application-session record only from the fresh accepted callback, one authenticated outcome whose application account, GitHub identity, authority session, and application session agree only for that active session, exact return of an accepted safe destination, and host-default return for every other destination.
+Where callback and protected-request fixtures carry forged account claims, a non-GitHub identity result, a generic authenticated claim, an unlisted redirect, an invalid authorization response, an unknown authority session identifier, an inactive application session, a signed-out but unexpired authority credential, an attempted revoked-session reactivation, and accepted, absent, and browser-forged destinations, and where credential-policy and establishment-response fixtures cover secure/insecure, host-only/domain, same-site, path, lifetime, and disclosure variants, when the provider gate, session authority, destination intake, and browser-credential boundary evaluate them, the contract suite shall assert:
+
+- [acceptance only of a valid GitHub callback or an already-active application session, with no mutation after rejection](#ghid-12), backed by an authority that satisfies the [online validation, callback, identity, and termination contract](#ghid-18);
+- [one new application-session record only from the fresh accepted callback and no revoked-session reactivation or account reassignment](#ghid-16), followed by [revocation of the exact application session on sign-out and denial despite an unexpired authority credential](#ghid-15);
+- an authenticated outcome only when the [active application session, authority session, registered GitHub identity, and application account agree and client claims are ignored](#ghid-11), and otherwise the [anonymous outcome with no data-access identity](#ghid-14);
+- [exact return of an accepted host-validated destination and the host default for every other destination](#ghid-17); and
+- only the [secure host-only cookie policy, bounded credential lifetime, and complete exclusion of credentials from rendered content, general page data, history, and diagnostics](#ghid-23).
