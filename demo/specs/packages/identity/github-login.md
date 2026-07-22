@@ -27,8 +27,9 @@ When the visitor activates "Continue with GitHub", the site shall
 send them to GitHub's authorization page for the site's OAuth
 app; when GitHub redirects back with an authorization grant, the
 site shall establish a signed-in session and return the visitor
-to the page sign-in started from, or to the home page when no
-origin is recorded.
+to the page sign-in started from — a same-site path only — or
+to the home page when no origin is recorded or the recorded
+origin is not same-site.
 
 #### AUTH-3
 
@@ -102,7 +103,9 @@ page offers the GitHub action ([AUTH-1](#auth-1)), that the
 browser is sent to the stub's authorization URL and returns
 signed in ([AUTH-2](#auth-2)), and that after the stub grants,
 the account menu shows the stub account's username and avatar
-on the page sign-in started from ([AUTH-4](#auth-4)).
+on the page sign-in started from ([AUTH-4](#auth-4)); and when
+the recorded origin is not same-site, the return lands on the
+home page instead ([AUTH-2](#auth-2)).
 
 #### AUTH-11
 
