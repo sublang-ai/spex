@@ -83,22 +83,22 @@ The active authorized upload request may transiently expose its opaque reserved 
 
 ## Internal Behavior
 
-### VIDS-15
+### VIDS-14
 
 Where video-management authorization has been accepted under [VIDS-19](#vids-19), when upload completion is finalized, the asset registry shall verify that account as the exact attempt owner together with the reserved bucket, immutable key, object identity, byte size, media result, and previously unused asset revision, and then perform one atomic `ready` transition.
 It shall make repeated or parallel finalization idempotent, reject completion after cancellation or expiry, and prevent any mismatched or already-used object from becoming ready.
 
-### VIDS-17
+### VIDS-15
 
 When a trusted storage-availability observation reports a formerly ready exact asset revision `missing`, `unreadable`, or `mismatched`, the asset registry shall change that revision to `unavailable`, preserve its content reference and prior label so an existing attachment can report the unavailable state, omit it from new attachment choices, issue no new playback grant, and preserve its asset identity.
 When a later trusted observation confirms the same immutable object and matching complete metadata, the asset registry shall restore that exact revision to `ready` without creating a new asset or revision; it shall not change lifecycle state from a transient player or network failure.
 
-### VIDS-14
+### VIDS-16
 
 When storage is read or changed, the storage boundary shall keep the bucket private and authorize the operation only through the exact upload capability, exact playback bearer grant, or named privileged finalization/cleanup operation [[3]].
 It shall treat signed URL redemption as bearer authorization rather than an identity, session, or role recheck, use no service-role client for ordinary browser requests, and keep every privileged credential outside browser-visible state.
 
-### VIDS-16
+### VIDS-17
 
 Where video-management authorization has been accepted under [VIDS-19](#vids-19) for the active account, exact owned attempt, request, and cancellation operation, when that upload is canceled, the asset registry shall make the attempt non-finalizable and the storage boundary shall schedule cleanup for any completed orphan object that is not the object of a ready asset.
 When an upload fails or passes its 24-hour resume window, the asset registry shall make the attempt non-finalizable and the storage boundary shall schedule the same cleanup without requiring a user cancellation request.
@@ -115,33 +115,33 @@ It shall reject a browser-supplied, replayed, expired, inactive-account, wrong-k
 When video-management authorization is supplied, the authorization intake shall accept only a fresh trusted server decision associated with the same active account, exact request, and exact managed-content listing or lookup, new upload attempt, owned cancellation operation, or owned finalization operation.
 It shall reject browser-supplied, stale, denied, inactive-account, wrong-owner, or cross-request evidence and shall start no transfer or lifecycle transition after rejection.
 
-### VIDS-25
+### VIDS-20
 
 When an object service is supplied, the storage-service intake shall accept only an environment-scoped private bucket that supports new immutable exact-path creation with overwrite disabled, resumable TUS transfer for the declared window, complete object-metadata observation, bounded signed bearer download, exact-object deletion, and observation of missing, unreadable, and mismatched objects.
 It shall reject a public, cross-environment, globally privileged, arbitrary-path, overwrite-capable, or metadata-incomplete service and shall treat provider expiry of incomplete TUS chunks separately from deletion of a completed orphan object.
 
 ## Verification
 
-### VIDS-20
+### VIDS-21
 
 Where storage is replaced by a controllable resumable-upload and availability fixture and representative profiles are exercised in the installation's declared version-pinned browser matrix, when supported and unsupported declarations and local decode, oversized, empty, interrupted, two-hour-token expiry, 24-hour-upload-URL expiry, allowed cancellation, denied or cross-owner cancellation, arbitrary-path, overwrite, captured-bearer, parallel-finalization, mismatched-object, completed-orphan cleanup, incomplete-chunk provider expiry, successful retry, trusted missing, mismatched, and recovered-object observations, and transient player failures are run and the library is reopened, the contract suite shall assert the [accepted media profiles, visible attempt state, and 24-hour resumption](#vids-1), the [specific preflight or metadata rejection with no ready asset](#vids-2), and [exactly one labeled ready video after completion or retry](#vids-3).
-It shall assert the [complete redacted, ordered descriptor list with only ready items attachable](#vids-7); [stable asset identity, exact attempt and object reservations, revision-1 reference, matching completion metadata, and status lookup behavior](#vids-10); the [two bearer stages, direct exact-path TUS transfer, overwrite prevention, and absence of finalization authority](#vids-12); and an [atomic, owner-bound, idempotent ready transition that rejects cancellation, expiry, mismatch, and reuse](#vids-15).
-It shall also assert [cancellation only with fresh exact-owner authorization, non-finalizable failed or expired attempts, the one-hour completed-orphan cleanup, and no incomplete-byte deletion promise](#vids-16); [exact `ready`/`unavailable`/`ready` transitions only from trusted object observations without identity or revision change](#vids-17); [no transfer or lifecycle transition after rejected management authorization](#vids-19); and [rejection of any object service lacking the required private, environment-scoped, immutable-path, resumable, observable, signed-download, and deletion capabilities](#vids-25).
+It shall assert the [complete redacted, ordered descriptor list with only ready items attachable](#vids-7); [stable asset identity, exact attempt and object reservations, revision-1 reference, matching completion metadata, and status lookup behavior](#vids-10); the [two bearer stages, direct exact-path TUS transfer, overwrite prevention, and absence of finalization authority](#vids-12); and an [atomic, owner-bound, idempotent ready transition that rejects cancellation, expiry, mismatch, and reuse](#vids-14).
+It shall also assert [cancellation only with fresh exact-owner authorization, non-finalizable failed or expired attempts, the one-hour completed-orphan cleanup, and no incomplete-byte deletion promise](#vids-17); [exact `ready`/`unavailable`/`ready` transitions only from trusted object observations without identity or revision change](#vids-15); [no transfer or lifecycle transition after rejected management authorization](#vids-19); and [rejection of any object service lacking the required private, environment-scoped, immutable-path, resumable, observable, signed-download, and deletion capabilities](#vids-20).
 When that matrix completes, the contract evidence shall name every exact browser and version exercised.
 
-### VIDS-21
+### VIDS-22
 
 Where a ready fixture video and clock-controlled asset-authorization authority exist, when playback, nominal expiry, allowed renewal, authorization replay, account-context or asset mismatch, authorization withdrawal, an authorization naming a different or unsupported revision, sign-out with an inactive-but-unexpired authority credential, cross-account bearer redemption, and cached-byte cases are run, the contract suite shall assert the [labeled native player controls and visible lifecycle states](#vids-4); [fresh exact-version renewal with local-position restoration or a plain stopped unavailable state](#vids-5); and [stopped loading after expiry, no renewal after sign-out, and no promise to erase delivered bytes](#vids-9).
 At the trust boundary, it shall assert [acceptance only of a fresh single-use exact-account, request, kind, asset, and revision authorization](#vids-18), followed by a [single exact-revision bearer grant with nominal lifetime no greater than five minutes, transferable redemption without identity recheck, and no claim over cached bytes](#vids-11).
 
-### VIDS-22
-
-Where private storage contains ready and incomplete assets, when anonymous, denied, stale-revision, unsigned, and allowed exact playback requests plus denied and authorized upload and asset-management actions are made, the contract suite shall assert the [same redacted unavailable state without private location, metadata, or denial detail](#vids-6); [no transfer or asset mutation after denied management access](#vids-8); and [private storage access only through the exact upload capability, playback bearer, or authorized named privileged operation](#vids-14).
-It shall find [bearer and path data only in the transient active authorized upload or player request and no path, signing material, service credential, or provider error in general responses, persisted browser state, or logs](#vids-13).
-
 ### VIDS-23
 
-Where public-client and privileged-client fixtures exercise every video-registry and Storage operation with absent, untrusted, inactive, mismatched, denied, and allowed account contexts plus bearer-grant, signed-upload-token, TUS-URL, and named privileged-operation callers, when direct requests are made, the contract suite shall assert the [single-use scoped playback-grant contract and transferable redemption](#vids-11), the [exact-path upload bearer contract without finalization authority](#vids-12), [private storage with only enumerated access paths and no ordinary service-role client](#vids-14), and [privileged finalization constrained to the exact previously authorized owner attempt](#vids-15).
+Where private storage contains ready and incomplete assets, when anonymous, denied, stale-revision, unsigned, and allowed exact playback requests plus denied and authorized upload and asset-management actions are made, the contract suite shall assert the [same redacted unavailable state without private location, metadata, or denial detail](#vids-6); [no transfer or asset mutation after denied management access](#vids-8); and [private storage access only through the exact upload capability, playback bearer, or authorized named privileged operation](#vids-16).
+It shall find [bearer and path data only in the transient active authorized upload or player request and no path, signing material, service credential, or provider error in general responses, persisted browser state, or logs](#vids-13).
+
+### VIDS-24
+
+Where public-client and privileged-client fixtures exercise every video-registry and Storage operation with absent, untrusted, inactive, mismatched, denied, and allowed account contexts plus bearer-grant, signed-upload-token, TUS-URL, and named privileged-operation callers, when direct requests are made, the contract suite shall assert the [single-use scoped playback-grant contract and transferable redemption](#vids-11), the [exact-path upload bearer contract without finalization authority](#vids-12), [private storage with only enumerated access paths and no ordinary service-role client](#vids-16), and [privileged finalization constrained to the exact previously authorized owner attempt](#vids-14).
 
 ## References
 

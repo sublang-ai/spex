@@ -40,7 +40,7 @@ The remaining placement choices affect authorization, large uploads, environment
   | video registry | none | no direct registry read; an authorized player receives only its visible label and generic state | manage after `video.manage`; playback exposure is the same as for a member | finalize or clean the exact authorized upload attempt |
   | private Storage objects | none | exact bounded playback bearer grant only | exact upload capability or playback grant only | sign the exact authorized object; verify/clean the exact attempt |
 
-  The public projection is the closed, surface-specific allowlist defined by [CAT-26](../packages/learning/course-catalog.md#cat-26) for the requested current catalog, course, or lesson route.
+  The public projection is the closed, surface-specific allowlist defined by [CAT-13](../packages/learning/course-catalog.md#cat-13) for the requested current catalog, course, or lesson route.
   It excludes draft, snapshot, and release identities or revisions; publication receipts; content kinds and references; asset identities and revisions; video labels, states, and locations; authorization values; and every provider field.
   No exposed table, view, function, or Storage policy may broaden this matrix.
   A revoked application session with an otherwise unexpired Auth JWT is treated as anonymous by every row, view, and RPC policy.

@@ -11,57 +11,39 @@ It is binding-only because these cross-cutting selections change with platform c
 ## Binding
 
 ### PLAT-1
-Clients: `identity authority` = [GHID-18](../../packages/access/github-identity.md#ghid-18)
-Suppliers: `authority` = [Supabase Auth with GitHub OAuth](../../decisions/001-web-platform.md)
-Scope: the `production GHID` instance across production-candidate and production deployments
 
-The installation shall supply GHID with the dedicated Supabase Auth authority configured with GitHub OAuth as its sole sign-in method, the declared callback and redirect allowlists, online authority-session validation and termination, and the canonical GitHub subject.
+Where the `production GHID` instance across production-candidate and production deployments uses GHID's [identity-authority intake](../../packages/access/github-identity.md#ghid-14), the installation shall supply the dedicated Supabase Auth authority with GitHub OAuth as its sole sign-in method, declared callback and redirect allowlists, online authority-session validation and termination, and the canonical GitHub subject, as selected by [DR-001](../../decisions/001-web-platform.md).
 
 ### PLAT-2
-Clients: `identity authority` = [GHID-18](../../packages/access/github-identity.md#ghid-18)
-Suppliers: `authority` = [deterministic fake GitHub OAuth and local Supabase Auth](../../decisions/001-web-platform.md)
-Scope: the `verification GHID` instance across local development and automated pull-request verification
 
-The installation shall supply the same GHID meanings through deterministic non-production authorities carrying no production identity, data, or secret.
+Where the `verification GHID` instance across local development and automated pull-request verification uses GHID's [identity-authority intake](../../packages/access/github-identity.md#ghid-14), the installation shall supply the same GHID meanings through the deterministic fake GitHub OAuth authority and local Supabase Auth selected by [DR-001](../../decisions/001-web-platform.md), carrying no production identity, data, or secret.
+
+### PLAT-3
+
+Where the `local video bucket` instance for local provider integration and the shared `production video bucket` instance for production-candidate and production use VIDS's [private object-service intake](../../packages/media/video-library.md#vids-20), the installation shall supply each with its environment-scoped private Supabase Storage service with TUS upload and signed download selected by [DR-001](../../decisions/001-web-platform.md), without broadening object, path, credential, or lifecycle scope or changing package-owned windows and limits.
 
 ### PLAT-4
-Clients: `private object service` = [VIDS-25](../../packages/media/video-library.md#vids-25)
-Suppliers: `object service` = [private Supabase Storage with TUS upload and signed download](../../decisions/001-web-platform.md)
-Scope: each provider-integrated environment's declared private video bucket
 
-The installation shall supply VIDS with the environment-scoped private object service selected by [DR-001](../../decisions/001-web-platform.md) for the declared bucket without broadening object, path, credential, or lifecycle scope or changing package-owned windows and limits.
+Where fixture-preview, production-candidate, and production profiles use LIVE's [web-deployment intake](../../packages/operations/production-runtime.md#live-17), the installation shall supply the immutable environment-scoped Vercel deployment with request-isolated Next.js server execution, private response controls, exact profile configuration, and protected unaliased candidates selected by [DR-001](../../decisions/001-web-platform.md); fixture preview shall receive no production connection.
 
 ### PLAT-5
-Clients: `web deployment` = [LIVE-19](../../packages/operations/production-runtime.md#live-19)
-Suppliers: `web runtime` = [Vercel with Next.js App Router](../../decisions/001-web-platform.md)
-Scope: fixture-preview, production-candidate, and production profiles
 
-The installation shall supply LIVE with an immutable environment-scoped Vercel deployment, request-isolated Next.js server execution, private response controls, the exact profile configuration, and protected unaliased candidates; fixture preview shall receive no production connection.
+Where pull-request verification and protected production delivery for this repository use PIPE's [delivery-control-plane intake](../../packages/operations/github-delivery.md#pipe-17), the installation shall supply only the environment-scoped GitHub repository and Actions, Vercel project, and Supabase project control planes selected by [DR-001](../../decisions/001-web-platform.md), withholding every protected control plane from untrusted refs and fixture previews.
 
 ### PLAT-6
-Clients: `delivery control planes` = [PIPE-19](../../packages/operations/github-delivery.md#pipe-19)
-Suppliers: `repository and CI` = [GitHub repository and Actions](../../decisions/001-web-platform.md), `web deployment` = [Vercel project](../../decisions/001-web-platform.md), `data and provider configuration` = [Supabase project control planes](../../decisions/001-web-platform.md)
-Scope: pull-request verification and protected production delivery for this repository
 
-The installation shall supply PIPE only the environment-scoped control planes selected by DR-001, withholding every protected control plane from untrusted refs and fixture previews.
-
-### PLAT-7
-Clients: `durable runtime services` = [LIVE-25](../../packages/operations/production-runtime.md#live-25)
-Suppliers: `service project` = [environment-scoped Supabase Auth, Postgres, and Storage](../../decisions/001-web-platform.md)
-Scope: local provider integration, production-candidate, and production profiles
-
-The installation shall supply LIVE with one environment-scoped Supabase project set naming Auth, Postgres, and Storage identities and their complete expected revisions and health operations, while keeping that durable identity independent of Vercel deployment replacement.
+Where the `local Supabase services` instance for local provider integration and the shared `production Supabase services` instance for production-candidate and production use LIVE's [durable-runtime-service intake](../../packages/operations/production-runtime.md#live-18), the installation shall supply each with its environment-scoped Supabase project set naming Auth, Postgres, and Storage identities and their complete expected revisions and health operations, as selected by [DR-001](../../decisions/001-web-platform.md), while keeping each durable identity independent of Vercel deployment replacement.
 
 ## Verification
 
-### PLAT-20
+### PLAT-7
 
 Where the [production identity authority](#plat-1) and [deterministic fixture authority](#plat-2) are configured in turn, when their callbacks, redirect policies, subjects, sessions, provider inventories, and sentinel secrets are inspected, the platform conformance suite shall assert equivalent GHID contract meaning, GitHub-only production entry, and complete production isolation for the fixture authority.
 
-### PLAT-21
+### PLAT-8
 
-Where clean local and hosted Supabase projects expose the [installed durable runtime services](#plat-7) and exercise the [installed private object service](#plat-4) through upload, 24-hour TUS resumption, playback, missing/unreadable/mismatched observation, completed-object cleanup, and incomplete-chunk expiry, when the two client contracts are checked against those services, the platform conformance suite shall assert environment isolation, complete service identity, durable revision reporting, private exact-object access, distinct cleanup and provider-expiry behavior, stated windows and limits, and no broadened client behavior.
+Where clean local and hosted Supabase projects expose the [installed durable runtime services](#plat-6) and exercise the [installed private object service](#plat-3) through upload, 24-hour TUS resumption, playback, missing/unreadable/mismatched observation, completed-object cleanup, and incomplete-chunk expiry, when the two client contracts are checked against those services, the platform conformance suite shall assert environment isolation, complete service identity, durable revision reporting, private exact-object access, distinct cleanup and provider-expiry behavior, stated windows and limits, and no broadened client behavior.
 
-### PLAT-22
+### PLAT-9
 
-Where fixture, candidate, production, trusted-repository, and untrusted-fork profiles are inspected, when the [web runtime](#plat-5) and [delivery control planes](#plat-6) are resolved, the platform conformance suite shall assert exact project identity, request isolation, correct public/server credential inventory, protected control-plane access only in the matching trusted environment, and no production connection from fixture code.
+Where fixture, candidate, production, trusted-repository, and untrusted-fork profiles are inspected, when the [web runtime](#plat-4) and [delivery control planes](#plat-5) are resolved, the platform conformance suite shall assert exact project identity, request isolation, correct public/server credential inventory, protected control-plane access only in the matching trusted environment, and no production connection from fixture code.

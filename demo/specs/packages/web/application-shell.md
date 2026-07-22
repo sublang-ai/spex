@@ -53,28 +53,28 @@ When it renders navigation, dialogs, forms, reorder controls, upload controls, c
 When an unknown route is requested in any session state, or the behavior responsible for a requested course or lesson reports it unavailable, the application shell shall return HTTP status 404, show one uniform `Page unavailable` state with a link to `/courses`, and shall not reveal whether a hidden draft, release, lesson, or asset exists.
 A current public lesson shall remain available when its visitor lacks playback permission; the video area shall offer GitHub sign-in rather than turn the page into an unavailable response.
 
-### SITE-11
+### SITE-7
 
 When a requested destination is supplied or returned after authentication, the destination boundary shall accept only a normalized route-map-relative path matching a known route or route pattern in [SITE-1](#site-1).
 It shall reject an absolute, protocol-relative, cross-origin, malformed, or unknown-route value and shall provide `/courses` when no destination is accepted; it shall never use a client-supplied scheme or host as a redirect target.
 
 ## Internal Behavior
 
-### SITE-10
+### SITE-8
 
 When an administrator route, protected Route Handler, protected video action, or Server Action is evaluated, the request boundary shall obtain fresh trusted authentication, the active account's access context, and authorization for that exact request before producing protected data or mutation results, so private video data, mutation results, and administrator controls are absent when access is denied.
 Rendering or prefetching a public catalog, course, or lesson shall not request playback authorization or private video data.
 
-### SITE-12
+### SITE-9
 
 When a package view is rendered, the view boundary shall provide the browser only the fields required by that visible state and shall not serialize service credentials, raw authorization records, unpublished fields, content references, asset identities or revisions, video-provider metadata, or private object locations into general page data.
 
-### SITE-13
+### SITE-10
 
 When responsible behavior reports a course or lesson route unavailable, a login-required playback state, or an unavailable or retryable video state, the state boundary shall map it respectively to [SITE-6](#site-6), the GitHub sign-in action in [SITE-2](#site-2), or a state under [SITE-4](#site-4) confined to the video area while retaining the public lesson page.
 It shall expose no provider-specific message and shall keep diagnostic detail available only to the operator surface.
 
-### SITE-14
+### SITE-11
 
 When an authentication callback or authenticated response is produced, the response-cache boundary shall mark user-specific and cookie-changing responses private and non-shared and shall prevent static, ISR, or CDN reuse across requests.
 It shall also resolve every public catalog, course, and lesson response against the current release for that request and prevent static, ISR, or CDN reuse, so a replaced or unpublished release cannot remain visible through a shared response.
@@ -82,15 +82,15 @@ When a request begins on a warm application instance, the request boundary shall
 
 ## Verification
 
-### SITE-20
+### SITE-12
 
 Where fixtures represent visitor, member, and administrator states and every owned page can report unavailable, when every route plus playback activation and same-origin, cross-origin, protocol-relative, malformed, and unknown destinations are visited, the shell contract suite shall assert the [route map, consistent page frame, preserved history, and unchanged domain terms](#site-1); the [visitor, member, and administrator header variants](#site-3); and the [uniform redacted 404 while a public lesson remains available when only playback is denied](#site-6).
-It shall also assert that protected entry produces the [GitHub login flow with the safe internal destination preserved](#site-2), and that destination handling [accepts only normalized known route-map paths and otherwise returns `/courses` without using a client-supplied host](#site-11).
+It shall also assert that protected entry produces the [GitHub login flow with the safe internal destination preserved](#site-2), and that destination handling [accepts only normalized known route-map paths and otherwise returns `/courses` without using a client-supplied host](#site-7).
 
-### SITE-21
+### SITE-13
 
-Where each page-state fixture is rendered at 360 pixels and at 200 percent zoom, when keyboard-only navigation and automated accessibility checks exercise every control and state transition, the suite shall assert the [retained header and route context, plain-language state, and available retry or next action](#site-4); the [usable no-horizontal-scroll layout, keyboard reachability, visible focus, semantic labels, and state announcements](#site-5); and the [correct confined mapping of unavailable, login-required, and retryable states without provider detail](#site-13).
+Where each page-state fixture is rendered at 360 pixels and at 200 percent zoom, when keyboard-only navigation and automated accessibility checks exercise every control and state transition, the suite shall assert the [retained header and route context, plain-language state, and available retry or next action](#site-4); the [usable no-horizontal-scroll layout, keyboard reachability, visible focus, semantic labels, and state announcements](#site-5); and the [correct confined mapping of unavailable, login-required, and retryable states without provider detail](#site-10).
 
-### SITE-22
+### SITE-14
 
-Where public and protected view fixtures contain administrator, draft, content-reference, asset, signing, and service-only fields and visitor, member, and administrator requests alternate on one warm instance, when public pages are primed before release replacement and unpublication and denied and allowed server-rendered responses, callbacks, action responses, cache metadata, and browser state are inspected, the contract suite shall assert [fresh trusted authorization before protected output, no protected output on denial, and no playback lookup during public render or prefetch](#site-10); [serialization of only the fields required by the visible state, with every service-only or unpublished field absent](#site-12); and [private session-varying responses, current-release public responses, no stale shared response, and no per-request state transfer on a warm instance](#site-14).
+Where public and protected view fixtures contain administrator, draft, content-reference, asset, signing, and service-only fields and visitor, member, and administrator requests alternate on one warm instance, when public pages are primed before release replacement and unpublication and denied and allowed server-rendered responses, callbacks, action responses, cache metadata, and browser state are inspected, the contract suite shall assert [fresh trusted authorization before protected output, no protected output on denial, and no playback lookup during public render or prefetch](#site-8); [serialization of only the fields required by the visible state, with every service-only or unpublished field absent](#site-9); and [private session-varying responses, current-release public responses, no stale shared response, and no per-request state transfer on a warm instance](#site-11).

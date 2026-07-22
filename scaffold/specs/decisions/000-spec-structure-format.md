@@ -72,11 +72,13 @@ For example, a spec package for generating short URLs may be `specs/packages/sig
 ### Compositions
 
 System-instantiation files live in `compositions/` per [META-30](../meta.md#meta-30).
-A `Binding` item installs either an External assembly role across External Behavior or External Behavior/a named service for a package's Internal requirement; a `Scenario` item describes an integrated outcome from materially necessary behavior across packages, grounded by at least one External item.
+A `Binding` item statically declares an installed selection, assembly, or product policy; its `Where` clause states exact scope and clients, and its shall clause states the provision with inline-cited External suppliers or load-bearing inputs, or an exactly named external-service capability.
+Supply Bindings satisfy complete Internal consumed requirements, while assembly and policy Bindings may connect or compute over External Behavior.
+A `Scenario` item instead describes a triggered or stateful integrated outcome from materially necessary behavior across packages, grounded by at least one External item.
 One cohesive file may contain either or both, without a file-type flag.
 
 Bindings are authoritative outside packages and may be projected back as read-only installed overlays.
-Scenarios carry integrated acceptance while package-local invariants remain in package Verification ([META-21](../meta.md#meta-21)).
+Binding evidence follows the installed seam's audience; Scenarios carry integrated acceptance while package-local invariants remain in package Verification ([META-21](../meta.md#meta-21)).
 
 `map.md` indexes packages and compositions.
 

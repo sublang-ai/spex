@@ -60,7 +60,7 @@ An intentional fixed dependency may cite exact peer External Behavior; selectabl
 
 ## Installed bindings
 
-Bindings install External assembly roles or select suppliers for package Internal requirements without modifying either package.
+Bindings record static installation decisions: they select suppliers for package Internal requirements, assemble External roles, or provide installation-owned policy over load-bearing External inputs without modifying either package.
 
 | Home | Installed seams |
 | --- | --- |
@@ -71,6 +71,10 @@ Bindings install External assembly roles or select suppliers for package Interna
 | [LEARN](compositions/learning/browse-and-watch.md#binding) | CAT current-lesson authorization → VIDS playback authorization |
 | [SHIP](compositions/operations/deliver-change.md#binding) | PIPE attestation/candidate → LIVE and LIVE evidence → PIPE |
 
+Each Binding's `Where` clause names its exact scope, resolved client instances, and client givens; its shall clause names the installed provision, supplier behavior, selected service, or load-bearing External inputs.
+This clause structure is the sole direction source—there are no parallel endpoint or scope fields.
+An n:m item states every pairing in adjacent prose or a normative table.
+
 The important course/media cycle is:
 
 ```mermaid
@@ -78,28 +82,29 @@ flowchart LR
     ROLE["ROLE decisions"] -- "ACCESS-4" --> SYLL["SYLL drafts"]
     ROLE -- "ACCESS-4 video.watch / course.publish" --> CAT["CAT protected operations"]
     ROLE -- "ACCESS-4" --> VIDS["VIDS assets"]
-    VIDS -- "PUBLISH-10 description" --> SYLL
-    SYLL -- "PUBLISH-11 snapshot" --> CAT
-    CAT -- "PUBLISH-12 result" --> SYLL
-    CAT -- "LEARN-10 authorization" --> VIDS
+    VIDS -- "PUBLISH-1 description" --> SYLL
+    SYLL -- "PUBLISH-2 snapshot" --> CAT
+    CAT -- "PUBLISH-3 result" --> SYLL
+    CAT -- "LEARN-1 authorization" --> VIDS
 ```
 
 These arrows are installed semantic bindings, not source imports.
-For example, [SYLL-13](packages/learning/course-syllabus.md#syll-13) defines the content description it needs without naming VIDS; [PUBLISH-10](compositions/authoring/publish-course.md#publish-10) selects [VIDS-10](packages/media/video-library.md#vids-10) as this installation's supplier.
+For example, [SYLL-12](packages/learning/course-syllabus.md#syll-12) defines the content description it needs without naming VIDS; [PUBLISH-1](compositions/authoring/publish-course.md#publish-1) selects [VIDS-10](packages/media/video-library.md#vids-10) as this installation's supplier.
 
-`ACCESS-4` also demonstrates that Binding items are not one-to-one: one ROLE policy supplies three client packages and four protected capability meanings; public catalog reads require no role grant.
-`PLAT-1` and `PLAT-2` bind the same GHID requirement to different authorities in disjoint production and test scopes.
+`ACCESS-4` also demonstrates that Binding items are not one-to-one: one ROLE policy supplies three client packages and four protected capability meanings through an explicit mapping; public catalog reads require no role grant.
+`PLAT-1` and `PLAT-2` bind the same GHID requirement to named instances in disjoint production and verification scopes stated in their `Where` clauses.
+Each applicable, resolved item declares its installed relationship; PLAT and ACCESS conformance Verification proves that the actual deployment realizes it.
 
 ## Scenarios and acceptance
 
 | Composition | Integrated outcome | Verification |
 | --- | --- | --- |
-| [ENTRY](compositions/access/enter-site.md) | GitHub-only entry, safe return, cancellation, and re-entry | ENTRY-20–22 |
-| [BOOT](compositions/access/bootstrap-admin.md) | deterministic initial administrator and fail-closed readiness | BOOT-20–21 |
-| [PUBLISH](compositions/authoring/publish-course.md) | draft + ready videos become one coherent release | PUBLISH-20–24 |
-| [LEARN](compositions/learning/browse-and-watch.md) | public-catalog-to-private-play journey, renewal, recovery, and reuse | LEARN-20–24 |
-| [GUARD](compositions/security/protect-course-content.md) | public catalog, protected route, data, storage, stale-entitlement, and sign-out boundaries | GUARD-20–24 |
-| [SHIP](compositions/operations/deliver-change.md) | fixture preview, staged promotion, rollback, and real-provider smoke | SHIP-20–24 |
+| [ENTRY](compositions/access/enter-site.md) | GitHub-only entry, safe return, cancellation, and re-entry | ENTRY-6–8 |
+| [BOOT](compositions/access/bootstrap-admin.md) | one-sign-in initial-administrator authoring readiness and fail-closed bootstrap | BOOT-4–5 |
+| [PUBLISH](compositions/authoring/publish-course.md) | draft + ready videos become one coherent release | PUBLISH-10–14 |
+| [LEARN](compositions/learning/browse-and-watch.md) | public-catalog-to-private-play journey, renewal, recovery, and reuse | LEARN-8–12 |
+| [GUARD](compositions/security/protect-course-content.md) | public catalog, protected route, data, storage, stale-entitlement, and sign-out boundaries | GUARD-7–11 |
+| [SHIP](compositions/operations/deliver-change.md) | fixture preview, staged promotion, rollback, and real-provider smoke | SHIP-10–14 |
 
 `ACCESS` and `PLAT` are binding-only because their seams are cross-cutting.
 `ENTRY`, `PUBLISH`, `LEARN`, and `SHIP` mix Binding and Scenario because each binding directly serves the same file's outcome.
@@ -114,22 +119,23 @@ The traces are complementary:
 ```text
 package Behavior -> inline package Verification citation -> contract evidence
 package External or materially relevant Internal Behavior -> inline Scenario citation -> Scenario -> inline Verification citation -> acceptance evidence
-supplier External Behavior -> Binding -> External client role
-supplier External Behavior or selected service -> Binding -> package Internal requirement
+Binding Where citation -> client requirement or role
+Binding shall citation or named service -> supplier behavior or load-bearing External input
+applicable resolved Binding -> declared installed relationship
 Binding -> inline Scenario citation -> Scenario
-Binding -> inline Verification citation -> conformance evidence
+Binding -> inline Verification citation -> deployment conformance evidence
 ```
 
 ## External and internal behavior
 
 [SYLL-2](packages/learning/course-syllabus.md#syll-2) is External Behavior for an author who sees save results.
-[SYLL-11](packages/learning/course-syllabus.md#syll-11) is also External Behavior: an installed publisher may rely on the snapshot.
-[SYLL-13](packages/learning/course-syllabus.md#syll-13) is Internal Behavior: SYLL requires a provider-neutral content description, and only a Binding may select its supplier.
-[SYLL-10](packages/learning/course-syllabus.md#syll-10) is also Internal Behavior, but it is a private invariant rather than a consumed requirement.
+[SYLL-10](packages/learning/course-syllabus.md#syll-10) is also External Behavior: an installed publisher may rely on the snapshot.
+[SYLL-12](packages/learning/course-syllabus.md#syll-12) is Internal Behavior: SYLL requires a provider-neutral content description, and only a Binding may select its supplier.
+[SYLL-17](packages/learning/course-syllabus.md#syll-17) is also Internal Behavior, but it is a private invariant rather than a consumed requirement.
 
 A peer package may rely on only another package's External Behavior.
-A Binding may cite Internal Behavior only as a client, while its supplier side cites External Behavior.
-Assembly Bindings join External roles, as [ENTRY-10](compositions/access/enter-site.md#entry-10) does.
+A Binding may cite Internal Behavior only as a complete client requirement in its `Where` clause; supplier behavior and load-bearing External inputs appear in its shall clause.
+Assembly Bindings can join External roles, as [ENTRY-1](compositions/access/enter-site.md#entry-1) does, so endpoint section type alone cannot determine direction.
 A Scenario may cite Internal Behavior when materially needed for an integrated outcome or inspection, but that citation does not expose it.
 An installed package overlay can show those reverse links, but it is derived and never written into the package file ([META-23](meta.md#meta-23)).
 
@@ -143,9 +149,9 @@ An installed package overlay can show those reverse links, but it is derived and
 | visitors browse published courses; members view private videos | GHID, CAT, VIDS | ENTRY, LEARN, GUARD |
 | Next.js App Router + TypeScript + Tailwind + shadcn/ui | [DR-001](decisions/001-web-platform.md), SITE | ENTRY, LEARN, SHIP |
 | Vercel + Supabase Auth/Postgres/Storage | [DR-001](decisions/001-web-platform.md), [PLAT](compositions/operations/install-platform.md), LIVE, PIPE | GUARD, SHIP |
-| DevOps on GitHub | PIPE, [PLAT-6](compositions/operations/install-platform.md#plat-6) | SHIP |
+| DevOps on GitHub | PIPE, [PLAT-5](compositions/operations/install-platform.md#plat-5) | SHIP |
 
 ## Code-generation readiness
 
-The specs fix actors, routes, states, limits, ordering, trust sources, lifecycle and conflict rules, installed seams, platform scopes, visible failure behavior, and acceptance evidence.
+The specs fix actors, routes, states, limits, ordering, trust sources, lifecycle and conflict rules, installed seams and their direction, platform scopes, visible failure behavior, and acceptance evidence.
 Implementation may now vary source structure and replaceable code dependencies without inventing product policy or cross-package wiring.

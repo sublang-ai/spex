@@ -50,22 +50,22 @@ While a member has an active playback grant, when the administrator [unpublishes
 
 ## Verification
 
-### GUARD-20
+### GUARD-7
 
 Where acceptance fixtures include a draft course, unpublished release, prior release, current release, a current lesson with a formerly ready unavailable attachment, an unready asset, unattached ready asset, random identifiers, and a safe lesson destination, when anonymous and authenticated-member browsers request every route and identifier class and explicitly attempt playback, the acceptance suite shall assert the [anonymous public-browsing and playback boundary](#guard-1), the [shared published-lesson behavior](#guard-3), retained HTTP-200 public lesson metadata with only audience-appropriate video-area states for the unavailable attachment, route-only safe return, absence of every private identifier and bearer from public output, and uniform outcomes for all hidden routes and direct identifiers.
 
-### GUARD-21
+### GUARD-8
 
 Where a member browser captures and replays the administrator's route and action shapes with forged role and owner fields, when it requests each administrator page and attempts draft edits, upload creation, asset management, publication, and unpublication, the acceptance suite shall assert the [member denial boundary](#guard-2), deterministic page/action outcomes, and byte-equivalent draft, asset, object, and release state afterward.
 
-### GUARD-22
+### GUARD-9
 
 Where a member obtains a playback grant and then signs out while its Auth token remains unexpired, when the acceptance clock checks public course access, pre-expiry, nominal expiry, renewal, unsigned-object, and copied-bearer cases with controllable cache behavior, the acceptance suite shall assert the [signed-out playback boundary](#guard-4): continued sanitized public metadata while published, immediate denial of every new application grant, no new origin authorization after nominal expiry, denial of unsigned access, no account-bound redemption claim for a copied unexpired bearer, and the explicit exclusion for previously transferred or cached bytes.
 
-### GUARD-23
+### GUARD-10
 
 Where direct REST, RPC, and Storage clients use the publishable key as anonymous, non-GitHub Auth, revoked-but-unexpired session, active member, and active administrator identities, when every stated data operation, entitlement request, and arbitrary upload/object path is exercised, the acceptance suite shall assert exactly the [direct-service access matrix](#guard-5), no raw snapshot or content-reference field in a public response, private-bucket behavior, and no service credential in any client.
 
-### GUARD-24
+### GUARD-11
 
 Where anonymous and member browsers have opened and primed every response for a published lesson and the member begins playback and captures the request shape and entitlement timing, when an administrator unpublishes the course and either browser rereads the lesson while the member replays the prior shape before and after nominal grant expiry, the acceptance suite shall assert the [unpublication-during-playback outcome](#guard-6): removal from every new public catalog read without a stale shared response, stale lesson denial for both audiences, rejection of the prior entitlement and every renewal, no new playback grant, and no claim beyond already transferred or cached video bytes.

@@ -27,9 +27,9 @@ For spec authoring, start with [Writing Strong Spex Specs](guidelines.md); [META
 | Question | Concrete examples |
 | --- | --- |
 | Package boundary and self-containment | [SYLL](specs/packages/learning/course-syllabus.md), [CAT](specs/packages/learning/course-catalog.md), and [VIDS](specs/packages/media/video-library.md) separate mutable drafts, immutable releases, and media lifecycle |
-| External versus Internal | [SYLL-11](specs/packages/learning/course-syllabus.md#syll-11) is a supplied External snapshot; [SYLL-13](specs/packages/learning/course-syllabus.md#syll-13) is a consumed Internal content requirement; [SYLL-10](specs/packages/learning/course-syllabus.md#syll-10) is a private invariant |
-| Reuse and dependency choice | [PUBLISH-10](specs/compositions/authoring/publish-course.md#publish-10) and [ACCESS-4](specs/compositions/access/install-course-access.md#access-4) install selectable suppliers without changing their client packages |
-| Binding versus Scenario | [PLAT](specs/compositions/operations/install-platform.md) is binding-only; [GUARD](specs/compositions/security/protect-course-content.md) is scenario-only; [PUBLISH](specs/compositions/authoring/publish-course.md) cohesively contains both |
+| External versus Internal | [SYLL-10](specs/packages/learning/course-syllabus.md#syll-10) is a supplied External snapshot; [SYLL-12](specs/packages/learning/course-syllabus.md#syll-12) is a consumed Internal content requirement; [SYLL-17](specs/packages/learning/course-syllabus.md#syll-17) is a private invariant |
+| Reuse and dependency choice | [PUBLISH-1](specs/compositions/authoring/publish-course.md#publish-1) and [ACCESS-4](specs/compositions/access/install-course-access.md#access-4) install selectable suppliers without changing their client packages |
+| Binding versus Scenario | [ENTRY-1](specs/compositions/access/enter-site.md#entry-1) is a static user-visible assembly while ENTRY's remaining items are triggered journeys; [PLAT](specs/compositions/operations/install-platform.md) is binding-only and [GUARD](specs/compositions/security/protect-course-content.md) scenario-only |
 | Acceptance coverage | [LEARN](specs/compositions/learning/browse-and-watch.md), [GUARD](specs/compositions/security/protect-course-content.md), and [SHIP](specs/compositions/operations/deliver-change.md) cover the main journey, trust boundaries, and deployed operation |
 
 ## Convention status
@@ -37,5 +37,5 @@ For spec authoring, start with [Writing Strong Spex Specs](guidelines.md); [META
 The demo and scaffold specify `compositions/` as the home of installed Bindings, integrated Scenarios, and Verification; nested directories remain navigation-only collections.
 `compositions/` is broader and less confusable with UX interactions than `interactions/`.
 
-The current Spex CLI and desktop parser still recognize the older `interactions/` layout and do not yet implement the Binding/Scenario grammar, inline trace semantics, or derived installed overlays.
+The current Spex CLI and desktop parser still recognize the older `interactions/` layout and do not yet implement the Binding/Scenario grammar, Binding clause-direction semantics, inline trace semantics, or derived installed overlays.
 Until that tooling migration lands, this tree is also its concrete compatibility fixture.

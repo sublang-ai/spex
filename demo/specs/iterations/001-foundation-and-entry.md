@@ -9,11 +9,11 @@ Establish a reproducible delivery foundation, request-isolated runtime, GitHub i
 
 ## Deliverables
 
-- [ ] Required GitHub checks, credential hygiene, and secret-free fixture previews ([PIPE-1](../packages/operations/github-delivery.md#pipe-1), [PIPE-23](../packages/operations/github-delivery.md#pipe-23))
+- [ ] Required GitHub checks, credential hygiene, and secret-free fixture previews ([PIPE-1](../packages/operations/github-delivery.md#pipe-1), [PIPE-18](../packages/operations/github-delivery.md#pipe-18))
 - [ ] Environment-scoped runtime readiness and isolation ([LIVE-1](../packages/operations/production-runtime.md#live-1), [LIVE-2](../packages/operations/production-runtime.md#live-2))
-- [ ] GitHub account and revocable application-session lifecycle ([GHID-1](../packages/access/github-identity.md#ghid-1), [GHID-15](../packages/access/github-identity.md#ghid-15))
-- [ ] Two-role capability policy with fail-closed initial-administrator readiness ([ROLE-14](../packages/access/role-access.md#role-14), [ROLE-15](../packages/access/role-access.md#role-15))
-- [ ] Route, header, state, cache, and accessibility shell ([SITE-1](../packages/web/application-shell.md#site-1), [SITE-14](../packages/web/application-shell.md#site-14))
+- [ ] GitHub account and revocable application-session lifecycle ([GHID-1](../packages/access/github-identity.md#ghid-1), [GHID-11](../packages/access/github-identity.md#ghid-11))
+- [ ] Two-role capability policy with fail-closed initial-administrator readiness ([ROLE-7](../packages/access/role-access.md#role-7), [ROLE-8](../packages/access/role-access.md#role-8))
+- [ ] Route, header, state, cache, and accessibility shell ([SITE-1](../packages/web/application-shell.md#site-1), [SITE-11](../packages/web/application-shell.md#site-11))
 - [ ] Identity, access, runtime, and delivery bindings for production and verification scopes ([PLAT-1](../compositions/operations/install-platform.md#plat-1), [ACCESS-1](../compositions/access/install-course-access.md#access-1))
 
 ## Tasks
@@ -44,8 +44,8 @@ Establish a reproducible delivery foundation, request-isolated runtime, GitHub i
 
 ## Acceptance criteria
 
-- [GHID-20](../packages/access/github-identity.md#ghid-20), [GHID-21](../packages/access/github-identity.md#ghid-21), and [GHID-22](../packages/access/github-identity.md#ghid-22) pass.
-- [ROLE-20](../packages/access/role-access.md#role-20), [ROLE-21](../packages/access/role-access.md#role-21), and [ROLE-22](../packages/access/role-access.md#role-22) pass.
-- [SITE-20](../packages/web/application-shell.md#site-20), [SITE-21](../packages/web/application-shell.md#site-21), and [SITE-22](../packages/web/application-shell.md#site-22) pass against package fixtures.
-- [LIVE-20](../packages/operations/production-runtime.md#live-20), [LIVE-21](../packages/operations/production-runtime.md#live-21), [LIVE-22](../packages/operations/production-runtime.md#live-22), and [LIVE-23](../packages/operations/production-runtime.md#live-23) pass.
-- [PIPE-20](../packages/operations/github-delivery.md#pipe-20), [PLAT-20](../compositions/operations/install-platform.md#plat-20), [PLAT-22](../compositions/operations/install-platform.md#plat-22), [ACCESS-20](../compositions/access/install-course-access.md#access-20), and [ACCESS-22](../compositions/access/install-course-access.md#access-22) pass.
+- [GHID-16](../packages/access/github-identity.md#ghid-16), [GHID-17](../packages/access/github-identity.md#ghid-17), and [GHID-18](../packages/access/github-identity.md#ghid-18) pass.
+- [ROLE-12](../packages/access/role-access.md#role-12), [ROLE-13](../packages/access/role-access.md#role-13), and [ROLE-14](../packages/access/role-access.md#role-14) pass.
+- [SITE-12](../packages/web/application-shell.md#site-12), [SITE-13](../packages/web/application-shell.md#site-13), and [SITE-14](../packages/web/application-shell.md#site-14) pass against package fixtures.
+- [LIVE-19](../packages/operations/production-runtime.md#live-19), [LIVE-20](../packages/operations/production-runtime.md#live-20), [LIVE-21](../packages/operations/production-runtime.md#live-21), and [LIVE-22](../packages/operations/production-runtime.md#live-22) pass.
+- [PIPE-19](../packages/operations/github-delivery.md#pipe-19), [PLAT-7](../compositions/operations/install-platform.md#plat-7), [PLAT-9](../compositions/operations/install-platform.md#plat-9), [ACCESS-6](../compositions/access/install-course-access.md#access-6), and [ACCESS-8](../compositions/access/install-course-access.md#access-8) pass.

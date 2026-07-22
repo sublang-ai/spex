@@ -9,11 +9,11 @@ Let the configured administrator create a draft, upload and attach ready videos,
 
 ## Deliverables
 
-- [ ] Ordered, revision-safe syllabus drafts and immutable publication snapshots ([SYLL-1](../packages/learning/course-syllabus.md#syll-1), [SYLL-11](../packages/learning/course-syllabus.md#syll-11))
+- [ ] Ordered, revision-safe syllabus drafts and immutable publication snapshots ([SYLL-1](../packages/learning/course-syllabus.md#syll-1), [SYLL-10](../packages/learning/course-syllabus.md#syll-10))
 - [ ] Resumable private video upload, lifecycle, chooser, and cleanup behavior ([VIDS-1](../packages/media/video-library.md#vids-1), [VIDS-10](../packages/media/video-library.md#vids-10))
-- [ ] Atomic catalog publication, immutable releases, slug ownership, and public projection ([CAT-3](../packages/learning/course-catalog.md#cat-3), [CAT-26](../packages/learning/course-catalog.md#cat-26))
-- [ ] Installed authoring, media, snapshot, result, storage, and role seams, including [ACCESS-4](../compositions/access/install-course-access.md#access-4), [PUBLISH-10](../compositions/authoring/publish-course.md#publish-10), [PUBLISH-11](../compositions/authoring/publish-course.md#publish-11), [PUBLISH-12](../compositions/authoring/publish-course.md#publish-12), and [PLAT-4](../compositions/operations/install-platform.md#plat-4)
-- [ ] Initial-administrator and complete author-to-release journeys ([BOOT-1](../compositions/access/bootstrap-admin.md#boot-1), [PUBLISH-1](../compositions/authoring/publish-course.md#publish-1))
+- [ ] Atomic catalog publication, immutable releases, slug ownership, and public projection ([CAT-3](../packages/learning/course-catalog.md#cat-3), [CAT-13](../packages/learning/course-catalog.md#cat-13))
+- [ ] Installed authoring, media, snapshot, result, storage, and role seams, including [ACCESS-4](../compositions/access/install-course-access.md#access-4), [PUBLISH-1](../compositions/authoring/publish-course.md#publish-1), [PUBLISH-2](../compositions/authoring/publish-course.md#publish-2), [PUBLISH-3](../compositions/authoring/publish-course.md#publish-3), and [PLAT-3](../compositions/operations/install-platform.md#plat-3)
+- [ ] Initial-administrator and complete author-to-release journeys ([BOOT-1](../compositions/access/bootstrap-admin.md#boot-1), [PUBLISH-4](../compositions/authoring/publish-course.md#publish-4))
 
 ## Tasks
 
@@ -51,8 +51,8 @@ Let the configured administrator create a draft, upload and attach ready videos,
 
 ## Acceptance criteria
 
-- [SYLL-20](../packages/learning/course-syllabus.md#syll-20), [SYLL-21](../packages/learning/course-syllabus.md#syll-21), and [SYLL-22](../packages/learning/course-syllabus.md#syll-22) pass.
-- [VIDS-20](../packages/media/video-library.md#vids-20), [VIDS-22](../packages/media/video-library.md#vids-22), and [VIDS-23](../packages/media/video-library.md#vids-23) pass for upload and management behavior.
-- [CAT-20](../packages/learning/course-catalog.md#cat-20), [CAT-21](../packages/learning/course-catalog.md#cat-21), and [CAT-23](../packages/learning/course-catalog.md#cat-23) pass for projection, publication, and trust boundaries.
-- [ACCESS-21](../compositions/access/install-course-access.md#access-21), [PLAT-21](../compositions/operations/install-platform.md#plat-21), [BOOT-20](../compositions/access/bootstrap-admin.md#boot-20), and [BOOT-21](../compositions/access/bootstrap-admin.md#boot-21) pass.
-- [PUBLISH-20](../compositions/authoring/publish-course.md#publish-20), [PUBLISH-21](../compositions/authoring/publish-course.md#publish-21), [PUBLISH-22](../compositions/authoring/publish-course.md#publish-22), [PUBLISH-23](../compositions/authoring/publish-course.md#publish-23), and [PUBLISH-24](../compositions/authoring/publish-course.md#publish-24) pass.
+- [SYLL-19](../packages/learning/course-syllabus.md#syll-19), [SYLL-20](../packages/learning/course-syllabus.md#syll-20), and [SYLL-21](../packages/learning/course-syllabus.md#syll-21) pass.
+- [VIDS-21](../packages/media/video-library.md#vids-21), [VIDS-23](../packages/media/video-library.md#vids-23), and [VIDS-24](../packages/media/video-library.md#vids-24) pass for upload and management behavior.
+- [CAT-23](../packages/learning/course-catalog.md#cat-23), [CAT-24](../packages/learning/course-catalog.md#cat-24), and [CAT-26](../packages/learning/course-catalog.md#cat-26) pass for projection, publication, and trust boundaries.
+- [ACCESS-7](../compositions/access/install-course-access.md#access-7), [PLAT-8](../compositions/operations/install-platform.md#plat-8), [BOOT-4](../compositions/access/bootstrap-admin.md#boot-4), and [BOOT-5](../compositions/access/bootstrap-admin.md#boot-5) pass.
+- [PUBLISH-10](../compositions/authoring/publish-course.md#publish-10), [PUBLISH-11](../compositions/authoring/publish-course.md#publish-11), [PUBLISH-12](../compositions/authoring/publish-course.md#publish-12), [PUBLISH-13](../compositions/authoring/publish-course.md#publish-13), and [PUBLISH-14](../compositions/authoring/publish-course.md#publish-14) pass.

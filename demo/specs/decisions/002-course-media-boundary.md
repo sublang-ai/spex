@@ -23,11 +23,11 @@ The concrete system needs to publish a complete syllabus and its ready videos as
 - `CAT` owns learner-visible course releases.
   It accepts a complete publication snapshot only as trusted server input, publishes it atomically, and exposes every reader to one sanitized projection of the current release: each current course's title, summary, and slug plus its ordered section and lesson metadata and lesson routes, but no content reference, asset identity, or video metadata.
   It returns a successful publication report to the syllabus host and produces a fresh opaque server-only playback permission only after trusted active-member authorization for the exact content reference present in the requested lesson of a current release.
-- [PUBLISH-10](../compositions/authoring/publish-course.md#publish-10), [PUBLISH-11](../compositions/authoring/publish-course.md#publish-11), and [PUBLISH-12](../compositions/authoring/publish-course.md#publish-12) install the video-description, publication-snapshot, and publication-result seams.
-  [LEARN-10](../compositions/learning/browse-and-watch.md#learn-10) installs the catalog-to-video playback authorization seam; VIDS never interprets course, release, or lesson concepts.
+- [PUBLISH-1](../compositions/authoring/publish-course.md#publish-1), [PUBLISH-2](../compositions/authoring/publish-course.md#publish-2), and [PUBLISH-3](../compositions/authoring/publish-course.md#publish-3) install the video-description, publication-snapshot, and publication-result seams.
+  [LEARN-1](../compositions/learning/browse-and-watch.md#learn-1) installs the catalog-to-video playback authorization seam; VIDS never interprets course, release, or lesson concepts.
 - Each package states the domain values it accepts or produces in its own behavior, with any necessary shapes, policies, or states placed beside the behavior that owns them.
   These definitions express domain meaning, not TypeScript interface design, and do not name the peer package selected by this system.
-- Binding items stay thin: they select exact client and supplier behavior, scope the installation, and do not restate endpoint meaning or vendor mechanics already owned elsewhere.
+- Binding items stay thin: their `Where` and shall clauses identify exact client and supplier behavior and scope the installation without restating endpoint meaning or vendor mechanics already owned elsewhere.
   A supply Binding may cite a client's Internal requirement, while an assembly Binding joins External behavior.
 - A Scenario may cite External or Internal behavior when that item materially supports the integrated outcome.
   Citing Internal behavior makes its contribution and verification traceable; it neither reclassifies that behavior as External nor exposes it as part of another package's contract.

@@ -22,19 +22,20 @@ Several product choices must be fixed before the behavior is precise enough to g
 - A visitor becomes a member by completing GitHub sign-in; there is no separate registration step.
 - One initial administrator is selected by a configured immutable GitHub numeric subject ID.
   Login order, username, and email do not grant administration.
-- There is no role-management UI in this version.
+  Changing that configured subject after assignment is not a transfer mechanism; it makes role readiness fail closed.
+- There is no role-management or administrator-transfer UI in this version.
 - A draft course contains a title, syntactically valid proposed slug, summary, ordered sections, and ordered lessons.
   The slug is reserved globally and locked to that course only on its first successful publication; later publication candidates for that course must retain the locked slug.
   Every lesson has a title, optional description, and exactly one attached content reference before publication.
 - Publication creates an immutable catalog release from the current draft.
   Later draft edits remain invisible until another successful publication.
-- Video is the only lesson-content kind installed by [PUBLISH-10](../compositions/authoring/publish-course.md#publish-10) in this project.
+- Video is the only lesson-content kind installed by [PUBLISH-1](../compositions/authoring/publish-course.md#publish-1) in this project.
   The syllabus contract nevertheless treats lesson content as an opaque reference so another system can bind documents, audio, or exercises without changing the syllabus package.
 - Accepted uploads are at most 1 GiB and use either MP4 with H.264 video plus optional AAC-LC audio, or WebM with VP8/VP9 video plus optional Vorbis/Opus audio.
   Before upload, the administrator's browser must read positive duration/dimensions and successfully decode the selected file; the administrator is trusted to supply only one of the declared codec profiles.
   Finalization verifies completed Storage metadata, not a second full-file media scan.
   Representative files for every accepted profile must pass the repository's version-pinned Chrome, Firefox, and WebKit/Safari acceptance matrix; each release records the exact browser versions, and matrix updates are reviewed delivery changes.
-  Per-upload transcoding, a media-processing worker, adaptive streaming, DRM, and a promise to revoke, prevent saving, or prevent sharing bearer access or bytes already delivered to an authorized viewer are out of scope.
+  Per-upload transcoding, a media-processing worker, adaptive streaming, DRM, a product download action, and a promise to revoke, prevent saving, or prevent sharing bearer access or bytes already delivered to an authorized viewer are out of scope.
 - Enrollment, payment, invitations, progress tracking, quizzes, comments, certificates, search, public marketing pages beyond the published catalog, analytics, course or video deletion, and multiple administrators are out of scope.
 
 ## Consequences

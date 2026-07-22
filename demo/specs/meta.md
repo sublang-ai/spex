@@ -55,12 +55,12 @@ A short form is a stable mnemonic, not a derivation of the filename.
 ### META-5
 
 Each item shall state every item-specific condition, value meaning, outcome, and failure in the item or an adjacent table it owns.
-It may use package-wide meaning defined in Intent, an exact same-package citation, or an exact peer External Behavior citation allowed by [META-12](#meta-12); it shall not rely on folder placement, file inventory, implicit context, or an undefined token.
+It may use meaning defined in its file's Intent and exact citations allowed for its section; it shall not rely on folder placement, file inventory, implicit context, or an undefined token.
 
 ### META-6
 
-Spec citations shall use relative Markdown links to exact item anchors.
-Except for the Binding endpoint lines required by [META-18](#meta-18), every citation inside a normative item shall appear inline immediately after the exact phrase, table cell, or assertion whose meaning it supplies or checks.
+Spec item citations shall use relative Markdown links to exact item anchors; decision citations shall link the exact decision record.
+Every citation inside a normative item shall appear inline immediately after the exact phrase, table cell, or assertion whose meaning it supplies or checks.
 The trace lines `Composes:`, `Bindings:`, and `Verifies:` shall not be used.
 A normative item shall not cite another item for background, navigation, further reading, incidental or transitive context, or a mere code call.
 External sources shall use numbered markers and authoritative URLs in the same file's `References` section.
@@ -160,38 +160,36 @@ At least one of `Binding` and `Scenario` shall be present.
 
 ### META-18
 
-Each Binding item shall carry these lines immediately below its heading:
+A Binding shall record one atomic static installation decision: selecting a supplier, assembling External roles, or supplying installation-owned policy computed over load-bearing External inputs.
+It shall have no trigger.
+Its `Where` clause shall state the exact applicability, resolved client instances, and client givens; exact package behavior citations there denote clients.
+Its shall clause shall state the installed provision; exact package behavior citations there denote supplier behavior or load-bearing External input.
+A named external service shall appear in the shall clause with its exact selected capability and selecting decision.
+Across item kinds, preconditions carry the item's givens and the shall clause carries its provision; an applicable, resolved Binding therefore declares the client's installed relationship rather than requiring “package B is installed” in package source.
+These constrained clauses are the sole authoritative direction and scope; `Clients:`, `Suppliers:`, and `Scope:` metadata shall not be used.
 
-```text
-Clients: <role> = <exact package behavior citation>, ...
-Suppliers: <role> = <exact package External Behavior citation or named external service selected by a cited decision>, ...
-Scope: <the package instances, environment, profile, request class, or other installation scope>
-```
-
-`Clients:` and `Suppliers:` declare endpoint direction and roles; `Scope:` declares the installed instances and applicability.
-Ordinary citations cannot supply those facts, so these lines are authoritative Binding structure rather than duplicate trace lists.
-Each endpoint shall have an explicit role; roles and prose shall make an n:m item unambiguous without positional pairing.
-The prose shall explain why the supplied meaning satisfies the client requirement without changing either endpoint.
-If conversion is required, an adapter package shall own it.
-
-A supply Binding shall cite a complete provider-neutral Internal consumed meaning as its client and External Behavior or a selected service as its supplier; it shall not bind a private invariant or implementation allocation.
-An assembly Binding shall cite External Behavior as its endpoints to install a package-user- or host-visible role; it does not create a fixed package dependency.
-A Binding shall not mix External and Internal client roles; split them because they have different audiences and evidence grades.
-An Internal item cited as a client shall contain one complete consumed requirement and its rejection behavior, not an unrelated private invariant or second independently supplied requirement.
+Each supply client shall be one complete provider-neutral Internal consumed requirement, and each supplying provision shall come from External Behavior or a selected service.
+Private invariants and implementation allocations shall not be bound.
+An assembly Binding may join External Behavior to install a package-user- or host-visible role without creating a fixed package dependency.
+An installation-policy Binding may satisfy an Internal or External client with a rule owned by the installation; every cited External input in its shall clause shall be load-bearing to that rule, even when no package offers the whole policy as a supplier contract.
+An Internal client item shall contain one complete consumed requirement and its rejection behavior, not an unrelated private invariant or second independently supplied requirement.
 If a controlled collaborator could satisfy the meaning, it is consumed and bindable; otherwise it is a private invariant and is not a Binding endpoint.
-For a named external service, the Binding shall name the exact selected capability, cite the selecting decision, and verify compatibility with the client meaning.
+The prose shall explain why the provision satisfies each client without changing either endpoint; required conversion belongs in an adapter package.
 
 ### META-19
 
 A Binding item may group several clients or suppliers only when they form one atomic installation decision.
 The relationship is therefore not assumed to be one-to-one.
-The item shall state how its supplier roles collectively satisfy its client roles.
+The item shall pair every client with its provision in adjacent prose or a normative table; citation order shall not imply pairing.
+For derived views, the Binding item is the authoritative hyperedge: tools shall preserve its complete endpoint sets and render its pairing prose or table rather than invent separate pairwise binding facts.
 If the installation owner intends an endpoint or scope to be selected, changed, or verified independently, it belongs in a separate Binding; merely imaginable technical replacement does not split one declared policy decision.
-For each client role and applicable scope, exactly one effective Binding shall exist unless the client contract explicitly defines aggregation, fallback, or runtime selection.
-Here a client role is identified by its cited item, role label, resolved package instance, and scope.
-When one contract has several installed instances, `Scope:` shall assign each a stable local instance name; the package citation identifies the contract and the name identifies its installation.
+For each resolved client item, package instance, and applicable scope, exactly one effective Binding shall exist unless the client contract explicitly defines optionality, aggregation, fallback, other cardinality, or runtime selection.
+Absence is otherwise an incomplete installation, not an implicit disablement.
+When one contract has several installed instances, the `Where` clause shall assign each a stable local instance name; the package citation identifies the contract and the name identifies its installation.
 The same supplier may satisfy many clients, and the same package may have different bindings in different installations.
 
+An applicable, resolved Binding declares the installed relationship; its conformance Verification proves that an actual deployment realizes the declaration.
+Mere item presence outside its stated scope proves neither applicability nor deployment conformance.
 Each installed relationship shall have one authoritative Binding item.
 Package annotations, indexes, and overlays shall be derived from it rather than copied into package source.
 
@@ -203,6 +201,7 @@ It may cite Internal Behavior only when materially necessary to specify or inspe
 A Scenario citation to a Binding denotes an installed handoff directly exercised by the adjacent phrase.
 A Scenario may cite only package behavior and Bindings and shall not cite ambient, transitive, supporting, or merely called behavior.
 Scenario prose shall state each causal handoff in product language rather than redefine either binding endpoint.
+A static selection, assembly, or installation policy remains a Binding even when its effect is user-visible; a triggered walk or outcome sequence belongs in Scenario.
 
 ### META-21
 
@@ -216,8 +215,9 @@ Each composition Verification item shall inline-cite at least one same-file Bind
 It may additionally inline-cite an external Binding it directly checks and may cite no other item.
 Every item citation in composition Verification denotes direct coverage; setup, background, supporting, and merely transitive citations are prohibited.
 Every same-file Binding and Scenario shall be inline-cited by at least one same-file Verification item.
-Binding verification checks endpoint compatibility, selection, and scope; Scenario verification checks the integrated outcome.
-Assembly Binding verification shall exercise the assembled package-user- or host-visible role at its external surface; supply Binding verification may use conformance inspection.
+Binding verification checks endpoint compatibility, selection, scope, and realization in the actual installation; Scenario verification checks the integrated outcome.
+Verification grade follows the seam's audience, not its Binding form or file shape: a relationship observable outside the installed system boundary shall be exercised at that external surface, while an installation-hidden relationship may use conformance inspection.
+The external consumer may be a human, operator, host, component, or higher layer.
 One verification item need not cite both kinds merely because the file is mixed.
 An external Binding still requires coverage in its defining file.
 
@@ -237,10 +237,11 @@ The acceptance trace shall be:
 ```text
 package Behavior -> inline package Verification citation -> contract evidence
 package External or materially relevant Internal Behavior -> inline Scenario citation -> Scenario -> inline Verification citation -> acceptance evidence
-supplier External Behavior -> Binding -> External client role
-supplier External Behavior or selected service -> Binding -> package Internal requirement
+Binding Where citation -> client requirement or role
+Binding shall citation or named service -> supplier behavior or load-bearing External input
+applicable resolved Binding -> declared installed relationship
 Binding -> inline Scenario citation -> Scenario
-Binding -> inline Verification citation -> conformance evidence
+Binding -> inline Verification citation -> deployment conformance evidence
 ```
 
 ## Records
