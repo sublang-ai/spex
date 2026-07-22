@@ -63,6 +63,17 @@ server-side before first paint, so no page flashes another role's
 chrome and no served markup carries entries the requester's role
 denies.
 
+### Response Freshness
+
+#### SHELL-10
+
+Where a response varies by session or role, it shall be served
+private to its requester, never from a cache shared across
+requesters; where a page's content varies by underlying state,
+each response shall reflect the state current at request time —
+no shared cache shall serve a copy made stale by a later
+change.
+
 ## Verification
 
 ### Frame Coverage
@@ -100,3 +111,14 @@ fixture page, the test suite shall assert the served markup
 contains no admin entry, and that the session control's served
 state matches the session without a client-side correction pass
 ([SHELL-6](#shell-6)).
+
+### Freshness Coverage
+
+#### SHELL-11
+
+Where a fixture page's underlying state changes between two
+requests, the test suite shall assert the second response
+reflects the new state; and where two fixture sessions of
+different roles request the same page in turn, the suite shall
+assert each response is produced for its requester's session,
+not reused from the other's ([SHELL-10](#shell-10)).

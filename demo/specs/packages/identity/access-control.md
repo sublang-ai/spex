@@ -27,6 +27,9 @@ sign-in ([AUTH-2](github-login.md#auth-2)), the site shall hold
 the admin role for that session when the account's stable ID
 matches the configured one, and the member role otherwise —
 usernames are mutable and shall never designate.
+The package shall expose no operation that changes, grants, or
+transfers a role at runtime; changing the configured
+designation is the only path.
 
 ### The Guard
 
@@ -75,9 +78,11 @@ test suite shall assert the configured account holds the admin
 role and the other holds member ([ROLE-1](#role-1)); when the
 configured ID changes to the second account and both sign in
 again, the suite shall assert the roles have swapped
-([ROLE-3](#role-3)); and when a third account adopts the first
+([ROLE-3](#role-3)); when a third account adopts the first
 account's former username and signs in, the suite shall assert
-it holds member ([ROLE-1](#role-1)).
+it holds member; and the suite shall assert the package exposes
+no operation that changes, grants, or transfers a role at
+runtime ([ROLE-1](#role-1)).
 
 ### Guard Coverage
 

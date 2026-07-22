@@ -138,7 +138,9 @@ Note: \<PACK\> refers to the short form of the containing file's name.
 
 ### META-12
 
-Item IDs shall not be modified once released; new items shall use higher IDs per package.
+An item ID and the normative concern it identifies are reserved if they appeared in any prior release.
+A reserved ID shall not be renumbered, reused, or reassigned; wording under it may change only compatibly with the published concern.
+Before publication, provisional items may be renumbered, replaced, or removed, and an ID absent from every prior release may be reassigned.
 
 ### META-13
 
@@ -152,7 +154,7 @@ The precondition and trigger clauses (Where, While, When; see [META-6](#meta-6))
 
 Each spec package shall minimize references to the containing project. When a project-specific reference is essential to a package's intent, it shall be documented in the package's `## Intent` section.
 
-### META-31
+### META-30
 
 Files under `interactions/` shall describe how multiple spec packages work together.
 

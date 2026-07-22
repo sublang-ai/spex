@@ -86,9 +86,10 @@ fields, query parameters, or page state.
 #### AUTH-8
 
 Where session state reaches the browser, it shall travel only in
-cookies scoped to the site's origin and marked Secure, and page
-script shall obtain no credential beyond the identity provider's
-own session tokens and their bounded lifetimes.
+cookies scoped to the site's origin, marked Secure, and marked
+SameSite (Lax or stricter), and page script shall obtain no
+credential beyond the identity provider's own session tokens and
+their bounded lifetimes.
 
 ## Verification
 
@@ -123,9 +124,10 @@ the requester as signed out ([AUTH-5](#auth-5)); after the
 session is aged past the configured lifetime under test control,
 the same surface prompts for sign-in while a public fixture
 surface still serves ([AUTH-6](#auth-6)); every session cookie
-is scoped to the site's origin and marked Secure, with page
-script obtaining no credential beyond the provider's session
-tokens ([AUTH-8](#auth-8)); and a request presenting a forged or
+is scoped to the site's origin, marked Secure, and marked
+SameSite Lax or stricter, with page script obtaining no
+credential beyond the provider's session tokens
+([AUTH-8](#auth-8)); and a request presenting a forged or
 absent session credential is treated as signed out
 ([AUTH-9](#auth-9)).
 

@@ -48,10 +48,11 @@ the course and its syllabus shall remain intact, the lesson's
 course-page entry shall lose its playable marking
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
 lesson view shall fall back to its no-media presentation, and
-the course manager shall mark the lesson's dangling reference —
-the library now reports it unresolvable
-([VID-14](../packages/catalog/video-library.md#vid-14)) — so the
-admin can reattach or clear it.
+the course manager shall mark the attachment unavailable with
+replace and remove offered
+([CAT-8](../packages/catalog/course-catalog.md#cat-8)) — the
+library now reports the reference unresolvable
+([VID-14](../packages/catalog/video-library.md#vid-14)).
 
 ## Tests
 
@@ -67,7 +68,11 @@ suite shall assert the public course page shows the syllabus
 with that lesson — and only that lesson — marked playable
 ([PUB-2](#pub-2)), and that the lesson's stored reference
 equals the uploaded asset's identifier
-([CAT-8](../packages/catalog/course-catalog.md#cat-8)).
+([CAT-8](../packages/catalog/course-catalog.md#cat-8)); when it
+adds a second lesson and attaches the same asset there, the
+suite shall assert both lessons are marked playable with equal
+stored references and no second upload
+([VID-9](../packages/catalog/video-library.md#vid-9)).
 
 ### PUB-5
 

@@ -16,7 +16,7 @@ repo's own migration.
   rewrite, map restructure, legacy file-history manifest, agent-file
   refresh on update, interactions prompt) per SCAF-39..47
 - [x] CLI: `spex lint` per the LINT package
-- [x] Templates: meta.md (META-1/9/10/20/21 revised, META-28/31
+- [x] Templates: meta.md (META-1/9/10/20/21 revised, META-28/30
   added), DR-000, map.md, packages/git.md, packages/licensing.md,
   interactions/.gitkeep, agent-specs.txt, both prompts, zh overlays,
   manifests

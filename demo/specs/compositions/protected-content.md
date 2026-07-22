@@ -24,7 +24,8 @@ exactly for assets referenced by a lesson of a currently
 published course
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2),
 [CAT-3](../packages/catalog/course-catalog.md#cat-3)), so
-unpublishing a course revokes member playback of its media.
+unpublishing a course stops new member grants for its media at
+once — a grant already issued lasts only to its expiry.
 
 ## Scenario
 
@@ -85,12 +86,15 @@ without a grant, with an expired grant, and with a tampered
 grant are denied for all three audiences ([GUARD-1](#guard-1),
 [VID-7](../packages/catalog/video-library.md#vid-7)); a
 member's playback request obtains a grant and plays; the grant
-is scoped to that one asset and stops working after its expiry
-([GUARD-2](#guard-2),
+is scoped to that one asset, stops working after its expiry,
+and a fresh playback request then obtains a new grant while the
+course stays published ([GUARD-2](#guard-2),
 [VID-8](../packages/catalog/video-library.md#vid-8)); a
 member's playback request for an asset referenced only by an
 unpublished fixture course is denied with no grant issued,
-while the admin's player on that unpublished lesson still plays
-([GUARD-5](#guard-5)); and every session cookie observed during
-the sweep is scoped to the site's origin and marked Secure
+while a grant the member obtained before the unpublish still
+plays until its expiry and the admin's player on that
+unpublished lesson still plays ([GUARD-5](#guard-5)); and every
+session cookie observed during the sweep is scoped to the
+site's origin and marked Secure
 ([AUTH-8](../packages/identity/github-login.md#auth-8)).

@@ -21,9 +21,9 @@ manages the referenced assets.
 
 When any visitor opens the course list, the catalog shall show
 every published course — title and summary — newest publication
-first by default, with an alphabetical-by-title order
-selectable (ties broken by slug), and shall not show
-unpublished courses.
+first by default (ties broken by title, then slug), with an
+alphabetical-by-title order selectable (ties broken by slug),
+and shall not show unpublished courses.
 
 #### CAT-2
 
@@ -111,6 +111,9 @@ deployment's media provider and store the returned reference on
 the lesson — at most one reference per lesson — without
 interpreting it; the remove action shall clear the reference
 only.
+While a lesson's stored reference no longer resolves with the
+provider, the course manager shall keep it, mark the attachment
+unavailable, and offer the replace and remove actions on it.
 
 ### Addresses
 
@@ -138,6 +141,13 @@ Where section and lesson order is stored, it shall be stored as
 explicit positions independent of names and timestamps, so a
 rename or a re-save never reorders a syllabus.
 
+#### CAT-19
+
+When a save, a publication change, or a deletion commits, the
+catalog shall apply it atomically: a concurrent read shall see
+the complete prior state or the complete new state of the
+course, never a mixture.
+
 ### Draft Isolation
 
 #### CAT-12
@@ -153,12 +163,13 @@ data request — carries unpublished content to non-admins.
 
 #### CAT-13
 
-Where fixture data holds two published courses with known
-publication times and one unpublished course, the test suite
-shall assert: the course list shows exactly the published two,
-newest publication first by default and alphabetical by title
-with slug tiebreak when that order is selected
-([CAT-1](#cat-1)); a published course
+Where fixture data holds three published courses with known
+publication times — two sharing one time — and one unpublished
+course, the test suite shall assert: the course list shows
+exactly the published three, newest publication first by
+default with the shared-time pair ordered by title, and
+alphabetical by title with slug tiebreak when that order is
+selected ([CAT-1](#cat-1)); a published course
 page shows its syllabus in the defined order with
 resolvable-attachment lessons marked playable ([CAT-2](#cat-2));
 the unpublished course's URL responds not-found without an admin
@@ -181,9 +192,11 @@ page with its first paragraph as the list summary
 arranged order, and after reordering and renaming plus a reload,
 the order matches the explicit positions ([CAT-5](#cat-5),
 [CAT-11](#cat-11)); removing a section asks for confirmation
-naming its lesson count; and a save with an empty required field
+naming its lesson count; a save with an empty required field
 marks the field, keeps the entered state, and persists nothing
-([CAT-7](#cat-7)).
+([CAT-7](#cat-7)); and a read issued while a multi-field save
+commits shows either the complete previous or the complete
+saved course, never a mixture ([CAT-19](#cat-19)).
 
 ### Identity and Boundary Coverage
 
@@ -192,7 +205,10 @@ marks the field, keeps the entered state, and persists nothing
 Where a stub media provider returns fixed references, the test
 suite shall assert: attach, replace, and remove store, swap, and
 clear the lesson's single reference without the catalog reading
-the referenced asset ([CAT-8](#cat-8)); a course's slug survives
+the referenced asset, and when the stub stops resolving a stored
+reference, the manager keeps it, marks the attachment
+unavailable, and still offers replace and remove
+([CAT-8](#cat-8)); a course's slug survives
 a title change and collides into a suffixed form
 ([CAT-9](#cat-9)); and deleting a course — after a confirmation
 naming its section and lesson counts ([CAT-17](#cat-17)) —

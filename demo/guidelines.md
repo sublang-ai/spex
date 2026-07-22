@@ -46,6 +46,8 @@ package:
   seams no user walks bind there too
   ([PLAT-1](specs/compositions/platform-services.md#plat-1)) —
   decisions only choose.
+  An unbound slot is an incomplete installation, not a disabled
+  feature.
 - **Make the boundary itself testable from both sides.**
   [CAT-10](specs/packages/catalog/course-catalog.md#cat-10):
   deleting a course never deletes a provider asset.
@@ -122,6 +124,10 @@ drop into another product unchanged.
   never the reverse.
   Swapping a vendor is a new decision record plus rewritten
   binding items; package items stay unchanged.
+  A replaceable code library gets less still — no binding item
+  at all: its behavioral guarantee, if any, belongs to the
+  package that owns the outcome, and its selection to a
+  decision record ([META-31](specs/meta.md#meta-31)).
   The exception proves the rule: GitHub appears in
   [AUTH](specs/packages/identity/github-login.md) items because
   the user sees GitHub; the technology is the behavior there.
@@ -242,10 +248,53 @@ cannot tell, which is the point.
   suppliers — and the supplier side cites only offered
   behavior: External items or a named service
   ([META-31](specs/meta.md#meta-31)).
+  When no single supplier serves the need, the shall clause
+  states a rule the installation itself owns:
+  [GUARD-5](specs/compositions/protected-content.md#guard-5)
+  answers the video library's authorization socket
+  ([VID-15](specs/packages/catalog/video-library.md#vid-15))
+  with a deployment-owned rule — published-course membership —
+  citing [CAT-2](specs/packages/catalog/course-catalog.md#cat-2)
+  and [CAT-3](specs/packages/catalog/course-catalog.md#cat-3)
+  as the rule's inputs, not as suppliers.
+- **Bindings install; scenarios run.**
+  A binding item is static — Where clauses and a shall clause,
+  never a trigger
+  ([PLAT-1](specs/compositions/platform-services.md#plat-1) has
+  no When: it states what the deployment wires, not what
+  happens); the moment a walk or an outcome sequence appears —
+  sign in, then play
+  ([PLAY-1](specs/compositions/lesson-playback.md#play-1)) — it
+  is a scenario item.
+  Visibility does not decide the kind; the trigger does.
+  And a binding only declares the installed relationship:
+  whether a deployment realizes it is its tests' question,
+  which is why
+  [PLAT-6](specs/compositions/platform-services.md#plat-6)
+  inspects configuration and egress instead of walking a
+  journey.
+- **A socket is one complete consumed requirement — rejection
+  arm included.**
+  [VID-15](specs/packages/catalog/video-library.md#vid-15)
+  states everything the video library asks of its host —
+  authorize this asset for this requester — plus what happens
+  when the answer is no, so
+  [GUARD-5](specs/compositions/protected-content.md#guard-5)
+  can bind it whole.
+  The test for socket-hood is the stand-in: a stub host could
+  satisfy VID-15, so it is consumed and bindable; no stub could
+  satisfy
+  [CAT-12](specs/packages/catalog/course-catalog.md#cat-12) —
+  excluding drafts at the data layer is the catalog's own
+  discipline — so it is a private invariant, and nothing may
+  bind it ([META-31](specs/meta.md#meta-31)).
 - **The litmus is the swap.**
   Rebind a supplier and every package item reads unchanged:
   swapping Supabase is a new DR plus rewritten PLAT items,
   nothing else.
+  Were a package's own text to change under the swap, its
+  dependency was really fixed — or its consumed requirement
+  incomplete.
   Rebind a composition and the product changes: aim the media
   slot at a different library and
   [PUB-4](specs/compositions/course-publishing.md#pub-4) walks

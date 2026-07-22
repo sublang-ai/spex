@@ -102,6 +102,9 @@ grant scoped to that one asset and bounded by the configured
 expiry; the server shall deny a playback request without a
 verified session and any content request bearing an expired or
 tampered grant.
+Authorization is evaluated at issuance: an issued grant shall
+stay redeemable until its expiry regardless of later session or
+authorization changes — expiry is the only revocation.
 
 ### Host Authorization
 
@@ -148,9 +151,10 @@ no session, the player shows the sign-in-required state and no
 media request is made ([VID-6](#vid-6)); and direct
 stored-content requests without a grant ([VID-7](#vid-7)), with
 an expired grant, and with a tampered grant are all denied even
-with a signed-in session ([VID-8](#vid-8)); and a request the
-stub host does not authorize is denied, with no grant issued
-([VID-15](#vid-15)).
+with a signed-in session, while a grant issued before sign-out
+still serves content until its expiry ([VID-8](#vid-8)); and a
+request the stub host does not authorize is denied, with no
+grant issued ([VID-15](#vid-15)).
 
 ### Identity and Deletion Coverage
 
