@@ -9,7 +9,7 @@ This package lets people establish and end an application account and session us
 It owns the GitHub identity path and may be used alone or alongside other identity packages.
 It can be reused unchanged by applications accepting this identity and session contract.
 It does not decide application roles, authorization, or route policy.
-A host may supply an already normalized, route-policy-approved safe destination for post-authentication navigation; validating that destination remains the host's responsibility.
+A host may supply an already normalized, route-policy-approved same-site path for post-authentication navigation; the package never returns to an absolute, protocol-relative, or cross-origin destination.
 
 ## External Behavior
 
@@ -23,7 +23,7 @@ While a GitHub sign-in attempt is active, when the user cancels it, GitHub or th
 
 ### GHID-3
 
-When GitHub sign-in succeeds, the session surface shall show the member's current GitHub avatar and login, mark the session authenticated, and make the requested safe destination available for navigation.
+When GitHub sign-in succeeds, the session surface shall show the member's current GitHub avatar and login, mark the session authenticated, and return to the accepted same-site path or the host's default path when none was accepted.
 
 ### GHID-4
 
@@ -74,8 +74,8 @@ It shall never create an active record from an ordinary protected request, react
 
 ### GHID-13
 
-When the host supplies a post-authentication destination, the destination intake shall accept only a normalized safe destination that the host has already validated, preserve it across one authentication attempt, and return it unchanged after success.
-When no accepted destination exists, it shall request the host's default destination and shall never infer safety from a browser-supplied scheme, host, or protocol-relative value.
+When the host supplies a post-authentication destination, the destination intake shall accept only a normalized, route-policy-approved same-site path, preserve it across one authentication attempt, and return it unchanged after success.
+It shall reject an absolute, protocol-relative, cross-origin, malformed, or host-unknown value, use the host's default path when no destination is accepted, and never infer safety from a browser-supplied scheme or host.
 
 ### GHID-14
 

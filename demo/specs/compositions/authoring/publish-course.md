@@ -5,74 +5,63 @@
 
 ## Intent
 
-This composition covers the administrator journey from a new ordered syllabus and private video uploads to one coherent learner-visible course release.
-It hands a ready video reference into a syllabus lesson and a complete syllabus snapshot into catalog publication.
+This composition covers how an administrator builds and publishes a mutable course while its lesson-media slot uses the independent video library.
 
 ## Binding
 
 ### PUBLISH-1
 
-Where lesson content in this course website uses SYLL's [learning-content input](../../packages/learning/course-syllabus.md#syll-12) with `video` as the sole installed content kind, the installation shall supply VIDS's [video references, chooser descriptions, and exact-reference status](../../packages/media/video-library.md#vids-10) for the same active account and request, preserving every identity, lifecycle, reference-completeness, and unavailable-result meaning owned by the two endpoints.
+Where lesson media in this course website uses CAT's [media-selection input](../../packages/learning/course-catalog.md#cat-15) and [media-resolution input](../../packages/learning/course-catalog.md#cat-16), the installation shall supply VIDS's [chooser references and reference resolution](../../packages/media/video-library.md#vids-5) according to this pairing:
 
-### PUBLISH-2
-
-Where each complete course publication-candidate handoff uses CAT's [publication-snapshot input](../../packages/learning/course-catalog.md#cat-14), the installation shall supply only SYLL's [trusted immutable schema-version `1` snapshot](../../packages/learning/course-syllabus.md#syll-10) for the same draft and revision; SYLL keeps every no-snapshot validation result in authoring.
-
-### PUBLISH-3
-
-Where the response to each course publication request uses SYLL's [success input](../../packages/learning/course-syllabus.md#syll-14) or [conflict input](../../packages/learning/course-syllabus.md#syll-16), the installation shall return CAT's [success report](../../packages/learning/course-catalog.md#cat-10) or [conflict report](../../packages/learning/course-catalog.md#cat-12) unchanged for the draft and snapshot that originated the request according to this mapping:
-
-| Client input | Supplier report |
+| CAT client | Installed VIDS provision |
 | --- | --- |
-| SYLL success input | CAT success report |
-| SYLL conflict input | CAT conflict report |
+| media selection | chooser labels and the selected opaque video reference, or cancellation |
+| media resolution | availability for the same stored opaque video reference, or unavailable |
+
+CAT retains and owns each lesson reference; VIDS retains and owns each video asset.
 
 ## Scenario
 
+### PUBLISH-2
+
+Where the configured administrator starts with no course, when the administrator [creates an unpublished course](../../packages/learning/course-catalog.md#cat-5), [arranges its syllabus](../../packages/learning/course-catalog.md#cat-6), [uploads a video](../../packages/media/video-library.md#vids-1), attaches its reference through the [installed media handoff](#publish-1), and [publishes that same course record](../../packages/learning/course-catalog.md#cat-10), the website shall show the saved public title, summary, section order, and lesson order through the [course view](../../packages/learning/course-catalog.md#cat-2) and the playable lesson through its [resolved media view](../../packages/learning/course-catalog.md#cat-3).
+
+### PUBLISH-3
+
+While a lesson's video upload is incomplete, when the transfer is [interrupted or the administrator leaves the page](../../packages/media/video-library.md#vids-3), the website shall show no selectable partial video and shall preserve the course and lesson unchanged.
+When the administrator retries from byte zero, completes the upload, and attaches it through the [installed media handoff](#publish-1), the [course manager](../../packages/learning/course-catalog.md#cat-8) shall store exactly one reference for that lesson.
+
 ### PUBLISH-4
 
-Where the configured administrator starts with no course, when the administrator opens course authoring, follows its primary [`Create course` action](../../packages/learning/course-syllabus.md#syll-1), creates an ordered draft, [uploads ready videos](../../packages/media/video-library.md#vids-3), attaches one ready reference to every lesson through the [installed video-content handoff](#publish-1) while reusing the same video where chosen, and confirms publication through the [installed snapshot handoff](#publish-2), the website shall [publish one coherent release](../../packages/learning/course-catalog.md#cat-3) whose public learner view contains the same title, summary, section order, and lesson order, and shall return the accepted draft revision and locked slug through the [installed publication-result handoff](#publish-3) as the authoring view's published baseline.
+Where a course is already published, when the administrator saves [changed details or syllabus order](../../packages/learning/course-catalog.md#cat-6) or a [changed media attachment](../../packages/learning/course-catalog.md#cat-8), the website shall expose the [complete saved state immediately and atomically](../../packages/learning/course-catalog.md#cat-7) on subsequent public reads and shall prevent a stale shared response through the shell's [current-state cache boundary](../../packages/web/application-shell.md#site-11).
 
 ### PUBLISH-5
 
-While a draft lesson's intended upload is [invalid](../../packages/media/video-library.md#vids-2), [failed, or interrupted](../../packages/media/video-library.md#vids-3), when the administrator checks publication readiness, the website shall [identify that lesson as blocked and keep publication unavailable](../../packages/learning/course-syllabus.md#syll-5).
-When the same intended upload later succeeds, the [installed video-content handoff](#publish-1) shall offer one ready reference for the lesson and no duplicate attachment.
+Where a published course has a lesson attached to a listed video, when the administrator confirms [course deletion](../../packages/learning/course-catalog.md#cat-11), the website shall make every course and lesson route unavailable while the video remains [listed](../../packages/media/video-library.md#vids-4) and [independently resolvable](../../packages/media/video-library.md#vids-5).
 
 ### PUBLISH-6
 
-Where a course is published, when the administrator [edits and reorders its draft](../../packages/learning/course-syllabus.md#syll-6), visitors shall continue seeing the [complete earlier release](../../packages/learning/course-catalog.md#cat-4) until the administrator supplies the later snapshot through the [installed snapshot handoff](#publish-2), after which new public reads shall see the complete later release and no mixed revision and the [installed publication-result handoff](#publish-3) shall mark the accepted revision as the new published baseline while retaining the locked slug.
+Where a course lesson retains a reference to a listed video, when the administrator confirms [video deletion](../../packages/media/video-library.md#vids-6), the course and syllabus shall remain, its public lesson shall show no playable media, and the [course manager shall mark the retained reference unavailable](../../packages/learning/course-catalog.md#cat-9).
+When the administrator replaces or clears it through the [installed media handoff](#publish-1), the course manager shall store the replacement reference or no reference without recreating the deleted video.
 
 ### PUBLISH-7
 
-Where a draft fails one or more publishability rules, when the administrator requests readiness or publication, the website shall [show every actionable validation result](../../packages/learning/course-syllabus.md#syll-9) at its field or lesson in the [retained editor context](../../packages/web/application-shell.md#site-4), emit no snapshot through the [installed snapshot handoff](#publish-2), initiate no catalog publication, and preserve the draft.
-
-### PUBLISH-8
-
-Where another published or unpublished course reserves the draft's syntactically valid slug, or a later snapshot tries to change the slug locked by that course's first release, when the administrator supplies it through the [installed snapshot handoff](#publish-2), the website shall [show the slug conflict without disclosing another draft and preserve the current draft](../../packages/learning/course-syllabus.md#syll-9), [preserve every current release and reservation](../../packages/learning/course-catalog.md#cat-9), and create no conflicting release.
-When the administrator gives the eligible different-course draft an unreserved slug or restores the same course's locked slug and confirms again, the website shall publish that corrected snapshot and show its accepted locked slug through the [installed publication-result handoff](#publish-3).
-
-### PUBLISH-9
-
-Where the authoring pages are rendered at 360 CSS pixels and 200 percent zoom, when an administrator uses only the keyboard to [create and reorder a syllabus](../../packages/learning/course-syllabus.md#syll-3), [upload](../../packages/media/video-library.md#vids-1) and [choose video](../../packages/media/video-library.md#vids-7), resolve a dialog, and publish, the [integrated presentation](../../packages/web/application-shell.md#site-5) shall preserve visible focus, labels, status announcements, logical order, and usable actions without horizontal page scrolling.
+Where authoring is rendered at 360 CSS pixels or 200 percent zoom, when an administrator uses only the keyboard to [create](../../packages/learning/course-catalog.md#cat-5), [edit and reorder](../../packages/learning/course-catalog.md#cat-6), [publish](../../packages/learning/course-catalog.md#cat-10), and [delete courses](../../packages/learning/course-catalog.md#cat-11), [upload](../../packages/media/video-library.md#vids-1), [choose](../../packages/media/video-library.md#vids-5), [rename](../../packages/media/video-library.md#vids-4), and [delete videos](../../packages/media/video-library.md#vids-6), and confirm destructive actions, the [integrated presentation](../../packages/web/application-shell.md#site-5) shall preserve logical order, visible focus, labels, state announcements, and usable actions without horizontal page scrolling.
 
 ## Verification
 
+### PUBLISH-8
+
+Where a clean acceptance environment starts empty and can interrupt uploads, when the administrator completes the [first-course journey](#publish-2) and the [byte-zero recovery journey](#publish-3), the acceptance suite shall assert exact chooser and resolution pairing through the [installed media handoff](#publish-1), no partial selectable asset, retry from zero, one stored reference, and one published playable course with the saved syllabus order.
+
+### PUBLISH-9
+
+Where public readers straddle course changes, when the administrator completes the [live-edit journey](#publish-4) and [confirmed course deletion](#publish-5), the acceptance suite shall assert all-preceding or all-saved reads without mixed or stale state, immediate visibility after save, unavailable deleted routes, and an unchanged listed video.
+
 ### PUBLISH-10
 
-Where separate administrator, anonymous-reader, and member browsers use a clean acceptance environment, when the administrator completes the [initial publication journey](#publish-4), the readers prime every public response, and the administrator completes the [later-snapshot journey](#publish-6), the acceptance suite shall assert the empty-state affordance, the same exact public learner hierarchy for the anonymous reader and member, one whole current release at each stage with no stale shared response, a receipt that establishes the accepted revision and locked slug in the authoring view, and no draft leakage between publications.
+Where a published lesson refers to a deletable video, when the administrator completes the [video-deletion and repair journey](#publish-6), the acceptance suite shall assert video record and content deletion, an unchanged course and syllabus, a retained unavailable reference visible only in management, public no-media presentation, and successful replacement or clearing.
 
 ### PUBLISH-11
 
-Where uploads can be rejected, interrupted, resumed, failed, and retried and the draft can omit each required field in turn, when the administrator drives the [upload-recovery case](#publish-5) and [invalid-draft case](#publish-7), then publishes after correction, the acceptance suite shall assert lesson-specific blocking, complete actionable validation, no snapshot or catalog request before correction, preserved draft state, and one attachment after successful retry.
-
-### PUBLISH-12
-
-Where fixtures cover a slug reserved by another published course, a slug retained by another unpublished course, and a changed slug for a later snapshot of the same course, when the administrator exercises the [slug-conflict and correction case](#publish-8), the acceptance suite shall assert each redacted conflict without another draft's identity, byte-equivalent drafts, releases, and reservations after every failure, and one correct later release only after correction.
-
-### PUBLISH-13
-
-Where the real editor, reorder controls, uploader, chooser, confirmation dialog, and publication result are rendered at the required viewport and zoom, when keyboard-only and assistive-technology checks complete the [accessible authoring journey](#publish-9), the acceptance suite shall assert focus order/visibility, names, announcements, state changes, usable layout, and successful publication.
-
-### PUBLISH-14
-
-Where versioned provider and client contract fixtures contain matching, incomplete, altered, mismatched-identity, exact repeated, result-identity-reused, cross-snapshot, and out-of-order values, including chooser descriptions in every lifecycle state and exact-reference status replies, when the [video-content](#publish-1), [publication-snapshot](#publish-2), and [publication-result](#publish-3) seams are checked directly, the conformance suite shall accept chooser omissions only for `uploading` or `failed`, require the exact reference for `ready`, `unavailable`, and status replies, accept only exact publication snapshots and results, preserve exact repeated current-snapshot success and conflict idempotently, reject reused identities and nonmatching snapshots, and preserve every endpoint meaning without conversion or duplication.
+Where the real authoring, upload, chooser, reorder, publication, and confirmation surfaces are rendered at the required viewport and zoom, when keyboard-only and assistive-technology checks complete the [accessible authoring journey](#publish-7), the acceptance suite shall assert focus order and visibility, names, announcements, state changes, usable layout, and successful completion of every action.

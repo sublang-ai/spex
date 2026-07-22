@@ -5,48 +5,41 @@
 
 ## Intent
 
-This composition installs the shared identity, role, route, and capability seams used by the course website's access scenarios.
-They are kept together because one access policy owns them and several journeys reuse them.
+This composition installs the course site's shared identity, safe-return, protected-request, and management-capability seams.
+Public catalog reads and video-playback policy remain outside these management bindings.
 
 ## Binding
 
 ### ACCESS-1
 
-Where every course-site role assignment and capability request uses ROLE's [identity intake](../../packages/access/role-access.md#role-11), the installation shall supply GHID's [application account and exact active-session evidence](../../packages/access/github-identity.md#ghid-7) for an authenticated request and its [anonymous result](../../packages/access/github-identity.md#ghid-8) for every rejected session.
+Where every installed ROLE identity intake uses its [trusted identity-evidence requirement](../../packages/access/role-access.md#role-5), the installation shall supply GHID's [authenticated account and active-session evidence](../../packages/access/github-identity.md#ghid-7) when validation succeeds and its [anonymous result with no usable identity](../../packages/access/github-identity.md#ghid-8) for every other result, preserving the exact account, session, and request.
 
 ### ACCESS-2
 
-Where every course-site GitHub authentication attempt uses GHID's [post-authentication destination intake](../../packages/access/github-identity.md#ghid-13), the installation shall supply only destinations that SITE's [destination boundary](../../packages/web/application-shell.md#site-7) has normalized and accepted under the installed route map, using `/courses` as SITE's default.
+Where every installed GHID destination intake uses its [safe post-authentication destination requirement](../../packages/access/github-identity.md#ghid-13), the installation shall supply only same-site paths accepted by SITE's [route-map destination boundary](../../packages/web/application-shell.md#site-7), including `/courses` as the default when no requested destination is accepted.
 
 ### ACCESS-3
 
-Where every administrator route, protected Route Handler, protected video action, and Server Action uses SITE's [protected request boundary](../../packages/web/application-shell.md#site-8), the installation shall gate each protected response or action with GHID's current [authenticated](../../packages/access/github-identity.md#ghid-7) or [anonymous](../../packages/access/github-identity.md#ghid-8) session result and ROLE's [access decision](../../packages/access/role-access.md#role-6) under its [capability policy](../../packages/access/role-access.md#role-7) for the same account, request, capability, and resource before returning protected data or a mutation result.
+Where every administrator route, protected Route Handler, protected video action, and Server Action uses SITE's [protected-request boundary](../../packages/web/application-shell.md#site-8), the installation shall supply GHID's current [authenticated](../../packages/access/github-identity.md#ghid-7) or [anonymous](../../packages/access/github-identity.md#ghid-8) result and, for an authenticated caller, ROLE's [exact server-only capability decision](../../packages/access/role-access.md#role-2) for the same account, session, request, capability, and resource before any protected data or mutation result is produced.
+An anonymous result shall supply no allowed decision.
 
 ### ACCESS-4
 
-Where every protected course-site domain request uses SYLL's [course-authoring intake](../../packages/learning/course-syllabus.md#syll-13), CAT's [lesson-content](../../packages/learning/course-catalog.md#cat-16) or [course-publication](../../packages/learning/course-catalog.md#cat-17) permission intake, or VIDS's [video-management intake](../../packages/media/video-library.md#vids-19), with public catalog reads outside this Binding, the installation shall project ROLE's [access decisions](../../packages/access/role-access.md#role-6) under its [capability policy](../../packages/access/role-access.md#role-7) into those client requirements without changing their account, request, resource, freshness, or denial meaning:
+Where CAT's [course-management authorization intake](../../packages/learning/course-catalog.md#cat-14) and VIDS's [video-management authorization intake](../../packages/media/video-library.md#vids-9) are installed, the installation shall project ROLE's [exact capability decisions](../../packages/access/role-access.md#role-2) without changing their account, session, request, action, resource, freshness, or denial meaning:
 
 | ROLE capability | Client requirement |
 | --- | --- |
-| `course.author` | SYLL course-authoring permission |
-| `video.watch` | CAT lesson-content permission |
-| `course.publish` | CAT course-publication permission |
+| `course.manage` | CAT course-management authorization |
 | `video.manage` | VIDS video-management authorization |
 
-### ACCESS-5
-
-Where the `initial-administrator` capability in each deployed environment uses LIVE's [application-capability readiness intake](../../packages/operations/production-runtime.md#live-14), the installation shall supply ROLE's [readiness report](../../packages/access/role-access.md#role-8) with its unchanged observation identity, time, capability, role-policy revision, fail-closed conclusion, and redacted evidence during the current deployment evaluation.
+The installation shall request no ROLE decision for public catalog reads through this projection and shall not use it to supply VIDS playback authorization.
 
 ## Verification
 
+### ACCESS-5
+
+Where identity, route, and capability fixtures produce authenticated, anonymous, expired, revoked, mismatched, unsafe-destination, and denied cases, when the installed seams are inspected and exercised, the conformance suite shall assert exact GHID identity or anonymous projection into ROLE with account, session, and request preserved ([ACCESS-1](#access-1)); acceptance only of SITE-approved same-site destinations and `/courses` fallback ([ACCESS-2](#access-2)); and fresh authentication plus the exact ROLE decision at every protected SITE boundary, with no allowed decision for an anonymous or mismatched caller ([ACCESS-3](#access-3)).
+
 ### ACCESS-6
 
-Where session, route, and role fixtures produce valid, expired, revoked, mismatched, unsafe-destination, and denied cases, when the [role-identity](#access-1), [safe-destination](#access-2), and [protected-request](#access-3) seams are inspected and exercised, the conformance suite shall assert exact account/request association, safe-destination projection, denial on every mismatch, and no alternate provider path.
-
-### ACCESS-7
-
-Where anonymous, member, and administrator requests exercise every ROLE capability against each client package and read the public catalog, when the [installed capability projection](#access-4) is exercised, the conformance suite shall assert the four exact protected mappings, resource and request preservation, no browser-supplied decision, denial of every unlisted capability, and no ROLE decision or access Binding on the public catalog read.
-
-### ACCESS-8
-
-Where bootstrap state is ready, missing, malformed, changed, and duplicated in turn, when the [installed readiness seam](#access-5) is inspected, the conformance suite shall assert the same fail-closed conclusion and deployment revision at ROLE and LIVE.
+Where anonymous, member, and administrator callers exercise course and video management plus public catalog and playback requests, when the capability projection is inspected, the conformance suite shall assert only the exact `course.manage` to CAT and `video.manage` to VIDS mappings, with every decision field and denial preserved, no browser-supplied decision accepted, no ROLE decision requested for a public catalog read, and no VIDS playback authorization supplied through this projection ([ACCESS-4](#access-4)).

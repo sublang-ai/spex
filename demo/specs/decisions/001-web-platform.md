@@ -10,90 +10,48 @@ Accepted for the demo.
 ## Context
 
 The product requirements select Next.js, Tailwind CSS, shadcn/ui, Vercel, Supabase, and GitHub.
-The remaining placement choices affect authorization, large uploads, environment isolation, and delivery behavior.
+The remaining choices must keep public catalog reads simple while protecting administration and video content.
 
 ## Decision
 
-- The application is a TypeScript Next.js application using the App Router.
-- User-facing styling uses Tailwind CSS and reusable shadcn/ui components.
-- Vercel hosts secret-free fixture previews, protected unaliased Production candidates, and promoted production deployments.
-- Supabase Auth is the identity authority and has only the GitHub OAuth provider enabled.
-  Email/password, magic-link, phone, anonymous, and every other direct sign-up or sign-in method are disabled.
-  A generic Supabase `authenticated` JWT is not membership: the server must verify a GitHub identity record and an active application session before producing a trusted principal.
-  The immutable provider subject comes from the server-validated `identities[].provider_id` string, never mutable user metadata and never a JavaScript number [[1]][[2]][[8]].
-- Authenticated App Router responses, authentication callbacks, Route Handlers, Server Actions, and every current-release catalog, course, or lesson response use request-scoped Supabase clients and non-shared caching.
-  Every protected entry point performs its own session and authorization check; no user-specific, `Set-Cookie`, or current-release response may be served from shared static, ISR, or CDN cache [[9]].
-- Supabase Postgres is the source of truth for accounts, active application sessions, roles, drafts, releases, upload attempts, and video metadata.
-  Every application table in an exposed schema has Row Level Security enabled; ordinary requests use the caller-scoped client, and every exposed view or function executes with caller semantics, preserves the underlying policies, and cannot broaden the public CAT projection or protected caller rights [[3]][[14]].
-  Every member/administrator policy requires both the Auth user ID and JWT session ID to match one active application-session row.
-  Anonymous access is limited to a read-only current-release projection that carries only the public catalog, course, section, and lesson fields declared by CAT.
-  A separate service-role client may perform only the named exact-object signing, upload finalization/cleanup, identity reconciliation, application-session revocation, and readiness operations after the owning package has authorized the request.
-  It is never used as a general application data client and never reaches a browser.
-- The semantic data-access matrix is:
-
-  | Surface | Anonymous or non-GitHub Auth user | Registered member | Administrator | Privileged server operation |
-  | --- | --- | --- | --- | --- |
-  | own account/session/role view | none | own row only | own row only | reconcile the exact verified identity or revoke the exact session |
-  | course drafts | none | none | read/write after `course.author` | none |
-  | current catalog metadata | read the sanitized current-release projection | same public projection | same public projection plus publish/unpublish after `course.publish` | none |
-  | current-lesson playback entitlement | none | server-only entitlement for the exact current attachment after `video.watch`; no content reference returned to the client | same as member | none |
-  | video registry | none | no direct registry read; an authorized player receives only its visible label and generic state | manage after `video.manage`; playback exposure is the same as for a member | finalize or clean the exact authorized upload attempt |
-  | private Storage objects | none | exact bounded playback bearer grant only | exact upload capability or playback grant only | sign the exact authorized object; verify/clean the exact attempt |
-
-  The public projection is the closed, surface-specific allowlist defined by [CAT-13](../packages/learning/course-catalog.md#cat-13) for the requested current catalog, course, or lesson route.
-  It excludes draft, snapshot, and release identities or revisions; publication receipts; content kinds and references; asset identities and revisions; video labels, states, and locations; authorization values; and every provider field.
-  No exposed table, view, function, or Storage policy may broaden this matrix.
-  A revoked application session with an otherwise unexpired Auth JWT is treated as anonymous by every row, view, and RPC policy.
-  Upload capabilities, TUS upload URLs, and playback grants become transferable bearer credentials after issuance; possession permits only their exact object operation, while issuance and finalization still require an active authorized account.
-
-  The concrete capability-to-client mapping is installed once by [ACCESS-4](../compositions/access/install-course-access.md#access-4).
-  This record explains the selected fail-closed data policy but is not a second source for that binding.
-- Supabase Storage on a Pro-or-higher project holds video objects in a private bucket with a 1 GiB project and bucket limit.
-  Large uploads use its resumable direct-upload facility so video bytes do not pass through a Vercel request handler [[4]][[10]].
-  Each upload uses a new immutable object key and a signed capability scoped to that exact key with overwrite disabled.
-- Playback uses bearer grants nominally expiring after no more than five minutes for exact private objects.
-  Every new grant requires an online-verified GitHub principal, an active application-session record, an allowed `video.watch` decision, and a fresh server-only catalog entitlement for that exact request and current lesson.
-  Sign-out revokes the application session before clearing browser state, so no new grant is issued afterward.
-  Supabase access tokens may remain valid until expiry, and a browser or Smart CDN may retain bytes or a signed response beyond the nominal grant expiry; the product therefore promises no new application grant or Storage-origin authorization, not erasure or a strict byte cutoff [[5]][[9]][[11]][[13]].
-- Local development and pull-request integration checks use a fresh Supabase local stack per commit and a deterministic fake GitHub OAuth authority.
-  Every pull request also receives a Vercel fixture preview with no protected provider secrets or production data; that preview is explicitly limited to route, responsive, and view-state evaluation and is never reported as provider-integrated production readiness.
-  The production candidate and production deployment use one dedicated Supabase Pro project and one dedicated GitHub OAuth application.
-  This avoids pretending that concurrent pull requests are isolated on one mutable non-production project.
-- Database schema, policies, bucket configuration, and seed fixtures are versioned as reviewed migrations/configuration in GitHub [[6]].
-- GitHub Actions supplies required quality checks and the clean local Supabase integration environment.
-  Vercel's GitHub integration supplies fixture previews and staged production deployment primitives [[7]].
-- Vercel automatic assignment of custom production domains is disabled.
-  Delivery creates a protected, unaliased Production deployment using production configuration, records its deployment ID, and promotes that exact artifact without rebuilding only after readiness and smoke evidence pass [[12]].
-- GitHub's callback registered at the OAuth provider is the Supabase Auth provider callback.
-  Supabase's application redirect allowlist separately names the website's `/auth/callback` origins; protected delivery verifies both sets and every non-GitHub Auth method and produces a provider-configuration attestation for runtime readiness.
-- Database migrations and reviewed Auth/API/Storage configuration are applied by separate explicit delivery steps.
-  Production mutation is serialized and non-cancelable from its first mutation through evidence capture.
-  Web rollback reassigns a retained deployment but does not roll back Postgres, Auth, or Storage state; the retained deployment must first prove compatibility with their current revisions.
-- Runtime code receives the provider-configuration attestation but no Supabase or GitHub control-plane management credential.
-  Runtime readiness checks its own environment configuration and functional provider health; protected delivery alone reads or changes plan, Auth-provider, callback, redirect, and global Storage settings.
+- The application uses Next.js App Router with strict TypeScript, Server Components by default, Server Actions for mutations, Tailwind CSS, and one in-repository shadcn/ui component set.
+- Supabase Auth is the identity authority and enables GitHub OAuth only.
+  The server obtains the immutable GitHub subject from verified provider identity rather than mutable profile metadata, and every protected request validates its current session online [[1]][[2]][[7]][[8]][[13]].
+- Supabase Postgres stores application accounts and sessions, roles, mutable courses and ordered syllabi, publication state, and video records.
+  Row Level Security permits anonymous reads only of CAT's published public fields; protected reads and mutations require the exact active account and installed authorization decision [[3]].
+- Supabase Storage holds complete video objects in a private bucket with a 1 GiB limit.
+  The browser uploads directly with byte progress through the exact installed private-object capability; an interrupted transfer creates no listed video, and retry begins at byte zero.
+  Storage provides no permanent public object URL [[9]].
+- Playback uses transferable signed bearer locations scoped to one video and expiring no later than five minutes [[4]].
+  Every new grant requires a current GitHub application session and the installed rule for an available video attached to a currently published lesson.
+  Sign-out, unpublication, or course deletion prevents later grants but does not invalidate an already-issued bearer before expiry.
+  Video deletion prevents later grants and removes the origin object; neither case can retract bytes already delivered or cached [[10]][[12]].
+- Request-specific authentication responses and public course responses use request-scoped clients and non-shared caching so another account's state or a stale saved, unpublished, or deleted course is not served [[8]].
+- Local provider integration uses a fresh local Supabase stack and deterministic fake GitHub authority; fixture previews receive no production identity, data, or secret [[5]].
+- GitHub hosts the repository and required Actions checks.
+  Vercel's Git integration publishes secret-free previews and protected production candidates; delivery promotes the exact tested candidate without rebuilding [[6]][[11]].
+- Provider configuration, database migrations, policies, and bucket configuration are reviewed in GitHub.
+  Runtime receives application credentials only; protected delivery alone receives the provider control-plane credentials needed to inspect or change configuration.
 
 ## Consequences
 
-- Authorization is enforced at both trusted application boundaries and the data/storage boundaries.
-- Anonymous database access can read only the sanitized current-release projection; it cannot discover a video or acquire playback authority.
-- Video uploads can be resumed and do not depend on Vercel body-size or execution-time limits.
-- Pull-request code can prove application behavior without receiving production identities, content, or credentials.
-- The playback contract states the limits of signed URLs and caches instead of promising impossible immediate revocation.
-- The specs constrain observable security and delivery outcomes while leaving source layout and algorithms to implementation.
+- Public course discovery needs no account, while administration and video grants remain server-authorized.
+- Upload retry is intentionally simple and may resend the whole file.
+- Signed bearer expiry bounds session and course-policy staleness without claiming impossible immediate byte revocation.
+- Preview and production data remain isolated, and every production artifact traces to reviewed GitHub evidence.
 
 ## References
 
 [1]: https://supabase.com/docs/guides/auth/social-login/auth-github "Supabase: Login with GitHub"
 [2]: https://nextjs.org/docs/app/guides/authentication "Next.js: Authentication"
 [3]: https://supabase.com/docs/guides/database/postgres/row-level-security "Supabase: Row Level Security"
-[4]: https://supabase.com/docs/guides/storage/uploads/resumable-uploads "Supabase: Resumable Uploads"
-[5]: https://supabase.com/docs/guides/storage/serving/downloads "Supabase: Serving Storage assets"
-[6]: https://supabase.com/docs/guides/local-development/overview "Supabase: Local development and migrations"
-[7]: https://vercel.com/docs/git/vercel-for-github "Vercel for GitHub"
-[8]: https://supabase.com/docs/guides/auth/identities "Supabase: User identities"
-[9]: https://supabase.com/docs/guides/auth/server-side/advanced-guide "Supabase: Advanced server-side Auth guide"
-[10]: https://supabase.com/docs/guides/storage/uploads/file-limits "Supabase: Storage file limits"
-[11]: https://supabase.com/docs/guides/storage/cdn/smart-cdn "Supabase: Smart CDN"
-[12]: https://vercel.com/docs/deployments/promoting-a-deployment "Vercel: Promoting a deployment"
-[13]: https://supabase.com/docs/guides/auth/signout "Supabase: Sign out"
-[14]: https://supabase.com/docs/guides/auth/sessions "Supabase: Sessions"
+[4]: https://supabase.com/docs/guides/storage/serving/downloads "Supabase: Serving Storage assets"
+[5]: https://supabase.com/docs/guides/local-development/overview "Supabase: Local development and migrations"
+[6]: https://vercel.com/docs/git/vercel-for-github "Vercel for GitHub"
+[7]: https://supabase.com/docs/guides/auth/identities "Supabase: User identities"
+[8]: https://supabase.com/docs/guides/auth/server-side/advanced-guide "Supabase: Advanced server-side Auth guide"
+[9]: https://supabase.com/docs/guides/storage/uploads/file-limits "Supabase: Storage file limits"
+[10]: https://supabase.com/docs/guides/storage/cdn/smart-cdn "Supabase: Smart CDN"
+[11]: https://vercel.com/docs/deployments/promoting-a-deployment "Vercel: Promoting a deployment"
+[12]: https://supabase.com/docs/guides/auth/signout "Supabase: Sign out"
+[13]: https://supabase.com/docs/guides/auth/sessions "Supabase: Sessions"

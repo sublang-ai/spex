@@ -5,145 +5,123 @@
 
 ## Intent
 
-This package publishes immutable syllabus snapshots, gives every reader one coherent public current-release catalog, and authorizes exact current-lesson content for permitted viewers.
-It owns published course releases and their selection while leaving mutable draft authoring and attached-content delivery outside the package.
-It can be reused unchanged with any authorizer, snapshot source, and content recipient satisfying the meanings defined below.
-Lesson-content permission means fresh trusted authorization associated with the active account, exact request, current published course and lesson, and exact attached content to request that content.
-Course-publication permission means fresh trusted authorization associated with the active account, exact request, and named course to publish a complete version or unpublish its current release.
-Each installation supplies those permissions through a trusted authorizer.
+This package owns mutable course records, their ordered syllabi, stable addresses, publication state, and opaque lesson-media references.
+A course has a title, optional summary, stable slug, and ordered sections; each section has a title and ordered lessons; each lesson has a title, optional description, and at most one opaque media reference.
+An administrator is a package user whose fresh course-management permission is accepted for the exact request.
+A trusted playback-eligibility request is a server-only request naming one exact course, lesson, and host request identity.
+The package neither defines roles nor owns media assets: an installation supplies authorization and a media collaborator, and the package can be reused unchanged with any suppliers satisfying the requirements below.
 
 ## External Behavior
 
 ### CAT-1
 
-When any reader opens the catalog, the catalog shall list every currently published course and no draft or unpublished course, ordered by `en-US` case-insensitive title and then slug as the deterministic tie-breaker, with each title and summary linking to its stable slug.
+When any visitor opens the course list, the catalog shall show every published course and no unpublished course, with each title and summary linking to its stable slug, and shall offer `Newest` and `Title A–Z` ordering.
+`Newest` shall be the default and order by publication time descending, then title, then slug; `Title A–Z` shall order by title, then slug.
+Every title comparison shall normalize to Unicode NFC and use `en-US` collation with base sensitivity (ignoring case and accents), punctuation significant, and digit sequences compared lexicographically rather than numerically.
 
 ### CAT-2
 
-When any reader selects the slug of a currently published course, the course view shall show the release's title, summary, and complete section and lesson hierarchy in published order, with each lesson linked to its public lesson route.
+When a visitor opens a published course, the course view shall show its title, summary, and complete syllabus, with sections and lessons in their saved order and every lesson linked to its stable lesson route.
+When the visitor opens a lesson, the lesson view shall show its title, optional description, course and section context, and media area.
 
 ### CAT-3
 
-Where an account is allowed to publish courses and the selected complete course version has no conflict under [CAT-9](#cat-9), when the account confirms publication, the publication surface shall make that version current in one operation and shall report success with the accepted draft revision, locked slug, release number, and publication time.
+When a published lesson carries a media reference that resolves, its course entry shall be marked playable and its lesson media area shall show a playback action without requesting or embedding the private media content.
+When the lesson has no reference or its reference does not resolve, both views shall show a no-media state and shall expose no opaque reference, provider metadata, or resolution detail.
 
 ### CAT-4
 
-Where a course already has a current release, when an account allowed to publish courses publishes a later saved version, the catalog shall switch new catalog, course, lesson, and playback selections to the later release together and shall show only all-earlier or all-later fields and lessons for each read.
+When a public request targets an unknown or unpublished course or one of its lessons, the catalog shall return the same plain not-found outcome and disclose no course, syllabus, media-reference, or publication-state data.
 
 ### CAT-5
 
-Where a course has a current release, when an account allowed to publish courses confirms unpublication, the catalog shall remove the course from subsequent catalog, course, lesson, and new playback results while retaining its release history and locked slug reservation for a later republish.
+Where course-management permission is accepted, when the administrator creates a course with a nonblank title, the course manager shall create one unpublished course with an empty syllabus.
+It shall derive the slug by lowercasing ASCII letters, replacing each run outside `a`–`z` and `0`–`9` with one hyphen, trimming boundary hyphens, and using `course` when the result is empty; on collision it shall append the smallest available numeric suffix starting with `-2`.
+The slug shall remain unchanged when the title later changes.
 
 ### CAT-6
 
-When an unknown slug, unpublished course, non-current release, unknown or non-current lesson, or unattached content is requested, the catalog shall show the same plain unavailable outcome and shall disclose no hidden course, release, lesson, content, authorization, or denial-cause detail.
+Where course-management permission is accepted, when the administrator saves course details or adds, renames, reorders, or removes sections and lessons, the course manager shall preserve the accepted title, optional summary, lesson descriptions, and exact arranged order.
+It shall require confirmation before removing a nonempty section or a lesson; when a required title is blank, it shall keep the entered state, mark the field, and persist none of that save.
 
 ### CAT-7
 
-Where a signed-in account is not allowed to publish courses, when that account requests publication or unpublication directly, the publication surface shall create no release, preserve the current release selection, and report that course-publishing access is required.
+Where a course is published, when an accepted save changes its details, syllabus, or media references, the catalog shall expose the complete saved state immediately and atomically across subsequent course-list, course, and lesson reads.
+Each reader shall receive either the complete preceding state or the complete saved state; no staging area, numbered release, or publication history shall exist.
 
 ### CAT-8
 
-When any reader opens a lesson in a current published release, the course view shall show that lesson's published title, optional description, position, course and section context, and a content area that exposes no content reference, asset identity, or video metadata before playback is authorized.
-When the lesson is no longer current, published, or attached, the course view shall instead show the same unavailable outcome as [CAT-6](#cat-6) and disclose no stale release or content metadata.
+Where course-management permission is accepted, when the administrator opens a lesson's media chooser, the course manager shall show the media collaborator's selectable items by label without exposing their opaque references.
+When the administrator selects, replaces, or clears an item, the course manager shall store at most one returned reference on the lesson or clear that reference, and shall never interpret, alter, or delete the referenced asset.
 
 ### CAT-9
 
-Where no complete publication candidate is supplied, a supplied slug is reserved by another course whether published or unpublished, a supplied candidate changes the slug locked by this course's first release, a lower candidate revision arrives after a higher accepted revision, or the same draft revision arrives with different candidate identity or content, when an account allowed to publish courses confirms publication, the publication surface shall create no release, preserve every current release and slug reservation, and show the corresponding redacted publication conflict without disclosing another draft.
+When a stored media reference becomes unresolvable, the course manager shall retain it, mark the attachment unavailable, and offer replacement and clear actions; public course and lesson views shall treat it as no playable media.
 
 ### CAT-10
 
-When publication succeeds, the release registry shall provide one report naming a stable result identity, draft ID, snapshot ID and revision, locked slug, monotonically increasing release number, and publication time, and shall persist the supplied snapshot as the immutable release identified by those values.
-When the exact same snapshot ID and value for a draft revision is published again, the release registry shall return that existing successful publication report and shall not create another release or result identity.
+Where course-management permission is accepted, when the administrator publishes an unpublished course, the course manager shall mark that same record published and set its publication time.
+When the administrator unpublishes it, the course manager shall mark that same record unpublished; republishing shall set a new publication time without creating a copy, release, or history entry.
 
 ### CAT-11
 
-Where lesson-content permission and its active-account context have been accepted under [CAT-16](#cat-16), when content-access authorization is requested, the entitlement boundary shall recompute current release state and shall produce one opaque single-use allow value only when the exact content reference occurs in the requested lesson of the exact current published release.
-The entitlement boundary shall pass that value directly to the trusted content recipient for the same request, associated with the account context, lesson, release, content kind, asset ID, and asset revision; it shall neither serialize the value to the browser nor accept one supplied by a browser or an earlier request, and shall otherwise produce the same generic unavailable outcome defined by [CAT-6](#cat-6).
+Where course-management permission is accepted, when the administrator asks to delete a course, the course manager shall request confirmation naming the numbers of sections and lessons that will be removed.
+If confirmed, it shall hard-delete the course, its sections, lessons, and stored media references in one operation, make its public routes not-found, and leave every media-provider asset unchanged; if canceled, it shall change nothing.
 
 ### CAT-12
 
-When a publication snapshot accepted under [CAT-14](#cat-14) is rejected for a reserved slug, locked-slug mismatch, stale revision, or same-revision value mismatch, the publication boundary shall provide one stable conflict report with a stable result identity, that reason, and candidate detail containing only draft ID, snapshot ID, revision, and slug.
-An exact repeated rejected request shall return the same report.
+When a caller without accepted course-management permission requests the course manager or any create, save, media-reference, publish, unpublish, or delete action, the package shall report that course-management access is required, disclose no management data, and change no course or media reference.
 
 ### CAT-13
 
-When a public catalog, course, or lesson response is produced, the catalog shall provide only the applicable current-release fields in this table:
-
-| Response | Complete public fields |
-| --- | --- |
-| catalog | each current course's title, summary, and slug |
-| course | the selected course's title, summary, and slug; each ordered section's title and position; and each ordered lesson's public route key, title, optional description, and position |
-| lesson | the selected course's title and slug, selected section's title and position, and selected lesson's public route key, title, optional description, and position |
-
-A public lesson route key shall be the stable opaque lesson ID used in that lesson's route and shall carry no content or provider meaning.
-It shall provide no draft ID or revision, snapshot ID, release identity or number, content kind or reference, asset ID or revision, video label or lifecycle state, authorization value, storage location, or provider field.
+Where a trusted host makes a playback-eligibility request, when its course and lesson are currently published and the lesson's stored media reference resolves, the playback-eligibility boundary shall return a fresh server-only eligible result naming that same host request identity and exact stored opaque reference.
+For an unknown or unpublished course or lesson, an absent or unresolvable reference, or an untrusted or mismatched request, it shall instead return one ineligible result naming the request and no course, publication, media-reference, provider, or failure detail.
 
 ## Internal Behavior
 
 ### CAT-14
 
-When a publication snapshot is supplied, the publication-snapshot intake shall accept only an immutable schema-version `1` value from a trusted server-only snapshot source.
-The publication boundary shall require that snapshot to contain an opaque snapshot ID, draft ID and revision, title, slug, summary, and sections and lessons in their declared order, with every section carrying its stable ID, title, and contiguous zero-based position and every lesson carrying its stable ID, title, optional description, contiguous zero-based position, and one exact content reference naming content kind, asset ID, and immutable asset revision.
-It shall require the snapshot to contain no mutable content label, lifecycle state, or storage location and to be complete without a later authoring, descriptor, or ordering lookup.
-The publication-snapshot intake shall reject a browser-supplied, altered, incomplete, untrusted, or same-identity/mismatched-value snapshot without producing an accepted snapshot.
+When course-management permission is supplied, the authorization intake shall accept only a fresh trusted server decision for the same active account, exact request and action, and named course when one exists.
+It shall reject absent, denied, stale, inactive-account, mismatched, browser-supplied, privileged-service, or generic-role evidence; after rejection it shall return no management data, invoke no media collaborator, and mutate nothing.
 
 ### CAT-15
 
-When lesson-content or course-publication permission is supplied, the authorization intake shall accept it only from a trusted server source with an active-account context naming the same account, exact request, and requested current release, lesson, content, or course as applicable.
-It shall reject stale, mismatched, browser-supplied, privileged-service, or generic role evidence and shall produce no content-access allow value or publication operation after rejection; rejection shall not remove the independently public metadata defined by [CAT-13](#cat-13).
+When media selection is supplied, the media-selection intake shall accept only a trusted server response for the exact chooser request that gives each selectable item a display label and opaque reference and returns either one offered reference or cancellation.
+It shall reject an absent, stale, malformed, altered, mismatched, or browser-supplied response by showing no choices and storing no reference.
 
 ### CAT-16
 
-When lesson-content permission is supplied, the lesson-content intake shall accept it only under [CAT-15](#cat-15) with an active-account context naming the same account, exact request, current release, lesson, and attached content.
-It shall reject absent, denied, stale, inactive-account, mismatched, browser-supplied, privileged-service, or generic role evidence and shall produce no content-access allow value after rejection; rejection shall not remove the independently public metadata defined by [CAT-13](#cat-13).
+When media resolution is supplied, the media-resolution intake shall accept only a trusted server response for the exact stored reference that reports either unresolvable or resolvable for that reference.
+It shall treat an absent, stale, malformed, altered, mismatched, or browser-supplied response as unresolvable, preserve the stored reference, and disclose no cause or provider detail.
 
 ### CAT-17
 
-When course-publication permission is supplied, the publication-permission intake shall accept it only under [CAT-15](#cat-15) with an active-account context naming the same account, exact request, named course, and publish or unpublish action.
-It shall reject absent, denied, stale, inactive-account, mismatched, browser-supplied, privileged-service, or generic role evidence and shall perform no publication operation after rejection.
+When an accepted action changes a course, the course registry shall preserve stable course, section, and lesson identities, explicit total order within each parent, and a slug unique among existing courses.
+It shall reserve a new slug and commit every complete save, publication-state change, or deletion atomically, or preserve the preceding record unchanged; course deletion shall issue no media-provider deletion.
 
 ### CAT-18
 
-When public catalog, course, or lesson metadata is read, the read boundary shall require no account or authorization context and shall return only the sanitized current-release projection defined by [CAT-13](#cat-13).
-When content-access authorization is requested or publication state is changed, the entitlement or publication boundary shall proceed only with fresh lesson-content or course-publication context, respectively, accepted under [CAT-16](#cat-16) or [CAT-17](#cat-17) for that exact request.
-It shall apply that same account context at its protected data-access boundary, use no privileged service identity for ordinary public reads or publication mutations, and change no release or slug reservation without both accepted publication context and a snapshot accepted under [CAT-14](#cat-14).
-
-### CAT-19
-
-When publication requests for one draft arrive concurrently or out of revision order, the publication boundary shall serialize their release-state effects so the greatest successfully accepted snapshot revision is current while published, a lower revision can never replace or revive it even after unpublication, and each rejected lower or conflicting same-revision request receives its own report under [CAT-12](#cat-12) without changing release history or slug ownership.
-
-### CAT-20
-
-When publication is attempted, the release registry shall reserve an accepted first-release slug atomically and shall reject a slug reserved by a different course, including an unpublished course, leaving all current releases and reservations unchanged for the rejected request.
-Where the same course draft already has a release, it shall also reject a snapshot whose slug differs from the first release's slug.
-
-### CAT-21
-
-When publication makes a release current, the release registry shall atomically designate either the existing immutable release for an exact repeated snapshot or a new immutable release for a newly accepted snapshot, so list, detail, and entitlement reads resolve through one current release identity.
-
-### CAT-22
-
-When catalog views are produced, the read boundary shall derive their complete visible values only from current immutable releases and shall remain independent of later mutable draft state.
+When a public catalog, course, or lesson response is produced, the read boundary shall select only currently published records and only the public fields needed by the applicable view.
+It shall carry no unpublished content, management data, opaque media reference, provider metadata, or authorization evidence into a public response.
 
 ## Verification
 
+### CAT-19
+
+Where fixtures contain published courses with tied and distinct publication times, titles, case, accents, punctuation, digit sequences, and Unicode normalization plus one unpublished course, and host eligibility fixtures cover eligible, unknown, unpublished, unattached, unavailable, untrusted, and mismatched requests, when visitors use both list orders, open every course and lesson route, and the host requests playback eligibility, the contract suite shall assert the exact `Newest` default and `Title A–Z` orders, normalized collation, deterministic tie-breakers, public fields, and exclusion of the unpublished course ([CAT-1](#cat-1)); the complete saved hierarchy and lesson context ([CAT-2](#cat-2)); exact playable and no-media presentations with no private reference or provider detail ([CAT-3](#cat-3)); one indistinguishable not-found outcome for unknown and unpublished routes ([CAT-4](#cat-4)); and a fresh request-bound server-only eligible result with the exact stored reference only for the published resolvable fixture, with one detail-free ineligible result otherwise ([CAT-13](#cat-13)).
+
+### CAT-20
+
+Where an authorized administrator starts with an empty catalog, when the contract suite creates colliding and punctuation-only titles, renames a course, edits and reorders its syllabus, confirms and cancels removals, and attempts a blank required title, the suite shall assert unpublished creation, `hello-world`, `hello-world-2`, and `course` slugs that survive renaming ([CAT-5](#cat-5)); and exact saved order, confirmation behavior, and preservation of the preceding record after invalid input ([CAT-6](#cat-6)).
+
+### CAT-21
+
+Where an authorized administrator has one course and a media collaborator whose assets are observable, when the suite publishes, saves new details and a reordered syllabus, unpublishes, republishes, and then confirms deletion while readers straddle each operation, the suite shall assert all-preceding or all-saved public reads with no staged or historical version ([CAT-7](#cat-7)); same-record visibility toggles and a new republish time ([CAT-10](#cat-10)); confirmation counts, atomic structural and reference deletion, not-found routes, and unchanged provider assets ([CAT-11](#cat-11)); and stable identities, explicit order, unique slugs, and all-or-nothing mutations ([CAT-17](#cat-17)).
+
+### CAT-22
+
+Where controlled media collaborators return valid, canceled, absent, stale, malformed, altered, mismatched, browser-supplied, resolvable, and unresolvable results, when the administrator selects, replaces, clears, and later encounters a deleted provider asset, the contract suite shall assert labeled selection, one opaque stored reference, clear behavior, and no provider-asset mutation ([CAT-8](#cat-8)); retention and administrator repair of a dangling reference with no public playable media ([CAT-9](#cat-9)); acceptance only of the exact trusted selection result with no stored reference after every rejection ([CAT-15](#cat-15)); and acceptance only of the exact trusted resolution with every rejection treated as unresolvable without clearing the reference ([CAT-16](#cat-16)).
+
 ### CAT-23
 
-Where fixtures contain two current releases, one draft-only course, one unpublished course, an unknown slug, and sentinel snapshot, release, content, asset, and video fields, when anonymous, denied-account, and allowed-account readers open every catalog, course, and lesson route, the contract suite shall assert the [same ordered list of only current published courses](#cat-1), the [exact current published hierarchy](#cat-2), and the [public lesson fields with no content or video metadata](#cat-8).
-Every view shall use the [complete sanitized field projection](#cat-13), be [derived only from the current immutable release rather than mutable draft state](#cat-22), and return the [same redacted unavailable outcome for every hidden or unknown target](#cat-6).
-
-### CAT-24
-
-Where fixtures contain no snapshot, two increasing snapshots for one draft, an exact repeated snapshot before and after unpublication, lower and conflicting same-revision snapshots arriving before and after the greater revision, an unpublished greater release followed by its lower snapshot, an unreserved slug, two first-release drafts racing for that slug, a slug reserved by another published or unpublished course, and a same-course changed slug, when publications and concurrent reads straddle each accepted or rejected request, the contract suite shall assert [successful atomic publication with its receipt](#cat-3), [all-earlier or all-later reads after replacement](#cat-4), and [one current immutable release identity for list, detail, and entitlement reads](#cat-21).
-It shall assert the [stable idempotent report and monotonically increasing release number only for a newly accepted snapshot](#cat-10); [atomic first-slug reservation and the permanent same-course slug lock](#cat-20); and [no release, selection, or reservation change with the correct redacted conflict](#cat-9), including the [stable exact conflict-report shape for repeated rejected requests](#cat-12).
-
-### CAT-25
-
-Where a current release contains two content references, when the contract suite reads its public projection and requests content access for an attached reference with fresh permission, without permission, for an unattached reference, a prior release, a mismatched or inactive account context, a denied decision, after current-release replacement, and after unpublication and also attempts publication and unpublication as a denied account, the suite shall keep only the [sanitized current-release metadata](#cat-13) publicly readable; provide a [server-only, opaque, single-use allow value only for the fresh exact current attached request and the same unavailable outcome otherwise](#cat-11); [remove the public projection while preserving release history and slug reservation after allowed unpublication](#cat-5); and [create no release or selection change for either denied mutation](#cat-7).
-
-### CAT-26
-
-Where data-access fixtures represent absent, untrusted, inactive, mismatched, allowed-viewer, allowed-publisher, and privileged identities and publication fixtures include trusted, browser-supplied, altered, and same-identity/mismatched-value snapshots in concurrent orderings, when each directly exercises every public read, content-authorization shape, and publication shape, the contract suite shall assert [account-free public reads but exact accepted contexts for content access and publication](#cat-18), returning only the [current sanitized public projection](#cat-13) [derived independently of mutable draft state](#cat-22).
-It shall assert the [common trusted authorization intake and rejection of client, privileged-service, stale, or mismatched evidence](#cat-15), the exact [lesson-content permission intake](#cat-16) and [course-publication permission intake](#cat-17), and [single-use current-lesson content authorization passed directly to the trusted recipient](#cat-11).
-For publication, it shall assert the [complete trusted schema-version `1` snapshot intake and rejection of every browser-supplied, altered, incomplete, or inconsistent snapshot](#cat-14), the [stable redacted conflict report](#cat-12), and [serialized concurrent effects that preserve the greatest accepted revision without lower-revision revival](#cat-19).
+Where authorization fixtures include fresh allowed and absent, denied, stale, inactive-account, mismatched, browser-supplied, privileged-service, and generic-role decisions, when each caller opens management and attempts every mutation while public readers request unpublished sentinel data, the contract suite shall assert the access-required response, no management disclosure, and no mutation after every unaccepted decision ([CAT-12](#cat-12)); acceptance only of the fresh exact trusted decision, with no media call or data access after rejection ([CAT-14](#cat-14)); and public reads containing only published view fields and none of the sentinel unpublished, management, reference, provider, or authorization values ([CAT-18](#cat-18)).

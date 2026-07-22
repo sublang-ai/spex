@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-002: Compose Drafts, Releases, and Media by Contract
+# DR-002: Compose Mutable Courses with Independent Media
 
 ## Status
 
@@ -9,33 +9,26 @@ Accepted for the demo.
 
 ## Context
 
-A single "courses" package could own authoring, publishing, browsing, upload, and playback, but it would be difficult to reuse and would hide the important consistency boundary.
-Splitting by UI page would instead make several packages co-own the same course state.
-The concrete system needs to publish a complete syllabus and its ready videos as one learner-visible outcome.
+One package could own courses, video assets, and playback, but that boundary would couple two independent lifecycles and make either capability difficult to reuse.
+A separate draft-and-release package would avoid live edits, but its snapshot and history machinery is unnecessary for this minimal website.
 
 ## Decision
 
-- `SYLL` owns mutable course drafts and emits complete immutable publication snapshots through a trusted server handoff.
-- A lesson in a snapshot holds an opaque content reference with content kind, asset ID, and asset revision.
-  Authoring receives a content description that adds the stable label and lifecycle state; `SYLL` can show and validate it without knowing storage or playback.
-- `VIDS` owns video upload, asset readiness, private playback, and the trusted content description and reusable video reference that can satisfy that content-reference meaning.
-  It knows nothing about courses or lesson order.
-- `CAT` owns learner-visible course releases.
-  It accepts a complete publication snapshot only as trusted server input, publishes it atomically, and exposes every reader to one sanitized projection of the current release: each current course's title, summary, and slug plus its ordered section and lesson metadata and lesson routes, but no content reference, asset identity, or video metadata.
-  It returns a successful publication report to the syllabus host and produces a fresh opaque server-only playback permission only after trusted active-member authorization for the exact content reference present in the requested lesson of a current release.
-- [PUBLISH-1](../compositions/authoring/publish-course.md#publish-1), [PUBLISH-2](../compositions/authoring/publish-course.md#publish-2), and [PUBLISH-3](../compositions/authoring/publish-course.md#publish-3) install the video-description, publication-snapshot, and publication-result seams.
-  [LEARN-1](../compositions/learning/browse-and-watch.md#learn-1) installs the catalog-to-video playback authorization seam; VIDS never interprets course, release, or lesson concepts.
-- Each package states the domain values it accepts or produces in its own behavior, with any necessary shapes, policies, or states placed beside the behavior that owns them.
-  These definitions express domain meaning, not TypeScript interface design, and do not name the peer package selected by this system.
-- Binding items stay thin: their `Where` and shall clauses identify exact client and supplier behavior and scope the installation without restating endpoint meaning or vendor mechanics already owned elsewhere.
-  A supply Binding may cite a client's Internal requirement, while an assembly Binding joins External behavior.
-- A Scenario may cite External or Internal behavior when that item materially supports the integrated outcome.
-  Citing Internal behavior makes its contribution and verification traceable; it neither reclassifies that behavior as External nor exposes it as part of another package's contract.
+- `CAT` owns each mutable course record, its ordered syllabus, stable public address, publication state, and opaque lesson-media references.
+  Saving an already-published course changes later public reads immediately and atomically; there is no staging or release history ([CAT-7](../packages/learning/course-catalog.md#cat-7)).
+- `VIDS` owns private video assets, their stable reusable references, upload and deletion, and bounded playback grants.
+  It knows nothing about courses, lessons, publication, or host authorization policy.
+- [PUBLISH-1](../compositions/authoring/publish-course.md#publish-1) supplies CAT's provider-neutral [media-selection](../packages/learning/course-catalog.md#cat-15) and [media-resolution](../packages/learning/course-catalog.md#cat-16) inputs with VIDS's [chooser and reference resolution](../packages/media/video-library.md#vids-5).
+  CAT retains each selected reference; VIDS retains the asset.
+- [GUARD-1](../compositions/security/protect-course-content.md#guard-1) supplies VIDS's [playback-authorization input](../packages/media/video-library.md#vids-10) with this website's policy over active GitHub identity, role capability, current publication, attachment, and video availability.
+  That product policy belongs to the composition rather than either reusable package.
+- Public readers receive only CAT's published course and syllabus projection.
+  Private video content requires a fresh eligible grant, while a bearer issued just before a policy change may remain usable until its five-minute maximum expiry ([VIDS-7](../packages/media/video-library.md#vids-7)).
+- A confirmed course deletion removes its structure and references but leaves VIDS assets unchanged; a confirmed video deletion removes its asset but leaves any CAT reference present and unavailable until repaired ([PUBLISH-5](../compositions/authoring/publish-course.md#publish-5), [PUBLISH-6](../compositions/authoring/publish-course.md#publish-6)).
 
 ## Consequences
 
-- Draft editing cannot mutate the catalog accidentally; publication is a visible composition boundary.
-- The public catalog can be read without an account, while the snapshot's attached-content identity remains behind the authenticated playback boundary.
-- The syllabus package can be reused with another content provider, and the video package can be reused outside courses.
-- The same video reference may be used by multiple lessons without copying an asset.
-- Cross-package consistency belongs in compositions, while draft revision and asset cleanup invariants remain package-local.
+- Course authoring and public reading share one deliberately simple lifecycle; published edits are live and no historical version can be recovered from CAT.
+- CAT can use another media provider without change, and VIDS can serve another host with different management and playback policy.
+- One video reference may appear in several lessons without copying the asset.
+- Cross-package consistency and product authorization remain explicit in compositions, while each package keeps its own state and invariants.

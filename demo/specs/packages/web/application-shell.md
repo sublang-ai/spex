@@ -21,12 +21,12 @@ The route map is:
 | `/` | redirect to `/courses` |
 | `/login` | visitor GitHub sign-in; authenticated users redirect to their requested destination or `/courses` |
 | `/auth/callback` | authentication completion followed by a safe redirect |
-| `/courses` | public catalog of current published courses |
-| `/courses/[slug]` | public syllabus from the course's current published release |
+| `/courses` | public catalog of published courses |
+| `/courses/[slug]` | public syllabus for one published course |
 | `/courses/[slug]/lessons/[lessonId]` | public lesson information with GitHub sign-in required to play its video |
-| `/admin/courses` | course-author draft list and publication status |
-| `/admin/courses/new` | course-author draft creation |
-| `/admin/courses/[draftId]` | syllabus editor and video attachment for course authors |
+| `/admin/courses` | mutable course manager and publication status |
+| `/admin/courses/new` | unpublished course creation |
+| `/admin/courses/[courseId]` | course details, syllabus, media attachments, publication, and deletion |
 
 ### SITE-2
 
@@ -50,7 +50,7 @@ When it renders navigation, dialogs, forms, reorder controls, upload controls, c
 
 ### SITE-6
 
-When an unknown route is requested in any session state, or the behavior responsible for a requested course or lesson reports it unavailable, the application shell shall return HTTP status 404, show one uniform `Page unavailable` state with a link to `/courses`, and shall not reveal whether a hidden draft, release, lesson, or asset exists.
+When an unknown route is requested in any session state, or the behavior responsible for a requested course or lesson reports it unavailable, the application shell shall return HTTP status 404, show one uniform `Page unavailable` state with a link to `/courses`, and shall not reveal whether an unpublished course, lesson, or media asset exists.
 A current public lesson shall remain available when its visitor lacks playback permission; the video area shall offer GitHub sign-in rather than turn the page into an unavailable response.
 
 ### SITE-7
@@ -67,7 +67,7 @@ Rendering or prefetching a public catalog, course, or lesson shall not request p
 
 ### SITE-9
 
-When a package view is rendered, the view boundary shall provide the browser only the fields required by that visible state and shall not serialize service credentials, raw authorization records, unpublished fields, content references, asset identities or revisions, video-provider metadata, or private object locations into general page data.
+When a package view is rendered, the view boundary shall provide the browser only the fields required by that visible state and shall not serialize service credentials, raw authorization records, unpublished course fields, opaque media references, video-provider metadata, or private object locations into general page data.
 
 ### SITE-10
 
@@ -77,7 +77,7 @@ It shall expose no provider-specific message and shall keep diagnostic detail av
 ### SITE-11
 
 When an authentication callback or authenticated response is produced, the response-cache boundary shall mark user-specific and cookie-changing responses private and non-shared and shall prevent static, ISR, or CDN reuse across requests.
-It shall also resolve every public catalog, course, and lesson response against the current release for that request and prevent static, ISR, or CDN reuse, so a replaced or unpublished release cannot remain visible through a shared response.
+It shall also resolve every public catalog, course, and lesson response against the current mutable publication state for that request and prevent static, ISR, or CDN reuse, so a saved edit, unpublication, or deletion cannot leave stale public content visible through a shared response.
 When a request begins on a warm application instance, the request boundary shall create user-specific session and provider state for only that request and shall not reuse it for another user.
 
 ## Verification
@@ -93,4 +93,4 @@ Where each page-state fixture is rendered at 360 pixels and at 200 percent zoom,
 
 ### SITE-14
 
-Where public and protected view fixtures contain administrator, draft, content-reference, asset, signing, and service-only fields and visitor, member, and administrator requests alternate on one warm instance, when public pages are primed before release replacement and unpublication and denied and allowed server-rendered responses, callbacks, action responses, cache metadata, and browser state are inspected, the contract suite shall assert [fresh trusted authorization before protected output, no protected output on denial, and no playback lookup during public render or prefetch](#site-8); [serialization of only the fields required by the visible state, with every service-only or unpublished field absent](#site-9); and [private session-varying responses, current-release public responses, no stale shared response, and no per-request state transfer on a warm instance](#site-11).
+Where public and protected view fixtures contain administrator, unpublished-course, media-reference, signing, and service-only fields and visitor, member, and administrator requests alternate on one warm instance, when public pages are primed before a published-course save, unpublication, and deletion and denied and allowed server-rendered responses, callbacks, action responses, cache metadata, and browser state are inspected, the contract suite shall assert [fresh trusted authorization before protected output, no protected output on denial, and no playback lookup during public render or prefetch](#site-8); [serialization of only the fields required by the visible state, with every service-only or unpublished field absent](#site-9); and [private session-varying responses, current mutable public state with no stale shared response, and no per-request state transfer on a warm instance](#site-11).

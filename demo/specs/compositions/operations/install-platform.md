@@ -20,11 +20,11 @@ Where the `verification GHID` instance across local development and automated pu
 
 ### PLAT-3
 
-Where the `local video bucket` instance for local provider integration and the shared `production video bucket` instance for production-candidate and production use VIDS's [private object-service intake](../../packages/media/video-library.md#vids-20), the installation shall supply each with its environment-scoped private Supabase Storage service with TUS upload and signed download selected by [DR-001](../../decisions/001-web-platform.md), without broadening object, path, credential, or lifecycle scope or changing package-owned windows and limits.
+Where the `local video bucket` instance for local provider integration and the shared `production video bucket` instance for production-candidate and production use VIDS's [private object-service intake](../../packages/media/video-library.md#vids-11), the installation shall supply each with its environment-scoped private Supabase Storage service for complete direct upload with byte progress, exact-object read and deletion, and asset-scoped signed bearer download selected by [DR-001](../../decisions/001-web-platform.md), without broadening object, credential, privacy, or five-minute-expiry scope.
 
 ### PLAT-4
 
-Where fixture-preview, production-candidate, and production profiles use LIVE's [web-deployment intake](../../packages/operations/production-runtime.md#live-17), the installation shall supply the immutable environment-scoped Vercel deployment with request-isolated Next.js server execution, private response controls, exact profile configuration, and protected unaliased candidates selected by [DR-001](../../decisions/001-web-platform.md); fixture preview shall receive no production connection.
+Where fixture-preview, production-candidate, and production profiles use LIVE's [web-deployment intake](../../packages/operations/production-runtime.md#live-16), the installation shall supply the immutable environment-scoped Vercel deployment with request-isolated Next.js server execution, private response controls, exact profile configuration, and protected unaliased candidates selected by [DR-001](../../decisions/001-web-platform.md); fixture preview shall receive no production connection.
 
 ### PLAT-5
 
@@ -32,7 +32,7 @@ Where pull-request verification and protected production delivery for this repos
 
 ### PLAT-6
 
-Where the `local Supabase services` instance for local provider integration and the shared `production Supabase services` instance for production-candidate and production use LIVE's [durable-runtime-service intake](../../packages/operations/production-runtime.md#live-18), the installation shall supply each with its environment-scoped Supabase project set naming Auth, Postgres, and Storage identities and their complete expected revisions and health operations, as selected by [DR-001](../../decisions/001-web-platform.md), while keeping each durable identity independent of Vercel deployment replacement.
+Where the `local Supabase services` instance for local provider integration and the shared `production Supabase services` instance for production-candidate and production use LIVE's [durable-runtime-service intake](../../packages/operations/production-runtime.md#live-17), the installation shall supply each with its environment-scoped Supabase project set naming Auth, Postgres, and Storage identities and their complete expected revisions and health operations, as selected by [DR-001](../../decisions/001-web-platform.md), while keeping each durable identity independent of Vercel deployment replacement.
 
 ## Verification
 
@@ -42,7 +42,7 @@ Where the [production identity authority](#plat-1) and [deterministic fixture au
 
 ### PLAT-8
 
-Where clean local and hosted Supabase projects expose the [installed durable runtime services](#plat-6) and exercise the [installed private object service](#plat-3) through upload, 24-hour TUS resumption, playback, missing/unreadable/mismatched observation, completed-object cleanup, and incomplete-chunk expiry, when the two client contracts are checked against those services, the platform conformance suite shall assert environment isolation, complete service identity, durable revision reporting, private exact-object access, distinct cleanup and provider-expiry behavior, stated windows and limits, and no broadened client behavior.
+Where clean local and hosted Supabase projects expose the [installed durable runtime services](#plat-6) and exercise the [installed private object service](#plat-3) through complete upload, exact-object read and deletion, bearer playback before and after expiry, and cross-environment attempts, when the two client contracts are checked against those services, the platform conformance suite shall assert environment isolation, complete service identity, durable revision reporting, private exact-object access, bounded bearer redemption, and no broadened client behavior.
 
 ### PLAT-9
 

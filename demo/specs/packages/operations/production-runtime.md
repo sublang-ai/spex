@@ -5,14 +5,14 @@
 
 ## Intent
 
-This package gives operators ready/not-ready behavior for Vercel environments, environment-scoped configuration, and Supabase Auth, Postgres, and Storage dependencies across non-production and production.
-It owns environment integrity rather than application behavior or delivery decisions and can be reused unchanged with different declared capabilities, provider policy, smoke checks, and privileged-operation inventory.
+This package gives operators ready/not-ready behavior for Vercel environments and their environment-scoped Supabase Auth, Postgres, and Storage dependencies across non-production and production.
+It owns platform integrity rather than application behavior or delivery decisions and can be reused unchanged with different provider policy, smoke checks, and privileged-operation inventory.
 
 ## External Behavior
 
 ### LIVE-1
 
-Where every capability required by the deployment's declared profile is configured and reachable at its expected revision and every supplied application-capability observation has been accepted under [LIVE-14](#live-14), when an operator requests readiness, the runtime status shall provide a readiness report naming that profile and deployed commit and reporting `ready` for each required capability [[1]].
+Where every platform capability required by the deployment's declared profile is configured and reachable at its expected revision, when an operator requests readiness, the runtime status shall provide a readiness report naming that profile and deployed commit and reporting `ready` for each required capability [[1]].
 
 Each deployment shall declare one of these profiles:
 
@@ -48,7 +48,7 @@ The reported target shall name its expected service revisions and scoped smoke-a
 ### LIVE-7
 
 When environment health is evaluated, the readiness boundary shall use non-mutating probes against the exact environment and shall not create or change an application record, identity, or stored object as a side effect.
-Where a smoke target has been accepted under [LIVE-15](#live-15), when an authorized smoke runner supplies an observation naming that deployment, immutable commit, smoke-contract revision, observed conclusion, time, and redacted correlation evidence, the readiness boundary shall accept it only when the expected service revisions also match and shall reject a replay or observation from another deployment.
+Where a smoke target has been accepted under [LIVE-14](#live-14), when an authorized smoke runner supplies an observation naming that deployment, immutable commit, smoke-contract revision, observed conclusion, time, and redacted correlation evidence, the readiness boundary shall accept it only when the expected service revisions also match and shall reject a replay or observation from another deployment.
 An accepted smoke result shall repeat the target identity, environment, immutable commit, smoke-contract revision, and service revisions, give its pass or fail conclusion and time, and contain only the redacted correlation evidence for that exact target.
 
 ### LIVE-8
@@ -72,8 +72,8 @@ It shall produce no evidence for a browser request, a different deployment, a st
 
 ### LIVE-11
 
-Where web-deployment and durable-service configuration have been accepted under [LIVE-17](#live-17) and [LIVE-18](#live-18), when a deployment starts or readiness is requested, the configuration boundary shall validate the declared runtime profile, expected application origin and project identities, publishable key, exact server-only application credential inventory, every declared application capability, Postgres migration/policy revision, and functional private-bucket access [[2]].
-For production profiles, it shall also require provider-configuration evidence accepted under [LIVE-16](#live-16) for that exact project and commit-compatible configuration revision and shall verify every declared requirement for plan, Auth providers and methods, callbacks, redirect allowlist, bucket privacy, and Storage limits.
+Where web-deployment and durable-service configuration have been accepted under [LIVE-16](#live-16) and [LIVE-17](#live-17), when a deployment starts or readiness is requested, the configuration boundary shall validate the declared runtime profile, expected application origin and project identities, publishable key, exact server-only application credential inventory, Postgres migration/policy revision, and functional private-bucket access [[2]].
+For production profiles, it shall also require provider-configuration evidence accepted under [LIVE-15](#live-15) for that exact project and commit-compatible configuration revision and shall verify every declared requirement for plan, Auth providers and methods, callbacks, redirect allowlist, bucket privacy, and Storage limits.
 The configuration boundary shall not receive or use an identity-provider or Supabase control-plane management credential to recreate those delivery-time checks.
 
 ### LIVE-12
@@ -88,46 +88,41 @@ It shall provide no Supabase service credential, OAuth secret, production databa
 
 ### LIVE-14
 
-When an application-capability readiness observation is supplied during an exact deployment evaluation, the capability intake shall accept it only from the capability's trusted package boundary and only when it names a stable observation ID, evaluation time, capability, expected policy revision, ready or not-ready conclusion, and redacted evidence.
-It shall associate an accepted observation with the current deployment and immutable commit, reject browser-supplied, stale, mismatched, replayed, or side-effecting observations, and report the affected capability not ready after rejection.
-
-### LIVE-15
-
 When a protected smoke target is supplied, the smoke-target intake shall accept only a trusted unaliased deployment identity with its immutable commit, environment, expected service revisions, smoke-contract revision, and scoped smoke-access requirement.
 It shall reject an aliased, public, stale, browser-supplied, or mismatched target and shall provide no ready smoke result for it.
 
-### LIVE-16
+### LIVE-15
 
 When provider-configuration evidence is supplied, the attestation intake shall accept only a trusted tamper-evident report naming the exact Supabase project, immutable delivery commit, plan, required and forbidden Auth methods, provider callbacks, application redirect allowlist, bucket privacy and limits, configuration revision, workflow, and time without a management credential.
 It shall reject browser-supplied, stale, altered, cross-project, cross-commit, incomplete, or credential-bearing evidence.
 
-### LIVE-17
+### LIVE-16
 
 When a web deployment is supplied, the web-deployment intake shall accept only an environment-scoped immutable deployment naming its ID, commit, profile, application origin, public configuration, server-only credential inventory, traffic state, and protected-candidate access when applicable.
 It shall reject a cross-environment, mutable, aliased candidate, production-connected fixture, public candidate, or deployment that cannot keep request-specific server state and cookie-changing responses private and non-shared.
 
-### LIVE-18
+### LIVE-17
 
 When durable runtime services are supplied, the service intake shall accept only one environment-scoped Supabase project set naming Auth, Postgres, and Storage identities and their expected policy, migration, configuration, secret-set, and durable-provider revisions, with health operations sufficient for readiness and compatibility evaluation.
 It shall reject production services in a fixture profile, cross-project identities, missing revisions, browser credentials beyond the publishable key, or services whose durable identity changes with the web deployment.
 
 ## Verification
 
+### LIVE-18
+
+Where an environment fixture can vary every runtime value, trusted, stale, or tampered provider attestation, schema or policy revision, application credential, functional health response, and exact, mismatched, or replayed smoke observation without supplying control-plane credentials, when readiness and smoke result are requested for the valid production candidate and one fault at a time, the contract suite shall assert the [complete profile, deployment, commit, capability, provider-revision, and redacted ready report](#live-1) or the [affected capability, environment, correlation ID, and secret-free not-ready report](#live-2), plus the [protected unaliased candidate target and scoped smoke-access requirement](#live-6).
+It shall assert [validation of the declared runtime, credential inventory, service revisions, functional private storage, and production provider policy without a management credential](#live-11), based only on an [accepted environment-scoped immutable web deployment](#live-16), [accepted environment-scoped durable services and revisions](#live-17), and [trusted complete provider-configuration attestation](#live-15).
+It shall also assert [acceptance only of the exact protected smoke target](#live-14); [non-mutating health probes and one matching, non-replayed smoke observation and result](#live-7); and [browser-inaccessible, exact-deployment readiness evidence without side effects](#live-10).
+
 ### LIVE-19
-
-Where an environment fixture can vary every runtime value, trusted, stale, or tampered provider attestation, schema or policy revision, declared application-capability status, application credential, functional health response, and exact, mismatched, or replayed smoke observation without supplying control-plane credentials, when readiness and smoke result are requested for the valid production candidate and one fault at a time, the contract suite shall assert the [complete profile, deployment, commit, capability, provider-revision, and redacted ready report](#live-1) or the [affected capability, environment, correlation ID, and secret-free not-ready report](#live-2), plus the [protected unaliased candidate target and scoped smoke-access requirement](#live-6).
-It shall assert [validation of the declared runtime, credential inventory, application capabilities, service revisions, functional private storage, and production provider policy without a management credential](#live-11), based only on an [accepted environment-scoped immutable web deployment](#live-17), [accepted environment-scoped durable services and revisions](#live-18), and [trusted complete provider-configuration attestation](#live-16).
-It shall also assert [trusted application-capability observation matching the current deployment and commit](#live-14); [acceptance only of the exact protected smoke target](#live-15); [non-mutating health probes and one matching, non-replayed smoke observation and result](#live-7); and [browser-inaccessible, exact-deployment readiness evidence without side effects](#live-10).
-
-### LIVE-20
 
 Where fixture-preview and production fixtures have sentinel secrets and data and each dependency can fail, when both deployments and their browser state, logs, and status are inspected, the contract suite shall assert [typed degradation with unaffected capability status preserved](#live-3), the [fixture-only profile with provider capabilities not applicable and no production connection](#live-5), the [strict fixture-versus-production provider association without production credentials in preview](#live-13), and [only the allowed browser-visible values with every provider secret and privileged credential absent from responses, builds, logs, and diagnostics](#live-12).
 
-### LIVE-21
+### LIVE-20
 
 Where durable fixture data exists and deployment revisions declare compatible and incompatible schema ranges, when replacement, service-revision reporting, compatibility evaluation, and rollback are simulated, the contract suite shall assert [record and object continuity across compatible web replacement and rollback](#live-4), and the [independent durable-service identity, exact redacted current-revision and retained-deployment compatibility reports, and startup refusal without mutation outside the declared compatible range](#live-8).
 
-### LIVE-22
+### LIVE-21
 
 Where every application operation is observed with distinct user-scoped and sentinel service-role clients, when ordinary and named privileged paths run, the contract suite shall assert [user-scoped access for every ordinary operation, exact authorization and scope for each named privileged operation, and a readiness and security failure for any unlisted privileged call](#live-9).
 

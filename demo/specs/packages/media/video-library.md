@@ -1,153 +1,89 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# VIDS: Supabase Video Library
+# VIDS: Video Library
 
 ## Intent
 
-This package uses private Supabase Storage and direct resumable browser uploads to accept browser-playable videos, produce reusable video references, and deliver private playback to authorized viewers.
-It remains independent of course structure and does not own authentication, authorization policy, transcoding, DRM, or viewing progress.
-It can be reused unchanged by Supabase applications accepting its media, upload, and bearer-playback contract.
-Each installation declares the version-pinned browser matrix on which every accepted media profile must pass package verification.
+This package lets an authorized video manager upload and manage reusable private video assets and lets a signed-in viewer play an exact asset authorized by the host.
+It owns the video library, stable video references, private asset content, and bounded playback grants, not sign-in, roles, host content, or host playback policy.
+It can be reused unchanged with any management authorizer, playback authorizer, and private object service satisfying the meanings below.
 
 ## External Behavior
 
 ### VIDS-1
 
-Where a video manager has permission to upload, when the manager selects a file no larger than 1 GiB using MP4 with H.264 video and optional AAC-LC audio or WebM with VP8 or VP9 video and optional Vorbis or Opus audio, and supplies a label, the upload surface shall start one exact resumable attempt, show its label, expected size, uploaded bytes, current state, and remaining resume window, and allow an interrupted upload to resume for up to 24 hours or be canceled [[2]][[5]].
+Where a video manager is allowed to upload, when the manager selects a non-empty MP4 or WebM file no larger than 1 GiB, the upload surface shall upload it while showing byte progress from zero through completion.
+When the upload completes, the video library shall create exactly one listed asset with a stable opaque video ID, a title defaulted from the selected file name, its byte size, and its upload date.
 
 ### VIDS-2
 
-When a selected file has a container or codec profile outside [VIDS-1](#vids-1), exceeds 1 GiB, is empty, has no positive duration or dimensions, cannot be decoded by the video manager's browser, or cannot be read completely, the upload surface shall identify the violated constraint during local preflight or final Storage-metadata checks, create no ready asset, and allow another file to be selected.
+When a selected file is not MP4 or WebM, is empty, or exceeds 1 GiB, the upload surface shall identify the violated format or size constraint before sending any file content and shall create no asset.
 
 ### VIDS-3
 
-When an accepted upload completes and is verified, the video library shall mark one video ready, show its stable label, and offer that exact ready video wherever the manager opens the library's content chooser.
-When a failed or interrupted attempt is retried successfully, the video library shall still show exactly one ready video for that intended upload.
+When an upload is interrupted by connection loss or by leaving the page, the video library shall list no partial asset and resolve no video reference for it.
+When the manager retries, the upload surface shall start again at byte zero and shall reuse none of the earlier transfer.
 
 ### VIDS-4
 
-Where an authenticated viewer is allowed to watch a ready video, when the viewer opens it, the playback surface shall show its label and native play, pause, seek, volume, fullscreen, and captions controls supported by the source file, and shall distinguish loading, playing, ended, and retryable failure states.
+Where a video manager is allowed to manage videos, when the manager opens the library, the video library shall list every asset by stable opaque video ID, title, byte size, and upload date, ordered by upload date newest first and then video ID.
+When the manager edits an asset title, the video library shall preserve the accepted title without changing its video ID, content, size, or upload date.
+Uploading the same file more than once shall create distinct assets with distinct video IDs.
 
 ### VIDS-5
 
-While an allowed viewer remains authenticated, when the video's authorization window expires, the playback surface shall request fresh access for that same video and resume from the viewer's last local position when fresh authorization is granted for that exact video version.
-When refreshed access is denied, the playback surface shall stop playback and show a plain unavailable state without video or denial detail.
+When a trusted host requests video choices under accepted management authorization, the video library shall provide every listed asset as a chooser entry containing its title and a reusable reference naming only the `video` kind and stable opaque video ID.
+When that chooser returns, the video library shall give the host either the exact reference selected from those offered entries or cancellation and shall reject a missing, altered, unoffered, or mismatched result without returning a reference.
+When that host resolves a stored reference, the video library shall report the matching listed asset available with the same reference and title, or shall report it unavailable without exposing an object location.
 
 ### VIDS-6
 
-When a visitor, denied account, missing authorization, unready video, wrong video version, or unsigned private-file request attempts playback, the video library shall show the same plain unavailable state and disclose neither private file location, video metadata, nor the denial cause.
+Where a video manager is allowed to delete a video, when the manager selects delete, the video library shall ask for confirmation naming the asset title.
+When the manager confirms, the video library shall remove the asset record and private content, omit it from subsequent lists and choices, and resolve its former reference as unavailable.
+It shall neither find nor change a reference retained by a host.
 
 ### VIDS-7
 
-Where a video manager has permission to manage videos, when the manager opens the video library or a content chooser, the video library shall list every managed video by stable label and `uploading`, `ready`, `failed`, or `unavailable` state, offer only ready videos for attachment, and reveal no private object location.
+Where a listed asset and playback authorization have been accepted under [VIDS-10](#vids-10) for the same signed-in account, request, and video ID, when playback is requested, the video library shall issue one transferable bearer scoped to that asset and expiring no later than five minutes after issuance.
+The playback surface shall use that bearer to show the asset title and standard browser play, pause, seek, volume, and fullscreen controls.
+Authorization shall be evaluated at grant issuance; a later sign-out or host-policy change alone shall not retract an issued bearer before expiry, and the package shall make no promise to retract bytes or responses already delivered or cached.
 
 ### VIDS-8
 
-Where a signed-in account lacks video-management permission, when that account requests an upload or asset-management action directly, the upload surface shall start no transfer, create or change no asset, and report that video-management access is required.
-
-### VIDS-9
-
-Where a viewer is watching a video, when its five-minute authorization window ends, the playback surface shall stop loading with that access and resume only after fresh authorization for the same exact video.
-When the viewer signs out, the playback surface shall stop playback, request no renewal, and show the plain unavailable state; it shall not tell the viewer that expiry or sign-out erases video data already delivered to the browser.
-
-### VIDS-10
-
-When an intended upload is first authorized, the asset registry shall reserve an opaque asset ID at revision `1` for its owner account.
-When an initial or retry attempt is authorized for that asset, it shall reserve a new opaque attempt ID, expected byte size, accepted [VIDS-1](#vids-1) media profile and positive local-preflight result, and unique immutable private object identity while preserving the asset ID.
-The asset registry shall change the asset to `ready` only after TUS completion and Storage metadata confirm the exact reserved object, expected byte size, and accepted MIME container and the owner finalizes the declared profile; it shall produce no reusable content reference from incomplete or mismatched metadata or bytes.
-Each ready asset shall make a reusable content reference naming only the `video` kind, opaque asset ID, and immutable asset revision.
-A content description shall add a stable descriptor ID, stable label, and `uploading`, `ready`, `failed`, or `unavailable` state without a storage location; it shall carry the complete reference while ready and after a formerly ready asset becomes unavailable, and may omit a reference while uploading or failed.
-Every newly selected upload shall create a distinct asset at revision `1`; retrying the same intended upload shall preserve its asset identity, while replacing a ready asset or creating a later asset revision is outside this package version.
-Where video-management authorization has been accepted under [VIDS-19](#vids-19), when a trusted content consumer requests chooser descriptions for that same active account and exact request, the asset registry shall return the complete managed descriptor set associated with that account and request in stable-label then descriptor-ID order.
-When the same trusted consumer requests status for one complete reference, the asset registry shall return only a description associated with that account and request and carrying that exact reference in `ready` or `unavailable` state, or shall report it unavailable; it shall not substitute an uploading, failed, different-asset, or different-revision description.
-
-### VIDS-11
-
-Where a ready asset and playback authorization have been accepted under [VIDS-18](#vids-18) for its exact revision, when a playback grant is requested in that same request, the grant boundary shall consume the authorization once and issue a bearer location scoped only to that asset revision with nominal expiry no later than five minutes.
-The grant boundary shall treat redemption as transferable bearer access and shall not claim that Storage rechecks the issuing account or session.
-The grant boundary shall reject a browser-supplied value, replayed or expired authorization, mismatched account or asset, or inactive account context and shall never sign in the browser.
-An issued signed response or already transferred bytes may remain available from browser or intermediary cache beyond the application's control [[1]][[4]].
-
-### VIDS-12
-
-Where video-management authorization has been accepted under [VIDS-19](#vids-19) for the active account and a new attempt, when the upload boundary creates it, the upload boundary shall issue a two-hour signed upload token for only the reserved bucket and new immutable object identity with overwrite disabled [[2]][[6]].
-The upload boundary shall treat that token as a transferable bearer: any holder may use it during those two hours to create a TUS upload URL only for the reserved path, and the resulting upload URL is a separate bearer that permits chunks and resumption for that upload for up to 24 hours.
-When upload bytes are transferred, the upload boundary shall send them directly to private Supabase Storage and shall not relay the bytes through the web application host.
-It shall rely on exact-path/no-upsert scope rather than holder identity during transfer; a captured bearer may place bytes only at the reserved path, but it shall confer no right to finalize the attempt or make an asset ready.
-
-### VIDS-13
-
-When a reusable content reference, content description, asset status, playback failure, general page value, persisted client value, or diagnostic event is produced, the video library shall use opaque asset identity and shall not reveal a private bucket path, signed URL, service credential, or provider error containing one.
-The active authorized upload request may transiently expose its opaque reserved path, signed token, bucket metadata, and TUS URL to the uploading browser, and the active playback surface may transiently expose its bearer request; neither exception shall be displayed, persisted as application state, or logged.
+When the asset is absent, playback authorization is missing or denied, or a private-content request has a missing, tampered, expired, or wrong-asset bearer, the video library shall provide one generic unavailable state and shall disclose no private object location, authorization detail, or denial cause.
 
 ## Internal Behavior
 
-### VIDS-14
+### VIDS-9
 
-Where video-management authorization has been accepted under [VIDS-19](#vids-19), when upload completion is finalized, the asset registry shall verify that account as the exact attempt owner together with the reserved bucket, immutable key, object identity, byte size, media result, and previously unused asset revision, and then perform one atomic `ready` transition.
-It shall make repeated or parallel finalization idempotent, reject completion after cancellation or expiry, and prevent any mismatched or already-used object from becoming ready.
+When management authorization is supplied, the management-authorization intake shall accept only a fresh trusted decision naming the same signed-in account, exact request, and one exact library action: list, upload, rename, choose, or delete, with the video ID when the action targets an asset.
+It shall reject missing, denied, stale, mismatched, or browser-supplied decisions and shall start no upload and reveal or change no asset after rejection.
 
-### VIDS-15
+### VIDS-10
 
-When a trusted storage-availability observation reports a formerly ready exact asset revision `missing`, `unreadable`, or `mismatched`, the asset registry shall change that revision to `unavailable`, preserve its content reference and prior label so an existing attachment can report the unavailable state, omit it from new attachment choices, issue no new playback grant, and preserve its asset identity.
-When a later trusted observation confirms the same immutable object and matching complete metadata, the asset registry shall restore that exact revision to `ready` without creating a new asset or revision; it shall not change lifecycle state from a transient player or network failure.
+When playback authorization is supplied, the playback-authorization intake shall accept only a fresh trusted host decision naming the same signed-in account, exact grant request, and exact listed video ID.
+It shall reject missing, denied, stale, signed-out, mismatched, or browser-supplied decisions and shall issue no bearer after rejection.
 
-### VIDS-16
+### VIDS-11
 
-When storage is read or changed, the storage boundary shall keep the bucket private and authorize the operation only through the exact upload capability, exact playback bearer grant, or named privileged finalization/cleanup operation [[3]].
-It shall treat signed URL redemption as bearer authorization rather than an identity, session, or role recheck, use no service-role client for ordinary browser requests, and keep every privileged credential outside browser-visible state.
+When a private object service is supplied, the object-service intake shall accept only an environment-scoped service that keeps every object private, accepts a complete MP4 or WebM object with observable byte progress, reads and deletes one exact object, and redeems an asset-scoped bearer only before its bounded expiry.
+It shall reject a public, cross-environment, arbitrary-object, overwrite-broadening, permanently public, or bearer-bypassing service and shall expose no service credential or private object location to general page data or logs.
 
-### VIDS-17
+### VIDS-12
 
-Where video-management authorization has been accepted under [VIDS-19](#vids-19) for the active account, exact owned attempt, request, and cancellation operation, when that upload is canceled, the asset registry shall make the attempt non-finalizable and the storage boundary shall schedule cleanup for any completed orphan object that is not the object of a ready asset.
-When an upload fails or passes its 24-hour resume window, the asset registry shall make the attempt non-finalizable and the storage boundary shall schedule the same cleanup without requiring a user cancellation request.
-Where a canceled or failed TUS upload has produced a complete orphan object, the storage boundary shall remove that object within one hour of detecting it and shall not remove or overwrite a ready asset.
-Where the provider still holds incomplete TUS chunks, the storage boundary shall rely on expiry of the provider-managed upload URL and shall make no promise of an application deletion mechanism or immediate physical-byte reclamation.
-
-### VIDS-18
-
-When playback authorization is supplied, the authorization intake shall accept only a fresh opaque single-use allow value from a trusted server source associated with the same active account, exact request, content kind, asset ID, and immutable asset revision.
-It shall reject a browser-supplied, replayed, expired, inactive-account, wrong-kind, wrong-asset, wrong-revision, or cross-request value and shall reveal no reason beyond the package's unavailable outcome.
-
-### VIDS-19
-
-When video-management authorization is supplied, the authorization intake shall accept only a fresh trusted server decision associated with the same active account, exact request, and exact managed-content listing or lookup, new upload attempt, owned cancellation operation, or owned finalization operation.
-It shall reject browser-supplied, stale, denied, inactive-account, wrong-owner, or cross-request evidence and shall start no transfer or lifecycle transition after rejection.
-
-### VIDS-20
-
-When an object service is supplied, the storage-service intake shall accept only an environment-scoped private bucket that supports new immutable exact-path creation with overwrite disabled, resumable TUS transfer for the declared window, complete object-metadata observation, bounded signed bearer download, exact-object deletion, and observation of missing, unreadable, and mismatched objects.
-It shall reject a public, cross-environment, globally privileged, arbitrary-path, overwrite-capable, or metadata-incomplete service and shall treat provider expiry of incomplete TUS chunks separately from deletion of a completed orphan object.
+When upload content becomes a listed asset, the asset registry shall associate one stable video ID with exactly one complete private object and shall expose neither the record nor its reference before the complete object is accepted.
+When deletion is confirmed under [VIDS-9](#vids-9), the registry and object boundary shall remove that exact record and object and shall not report deletion complete while either remains available, without reading or changing any host data.
+When a bearer issued under [VIDS-7](#vids-7) is redeemed, the object boundary shall authorize by its asset scope, integrity, and expiry and shall not recheck the issuing account, session, or host policy.
 
 ## Verification
 
-### VIDS-21
+### VIDS-13
 
-Where storage is replaced by a controllable resumable-upload and availability fixture and representative profiles are exercised in the installation's declared version-pinned browser matrix, when supported and unsupported declarations and local decode, oversized, empty, interrupted, two-hour-token expiry, 24-hour-upload-URL expiry, allowed cancellation, denied or cross-owner cancellation, arbitrary-path, overwrite, captured-bearer, parallel-finalization, mismatched-object, completed-orphan cleanup, incomplete-chunk provider expiry, successful retry, trusted missing, mismatched, and recovered-object observations, and transient player failures are run and the library is reopened, the contract suite shall assert the [accepted media profiles, visible attempt state, and 24-hour resumption](#vids-1), the [specific preflight or metadata rejection with no ready asset](#vids-2), and [exactly one labeled ready video after completion or retry](#vids-3).
-It shall assert the [complete redacted, ordered descriptor list with only ready items attachable](#vids-7); [stable asset identity, exact attempt and object reservations, revision-1 reference, matching completion metadata, and status lookup behavior](#vids-10); the [two bearer stages, direct exact-path TUS transfer, overwrite prevention, and absence of finalization authority](#vids-12); and an [atomic, owner-bound, idempotent ready transition that rejects cancellation, expiry, mismatch, and reuse](#vids-14).
-It shall also assert [cancellation only with fresh exact-owner authorization, non-finalizable failed or expired attempts, the one-hour completed-orphan cleanup, and no incomplete-byte deletion promise](#vids-17); [exact `ready`/`unavailable`/`ready` transitions only from trusted object observations without identity or revision change](#vids-15); [no transfer or lifecycle transition after rejected management authorization](#vids-19); and [rejection of any object service lacking the required private, environment-scoped, immutable-path, resumable, observable, signed-download, and deletion capabilities](#vids-20).
-When that matrix completes, the contract evidence shall name every exact browser and version exercised.
+Where an authorized-manager fixture and private object-service double contain accepted, wrong-format, empty, oversized, duplicate, interrupted, renamed, and deletable files and chooser results include exact selection, cancellation, missing, altered, unoffered, and mismatched values, when upload, retry, listing, chooser, resolution, rename, and confirmed deletion are exercised, the contract suite shall assert the [accepted upload, visible progress, stable identity, default title, size, and date](#vids-1); [pre-transfer rejection](#vids-2); [absence of partial assets and byte-zero retry](#vids-3); [stable ordered library and distinct duplicate identities](#vids-4); [opaque offered references, exact selection or cancellation, rejection of every invalid chooser result, and reference resolution](#vids-5); and [record-and-content deletion without host-reference mutation](#vids-6).
+At the package boundaries, it shall also assert [exact trusted management authorization](#vids-9), [complete-object-only registry visibility and complete exact deletion](#vids-12), and rejection of every [private object service](#vids-11) that weakens the declared privacy, scope, or expiry meanings.
 
-### VIDS-22
+### VIDS-14
 
-Where a ready fixture video and clock-controlled asset-authorization authority exist, when playback, nominal expiry, allowed renewal, authorization replay, account-context or asset mismatch, authorization withdrawal, an authorization naming a different or unsupported revision, sign-out with an inactive-but-unexpired authority credential, cross-account bearer redemption, and cached-byte cases are run, the contract suite shall assert the [labeled native player controls and visible lifecycle states](#vids-4); [fresh exact-version renewal with local-position restoration or a plain stopped unavailable state](#vids-5); and [stopped loading after expiry, no renewal after sign-out, and no promise to erase delivered bytes](#vids-9).
-At the trust boundary, it shall assert [acceptance only of a fresh single-use exact-account, request, kind, asset, and revision authorization](#vids-18), followed by a [single exact-revision bearer grant with nominal lifetime no greater than five minutes, transferable redemption without identity recheck, and no claim over cached bytes](#vids-11).
-
-### VIDS-23
-
-Where private storage contains ready and incomplete assets, when anonymous, denied, stale-revision, unsigned, and allowed exact playback requests plus denied and authorized upload and asset-management actions are made, the contract suite shall assert the [same redacted unavailable state without private location, metadata, or denial detail](#vids-6); [no transfer or asset mutation after denied management access](#vids-8); and [private storage access only through the exact upload capability, playback bearer, or authorized named privileged operation](#vids-16).
-It shall find [bearer and path data only in the transient active authorized upload or player request and no path, signing material, service credential, or provider error in general responses, persisted browser state, or logs](#vids-13).
-
-### VIDS-24
-
-Where public-client and privileged-client fixtures exercise every video-registry and Storage operation with absent, untrusted, inactive, mismatched, denied, and allowed account contexts plus bearer-grant, signed-upload-token, TUS-URL, and named privileged-operation callers, when direct requests are made, the contract suite shall assert the [single-use scoped playback-grant contract and transferable redemption](#vids-11), the [exact-path upload bearer contract without finalization authority](#vids-12), [private storage with only enumerated access paths and no ordinary service-role client](#vids-16), and [privileged finalization constrained to the exact previously authorized owner attempt](#vids-14).
-
-## References
-
-[1]: https://supabase.com/docs/guides/storage/serving/downloads "Supabase: Serving Storage assets"
-[2]: https://supabase.com/docs/guides/storage/uploads/resumable-uploads "Supabase: Resumable Uploads"
-[3]: https://supabase.com/docs/guides/storage/security/access-control "Supabase: Storage access control"
-[4]: https://supabase.com/docs/guides/storage/cdn/smart-cdn "Supabase: Smart CDN"
-[5]: https://supabase.com/docs/guides/storage/uploads/file-limits "Supabase: Storage file limits"
-[6]: https://supabase.com/docs/reference/javascript/file-buckets-createsigneduploadurl "Supabase: Create a signed upload URL"
+Where a ready fixture asset, clock-controlled playback authorizer, and private object-service double exist, when allowed, missing, denied, stale, signed-out, wrong-account, wrong-request, wrong-asset, browser-supplied, tampered-bearer, and expired-bearer cases are exercised, the contract suite shall assert [issuance only after fresh exact playback authorization, the standard player, asset scope, transferability, five-minute maximum lifetime, and issuance-time policy boundary](#vids-7); the [single generic unavailable state without private detail](#vids-8); and the [complete trusted playback-authorization intake](#vids-10).
+It shall assert that a later sign-out or host-policy change prevents a new grant but does not by itself invalidate an unexpired issued bearer, that redemption performs no session or policy recheck under [VIDS-12](#vids-12), and that delivered or cached bytes carry no retraction guarantee.
