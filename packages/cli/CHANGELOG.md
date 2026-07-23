@@ -8,32 +8,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-07-23
 
 ### Added
 
-- `spex lint` checks the specs tree: layout, package file sections,
-  item ID uniqueness and prefixes, `Verifies:` lines, citations (files
-  and anchors), reference markers, record sections, and the `map.md`
-  index. Errors exit non-zero; warnings do not.
+- `spex lint` checks the specs tree: layout, package and composition
+  file sections, item ID uniqueness and prefixes, inline-citation
+  coverage (package Verification items cite the same-file items they
+  check; composition Tests items cite the same-file Binding or
+  Scenario items they execute; every Binding and Scenario item is
+  covered; scenario tests span two packages), the static-binding
+  rule (no `When`/`While` clause in a `## Binding` item), citations
+  (files and anchors), reference markers, record sections, and the
+  `map.md` index. Relationship-metadata lines (`Verifies:`,
+  `Binds:`, `Composes:`, `Clients:`, `Suppliers:`, `Scope:`,
+  `Requires:`, `Uses:`) are errors: the citations in an item's
+  clauses are the single source of its relationships (META-20).
+  Errors exit non-zero; warnings do not.
 - `spex scaffold --update` migrates the legacy `specs/user`/`dev`/`test`
   layout to the new structure: each package's item files are merged
   into a single `specs/packages/<name>.md` (`## External Behavior`,
   `## Internal Behavior`, `## Verification` sections; heading levels
-  demoted; reference markers renumbered), citations across `specs/`
-  are rewritten to the new paths, a customized `map.md` is
-  restructured in place, and a prompt for filling
-  `specs/interactions/` with cross-package behavior is printed for
-  your AI agent.
+  demoted; reference markers renumbered; `Verifies:` lines rewritten
+  as inline sentences), citations across `specs/` are rewritten to
+  the new paths, a customized `map.md` is restructured in place, and
+  a prompt for filling `specs/compositions/` is printed for your AI
+  agent.
+- `spex scaffold --update` migrates `specs/interactions/` to
+  `specs/compositions/` (SCAF-50): files move with conflict-keeping,
+  their `Verifies:` lines become inline sentences, citations and a
+  `## Interactions` map heading are rewritten, and the retired
+  `.gitkeep` is dropped via the legacy manifest.
 
 ### Changed
 
-- The spec structure (DR-000, META-1/9/10/20/21, new META-28/30) now
-  has two item directories: `specs/packages/` (one file per spec
-  package) and `specs/interactions/` (cross-package behaviors,
-  scenarios, and the integration/acceptance tests that span packages).
-  Fresh scaffolds create the new layout; bundled seeds moved to
-  `specs/packages/git.md` and `specs/packages/licensing.md`.
+- The spec model is the composed model (DR-000, META-1–36):
+  `specs/packages/` holds standalone package contracts and
+  `specs/compositions/` holds binding items — static installed
+  relationships — plus scenario items and the tests that span
+  packages, per the META-34 grammar (`Intent`, `Binding?`,
+  `Scenario?`, `Tests`, `References?`). Fresh scaffolds create the
+  new layout; bundled seeds moved to `specs/packages/git.md` and
+  `specs/packages/licensing.md`, and the bundled meta, decision
+  record, prompts, and agent instructions carry the converged
+  conventions (bindability, binding form, release-boundary item
+  IDs, inline citations).
 - `spex scaffold --update` now also refreshes the managed specs
   section of an existing `CLAUDE.md`/`AGENTS.md` (absent files are not
   created).
@@ -44,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requires the CI workflow (`ci.yml`) to conclude successfully for the
   tagged commit before publishing to npm or creating the GitHub
   release, and fails without publishing otherwise (RELEASE-18).
+- This repository's own `specs/` tree is migrated to the composed
+  model and lint-gated by the CLI test suite; the desktop app's
+  spec view still parses the legacy layout and remains deferred
+  (IR-017).
 
 ## [0.3.0] - 2026-06-25
 
