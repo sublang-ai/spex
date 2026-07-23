@@ -233,7 +233,7 @@ DRs and items shall be allowed to cite each other.
 
 ### META-18
 
-IRs shall not be cited by any spec except `map.md`.
+IRs shall not be cited by any spec except `map.md`; naming an IR in prose is a citation.
 
 <!-- spex-i18n-source: META-19 sha256-3f6ffcfc6f8e3c50369236b4ccba2bec39ef6972b12b425946b2e9dcb2ae79d0 -->
 ### META-19

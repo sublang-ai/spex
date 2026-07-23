@@ -109,7 +109,7 @@ clauses are the single source ([META-20](../meta.md#meta-20)):
 - a package Verification item citing another package's file shall be
   a warning pointing at `specs/compositions/`;
 - a Tests item that cites a same-file Scenario item while citing
-  items in fewer than two distinct package files shall be a warning
+  items in fewer than two distinct package files shall be an error
   ([META-21](../meta.md#meta-21)); a file link without an item
   anchor counts toward no package.
 
@@ -128,7 +128,9 @@ target file (GitHub anchor semantics).
 An error shall also be reported for a link from a `packages/` file
 into `specs/compositions/` ([META-33](../meta.md#meta-33)), and for
 a link into `specs/iterations/` from any file but `specs/map.md`
-([META-18](../meta.md#meta-18)).
+([META-18](../meta.md#meta-18)); a textual `IR-<n>` reference
+outside `specs/map.md` and `specs/iterations/` is likewise an
+error — naming an IR is citing it.
 Scheme, protocol-relative, and absolute URLs shall not be checked.
 
 A warning shall be reported for duplicate heading anchors within one
@@ -159,10 +161,16 @@ Where citation discipline is linted:
   supports ([META-20](../meta.md#meta-20)), so a mechanically
   migrated tree cannot pass the gate unreconciled;
 - a citation link inside a package file's `## Intent` section shall
-  be a warning ([META-15](../meta.md#meta-15));
+  be an error ([META-15](../meta.md#meta-15));
 - a link in a package file resolving to an item inside another
-  package's `## Internal Behavior` section shall be a warning
-  ([META-14](../meta.md#meta-14)).
+  package's `## Internal Behavior` section shall be an error
+  ([META-14](../meta.md#meta-14));
+- in a package behavior item, a citation of another package whose
+  nearest preceding English clause keyword — `Where`, `While`,
+  `When`, or `shall`, with a list attached to its lead-in when
+  that lead-in ends in a colon — is `shall` shall be an error:
+  peers are cited from preconditions and triggers only
+  ([META-13](../meta.md#meta-13), [META-14](../meta.md#meta-14)).
 
 ## Internal Behavior
 
@@ -181,6 +189,9 @@ keywords shall be detected outside code blocks only, using the
 parsed tree's code spans — GFM fences of any delimiter length and
 indented code — so a literal fence inside a longer fence cannot
 leak lines into detection.
+Binding trigger keywords shall be matched over the parsed inline
+text, so list markers, blockquotes, and emphasis cannot hide a
+trigger and inline code cannot fake one.
 
 ## Verification
 
@@ -198,12 +209,15 @@ and Tests items, uncovered Binding and Scenario items, a Binding
 uncited by any same-file Scenario in a mixed file, cross-package
 Verification, the scenario two-package floor with an anchor-less
 file link not counting, and a triggered Binding in each language
-([LINT-7](#lint-7)); citations — broken link, broken anchor,
-legacy path, a package link into `specs/compositions/`, and an
-iteration citation outside the map ([LINT-8](#lint-8)); reference
+including a list-wrapped zh trigger ([LINT-7](#lint-7));
+citations — broken link, broken anchor, legacy path, a package
+link into `specs/compositions/`, and iteration references outside
+the map, linked and textual ([LINT-8](#lint-8)); reference
 markers, records, and map listing ([LINT-9](#lint-9)); citation
-discipline — an Intent citation, a peer-Internal citation, and a
-detached `Verifies` sentence as an error ([LINT-13](#lint-13));
+discipline — an Intent citation, a peer-Internal citation, an
+outcome-clause peer citation beside an accepted precondition
+citation, and a detached `Verifies` sentence
+([LINT-13](#lint-13));
 an item body spanning a nested subheading whose citations count
 for the item, and a literal triple-backtick line inside a longer
 fence staying undetected ([LINT-10](#lint-10)); finding format
