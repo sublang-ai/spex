@@ -17,14 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coverage (package Verification items cite the same-file items they
   check; composition Tests items cite the same-file Binding or
   Scenario items they execute; every Binding and Scenario item is
-  covered; scenario tests span two packages), the static-binding
-  rule (no `When`/`While` clause in a `## Binding` item), citations
-  (files and anchors), reference markers, record sections, and the
-  `map.md` index. Relationship-metadata lines (`Verifies:`,
-  `Binds:`, `Composes:`, `Clients:`, `Suppliers:`, `Scope:`,
-  `Requires:`, `Uses:`) are errors: the citations in an item's
-  clauses are the single source of its relationships (META-20).
-  Errors exit non-zero; warnings do not.
+  covered; scenario tests cite items in two distinct packages — a
+  file link without an item anchor counts toward none; in a mixed
+  file, every Binding item is cited by a same-file Scenario item),
+  the static-binding rule (no `When`/`While` clause in a
+  `## Binding` item), citations (files and anchors), reference
+  markers, record sections, and the `map.md` index. Item bodies
+  span nested subheadings. Relationship-metadata lines
+  (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`,
+  `Scope:`, `Requires:`, `Uses:`) are errors: the citations in an
+  item's clauses are the single source of its relationships
+  (META-20). Citation-discipline warnings flag a citation inside a
+  package `## Intent` (META-15), a package link into a peer's
+  `## Internal Behavior` (META-14), and a detached `Verifies …`
+  sentence left by mechanical migration (META-20). Errors exit
+  non-zero; warnings do not.
 - `spex scaffold --update` migrates the legacy `specs/user`/`dev`/`test`
   layout to the new structure: each package's item files are merged
   into a single `specs/packages/<name>.md` (`## External Behavior`,
@@ -36,9 +43,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   agent.
 - `spex scaffold --update` migrates `specs/interactions/` to
   `specs/compositions/` (SCAF-50): files move with conflict-keeping,
-  their `Verifies:` lines become inline sentences, citations and a
+  each `Verifies:` block — including wrapped continuation lines —
+  collapses to one inline sentence, citations and a
   `## Interactions` map heading are rewritten, and the retired
-  `.gitkeep` is dropped via the legacy manifest.
+  `.gitkeep` is dropped via the legacy manifest. Moved files are
+  not reshaped into the META-34 grammar; the remaining lint
+  findings are reconciliation work for the printed compositions
+  prompt.
+- Composition section headings have Chinese names: the bundled zh
+  `meta.md` translates META-28 and META-34, defining
+  意图/外部行为/内部行为/验证/参考资料 for packages and
+  绑定/场景/测试 for compositions, and `spex lint` accepts them
+  alongside the English names.
 
 ### Changed
 
@@ -200,7 +216,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sublang-ai/spex/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sublang-ai/spex/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/sublang-ai/spex/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/sublang-ai/spex/compare/v0.2.1...v0.2.2
