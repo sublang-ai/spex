@@ -51,11 +51,10 @@ A scenario test shall cite items from two or more packages; a
 binding inspection may involve one package and its service.
 Every binding and scenario item shall be cited by at least one
 same-file test item.
-A composition test's grade follows visibility: a relationship
-observable to a user of the installed system — a human, host, or
-peer component — shall be exercised at that surface as acceptance;
-a relationship hidden inside the installation may be verified by
-deployment inspection.
+A composition test's grade follows visibility: composed behavior
+or a relationship observable at the installed system's external
+boundary shall be exercised there as acceptance; what stays hidden
+inside the installation may be verified by deployment inspection.
 
 Unit tests shall be part of the implementation and shall not be
 specified as spec items.
@@ -281,14 +280,13 @@ A binding item declares one installed relationship by clause:
 its precondition clauses cite the client items — or name the
 deployment surface — it serves, and its shall clause states
 the provision.
-The provision shall take one of two forms: resolve the need to
-another package's External Behavior or to a named external
-service; or state what the installation itself supplies — a rule
-over cited External inputs (an authorization policy, an
-exclusivity constraint) or a concrete installed value (a name, a
-label).
-Clause placement identifies client versus provision; the
-item's prose distinguishes the two provision forms.
+The provision shall consist of one or more mappings, each in one
+of two forms: resolve a client need to another package's External
+Behavior or to a named external service; or state what the
+installation itself supplies — a rule over cited External inputs
+(an authorization policy, an exclusivity constraint) or a concrete
+installed value (a name, a label).
+Clause placement identifies client versus provision; the item's prose distinguishes the provision forms.
 Provision-side citations shall be External Behavior — what the
 supplier offers its users — never another package's internal
 items; citations to decision records in either clause are
@@ -299,10 +297,11 @@ is a scenario item.
 A binding declares the installed relationship; whether the
 deployment realizes it is its tests' question
 ([META-21](#meta-21)).
-Each slot or abstract subject shall have exactly one effective
-binding per deployment, unless the client item itself defines
-aggregation or selection; a slot with no effective binding is
-an incomplete installation, not a disabled feature.
+Each declared client need — a slot, an abstract subject, or a
+named installation surface — shall have exactly one effective
+binding per deployment, unless its declaration defines aggregation
+or selection; a need with no effective binding is an incomplete
+installation, not a disabled feature.
 
 A binding item reads as one GEARS sentence:
 

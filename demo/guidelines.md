@@ -270,9 +270,11 @@ cannot tell, which is the point.
   closes it.
   Every binding declares its endpoints by clause — its
   preconditions cite the clients, its shall clause the
-  suppliers or the inputs of a rule the installation owns — and
-  the provision side cites only offered behavior: External
-  items or a named service
+  suppliers, the inputs of a rule the installation owns, or a
+  concrete installed value —
+  [NAV-1](specs/compositions/site-navigation.md#nav-1) binds
+  the site name "Academy" — and a provision-side citation is
+  only offered behavior: External items or a named service
   ([META-36](specs/meta.md#meta-36)).
   When no single supplier serves the need, the shall clause
   states a rule the installation itself owns:
