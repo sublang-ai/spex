@@ -175,8 +175,9 @@ Release acceptance is the composition tests plus each package's
 Verification items; the compositions alone cover everything
 integrated.
 
-- **Each composition is one integrated behavior, and its tests
-  are acceptance tests**
+- **Each composition is one integrated concern, and its tests
+  are release evidence — acceptance for visible seams,
+  inspection for hidden ones**
   ([META-21](specs/meta.md#meta-21),
   [META-31](specs/meta.md#meta-31)).
   The demo's release gate
@@ -243,8 +244,8 @@ item and inspection tests.
 A supplier may be a vendor or an in-house package; the client
 cannot tell, which is the point.
 
-- **Every open slot is an item; the decision record keeps the
-  why** ([META-24](specs/meta.md#meta-24)).
+- **Every open slot has a binding item; the decision record
+  keeps the why** ([META-24](specs/meta.md#meta-24)).
   [PUB-1](specs/compositions/course-publishing.md#pub-1) binds
   the catalog's media slot
   ([CAT-8](specs/packages/catalog/course-catalog.md#cat-8)) to
@@ -368,8 +369,9 @@ cannot tell, which is the point.
   storage test double), the supplier a stub of its host
   ([VID-13](specs/packages/catalog/video-library.md#vid-13)) —
   no scenario required.
-- **Files take four shapes; audience picks the test kind, never
-  the residence** ([META-34](specs/meta.md#meta-34)).
+- **Files take four shapes; visibility picks the test kind,
+  never the residence** ([META-21](specs/meta.md#meta-21),
+  [META-34](specs/meta.md#meta-34)).
   Scenario-only
   ([PLAY](specs/compositions/lesson-playback.md),
   [BOOT](specs/compositions/admin-bootstrap.md)); binding-only

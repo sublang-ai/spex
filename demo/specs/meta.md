@@ -51,6 +51,11 @@ A scenario test shall cite items from two or more packages; a
 binding inspection may involve one package and its service.
 Every binding and scenario item shall be cited by at least one
 same-file test item.
+A composition test's grade follows visibility: a relationship
+observable to a user of the installed system — a human, host, or
+peer component — shall be exercised at that surface as acceptance;
+a relationship hidden inside the installation may be verified by
+deployment inspection.
 
 Unit tests shall be part of the implementation and shall not be
 specified as spec items.
@@ -241,7 +246,7 @@ exclusivity is an installation policy, stated by a binding item
 ### META-31
 
 Files under `compositions/` shall describe how the installed
-system is composed, in two item kinds: binding items — static
+system is composed, in two behavior-item kinds: binding items — static
 installed relationships ([META-36](#meta-36)) — and scenario
 items — integrated runtime behavior over the composed system,
 triggered or standing, which may take the composed system as
@@ -257,9 +262,10 @@ their subject.
 
 ### META-35
 
-Only a declared counterparty is bindable: an open slot or
-abstract collaborator that a package item itself names
-([META-13](#meta-13)).
+Only a declared counterparty is bindable: an open slot or abstract
+collaborator that a package item itself names
+([META-13](#meta-13)), or a surface the installation itself owns
+and the binding names ([META-36](#meta-36)).
 A consumed requirement states the supplied meaning together
 with the package's own acceptance and rejection handling of
 it.
@@ -267,9 +273,11 @@ A private invariant — behavior no declared collaborator
 supplies — shall not be a binding endpoint, and inventing a
 collaborator to externalize an invariant does not make it
 consumed.
-A replaceable code dependency — a library, a framework — is no
-seam at all: it gets no binding item, and its selection lives
-in a decision record.
+Replaceability alone creates no seam: an implementation dependency
+no package item declares — a library, a framework — gets no
+binding item, and its selection lives in a decision record; a
+declared abstract collaborator stays bindable however it is
+realized — in-process, in-house, or remote.
 
 ### META-36
 
@@ -282,9 +290,10 @@ item's givens, the shall clause its provision; a binding's
 given is the client's stated need.
 The provision shall take one of two forms: resolve the need to
 another package's External Behavior or to a named external
-service; or state a rule the installation itself owns — an
-authorization policy, an exclusivity constraint — citing the
-External Behavior it depends on as the rule's inputs.
+service; or state what the installation itself supplies — a rule
+over cited External inputs (an authorization policy, an
+exclusivity constraint) or a concrete installed value (a name, a
+label).
 Clause placement identifies client versus provision; the
 item's prose distinguishes the two provision forms.
 Provision-side citations shall be External Behavior — what the
@@ -295,10 +304,10 @@ A binding item is static: Where preconditions and a shall
 clause, never a While or When trigger — a triggered sequence
 is a scenario item.
 A binding declares the installed relationship; whether the
-deployment realizes it is its tests' question, and test grade
-follows the seam's audience ([META-34](#meta-34)), not the
-supplier's kind — an in-house package and an external service
-bind the same way.
+deployment realizes it is its tests' question
+([META-21](#meta-21)).
+An in-house package and an external service bind the same way —
+the supplier's kind changes nothing.
 Each slot or abstract subject shall have exactly one effective
 binding per deployment, unless the client item itself defines
 aggregation or selection; a slot with no effective binding is
@@ -307,7 +316,7 @@ an incomplete installation, not a disabled feature.
 A binding item reads as one GEARS sentence:
 
 ```text
-Where <the client's cited need or named deployment surface>, the deployment shall <serve it: cite supplier External Behavior, name the selected service, or state the installation's own rule over cited External inputs>.
+Where <the client's cited need or named deployment surface>, the deployment shall <serve it: cite supplier External Behavior, name the selected service, or state the installation's own rule or value>.
 ```
 
 ### META-34
@@ -325,10 +334,9 @@ sections, in this order:
 
 At least one of `## Binding` and `## Scenario` shall be
 present.
-A file may hold bindings alone; whether its tests are
-acceptance journeys or deployment inspections follows from its
-seams' audience ([META-36](#meta-36)), not from the file's
-section shape.
+A file may hold bindings alone; whether its tests are acceptance journeys or deployment
+inspections follows from the relationship's visibility
+([META-21](#meta-21)), not from the file's section shape.
 Binding and Scenario may share a file when they form one
 concern: where both are present, each binding item shall be
 cited by at least one same-file scenario item whose outcome
@@ -392,9 +400,11 @@ items ([META-21](#meta-21)).
 A citation binds its adjacent phrase: cite exactly the behavior
 that phrase directly relies on, exercises, or checks — never
 ambient, transitive, or merely invoked behavior.
-A scenario or test item may cite a package's Internal Behavior
-where its integrated claim materially needs it; the citation
-neither reclassifies nor exposes the item.
+A binding item's precondition may cite a consumed Internal
+requirement as its client ([META-35](#meta-35)); a scenario or
+test item may cite a package's Internal Behavior where its
+integrated claim materially needs it.
+Such a citation neither reclassifies nor exposes the item.
 Spec items shall carry no relationship-metadata lines —
 `Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`,
 `Scope:`, or any other line declaring an item relationship; the

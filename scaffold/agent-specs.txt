@@ -6,7 +6,7 @@
 - Whenever your changes involve any spec, or you make a decision worth recording, keep the specs in sync — don't let them drift.
 - Keep specs:
   - Complete & coherent: sufficient for you to reimplement code.
-  - Right level: each package file in @specs/packages holds behavior its users may rely on (## External Behavior), consumed requirements and private invariants (## Internal Behavior), and tests of its own claims (## Verification); behavior and tests spanning multiple packages go in @specs/compositions, where a binding item declares each seam by clause — preconditions cite the clients, the shall clause the supplier's External Behavior or named service. Specify integration/system testing, not unit testing.
+  - Right level: each package file in @specs/packages holds behavior its users may rely on (## External Behavior), consumed requirements and private invariants (## Internal Behavior), and tests of its own claims (## Verification); behavior and tests spanning multiple packages go in @specs/compositions, where a binding item declares each seam by clause — preconditions cite the clients, the shall clause the supplier's External Behavior, a named service, or the installation's own rule or value. Specify integration/system testing, not unit testing.
   - Minimal: essential and concise; also check against other spec items to avoid overlap.
   - Well organized: spec packages are finely scoped, with high cohesion and low coupling.
   - Single-source: citations sit inline beside the phrase they support; items carry no metadata lines (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`, `Scope:`).
