@@ -25,13 +25,17 @@ export type LintFinding = {
 };
 
 // Localized section names accepted alongside the English ones,
-// matching the bundled zh templates.
+// matching the bundled zh templates. Composition sections ship in
+// English only.
 const SECTION_ALIASES: Record<string, string[]> = {
   Intent: ["Intent", "意图"],
   "External Behavior": ["External Behavior", "外部行为"],
   "Internal Behavior": ["Internal Behavior", "内部行为"],
   Verification: ["Verification", "验证"],
   References: ["References", "参考资料"],
+  Binding: ["Binding"],
+  Scenario: ["Scenario"],
+  Tests: ["Tests"],
 };
 
 const PACKAGE_SECTION_ORDER = [
@@ -39,6 +43,15 @@ const PACKAGE_SECTION_ORDER = [
   "External Behavior",
   "Internal Behavior",
   "Verification",
+  "References",
+];
+
+// META-34 grammar for composition files.
+const COMPOSITION_SECTION_ORDER = [
+  "Intent",
+  "Binding",
+  "Scenario",
+  "Tests",
   "References",
 ];
 
@@ -61,12 +74,18 @@ const RECORD_NAME_RE = /^\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 const H1_RE = /^([A-Z][A-Z0-9]+):\s+\S.*$/;
 const ITEM_RE = /^([A-Z][A-Z0-9]*)-(\d+)$/;
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-const LEGACY_DIRS = ["user", "dev", "test", "items"];
+// Detached relationship metadata prohibited by META-20.
+const METADATA_LINE_RE =
+  /^(Verifies|Binds|Composes|Clients|Suppliers|Scope|Requires|Uses):(\s|$)/;
+// Clause keywords a static Binding item must not carry (META-36).
+const TRIGGER_RE = /\b(When|While)\b/;
+const FENCE_RE = /^\s*(```|~~~)/;
+const LEGACY_ITEM_DIRS = ["user", "dev", "test", "items"];
 const KNOWN_TOP_LEVEL = new Set([
   "decisions",
   "iterations",
   "packages",
-  "interactions",
+  "compositions",
   "map.md",
   "meta.md",
 ]);
@@ -76,12 +95,12 @@ type HeadingInfo = {
   text: string;
   plain: string;
   line: number;
+  slug: string;
 };
 
 type LinkInfo = {
   url: string;
   line: number;
-  /** Line of the enclosing Verifies: metadata line, if this is one. */
   kind: "link" | "image" | "definition";
 };
 
@@ -97,6 +116,8 @@ type SpecFile = {
   links: LinkInfo[];
   h1: HeadingInfo | null;
   shortForm: string | null;
+  /** Per-line flag: inside a fenced code block. */
+  fenced: boolean[];
 };
 
 type LintContext = {
@@ -131,16 +152,30 @@ function listMarkdownFiles(dir: string, prefix: string): string[] {
   return files;
 }
 
+function fenceMap(lines: string[]): boolean[] {
+  const fenced: boolean[] = [];
+  let inFence = false;
+  for (const line of lines) {
+    if (FENCE_RE.test(line)) {
+      fenced.push(true);
+      inFence = !inFence;
+      continue;
+    }
+    fenced.push(inFence);
+  }
+  return fenced;
+}
+
 function loadFile(basePath: string, relPath: string): SpecFile {
   const text = readFileSync(join(basePath, relPath), "utf-8");
   const tree = parseMarkdown(text);
 
-  const headings: HeadingInfo[] = [];
+  const rawHeadings: Omit<HeadingInfo, "slug">[] = [];
   const links: LinkInfo[] = [];
   visit(tree, (node: Node) => {
     if (node.type === "heading") {
       const heading = node as Heading;
-      headings.push({
+      rawHeadings.push({
         depth: heading.depth,
         text: headingText(text, heading),
         plain: plainHeadingText(text, heading),
@@ -162,13 +197,18 @@ function loadFile(basePath: string, relPath: string): SpecFile {
   });
 
   const slugList = headingSlugs(text, tree);
+  const headings: HeadingInfo[] = rawHeadings.map((heading, index) => ({
+    ...heading,
+    slug: slugList[index] ?? "",
+  }));
+  const lines = text.split("\n");
   const h1 = headings.find((heading) => heading.depth === 1) ?? null;
   const h1Match = h1?.plain.match(H1_RE) ?? null;
 
   return {
     relPath,
     text,
-    lines: text.split("\n"),
+    lines,
     tree,
     headings,
     slugs: new Set(slugList),
@@ -176,6 +216,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
     links,
     h1,
     shortForm: h1Match === null ? null : h1Match[1],
+    fenced: fenceMap(lines),
   };
 }
 
@@ -199,7 +240,7 @@ function isUnder(relPath: string, dir: string): boolean {
 
 function lintStructure(ctx: LintContext): void {
   const specsDir = join(ctx.basePath, "specs");
-  for (const dir of LEGACY_DIRS) {
+  for (const dir of LEGACY_ITEM_DIRS) {
     if (existsSync(join(specsDir, dir))) {
       report(
         ctx,
@@ -211,16 +252,26 @@ function lintStructure(ctx: LintContext): void {
       );
     }
   }
+  if (existsSync(join(specsDir, "interactions"))) {
+    report(
+      ctx,
+      "specs/interactions",
+      1,
+      "error",
+      "structure/legacy-layout",
+      "legacy directory specs/interactions/ found; run `spex scaffold --update` to migrate to specs/compositions/",
+    );
+  }
   for (const entry of readdirSync(specsDir).sort()) {
     if (entry === ".DS_Store" || KNOWN_TOP_LEVEL.has(entry)) continue;
-    if (LEGACY_DIRS.includes(entry)) continue;
+    if (LEGACY_ITEM_DIRS.includes(entry) || entry === "interactions") continue;
     report(
       ctx,
       `specs/${entry}`,
       1,
       "warning",
       "structure/unknown-entry",
-      `unexpected entry under specs/ (expected decisions/, iterations/, packages/, interactions/, map.md, meta.md)`,
+      `unexpected entry under specs/ (expected decisions/, iterations/, packages/, compositions/, map.md, meta.md)`,
     );
   }
   for (const required of ["specs/meta.md", "specs/map.md"]) {
@@ -240,7 +291,7 @@ function lintStructure(ctx: LintContext): void {
 function lintNaming(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
     const { relPath } = file;
-    if (isUnder(relPath, "packages") || isUnder(relPath, "interactions")) {
+    if (isUnder(relPath, "packages") || isUnder(relPath, "compositions")) {
       const segments = relPath.split("/").slice(2);
       const basename = segments.pop() as string;
       if (!KEBAB_RE.test(basename.replace(/\.md$/, ""))) {
@@ -283,8 +334,63 @@ function lintNaming(ctx: LintContext): void {
 }
 
 // ---------------------------------------------------------------
-// Package / interaction file rules
+// Package / composition file rules
 // ---------------------------------------------------------------
+
+function lintSections(
+  ctx: LintContext,
+  file: SpecFile,
+  order: string[],
+  ruleId: string,
+  kind: string,
+): string[] {
+  const h2s = file.headings.filter((heading) => heading.depth === 2);
+  const present: string[] = [];
+  for (const heading of h2s) {
+    const canonical = SECTION_BY_NAME.get(heading.plain.trim());
+    if (canonical === undefined || !order.includes(canonical)) {
+      report(
+        ctx,
+        file.relPath,
+        heading.line,
+        "error",
+        ruleId,
+        `unexpected section "## ${heading.plain}"; ${kind} files use ${order.join(
+          ", ",
+        )}`,
+      );
+      continue;
+    }
+    if (present.includes(canonical)) {
+      report(
+        ctx,
+        file.relPath,
+        heading.line,
+        "error",
+        ruleId,
+        `duplicate section "## ${heading.plain}"`,
+      );
+      continue;
+    }
+    if (
+      present.length > 0 &&
+      order.indexOf(canonical) < order.indexOf(present[present.length - 1])
+    ) {
+      report(
+        ctx,
+        file.relPath,
+        heading.line,
+        "error",
+        ruleId,
+        `section "## ${heading.plain}" is out of order (expected ${order.join(
+          ", ",
+        )})`,
+      );
+    }
+    present.push(canonical);
+  }
+  return present;
+}
 
 function lintPackageFile(ctx: LintContext, file: SpecFile): void {
   if (file.h1 === null || file.shortForm === null) {
@@ -298,50 +404,13 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
     );
   }
 
-  const h2s = file.headings.filter((heading) => heading.depth === 2);
-  const present: string[] = [];
-  for (const heading of h2s) {
-    const canonical = SECTION_BY_NAME.get(heading.plain.trim());
-    if (canonical === undefined) {
-      report(
-        ctx,
-        file.relPath,
-        heading.line,
-        "error",
-        "package/sections",
-        `unexpected section "## ${heading.plain}"; package files use Intent, External Behavior, Internal Behavior, Verification, References`,
-      );
-      continue;
-    }
-    if (present.includes(canonical)) {
-      report(
-        ctx,
-        file.relPath,
-        heading.line,
-        "error",
-        "package/sections",
-        `duplicate section "## ${heading.plain}"`,
-      );
-      continue;
-    }
-    if (
-      present.length > 0 &&
-      PACKAGE_SECTION_ORDER.indexOf(canonical) <
-        PACKAGE_SECTION_ORDER.indexOf(present[present.length - 1])
-    ) {
-      report(
-        ctx,
-        file.relPath,
-        heading.line,
-        "error",
-        "package/sections",
-        `section "## ${heading.plain}" is out of order (expected ${PACKAGE_SECTION_ORDER.join(
-          ", ",
-        )})`,
-      );
-    }
-    present.push(canonical);
-  }
+  const present = lintSections(
+    ctx,
+    file,
+    PACKAGE_SECTION_ORDER,
+    "package/sections",
+    "package",
+  );
 
   if (!present.includes("Intent")) {
     report(
@@ -368,35 +437,59 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
   }
 }
 
-function lintInteractionFile(ctx: LintContext, file: SpecFile): void {
+function lintCompositionFile(ctx: LintContext, file: SpecFile): void {
   if (file.h1 === null || file.shortForm === null) {
     report(
       ctx,
       file.relPath,
       file.h1?.line ?? 1,
       "error",
-      "interaction/heading",
-      "interaction file needs a `# <SHORTFORM>: <Title>` heading",
+      "composition/heading",
+      "composition file needs a `# <SHORTFORM>: <Title>` heading",
     );
   }
-  const hasIntent = file.headings.some(
-    (heading) =>
-      heading.depth === 2 &&
-      SECTION_BY_NAME.get(heading.plain.trim()) === "Intent",
+
+  const present = lintSections(
+    ctx,
+    file,
+    COMPOSITION_SECTION_ORDER,
+    "composition/sections",
+    "composition",
   );
-  if (!hasIntent) {
+
+  if (!present.includes("Intent")) {
     report(
       ctx,
       file.relPath,
       1,
       "error",
-      "interaction/sections",
+      "composition/sections",
       'missing required "## Intent" section',
+    );
+  }
+  if (!present.includes("Tests")) {
+    report(
+      ctx,
+      file.relPath,
+      1,
+      "error",
+      "composition/sections",
+      'missing required "## Tests" section (META-34)',
+    );
+  }
+  if (!present.includes("Binding") && !present.includes("Scenario")) {
+    report(
+      ctx,
+      file.relPath,
+      1,
+      "error",
+      "composition/sections",
+      'composition file needs "## Binding" and/or "## Scenario" (META-34)',
     );
   }
 }
 
-function lintInteractionNames(ctx: LintContext): void {
+function lintCompositionNames(ctx: LintContext): void {
   const packageNames = new Set<string>();
   for (const file of ctx.files.values()) {
     if (!isUnder(file.relPath, "packages")) continue;
@@ -408,7 +501,7 @@ function lintInteractionNames(ctx: LintContext): void {
   if (packageNames.size === 0) return;
 
   for (const file of ctx.files.values()) {
-    if (!isUnder(file.relPath, "interactions")) continue;
+    if (!isUnder(file.relPath, "compositions")) continue;
     const name = posix.basename(file.relPath, ".md");
     const tokens = name.split("-");
     // Can the token list be partitioned into >= 2 package names?
@@ -433,17 +526,17 @@ function lintInteractionNames(ctx: LintContext): void {
         file.relPath,
         1,
         "warning",
-        "interaction/name-composition",
+        "composition/name-composition",
         `"${name}" looks like a composition of package names (${matched.join(
           " + ",
-        )}); name interaction files after the behavior or scenario instead`,
+        )}); name composition files after the concern instead`,
       );
     }
   }
 }
 
 // ---------------------------------------------------------------
-// Item ID rules
+// Item rules
 // ---------------------------------------------------------------
 
 type ItemInfo = {
@@ -451,6 +544,12 @@ type ItemInfo = {
   heading: HeadingInfo;
   id: string;
   prefix: string;
+  /** Canonical section of the containing ## heading, if known. */
+  section: string | null;
+  /** 1-based line after the heading where the body starts. */
+  bodyStart: number;
+  /** 1-based line after the body's last line. */
+  bodyEnd: number;
 };
 
 function collectItems(ctx: LintContext): ItemInfo[] {
@@ -458,22 +557,37 @@ function collectItems(ctx: LintContext): ItemInfo[] {
   for (const file of ctx.files.values()) {
     const eligible =
       isUnder(file.relPath, "packages") ||
-      isUnder(file.relPath, "interactions") ||
+      isUnder(file.relPath, "compositions") ||
       file.relPath === "specs/meta.md";
     if (!eligible) continue;
-    for (const heading of file.headings) {
+    for (const [index, heading] of file.headings.entries()) {
       if (heading.depth < 2) continue;
       const match = heading.plain.trim().match(ITEM_RE);
       if (match === null) continue;
+      const next = file.headings[index + 1];
       items.push({
         file,
         heading,
         id: heading.plain.trim(),
         prefix: match[1],
+        section: sectionOf(file, heading),
+        bodyStart: heading.line + 1,
+        bodyEnd: next === undefined ? file.lines.length + 1 : next.line,
       });
     }
   }
   return items;
+}
+
+function sectionOf(file: SpecFile, heading: HeadingInfo): string | null {
+  let current: string | null = null;
+  for (const candidate of file.headings) {
+    if (candidate.line > heading.line) break;
+    if (candidate.depth === 2) {
+      current = SECTION_BY_NAME.get(candidate.plain.trim()) ?? candidate.plain;
+    }
+  }
+  return current;
 }
 
 function lintItems(ctx: LintContext, items: ItemInfo[]): void {
@@ -491,6 +605,19 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
         "error",
         "id/prefix",
         `item ${item.id} does not match the file's short form ${item.file.shortForm}`,
+      );
+    }
+    if (
+      item.file.relPath !== "specs/meta.md" &&
+      (item.section === "Intent" || item.section === "References")
+    ) {
+      report(
+        ctx,
+        item.file.relPath,
+        item.heading.line,
+        "warning",
+        "id/misplaced",
+        `item ${item.id} sits inside the ${item.section} section; items belong in the behavior, Binding, Scenario, Verification, or Tests sections`,
       );
     }
   }
@@ -513,7 +640,7 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
     if (
       file.shortForm === null ||
       (!isUnder(file.relPath, "packages") &&
-        !isUnder(file.relPath, "interactions"))
+        !isUnder(file.relPath, "compositions"))
     ) {
       continue;
     }
@@ -539,18 +666,8 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
 }
 
 // ---------------------------------------------------------------
-// Verifies rules
+// Item relationship rules (META-20, META-21, META-36)
 // ---------------------------------------------------------------
-
-function verifiesLine(file: SpecFile, heading: HeadingInfo): number | null {
-  for (let line = heading.line; line < file.lines.length; line += 1) {
-    const content = file.lines[line];
-    if (content === undefined) break;
-    if (content.trim() === "") continue;
-    return content.trimStart().startsWith("Verifies:") ? line + 1 : null;
-  }
-  return null;
-}
 
 /**
  * Resolve a relative citation URL against its file, or null for
@@ -563,102 +680,179 @@ function resolveCitation(file: SpecFile, url: string): string | null {
   return posix.normalize(posix.join(posix.dirname(file.relPath), path));
 }
 
-function sectionOf(file: SpecFile, heading: HeadingInfo): string | null {
-  let current: string | null = null;
-  for (const candidate of file.headings) {
-    if (candidate.line > heading.line) break;
-    if (candidate.depth === 2) {
-      current = SECTION_BY_NAME.get(candidate.plain.trim()) ?? candidate.plain;
-    }
-  }
-  return current;
+/** Links whose source line falls inside the item's body. */
+function bodyLinks(item: ItemInfo): LinkInfo[] {
+  return item.file.links.filter(
+    (link) =>
+      link.kind === "link" &&
+      link.line >= item.bodyStart &&
+      link.line < item.bodyEnd,
+  );
 }
 
-function lintVerifies(ctx: LintContext, items: ItemInfo[]): void {
+/** Same-file item anchors cited from the item's body. */
+function citedSameFileItems(
+  item: ItemInfo,
+  itemsBySlug: Map<string, ItemInfo>,
+): ItemInfo[] {
+  const cited: ItemInfo[] = [];
+  for (const link of bodyLinks(item)) {
+    let fragment: string | null = null;
+    if (link.url.startsWith("#")) {
+      fragment = link.url.slice(1);
+    } else {
+      // A same-file citation may spell out the file name.
+      const [path, ...fragmentParts] = link.url.split("#");
+      if (
+        fragmentParts.length > 0 &&
+        resolveCitation(item.file, path) === item.file.relPath
+      ) {
+        fragment = fragmentParts.join("#");
+      }
+    }
+    if (fragment === null) continue;
+    const target = itemsBySlug.get(fragment);
+    if (target !== undefined && target !== item) cited.push(target);
+  }
+  return cited;
+}
+
+/** Distinct specs/packages/ files cited from the item's body. */
+function citedPackageFiles(item: ItemInfo): Set<string> {
+  const cited = new Set<string>();
+  for (const link of bodyLinks(item)) {
+    const resolved = resolveCitation(item.file, link.url);
+    if (resolved !== null && resolved.startsWith("specs/packages/")) {
+      cited.add(resolved);
+    }
+  }
+  return cited;
+}
+
+function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
+  const bySlug = new Map<string, Map<string, ItemInfo>>();
+  for (const item of items) {
+    const map = bySlug.get(item.file.relPath) ?? new Map<string, ItemInfo>();
+    map.set(item.heading.slug, item);
+    bySlug.set(item.file.relPath, map);
+  }
+
+  // Same-file Tests coverage of Binding/Scenario items (META-21).
+  const coveredByTests = new Set<ItemInfo>();
+
   for (const item of items) {
     const inPackages = isUnder(item.file.relPath, "packages");
-    const inInteractions = isUnder(item.file.relPath, "interactions");
-    if (!inPackages && !inInteractions) continue;
+    const inCompositions = isUnder(item.file.relPath, "compositions");
+    if (!inPackages && !inCompositions) continue;
 
-    const section = sectionOf(item.file, item.heading);
-    const verifies = verifiesLine(item.file, item.heading);
+    // Relationship-metadata lines are prohibited (META-20).
+    for (let line = item.bodyStart; line < item.bodyEnd; line += 1) {
+      if (item.file.fenced[line - 1]) continue;
+      const content = item.file.lines[line - 1];
+      if (content !== undefined && METADATA_LINE_RE.test(content.trimStart())) {
+        report(
+          ctx,
+          item.file.relPath,
+          line,
+          "error",
+          "meta/metadata-line",
+          `item ${item.id} carries a relationship-metadata line; inline citations are the single source of relationships (META-20)`,
+        );
+      }
+    }
 
-    if (inPackages && section === "Verification" && verifies === null) {
+    const fileItems = bySlug.get(item.file.relPath) ?? new Map();
+    const sameFileCited = citedSameFileItems(item, fileItems);
+
+    if (inPackages && item.section === "Verification") {
+      if (sameFileCited.length === 0) {
+        report(
+          ctx,
+          item.file.relPath,
+          item.heading.line,
+          "error",
+          "verify/uncited",
+          `Verification item ${item.id} cites no same-file item; cite each behavior it checks inline at the assertion (META-20)`,
+        );
+      }
+      const crossCited = [...citedPackageFiles(item)].filter(
+        (relPath) => relPath !== item.file.relPath,
+      );
+      for (const relPath of crossCited) {
+        report(
+          ctx,
+          item.file.relPath,
+          item.heading.line,
+          "warning",
+          "verify/cross-package",
+          `Verification item ${item.id} cites another package (${relPath}); cross-package tests belong in specs/compositions/`,
+        );
+      }
+    }
+
+    if (inCompositions && item.section === "Tests") {
+      const bindingOrScenario = sameFileCited.filter(
+        (cited) => cited.section === "Binding" || cited.section === "Scenario",
+      );
+      if (bindingOrScenario.length === 0) {
+        report(
+          ctx,
+          item.file.relPath,
+          item.heading.line,
+          "error",
+          "tests/uncited",
+          `Tests item ${item.id} cites no same-file Binding or Scenario item (META-21)`,
+        );
+      }
+      for (const cited of bindingOrScenario) coveredByTests.add(cited);
+
+      const citesScenario = bindingOrScenario.some(
+        (cited) => cited.section === "Scenario",
+      );
+      if (citesScenario && citedPackageFiles(item).size < 2) {
+        report(
+          ctx,
+          item.file.relPath,
+          item.heading.line,
+          "warning",
+          "tests/scenario-two-packages",
+          `Tests item ${item.id} exercises a scenario but cites fewer than two package files (META-21)`,
+        );
+      }
+    }
+
+    // A binding is static: no trigger or stateful clause (META-36).
+    if (inCompositions && item.section === "Binding") {
+      for (let line = item.bodyStart; line < item.bodyEnd; line += 1) {
+        if (item.file.fenced[line - 1]) continue;
+        const content = item.file.lines[line - 1];
+        if (content !== undefined && TRIGGER_RE.test(content)) {
+          report(
+            ctx,
+            item.file.relPath,
+            line,
+            "error",
+            "binding/trigger",
+            `Binding item ${item.id} carries a When/While clause; a binding is static (META-36)`,
+          );
+          break;
+        }
+      }
+    }
+  }
+
+  for (const item of items) {
+    if (!isUnder(item.file.relPath, "compositions")) continue;
+    if (item.section !== "Binding" && item.section !== "Scenario") continue;
+    if (!coveredByTests.has(item)) {
       report(
         ctx,
         item.file.relPath,
         item.heading.line,
         "error",
-        "verify/missing",
-        `Verification item ${item.id} needs a "Verifies:" line citing the items it checks (META-20)`,
+        "tests/uncovered",
+        `${item.section} item ${item.id} is cited by no same-file Tests item (META-21)`,
       );
-    }
-    if (
-      (inPackages || inInteractions) &&
-      (section === "Intent" || section === "References")
-    ) {
-      report(
-        ctx,
-        item.file.relPath,
-        item.heading.line,
-        "warning",
-        "id/misplaced",
-        `item ${item.id} sits inside the ${section} section; items belong in the behavior or Verification sections`,
-      );
-    }
-    if (inPackages && section !== "Verification" && verifies !== null) {
-      report(
-        ctx,
-        item.file.relPath,
-        verifies,
-        "warning",
-        "verify/outside",
-        `item ${item.id} carries a "Verifies:" line outside the Verification section`,
-      );
-    }
-    if (inPackages && verifies !== null) {
-      // A Verification item that checks another package's claims
-      // belongs in interactions/ (META-21).
-      for (const link of item.file.links) {
-        if (link.line !== verifies) continue;
-        const resolved = resolveCitation(item.file, link.url);
-        if (resolved === null) continue;
-        if (
-          resolved.startsWith("specs/packages/") &&
-          resolved !== item.file.relPath
-        ) {
-          report(
-            ctx,
-            item.file.relPath,
-            verifies,
-            "warning",
-            "verify/cross-package",
-            `item ${item.id} verifies another package (${resolved}); cross-package tests belong in specs/interactions/`,
-          );
-        }
-      }
-    }
-    if (inInteractions && verifies !== null) {
-      // Interaction test items should span packages; a single-package
-      // test belongs in that package's Verification section.
-      const cited = new Set<string>();
-      for (const link of item.file.links) {
-        if (link.line !== verifies) continue;
-        const resolved = resolveCitation(item.file, link.url);
-        if (resolved !== null && resolved.startsWith("specs/packages/")) {
-          cited.add(resolved);
-        }
-      }
-      if (cited.size === 1) {
-        report(
-          ctx,
-          item.file.relPath,
-          verifies,
-          "warning",
-          "interaction/single-package",
-          `test item ${item.id} verifies a single package; consider moving it into that package's Verification section`,
-        );
-      }
     }
   }
 }
@@ -708,14 +902,14 @@ function lintCitations(ctx: LintContext): void {
         continue;
       }
 
-      if (/^specs\/(?:user|dev|test|items)\//.test(resolved)) {
+      if (/^specs\/(?:user|dev|test|items|interactions)\//.test(resolved)) {
         report(
           ctx,
           file.relPath,
           link.line,
           "error",
           "cite/legacy-path",
-          `link points into the legacy layout (${resolved}); cite specs/packages/ instead`,
+          `link points into the legacy layout (${resolved}); cite specs/packages/ or specs/compositions/ instead`,
         );
         continue;
       }
@@ -857,7 +1051,7 @@ function lintMap(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
     if (
       !isUnder(file.relPath, "packages") &&
-      !isUnder(file.relPath, "interactions")
+      !isUnder(file.relPath, "compositions")
     ) {
       continue;
     }
@@ -931,12 +1125,12 @@ export function lintSpecs(basePath: string): LintFinding[] {
   lintNaming(ctx);
   for (const file of ctx.files.values()) {
     if (isUnder(file.relPath, "packages")) lintPackageFile(ctx, file);
-    if (isUnder(file.relPath, "interactions")) lintInteractionFile(ctx, file);
+    if (isUnder(file.relPath, "compositions")) lintCompositionFile(ctx, file);
   }
-  lintInteractionNames(ctx);
+  lintCompositionNames(ctx);
   const items = collectItems(ctx);
   lintItems(ctx, items);
-  lintVerifies(ctx, items);
+  lintItemRelationships(ctx, items);
   lintCitations(ctx);
   lintReferences(ctx);
   lintRecords(ctx);

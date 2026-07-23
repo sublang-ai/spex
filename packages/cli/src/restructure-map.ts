@@ -19,27 +19,27 @@ const MAP_STRINGS: Record<
   ScaffoldLanguage,
   {
     layoutLines: string[];
-    interactionsHeading: string;
-    interactionsEmpty: string;
+    compositionsHeading: string;
+    compositionsEmpty: string;
   }
 > = {
   en: {
     layoutLines: [
       "packages/     Spec packages (one file per package)",
-      "interactions/ Cross-package behaviors and tests",
+      "compositions/ Cross-package compositions: scenarios, bindings, tests",
     ],
-    interactionsHeading: "Interactions",
-    interactionsEmpty:
-      "None yet. Add files under `interactions/` as packages start working together.",
+    compositionsHeading: "Compositions",
+    compositionsEmpty:
+      "None yet. Add files under `compositions/` as packages start working together.",
   },
   zh: {
     layoutLines: [
       "packages/     规约包（每包一个文件）",
-      "interactions/ 跨包行为与测试",
+      "compositions/ 跨包组合：场景、绑定与测试",
     ],
-    interactionsHeading: "交互",
-    interactionsEmpty:
-      "暂无。当多个包开始协作时，在 `interactions/` 下添加文件。",
+    compositionsHeading: "组合",
+    compositionsEmpty:
+      "暂无。当多个包开始协作时，在 `compositions/` 下添加文件。",
   },
 };
 
@@ -171,15 +171,35 @@ export function restructureMap(
 
   let result = edits.length > 0 ? applyEdits(text, edits) : text;
 
-  const hasInteractions = new RegExp(
-    `^##\\s+(${strings.interactionsHeading}|Interactions)\\s*$`,
+  const renamed = renameInteractionsHeading(result, language);
+  if (renamed !== null) result = renamed;
+
+  const hasCompositions = new RegExp(
+    `^##\\s+(${strings.compositionsHeading}|Compositions)\\s*$`,
     "m",
   ).test(result);
-  if (!hasInteractions) {
+  if (!hasCompositions) {
     result =
       result.trimEnd() +
-      `\n\n## ${strings.interactionsHeading}\n\n${strings.interactionsEmpty}\n`;
+      `\n\n## ${strings.compositionsHeading}\n\n${strings.compositionsEmpty}\n`;
   }
 
+  return result === text ? null : result;
+}
+
+/**
+ * SCAF-50: rename a legacy `## Interactions` (or `## 交互`) map
+ * heading to the active-language Compositions heading. Returns null
+ * when the map has no such heading.
+ */
+export function renameInteractionsHeading(
+  text: string,
+  language: ScaffoldLanguage,
+): string | null {
+  const strings = MAP_STRINGS[language];
+  const result = text.replace(
+    /^##(\s+)(Interactions|交互)(\s*)$/m,
+    `##$1${strings.compositionsHeading}$3`,
+  );
   return result === text ? null : result;
 }

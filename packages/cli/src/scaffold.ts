@@ -22,12 +22,13 @@ import {
 } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
 import {
+  migrateInteractionsLayout,
   migratePackageLayout,
   rewriteAllSpecCitations,
   type PackageMigrationOutcome,
 } from "./migrate-package-layout.js";
 import { resolveBase } from "./resolve-base.js";
-import { restructureMap } from "./restructure-map.js";
+import { renameInteractionsHeading, restructureMap } from "./restructure-map.js";
 
 type ScaffoldOptions =
   | { mode: "create"; pathArg?: string; language?: ScaffoldLanguage }
@@ -221,15 +222,19 @@ function updateScaffoldTemplates(): void {
     provenance,
   });
 
+  const interactionsResults = migrateInteractionsLayout(basePath);
+  const interactionsMoved = interactionsResults.some(
+    (result) => result.status === "moved",
+  );
+
   const rewritten = rewriteAllSpecCitations(basePath, pristineSnapshot);
 
   let mapRestructured = false;
+  let mapHeadingRenamed = false;
   const mapPath = join(basePath, "specs", "map.md");
-  if (
-    packageOutcome.migratedPackages &&
-    !pristineSnapshot.has("specs/map.md") &&
-    existsSync(mapPath)
-  ) {
+  const mapEditable =
+    !pristineSnapshot.has("specs/map.md") && existsSync(mapPath);
+  if (packageOutcome.migratedPackages && mapEditable) {
     const restructured = restructureMap(
       readFileSync(mapPath, "utf-8"),
       language,
@@ -237,6 +242,16 @@ function updateScaffoldTemplates(): void {
     if (restructured !== null) {
       writeFileSync(mapPath, restructured);
       mapRestructured = true;
+    }
+  }
+  if (interactionsMoved && mapEditable && !mapRestructured) {
+    const renamed = renameInteractionsHeading(
+      readFileSync(mapPath, "utf-8"),
+      language,
+    );
+    if (renamed !== null) {
+      writeFileSync(mapPath, renamed);
+      mapHeadingRenamed = true;
     }
   }
 
@@ -294,6 +309,19 @@ function updateScaffoldTemplates(): void {
     reportedPaths.add(result.targetRelPath);
   }
 
+  for (const result of interactionsResults) {
+    if (result.status === "conflict") {
+      console.log(
+        `  ${result.sourceRelPath} (kept — target exists at ${result.targetRelPath})`,
+      );
+      continue;
+    }
+    console.log(
+      `  ${result.targetRelPath} (migrated from ${result.sourceRelPath})`,
+    );
+    reportedPaths.add(result.targetRelPath);
+  }
+
   for (const relPath of rewritten) {
     if (
       seedPaths.has(relPath) ||
@@ -312,6 +340,11 @@ function updateScaffoldTemplates(): void {
     indicatorOverrides.set(
       "specs/map.md",
       "restructured for the packages layout",
+    );
+  } else if (mapHeadingRenamed) {
+    indicatorOverrides.set(
+      "specs/map.md",
+      "kept — user-modified; Interactions heading renamed",
     );
   }
   for (const relPath of rewritten) {
@@ -347,24 +380,25 @@ function updateScaffoldTemplates(): void {
   console.log(readBundledMarkdown("update-merge-prompt.md"));
   console.log("```");
 
-  const interactionsEmpty = !hasMarkdownFiles(
-    join(basePath, "specs", "interactions"),
+  const compositionsEmpty = !hasMarkdownFiles(
+    join(basePath, "specs", "compositions"),
   );
   const packagesPresent = hasMarkdownFiles(
     join(basePath, "specs", "packages"),
   );
   if (
     packageOutcome.migratedPackages ||
-    (interactionsEmpty && packagesPresent)
+    interactionsMoved ||
+    (compositionsEmpty && packagesPresent)
   ) {
     console.log("");
     console.log(
-      "specs/interactions/ is where cross-package behavior lives. Share this",
+      "specs/compositions/ is where cross-package behavior lives. Share this",
     );
     console.log("prompt with your AI agent to fill it in:");
     console.log("");
     console.log("```");
-    console.log(readBundledMarkdown("interactions-prompt.md"));
+    console.log(readBundledMarkdown("compositions-prompt.md"));
     console.log("```");
   }
 }

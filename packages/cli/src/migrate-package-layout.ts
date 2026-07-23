@@ -22,6 +22,7 @@ import {
 } from "./copy-templates.js";
 import { baseHeadingSlugs } from "./markdown.js";
 import {
+  convertVerifiesLines,
   LEGACY_GROUPS,
   mergePackageSources,
   type LegacyGroup,
@@ -172,8 +173,9 @@ export function migratePackageLayout(
       }
       const basename = posix.basename(rel, ".md");
       const { content } = mergePackageSources(basename, merge);
-      writeFileSync(target, content);
-      const slugs = duplicateSlugs(content);
+      const converted = convertVerifiesLines(content);
+      writeFileSync(target, converted);
+      const slugs = duplicateSlugs(converted);
       if (slugs.length > 0) {
         outcome.anchorCollisions.push({ targetRelPath, slugs });
       }
@@ -218,6 +220,56 @@ export function migratePackageLayout(
   }
 
   return outcome;
+}
+
+export type InteractionsMigrationResult = {
+  status: "moved" | "conflict";
+  targetRelPath: string;
+  sourceRelPath: string;
+};
+
+/**
+ * SCAF-50: move specs/interactions/ entries to specs/compositions/,
+ * keeping conflict targets in place. A pristine bundled .gitkeep is
+ * dropped via the legacy manifest. Sources are moved one at a time,
+ * so an interrupted run resumes cleanly.
+ */
+export function migrateInteractionsLayout(
+  basePath: string,
+): InteractionsMigrationResult[] {
+  const results: InteractionsMigrationResult[] = [];
+  const root = join(basePath, "specs", "interactions");
+  if (!isDirectory(root)) return results;
+
+  for (const abs of listFiles(root)) {
+    const rel = relative(root, abs).replace(/\\/g, "/");
+    const sourceRelPath = posix.join("specs/interactions", rel);
+    if (
+      posix.basename(rel) === ".gitkeep" &&
+      isLegacyPristine(basePath, sourceRelPath) === "pristine"
+    ) {
+      rmSync(abs);
+      continue;
+    }
+    const targetRelPath = posix.join("specs/compositions", rel);
+    const target = join(basePath, targetRelPath);
+    if (existsSync(target)) {
+      results.push({ status: "conflict", targetRelPath, sourceRelPath });
+      continue;
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    if (rel.endsWith(".md")) {
+      const converted = convertVerifiesLines(readFileSync(abs, "utf-8"));
+      writeFileSync(target, converted);
+      rmSync(abs);
+    } else {
+      renameSync(abs, target);
+    }
+    results.push({ status: "moved", targetRelPath, sourceRelPath });
+  }
+
+  removeEmptyDirectories(root);
+  return results;
 }
 
 /**

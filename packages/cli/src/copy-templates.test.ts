@@ -71,8 +71,8 @@ describe("copyTemplates", () => {
       );
       // Tracked dotfiles must not be skipped (SCAF-8)
       assert.ok(
-        existsSync(join(dir, "specs", "interactions", ".gitkeep")),
-        "specs/interactions/.gitkeep should be copied",
+        existsSync(join(dir, "specs", "compositions", ".gitkeep")),
+        "specs/compositions/.gitkeep should be copied",
       );
 
       // Verify content matches the source

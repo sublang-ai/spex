@@ -167,7 +167,7 @@ describe("CLI integration", () => {
       assert.ok(existsSync(join(dir, "specs", "decisions")));
       assert.ok(existsSync(join(dir, "specs", "iterations")));
       assert.ok(existsSync(join(dir, "specs", "packages")));
-      assert.ok(existsSync(join(dir, "specs", "interactions")));
+      assert.ok(existsSync(join(dir, "specs", "compositions")));
       for (const legacy of ["user", "dev", "test"]) {
         assert.ok(
           !existsSync(join(dir, "specs", legacy)),
@@ -180,7 +180,7 @@ describe("CLI integration", () => {
       assert.ok(existsSync(join(dir, "specs", "meta.md")));
       assert.ok(existsSync(join(dir, "specs", "packages", "git.md")));
       assert.ok(existsSync(join(dir, "specs", "packages", "licensing.md")));
-      assert.ok(existsSync(join(dir, "specs", "interactions", ".gitkeep")));
+      assert.ok(existsSync(join(dir, "specs", "compositions", ".gitkeep")));
       assert.ok(
         existsSync(
           join(dir, "specs", "decisions", "000-spec-structure-format.md"),
@@ -193,7 +193,7 @@ describe("CLI integration", () => {
       const claude = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(claude.includes("## Specs (Source of Truth)"));
       assert.ok(claude.includes("@specs/packages"));
-      assert.ok(claude.includes("@specs/interactions"));
+      assert.ok(claude.includes("@specs/compositions"));
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -714,30 +714,82 @@ describe("CLI integration", () => {
     }
   });
 
-  // The interactions .gitkeep is never resurrected into a filled dir.
-  it("update: removed interactions/.gitkeep stays removed when files exist", () => {
+  // The compositions .gitkeep is never resurrected into a filled dir.
+  it("update: removed compositions/.gitkeep stays removed when files exist", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
-      rmSync(join(dir, "specs", "interactions", ".gitkeep"));
+      rmSync(join(dir, "specs", "compositions", ".gitkeep"));
       write(
         dir,
-        "specs/interactions/login-flow.md",
+        "specs/compositions/login-flow.md",
         "# LF: Login Flow\n\n## Intent\n\nEnd-to-end login.\n",
       );
-      gitCommit(dir, "filled interactions");
+      gitCommit(dir, "filled compositions");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
-        existsSync(join(dir, "specs", "interactions", ".gitkeep")),
+        existsSync(join(dir, "specs", "compositions", ".gitkeep")),
         false,
         ".gitkeep must not be resurrected",
       );
       assert.equal(
-        parseIndicators(result.stdout).has("specs/interactions/.gitkeep"),
+        parseIndicators(result.stdout).has("specs/compositions/.gitkeep"),
         false,
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // SCAF-50: interactions files move to compositions with citations
+  // and the map heading rewritten.
+  it("update: specs/interactions/ migrates to specs/compositions/", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      rmSync(join(dir, "specs", "compositions", ".gitkeep"));
+      write(
+        dir,
+        "specs/interactions/login-flow.md",
+        "# LF: Login Flow\n\n## Intent\n\nSee [git](../packages/git.md#git-1).\n",
+      );
+      write(
+        dir,
+        "specs/packages/notes.md",
+        "# NOTES: Notes\n\n## Intent\n\nSee [flow](../interactions/login-flow.md).\n\n## External Behavior\n\n### NOTES-1\n\nX shall Y.\n",
+      );
+      const map = readFileSync(join(dir, "specs", "map.md"), "utf-8");
+      writeFileSync(
+        join(dir, "specs", "map.md"),
+        `${map}\n## Interactions\n\n| File | Summary |\n| --- | --- |\n| [login-flow.md](interactions/login-flow.md) | Login |\n`,
+      );
+      gitCommit(dir, "filled interactions the old way");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.ok(
+        existsSync(join(dir, "specs", "compositions", "login-flow.md")),
+      );
+      assert.ok(!existsSync(join(dir, "specs", "interactions")));
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/compositions/login-flow.md"),
+        "migrated from specs/interactions/login-flow.md",
+      );
+      const notes = readFileSync(
+        join(dir, "specs", "packages", "notes.md"),
+        "utf-8",
+      );
+      assert.match(notes, /\.\.\/compositions\/login-flow\.md/);
+      const updatedMap = readFileSync(join(dir, "specs", "map.md"), "utf-8");
+      assert.doesNotMatch(updatedMap, /^## Interactions$/m);
+      assert.match(updatedMap, /^## Compositions$/m);
+      assert.match(updatedMap, /compositions\/login-flow\.md/);
+      assert.ok(
+        result.stdout.includes(readBundledMarkdown("compositions-prompt.md")),
       );
     } finally {
       rmSync(dir, { recursive: true });
@@ -963,11 +1015,11 @@ meta.md     The spec of specs
         map,
         /\| \[auth\.md\]\(packages\/auth\.md\) \| Login behavior; Session store; Login coverage \|/,
       );
-      assert.match(map, /^## Interactions$/m);
+      assert.match(map, /^## Compositions$/m);
 
-      // The interactions prompt is printed after a migration.
+      // The compositions prompt is printed after a migration.
       assert.ok(
-        result.stdout.includes(readBundledMarkdown("interactions-prompt.md")),
+        result.stdout.includes(readBundledMarkdown("compositions-prompt.md")),
       );
 
       const lint = run(["lint", dir]);
@@ -1311,7 +1363,7 @@ meta.md     The spec of specs
   });
 
   // Packaging: the new bundled assets ship with the npm package.
-  it("npm pack ships the manifests, prompts, and interactions seed", () => {
+  it("npm pack ships the manifests, prompts, and compositions seed", () => {
     // execSync (a shell) so Windows resolves npm.cmd.
     const output = execSync("npm pack --dry-run --json", {
       cwd: ROOT,
@@ -1323,9 +1375,9 @@ meta.md     The spec of specs
     for (const required of [
       "scaffold/.file-history.json",
       "scaffold/.legacy-file-history.json",
-      "scaffold/interactions-prompt.md",
+      "scaffold/compositions-prompt.md",
       "scaffold/update-merge-prompt.md",
-      "scaffold/specs/interactions/.gitkeep",
+      "scaffold/specs/compositions/.gitkeep",
       "scaffold/specs/packages/git.md",
       "scaffold/specs/packages/licensing.md",
     ]) {

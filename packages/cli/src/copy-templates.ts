@@ -29,7 +29,7 @@ const SEED_FILES = [
   "specs/iterations/000-spdx-headers.md",
   "specs/packages/git.md",
   "specs/packages/licensing.md",
-  "specs/interactions/.gitkeep",
+  "specs/compositions/.gitkeep",
 ] as const;
 
 const LEGACY_ITEM_DIRS = [

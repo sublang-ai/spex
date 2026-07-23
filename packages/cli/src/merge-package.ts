@@ -365,12 +365,40 @@ export type MergeResult = {
   title: string;
 };
 
+const VERIFIES_LINE_RE = /^(\s*)Verifies:\s*(.+?)\s*$/;
+const FENCE_LINE_RE = /^\s*(```|~~~)/;
+
+/**
+ * Rewrite detached `Verifies:` metadata lines as inline
+ * `Verifies …` sentences (META-20), leaving fenced code alone.
+ * Returns the input unchanged when no line matches.
+ */
+export function convertVerifiesLines(text: string): string {
+  const lines = text.split("\n");
+  let inFence = false;
+  let changed = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (FENCE_LINE_RE.test(lines[index])) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const match = lines[index].match(VERIFIES_LINE_RE);
+    if (match !== null) {
+      lines[index] = `${match[1]}Verifies ${match[2].replace(/[.\s]+$/, "")}.`;
+      changed = true;
+    }
+  }
+  return changed ? lines.join("\n") : text;
+}
+
 /**
  * Merge a spec package's legacy user/dev/test item files into one
  * package file with External Behavior / Internal Behavior /
- * Verification sections (DR-000). Content moves byte-faithfully:
- * only heading depths, reference numbers, line endings (normalized
- * to LF), and the file frame change.
+ * Verification sections (DR-000). Content moves byte-faithfully
+ * except that `Verifies:` metadata lines become inline sentences:
+ * only those, heading depths, reference numbers, line endings
+ * (normalized to LF), and the file frame change.
  */
 export function mergePackageSources(
   basename: string,

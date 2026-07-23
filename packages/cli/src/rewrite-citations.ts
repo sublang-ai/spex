@@ -12,8 +12,9 @@ import {
   type TextEdit,
 } from "./markdown.js";
 
-const LEGACY_TARGET_RE =
+const LEGACY_ITEM_TARGET_RE =
   /^specs\/(?:user|dev|test|items\/(?:user|dev|test))\/(.+)$/;
+const LEGACY_INTERACTIONS_RE = /^specs\/interactions\/(.+)$/;
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
 export type CitationRewriteOptions = {
@@ -59,10 +60,17 @@ export function remapLegacyUrl(
 
   const fileDir = posix.dirname(fileRelPath);
   const resolved = posix.normalize(posix.join(fileDir, path));
-  const match = resolved.match(LEGACY_TARGET_RE);
-  if (match === null) return null;
-
-  const newTarget = posix.join("specs/packages", match[1]);
+  let newTarget: string | null = null;
+  const itemMatch = resolved.match(LEGACY_ITEM_TARGET_RE);
+  if (itemMatch !== null) {
+    newTarget = posix.join("specs/packages", itemMatch[1]);
+  } else {
+    const interactionsMatch = resolved.match(LEGACY_INTERACTIONS_RE);
+    if (interactionsMatch !== null) {
+      newTarget = posix.join("specs/compositions", interactionsMatch[1]);
+    }
+  }
+  if (newTarget === null) return null;
   // Only rewrite once the move actually happened: the old file must
   // be gone and the new one present. This keeps conflict-kept files'
   // citations intact and lets an interrupted run self-repair on rerun.
