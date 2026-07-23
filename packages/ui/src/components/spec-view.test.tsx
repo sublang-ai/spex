@@ -209,6 +209,7 @@ function Harness({
   onRefresh = () => {},
   onReadRecord = async () => "",
   onSeedExample,
+  seedError,
 }: {
   tree?: SpecTreeState;
   loading?: boolean;
@@ -216,6 +217,7 @@ function Harness({
   onRefresh?: () => void;
   onReadRecord?: (path: string) => Promise<string>;
   onSeedExample?: () => void;
+  seedError?: string;
 }) {
   const [viewState, setViewState] = useState(initialSpecViewState);
   return (
@@ -226,6 +228,7 @@ function Harness({
       onRefresh={onRefresh}
       onReadRecord={onReadRecord}
       onSeedExample={onSeedExample}
+      seedError={seedError}
       viewState={viewState}
       onViewState={setViewState}
     />
@@ -569,6 +572,23 @@ describe("SPECV-9: empty, legacy, and loading states", () => {
     expect(button.textContent).toBe("Try the Academy example");
     fireEvent.click(button);
     expect(onSeedExample).toHaveBeenCalledTimes(1);
+  });
+
+  test("a failed seed surfaces its error beside the Academy offer", () => {
+    render(
+      <Harness
+        tree={EMPTY_TREE}
+        onSeedExample={() => {}}
+        seedError="target directory exists and is not empty"
+      />,
+    );
+    const alert = screen.getByTestId("specs-empty-seed-error");
+    expect(alert.getAttribute("role")).toBe("alert");
+    expect(alert.textContent).toContain("not empty");
+    // Without a failure there is no error line.
+    cleanup();
+    render(<Harness tree={EMPTY_TREE} onSeedExample={() => {}} />);
+    expect(screen.queryByTestId("specs-empty-seed-error")).toBeNull();
   });
 
   test("a legacy tree renders migration guidance and no tree", () => {

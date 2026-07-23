@@ -149,6 +149,10 @@ Where the project has no `specs/` directory, the spec view's empty
 state shall also offer the Academy example
 ([DR-015](../decisions/015-reference-content.md)) as one action
 that seeds and opens the example project.
+When the example's target is already a registered project, the
+action shall open that project instead of failing; when seeding
+fails otherwise, the empty state shall show the failure beside the
+offer and shall clear it on the next attempt.
 
 #### SPECV-18
 

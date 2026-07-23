@@ -28,14 +28,17 @@ function MappingSelect({
   value,
   profiles,
   onChange,
+  testId,
 }: {
   value: string;
   profiles: string[];
   onChange: (ref: string) => void;
+  testId?: string;
 }) {
   return (
     <select
       value={value}
+      {...(testId ? { "data-testid": testId } : {})}
       onChange={(event) => onChange(event.target.value)}
       className="rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
     >
@@ -476,6 +479,16 @@ export function LibrarySurface({
     setRolesText(SLC_DEMO.roles);
     setSourceText(SLC_DEMO.stages.normalized);
     setSourcePath("");
+    // Pre-map the demo roles onto a concrete profile so the mapping
+    // selects show a deliberate choice, not an implicit fallback.
+    setPlayerRefs((current) => {
+      const next = { ...current };
+      for (const role of SLC_DEMO.roles.split(",")) {
+        const id = role.trim();
+        if (id && !next[id]) next[id] = profileIds[0] ?? "claude";
+      }
+      return next;
+    });
     compileFormRef.current?.scrollIntoView?.({
       behavior: "smooth",
       block: "start",
@@ -710,6 +723,7 @@ export function LibrarySurface({
                   <MappingSelect
                     value={playerRefs[role] ?? profileIds[0] ?? "claude"}
                     profiles={profileIds}
+                    testId={`compile-player-${role}`}
                     onChange={(ref) =>
                       setPlayerRefs((current) => ({ ...current, [role]: ref }))
                     }

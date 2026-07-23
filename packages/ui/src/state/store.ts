@@ -157,6 +157,12 @@ export function getClient(): SpexClient {
   return client;
 }
 
+/** Test seam: store actions resolve the module-local client, which
+ * module mocks cannot reach — vitest injects a fake through here. */
+export function setClientForTests(fake: SpexClient | undefined): void {
+  client = fake;
+}
+
 export const useAppStore = create<AppState>((set, get) => {
   function setRunError(sessionId: string, message: string): void {
     set({ runErrors: { ...get().runErrors, [sessionId]: message } });
@@ -439,10 +445,30 @@ export const useAppStore = create<AppState>((set, get) => {
       // Same path UX as the palette's typed paths: pass through as
       // written and let the core expand ~ (DR-015 example mode).
       const target = path?.trim() || "~/spex-academy";
-      const project = await getClient().command("project.create", {
-        path: target,
-        example: true,
-      });
+      let project: ProjectInfo;
+      try {
+        project = await getClient().command("project.create", {
+          path: target,
+          example: true,
+        });
+      } catch (cause) {
+        // A repeat visit: the example is already a registered
+        // project — open it instead of surfacing the conflict. The
+        // error names the expanded path, which the client cannot
+        // derive itself.
+        const registered = /^(.*) is already registered$/.exec(
+          (cause as Error).message ?? "",
+        )?.[1];
+        const projects = await getClient().command("project.list", {});
+        const existing = registered
+          ? projects.find((entry) => entry.path === registered)
+          : undefined;
+        if (!existing) throw cause;
+        set({ projects });
+        void get().loadProjectMeta(existing.id);
+        get().setCurrentProject(existing.id);
+        return existing;
+      }
       // Registration happened server-side: mirror the post-create
       // flow of addProjectByPath, then make the example current.
       set({ projects: await getClient().command("project.list", {}) });

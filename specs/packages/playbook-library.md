@@ -179,8 +179,11 @@ slc demo workflow as a read-only example
 ([DR-015](../decisions/015-reference-content.md)) in the pipeline
 grammar — source, normalized text, gears, and state machine —
 and shall offer a prefill action that fills the compile form with
-the example's normalized text and judgment fields without
-starting a compile.
+the example's normalized text and judgment fields — mapping the
+example's roles onto a configured profile — without starting a
+compile.
+Sources and gears served for display shall drop their leading
+maintainer comment headers.
 
 ### Compile Cancellation
 

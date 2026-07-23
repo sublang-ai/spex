@@ -23,6 +23,22 @@ function readOrNull(path: string | undefined): string | null {
 }
 
 /**
+ * Display hygiene (DR-015): served markdown drops leading HTML
+ * comment blocks — SPDX and vendoring provenance headers are
+ * maintainer-facing and render as literal text in the app.
+ */
+export function stripLeadingComments(markdown: string): string {
+  let rest = markdown;
+  for (;;) {
+    const trimmed = rest.replace(/^\s+/, "");
+    if (!trimmed.startsWith("<!--")) return trimmed;
+    const end = trimmed.indexOf("-->");
+    if (end === -1) return trimmed;
+    rest = trimmed.slice(end + 3);
+  }
+}
+
+/**
  * Vendored source fallback (DR-015): the published playbook package
  * omits the built-in prose sources, so Spex ships copies as assets.
  * Returns the asset path when one exists for the id.
@@ -78,9 +94,11 @@ export async function resolveArtifacts(
   if (!gearsPath) missing.push("gears");
   if (!fsmPath) missing.push("fsm");
 
+  const source = readOrNull(sourcePath);
+  const gears = readOrNull(gearsPath);
   return {
-    source: readOrNull(sourcePath),
-    gears: readOrNull(gearsPath),
+    source: source === null ? null : stripLeadingComments(source),
+    gears: gears === null ? null : stripLeadingComments(gears),
     fsm: readOrNull(fsmPath),
     stateIds: fsmPath ? await listFsmStates(fsmPath) : null,
     missing,

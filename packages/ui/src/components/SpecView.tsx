@@ -123,6 +123,8 @@ export interface SpecViewProps {
   /** Seed the Academy example into this project (DR-015); the empty
    * state offers it only when wired. */
   onSeedExample?: () => void;
+  /** Failure from the last seed attempt, shown in the empty state. */
+  seedError?: string;
   viewState: SpecViewState;
   onViewState: (next: SpecViewState) => void;
 }
@@ -455,6 +457,15 @@ export function SpecView(props: SpecViewProps) {
               Try the Academy example
             </button>
           </div>
+        ) : null}
+        {props.seedError ? (
+          <p
+            className="text-sm text-red-600 dark:text-red-400"
+            data-testid="specs-empty-seed-error"
+            role="alert"
+          >
+            {props.seedError}
+          </p>
         ) : null}
       </div>
     );

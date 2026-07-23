@@ -32,7 +32,7 @@ vi.mock("../state/store.js", async (importOriginal) => {
 });
 
 import { LibrarySurface } from "./LibrarySurface.js";
-import { useAppStore } from "../state/store.js";
+import { setClientForTests, useAppStore } from "../state/store.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import type {
   BuiltinPlaybookInfo,
@@ -235,5 +235,69 @@ describe("DR-015: the slc demo example card", () => {
     expect(source.value).not.toBe(SLC_DEMO.stages.source);
     // A stale source path would override the text: prefill clears it.
     expect(path.value).toBe("");
+
+    // The demo roles are pre-mapped onto the first profile so the
+    // mapping selects show a deliberate choice (DR-015).
+    const coderSelect = screen.getByTestId(
+      "compile-player-Coder",
+    ) as HTMLSelectElement;
+    const reviewerSelect = screen.getByTestId(
+      "compile-player-Reviewer",
+    ) as HTMLSelectElement;
+    expect(coderSelect.value).toBe("claude-opus");
+    expect(reviewerSelect.value).toBe("claude-opus");
+  });
+});
+
+describe("DR-015: repeated Academy seeding opens the existing project", () => {
+  beforeEach(() => {
+    // Store actions resolve the module-local client, not the mocked
+    // export — inject the fake through the seam.
+    setClientForTests({ command: commandMock } as unknown as Parameters<
+      typeof setClientForTests
+    >[0]);
+  });
+
+  test("a conflict on the default path selects the registered example", async () => {
+    const academy = {
+      id: "p-academy",
+      path: "/Users/dev/spex-academy",
+      name: "spex-academy",
+      createdAt: 1,
+    };
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "project.create") {
+        throw new Error("/Users/dev/spex-academy is already registered");
+      }
+      if (type === "project.list") return [academy];
+      if (type === "specs.get") {
+        return {
+          present: false,
+          legacy: false,
+          files: [],
+          decisions: [],
+          iterations: [],
+          notices: [],
+          readAt: 0,
+        };
+      }
+      return {};
+    });
+    const project = await useAppStore.getState().openAcademyExample();
+    expect(project.id).toBe("p-academy");
+    expect(useAppStore.getState().currentProjectId).toBe("p-academy");
+  });
+
+  test("a non-conflict failure still rejects", async () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "project.create") {
+        throw new Error("target directory exists and is not empty");
+      }
+      if (type === "project.list") return [];
+      return {};
+    });
+    await expect(
+      useAppStore.getState().openAcademyExample(),
+    ).rejects.toThrow(/not empty/);
   });
 });

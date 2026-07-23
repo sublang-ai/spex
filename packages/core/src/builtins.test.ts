@@ -40,9 +40,10 @@ test("catalog serves both built-ins with vendored sources", async () => {
   const discuss = builtins.find((b) => b.id === "discuss");
   assert.deepEqual(discuss?.roles, ["host", "participant"]);
   assert.equal(discuss?.from, "@sublang/playbook/discuss/registry");
-  // Vendored sources ship as core assets (DR-015).
-  assert.match(discuss?.source ?? "", /Vendored from sublang-ai\/playbook/);
-  assert.match(discuss?.source ?? "", /# Discuss/);
+  // Vendored sources ship as core assets, served without their
+  // maintainer-facing comment headers (DR-015).
+  assert.ok((discuss?.source ?? "").startsWith("# Discuss"));
+  assert.doesNotMatch(discuss?.source ?? "", /<!--/);
 });
 
 test("a built-in whose registry fails to load is omitted", async () => {

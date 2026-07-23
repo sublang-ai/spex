@@ -7,7 +7,7 @@
 
 import { readFileSync } from "node:fs";
 
-import { bundledSourcePath } from "./artifacts.js";
+import { bundledSourcePath, stripLeadingComments } from "./artifacts.js";
 import { isValidRegistryEntry, type LoadModule } from "./config.js";
 import type { BuiltinPlaybookInfo } from "./protocol.js";
 
@@ -43,7 +43,9 @@ export async function loadBuiltinCatalog(
       from,
       roles: [...entry.requiredRoleIds],
       configured: configuredIds.has(id),
-      ...(sourcePath ? { source: readFileSync(sourcePath, "utf8") } : {}),
+      ...(sourcePath
+        ? { source: stripLeadingComments(readFileSync(sourcePath, "utf8")) }
+        : {}),
     });
   }
   return builtins;

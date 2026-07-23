@@ -199,6 +199,9 @@ function WorkspaceSurface({
   const [specViewStates, setSpecViewStates] = useState<
     Record<string, SpecViewState>
   >({});
+  const [seedErrors, setSeedErrors] = useState<
+    Record<string, string | undefined>
+  >({});
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const project = projects.find((entry) => entry.id === currentProjectId);
@@ -592,7 +595,16 @@ function WorkspaceSurface({
           error={specErrors[project.id]}
           onRefresh={() => void loadSpecs(project.id)}
           onReadRecord={(path) => readSpecRecord(project.id, path)}
-          onSeedExample={() => void openAcademyExample().catch(() => {})}
+          onSeedExample={() => {
+            setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
+            void openAcademyExample().catch((cause: Error) => {
+              setSeedErrors((current) => ({
+                ...current,
+                [project.id]: cause.message || "seeding the example failed",
+              }));
+            });
+          }}
+          seedError={seedErrors[project.id]}
           viewState={specViewStates[project.id] ?? initialSpecViewState}
           onViewState={(next) =>
             setSpecViewStates((current) => ({

@@ -89,3 +89,14 @@ test("an unresolvable registry yields all stages missing", async () => {
   assert.deepEqual(artifacts.missing, ["source", "gears", "fsm"]);
   assert.equal(artifacts.stateIds, null);
 });
+
+test("served source and gears drop leading comment headers", async () => {
+  const { dir, from } = compiledLayout("demo");
+  writeFileSync(
+    join(dir, "demo.md"),
+    "<!-- SPDX-License-Identifier: Apache-2.0 -->\n<!-- Vendored from elsewhere\n     for provenance -->\n\n# demo workflow\n\n<!-- an inline note stays --> body\n",
+  );
+  const artifacts = await resolveArtifacts({ id: "demo", from });
+  assert.ok((artifacts.source ?? "").startsWith("# demo workflow"));
+  assert.match(artifacts.source ?? "", /an inline note stays/);
+});
