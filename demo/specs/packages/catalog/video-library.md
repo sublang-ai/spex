@@ -132,6 +132,16 @@ record and its stored content, and shall not read or modify any
 data a host surface keeps about the asset — what hosts stored
 is theirs to reconcile.
 
+### Asset Records
+
+#### VID-16
+
+Where asset records are kept — the identifier, title, size, and
+upload date behind the library listing ([VID-4](#vid-4)) — they
+shall live in the library's asset store, surviving restarts and
+redeployments, and a deleted asset's record shall leave the
+store with it ([VID-10](#vid-10)).
+
 ## Verification
 
 ### Upload Coverage
@@ -151,17 +161,19 @@ asset, with a retry starting from zero ([VID-3](#vid-3)).
 
 #### VID-12
 
-Where a fixture asset exists, the test suite shall assert: with
-a signed-in session, the embedded player obtains a grant and the
-media element reaches the playing state ([VID-5](#vid-5)); with
+Where a fixture asset exists and the stub host authorizes it
+for the signed-in session's requests, the test suite shall
+assert: with that session, the embedded player obtains a grant
+and the media element reaches the playing state
+([VID-5](#vid-5)); with
 no session, the player shows the sign-in-required state and no
 media request is made ([VID-6](#vid-6)); and direct
 stored-content requests without a grant ([VID-7](#vid-7)), with
 an expired grant, and with a tampered grant are all denied even
 with a signed-in session, while a grant issued before sign-out
 still serves content until its expiry ([VID-8](#vid-8)); and a
-request the stub host does not authorize is denied, with no
-grant issued ([VID-15](#vid-15)).
+request for an asset the stub host does not authorize is
+denied, with no grant issued ([VID-15](#vid-15)).
 
 ### Identity and Deletion Coverage
 
@@ -171,7 +183,9 @@ Where the same fixture content is uploaded twice, the test suite
 shall assert two assets exist with distinct stable identifiers
 ([VID-9](#vid-9)); when the admin edits one asset's title, the
 suite shall assert the list shows the new title with the asset's
-size and upload date after a reload ([VID-4](#vid-4)); when one
+size and upload date after a reload ([VID-4](#vid-4)), and that
+the records survive a service restart under test control
+([VID-16](#vid-16)); when one
 asset is deleted after confirmation, the suite shall assert its
 content is no longer served while the other still plays, that a
 stub host's stored reference to the deleted asset remains unread

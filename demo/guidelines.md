@@ -65,12 +65,14 @@ package:
 External behavior is what a package's users — humans, hosts, or
 peer packages — may rely on; internal behavior is the package's
 consumed requirements and private invariants.
-No peer package may rely on or cite an internal item; the two
+No peer package may rely on or cite an internal item; the
 outsiders with standing are the installation's binding items,
 which may target a consumed requirement as their client
-([META-31](specs/meta.md#meta-31)), and tests, which may
-inspect anything they verify
-([META-20](specs/meta.md#meta-20)).
+([META-31](specs/meta.md#meta-31)); scenario items, where an
+integrated claim materially needs an internal gate —
+[GUARD-2](specs/compositions/protected-content.md#guard-2)
+pins four without exposing one; and tests, which may inspect
+anything they verify ([META-20](specs/meta.md#meta-20)).
 Observability grade is independent of the split: some external
 guarantees show only under deliberate inspection (payload
 inspection, security testing, restart survival).
@@ -222,7 +224,10 @@ a binding item in `compositions/`
 ([META-13](specs/meta.md#meta-13),
 [META-15](specs/meta.md#meta-15)).
 Composition is the external relationship: the product's user
-walks the seam, so it gets scenario items and acceptance tests.
+walks the seam, so its tests are acceptance tests — with
+scenario items where the journey itself needs stating; a
+walked binding alone, like NAV's, needs only its acceptance
+test.
 Supply is the internal one: a client consumes a supplier's
 external behavior as pure implementation, so it gets a binding
 item and inspection tests.

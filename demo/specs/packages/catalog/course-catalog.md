@@ -105,8 +105,8 @@ the course's summary ([CAT-1](#cat-1)).
 
 When a save, a publication change, or a deletion of a course
 commits, the change shall be visible to the next read of every
-public and management view — there is no staged or draft copy
-of a published course — and the commit
+public and management view — a committed edit to a published
+course requires no further publish action — and the commit
 shall be atomic: a concurrent read sees the complete prior
 state or the complete new state, never a mixture.
 

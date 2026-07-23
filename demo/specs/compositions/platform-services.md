@@ -40,8 +40,8 @@ role store records each account's role
 ([ROLE-3](../packages/identity/access-control.md#role-3)),
 catalog content is stored with explicit ordering
 ([CAT-11](../packages/catalog/course-catalog.md#cat-11)), and
-the video library's listing rests on its asset records
-([VID-4](../packages/catalog/video-library.md#vid-4)), the
+asset records live in the library's asset store
+([VID-16](../packages/catalog/video-library.md#vid-16)), the
 deployment shall keep those stores in the environment's
 Supabase Postgres project — the binding allocates storage;
 each package's invariants over that storage remain its own.
@@ -76,6 +76,25 @@ production deployment traces to one default-branch commit
 repository shall live on GitHub, with the required checks run
 by GitHub Actions and merging gated by branch protection.
 
+### PLAT-8
+
+Where behavior follows deployment configuration — the
+initial-admin account ID
+([ROLE-1](../packages/identity/access-control.md#role-1)), the
+session lifetime
+([AUTH-6](../packages/identity/github-login.md#auth-6)), the
+upload size cap
+([VID-1](../packages/catalog/video-library.md#vid-1)), the
+grant expiry
+([VID-8](../packages/catalog/video-library.md#vid-8)), and the
+secrets and variables of the platform's environment
+configuration
+([DELIV-5](../packages/ops/delivery.md#deliv-5)) — the
+deployment shall hold those values in the Vercel project's
+per-environment variables, secrets marked as such, and the
+pipeline's credentials in the repository's GitHub Actions
+secrets.
+
 ## Tests
 
 ### PLAT-6
@@ -90,8 +109,12 @@ environment's Supabase Postgres project ([PLAT-2](#plat-2)); asset content is se
 the private bucket
 ([VID-7](../packages/catalog/video-library.md#vid-7)) through
 signed URLs that stop working at expiry ([PLAT-3](#plat-3));
-and no other identity, database, or storage service appears in
-the configuration or the observed egress.
+every configured value — the initial-admin ID, session
+lifetime, upload cap, and grant expiry — resolves from the
+environment's Vercel configuration with secrets absent from
+the repository ([PLAT-8](#plat-8)); and no other identity,
+database, or storage service appears in the configuration or
+the observed egress.
 
 ### PLAT-7
 

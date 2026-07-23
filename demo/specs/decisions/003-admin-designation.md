@@ -17,7 +17,7 @@ Options considered:
   deployment can be hijacked between deploy and first sign-in.
 - Seeded database row — rejected: a manual step outside the
   spec'd deployment path
-  ([DELIV-7](../packages/ops/delivery.md#deliv-7)).
+  ([DELIV-11](../packages/ops/delivery.md#deliv-11)).
 - Configured GitHub username — rejected: usernames are mutable
   and reusable, so a rename lets a squatter inherit the
   designation at their next sign-in.

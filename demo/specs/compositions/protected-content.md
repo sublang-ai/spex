@@ -28,6 +28,8 @@ non-admin grants for an asset stop as soon as no currently
 published course references it — unpublishing or deleting the
 last referencing course closes access at once, and a grant
 already issued lasts only to its expiry.
+This answer feeds the library's own gates and replaces none of
+them: session verification and grant checks stay the library's.
 
 ## Scenario
 
@@ -43,7 +45,7 @@ navigation, and data requests:
 | Lesson playback ([VID-5](../packages/catalog/video-library.md#vid-5), [VID-6](../packages/catalog/video-library.md#vid-6)) | sign-in-required state | plays | plays |
 | Unpublished course and lesson pages ([CAT-3](../packages/catalog/course-catalog.md#cat-3)) | not-found | not-found | shown |
 | Course manager and video library ([ROLE-2](../packages/identity/access-control.md#role-2), [CAT-4](../packages/catalog/course-catalog.md#cat-4), [VID-1](../packages/catalog/video-library.md#vid-1)) | sent to sign-in | not-authorized | shown |
-| Media of courses not currently published ([GUARD-5](#guard-5)) | denied | denied | plays on the unpublished page |
+| Assets referenced by no currently published course ([GUARD-5](#guard-5)) | denied | denied | plays on the unpublished lesson page |
 | Stored media content without a valid grant ([VID-7](../packages/catalog/video-library.md#vid-7)) | denied | denied | denied |
 
 ### GUARD-2

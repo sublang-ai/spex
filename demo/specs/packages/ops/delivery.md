@@ -43,6 +43,14 @@ Where preview deployments run, they shall bind to non-production
 backing services and shall neither read nor write production
 data.
 
+### Provenance
+
+#### DELIV-7
+
+Every production deployment shall report the one default-branch
+commit that produced it, so the operator can trace what is
+serving to what was merged.
+
 ## Internal Behavior
 
 ### Secrets
@@ -63,13 +71,13 @@ versioned migration applied in order before the new revision
 serves traffic; when a migration fails, the deployment shall not
 switch traffic to the new revision.
 
-### Traceability
+### Deployment Paths
 
-#### DELIV-7
+#### DELIV-11
 
-Every production deployment shall be traceable to the one commit
-on the default branch that produced it, and no deployment path
-shall exist that bypasses the repository.
+Where production deployments are created, the pipeline from the
+repository's default branch shall be the only path: no
+deployment route shall exist that bypasses the repository.
 
 ## Verification
 
@@ -102,6 +110,8 @@ endpoints are disjoint from production's
 
 The audit suite shall assert a repository scan finds no secret
 values, the example environment file lists every required
-variable name with no values ([DELIV-5](#deliv-5)), and the
+variable name with no values ([DELIV-5](#deliv-5)), the
 serving production revision reports a commit identifier that
-exists on the default branch ([DELIV-7](#deliv-7)).
+exists on the default branch ([DELIV-7](#deliv-7)), and the
+platform's deployment configuration admits no deploy source
+other than the repository integration ([DELIV-11](#deliv-11)).

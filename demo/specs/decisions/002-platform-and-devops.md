@@ -35,6 +35,11 @@ This record holds the choice of services and its tradeoffs.
   ([PLAT-5](../compositions/platform-services.md#plat-5)): the
   pipeline lives where the code and the sign-in provider
   already do.
+- Configuration lives with its consumer
+  ([PLAT-8](../compositions/platform-services.md#plat-8)):
+  runtime values in Vercel environment variables, pipeline
+  credentials in GitHub Actions secrets — no third
+  configuration system for a one-developer product.
 
 ## Consequences
 

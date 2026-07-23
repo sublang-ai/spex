@@ -231,8 +231,9 @@ exclusivity is an installation policy, stated by a binding item
 
 ### META-31
 
-Files under `compositions/` shall describe how multiple spec
-packages work together.
+Files under `compositions/` shall describe how the installed
+system is composed: packages working together, and open needs
+bound to suppliers or services.
 
 - Each file shall cover one integrated behavior, scenario, or
   binding concern and be named after it; file names shall not
@@ -244,6 +245,9 @@ packages work together.
 - Composition items may take the composed system as their
   subject, and may bind an open slot one package leaves to a
   surface another package provides (a binding item).
+  A scenario or test item may cite a package's Internal
+  Behavior where its integrated claim materially needs it; the
+  citation neither reclassifies nor exposes the item.
   Where no product user observes the seam, a binding item may
   bind an abstract subject to an external service instead (a
   supply binding); its tests are inspections of a deployment
@@ -278,7 +282,8 @@ packages work together.
   Clause placement alone fixes the direction: a provision-side
   citation reads as the supplier serving the need or, under an
   installation-owned rule, as the rule's input — both provide,
-  neither consumes.
+  neither consumes, and which reading applies is stated by the
+  item's prose, not derived as a label.
   Each slot or abstract subject shall have exactly one
   effective binding per deployment, unless the client item
   itself defines aggregation or selection; a slot with no
