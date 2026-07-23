@@ -233,10 +233,12 @@ relative citation across `specs/` that resolved into
 `specs/interactions/` to the `specs/compositions/` path; rewrite each
 moved file's `Verifies:` metadata blocks as inline `Verifies …`
 sentences ([SCAF-44](#scaf-44)); rename a
-`## Interactions` map heading and an `interactions/` layout-block
-line to the active-language Compositions forms; drop a pristine
-bundled `interactions/.gitkeep` via the legacy manifest; and
-remove the emptied directory.
+`## Interactions` map heading, and an `interactions/` line inside
+the code block under the map's Layout heading, to the
+active-language Compositions forms — a lookalike block elsewhere
+in the map is never rewritten; drop a pristine bundled
+`interactions/.gitkeep` via the legacy manifest; and remove the
+emptied directory.
 Moved files shall be reported as
 `(migrated from specs/interactions/...)` indicator lines.
 The CLI shall not reshape a moved file into the META-34 section

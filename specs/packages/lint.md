@@ -129,8 +129,9 @@ An error shall also be reported for a link from a `packages/` file
 into `specs/compositions/` ([META-33](../meta.md#meta-33)), and for
 a link into `specs/iterations/` from any file but `specs/map.md`
 ([META-18](../meta.md#meta-18)); a textual `IR-<n>` reference
-outside `specs/map.md` and `specs/iterations/` is likewise an
-error — naming an IR is citing it.
+outside `specs/map.md` is likewise an error — naming an IR is
+citing it — where an iteration record is exempt only for its own
+ID.
 Scheme, protocol-relative, and absolute URLs shall not be checked.
 
 A warning shall be reported for duplicate heading anchors within one
@@ -162,14 +163,17 @@ Where citation discipline is linted:
   migrated tree cannot pass the gate unreconciled;
 - a citation link inside a package file's `## Intent` section shall
   be an error ([META-15](../meta.md#meta-15));
-- a link in a package file resolving to an item inside another
-  package's `## Internal Behavior` section shall be an error
-  ([META-14](../meta.md#meta-14));
-- in a package behavior item, a citation of another package whose
-  nearest preceding English clause keyword — `Where`, `While`,
-  `When`, or `shall`, with a list attached to its lead-in when
-  that lead-in ends in a colon — is `shall` shall be an error:
-  peers are cited from preconditions and triggers only
+- a link in a package file resolving to a peer package item outside
+  that peer's `## External Behavior` section shall be an error — a
+  peer may rely only on External Behavior
+  ([META-14](../meta.md#meta-14), [META-28](../meta.md#meta-28));
+- in a package behavior item, a peer citation is legal only inside
+  a precondition or trigger clause: its nearest preceding clause
+  keyword — `Where`, `While`, `When` (给定, 如果, clause-start 当),
+  with a list attached to its lead-in when that lead-in ends in a
+  colon — is a precondition keyword with no `shall` (应) after it,
+  and the citation names a peer item; any other peer citation in a
+  behavior item shall be an error
   ([META-13](../meta.md#meta-13), [META-14](../meta.md#meta-14)).
 
 ## Internal Behavior
@@ -214,9 +218,9 @@ citations — broken link, broken anchor, legacy path, a package
 link into `specs/compositions/`, and iteration references outside
 the map, linked and textual ([LINT-8](#lint-8)); reference
 markers, records, and map listing ([LINT-9](#lint-9)); citation
-discipline — an Intent citation, a peer-Internal citation, an
-outcome-clause peer citation beside an accepted precondition
-citation, and a detached `Verifies` sentence
+discipline — an Intent citation, a peer citation outside External
+Behavior, out-of-clause peer citations in both languages beside
+accepted precondition forms, and a detached `Verifies` sentence
 ([LINT-13](#lint-13));
 an item body spanning a nested subheading whose citations count
 for the item, and a literal triple-backtick line inside a longer
