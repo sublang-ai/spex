@@ -63,8 +63,7 @@ role-clean served markup
 ([SHELL-6](../packages/site/web-shell.md#shell-6)), and
 grant-only media access
 ([VID-8](../packages/catalog/video-library.md#vid-8)) shall each
-hold independently, so removing every client-side hiding changes
-nothing about what each audience can obtain.
+hold independently.
 
 ## Tests
 

@@ -246,19 +246,15 @@ exclusivity is an installation policy, stated by a binding item
 ### META-31
 
 Files under `compositions/` shall describe how the installed
-system is composed, in two behavior-item kinds: binding items — static
-installed relationships ([META-36](#meta-36)) — and scenario
-items — integrated runtime behavior over the composed system,
-triggered or standing, which may take the composed system as
-their subject.
+system is composed, in two behavior-item kinds: binding items —
+static installed relationships ([META-36](#meta-36)) — and
+scenario items — integrated runtime behavior over the composed
+system, triggered or standing, which may take the composed
+system as their subject.
 
-- Each file shall cover one composition concern and be named
-  after it; file names shall not be concatenations of package
-  names.
-- Each file shall follow the item-file conventions: an H1 with a
-  short form ([META-10](#meta-10)), an `## Intent` section
-  ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6)),
-  with sections per [META-34](#meta-34).
+Each file shall cover one composition concern and be named
+after it; file names shall not be concatenations of package
+names.
 
 ### META-35
 
@@ -285,9 +281,6 @@ A binding item declares one installed relationship by clause:
 its precondition clauses cite the client items — or name the
 deployment surface — it serves, and its shall clause states
 the provision.
-This is the uniform GEARS reading — preconditions carry an
-item's givens, the shall clause its provision; a binding's
-given is the client's stated need.
 The provision shall take one of two forms: resolve the need to
 another package's External Behavior or to a named external
 service; or state what the installation itself supplies — a rule
@@ -306,8 +299,6 @@ is a scenario item.
 A binding declares the installed relationship; whether the
 deployment realizes it is its tests' question
 ([META-21](#meta-21)).
-An in-house package and an external service bind the same way —
-the supplier's kind changes nothing.
 Each slot or abstract subject shall have exactly one effective
 binding per deployment, unless the client item itself defines
 aggregation or selection; a slot with no effective binding is
@@ -334,20 +325,15 @@ sections, in this order:
 
 At least one of `## Binding` and `## Scenario` shall be
 present.
-A file may hold bindings alone; whether its tests are acceptance journeys or deployment
-inspections follows from the relationship's visibility
-([META-21](#meta-21)), not from the file's section shape.
 Binding and Scenario may share a file when they form one
 concern: where both are present, each binding item shall be
 cited by at least one same-file scenario item whose outcome
 depends on it — a binding no same-file scenario depends on, or
 one that serves several files' concerns, shall live in a
 bindings-only file.
-Binding conformance and scenario acceptance may share one test
-item but need not.
 Binding overlays, package-focused indexes, and other
 projections over these files shall be derived, read-only
-views — never a second source of truth.
+views.
 
 ### META-32
 
@@ -364,10 +350,6 @@ or anchor.
 
 Files under `packages/` shall not cite files under
 `compositions/`.
-Compositions cite package items; packages stay ignorant of the
-compositions built on them, so a package can be moved to another
-project without dragging scenario context along.
-
 ## Citation
 
 ### META-16

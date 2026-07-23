@@ -136,8 +136,7 @@ unavailable, and offer the replace and remove actions on it.
 
 When a course is created, the catalog shall assign it a URL slug
 derived from its title, made unique by suffixing on collision;
-the slug shall not change thereafter — renaming the course keeps
-the slug — so shared course links keep resolving.
+the slug shall not change thereafter.
 
 ## Internal Behavior
 
@@ -148,7 +147,7 @@ the slug — so shared course links keep resolving.
 When a course is deleted ([CAT-17](#cat-17)), the catalog shall
 delete its sections, lessons, and stored media references in the
 same operation, and shall not delete or alter any asset of the
-media provider — references are the catalog's, assets are not.
+media provider.
 
 #### CAT-11
 

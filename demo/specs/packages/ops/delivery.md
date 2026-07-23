@@ -48,8 +48,7 @@ data.
 #### DELIV-7
 
 Every production deployment shall report the one default-branch
-commit that produced it, so the operator can trace what is
-serving to what was merged.
+commit that produced it.
 
 ### Secrets
 
