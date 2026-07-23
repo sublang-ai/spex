@@ -247,7 +247,7 @@ profile's config node intact, per
 ### Round-Trip Coverage
 
 #### SET-17
-Verifies: [SET-1](#set-1), [SET-7](#set-7), [SET-13](#set-13)
+Verifies [SET-1](#set-1), [SET-7](#set-7), [SET-13](#set-13).
 
 Where profile create, edit, and delete are exercised through the
 core service's Settings command surface, given a shared config file
@@ -260,7 +260,7 @@ content.
 ### Validation Coverage
 
 #### SET-18
-Verifies: [SET-2](#set-2), [SET-3](#set-3), [SET-11](#set-11), [SET-12](#set-12)
+Verifies [SET-2](#set-2), [SET-3](#set-3), [SET-11](#set-11), [SET-12](#set-12).
 
 Where validation is exercised, given fixture configs the playbook
 launcher rejects — at minimum a profile id colliding with an
@@ -273,7 +273,7 @@ rule identifier as the rejected save.
 ### Readiness Coverage
 
 #### SET-19
-Verifies: [SET-5](#set-5), [SET-14](#set-14)
+Verifies [SET-5](#set-5), [SET-14](#set-14).
 
 Where adapter readiness is exercised, given fixture environments
 and home directories covering each launcher rule (credential
@@ -287,7 +287,7 @@ environment variable or login step.
 ### External Edit Coverage
 
 #### SET-20
-Verifies: [SET-8](#set-8), [SET-15](#set-15)
+Verifies [SET-8](#set-8), [SET-15](#set-15).
 
 Where external edit reflection is exercised, given a connected
 client holding Settings state, when the shared config file is
@@ -301,7 +301,7 @@ notice.
 
 #### SET-25
 
-Verifies: [SET-22](#set-22),
+Verifies [SET-22](#set-22),.
 [SET-23](#set-23),
 [SET-24](#set-24)
 

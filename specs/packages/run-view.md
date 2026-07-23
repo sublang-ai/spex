@@ -476,7 +476,7 @@ build serves browser deployments.
 ### Fixture Replay Coverage
 
 #### RUN-20
-Verifies: [RUN-1](#run-1), [RUN-3](#run-3), [RUN-4](#run-4), [RUN-6](#run-6), [RUN-14](#run-14)
+Verifies [RUN-1](#run-1), [RUN-3](#run-3), [RUN-4](#run-4), [RUN-6](#run-6), [RUN-14](#run-14).
 
 Where a recorded fixture stream of a completed playbook session is
 replayed into the run view over the protocol, the test suite shall
@@ -487,7 +487,7 @@ expected Markdown text, tool-use entries appear as collapsed cards,
 and every completed turn with usage data shows its usage and cost.
 
 #### RUN-21
-Verifies: [RUN-7](#run-7), [RUN-18](#run-18)
+Verifies [RUN-7](#run-7), [RUN-18](#run-18).
 
 Where a fixture stream contains records marked hidden (judge or
 router traffic), when the fixture is replayed into the run view,
@@ -498,7 +498,7 @@ appearing only in hidden records.
 ### Interaction Coverage
 
 #### RUN-22
-Verifies: [RUN-9](#run-9)
+Verifies [RUN-9](#run-9).
 
 Where a replayed fixture stream ends in an await-Boss-reply state
 carrying a player question, the test suite shall assert that the
@@ -509,7 +509,7 @@ protocol as the reply to the waiting question — not as a new Boss
 prompt — and that the question display clears.
 
 #### RUN-23
-Verifies: [RUN-8](#run-8), [RUN-10](#run-10)
+Verifies [RUN-8](#run-8), [RUN-10](#run-10).
 
 While a replayed fixture stream holds a turn active, when the abort
 control is activated and the turn-aborted record is then delivered,
@@ -519,7 +519,7 @@ and that a submission made after the abort is dispatched
 immediately rather than queued.
 
 #### RUN-24
-Verifies: [RUN-8](#run-8)
+Verifies [RUN-8](#run-8).
 
 While a replayed fixture stream holds a turn active, when text is
 submitted in the Boss composer, the test suite shall assert that
@@ -530,7 +530,7 @@ that the queued submission is dispatched and the indicator clears.
 
 #### RUN-29
 
-Verifies: [RUN-25](#run-25),
+Verifies [RUN-25](#run-25),.
 [RUN-26](#run-26)
 
 Where no session is live, when the Workspace renders with a
@@ -545,7 +545,7 @@ the draft survives.
 
 #### RUN-31
 
-Verifies: [RUN-27](#run-27),
+Verifies [RUN-27](#run-27),.
 [RUN-30](#run-30)
 
 When `/` is typed at the start of the Captain home composer, the
@@ -559,7 +559,7 @@ renders as a user bubble in the Captain thread.
 
 #### RUN-35
 
-Verifies: [RUN-32](#run-32)
+Verifies [RUN-32](#run-32).
 
 When the captain editor popover is opened from the Captain home
 with fixture profiles, the test suite shall assert it lists the
@@ -570,7 +570,7 @@ without a surface change.
 
 #### RUN-36
 
-Verifies: [RUN-33](#run-33),
+Verifies [RUN-33](#run-33),.
 [RUN-34](#run-34)
 
 Where a fixture holds one ended session with a stored transcript
@@ -581,7 +581,7 @@ navigation badge shows the count 1.
 
 #### RUN-52
 
-Verifies: [RUN-9](#run-9)
+Verifies [RUN-9](#run-9).
 
 When the awaitBossReply fixture stream is replayed, the test suite
 shall assert the question renders as one incoming bubble naming the
@@ -592,7 +592,7 @@ the banner names the player without repeating the question.
 
 #### RUN-53
 
-Verifies: [RUN-37](#run-37),
+Verifies [RUN-37](#run-37),.
 [RUN-38](#run-38),
 [RUN-39](#run-39),
 [RUN-40](#run-40)
@@ -605,7 +605,7 @@ activating Abort disables it with an "Aborting…" label.
 
 #### RUN-54
 
-Verifies: [RUN-41](#run-41),
+Verifies [RUN-41](#run-41),.
 [RUN-42](#run-42),
 [RUN-43](#run-43)
 
@@ -619,7 +619,7 @@ Escape hides the slash menu without touching the draft.
 
 #### RUN-55
 
-Verifies: [RUN-44](#run-44),
+Verifies [RUN-44](#run-44),.
 [RUN-45](#run-45)
 
 Where a fixture config is invalid, the test suite shall assert the

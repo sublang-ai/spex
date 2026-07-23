@@ -5,7 +5,7 @@
 
 ## Intent
 
-This interaction spec covers how GitHub work reaches the Boss's
+This composition covers how GitHub work reaches the Boss's
 attention: the Projects package binds a repository to its forge and
 owns the adapter, and the Dashboard renders cross-project next-work
 lists from that same adapter
@@ -28,10 +28,12 @@ second fetch path
 ## Tests
 
 ### FORGE-2
-Verifies: [PROJ-6](../packages/projects.md#proj-6), [PROJ-15](../packages/projects.md#proj-15), [DASH-6](../packages/dashboard.md#dash-6)
 
-Where a registered fixture repository is bound to GitHub and a stub
-`gh` executable returns fixture issues and pull requests, the
-integration suite shall assert that the Repo tab's lists and the
-Dashboard's next-work lists render the same fixture items for that
-project, so both surfaces demonstrably share the adapter.
+Where a registered fixture repository is bound to GitHub
+([PROJ-6](../packages/projects.md#proj-6)) and a stub `gh`
+executable returns fixture issues and pull requests
+([PROJ-15](../packages/projects.md#proj-15)), the integration
+suite shall assert that the Repo tab's lists and the Dashboard's
+next-work lists ([DASH-6](../packages/dashboard.md#dash-6)) render
+the same fixture items for that project ([FORGE-1](#forge-1)), so
+both surfaces demonstrably share the adapter.

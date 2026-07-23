@@ -18,7 +18,7 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
 | `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | spec packages, one item file per package | [\<path\>/]\<kebab-case\>.md |
-| `interactions/` | cross-package behaviors, scenarios, and their tests | [\<path\>/]\<kebab-case\>.md |
+| `compositions/` | cross-package compositions: scenarios, bindings, and their tests | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
@@ -31,7 +31,11 @@ Each item file shall include an `## Intent` section stating its purpose.
 Test items shall focus on integration and system testing.
 
 A package's `## Verification` section shall hold test items that check that package's own claims.
-Test items that involve multiple spec packages shall live in `interactions/` files.
+Package test items shall drive the package against controlled collaborators — stubs standing in for its peers and services — never by executing a selected supplier; supplier-facing checks are composition tests ([META-31](#meta-31)).
+Test items that involve multiple spec packages shall live in `compositions/` files: integration and acceptance test items, each citing ([META-20](#meta-20)) the same-file scenario or binding items it executes plus the package items it directly checks.
+A scenario test shall cite items from two or more packages; a binding inspection may involve one package and its service.
+Every binding and scenario item shall be cited by at least one same-file test item.
+A composition test's grade follows visibility: composed behavior or a relationship observable at the installed system's external boundary shall be exercised there as acceptance; what stays hidden inside the installation may be verified by deployment inspection.
 
 Unit tests shall be part of the implementation and shall not be specified as spec items.
 
@@ -53,7 +57,7 @@ DRs and IRs shall be written in concise language, including only what is needed 
 
 A DR shall specify design decisions and constraints, not duplicate implementation logic.
 A DR is sufficient when an implementer can generate or audit code from the design intent, constraints, and tradeoffs.
-Implementation details shall be included only when they are part of the design contract.
+DRs shall carry no implementation logic: an observable outcome that code generation must honor shall be a spec item ([META-26](#meta-26)); a technology or architecture choice shall be recorded as the decision with its rationale; a detail that neither constrains observable behavior nor records a choice shall appear in no spec.
 
 ### META-25
 
@@ -106,11 +110,11 @@ A spec item shall describe behavior as observable outcomes (e.g., file state, ex
 ### META-9
 
 A spec package shall be a single item file under `packages/`, so one read covers the whole package.
-Related packages may be grouped into subdirectories of `packages/` for navigation convenience.
+Packages may be grouped into subdirectories of `packages/` for navigation convenience ([META-32](#meta-32)).
 
 ### META-10
 
-A spec package shall have a basename \<kebab-case\>.md unique across `specs/packages/` and `specs/interactions/`, with a short form \<ALLCAPS\> unique across the same set.
+A spec package shall have a basename \<kebab-case\>.md unique across `specs/packages/` and `specs/compositions/`, with a short form \<ALLCAPS\> unique across the same set.
 
 Example: `package-management.md` has short form `PKGMGT`.
 
@@ -121,12 +125,13 @@ Each package file shall contain only the following `##` sections, in this order:
 | Section | Presence | Content |
 | ------- | -------- | ------- |
 | `## Intent` | required | the package's purpose ([META-3](#meta-3)) |
-| `## External Behavior` | optional | user-visible behavior: what the system does |
-| `## Internal Behavior` | optional | implementation requirements: how the system is built |
+| `## External Behavior` | optional | outcomes and guarantees the package's users may rely on |
+| `## Internal Behavior` | optional | consumed requirements and private invariants, hidden from the package's users |
 | `## Verification` | optional | test items checking this package's claims ([META-21](#meta-21)) |
 | `## References` | optional | external sources ([META-19](#meta-19)) |
 
 At least one of `## External Behavior` and `## Internal Behavior` shall be present.
+A package's user is any human, host, or peer component using its contract; classification is package-relative, and a peer may rely only on External Behavior.
 Topic subsections (`###`) and item headings (`###` or `####`) live inside the behavior and Verification sections.
 Localized scaffolds translate these section headings; the bundled templates define the active names.
 
@@ -138,29 +143,76 @@ Note: \<PACK\> refers to the short form of the containing file's name.
 
 ### META-12
 
-An item ID and the normative concern it identifies are reserved if they appeared in any prior release.
-A reserved ID shall not be renumbered, reused, or reassigned; wording under it may change only compatibly with the published concern.
-Before publication, provisional items may be renumbered, replaced, or removed, and an ID absent from every prior release may be reassigned.
+An item ID, and the concern it identifies, is reserved once it has appeared in any release; a reserved ID shall not be renumbered, reused, or reassigned, and wording may change under it only while it preserves the cited concern.
+Unreleased IDs may be renumbered or overwritten to keep a file's numbering compact; an ID that has appeared in no release may be reassigned, and new items take the next free ID.
 
 ### META-13
 
-A spec package shall define a closed set of subjects and their behaviors for a single intent. The shall clause (see [META-6](#meta-6)) of any item shall only involve subjects and behaviors within its own package.
+A spec package shall define a closed set of subjects and their behaviors for a single intent. The shall clause (see [META-6](#meta-6)) of any item shall only involve subjects and behaviors within its own package; where a package leaves an open slot for another party (e.g., "the deployment's media provider"), the slot shall be named abstractly, and its binding shall live in a composition ([META-31](#meta-31)).
 
 ### META-14
 
-The precondition and trigger clauses (Where, While, When; see [META-6](#meta-6)) of items shall be allowed to reference subjects and behaviors from other spec packages.
+The precondition and trigger clauses (Where, While, When; see [META-6](#meta-6)) of items may cite another package's External Behavior where the reliance is an intentional, fixed semantic dependency of the package's contract; such citations shall never target a peer's Internal Behavior.
+Where the counterparty is selectable, the package shall state an abstract subject instead, bound in a composition ([META-31](#meta-31)).
 
 ### META-15
 
-Each spec package shall minimize references to the containing project. When a project-specific reference is essential to a package's intent, it shall be documented in the package's `## Intent` section.
+Each spec package shall minimize references to the containing project and stand alone: its `## Intent` section shall be self-contained prose carrying no citations.
+Dependencies on other packages shall appear only as item-level precondition citations ([META-14](#meta-14)); bindings of abstract subjects — to another package or to an external service — shall be binding items under `compositions/` ([META-31](#meta-31)), and the decision record that chooses the bound party shall cite those binding items ([META-17](#meta-17)).
+A package shall claim no site-wide exclusivity for itself; exclusivity is an installation policy, stated by a binding item ([META-36](#meta-36)).
 
-### META-30
+### META-31
 
-Files under `interactions/` shall describe how multiple spec packages work together.
+Files under `compositions/` shall describe how the installed system is composed, in two behavior-item kinds: binding items — static installed relationships ([META-36](#meta-36)) — and scenario items — integrated runtime behavior over the composed system, triggered or standing, which may take the composed system as their subject.
 
-- Each file shall cover one behavior or scenario and be named after it; file names shall not be concatenations of package names.
-- Each file shall follow the item-file conventions: an H1 with a short form ([META-10](#meta-10)), an `## Intent` section ([META-3](#meta-3)), and GEARS items ([META-6](#meta-6)); other sections are free-form.
-- Integration and acceptance test items that span multiple packages shall live here, each carrying a `Verifies:` line ([META-20](#meta-20)) citing items from two or more packages.
+Each file shall cover one composition concern and be named after it; file names shall not be concatenations of package names.
+
+### META-35
+
+Only a declared counterparty is bindable: an open slot or abstract collaborator that a package item itself names ([META-13](#meta-13)), or a surface the installation itself owns and the binding names ([META-36](#meta-36)).
+A consumed requirement states the supplied meaning together with the package's own acceptance and rejection handling of it.
+A private invariant — behavior no declared collaborator supplies — shall not be a binding endpoint, and inventing a collaborator to externalize an invariant does not make it consumed.
+Replaceability alone creates no seam: an implementation dependency no package item declares — a library, a framework — gets no binding item, and its selection lives in a decision record; a declared abstract collaborator stays bindable however it is realized — in-process, in-house, or remote.
+
+### META-36
+
+A binding item declares one installed relationship by clause: its precondition clauses cite the client items — or name the deployment surface — it serves, and its shall clause states the provision.
+The provision shall consist of one or more mappings, each in one of two forms: resolve a client need to another package's External Behavior or to a named external service; or state what the installation itself supplies — a rule over cited External inputs (an authorization policy, an exclusivity constraint) or a concrete installed value (a name, a label). Clause placement identifies client versus provision; the item's prose distinguishes the provision forms.
+Provision-side citations shall be External Behavior — what the supplier offers its users — never another package's internal items; citations to decision records in either clause are policy references, not endpoints.
+A binding item is static: Where preconditions and a shall clause, never a While or When trigger — a triggered sequence is a scenario item. A binding declares the installed relationship; whether the deployment realizes it is its tests' question ([META-21](#meta-21)).
+Each declared client need — a slot, an abstract subject, or a named installation surface — shall have exactly one effective binding per deployment, unless its declaration defines aggregation or selection; a need with no effective binding is an incomplete installation, not a disabled feature.
+
+A binding item reads as one GEARS sentence:
+
+```text
+Where <the client's cited need or named deployment surface>, the deployment shall <serve it: cite supplier External Behavior, name the selected service, or state the installation's own rule or value>.
+```
+
+### META-32
+
+Subdirectories under `packages/` and `compositions/` shall be navigation collections only, with no semantic meaning: no spec, tool, or reader shall infer package relationships, layering, or ownership from directory placement.
+A file's identity is its basename and short form ([META-10](#meta-10)); moving a file between collections changes relative citation paths but shall change no item ID, short form, or anchor.
+
+### META-33
+
+Files under `packages/` shall not cite files under `compositions/`.
+
+### META-34
+
+Each composition file shall contain only the following `##` sections, in this order:
+
+| Section | Presence | Content |
+| ------- | -------- | ------- |
+| `## Intent` | required | the concern's purpose ([META-3](#meta-3)) |
+| `## Binding` | optional | binding items ([META-36](#meta-36)) |
+| `## Scenario` | optional | integrated-behavior items over the composed system |
+| `## Tests` | required | test items citing what they verify ([META-20](#meta-20)) |
+| `## References` | optional | external sources ([META-19](#meta-19)) |
+
+At least one of `## Binding` and `## Scenario` shall be present.
+Where both sections are present, each binding item shall be cited by at least one same-file scenario item whose outcome depends on it — a binding no same-file scenario depends on, or one that serves several files' concerns, shall live in a bindings-only file.
+Binding overlays, package-focused indexes, and other projections over these files shall be derived, read-only views.
+Localized scaffolds translate these section headings; the bundled templates define the active names.
 
 ## Citation
 
@@ -182,9 +234,12 @@ External references in specs shall cite authoritative sources (e.g., official do
 
 ### META-20
 
-Each test item shall include one `Verifies:` metadata line immediately below its item ID heading.
-
-The `Verifies:` line shall contain one or more comma-separated [citations](#meta-16) to the behavior items that the test item verifies: same-file anchors for a package's own Verification items, and `packages/` citations for interaction test items.
+A test item shall cite every behavior item it verifies, inline at the assertion that verifies it: same-file anchors for a package's own Verification items, and `packages/` citations plus same-file scenario or binding anchors for composition test items ([META-21](#meta-21)).
+A citation binds its adjacent phrase: cite exactly the behavior that phrase directly relies on, exercises, or checks — never ambient, transitive, or merely invoked behavior.
+A binding item's precondition may cite a consumed Internal requirement as its client ([META-35](#meta-35)); a scenario or test item may cite a package's Internal Behavior where its integrated claim materially needs it.
+Such a citation neither reclassifies nor exposes the item.
+Spec items shall carry no relationship-metadata lines — `Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`, `Scope:`, or any other line declaring an item relationship; the citations in an item's clauses are the single source of its relationships.
+A machine-readable declaration an item itself defines — like the language marker of [META-27](#meta-27) — is item content, not relationship metadata.
 
 ## Authoring language
 

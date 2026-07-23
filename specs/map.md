@@ -141,10 +141,10 @@ meta.md       The spec of specs
 | --- | --- |
 | [app-shell.md](packages/app-shell.md) | Desktop shell: single-instance window, notifications, dock badge, core-in-main over WebSocket, packaging; packaged-app acceptance |
 
-## Interactions
+## Compositions
 
 | File | Summary |
 | --- | --- |
-| [desktop-session.md](interactions/desktop-session.md) | DESK: a Boss session in the packaged app — shell process topology, core streaming, run-view rendering, one protocol |
-| [forge-work-lists.md](interactions/forge-work-lists.md) | FORGE: Repo tab and Dashboard render the same forge-adapter data |
-| [shared-config-roundtrip.md](interactions/shared-config-roundtrip.md) | CONF: one config file, one fail-closed rule set across Settings, core, and Library |
+| [desktop-session.md](compositions/desktop-session.md) | DESK: a Boss session in the packaged app — shell process topology, core streaming, run-view rendering, one protocol |
+| [forge-work-lists.md](compositions/forge-work-lists.md) | FORGE: Repo tab and Dashboard render the same forge-adapter data |
+| [shared-config-roundtrip.md](compositions/shared-config-roundtrip.md) | CONF: one config file, one fail-closed rule set across Settings, core, and Library |

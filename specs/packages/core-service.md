@@ -291,7 +291,7 @@ requirements before the first turn fails.
 ### Session Coverage
 
 #### CORE-19
-Verifies: [CORE-4](#core-4), [CORE-5](#core-5), [CORE-7](#core-7), [CORE-18](#core-18)
+Verifies [CORE-4](#core-4), [CORE-5](#core-5), [CORE-7](#core-7), [CORE-18](#core-18).
 
 Where the core service runs with a valid config and the scripted
 fake adapter, the test suite shall connect a WebSocket client,
@@ -309,7 +309,7 @@ turn, and assert that:
 ### Record Visibility Coverage
 
 #### CORE-20
-Verifies: [CORE-8](#core-8), [CORE-14](#core-14)
+Verifies [CORE-8](#core-8), [CORE-14](#core-14).
 
 Where the fake adapter script contains records marked hidden, the
 test suite shall subscribe one client to the session and a second
@@ -320,7 +320,7 @@ hidden record.
 ### Configuration Coverage
 
 #### CORE-21
-Verifies: [CORE-2](#core-2), [CORE-16](#core-16)
+Verifies [CORE-2](#core-2), [CORE-16](#core-16).
 
 Where the config file carries a defect from each launcher
 fail-closed defect class recorded in
@@ -332,7 +332,7 @@ request while that config is active.
 ### Persistence Coverage
 
 #### CORE-22
-Verifies: [CORE-10](#core-10), [CORE-15](#core-15)
+Verifies [CORE-10](#core-10), [CORE-15](#core-15).
 
 Where a session has completed a Boss turn, the test suite shall stop
 the core service, start it again on the same store file, and assert
@@ -343,7 +343,7 @@ session live at shutdown is reported as no longer live.
 ### Readiness Coverage
 
 #### CORE-23
-Verifies: [CORE-9](#core-9)
+Verifies [CORE-9](#core-9).
 
 Where the config defines both a profile whose adapter readiness
 requirements are satisfied and one whose requirements are not (via
@@ -355,7 +355,7 @@ profile.
 ### Compile Lifecycle Coverage
 
 #### CORE-27
-Verifies: [CORE-25](#core-25)
+Verifies [CORE-25](#core-25).
 
 Where the core service runs with an injected compile spawner whose
 toolchain run blocks until canceled, the test suite shall start a
@@ -374,7 +374,7 @@ compile over the protocol and assert that:
 ### Shorthand Readiness Coverage
 
 #### CORE-28
-Verifies: [CORE-26](#core-26)
+Verifies [CORE-26](#core-26).
 
 Where the config references adapters by shorthand — as the captain
 and as a playbook player — alongside a declared profile, the test

@@ -253,7 +253,7 @@ serving the project's other state.
 ### Registration and Card Coverage
 
 #### PROJ-17
-Verifies: [PROJ-1](#proj-1), [PROJ-2](#proj-2), [PROJ-4](#proj-4), [PROJ-11](#proj-11)
+Verifies [PROJ-1](#proj-1), [PROJ-2](#proj-2), [PROJ-4](#proj-4), [PROJ-11](#proj-11).
 
 Where a fixture git repository exists with a named branch checked
 out, an uncommitted change, and a local upstream remote that it is
@@ -269,7 +269,7 @@ that is not the top level of a git work tree is rejected with a
 message and creates no project entry.
 
 #### PROJ-18
-Verifies: [PROJ-3](#proj-3)
+Verifies [PROJ-3](#proj-3).
 
 Where a temporary parent directory exists, when the create-project
 flow completes with the scaffold option on, the test suite shall
@@ -286,7 +286,7 @@ generated.
 ### Forge Coverage
 
 #### PROJ-19
-Verifies: [PROJ-5](#proj-5), [PROJ-6](#proj-6), [PROJ-13](#proj-13), [PROJ-15](#proj-15)
+Verifies [PROJ-5](#proj-5), [PROJ-6](#proj-6), [PROJ-13](#proj-13), [PROJ-15](#proj-15).
 
 Where a registered fixture repository's `origin` remote points at a
 GitHub repository, and a stub `gh` executable on `PATH` reports an
@@ -299,7 +299,7 @@ titles, and that activating an entry passes that entry's GitHub URL
 to the stubbed browser opener.
 
 #### PROJ-20
-Verifies: [PROJ-7](#proj-7), [PROJ-16](#proj-16)
+Verifies [PROJ-7](#proj-7), [PROJ-16](#proj-16).
 
 Where the stub `gh` reports a not-authenticated state, or `gh` is
 absent from `PATH`, or the registered repository has no GitHub
@@ -312,7 +312,7 @@ keeps serving subsequent commands.
 ### Removal Coverage
 
 #### PROJ-21
-Verifies: [PROJ-9](#proj-9), [PROJ-10](#proj-10)
+Verifies [PROJ-9](#proj-9), [PROJ-10](#proj-10).
 
 Where a fixture repository is registered, when the project is
 removed and the core service is restarted, the test suite shall
@@ -324,7 +324,7 @@ state are identical to their state before removal.
 
 #### PROJ-26
 
-Verifies: [PROJ-22](#proj-22),
+Verifies [PROJ-22](#proj-22),.
 [PROJ-23](#proj-23),
 [PROJ-25](#proj-25)
 

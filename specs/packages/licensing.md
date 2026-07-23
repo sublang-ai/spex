@@ -60,11 +60,11 @@ For source code files with `//` comment syntax:
 ### Header Checks
 
 #### LIC-3
-Verifies: [LIC-1](#lic-1)
+Verifies [LIC-1](#lic-1).
 
 Where the file has comment syntax and is not [excluded](#exclusions), while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-FileCopyrightText`.
 
 #### LIC-4
-Verifies: [LIC-2](#lic-2)
+Verifies [LIC-2](#lic-2).
 
 Where the file has comment syntax, is not [excluded](#exclusions), and a [license file](#license-file-detection) exists at project root, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier`.

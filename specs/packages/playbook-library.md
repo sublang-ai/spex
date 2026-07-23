@@ -301,7 +301,7 @@ absent stages without failing the request.
 ### Compile Coverage
 
 #### PBLIB-17
-Verifies: [PBLIB-5](#pblib-5), [PBLIB-7](#pblib-7), [PBLIB-10](#pblib-10), [PBLIB-12](#pblib-12), [PBLIB-14](#pblib-14)
+Verifies [PBLIB-5](#pblib-5), [PBLIB-7](#pblib-7), [PBLIB-10](#pblib-10), [PBLIB-12](#pblib-12), [PBLIB-14](#pblib-14).
 
 Where a stub `slc` executable that emits a valid compiled
 playbook output is placed on the toolchain resolution path, when
@@ -316,7 +316,7 @@ resolves to that manifest, and that the Library lists the new
 playbook.
 
 #### PBLIB-18
-Verifies: [PBLIB-8](#pblib-8), [PBLIB-11](#pblib-11)
+Verifies [PBLIB-8](#pblib-8), [PBLIB-11](#pblib-11).
 
 Where no `slc` is resolvable, or the resolved Node.js fails the
 version floor, the test suite shall assert that the compile flow
@@ -325,7 +325,7 @@ prerequisite, that no external process is spawned, and that the
 shared config file is unmodified.
 
 #### PBLIB-19
-Verifies: [PBLIB-9](#pblib-9), [PBLIB-12](#pblib-12)
+Verifies [PBLIB-9](#pblib-9), [PBLIB-12](#pblib-12).
 
 Where a stub `slc` fails at a known pipeline phase with error
 output, when a compile is run, the test suite shall assert that
@@ -336,7 +336,7 @@ compiled outputs for the same playbook id remain unchanged.
 ### Registration and Config Coverage
 
 #### PBLIB-20
-Verifies: [PBLIB-7](#pblib-7), [PBLIB-15](#pblib-15)
+Verifies [PBLIB-7](#pblib-7), [PBLIB-15](#pblib-15).
 
 When the registry form is submitted with an entry violating a
 fail-closed rule, covering at least a command duplicating an
@@ -348,7 +348,7 @@ violated rule and that the shared config file bytes are
 unchanged.
 
 #### PBLIB-21
-Verifies: [PBLIB-3](#pblib-3), [PBLIB-16](#pblib-16)
+Verifies [PBLIB-3](#pblib-3), [PBLIB-16](#pblib-16).
 
 Where the shared config file contains comments and entries
 unrelated to the toggled playbook, when a playbook is disabled
@@ -359,7 +359,7 @@ round trip that the playbook's entry is enabled again.
 
 #### PBLIB-25
 
-Verifies: [PBLIB-22](#pblib-22),
+Verifies [PBLIB-22](#pblib-22),.
 [PBLIB-24](#pblib-24)
 
 Where a playbook was compiled into the library directory, when its
@@ -373,7 +373,7 @@ missing stage while still serving the others.
 
 #### PBLIB-30
 
-Verifies: [PBLIB-27](#pblib-27)
+Verifies [PBLIB-27](#pblib-27).
 
 While a compile driven through the app store is running, the test
 suite shall assert that a cancel control is rendered beside the
@@ -384,7 +384,7 @@ start control stays disabled until the compile settles.
 
 #### PBLIB-31
 
-Verifies: [PBLIB-28](#pblib-28)
+Verifies [PBLIB-28](#pblib-28).
 
 Where the shared config state is missing or invalid, the test
 suite shall assert that the Library renders the config gate — the

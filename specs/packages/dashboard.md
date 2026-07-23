@@ -249,7 +249,7 @@ persisted in the app store and refreshed through the forge adapter
 ### Attention Coverage
 
 #### DASH-15
-Verifies: [DASH-1](#dash-1), [DASH-2](#dash-2), [DASH-10](#dash-10)
+Verifies [DASH-1](#dash-1), [DASH-2](#dash-2), [DASH-10](#dash-10).
 
 Where a fixture record stream spans two project sessions and
 contains a player `permission_request`, a captain `awaitBossReply`
@@ -263,7 +263,7 @@ and session, that entries follow the kind precedence of
 produced no entry.
 
 #### DASH-16
-Verifies: [DASH-4](#dash-4), [DASH-9](#dash-9), [DASH-10](#dash-10)
+Verifies [DASH-4](#dash-4), [DASH-9](#dash-9), [DASH-10](#dash-10).
 
 While the attention queue contains a pending Boss question among
 other entries, when the fixture stream continues with a Boss turn
@@ -272,7 +272,7 @@ that the question entry is removed, that all other entries remain,
 and that the published attention count decreases by exactly one.
 
 #### DASH-17
-Verifies: [DASH-11](#dash-11)
+Verifies [DASH-11](#dash-11).
 
 Where a fixture record stream and review state are persisted to the
 app store, when attention derivation is re-run from persisted state
@@ -283,7 +283,7 @@ same stream.
 ### Usage Coverage
 
 #### DASH-18
-Verifies: [DASH-7](#dash-7), [DASH-13](#dash-13)
+Verifies [DASH-7](#dash-7), [DASH-13](#dash-13).
 
 Where fixture player `done` events carry usage payloads across two
 sessions and two calendar days, including one on a
@@ -296,7 +296,7 @@ usage-less `done` event contributes nothing.
 ### Forge Coverage
 
 #### DASH-19
-Verifies: [DASH-6](#dash-6), [DASH-14](#dash-14)
+Verifies [DASH-6](#dash-6), [DASH-14](#dash-14).
 
 Where a stubbed forge adapter returns fixture open issues and pull
 requests for a bound project, when the Dashboard is displayed,
@@ -310,7 +310,7 @@ surfaced.
 
 #### DASH-22
 
-Verifies: [DASH-5](#dash-5),
+Verifies [DASH-5](#dash-5),.
 [DASH-8](#dash-8),
 [DASH-21](#dash-21)
 

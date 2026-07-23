@@ -5,7 +5,7 @@
 
 ## Intent
 
-This interaction spec covers the flow that makes Spex a product: a
+This composition covers the flow that makes Spex a product: a
 Boss runs a live playbook session inside the packaged desktop app.
 The scenario spans the shell (process topology and packaging), the
 core service (session lifecycle and record streaming), and the run
@@ -36,22 +36,30 @@ record stream.
 ## Tests
 
 ### DESK-3
-Verifies: [SHELL-10](../packages/app-shell.md#shell-10), [CORE-4](../packages/core-service.md#core-4), [CORE-7](../packages/core-service.md#core-7), [RUN-1](../packages/run-view.md#run-1)
 
 Where a packaged build is installed with a profile backed by a fake
 adapter, when the acceptance suite launches the app, starts a
-session, and completes a Boss turn, the suite shall assert the whole
-chain end to end: the core runs inside the app process, the session
-is created with the project directory as its working directory, the
-turn's records stream over the WebSocket protocol, and the Captain
-pane renders them in arrival order with their glyphs.
+session, and completes a Boss turn, the suite shall assert the
+whole chain end to end ([DESK-1](#desk-1)): the core runs inside
+the app process
+([SHELL-10](../packages/app-shell.md#shell-10)), the session is
+created with the project directory as its working directory
+([CORE-4](../packages/core-service.md#core-4)), the turn's records
+stream over the WebSocket protocol
+([CORE-7](../packages/core-service.md#core-7)), and the Captain
+pane renders them in arrival order with their glyphs
+([RUN-1](../packages/run-view.md#run-1)); and while the session
+awaits the Boss's reply with the window unfocused, the OS
+notification, dock badge, and composer awaiting state all surface
+from the same record stream ([DESK-2](#desk-2)).
 
 ### DESK-4
-Verifies: [CORE-8](../packages/core-service.md#core-8), [RUN-13](../packages/run-view.md#run-13)
 
 Where a fixture session emits records marked hidden, when the
 acceptance suite drives the packaged app through that session, the
 suite shall assert that hidden records appear nowhere in the run
-view, proving the core's visibility boundary and the view's
-protocol-only rendering compose to keep judge and router traffic
-invisible.
+view ([DESK-1](#desk-1)): the core's visibility boundary
+([CORE-8](../packages/core-service.md#core-8)) and the view's
+protocol-only rendering
+([RUN-13](../packages/run-view.md#run-13)) compose to keep judge
+and router traffic invisible.

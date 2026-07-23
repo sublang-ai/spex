@@ -5,7 +5,7 @@
 
 ## Intent
 
-This interaction spec covers the one config file every surface
+This composition covers the one config file every surface
 shares: the playbook config of
 [DR-004](../decisions/004-config-and-persistence.md).
 Settings edits it, the core service loads and revalidates it, the
@@ -36,20 +36,24 @@ surface saved last.
 ## Tests
 
 ### CONF-3
-Verifies: [SET-11](../packages/settings.md#set-11), [CORE-2](../packages/core-service.md#core-2), [PBLIB-15](../packages/playbook-library.md#pblib-15)
 
-Where a fixture config is edited through the Settings protocol
-commands, then extended by a stub-compiled playbook registration,
-the integration suite shall assert that the core service reloads
-each intermediate config without a validation failure, and that a
-config rejected by the Settings validator is byte-identical on disk
-afterwards — one rule set, observed at every seam.
+Where a commented fixture config is edited through the Settings
+protocol commands ([SET-11](../packages/settings.md#set-11)), then
+extended by a stub-compiled playbook registration
+([PBLIB-15](../packages/playbook-library.md#pblib-15)), the
+integration suite shall assert that the core service reloads each
+intermediate config without a validation failure
+([CONF-1](#conf-1), [CORE-2](../packages/core-service.md#core-2)),
+that a config rejected by the Settings validator is byte-identical
+on disk afterwards, and that the fixture's comments survive both
+writers ([CONF-2](#conf-2)) — one rule set, observed at every seam.
 
 ### CONF-4
-Verifies: [SET-2](../packages/settings.md#set-2), [CORE-13](../packages/core-service.md#core-13)
 
 Where a client submits a config edit that violates a shared-config
-rule, the integration suite shall assert the Settings surface marks
-the field inline while the core service leaves the file unwritten
-and the connection open — the failure is visible in the UI and
-harmless at the protocol layer.
+rule ([CONF-1](#conf-1)), the integration suite shall assert the
+Settings surface marks the field inline
+([SET-2](../packages/settings.md#set-2)) while the core service
+leaves the file unwritten and the connection open
+([CORE-13](../packages/core-service.md#core-13)) — the failure is
+visible in the UI and harmless at the protocol layer.

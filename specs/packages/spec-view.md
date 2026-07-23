@@ -236,7 +236,7 @@ file's raw markdown.
 ### Parse Coverage
 
 #### SPECV-30
-Verifies: [SPECV-10](#specv-10)
+Verifies [SPECV-10](#specv-10).
 
 Where a fixture tree defines a top-level package with all three
 group files, a package nested in a directory, and a package present
@@ -247,7 +247,7 @@ order when it differs from ID order, and that two packages sharing
 a basename at different paths each carry a notice naming the other.
 
 #### SPECV-31
-Verifies: [SPECV-11](#specv-11)
+Verifies [SPECV-11](#specv-11).
 
 Where a fixture file mixes a majority and a minority item-ID
 prefix, the test suite shall assert that the package's short form
@@ -256,7 +256,7 @@ prefixes and the minority file; where a package has no items, the
 suite shall assert it has no short form.
 
 #### SPECV-32
-Verifies: [SPECV-12](#specv-12)
+Verifies [SPECV-12](#specv-12).
 
 Where fixture items sit under `##` sections, under `## Intent`, and
 after `## References`, and carry `Verifies:` lines and fenced code
@@ -266,7 +266,7 @@ Verifies ID extraction with the line excluded from the digest, and
 that fenced `###` lines start no item.
 
 #### SPECV-33
-Verifies: [SPECV-13](#specv-13)
+Verifies [SPECV-13](#specv-13).
 
 Where a group file carries a multi-line first paragraph under
 `## Intent` followed by further paragraphs, the test suite shall
@@ -276,7 +276,7 @@ to one line.
 ### Records Coverage
 
 #### SPECV-34
-Verifies: [SPECV-14](#specv-14)
+Verifies [SPECV-14](#specv-14).
 
 Where fixture decision and iteration files carry prefixed and
 unprefixed `#` headings, the test suite shall assert record IDs
@@ -286,7 +286,7 @@ prefix stripped, `specs/`-relative paths, and filename ordering.
 ### Degradation Coverage
 
 #### SPECV-35
-Verifies: [SPECV-15](#specv-15), [SPECV-10](#specv-10)
+Verifies [SPECV-15](#specv-15), [SPECV-10](#specv-10).
 
 Where a fixture tree contains an unreadable group file and unknown
 entries directly under `specs/`, the test suite shall assert that
@@ -299,7 +299,7 @@ empty lists.
 ### Confinement Coverage
 
 #### SPECV-36
-Verifies: [SPECV-16](#specv-16)
+Verifies [SPECV-16](#specv-16).
 
 Where a fixture project contains a symlink escaping the project and
 `specs.read` requests carry `..` segments, absolute paths,
