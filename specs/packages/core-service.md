@@ -10,20 +10,13 @@ in `packages/core` (the private workspace package
 `@sublang/spex-core`): its observable behavior, its implementation
 requirements, and its end-to-end integration coverage.
 The service owns config, project sessions, the embedded playbook
-runtime, and persistence behind one WebSocket API, per
-[DR-002](../decisions/002-desktop-app-architecture.md).
-Runtime embedding and record routing follow
-[DR-003](../decisions/003-runtime-reuse.md): the service embeds the
-headless cligent runtime and the playbook captain shell.
-Config ownership, persistence, and readiness follow
-[DR-004](../decisions/004-config-and-persistence.md): the service
+runtime, and persistence behind one WebSocket API: it embeds the
+headless cligent runtime and the playbook captain shell, and it
 shares the playbook launcher's config file, persistence split, and
 adapter readiness rules.
 Every behavior in this package is observable over the WebSocket
-protocol; the service serves no HTML.
-Integration coverage is exercised end to end over the WebSocket
-protocol against the scripted fake adapter required by
-[CORE-18](#core-18).
+protocol; the service serves no HTML, and integration coverage runs
+end to end against a scripted fake adapter.
 
 ## External Behavior
 
@@ -291,81 +284,75 @@ requirements before the first turn fails.
 ### Session Coverage
 
 #### CORE-19
-Verifies [CORE-4](#core-4), [CORE-5](#core-5), [CORE-7](#core-7), [CORE-18](#core-18).
-
 Where the core service runs with a valid config and the scripted
-fake adapter, the test suite shall connect a WebSocket client,
-create a session for a temporary project directory, submit a Boss
-turn, and assert that:
+fake adapter ([CORE-18](#core-18)), the test suite shall connect a
+WebSocket client, create a session for a temporary project
+directory, submit a Boss turn, and assert that:
 
-- the session's runtime working directory is the project directory;
+- the session's runtime working directory is the project directory
+  ([CORE-4](#core-4));
 - every non-hidden scripted record arrives on the session
-  subscription in script order;
+  subscription in script order ([CORE-7](#core-7));
 - the turn ends with a finished record;
 - a second Boss submission during the turn is rejected with a busy
-  error and starts no turn;
-- no network connection is opened during the run.
+  error and starts no turn ([CORE-5](#core-5));
+- no network connection is opened during the run
+  ([CORE-18](#core-18)).
 
 ### Record Visibility Coverage
 
 #### CORE-20
-Verifies [CORE-8](#core-8), [CORE-14](#core-14).
-
 Where the fake adapter script contains records marked hidden, the
 test suite shall subscribe one client to the session and a second
 client to the debug channel, and assert that the session subscriber
-receives no hidden record while the debug subscriber receives every
-hidden record.
+receives no hidden record ([CORE-8](#core-8)) while the debug
+subscriber receives every hidden record ([CORE-14](#core-14)).
 
 ### Configuration Coverage
 
 #### CORE-21
-Verifies [CORE-2](#core-2), [CORE-16](#core-16).
-
 Where the config file carries a defect from each launcher
 fail-closed defect class recorded in
-[DR-004](../decisions/004-config-and-persistence.md), the test suite
-shall assert, per defect, that the core service reports a config
-error naming the offending entry and rejects a session creation
-request while that config is active.
+[DR-004](../decisions/004-config-and-persistence.md)
+([CORE-16](#core-16)), the test suite shall assert, per defect,
+that the core service reports a config error naming the offending
+entry and rejects a session creation request while that config is
+active ([CORE-2](#core-2)).
 
 ### Persistence Coverage
 
 #### CORE-22
-Verifies [CORE-10](#core-10), [CORE-15](#core-15).
-
 Where a session has completed a Boss turn, the test suite shall stop
-the core service, start it again on the same store file, and assert
-that the session, its turns, its records (content and order), and
-its usage totals are served identically after restart, and that a
-session live at shutdown is reported as no longer live.
+the core service, start it again on the same app-local store file
+([CORE-15](#core-15)), and assert that the session, its turns, its
+records (content and order), and its usage totals are served
+identically after restart ([CORE-10](#core-10)), and that a session
+live at shutdown is reported as no longer live.
 
 ### Readiness Coverage
 
 #### CORE-23
-Verifies [CORE-9](#core-9).
-
 Where the config defines both a profile whose adapter readiness
 requirements are satisfied and one whose requirements are not (via
 controlled environment variables and home-directory fixtures), the
 test suite shall assert that readiness reporting marks each profile
 accordingly and names the unmet requirement for the not-ready
-profile.
+profile ([CORE-9](#core-9)).
 
 ### Compile Lifecycle Coverage
 
 #### CORE-27
-Verifies [CORE-25](#core-25).
-
 Where the core service runs with an injected compile spawner whose
 toolchain run blocks until canceled, the test suite shall start a
 compile over the protocol and assert that:
 
 - a second `compile.run` for the same playbook id is rejected with
-  a `busy` error naming the id while the first is in flight;
+  a `busy` error naming the id while the first is in flight
+  ([CORE-25](#core-25));
 - `compile.abort` for that id makes the pending `compile.run`
   reply with an `aborted` error, and the final progress line
-  broadcast for the playbook is the canceled marker;
+  broadcast for the playbook is the canceled marker
+  ([CORE-25](#core-25));
 - `compile.abort` for a playbook id with no compile in flight is
   rejected with a `not_found` error;
 - after cancellation, a new `compile.run` for the same id is
@@ -374,11 +361,10 @@ compile over the protocol and assert that:
 ### Shorthand Readiness Coverage
 
 #### CORE-28
-Verifies [CORE-26](#core-26).
-
 Where the config references adapters by shorthand — as the captain
 and as a playbook player — alongside a declared profile, the test
 suite shall assert that readiness reporting includes exactly one
-entry per referenced shorthand, marked per the adapter readiness
-rules with the unmet requirement named for a not-ready shorthand,
-while the declared profile keeps its own entry.
+entry per referenced shorthand ([CORE-26](#core-26)), marked per
+the adapter readiness rules with the unmet requirement named for a
+not-ready shorthand, while the declared profile keeps its own
+entry.

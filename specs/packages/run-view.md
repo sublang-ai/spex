@@ -10,19 +10,14 @@ that renders one live playbook session — spanning its user-visible
 behavior, its implementation requirements, and its integration
 coverage.
 The view presents a Captain pane, read-only player panes, and the
-single Boss composer, per the concept model of
-[DR-002](../decisions/002-desktop-app-architecture.md), and lives
-in that architecture's UI package.
+single Boss composer.
 Everything the view displays derives from the session record
 stream, which it renders exclusively from the WebSocket protocol
 that carries it, and the captain glyph vocabulary follows the
-embedded Playbook Captain shell, per
-[DR-003](../decisions/003-runtime-reuse.md).
-Coverage replays recorded record-stream fixtures through the
-WebSocket protocol of
-[DR-002](../decisions/002-desktop-app-architecture.md), exercising
-the record-driven rendering contract of
-[DR-003](../decisions/003-runtime-reuse.md) without live agents.
+embedded Playbook Captain shell.
+Coverage replays recorded record-stream fixtures through that
+protocol, exercising the record-driven rendering contract without
+live agents.
 
 ## External Behavior
 
@@ -233,7 +228,7 @@ load, the run view shall say so and offer a retry that reloads it
 While any session needs a human (a pending Boss question or a
 failure), the Workspace navigation entry shall show a badge with
 the count across all projects, derived from the same attention
-rules as the Dashboard ([DASH-11](dashboard.md#dash-11));
+rules as the Dashboard ([DASH-9](dashboard.md#dash-9));
 while a non-current project needs a human, the project bar's chip
 shall carry a dot in the most severe color. The slash menu shall
 end with a compile-a-new-playbook entry that opens the Playbooks
@@ -328,8 +323,7 @@ semantics, and keep the active tab scrolled into view.
 #### RUN-49
 
 The app shall provide keyboard shortcuts implemented in the web UI
-(so they work identically in a browser, per
-[SHELL-10](app-shell.md#shell-10)): Cmd/Ctrl+1..4 switch
+(so they work identically in a browser): Cmd/Ctrl+1..4 switch
 surfaces, Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project
 palette, Cmd/Ctrl+N opens the new-session tab (or the palette when
 no project is chosen), Cmd/Ctrl+Shift+S toggles the Specs tab with
@@ -467,7 +461,8 @@ route records carrying `hidden` visibility to any pane.
 The start view shall obtain projects, playbooks, captain identity,
 and readiness exclusively through existing protocol commands and
 broadcasts, and shall detect the native picker by feature-testing
-the shell bridge ([SHELL-20](app-shell.md#shell-20)), falling back
+the shell bridge
+([DR-008](../decisions/008-native-shell-bridge.md)), falling back
 to manual path entry when the bridge is absent so the identical
 build serves browser deployments.
 
@@ -476,154 +471,132 @@ build serves browser deployments.
 ### Fixture Replay Coverage
 
 #### RUN-20
-Verifies [RUN-1](#run-1), [RUN-3](#run-3), [RUN-4](#run-4), [RUN-6](#run-6), [RUN-14](#run-14).
-
 Where a recorded fixture stream of a completed playbook session is
-replayed into the run view over the protocol, the test suite shall
-assert that the rendered result matches the fixture's expectations:
-the Captain pane holds the expected glyph lines in arrival order,
-one pane exists per visible player, player transcripts render the
-expected Markdown text, tool-use entries appear as collapsed cards,
-and every completed turn with usage data shows its usage and cost.
+replayed into the run view over the protocol ([RUN-14](#run-14)),
+the test suite shall assert that the rendered result matches the
+fixture's expectations: the Captain pane holds the expected glyph
+lines in arrival order ([RUN-1](#run-1)), one pane exists per
+visible player, player transcripts render the expected Markdown
+text ([RUN-3](#run-3)), tool-use entries appear as collapsed cards
+([RUN-4](#run-4)), and every completed turn with usage data shows
+its usage and cost ([RUN-6](#run-6)).
 
 #### RUN-21
-Verifies [RUN-7](#run-7), [RUN-18](#run-18).
-
 Where a fixture stream contains records marked hidden (judge or
 router traffic), when the fixture is replayed into the run view,
 the test suite shall assert that no rendered pane contains the
-hidden records' content and that no pane exists for a player
-appearing only in hidden records.
+hidden records' content ([RUN-18](#run-18)) and that no pane
+exists for a player appearing only in hidden records
+([RUN-7](#run-7)).
 
 ### Interaction Coverage
 
 #### RUN-22
-Verifies [RUN-9](#run-9).
-
 Where a replayed fixture stream ends in an await-Boss-reply state
 carrying a player question, the test suite shall assert that the
 question appears above the Boss composer and inside the asking
-player's pane. When text is then submitted in the composer, the
-test suite shall assert that the submission is sent over the
-protocol as the reply to the waiting question — not as a new Boss
-prompt — and that the question display clears.
+player's pane ([RUN-9](#run-9)). When text is then submitted in
+the composer, the test suite shall assert that the submission is
+sent over the protocol as the reply to the waiting question — not
+as a new Boss prompt — and that the question display clears
+([RUN-9](#run-9)).
 
 #### RUN-23
-Verifies [RUN-8](#run-8), [RUN-10](#run-10).
-
 While a replayed fixture stream holds a turn active, when the abort
 control is activated and the turn-aborted record is then delivered,
 the test suite shall assert that an abort command was sent over the
-protocol, that the interrupted turn shows a visible aborted marker,
-and that a submission made after the abort is dispatched
-immediately rather than queued.
+protocol ([RUN-10](#run-10)), that the interrupted turn shows a
+visible aborted marker, and that a submission made after the abort
+is dispatched immediately rather than queued ([RUN-8](#run-8)).
 
 #### RUN-24
-Verifies [RUN-8](#run-8).
-
 While a replayed fixture stream holds a turn active, when text is
 submitted in the Boss composer, the test suite shall assert that
 the submission is queued with a visible queued indicator and that
-no Boss prompt is dispatched over the protocol. When the
-turn-finished record is then delivered, the test suite shall assert
-that the queued submission is dispatched and the indicator clears.
+no Boss prompt is dispatched over the protocol ([RUN-8](#run-8)).
+When the turn-finished record is then delivered, the test suite
+shall assert that the queued submission is dispatched and the
+indicator clears ([RUN-8](#run-8)).
 
 #### RUN-29
-
-Verifies [RUN-25](#run-25),.
-[RUN-26](#run-26)
 
 Where no session is live, when the Workspace renders with a
 fixture config of one project and one playbook, the test suite
 shall assert the Captain home shows the greeting naming the
-current project, the chat composer, and the captain identity; when
-text is submitted with a current project, the test suite shall
-assert a session is created for that project and the text is
-dispatched as its first Boss turn; when text is submitted with no
-project chosen, the test suite shall assert the palette opens and
-the draft survives.
+current project, the chat composer, and the captain identity
+([RUN-25](#run-25)); when text is submitted with a current
+project, the test suite shall assert a session is created for that
+project and the text is dispatched as its first Boss turn
+([RUN-26](#run-26)); when text is submitted with no project
+chosen, the test suite shall assert the palette opens and the
+draft survives ([RUN-26](#run-26)).
 
 #### RUN-31
-
-Verifies [RUN-27](#run-27),.
-[RUN-30](#run-30)
 
 When `/` is typed at the start of the Captain home composer, the
 test suite shall assert the slash menu lists the fixture playbook
 with its intent, filters as more is typed, and inserts the command
-without dispatching on selection; when the quick start card is
-dismissed and the view is remounted, the test suite shall assert
-the card stays dismissed; when a fixture stream containing a boss
-turn is replayed, the test suite shall assert the submitted text
-renders as a user bubble in the Captain thread.
+without dispatching on selection ([RUN-27](#run-27)); when the
+quick start card is dismissed and the view is remounted, the test
+suite shall assert the card stays dismissed ([RUN-27](#run-27));
+when a fixture stream containing a boss turn is replayed, the test
+suite shall assert the submitted text renders as a user bubble in
+the Captain thread ([RUN-30](#run-30)).
 
 #### RUN-35
-
-Verifies [RUN-32](#run-32).
 
 When the captain editor popover is opened from the Captain home
 with fixture profiles, the test suite shall assert it lists the
 profiles with models, that selecting another profile issues a
 captain change through the configuration edit path, and that
 editing the selected profile's model issues a profile save — all
-without a surface change.
+without a surface change ([RUN-32](#run-32)).
 
 #### RUN-36
 
-Verifies [RUN-33](#run-33),.
-[RUN-34](#run-34)
-
 Where a fixture holds one ended session with a stored transcript
 and one live session awaiting a Boss reply, the test suite shall
-assert the Captain home lists the ended session, opening it renders
-the transcript read-only with an ended notice, and the Workspace
-navigation badge shows the count 1.
+assert the Captain home lists the ended session, opening it
+renders the transcript read-only with an ended notice
+([RUN-33](#run-33)), and the Workspace navigation badge shows the
+count 1 ([RUN-34](#run-34)).
 
 #### RUN-52
 
-Verifies [RUN-9](#run-9).
-
 When the awaitBossReply fixture stream is replayed, the test suite
-shall assert the question renders as one incoming bubble naming the
-asking player (resolved to its pane id, including from a bare role
-name), that no status-line duplicate of the question survives — in
-either arrival order of the narration and the telemetry — and that
-the banner names the player without repeating the question.
+shall assert the question renders as one incoming bubble naming
+the asking player (resolved to its pane id, including from a bare
+role name), that no status-line duplicate of the question survives
+— in either arrival order of the narration and the telemetry — and
+that the banner names the player without repeating the question
+([RUN-9](#run-9)).
 
 #### RUN-53
 
-Verifies [RUN-37](#run-37),.
-[RUN-38](#run-38),
-[RUN-39](#run-39),
-[RUN-40](#run-40)
-
 While a fixture turn is active, the test suite shall assert the
-Captain thread shows the working indicator, queued entries render
-in full with the sends-when-this-turn-ends caption, the composer
-renders a store-provided draft and reports edits to the store, and
-activating Abort disables it with an "Aborting…" label.
+Captain thread shows the working indicator ([RUN-37](#run-37)),
+queued entries render in full with the sends-when-this-turn-ends
+caption ([RUN-38](#run-38)), the composer renders a
+store-provided draft and reports edits to the store
+([RUN-39](#run-39)), and activating Abort disables it with an
+"Aborting…" label ([RUN-40](#run-40)).
 
 #### RUN-54
 
-Verifies [RUN-41](#run-41),.
-[RUN-42](#run-42),
-[RUN-43](#run-43)
-
-The test suite shall assert time separators appear before the first
-line, after >10-minute gaps, and on day changes; that known states
-map to human labels with unknown ids humanized; that the project
-palette is driven end-to-end by keyboard (opens focused, arrows
-highlight, Enter picks, Escape closes with the composer draft
-intact) and its rows carry running and needs-you state; and that
-Escape hides the slash menu without touching the draft.
+The test suite shall assert time separators appear before the
+first line, after >10-minute gaps, and on day changes
+([RUN-41](#run-41)); that known states map to human labels with
+unknown ids humanized; that the project palette is driven
+end-to-end by keyboard (opens focused, arrows highlight, Enter
+picks, Escape closes with the composer draft intact) and its rows
+carry running and needs-you state ([RUN-42](#run-42)); and that
+Escape hides the slash menu without touching the draft
+([RUN-43](#run-43)).
 
 #### RUN-55
 
-Verifies [RUN-44](#run-44),.
-[RUN-45](#run-45)
-
 Where a fixture config is invalid, the test suite shall assert the
-Captain home thread lists the errors with a Settings link; where a
-fixture readiness entry is not ready, the test suite shall assert
-the heads-up bubble offers a re-check that invokes the readiness
-refresh.
+Captain home thread lists the errors with a Settings link
+([RUN-44](#run-44)); where a fixture readiness entry is not ready,
+the test suite shall assert the heads-up bubble offers a re-check
+that invokes the readiness refresh ([RUN-45](#run-45)).

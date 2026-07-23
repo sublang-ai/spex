@@ -7,14 +7,8 @@
 
 This spec defines the observable behavior, implementation
 constraints, and integration coverage of the Dashboard, the Spex
-workspace surface
-([DR-002](../decisions/002-desktop-app-architecture.md)) that
-aggregates what needs the Boss's attention across projects.
-Dashboard content derives from the session record stream
-([DR-003](../decisions/003-runtime-reuse.md)), the app-local store
-([DR-004](../decisions/004-config-and-persistence.md)), and the
-forge adapter
-([DR-006](../decisions/006-projects-and-forge.md)).
+workspace surface that aggregates what needs the Boss's attention
+across projects.
 Attention state is derived deterministically from the session
 record stream and review state persisted in the app-local store,
 and forge data flows only through the forge adapter.
@@ -249,76 +243,65 @@ persisted in the app store and refreshed through the forge adapter
 ### Attention Coverage
 
 #### DASH-15
-Verifies [DASH-1](#dash-1), [DASH-2](#dash-2), [DASH-10](#dash-10).
-
 Where a fixture record stream spans two project sessions and
 contains a player `permission_request`, a captain `awaitBossReply`
 question, a `runtime_error`, a `turn_finished`, and a
 `hidden`-visibility record, when Dashboard state is derived, the
 test suite shall assert that the attention queue contains exactly
-one entry per
-non-hidden condition, that each entry identifies its source project
-and session, that entries follow the kind precedence of
-[DASH-2](#dash-2), and that the hidden record
-produced no entry.
+one entry per non-hidden condition ([DASH-1](#dash-1)), that each
+entry identifies its source project and session, that entries
+follow the kind precedence of [DASH-2](#dash-2), and that the
+hidden record produced no entry ([DASH-10](#dash-10)).
 
 #### DASH-16
-Verifies [DASH-4](#dash-4), [DASH-9](#dash-9), [DASH-10](#dash-10).
-
 While the attention queue contains a pending Boss question among
 other entries, when the fixture stream continues with a Boss turn
 starting in that question's session, the test suite shall assert
-that the question entry is removed, that all other entries remain,
-and that the published attention count decreases by exactly one.
+that the question entry is removed ([DASH-4](#dash-4)), that all
+other entries remain ([DASH-10](#dash-10)), and that the published
+attention count decreases by exactly one ([DASH-9](#dash-9)).
 
 #### DASH-17
-Verifies [DASH-11](#dash-11).
-
 Where a fixture record stream and review state are persisted to the
 app store, when attention derivation is re-run from persisted state
 alone, as after a core restart, the test suite shall assert that
 the resulting attention set equals the set derived live from the
-same stream.
+same stream ([DASH-11](#dash-11)).
 
 ### Usage Coverage
 
 #### DASH-18
-Verifies [DASH-7](#dash-7), [DASH-13](#dash-13).
-
 Where fixture player `done` events carry usage payloads across two
 sessions and two calendar days, including one on a
 `hidden`-visibility record and one `done` event without usage, when
 rollups are computed, the test suite shall assert that per-session
-and per-day totals equal hand-computed sums of the fixture
-payloads, that the hidden record's usage is included, and that the
-usage-less `done` event contributes nothing.
+and per-day totals equal hand-computed sums of the fixture payloads
+([DASH-7](#dash-7)), that the hidden record's usage is included
+([DASH-13](#dash-13)), and that the usage-less `done` event
+contributes nothing.
 
 ### Forge Coverage
 
 #### DASH-19
-Verifies [DASH-6](#dash-6), [DASH-14](#dash-14).
-
 Where a stubbed forge adapter returns fixture open issues and pull
 requests for a bound project, when the Dashboard is displayed,
 the test suite shall assert that the next-work lists render the
-fixture entries with titles and numbers, that a manual refresh
-invokes the stub again, and that a stub failure on refresh leaves
-the previously served lists in place with the failure and data age
-surfaced.
+fixture entries with titles and numbers ([DASH-6](#dash-6)), that
+a manual refresh invokes the stub again, and that a stub failure
+on refresh leaves the previously served lists in place with the
+failure and data age surfaced ([DASH-14](#dash-14)).
 
 ### Empty-State and Label Coverage
 
 #### DASH-22
 
-Verifies [DASH-5](#dash-5),.
-[DASH-8](#dash-8),
-[DASH-21](#dash-21)
-
 Where Dashboard state is derived with no registered project, the
 test suite shall assert that the Dashboard renders its sections
-with their empty-state guidance rather than a welcome takeover,
-and that the next-work empty state offers an activatable
-navigation control to the Projects surface. Where a live session's
-view carries an engagement state id, the test suite shall assert
-that the running-sessions row renders the human-readable state
-label with the raw state id available in the tooltip.
+with their empty-state guidance ([DASH-8](#dash-8)) rather than a
+welcome takeover ([DASH-21](#dash-21)), and that the next-work
+empty state offers an activatable navigation control to the
+Projects surface ([DASH-8](#dash-8)). Where a live session's view
+carries an engagement state id, the test suite shall assert that
+the running-sessions row renders the human-readable state label
+with the raw state id available in the tooltip
+([DASH-5](#dash-5)).

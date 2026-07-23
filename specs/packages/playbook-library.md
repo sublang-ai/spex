@@ -6,22 +6,17 @@
 ## Intent
 
 This spec covers the Spex Library surface — presented to the
-user as **Playbooks** ([PBLIB-26](#pblib-26)) — across its
-user-visible behavior, the implementation behind it, and the
-integration coverage that verifies it: browsing and enabling
-configured playbooks, mapping playbook roles to player profiles,
-and compiling new playbooks, backed by compile execution,
-registry generation, and shared-config writes.
+user as **Playbooks** — across its user-visible behavior, the
+implementation behind it, and the integration coverage that
+verifies it: browsing and enabling configured playbooks, mapping
+playbook roles to player profiles, and compiling new playbooks,
+backed by compile execution, registry generation, and
+shared-config writes.
 
-The Library is a workspace surface of the Spex desktop app
-([DR-002](../decisions/002-desktop-app-architecture.md)).
 Playbook entries live in the shared playbook config file, which
-remains the source of truth; that file, its fail-closed
-validation rules, and app-local state locations are defined by
-[DR-004](../decisions/004-config-and-persistence.md).
-Compilation runs the external `slc` toolchain, whose Node.js
-version floor and compiled outputs are defined by
-[DR-005](../decisions/005-compilation-integration.md).
+remains the source of truth under its fail-closed validation
+rules; compilation runs the external `slc` toolchain with its
+Node.js version floor and compiled outputs.
 
 Verification requires integration coverage of the Library
 surface's compile, registration, and shared-config write paths,
@@ -301,94 +296,84 @@ absent stages without failing the request.
 ### Compile Coverage
 
 #### PBLIB-17
-Verifies [PBLIB-5](#pblib-5), [PBLIB-7](#pblib-7), [PBLIB-10](#pblib-10), [PBLIB-12](#pblib-12), [PBLIB-14](#pblib-14).
-
 Where a stub `slc` executable that emits a valid compiled
 playbook output is placed on the toolchain resolution path, when
-the compile flow is driven end to end — source provided, role
-names entered, registry form submitted — the test suite shall
-assert that the stub ran as an external process in the per-id
-library directory, that a registry manifest was emitted whose
-entry passes the fail-closed registry validation
-([PBLIB-15](#pblib-15)), that the
-shared config gained a `playbooks.<id>` entry whose `from`
-resolves to that manifest, and that the Library lists the new
-playbook.
+the compile flow is driven end to end — source provided
+([PBLIB-5](#pblib-5)), role names entered, registry form
+submitted ([PBLIB-7](#pblib-7)) — the test suite shall assert
+that the stub ran as an external process in the per-id library
+directory ([PBLIB-12](#pblib-12)), that a registry manifest was
+emitted whose entry passes the fail-closed registry validation
+([PBLIB-15](#pblib-15)), that the shared config gained a
+`playbooks.<id>` entry whose `from` resolves to that manifest
+([PBLIB-14](#pblib-14)), and that the Library lists the new
+playbook ([PBLIB-10](#pblib-10)).
 
 #### PBLIB-18
-Verifies [PBLIB-8](#pblib-8), [PBLIB-11](#pblib-11).
-
 Where no `slc` is resolvable, or the resolved Node.js fails the
-version floor, the test suite shall assert that the compile flow
-is reported unavailable with guidance naming the missing
-prerequisite, that no external process is spawned, and that the
-shared config file is unmodified.
+version floor ([PBLIB-11](#pblib-11)), the test suite shall
+assert that the compile flow is reported unavailable with
+guidance naming the missing prerequisite ([PBLIB-8](#pblib-8)),
+that no external process is spawned, and that the shared config
+file is unmodified.
 
 #### PBLIB-19
-Verifies [PBLIB-9](#pblib-9), [PBLIB-12](#pblib-12).
-
 Where a stub `slc` fails at a known pipeline phase with error
 output, when a compile is run, the test suite shall assert that
 the failing phase is identified, that the phase's captured output
-is surfaced, that no config write occurs, and that previously
-compiled outputs for the same playbook id remain unchanged.
+is surfaced ([PBLIB-9](#pblib-9)), that no config write occurs,
+and that previously compiled outputs for the same playbook id
+remain unchanged ([PBLIB-12](#pblib-12)).
 
 ### Registration and Config Coverage
 
 #### PBLIB-20
-Verifies [PBLIB-7](#pblib-7), [PBLIB-15](#pblib-15).
-
-When the registry form is submitted with an entry violating a
-fail-closed rule, covering at least a command duplicating an
-existing playbook's and an id failing the `^[a-z][a-z0-9_-]*$`
-character rule
+When the registry form ([PBLIB-7](#pblib-7)) is submitted with an
+entry violating a fail-closed rule, covering at least a command
+duplicating an existing playbook's and an id failing the
+`^[a-z][a-z0-9_-]*$` character rule
 ([DR-004](../decisions/004-config-and-persistence.md)), the test
 suite shall assert that each submission is rejected naming the
-violated rule and that the shared config file bytes are
-unchanged.
+violated rule ([PBLIB-15](#pblib-15)) and that the shared config
+file bytes are unchanged.
 
 #### PBLIB-21
-Verifies [PBLIB-3](#pblib-3), [PBLIB-16](#pblib-16).
-
 Where the shared config file contains comments and entries
 unrelated to the toggled playbook, when a playbook is disabled
-and then re-enabled, the test suite shall assert after each write
-that comments and unrelated entries are byte-identical to the
-original and that the list reflects the new state, and after the
-round trip that the playbook's entry is enabled again.
+and then re-enabled ([PBLIB-3](#pblib-3)), the test suite shall
+assert after each write that comments and unrelated entries are
+byte-identical to the original ([PBLIB-16](#pblib-16)) and that
+the list reflects the new state, and after the round trip that
+the playbook's entry is enabled again.
 
 #### PBLIB-25
-
-Verifies [PBLIB-22](#pblib-22),.
-[PBLIB-24](#pblib-24)
 
 Where a playbook was compiled into the library directory, when its
 artifacts are requested over the protocol, the test suite shall
 assert the response carries the source markdown, the gears
-markdown, the FSM code, and the derived state ids; where a stage
-file is removed, the test suite shall assert the response names the
-missing stage while still serving the others.
+markdown, the FSM code ([PBLIB-22](#pblib-22)), and the derived
+state ids ([PBLIB-24](#pblib-24)); where a stage file is removed,
+the test suite shall assert the response names the missing stage
+while still serving the others ([PBLIB-24](#pblib-24)).
 
 ### Cancellation and Gate Coverage
 
 #### PBLIB-30
 
-Verifies [PBLIB-27](#pblib-27).
-
 While a compile driven through the app store is running, the test
 suite shall assert that a cancel control is rendered beside the
 compile progress output, that activating it issues the compile
-abort command for the running playbook id, that the recorded
-cancellation appears in the progress log, and that the compile
-start control stays disabled until the compile settles.
+abort command for the running playbook id
+([PBLIB-27](#pblib-27)), that the recorded cancellation appears
+in the progress log, and that the compile start control stays
+disabled until the compile settles.
 
 #### PBLIB-31
 
-Verifies [PBLIB-28](#pblib-28).
-
 Where the shared config state is missing or invalid, the test
 suite shall assert that the Library renders the config gate — the
-Captain-scope explanation and the fix-it-in-Settings direction —
-with "Settings" as an activatable navigation control when a
-navigation callback is supplied and as plain text when it is not,
-and that no playbook list or compile form is rendered.
+Captain-scope explanation and the fix-it-in-Settings direction
+([PBLIB-28](#pblib-28)) — with "Settings" as an activatable
+navigation control when a navigation callback is supplied and as
+plain text when it is not, and that no playbook list or compile
+form is rendered.

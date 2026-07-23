@@ -5,10 +5,7 @@
 
 ## Intent
 
-This spec covers the Spex desktop shell (`apps/desktop`) — the user-visible Electron window, OS notifications, dock/taskbar badge, native dialogs, and app lifecycle — together with the shell's implementation requirements and its end-to-end verification coverage, per [DR-002](../decisions/002-desktop-app-architecture.md).
-The notified event kinds (`turn_finished`, `awaitBossReply` questions, failures) and the attention count originate in the embedded runtime's record stream ([DR-003](../decisions/003-runtime-reuse.md)), and per-event notification preferences live in the shared config file ([DR-004](../decisions/004-config-and-persistence.md)).
-Implementation-wise, the shell's process topology runs over the core's WebSocket protocol ([DR-002](../decisions/002-desktop-app-architecture.md)); login-shell environment capture and app-data placement follow [DR-004](../decisions/004-config-and-persistence.md); and packaging and release must keep the agent binaries spawned by the embedded runtime ([DR-003](../decisions/003-runtime-reuse.md)) executable.
-Verification exercises the packaged Electron app end to end ([DR-002](../decisions/002-desktop-app-architecture.md)), with fake adapters and fixture playbooks standing in for real agents ([DR-003](../decisions/003-runtime-reuse.md)), while notification preferences and adapter readiness follow the shared config and environment-capture rules ([DR-004](../decisions/004-config-and-persistence.md)).
+This spec covers the Spex desktop shell (`apps/desktop`) — the single-window Electron app with OS notifications, dock badge, native dialogs, and app lifecycle — its implementation requirements (process topology over the core's WebSocket protocol, login-shell environment capture, packaging that keeps spawned agent binaries executable), and its packaged-app verification coverage.
 
 ## External Behavior
 
@@ -147,29 +144,25 @@ so untrusted agent output cannot beacon out of the app.
 ### Packaged App Coverage
 
 #### SHELL-16
-Verifies [SHELL-1](#shell-1), [SHELL-10](#shell-10), [SHELL-13](#shell-13).
 
-Where a packaged macOS arm64 build is installed with a profile backed by a fake adapter that spawns a child process, when the test suite launches the packaged app, the test suite shall assert that a single main window opens with the UI connected to the in-app core over WebSocket, and that a Boss turn through the fake adapter completes with its records rendered in the session's run view, so packaged spawning and the protocol seam are proven together.
+Where a packaged macOS arm64 build is installed with a profile backed by a fake adapter that spawns a child process, when the test suite launches the packaged app, the test suite shall assert that a single main window opens with the UI connected to the in-app core ([SHELL-1](#shell-1)) over WebSocket ([SHELL-10](#shell-10)), and that a Boss turn through the fake adapter's spawned child completes ([SHELL-13](#shell-13)) with its records rendered in the session's run view, so packaged spawning and the protocol seam are proven together.
 
 #### SHELL-17
-Verifies [SHELL-2](#shell-2).
 
-While a packaged app instance is running, when the test suite launches a second instance, the test suite shall assert that the second launch exits without opening a window, that the first instance's main window gains focus, and that exactly one core WebSocket endpoint remains listening.
+While a packaged app instance is running, when the test suite launches a second instance, the test suite shall assert that the second launch exits without opening a window, that the first instance's main window gains focus ([SHELL-2](#shell-2)), and that exactly one core WebSocket endpoint remains listening.
 
 ### Notification Coverage
 
 #### SHELL-18
-Verifies [SHELL-3](#shell-3).
 
-Where a fixture playbook that raises an `awaitBossReply` question is enabled and the shared config enables that notification kind, when the test suite runs a session until the question is raised, the test suite shall assert that a native desktop notification is posted identifying the project session.
-Where the shared config disables that notification kind, the test suite shall assert that the same fixture run posts no notification.
+Where a fixture playbook that raises an `awaitBossReply` question is enabled and the shared config enables that notification kind, when the test suite runs a session until the question is raised, the test suite shall assert that a native desktop notification is posted identifying the project session ([SHELL-3](#shell-3)).
+Where the shared config disables that notification kind, the test suite shall assert that the same fixture run posts no notification ([SHELL-3](#shell-3)).
 
 ### Environment Coverage
 
 #### SHELL-19
-Verifies [SHELL-12](#shell-12).
 
-Where an environment variable consulted by an adapter readiness check (for example, `ANTHROPIC_API_KEY`) is exported only in the user's login-shell profile and absent from the app's launch environment, when the test suite starts the app and queries adapter readiness, the test suite shall assert that the check reports the adapter ready, proving the captured login-shell environment reached the core before readiness checks ran.
+Where an environment variable consulted by an adapter readiness check (for example, `ANTHROPIC_API_KEY`) is exported only in the user's login-shell profile and absent from the app's launch environment, when the test suite starts the app and queries adapter readiness, the test suite shall assert that the check reports the adapter ready, proving the captured login-shell environment reached the core before readiness checks ran ([SHELL-12](#shell-12)).
 
 ## References
 

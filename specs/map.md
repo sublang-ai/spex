@@ -13,7 +13,7 @@ Code can be inconsistent with specs during development.
 decisions/    Decision records (DRs)
 iterations/   Iteration records (IRs)
 packages/     Spec packages (one file per package)
-interactions/ Cross-package behaviors and tests
+compositions/ Cross-package compositions: scenarios, bindings, tests
 map.md        This index
 meta.md       The spec of specs
 ```
@@ -91,7 +91,7 @@ meta.md       The spec of specs
 
 | File | Summary |
 | --- | --- |
-| [lint.md](packages/lint.md) | `spex lint`: structure, package sections, item IDs, Verifies lines, citations and anchors, reference markers, records, map listing |
+| [lint.md](packages/lint.md) | `spex lint`: structure, package and composition sections, item IDs, inline-citation coverage, citation discipline, citations and anchors, reference markers, records, map listing |
 
 ### PBLIB
 

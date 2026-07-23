@@ -713,13 +713,13 @@ appended to the file.
 ### Update Coverage
 
 #### SCAF-24
-Verifies [SCAF-11](#scaf-11), [SCAF-14](#scaf-14), [SCAF-23](#scaf-23).
-
-Where `--update` is exercised, the test suite shall cover each
-row of the state matrix below and shall assert both (a) the
-printed indicator for that path and (b) the post-run file-system
-state, so that an over-eager indicator cannot pass while bytes
-remain unchanged or vice versa.
+Where `--update` is exercised ([SCAF-11](#scaf-11)), the test
+suite shall cover each row of the state matrix below — the
+framework ([SCAF-14](#scaf-14)) and seed ([SCAF-23](#scaf-23))
+refresh paths — and shall assert both (a) the printed indicator
+for that path and (b) the post-run file-system state, so that an
+over-eager indicator cannot pass while bytes remain unchanged or
+vice versa.
 
 Hash comparisons shall use the canonical content hash from
 [SCAF-21](#scaf-21). A text file with CRLF
@@ -739,21 +739,19 @@ in the bundled-current cell and preserve its existing bytes.
 | `.gitkeep` seed | file absent, directory holds other entries | no indicator line | file stays absent |
 
 #### SCAF-25
-Verifies [SCAF-23](#scaf-23).
-
 Where `--update` is exercised over any cell of the
 [SCAF-24](#scaf-24) matrix, the test suite shall additionally
 assert that `(updated)` does not appear in the output for any
-path whose post-run content equals its pre-run content, so that
-a regression to the prior over-eager indicator cannot pass.
+path whose post-run content equals its pre-run content
+([SCAF-23](#scaf-23)), so that a regression to the prior
+over-eager indicator cannot pass.
 
 #### SCAF-27
-Verifies [SCAF-26](#scaf-26), [SCAF-43](#scaf-43).
-
 Where `--update` is exercised on a repository using the legacy
 `specs/items/user/`, `specs/items/dev/`, or `specs/items/test/`
 layout, the test suite shall assert that legacy item files chain
-through both migrations into `specs/packages/` in one run, that the
+through both migrations ([SCAF-26](#scaf-26),
+[SCAF-43](#scaf-43)) into `specs/packages/` in one run, that the
 indicators name the original `specs/items/` paths, and that the
 emptied `specs/items/` and group directories are removed.
 It shall cover both a recognized bundled legacy seed (asserting the
@@ -763,25 +761,25 @@ file (asserting its content survives the merge transform).
 ### Migration Coverage
 
 #### SCAF-48
-Verifies [SCAF-39](#scaf-39), [SCAF-43](#scaf-43), [SCAF-44](#scaf-44).
-
 Where `--update` is exercised on a repository using the flat legacy
-`specs/user/`, `specs/dev/`, `specs/test/` layout, the test suite
-shall run the real CLI and cover at least:
+`specs/user/`, `specs/dev/`, `specs/test/` layout
+([SCAF-39](#scaf-39)), the test suite shall run the real CLI and
+cover at least:
 
 - all-pristine legacy seeds: the targets' bytes equal the current
-  bundled package seeds, one combined indicator names every source,
-  and the legacy directories (including a pristine `.gitkeep`) are
-  gone;
+  bundled package seeds ([SCAF-43](#scaf-43)), one combined
+  indicator names every source, and the legacy directories
+  (including a pristine `.gitkeep`) are gone;
 - a customized legacy seed: the target holds the merge transform of
-  the user's content and the indicator combines the migration
-  sources with `kept — user-modified`;
+  the user's content ([SCAF-44](#scaf-44)) and the indicator
+  combines the migration sources with `kept — user-modified`;
 - a custom multi-file package: the merged target carries the
   Intent/External Behavior/Internal Behavior/Verification sections
   in order with demoted headings, and its `Verifies:` citations
-  collapse to same-file anchors;
+  collapse to same-file anchors ([SCAF-44](#scaf-44));
 - a conflicting target: every legacy source is kept byte-identical
-  and reported, and the existing target is untouched;
+  and reported, and the existing target is untouched
+  ([SCAF-43](#scaf-43));
 - indicator ordering: migration, conflict, and citation-rewrite
   lines precede framework and seed indicator lines
   ([SCAF-11](#scaf-11) step 7);
@@ -791,86 +789,86 @@ shall run the real CLI and cover at least:
   migrated tree lints clean.
 
 #### SCAF-49
-Verifies [SCAF-40](#scaf-40), [SCAF-41](#scaf-41), [SCAF-42](#scaf-42), [SCAF-45](#scaf-45), [SCAF-46](#scaf-46).
-
 Where `--update` migrates packages, the test suite shall assert
 end to end that:
 
 - citations in decision records and other spec files are rewritten
-  to the `specs/packages/` paths and reported as
-  `(citations rewritten)`;
+  to the `specs/packages/` paths ([SCAF-40](#scaf-40),
+  [SCAF-45](#scaf-45)) and reported as `(citations rewritten)`;
 - a customized legacy-shape map is restructured in place — layout
   block lines replaced, group tables reshaped to one `File | Summary`
   row with `; `-joined summaries, a Compositions section appended —
-  and reported as `(restructured for the packages layout)`;
+  and reported as `(restructured for the packages layout)`
+  ([SCAF-41](#scaf-41), [SCAF-46](#scaf-46));
 - a tree with `specs/interactions/` files has them moved to
   `specs/compositions/` with citations and the map heading
   rewritten, a wrapped `Verifies:` block collapsing to one inline
   sentence, and the remaining lint errors confined to the moved
   composition files ([SCAF-50](#scaf-50));
-- the compositions prompt is printed after a migrating run and a
-  package-layout migration leaves a tree `spex lint` passes with
-  zero errors;
+- the compositions prompt is printed after a migrating run
+  ([SCAF-42](#scaf-42)) and a package-layout migration leaves a
+  tree `spex lint` passes with zero errors;
 - the packaged npm artifact ships both file-history manifests, both
-  prompts, and the bundled `specs/packages/` and
-  `specs/compositions/` seeds.
+  prompts ([SCAF-42](#scaf-42)), and the bundled `specs/packages/`
+  and `specs/compositions/` seeds.
 
 #### SCAF-35
-Verifies [SCAF-11](#scaf-11), [SCAF-14](#scaf-14), [SCAF-18](#scaf-18), [SCAF-19](#scaf-19).
-
 Where `--update` replaces a framework file, the test suite shall run
 the real CLI and cover both the warn and the quiet paths:
 
-- Given a framework file whose committed content matches no recognized
-  bundled version, the suite shall assert the run exits zero, the
-  file's indicator is `(overwritten — user-modified)`, the file's bytes
-  equal the bundled current, and a stderr warning names the file and
-  points to reviewing and reconciling the replaced content.
+- Given a framework file ([SCAF-19](#scaf-19)) whose committed
+  content matches no recognized bundled version, the suite shall
+  assert the run exits zero, the file's indicator is
+  `(overwritten — user-modified)` with the bytes equal to the
+  bundled current ([SCAF-14](#scaf-14)), and a stderr warning names
+  the file and points to reviewing and reconciling the replaced
+  content ([SCAF-11](#scaf-11)).
 - Given a pre-localization specs tree whose `specs/meta.md` is a
   recognized older bundled version carrying no authoring-language
   declaration, the suite shall assert the run exits zero, refreshes
-  `specs/meta.md` to the bundled current with an `(updated)` indicator,
-  and prints no replaced-user-content warning.
+  `specs/meta.md` to the bundled current with an `(updated)`
+  indicator ([SCAF-18](#scaf-18)), and prints no
+  replaced-user-content warning.
 
 ### License Coverage
 
 #### SCAF-38
-Verifies [SCAF-36](#scaf-36), [SCAF-37](#scaf-37).
-
 Where the `scaffold` subcommand creates a project, the test suite shall
 assert that a top-level `LICENSE` file is written whose bytes equal the
-bundled `scaffold/LICENSE`, that its canonical content hash equals the
-authoritative Apache License 2.0 hash, and that no `NOTICE` file is
-written.
+bundled `scaffold/LICENSE` ([SCAF-36](#scaf-36)), that its canonical
+content hash equals the authoritative Apache License 2.0 hash
+([SCAF-37](#scaf-37)), and that no `NOTICE` file is written.
 
 Where a `LICENSE` file already exists at the target root, the test suite
 shall assert that `scaffold` leaves its bytes unchanged and reports it
-with an `(already exists)` indicator.
+with an `(already exists)` indicator ([SCAF-36](#scaf-36)).
 
 ### Localization Coverage
 
 #### SCAF-33
-Verifies [SCAF-14](#scaf-14), [SCAF-18](#scaf-18), [SCAF-23](#scaf-23), [SCAF-28](#scaf-28), [SCAF-29](#scaf-29), [SCAF-30](#scaf-30), [SCAF-31](#scaf-31).
-
 Where the `scaffold` subcommand is exercised with language selection,
-the test suite shall cover a Chinese fresh scaffold, a localized
-update refresh on a Chinese specs tree, an unsupported language code,
-a mismatched language on an existing scaffold, and `--update` with
-`--lang`.
+the test suite shall cover a Chinese fresh scaffold
+([SCAF-28](#scaf-28)), a localized update refresh on a Chinese specs
+tree, an unsupported language code ([SCAF-28](#scaf-28)), a
+mismatched language on an existing scaffold ([SCAF-29](#scaf-29)),
+and `--update` with `--lang` ([SCAF-30](#scaf-30)).
 
 The Chinese fresh scaffold case shall assert that localized overlay
 files are written for paths that have overlays and that fallback files
-remain byte-identical to their English bundled templates.
+remain byte-identical to their English bundled templates
+([SCAF-31](#scaf-31)).
 
 The localized update case shall assert that `--update` on a Chinese
-specs tree refreshes a pristine framework or seed file from the active
-Chinese overlay rather than the English base template.
+specs tree ([SCAF-30](#scaf-30)) refreshes a pristine framework
+([SCAF-14](#scaf-14)) or seed ([SCAF-23](#scaf-23)) file from the
+active Chinese overlay ([SCAF-18](#scaf-18)) rather than the English
+base template.
 
 #### SCAF-34
-Verifies [SCAF-32](#scaf-32).
 
 For each localized `meta.md` overlay, the test suite shall enforce
-completeness, kept-English parity, and translated-item source hashes.
+completeness, kept-English parity, and translated-item source hashes
+([SCAF-32](#scaf-32)).
 
 ## References
 

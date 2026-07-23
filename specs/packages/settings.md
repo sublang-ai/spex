@@ -6,29 +6,24 @@
 ## Intent
 
 This spec covers the Settings workspace surface of the Spex desktop
-app ([DR-002](../decisions/002-desktop-app-architecture.md)) — its
-externally visible behavior, the implementation requirements behind
-it, and the integration coverage that verifies both.
+app — its externally visible behavior, the implementation
+requirements behind it, and the integration coverage that verifies
+both.
 The Settings surface is an editor over the shared playbook config
 file at `${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml`,
-which stays the source of truth shared with the playbook CLI per
-[DR-004](../decisions/004-config-and-persistence.md).
+which stays the source of truth shared with the playbook CLI.
 The adapter names (`claude`, `codex`, `gemini`, `opencode`), the
 config's top-level maps (`profiles`, `captain`, `layout`,
 `notifications`, `theme`), and the fail-closed validation rules are
-those of the playbook launcher that shares this file
-([DR-004](../decisions/004-config-and-persistence.md)).
+those of the playbook launcher that shares this file.
 Behind the surface, the implementation requires one validation
 module shared with core config loading, comment-preserving YAML
 writing, launcher-equivalent readiness checks, and the protocol
-boundary between the Settings UI and the core service
-([DR-002](../decisions/002-desktop-app-architecture.md)).
+boundary between the Settings UI and the core service.
 Integration coverage is exercised through the core service's
 WebSocket protocol against real shared config files in fixture
-config directories, so that Settings behavior and the playbook
-launcher's config contract
-([DR-004](../decisions/004-config-and-persistence.md)) are verified
-together.
+config directories, so that Settings behavior and the launcher's
+config contract are verified together.
 
 ## External Behavior
 
@@ -247,68 +242,62 @@ profile's config node intact, per
 ### Round-Trip Coverage
 
 #### SET-17
-Verifies [SET-1](#set-1), [SET-7](#set-7), [SET-13](#set-13).
-
-Where profile create, edit, and delete are exercised through the
-core service's Settings command surface, given a shared config file
-containing comments and keys unknown to Settings, the test suite
-shall assert that after each operation the file contains the
-requested change, every comment and unknown key survives, and file
-content outside the edited nodes is byte-identical to the pre-run
-content.
+Where profile create, edit, and delete ([SET-1](#set-1)) are
+exercised through the core service's Settings command surface
+([SET-7](#set-7)), given a shared config file containing comments
+and keys unknown to Settings, the test suite shall assert that
+after each operation the file contains the requested change, every
+comment and unknown key survives, and file content outside the
+edited nodes is byte-identical to the pre-run content
+([SET-13](#set-13)).
 
 ### Validation Coverage
 
 #### SET-18
-Verifies [SET-2](#set-2), [SET-3](#set-3), [SET-11](#set-11), [SET-12](#set-12).
-
 Where validation is exercised, given fixture configs the playbook
 launcher rejects — at minimum a profile id colliding with an
-adapter shorthand — the test suite shall assert for each fixture
-that the save command is rejected with a violation carrying a rule
-identifier and field location, that the shared config file's bytes
-are unchanged, and that loading the same fixture reports the same
-rule identifier as the rejected save.
+adapter shorthand ([SET-2](#set-2)) — the test suite shall assert
+for each fixture that the save command is rejected with a
+violation carrying a rule identifier and field location
+([SET-12](#set-12)), that the shared config file's bytes are
+unchanged ([SET-3](#set-3)), and that loading the same fixture
+reports the same rule identifier as the rejected save
+([SET-11](#set-11)).
 
 ### Readiness Coverage
 
 #### SET-19
-Verifies [SET-5](#set-5), [SET-14](#set-14).
-
 Where adapter readiness is exercised, given fixture environments
 and home directories covering each launcher rule (credential
 environment variable set, credential directory present, both
 absent), the test suite shall assert that the readiness results
-delivered over the protocol match the expected state per adapter,
-that adapters without a light check are reported as unverified, and
-that each not-ready result includes fix instructions naming the
-environment variable or login step.
+delivered over the protocol match the expected state per adapter
+([SET-14](#set-14)), that adapters without a light check are
+reported as unverified ([SET-14](#set-14)), and that each
+not-ready result includes fix instructions naming the environment
+variable or login step ([SET-5](#set-5)).
 
 ### External Edit Coverage
 
 #### SET-20
-Verifies [SET-8](#set-8), [SET-15](#set-15).
-
 Where external edit reflection is exercised, given a connected
 client holding Settings state, when the shared config file is
 modified on disk by a writer other than the core service, the test
 suite shall assert that the client receives the updated config
-state and an external-change notice, and that a subsequent save
-performed through the core service produces no external-change
-notice.
+state ([SET-8](#set-8)) and an external-change notice
+([SET-15](#set-15)), and that a subsequent save performed through
+the core service produces no external-change notice
+([SET-15](#set-15)).
 
 ### Presentation Coverage
 
 #### SET-25
 
-Verifies [SET-22](#set-22),.
-[SET-23](#set-23),
-[SET-24](#set-24)
-
 Where the Settings surface renders against fixture state, the test
 suite shall assert that each notification row shows its
-human-readable label with the wire event id in the row's tooltip,
-that a not-ready profile's long fix requirement renders without
-truncation, and that with an invalid config the copy control
-places the config file path on the clipboard and shows a transient
-copied confirmation.
+human-readable label with the wire event id in the row's tooltip
+([SET-22](#set-22)), that a not-ready profile's long fix
+requirement renders without truncation ([SET-23](#set-23)), and
+that with an invalid config the copy control places the config
+file path on the clipboard and shows a transient copied
+confirmation ([SET-24](#set-24)).

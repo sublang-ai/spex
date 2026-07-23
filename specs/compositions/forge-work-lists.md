@@ -20,9 +20,8 @@ from the two packages agreeing on the data path.
 Where a project is bound to a GitHub repository, when its issues and
 pull requests are displayed anywhere in the app — the project's Repo
 tab or the Dashboard's next-work lists — both surfaces shall present
-the same items obtained through the project's forge adapter, with no
-second fetch path
-([PROJ-11](../packages/projects.md#proj-11),
+the same items, obtained through the project's forge adapter
+([PROJ-14](../packages/projects.md#proj-14),
 [DASH-6](../packages/dashboard.md#dash-6)).
 
 ## Tests
@@ -35,5 +34,5 @@ executable returns fixture issues and pull requests
 ([PROJ-15](../packages/projects.md#proj-15)), the integration
 suite shall assert that the Repo tab's lists and the Dashboard's
 next-work lists ([DASH-6](../packages/dashboard.md#dash-6)) render
-the same fixture items for that project ([FORGE-1](#forge-1)), so
-both surfaces demonstrably share the adapter.
+the same fixture items for that project ([FORGE-1](#forge-1)) —
+the two surfaces agree on the adapter-delivered data.

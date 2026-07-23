@@ -9,14 +9,12 @@ This spec covers the per-project spec view — its user-visible
 behavior, the implementation of its data plane, and the coverage
 that verifies that data plane.
 The view is a read-only, interactive outline of the current
-project's `specs/` tree, pinned as the workspace's Specs tab
-([DR-011](../decisions/011-project-workspace.md)), spanning the
-outline's shape, package and item presentation, group filters and
-search, citation navigation, the records reader, freshness, and
-the empty state.
+project's `specs/` tree, pinned as the workspace's Specs tab,
+spanning the outline's shape, package and item presentation, group
+filters and search, citation navigation, the records reader,
+freshness, and the empty state.
 Its data plane — the `specs.get` tree parse and the `specs.read`
-record fetch served by the core package, per
-[DR-011](../decisions/011-project-workspace.md) — is exercised for
+record fetch served by the core package — is exercised for
 coverage against fixture spec trees written to temporary project
 directories.
 
@@ -236,75 +234,66 @@ file's raw markdown.
 ### Parse Coverage
 
 #### SPECV-30
-Verifies [SPECV-10](#specv-10).
-
 Where a fixture tree defines a top-level package with all three
 group files, a package nested in a directory, and a package present
 in only one group, the test suite shall parse the tree and assert
 that packages are keyed by directory path plus basename, that a
 package's group files merge under one key, that items keep document
 order when it differs from ID order, and that two packages sharing
-a basename at different paths each carry a notice naming the other.
+a basename at different paths each carry a notice naming the other
+([SPECV-10](#specv-10)).
 
 #### SPECV-31
-Verifies [SPECV-11](#specv-11).
-
 Where a fixture file mixes a majority and a minority item-ID
 prefix, the test suite shall assert that the package's short form
 is the majority prefix and that a package notice names the mixed
-prefixes and the minority file; where a package has no items, the
-suite shall assert it has no short form.
+prefixes and the minority file ([SPECV-11](#specv-11)); where a
+package has no items, the suite shall assert it has no short form
+([SPECV-11](#specv-11)).
 
 #### SPECV-32
-Verifies [SPECV-12](#specv-12).
-
 Where fixture items sit under `##` sections, under `## Intent`, and
 after `## References`, and carry `Verifies:` lines and fenced code
 blocks, the test suite shall assert section attribution (none under
 Intent or References), digest truncation at the first sentence end,
-Verifies ID extraction with the line excluded from the digest, and
-that fenced `###` lines start no item.
+`Verifies:` ID extraction with the line excluded from the digest,
+and that fenced `###` lines start no item ([SPECV-12](#specv-12)).
 
 #### SPECV-33
-Verifies [SPECV-13](#specv-13).
-
 Where a group file carries a multi-line first paragraph under
 `## Intent` followed by further paragraphs, the test suite shall
 assert that the file's intent is the first paragraph only, joined
-to one line.
+to one line ([SPECV-13](#specv-13)).
 
 ### Records Coverage
 
 #### SPECV-34
-Verifies [SPECV-14](#specv-14).
-
 Where fixture decision and iteration files carry prefixed and
 unprefixed `#` headings, the test suite shall assert record IDs
 formed from filename numbers, titles with any `DR-nnn:`/`IR-nnn:`
-prefix stripped, `specs/`-relative paths, and filename ordering.
+prefix stripped, `specs/`-relative paths, and filename ordering
+([SPECV-14](#specv-14)).
 
 ### Degradation Coverage
 
 #### SPECV-35
-Verifies [SPECV-15](#specv-15), [SPECV-10](#specv-10).
-
 Where a fixture tree contains an unreadable group file and unknown
 entries directly under `specs/`, the test suite shall assert that
 the parse still succeeds, carrying a per-file error for the
-unreadable file, one tree notice listing the unknown entries, and
-intact parses for every other file; where a project has no `specs/`
+unreadable file, one tree notice listing the unknown entries
+([SPECV-15](#specv-15)), and intact parses for every other file
+([SPECV-10](#specv-10)); where a project has no `specs/`
 directory, the suite shall assert the reply states absence with
-empty lists.
+empty lists ([SPECV-15](#specv-15)).
 
 ### Confinement Coverage
 
 #### SPECV-36
-Verifies [SPECV-16](#specv-16).
-
 Where a fixture project contains a symlink escaping the project and
 `specs.read` requests carry `..` segments, absolute paths,
 non-`.md` targets, and missing files, the test suite shall assert
 that the tree walk skips the escaping symlink with a notice, that
 each malformed read is rejected as `invalid_request`, that the
 missing-file read replies `not_found`, and that a valid in-tree
-path returns the file's raw markdown over the protocol.
+path returns the file's raw markdown over the protocol
+([SPECV-16](#specv-16)).
