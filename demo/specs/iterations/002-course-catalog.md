@@ -7,7 +7,7 @@
 
 Admins shape and publish courses; everyone browses them.
 Lands the CAT package and the admin-bootstrap composition on the
-skeleton of IR-001.
+skeleton the first iteration built.
 
 ## Deliverables
 

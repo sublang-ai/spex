@@ -33,6 +33,14 @@ write it in sequence, the comments shall survive every writer, so
 hand-maintained files stay hand-maintainable regardless of which
 surface saved last.
 
+### CONF-5
+
+Where any Spex surface submits a shared-config change that violates
+the shared fail-closed rule set, the receiving surface shall reject
+it naming the violated rule and the shared config file's bytes
+shall remain unchanged — no surface writes a config another surface
+would refuse.
+
 ## Tests
 
 ### CONF-3
@@ -44,24 +52,22 @@ extended by a stub-compiled playbook registration
 integration suite shall assert that the core service reloads each
 intermediate config without a validation failure
 ([CONF-1](#conf-1), [CORE-2](../packages/core-service.md#core-2)),
-that a config rejected by the Settings validator
-([SET-12](../packages/settings.md#set-12)) is byte-identical on
-disk afterwards, and that the fixture's comments survive the
-Settings save ([SET-13](../packages/settings.md#set-13)) and the
-registration write
-([PBLIB-16](../packages/playbook-library.md#pblib-16)) alike
+and that the fixture's comments survive the Settings save
+([SET-13](../packages/settings.md#set-13)) and the registration
+write ([PBLIB-16](../packages/playbook-library.md#pblib-16)) alike
 ([CONF-2](#conf-2)) — one rule set, observed at every seam.
 
 ### CONF-4
 
 Where a client submits a config edit that violates a shared-config
-rule ([CONF-1](#conf-1)), the integration suite shall assert the
+rule ([CONF-5](#conf-5)), the integration suite shall assert the
 Settings surface marks the field inline
 ([SET-2](../packages/settings.md#set-2)) while the core service
-leaves the file unwritten and the connection open
-([SET-12](../packages/settings.md#set-12)); and where a playbook
-registration violates the same rule, the suite shall assert the
-registration is rejected naming it, with the config bytes
-unchanged ([PBLIB-15](../packages/playbook-library.md#pblib-15)) —
-the same fail-closed rule set answers at every surface, and the
-failure is visible in the UI while harmless at the protocol layer.
+leaves the file unwritten and returns the violations over the
+protocol ([SET-12](../packages/settings.md#set-12)); and where a
+playbook registration violates the same rule, the suite shall
+assert the registration is rejected naming it, with the config
+bytes unchanged
+([PBLIB-15](../packages/playbook-library.md#pblib-15),
+[CONF-5](#conf-5)) — the same fail-closed rule set answers at
+every surface.

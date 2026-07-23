@@ -21,8 +21,11 @@ completes a turn, every non-hidden record the embedded runtime emits
 shall reach the run view through the same WebSocket protocol a
 browser client would use
 ([SHELL-11](../packages/app-shell.md#shell-11),
-[CORE-7](../packages/core-service.md#core-7)), and shall render
-there in emission order ([RUN-13](../packages/run-view.md#run-13)).
+[CORE-7](../packages/core-service.md#core-7)), shall render there
+in emission order ([RUN-14](../packages/run-view.md#run-14)), and
+no record marked hidden shall appear in the view
+([CORE-8](../packages/core-service.md#core-8),
+[RUN-13](../packages/run-view.md#run-13)).
 
 ### DESK-2
 

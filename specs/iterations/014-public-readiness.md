@@ -6,8 +6,8 @@
 ## Goal
 
 Close the blockers and majors from the adversarial public-readiness
-review (four angles over the post-IR-013 code), so a stranger's
-first hour holds.
+review (four angles over the preceding iteration's code), so a
+stranger's first hour holds.
 
 ## Deliverables
 

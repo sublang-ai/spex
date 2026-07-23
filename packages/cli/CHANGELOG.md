@@ -31,17 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   item's clauses are the single source of its relationships
   (META-20). So are a detached `Verifies …` sentence left by
   mechanical migration (META-20), a citation inside a package
-  `## Intent` (META-15), a package link into a peer's
-  `## Internal Behavior` (META-14), a peer citation in an outcome
-  clause — the nearest preceding clause keyword is `shall`
-  (META-13) — a package link into `specs/compositions/` (META-33),
-  an iteration reference outside `specs/map.md`, linked or textual
-  (META-18), and a scenario test citing items in fewer than two
-  packages (META-21). Binding-trigger detection covers the Chinese
-  clause keywords over the parsed inline text, so lists, quotes,
-  and emphasis cannot hide a trigger; all keyword detection follows
-  the parsed code spans — GFM-correct for fences of any delimiter
-  length and indented code. Errors exit non-zero; warnings do not.
+  `## Intent` (META-15), a package citation of a peer item outside
+  its `## External Behavior` (META-14, META-28), a peer citation
+  outside a precondition or trigger clause — decided by the clause
+  keywords of either bundled language (META-13) — a package link
+  into `specs/compositions/` (META-33), an iteration reference
+  outside `specs/map.md`, linked or textual, with an iteration
+  record exempt only for its own ID (META-18), and a scenario test
+  citing items in fewer than two packages (META-21).
+  Binding-trigger detection covers the Chinese clause keywords over
+  the parsed inline text, so lists, quotes, and emphasis cannot
+  hide a trigger; all keyword detection follows the parsed code
+  spans — GFM-correct for fences of any delimiter length and
+  indented code. Errors exit non-zero; warnings do not.
 - `spex scaffold --update` migrates the legacy `specs/user`/`dev`/`test`
   layout to the new structure: each package's item files are merged
   into a single `specs/packages/<name>.md` (`## External Behavior`,

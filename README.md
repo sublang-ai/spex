@@ -58,6 +58,9 @@ runs playbooks against it. You are the *Boss*: you talk to a
 *Captain* that routes work to *player* coding agents, and every
 session streams live: transcripts, tool use, cost, and the
 questions that need your answer.
+(The built-in spec view still reads the pre-0.4.0 three-folder
+layout; rendering trees scaffolded by the current CLI is a
+deferred follow-up.)
 
 ### Install
 

@@ -48,7 +48,9 @@ This creates:
 
 See `specs/decisions/000-spec-structure-format.md` for the spec format and naming conventions.
 
-Idempotency: Rerunning is safe — existing files and directories are skipped.
+Idempotency: rerunning `scaffold` is safe — it only adds missing files
+and never edits existing ones. (`--update` does edit, mechanically;
+see below.)
 
 ### Linting
 
@@ -102,15 +104,20 @@ spex scaffold --update
   compositions prompt covers the reshaping the tool cannot infer.
 - Spex-authoritative files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally, including when they are absent. If you had modified one of these, `--update` warns and names it so you can reapply your changes from git history.
 - Starter files (`map.md`, the sample iteration, boilerplate items) are refreshed when you have not customized them, and written from the bundled template when they are absent. Customized starter files are kept as-is. Remove a starter file *after* `--update` if you do not want it.
-- Anything you authored outside the bundled framework and starter files is left alone.
+- Files you authored are edited only mechanically: legacy layouts are
+  merged and moved, and citations to moved paths are rewritten across
+  `specs/`. Nothing else about your content is changed, and the
+  clean-tree precondition keeps every edit reviewable in git.
 - The managed specs section of an existing `CLAUDE.md`/`AGENTS.md` is
   refreshed; absent agent files are not created.
 
 Review the changes with `git diff -- specs` and run `spex lint`.
-The command prints clear next steps plus two copy-paste-ready prompts for
-your AI agent: one to reconcile citations and local extensions, and one to
-fill `specs/compositions/` with the bindings, scenarios, and tests that
-the mechanical migration cannot infer.
+The command prints clear next steps plus copy-paste-ready prompts for
+your AI agent: an update-merge prompt to reconcile citations and local
+extensions, and — after a migration or while `specs/compositions/` is
+still empty — a second prompt to fill `specs/compositions/` with the
+bindings, scenarios, and tests that the mechanical migration cannot
+infer.
 
 ## Workflow
 

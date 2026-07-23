@@ -29,11 +29,12 @@ present the same items.
 
 ### FORGE-2
 
-Where a registered fixture repository is bound to GitHub
-([PROJ-6](../packages/projects.md#proj-6)) and a stub `gh`
-executable returns fixture issues and pull requests
+Where a registered fixture repository is bound to GitHub and a
+stub `gh` executable on `PATH` reports an authenticated account
+and returns fixture issues and pull requests
 ([PROJ-15](../packages/projects.md#proj-15)), the integration
-suite shall assert that the Repo tab's lists and the Dashboard's
+suite shall assert that the Repo tab's lists
+([PROJ-6](../packages/projects.md#proj-6)) and the Dashboard's
 next-work lists ([DASH-6](../packages/dashboard.md#dash-6)) render
 the same fixture items for that project ([FORGE-1](#forge-1)) —
 the two surfaces present the same forge data for the project.

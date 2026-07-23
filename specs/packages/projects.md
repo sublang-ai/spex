@@ -48,8 +48,10 @@ project entry.
 
 #### PROJ-3
 
-When the user submits the project palette's create action with a
-path and the specs-scaffold option on or off, the palette shall:
+Where the specs-scaffold option is backed by the spex scaffold
+generator ([SCAF-1](scaffold.md#scaf-1)), when the user submits the
+project palette's create action with a path and the scaffold option
+on or off, the palette shall:
 
 1. create the project directory under the parent directory,
 2. initialize a git repository in it,
