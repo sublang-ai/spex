@@ -21,9 +21,10 @@ completes a turn, every non-hidden record the embedded runtime emits
 shall reach the run view through the same WebSocket protocol a
 browser client would use
 ([SHELL-11](../packages/app-shell.md#shell-11),
-[CORE-7](../packages/core-service.md#core-7)), shall render there
-in emission order ([RUN-14](../packages/run-view.md#run-14)), and
-no record marked hidden shall appear in the view
+[CORE-7](../packages/core-service.md#core-7)) and shall be
+rendered from that stream alone
+([RUN-14](../packages/run-view.md#run-14)), with no record marked
+hidden appearing in the view
 ([CORE-8](../packages/core-service.md#core-8),
 [RUN-13](../packages/run-view.md#run-13)).
 
@@ -33,8 +34,7 @@ Where the shared config enables the awaiting-reply notification
 kind, while a session awaits a Boss reply, when the app window is
 not focused, the attention shall surface at every layer the Boss
 can see: an OS notification and dock badge from the shell, and the
-composer's awaiting state in the run view, all derived from the
-same record stream.
+composer's awaiting state in the run view.
 
 ## Tests
 
@@ -57,7 +57,7 @@ awaits the Boss's reply with the window unfocused, the OS
 notification ([SHELL-3](../packages/app-shell.md#shell-3)), dock
 badge ([SHELL-4](../packages/app-shell.md#shell-4)), and composer
 awaiting state ([RUN-9](../packages/run-view.md#run-9)) all
-surface from the same record stream ([DESK-2](#desk-2)).
+surface ([DESK-2](#desk-2)).
 
 ### DESK-4
 

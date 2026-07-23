@@ -48,9 +48,10 @@ This creates:
 
 See `specs/decisions/000-spec-structure-format.md` for the spec format and naming conventions.
 
-Idempotency: rerunning `scaffold` is safe — it only adds missing files
-and never edits existing ones. (`--update` does edit, mechanically;
-see below.)
+Idempotency: rerunning `scaffold` is safe — it only adds missing
+files. The one in-place edit it makes is to an existing
+`CLAUDE.md`/`AGENTS.md`, whose managed specs section is added or
+refreshed. (`--update` edits more, mechanically; see below.)
 
 ### Linting
 
@@ -111,7 +112,8 @@ spex scaffold --update
 - The managed specs section of an existing `CLAUDE.md`/`AGENTS.md` is
   refreshed; absent agent files are not created.
 
-Review the changes with `git diff -- specs` and run `spex lint`.
+Review the changes with `git diff -- specs CLAUDE.md AGENTS.md` and
+run `spex lint`.
 The command prints clear next steps plus copy-paste-ready prompts for
 your AI agent: an update-merge prompt to reconcile citations and local
 extensions, and — after a migration or while `specs/compositions/` is

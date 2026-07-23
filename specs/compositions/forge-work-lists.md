@@ -21,7 +21,8 @@ Where a project is bound to a GitHub repository and its forge data
 is served through the project's forge adapter
 ([PROJ-14](../packages/projects.md#proj-14)), when its issues and
 pull requests are displayed anywhere in the app — the project's
-Repo tab or the Dashboard's next-work lists
+Repo tab ([PROJ-6](../packages/projects.md#proj-6)) or the
+Dashboard's next-work lists
 ([DASH-6](../packages/dashboard.md#dash-6)) — both surfaces shall
 present the same items.
 
