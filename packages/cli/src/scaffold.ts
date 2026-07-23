@@ -344,7 +344,7 @@ function updateScaffoldTemplates(): void {
   } else if (mapHeadingRenamed) {
     indicatorOverrides.set(
       "specs/map.md",
-      "kept — user-modified; Interactions heading renamed",
+      "kept — user-modified; interactions entries renamed",
     );
   }
   for (const relPath of rewritten) {

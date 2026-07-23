@@ -432,14 +432,61 @@ describe("lintSpecs", () => {
     assert.ok(!rules(woven).includes("binding/no-scenario"));
   });
 
-  it("warns on a detached Verifies sentence (LINT-13)", () => {
+  it("errors on a detached Verifies sentence (LINT-13)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y.\n\n## Verification\n\n### A-2\n\nVerifies [A-1](#a-1).\n\nThe suite shall assert Y.\n",
     });
-    assert.ok(rules(findings).includes("cite/detached"));
+    const detached = findings.find((f) => f.rule === "cite/detached");
+    assert.ok(detached, "expected a cite/detached finding");
+    assert.equal(detached.severity, "error");
     assert.ok(!rules(findings).includes("meta/metadata-line"));
     assert.ok(!rules(findings).includes("verify/uncited"));
+  });
+
+  it("errors on package→composition and non-map iteration citations", () => {
+    const findings = findingsFor({
+      "specs/packages/auth.md":
+        "# AUTH: Auth\n\n## Intent\n\nAuth behavior.\n\n## External Behavior\n\n### AUTH-1\n\nWhen credentials are valid, the system shall log in (see [flow](../compositions/flow.md), [IR-001](../iterations/001-a.md)).\n\n## Verification\n\n### AUTH-2\n\nThe suite shall assert a valid login succeeds ([AUTH-1](#auth-1)).\n",
+      "specs/compositions/flow.md":
+        "# FLOW: Flow\n\n## Intent\n\nX.\n\n## Scenario\n\n### FLOW-1\n\nThe composed system shall proceed ([AUTH-1](../packages/auth.md#auth-1)).\n\n## Tests\n\n### FLOW-2\n\nThe suite shall assert it ([FLOW-1](#flow-1), [AUTH-1](../packages/auth.md#auth-1)).\n",
+      "specs/iterations/001-a.md":
+        "# IR-001: A\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
+    });
+    const found = rules(findings);
+    assert.ok(found.includes("cite/composition"));
+    assert.ok(found.includes("cite/iteration"));
+
+    const mapOnly = findingsFor({
+      "specs/map.md": `${MAP("")}\n## Iterations\n\n| ID | File |\n| --- | --- |\n| IR-001 | [001-a.md](iterations/001-a.md) |\n`,
+      "specs/iterations/001-a.md":
+        "# IR-001: A\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
+    });
+    assert.ok(!rules(mapOnly).includes("cite/iteration"));
+  });
+
+  it("errors on zh trigger keywords in a Binding item", () => {
+    const triggered = findingsFor({
+      "specs/compositions/platform.md":
+        "# PLAT: 平台\n\n## 意图\n\n平台绑定。\n\n## 绑定\n\n### PLAT-1\n\n当用户登录时，部署应使用 Example Auth。\n\n## 测试\n\n### PLAT-2\n\n审计套件应检查部署配置（[PLAT-1](#plat-1)）。\n",
+    });
+    assert.ok(rules(triggered).includes("binding/trigger"));
+
+    const clean = findingsFor({
+      "specs/compositions/platform.md":
+        "# PLAT: 平台\n\n## 意图\n\n平台绑定。\n\n## 绑定\n\n### PLAT-1\n\n部署当前的认证服务应为 Example Auth。\n\n## 测试\n\n### PLAT-2\n\n审计套件应检查部署配置（[PLAT-1](#plat-1)）。\n",
+    });
+    assert.ok(!rules(clean).includes("binding/trigger"));
+  });
+
+  it("keeps a literal fence inside a longer fence out of detection", () => {
+    const findings = findingsFor({
+      "specs/compositions/platform.md":
+        '# PLAT: Platform\n\n## Intent\n\nX.\n\n## Binding\n\n### PLAT-1\n\nWhere logins are verified ([AUTH-1](../packages/auth.md#auth-1)), the deployment shall use Example Auth per:\n\n````text\n```\nWhen in doubt\nVerifies: nothing\n```\n````\n\n## Tests\n\n### PLAT-2\n\nThe suite shall inspect it ([PLAT-1](#plat-1)).\n',
+      "specs/packages/auth.md": CLEAN_PACKAGE,
+    });
+    assert.ok(!rules(findings).includes("binding/trigger"));
+    assert.ok(!rules(findings).includes("meta/metadata-line"));
   });
 
   it("warns on Intent citations and peer-Internal citations (LINT-13)", () => {

@@ -132,4 +132,32 @@ Some prose.
     assert.ok(zh !== null);
     assert.match(zh, /^## 组合$/m);
   });
+
+  it("rewrites an interactions/ layout-block line alongside the heading", () => {
+    const renamed = renameInteractionsHeading(
+      [
+        "# Map",
+        "",
+        "## Layout",
+        "",
+        "```text",
+        "packages/     Spec packages (one file per package)",
+        "interactions/ Cross-package behaviors and tests",
+        "```",
+        "",
+        "## Interactions",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "en",
+    );
+    assert.ok(renamed !== null);
+    assert.match(
+      renamed,
+      /^compositions\/ Cross-package compositions: scenarios, bindings, tests$/m,
+    );
+    assert.doesNotMatch(renamed, /^interactions\//m);
+    assert.match(renamed, /^## Compositions$/m);
+  });
 });

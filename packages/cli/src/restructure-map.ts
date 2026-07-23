@@ -188,18 +188,21 @@ export function restructureMap(
 }
 
 /**
- * SCAF-50: rename a legacy `## Interactions` (or `## 交互`) map
- * heading to the active-language Compositions heading. Returns null
- * when the map has no such heading.
+ * SCAF-50: rename legacy interactions entries of a map — a
+ * `## Interactions` (or `## 交互`) heading and an `interactions/`
+ * layout-block line — to the active-language Compositions forms.
+ * Returns null when the map has neither.
  */
 export function renameInteractionsHeading(
   text: string,
   language: ScaffoldLanguage,
 ): string | null {
   const strings = MAP_STRINGS[language];
-  const result = text.replace(
+  const compositionsLine = strings.layoutLines[1];
+  let result = text.replace(
     /^##(\s+)(Interactions|交互)(\s*)$/m,
     `##$1${strings.compositionsHeading}$3`,
   );
+  result = result.replace(/^interactions\/[ \t].*$/m, compositionsLine);
   return result === text ? null : result;
 }

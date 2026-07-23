@@ -212,6 +212,32 @@ describe("convertVerifiesLines", () => {
     );
   });
 
+  it("leaves Verifies: lines inside longer fences untouched", () => {
+    const text = [
+      "Verifies: [A-1](#a-1)",
+      "",
+      "````text",
+      "```",
+      "Verifies: [B-1](#b-1)",
+      "```",
+      "````",
+      "",
+    ].join("\n");
+    assert.equal(
+      convertVerifiesLines(text),
+      [
+        "Verifies [A-1](#a-1).",
+        "",
+        "````text",
+        "```",
+        "Verifies: [B-1](#b-1)",
+        "```",
+        "````",
+        "",
+      ].join("\n"),
+    );
+  });
+
   it("never swallows prose lines or fenced content", () => {
     const text = [
       "Verifies: [A-1](#a-1)",

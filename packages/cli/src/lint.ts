@@ -6,6 +6,7 @@ import { join, posix, relative } from "node:path";
 import type { Heading, Node, Root } from "mdast";
 import {
   baseHeadingSlugs,
+  codeLineMap,
   headingSlugs,
   headingText,
   parseMarkdown,
@@ -83,9 +84,11 @@ const METADATA_LINE_RE =
 const HAS_CITATION_RE = /\[[^\]]*\]\([^)]*\)/;
 const CITATION_SCAN_RE = /\[[^\]]*\]\([^)]*\)/g;
 const DETACHED_VERIFIES_RE = /^Verifies\b(?:[\s,.;]|and\b)*$/;
-// Clause keywords a static Binding item must not carry (META-36).
-const TRIGGER_RE = /\b(When|While)\b/;
-const FENCE_RE = /^\s*(```|~~~)/;
+// Clause keywords a static Binding item must not carry (META-36):
+// English When/While, plus the zh trigger keywords of the bundled
+// templates at a clause start (当 not in 当前/当中/当下/当然).
+const TRIGGER_RE =
+  /\b(When|While)\b|(^|[，。；：、（("'「])\s*(当(?![前中下然])|如果)/;
 const LEGACY_ITEM_DIRS = ["user", "dev", "test", "items"];
 const KNOWN_TOP_LEVEL = new Set([
   "decisions",
@@ -158,20 +161,6 @@ function listMarkdownFiles(dir: string, prefix: string): string[] {
   return files;
 }
 
-function fenceMap(lines: string[]): boolean[] {
-  const fenced: boolean[] = [];
-  let inFence = false;
-  for (const line of lines) {
-    if (FENCE_RE.test(line)) {
-      fenced.push(true);
-      inFence = !inFence;
-      continue;
-    }
-    fenced.push(inFence);
-  }
-  return fenced;
-}
-
 function loadFile(basePath: string, relPath: string): SpecFile {
   const text = readFileSync(join(basePath, relPath), "utf-8");
   const tree = parseMarkdown(text);
@@ -222,7 +211,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
     links,
     h1,
     shortForm: h1Match === null ? null : h1Match[1],
-    fenced: fenceMap(lines),
+    fenced: codeLineMap(tree, lines.length),
   };
 }
 
@@ -812,7 +801,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           ctx,
           item.file.relPath,
           line,
-          "warning",
+          "error",
           "cite/detached",
           `item ${item.id} carries a detached "Verifies …" sentence; weave each citation into the assertion it supports (META-20)`,
         );
@@ -1065,6 +1054,34 @@ function lintCitations(ctx: LintContext): void {
           `link points into the legacy layout (${resolved}); cite specs/packages/ or specs/compositions/ instead`,
         );
         continue;
+      }
+
+      if (
+        isUnder(file.relPath, "packages") &&
+        resolved.startsWith("specs/compositions/")
+      ) {
+        report(
+          ctx,
+          file.relPath,
+          link.line,
+          "error",
+          "cite/composition",
+          `package file cites ${resolved}; files under packages/ shall not cite compositions/ (META-33)`,
+        );
+      }
+
+      if (
+        resolved.startsWith("specs/iterations/") &&
+        file.relPath !== "specs/map.md"
+      ) {
+        report(
+          ctx,
+          file.relPath,
+          link.line,
+          "error",
+          "cite/iteration",
+          `iteration records are cited only from specs/map.md (META-18)`,
+        );
       }
 
       if (!existsSync(join(ctx.basePath, resolved))) {

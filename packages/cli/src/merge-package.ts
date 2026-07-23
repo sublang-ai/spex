@@ -4,6 +4,7 @@
 import type { Definition, Heading, Node, Root } from "mdast";
 import {
   applyEdits,
+  codeLineMap,
   endOffset,
   headingText,
   parseMarkdown,
@@ -366,7 +367,6 @@ export type MergeResult = {
 };
 
 const VERIFIES_LINE_RE = /^(\s*)Verifies:\s*(.+?)\s*$/;
-const FENCE_LINE_RE = /^\s*(```|~~~)/;
 // A wrapped continuation of a Verifies: block: citations and
 // separators only, so prose lines are never swallowed.
 const VERIFIES_CONTINUATION_RE =
@@ -379,16 +379,11 @@ const VERIFIES_CONTINUATION_RE =
  */
 export function convertVerifiesLines(text: string): string {
   const lines = text.split("\n");
+  const inCode = codeLineMap(parseMarkdown(text), lines.length);
   const out: string[] = [];
-  let inFence = false;
   let changed = false;
   for (let index = 0; index < lines.length; index += 1) {
-    if (FENCE_LINE_RE.test(lines[index])) {
-      inFence = !inFence;
-      out.push(lines[index]);
-      continue;
-    }
-    if (inFence) {
+    if (inCode[index]) {
       out.push(lines[index]);
       continue;
     }
@@ -402,8 +397,8 @@ export function convertVerifiesLines(text: string): string {
     const parts = [match[2]];
     while (
       index + 1 < lines.length &&
+      !inCode[index + 1] &&
       lines[index + 1].trim() !== "" &&
-      !FENCE_LINE_RE.test(lines[index + 1]) &&
       VERIFIES_CONTINUATION_RE.test(lines[index + 1])
     ) {
       index += 1;

@@ -787,10 +787,35 @@ describe("CLI integration", () => {
         "specs/packages/notes.md",
         "# NOTES: Notes\n\n## Intent\n\nNote keeping.\n\n## External Behavior\n\n### NOTES-1\n\nX shall Y (see [flow](../interactions/login-flow.md)).\n",
       );
-      const map = readFileSync(join(dir, "specs", "map.md"), "utf-8");
       writeFileSync(
         join(dir, "specs", "map.md"),
-        `${map}\n## Interactions\n\n| File | Summary |\n| --- | --- |\n| [login-flow.md](interactions/login-flow.md) | Login |\n`,
+        [
+          "# Spec Map",
+          "",
+          "## Layout",
+          "",
+          "```text",
+          "packages/     Spec packages (one file per package)",
+          "interactions/ Cross-package behaviors and tests",
+          "map.md        This index",
+          "meta.md       The spec of specs",
+          "```",
+          "",
+          "## Packages",
+          "",
+          "| File | Summary |",
+          "| --- | --- |",
+          "| [git.md](packages/git.md) | Commit rules |",
+          "| [licensing.md](packages/licensing.md) | SPDX headers |",
+          "| [notes.md](packages/notes.md) | Notes |",
+          "",
+          "## Interactions",
+          "",
+          "| File | Summary |",
+          "| --- | --- |",
+          "| [login-flow.md](interactions/login-flow.md) | Login |",
+          "",
+        ].join("\n"),
       );
       gitCommit(dir, "filled interactions the old way");
 
@@ -817,11 +842,23 @@ describe("CLI integration", () => {
       const updatedMap = readFileSync(join(dir, "specs", "map.md"), "utf-8");
       assert.doesNotMatch(updatedMap, /^## Interactions$/m);
       assert.match(updatedMap, /^## Compositions$/m);
+      assert.match(
+        updatedMap,
+        /^compositions\/ Cross-package compositions: scenarios, bindings, tests$/m,
+      );
+      assert.doesNotMatch(updatedMap, /^interactions\//m);
       assert.match(updatedMap, /compositions\/login-flow\.md/);
+      assert.equal(
+        parseIndicators(result.stdout).get("specs/map.md"),
+        "kept — user-modified; interactions entries renamed",
+      );
       assert.ok(
         result.stdout.includes(readBundledMarkdown("compositions-prompt.md")),
       );
 
+      // Remaining errors are the reconciliation set: findings inside
+      // the moved composition file plus the package backreference the
+      // rewrite kept navigable (SCAF-49, SCAF-50).
       const lint = run(["lint"], { cwd: dir });
       assert.notEqual(lint.exitCode, 0, lint.stdout);
       const errorLines = lint.stdout
@@ -829,7 +866,22 @@ describe("CLI integration", () => {
         .filter((line) => line.includes(": error "));
       assert.ok(errorLines.length > 0, lint.stdout);
       for (const line of errorLines) {
-        assert.match(line, /^specs\/compositions\/login-flow\.md:/, line);
+        assert.match(
+          line,
+          /^specs\/(compositions\/login-flow\.md|packages\/notes\.md):/,
+          line,
+        );
+      }
+      assert.ok(
+        errorLines.some((line) =>
+          line.startsWith("specs/compositions/login-flow.md"),
+        ),
+        lint.stdout,
+      );
+      for (const line of errorLines.filter((entry) =>
+        entry.startsWith("specs/packages/notes.md"),
+      )) {
+        assert.match(line, /cite\/composition/, line);
       }
     } finally {
       rmSync(dir, { recursive: true });
@@ -1062,8 +1114,21 @@ meta.md     The spec of specs
         result.stdout.includes(readBundledMarkdown("compositions-prompt.md")),
       );
 
-      const lint = run(["lint", dir]);
-      assert.equal(lint.exitCode, 0, lint.stdout);
+      // The converted Verifies sentence is the only error the
+      // migrated tree reports — the reconciliation signal (SCAF-49).
+      const lint = run(["lint"], { cwd: dir });
+      assert.notEqual(lint.exitCode, 0, lint.stdout);
+      const errorLines = lint.stdout
+        .split("\n")
+        .filter((line) => line.includes(": error "));
+      assert.ok(errorLines.length > 0, lint.stdout);
+      for (const line of errorLines) {
+        assert.match(
+          line,
+          /^specs\/packages\/auth\.md:\d+: error cite\/detached:/,
+          line,
+        );
+      }
     } finally {
       rmSync(dir, { recursive: true });
     }

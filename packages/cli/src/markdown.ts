@@ -14,6 +14,26 @@ export function parseMarkdown(text: string): Root {
   return processor.parse(text) as Root;
 }
 
+/**
+ * Per-line flag: the line lies inside a code block — a GFM fence of
+ * any delimiter length (including its delimiter lines) or indented
+ * code — per the parsed tree, so a literal fence inside a longer
+ * fence is not mistaken for a closer.
+ */
+export function codeLineMap(tree: Root, lineCount: number): boolean[] {
+  const inCode: boolean[] = new Array(lineCount).fill(false);
+  visit(tree, (node: Node) => {
+    if (node.type !== "code") return;
+    const start = node.position?.start.line;
+    const end = node.position?.end.line;
+    if (start === undefined || end === undefined) return;
+    for (let line = start; line <= end && line <= lineCount; line += 1) {
+      inCode[line - 1] = true;
+    }
+  });
+  return inCode;
+}
+
 /** Start offset of a node, throwing when position data is absent. */
 export function startOffset(node: Node): number {
   const offset = node.position?.start.offset;
