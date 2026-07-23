@@ -656,13 +656,37 @@ export class CoreService {
               error instanceof Error ? error.message : String(error);
             throw new CoreError("invalid_request", message);
           }
+          // The compiled entry's derived roles are authoritative
+          // (DR-014): re-key the request's role -> profile assignments
+          // onto them case-insensitively; an unmatched role fails
+          // before any config write, keeping the artifacts for a
+          // re-registration without recompiling.
+          const assignments = new Map(
+            Object.entries(command.players).map(([role, ref]) => [
+              role.toLowerCase(),
+              ref,
+            ]),
+          );
+          const players: Record<string, string> = {};
+          const unmatched: string[] = [];
+          for (const role of result.roles) {
+            const ref = assignments.get(role);
+            if (ref === undefined) unmatched.push(role);
+            else players[role] = ref;
+          }
+          if (unmatched.length > 0) {
+            throw new CoreError(
+              "invalid_request",
+              `compiled, but the playbook's derived roles are [${result.roles.join(", ")}] and no profile was assigned for: ${unmatched.join(", ")}. Re-submit with players for the derived roles; the compiled artifacts are kept.`,
+            );
+          }
           const edit = await editConfigFile(
             this.configPath,
             {
               kind: "playbook.add",
               playbookId: command.playbookId,
               from: result.from,
-              players: command.players,
+              players,
             },
             this.options.loadModule,
           );

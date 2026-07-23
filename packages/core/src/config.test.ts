@@ -33,7 +33,15 @@ function registryEntry(overrides: Record<string, unknown> = {}) {
       copyPasteGuardNames: [],
       savedCountsLine: () => "",
     },
-    validateOptions: () => ({}),
+    // Fail-closed like the real registry: only CODE's own option
+    // keys pass, so the compose-time cwd probe reports false.
+    validateOptions: (value: unknown) => {
+      const slice = (value ?? {}) as Record<string, unknown>;
+      for (const key of Object.keys(slice)) {
+        if (key !== "committer") throw new Error(`unknown option "${key}"`);
+      }
+      return slice;
+    },
     createRuntime: () => ({}),
     ...overrides,
   };
@@ -179,6 +187,44 @@ test("unknown agent fields and adapters are rejected", async () => {
   await expectError(
     top,
     /^Unknown adapter "mystery" for playbooks\.code\.players\.reviewer\./,
+  );
+});
+
+test("cwd acceptance probe marks entries that take a cwd option", async () => {
+  const cwdLoader: LoadModule = async (specifier) => {
+    if (specifier === "@sublang/playbook/code/registry") {
+      return {
+        default: registryEntry({
+          validateOptions: (value: unknown) => {
+            const slice = (value ?? {}) as Record<string, unknown>;
+            for (const key of Object.keys(slice)) {
+              if (key !== "cwd" && key !== "committer") {
+                throw new Error(`unknown option "${key}"`);
+              }
+            }
+            return slice;
+          },
+        }),
+      };
+    }
+    throw new Error(`no module ${specifier}`);
+  };
+  const accepting = await composeConfig(baseConfig(), cwdLoader);
+  assert.equal(accepting.playbooks[0]?.acceptsCwdOption, true);
+
+  // The real CODE registry rejects unknown options, so the probe
+  // reports false and sessions must not inject.
+  const rejecting = await composeConfig(baseConfig(), stubLoader);
+  assert.equal(rejecting.playbooks[0]?.acceptsCwdOption, false);
+
+  // A config-set cwd wins: no injection even for accepting entries.
+  const top = baseConfig();
+  (top.playbooks as Record<string, Record<string, unknown>>).code.cwd = "/x";
+  const preset = await composeConfig(top, cwdLoader);
+  assert.equal(preset.playbooks[0]?.acceptsCwdOption, false);
+  assert.equal(
+    (preset.captainOptions.playbooks.code?.options as { cwd?: string }).cwd,
+    "/x",
   );
 });
 

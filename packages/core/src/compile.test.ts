@@ -52,11 +52,56 @@ fs.writeFileSync(
     "export default function createDemoRuntime(options: unknown) {",
     "  return {",
     "    options,",
-    "    async init() {},",
+    "    async init(session: any) { this.session = session; },",
     "    async handleBossInput() {},",
     "    async dispose() {},",
-    "  };",
+    "  } as Record<string, unknown>;",
     "}",
+  ].join("\\n"),
+);
+// The slc 0.1.0 entry module: emitted beside the artifact dir, role
+// ids verbatim from the gears (capitalized here on purpose), options
+// allowlist with cwd, and the canonicalizing role bind at callPlayer.
+fs.writeFileSync(
+  path.join(path.dirname(src), base + ".ts"),
+  [
+    "import createPlaybookRuntime from './" + base + ".playbook/" + base + ".playbook.ts';",
+    "const REQUIRED_ROLE_IDS = ['Helper'];",
+    "const BY_LOWER = new Map(REQUIRED_ROLE_IDS.map((id) => [id.toLowerCase(), id]));",
+    "function bindRoleIds(session) {",
+    "  const ports = session && session.ports;",
+    "  if (!ports || typeof ports.callPlayer !== 'function') return session;",
+    "  return { ...session, ports: { ...ports, callPlayer: (playerId, ...rest) =>",
+    "    ports.callPlayer(BY_LOWER.get(playerId) ?? playerId, ...rest) } };",
+    "}",
+    "const entry = {",
+    "  id: '" + base + "',",
+    "  command: '" + base + "',",
+    "  intent: 'Stub Demo - a one-player workflow.',",
+    "  requiredRoleIds: [...REQUIRED_ROLE_IDS],",
+    "  validateOptions(value) {",
+    "    if (value === undefined) return {};",
+    "    if (typeof value !== 'object' || value === null || Array.isArray(value)) {",
+    "      throw new Error('playbook options must be an object');",
+    "    }",
+    "    for (const key of Object.keys(value)) {",
+    "      if (key !== 'cwd') throw new Error('unknown option \\"' + key + '\\"');",
+    "    }",
+    "    return value;",
+    "  },",
+    "  createRuntime(options) {",
+    "    const validated = entry.validateOptions(options.captainOptions);",
+    "    const runtime = createPlaybookRuntime({ ...validated });",
+    "    return new Proxy(runtime, { get(target, property, receiver) {",
+    "      const value = Reflect.get(target, property, receiver);",
+    "      if (property === 'init' && typeof value === 'function') {",
+    "        return (session, ...rest) => value.call(target, bindRoleIds(session), ...rest);",
+    "      }",
+    "      return value;",
+    "    } });",
+    "  },",
+    "};",
+    "export default entry;",
   ].join("\\n"),
 );
 console.log("stub slc: compiled " + base);
@@ -95,27 +140,55 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
   assert.equal(result.idleStateId, "ready");
   assert.equal(result.finalStateId, "done");
   assert.deepEqual(result.parkStateIds, ["failed", "awaitBossReply"]);
+  // Derived from the slc-emitted entry ('Helper'), lowercased for the
+  // host boundary — the user's typed roles are not the source.
+  assert.deepEqual(result.roles, ["helper"]);
   assert.ok(progress.some((line) => line.includes("stub slc: compiled demo")));
 
   const moduleValue = (await import(pathToFileURL(result.from).href)) as {
     default: RegistryEntryLike;
+    spexRegistryContract?: number;
   };
+  assert.equal(moduleValue.spexRegistryContract, 2);
   const entry = moduleValue.default;
   assert.equal(entry.id, "demo");
   assert.equal(entry.command, "demo");
+  assert.equal(entry.intent, "demo workflow for tests");
   assert.deepEqual(entry.requiredRoleIds, ["helper"]);
 
-  // createRuntime maps role identities per the link convention.
+  // The wrapper hands captainOptions through the entry's own
+  // validateOptions and re-cases role ids at the port seam: the
+  // runtime sees the entry's canonical 'Helper', the host port gets
+  // back the lowercase host role.
   const runtime = entry.createRuntime({
-    captainOptions: { extra: 1 },
+    captainOptions: { cwd: "/tmp/project" },
     players: [{ id: "helper", adapter: "claude", model: "claude-test" }],
-  }) as { options: Record<string, unknown> };
-  assert.equal(runtime.options.helperPlayer, "claude-test");
-  assert.equal(runtime.options.extra, 1);
+  }) as {
+    options: Record<string, unknown>;
+    init(session: unknown): Promise<void>;
+    session?: { ports: { callPlayer(id: string): unknown } };
+  };
+  assert.equal(runtime.options.cwd, "/tmp/project");
+
+  const seenIds: string[] = [];
+  await runtime.init({
+    sessionId: "s1",
+    ports: {
+      callPlayer: (playerId: string) => {
+        seenIds.push(playerId);
+        return Promise.resolve();
+      },
+    },
+  });
+  // The stub runtime saved the (doubly shimmed) session; a call with
+  // the entry's canonical id must reach the host port lowercased.
+  runtime.session?.ports.callPlayer("Helper");
+  runtime.session?.ports.callPlayer("helper");
+  assert.deepEqual(seenIds, ["helper", "helper"]);
 
   assert.throws(
-    () => entry.validateOptions([1, 2]),
-    /captain\.options\.playbooks\.demo\.options must be an object/,
+    () => entry.validateOptions({ mystery: 1 }),
+    /unknown option "mystery"/,
   );
 });
 

@@ -226,10 +226,13 @@ be replaced only after the new compile succeeds.
 #### PBLIB-13
 
 When `slc` completes successfully, the registry generator shall
-derive the registry entry's `idleStateId`, `finalStateId`, and
-`parkStateIds` by introspecting the emitted machine definition
-([DR-005](../decisions/005-compilation-integration.md)), and each
-derived id shall name a state present in that machine. When a
+derive `idleStateId`, `finalStateId`, and `parkStateIds` by
+introspecting the emitted machine definition
+([DR-005](../decisions/005-compilation-integration.md)), each
+derived id naming a state present in that machine, and shall
+report them as compile metadata for display
+([PBLIB-22](#pblib-22)) — never as registry-entry fields
+([DR-014](../decisions/014-released-toolchain.md)). When a
 derivation is ambiguous, the registry generator shall surface the
 candidate state ids for user selection in the registry form
 ([PBLIB-7](#pblib-7)) instead of
@@ -240,14 +243,17 @@ choosing silently.
 When the registry form
 ([PBLIB-7](#pblib-7)) is submitted
 with valid entries, the registry generator shall emit a registry
-manifest module
-([DR-005](../decisions/005-compilation-integration.md)) into the
-playbook's library directory, exporting the registry entry
-consumed at playbook load: id,
-command, intent, required role ids, the state ids derived per
-[PBLIB-13](#pblib-13), summary policy, option validation, and
-runtime creation wired to the compiled playbook. It shall return
-the manifest path for the config entry's `from` key.
+manifest module into the playbook's library directory as a
+normalization wrapper over the `slc`-emitted registry entry
+([DR-014](../decisions/014-released-toolchain.md)): the user's
+command and intent override the entry's, the entry's role ids are
+lowercased for the host boundary with player ids re-cased to the
+entry's canonical casing at the port seam, and the module carries
+the registry-contract marker. A derived role id that cannot form
+a valid host player id, or two role ids colliding after
+lowercasing, shall fail the compile naming the offending role.
+It shall return the manifest path for the config entry's `from`
+key and the derived role ids.
 
 ### Registry Validation
 
@@ -266,6 +272,27 @@ shall reject a violating registration naming the violated rule,
 leaving the shared config file unmodified.
 
 ### Config Writes
+
+#### PBLIB-32
+
+When a registration writes the `playbooks.<id>` entry after a
+compile, the compile flow shall re-key the submitted role-profile
+assignments onto the derived role ids
+([PBLIB-14](#pblib-14)) by case-insensitive name match; when a
+derived role matches no assignment, the compile flow shall fail
+naming the derived roles and the unmatched ones, shall write no
+config change, and shall keep the compiled artifacts so a
+corrected submission can register without recompiling.
+
+#### PBLIB-33
+
+When playbook loading imports a config `from` module that is a
+file path, and the module carries no registry-contract marker
+([PBLIB-14](#pblib-14)), the registry validator shall treat the
+config as invalid with guidance naming the playbook and
+recompilation as the remedy
+([DR-014](../decisions/014-released-toolchain.md)); a package
+specifier `from` shall not require the marker.
 
 #### PBLIB-16
 

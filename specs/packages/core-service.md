@@ -228,6 +228,15 @@ core-provided module loader injected via the shell's dependency
 options, keeping playbook module resolution under core control and
 the shell's coupling to the core type-only.
 
+#### CORE-29
+
+Where a configured playbook's registry entry accepts a `cwd`
+option and the config block leaves it unset, when a session is
+created, the core package shall pass the session project's
+directory as that playbook's `cwd` option in the captain options
+([DR-014](../decisions/014-released-toolchain.md)); a `cwd` set
+in the config block shall pass through unchanged.
+
 ### Contract Testing
 
 #### CORE-18

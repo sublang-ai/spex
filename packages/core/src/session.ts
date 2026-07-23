@@ -73,6 +73,30 @@ function isHidden(record: TmuxPlayRecord): boolean {
   );
 }
 
+/** Per-session captain options (DR-014): playbooks that take a `cwd`
+ * option the config leaves unset run their script gears in the
+ * session's project directory instead of the app process cwd. */
+function withProjectCwd(
+  composed: ComposedConfig,
+  projectPath: string,
+): ComposedConfig {
+  const injectable = composed.playbooks.filter((p) => p.acceptsCwdOption);
+  if (injectable.length === 0) return composed;
+  const playbooks = { ...composed.captainOptions.playbooks };
+  for (const playbook of injectable) {
+    const block = playbooks[playbook.id];
+    if (!block) continue;
+    playbooks[playbook.id] = {
+      ...block,
+      options: { ...block.options, cwd: projectPath },
+    };
+  }
+  return {
+    ...composed,
+    captainOptions: { ...composed.captainOptions, playbooks },
+  };
+}
+
 async function defaultCaptainFactory(
   composed: ComposedConfig,
   loadModule: LoadModule,
@@ -137,9 +161,10 @@ export class SessionManager {
       );
     }
 
+    const sessionComposed = withProjectCwd(composed, project.path);
     const captain = this.captainFactory
-      ? await this.captainFactory(composed)
-      : await defaultCaptainFactory(composed, this.loadModule);
+      ? await this.captainFactory(sessionComposed)
+      : await defaultCaptainFactory(sessionComposed, this.loadModule);
 
     const info: SessionInfo = {
       id: randomUUID(),

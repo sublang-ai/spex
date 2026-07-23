@@ -10,13 +10,17 @@
 import { constants, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 
 import type { AdapterName, ConfigSummary } from "./protocol.js";
 
 export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
+
+/** Marker export stamped into Spex-generated registry bundles
+ * (DR-014); composition refuses file-path registries without it. */
+export const REGISTRY_CONTRACT = 2;
 
 const ADAPTER_SHORTHANDS = ["claude", "codex"];
 const KNOWN_ADAPTERS = ["claude", "codex", "gemini", "opencode"] as const;
@@ -85,6 +89,9 @@ export interface ComposedPlaybook {
   from: string;
   /** role -> resolved agent (local role names, not namespaced ids). */
   players: Record<string, ResolvedAgent>;
+  /** True when the entry takes a `cwd` option the config leaves
+   * unset, so sessions may inject the project path (DR-014). */
+  acceptsCwdOption: boolean;
 }
 
 export interface ComposedConfig {
@@ -428,6 +435,20 @@ export async function composeConfig(
         `playbooks.${id}.from "${from}" exposes no valid registry entry`,
       );
     }
+    // File-path registries are Spex-generated bundles; one without the
+    // DR-014 contract marker predates the playbook 2.0 runtime and
+    // would fail mid-turn — refuse it at load with recompile guidance.
+    // Package-specifier registries ship with their runtime and are
+    // exempt.
+    if (
+      isAbsolute(from) &&
+      (moduleValue as { spexRegistryContract?: unknown }).spexRegistryContract !==
+        REGISTRY_CONTRACT
+    ) {
+      throw new Error(
+        `playbooks.${id}.from "${from}" was compiled before the playbook 2.0 toolchain; recompile "${id}" in the Playbooks surface to re-enable it`,
+      );
+    }
     if (entry.id !== id) {
       throw new Error(
         `playbooks.${id} key must equal the module manifest id "${entry.id}"`,
@@ -498,6 +519,19 @@ export async function composeConfig(
     for (const [key, value] of Object.entries(block)) {
       if (!PLAYBOOK_LAUNCHER_KEYS.includes(key)) optionSlice[key] = value;
     }
+    // Probe whether the entry accepts a `cwd` option (DR-014): script
+    // gears default to the host process cwd, so sessions inject the
+    // project path for entries that take it and configs that leave it
+    // unset. validateOptions is fail-closed, making the probe safe.
+    let acceptsCwdOption = false;
+    if (optionSlice.cwd === undefined) {
+      try {
+        entry.validateOptions({ ...optionSlice, cwd: "/" });
+        acceptsCwdOption = true;
+      } catch {
+        acceptsCwdOption = false;
+      }
+    }
     captainOptions.playbooks[id] = {
       from,
       ...(commandOverride ? { command: commandOverride } : {}),
@@ -511,6 +545,7 @@ export async function composeConfig(
       requiredRoleIds: entry.requiredRoleIds,
       from,
       players: resolvedRolePlayers,
+      acceptsCwdOption,
     });
   }
 

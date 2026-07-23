@@ -9,14 +9,14 @@ Adopt `@sublang/playbook` 2.0.0, `@sublang/cligent` 0.16.0, and the published `@
 
 ## Deliverables
 
-- [ ] `packages/core` depends on `@sublang/playbook` ^2.0.0 and `@sublang/cligent` ^0.16.0; the tree installs and builds.
-- [ ] `effort` is the canonical agent key across core validation, composition, protocol, template, config edits, and UI; `reasoningEffort` still composes as a legacy alias and both-set blocks are invalid.
-- [ ] `compilePlaybook` consumes slc's emitted `<id>.ts` entry: normalization wrapper (command/intent overrides, lowercased role ids with a port-seam casing shim, contract marker), fail-closed validation, state ids as display metadata only.
-- [ ] `compile.run` re-keys player assignments onto derived role ids case-insensitively and reports unmatched roles as a structured error before any config write.
-- [ ] Config composition rejects marker-less file-path registries with recompile guidance.
-- [ ] Session creation injects the project path as each accepting playbook's `cwd` option.
-- [ ] Record-sequence expectations updated for the playbook 2.0 Captain failure contract.
-- [ ] PBLIB package spec amended (registry generation, roles, invalidation); map row added.
+- [x] `packages/core` depends on `@sublang/playbook` ^2.0.0 and `@sublang/cligent` ^0.16.0; the tree installs and builds.
+- [x] `effort` is the canonical agent key across core validation, composition, protocol, template, config edits, and UI; `reasoningEffort` still composes as a legacy alias and both-set blocks are invalid.
+- [x] `compilePlaybook` consumes slc's emitted `<id>.ts` entry: normalization wrapper (command/intent overrides, lowercased role ids with a port-seam casing shim, contract marker), fail-closed validation, state ids as display metadata only.
+- [x] `compile.run` re-keys player assignments onto derived role ids case-insensitively and reports unmatched roles as a structured error before any config write.
+- [x] Config composition rejects marker-less file-path registries with recompile guidance.
+- [x] Session creation injects the project path as each accepting playbook's `cwd` option.
+- [x] Record-sequence expectations updated for the playbook 2.0 Captain failure contract.
+- [x] PBLIB package spec amended (registry generation, roles, invalidation); map row added.
 
 ## Tasks
 
