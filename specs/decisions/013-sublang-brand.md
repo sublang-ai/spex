@@ -74,4 +74,3 @@ Accepted
   ([SHELL-23](../packages/app-shell.md#shell-23)).
 - Most users see the platform sans until a font-license decision
   allows shipping Euclid with the app.
-- IR-018 materializes this decision across the UI and shell.

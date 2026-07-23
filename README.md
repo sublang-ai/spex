@@ -37,16 +37,17 @@ npx @sublang/spex scaffold --update   # refresh templates, migrate legacy layout
 npx @sublang/spex lint                # check structure, IDs, and citations
 ```
 
-Rerunning is safe: `scaffold` skips files that already exist, and
-your own spec content is never touched
-(`CLAUDE.md`/`AGENTS.md` only get their managed specs section added
-or refreshed). `--update` requires a clean `specs/` tree, migrates
-the legacy `user/`/`dev/`/`test/` layout into `specs/packages/` and
-`specs/interactions/` into `specs/compositions/` (merging files and
-rewriting citations with a real Markdown parser), and refreshes the
-spex-owned framework files and uncustomized starters — warning
-before it replaces locally modified framework content, so the
-previous version stays recoverable in git.
+Rerunning `scaffold` is safe: it only adds missing files and never
+edits existing ones (`CLAUDE.md`/`AGENTS.md` only get their managed
+specs section added or refreshed). `--update` does edit, mechanically
+— it requires a clean `specs/` tree so every change stays reviewable
+in git: it merges the legacy `user/`/`dev/`/`test/` layout into
+`specs/packages/`, moves `specs/interactions/` into
+`specs/compositions/`, rewrites citations to the moved paths with a
+real Markdown parser, and refreshes the spex-owned framework files
+and uncustomized starters — warning before it replaces locally
+modified framework content, so the previous version stays
+recoverable in git.
 `--lang zh` selects the bundled Chinese templates.
 
 ## Desktop app

@@ -45,8 +45,10 @@ supply bindings, the [META-34](specs/meta.md#meta-34) section
 grammar, standalone Intents, and DRs without implementation
 detail.
 The shipped tooling matches: `spex lint` enforces these
-conventions, and `spex scaffold --update` migrates
-`interactions/`-era trees to them.
+conventions, and `spex scaffold --update` moves
+`interactions/`-era trees into `compositions/` mechanically —
+the META-34 reshaping itself is agent reconciliation work that
+lint keeps flagged until done.
 
 ## Research pointers
 

@@ -178,9 +178,7 @@ draft intact.
 
 #### RUN-27
 
-When the user picks a folder that is not a git repository, the run
-view shall initialize a git repository there and register it as a
-project without further prompts. When the user types `/` at the
+When the user types `/` at the
 start of a composer, the run view shall show the configured
 playbooks filtered by the typed prefix, each with its intent as the
 hint, and insert the selected command into the composer without

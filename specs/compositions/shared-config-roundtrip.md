@@ -44,8 +44,9 @@ extended by a stub-compiled playbook registration
 integration suite shall assert that the core service reloads each
 intermediate config without a validation failure
 ([CONF-1](#conf-1), [CORE-2](../packages/core-service.md#core-2)),
-that a config rejected by the Settings validator is byte-identical
-on disk afterwards, and that the fixture's comments survive the
+that a config rejected by the Settings validator
+([SET-12](../packages/settings.md#set-12)) is byte-identical on
+disk afterwards, and that the fixture's comments survive the
 Settings save ([SET-13](../packages/settings.md#set-13)) and the
 registration write
 ([PBLIB-16](../packages/playbook-library.md#pblib-16)) alike
@@ -58,5 +59,9 @@ rule ([CONF-1](#conf-1)), the integration suite shall assert the
 Settings surface marks the field inline
 ([SET-2](../packages/settings.md#set-2)) while the core service
 leaves the file unwritten and the connection open
-([CORE-13](../packages/core-service.md#core-13)) — the failure is
-visible in the UI and harmless at the protocol layer.
+([SET-12](../packages/settings.md#set-12)); and where a playbook
+registration violates the same rule, the suite shall assert the
+registration is rejected naming it, with the config bytes
+unchanged ([PBLIB-15](../packages/playbook-library.md#pblib-15)) —
+the same fail-closed rule set answers at every surface, and the
+failure is visible in the UI while harmless at the protocol layer.

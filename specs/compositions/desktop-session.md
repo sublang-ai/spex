@@ -19,28 +19,29 @@ Where the packaged desktop app is installed with a valid shared
 config, when the Boss starts a session for a registered project and
 completes a turn, every non-hidden record the embedded runtime emits
 shall reach the run view through the same WebSocket protocol a
-browser client would use, and shall render there in emission order —
-the shell adds no second data path
+browser client would use
 ([SHELL-11](../packages/app-shell.md#shell-11),
-[CORE-7](../packages/core-service.md#core-7),
-[RUN-13](../packages/run-view.md#run-13)).
+[CORE-7](../packages/core-service.md#core-7)), and shall render
+there in emission order ([RUN-13](../packages/run-view.md#run-13)).
 
 ### DESK-2
 
-While a session awaits a Boss reply, when the app window is not
-focused, the attention shall surface at every layer the Boss can
-see: an OS notification and dock badge from the shell, and the
-composer's awaiting state in the run view, all derived from the same
-record stream.
+Where the shared config enables the awaiting-reply notification
+kind, while a session awaits a Boss reply, when the app window is
+not focused, the attention shall surface at every layer the Boss
+can see: an OS notification and dock badge from the shell, and the
+composer's awaiting state in the run view, all derived from the
+same record stream.
 
 ## Tests
 
 ### DESK-3
 
 Where a packaged build is installed with a profile backed by a fake
-adapter, when the acceptance suite launches the app, starts a
-session, and completes a Boss turn, the suite shall assert the
-whole chain end to end ([DESK-1](#desk-1)): the core runs inside
+adapter and the shared config enables the awaiting-reply
+notification kind, when the acceptance suite launches the app,
+starts a session, and completes a Boss turn, the suite shall assert
+the whole chain end to end ([DESK-1](#desk-1)): the core runs inside
 the app process
 ([SHELL-10](../packages/app-shell.md#shell-10)), the session is
 created with the project directory as its working directory

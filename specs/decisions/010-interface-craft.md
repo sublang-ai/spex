@@ -22,8 +22,8 @@ Accepted.
 
 ## Decision
 
-Eight principles govern the interface; every finding cluster in
-IR-015 traces to one of them.
+Eight principles govern the interface; every audit finding
+cluster traces to one of them.
 
 1. **The conversation is the primary surface.** Events that matter
    to the Boss — a player's question, work in progress, queued
@@ -63,8 +63,8 @@ IR-015 traces to one of them.
 
 ## Consequences
 
-- IR-015 materializes these across the code; spec items under each
-  surface package are amended so tests pin the behaviors.
+- Spec items under each surface package are amended so tests pin
+  the behaviors as the principles land across the code.
 - New strings and controls are held to principles 2, 4, and 8 at
   review time; deviations need a recorded decision.
 - The compile pipeline gains cancel/busy semantics in the core

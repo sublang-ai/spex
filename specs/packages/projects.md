@@ -33,6 +33,9 @@ project.
 When the confirmed directory is inside a work tree below its top
 level, the palette shall register nothing and show a message
 naming the work tree's top-level path.
+When the confirmed directory is no git work tree at all, the
+palette shall initialize a git repository in it and register it as
+a project, without further prompts.
 
 #### PROJ-2
 
@@ -255,10 +258,12 @@ indicator, and the expected ahead/behind counts
 ([PROJ-11](#proj-11)).
 
 The test suite shall also assert that confirming the same path
-again creates no duplicate entry ([PROJ-2](#proj-2)), and that
-confirming a directory that is not the top level of a git work
-tree is rejected with a message and creates no project entry
-([PROJ-1](#proj-1)).
+again creates no duplicate entry ([PROJ-2](#proj-2)), that
+confirming a directory inside a work tree below its top level is
+rejected with a message and creates no project entry
+([PROJ-1](#proj-1)), and that confirming a directory that is no
+git work tree initializes a repository there and registers the
+project ([PROJ-1](#proj-1)).
 
 #### PROJ-18
 Where a temporary parent directory exists, when the create-project

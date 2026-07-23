@@ -55,7 +55,7 @@ Localized for `zh` in the first cut:
 | `meta.md` reference `[1]` | GEARS reference URL | repointed to the Chinese page [[1]] |
 | `map.md` | spec index | short, user-facing, agent-extended |
 
-- The first cut keeps these English: [DR-000](000-spec-structure-format.md), the GIT and LIC packages, IR-000, the `agent-specs.txt` body, and every other META item.
+- The first cut keeps these English: [DR-000](000-spec-structure-format.md), the GIT and LIC packages, the sample iteration record, the `agent-specs.txt` body, and every other META item.
 - [DR-000](000-spec-structure-format.md) is not translated, but it is clarified once so localized scaffolds cannot make framework documents disagree: it defers DR/IR headings, the GWT mapping, and GEARS clause forms to the active `meta.md` instead of restating English forms as normative.
 
 ### Authoritative translations
