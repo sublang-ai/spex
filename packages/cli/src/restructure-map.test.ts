@@ -133,15 +133,19 @@ Some prose.
     assert.match(zh, /^## 组合$/m);
   });
 
-  it("targets the layout block, never a prose example block", () => {
+  it("targets the block under the Layout heading, never a lookalike", () => {
     const renamed = renameInteractionsHeading(
       [
         "# Map",
         "",
         "## Notes",
         "",
+        "A realistic example of the old layout:",
+        "",
         "```text",
-        "interactions/ is where the old cross-package files lived",
+        "packages/     Spec packages (one file per package)",
+        "interactions/ Cross-package behaviors and tests",
+        "map.md        This index",
         "```",
         "",
         "## Layout",
@@ -155,15 +159,32 @@ Some prose.
       "en",
     );
     assert.ok(renamed !== null);
-    assert.match(
-      renamed,
-      /^interactions\/ is where the old cross-package files lived$/m,
-    );
+    // The lookalike under Notes keeps its interactions/ line; only
+    // the block under ## Layout is rewritten.
+    const remaining = renamed.match(/^interactions\/ Cross-package behaviors and tests$/gm);
+    assert.equal(remaining?.length, 1);
+    assert.ok(renamed.indexOf("interactions/ Cross-package") < renamed.indexOf("## Layout"));
     assert.match(
       renamed,
       /^compositions\/ Cross-package compositions: scenarios, bindings, tests$/m,
     );
-    assert.doesNotMatch(renamed, /^interactions\/ Cross-package behaviors/m);
+
+    const zh = renameInteractionsHeading(
+      [
+        "# 地图",
+        "",
+        "## 目录结构",
+        "",
+        "```text",
+        "packages/     规约包（每包一个文件）",
+        "interactions/ 跨包行为与测试",
+        "```",
+        "",
+      ].join("\n"),
+      "zh",
+    );
+    assert.ok(zh !== null);
+    assert.match(zh, /^compositions\/ 跨包组合：场景、绑定与测试$/m);
   });
 
   it("rewrites an interactions/ layout-block line alongside the heading", () => {

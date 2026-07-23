@@ -523,33 +523,76 @@ describe("lintSpecs", () => {
     assert.ok(!rules(composition).includes("intent/cited"));
   });
 
-  it("errors on peer citations in outcome clauses (LINT-13)", () => {
+  it("errors on peer citations outside precondition clauses (LINT-13)", () => {
+    const AUDIT_EXTERNAL =
+      "# AUD: Audit\n\n## Intent\n\nAudit behavior.\n\n## External Behavior\n\n### AUD-1\n\nWhere an event is reported, the audit log shall record it.\n";
+
     const outcome = findingsFor({
       "specs/packages/a.md":
         "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere credentials are valid, the system shall record the login in the audit log ([AUD-1](audit.md#aud-1)).\n",
-      "specs/packages/audit.md": AUDIT_PACKAGE,
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
     });
     assert.ok(rules(outcome).includes("cite/outcome"));
 
     const listOutcome = findingsFor({
       "specs/packages/a.md":
         "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhen the user confirms, the system shall:\n\n1. validate the input,\n2. record it in the audit log ([AUD-1](audit.md#aud-1)).\n",
-      "specs/packages/audit.md": AUDIT_PACKAGE,
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
     });
     assert.ok(rules(listOutcome).includes("cite/outcome"));
+
+    const subjectPosition = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nThe audit log of record ([AUD-1](audit.md#aud-1)) shall receive every login event.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(subjectPosition).includes("cite/outcome"));
+
+    const zhOutcome = findingsFor({
+      "specs/packages/a.md":
+        "# A: 甲\n\n## 意图\n\n甲行为。\n\n## 外部行为\n\n### A-1\n\n系统应使用对等审计（[AUD-1](audit.md#aud-1)）记录登录。\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(zhOutcome).includes("cite/outcome"));
+
+    const zhPrecondition = findingsFor({
+      "specs/packages/a.md":
+        "# A: 甲\n\n## 意图\n\n甲行为。\n\n## 外部行为\n\n### A-1\n\n给定审计日志已启用（[AUD-1](audit.md#aud-1)），系统应记录登录。\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(!rules(zhPrecondition).includes("cite/outcome"));
 
     const precondition = findingsFor({
       "specs/packages/a.md":
         "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile the audit log accepts events ([AUD-1](audit.md#aud-1)), the system shall record logins.\n",
-      "specs/packages/audit.md": AUDIT_PACKAGE,
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
     });
     assert.ok(!rules(precondition).includes("cite/outcome"));
+    assert.ok(!rules(precondition).includes("cite/internal"));
 
     const sameFile = findingsFor({
       "specs/packages/a.md":
         "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y.\n\n### A-3\n\nThe system shall reuse the login rule ([A-1](#a-1)).\n",
     });
     assert.ok(!rules(sameFile).includes("cite/outcome"));
+  });
+
+  it("errors on peer targets outside External Behavior (LINT-13)", () => {
+    const verificationTarget = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile audit coverage holds ([AUD-2](audit.md#aud-2)), the system shall log in.\n",
+      "specs/packages/audit.md":
+        "# AUD: Audit\n\n## Intent\n\nAudit behavior.\n\n## External Behavior\n\n### AUD-1\n\nWhere an event is reported, the audit log shall record it.\n\n## Verification\n\n### AUD-2\n\nThe suite shall assert recording ([AUD-1](#aud-1)).\n",
+    });
+    assert.ok(rules(verificationTarget).includes("cite/internal"));
+
+    const bareLink = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile audit holds (see [audit](audit.md)), the system shall log in.\n",
+      "specs/packages/audit.md":
+        "# AUD: Audit\n\n## Intent\n\nAudit behavior.\n\n## External Behavior\n\n### AUD-1\n\nWhere an event is reported, the audit log shall record it.\n",
+    });
+    assert.ok(rules(bareLink).includes("cite/internal"));
   });
 
   it("errors on textual IR references outside the map (META-18)", () => {
@@ -560,6 +603,15 @@ describe("lintSpecs", () => {
     const textual = findings.find((f) => f.rule === "cite/iteration");
     assert.ok(textual, "expected a textual cite/iteration finding");
     assert.equal(textual.severity, "error");
+
+    // An iteration record is exempt only for its own ID.
+    const crossIteration = findingsFor({
+      "specs/iterations/002-b.md":
+        "# IR-002: B\n\n## Goal\n\nBuild on the IR-001 groundwork.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nIR-002 is done.\n",
+    });
+    const cross = crossIteration.filter((f) => f.rule === "cite/iteration");
+    assert.equal(cross.length, 1, JSON.stringify(cross));
+    assert.equal(cross[0].line, 5);
   });
 
   it("accepts localized zh composition sections", () => {

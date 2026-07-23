@@ -965,9 +965,14 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
 // Citation discipline (META-14, META-15) — LINT-13
 // ---------------------------------------------------------------
 
-// English clause keywords deciding a citation's clause (META-6).
-const PRECONDITION_KEYWORD_RE = /\b(Where|While|When)\b/g;
-const SHALL_KEYWORD_RE = /\bshall\b/g;
+// Clause keywords deciding a citation's clause (META-6), in both
+// bundled languages. zh 当 counts at clause starts only (excluding
+// 当前-class words), and zh 应 excludes common non-shall compounds
+// like 应用 and 反应.
+const PRECONDITION_KEYWORD_RE =
+  /\b(Where|While|When)\b|给定|如果|(^|[，。；：、（("'「])\s*当(?![前中下然])/g;
+const SHALL_KEYWORD_RE =
+  /\bshall\b|(?<![反相对适响供效回报感一])应(?![用对答邀酬])/g;
 
 function lastMatchIndex(text: string, re: RegExp): number {
   let last = -1;
@@ -1049,22 +1054,24 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
         continue;
       }
       const target = bySlug.get(resolved)?.get(fragment);
-      if (target !== undefined && target.section === "Internal Behavior") {
+      if (target !== undefined && target.section !== "External Behavior") {
         report(
           ctx,
           file.relPath,
           link.line,
           "error",
           "cite/internal",
-          `citation targets ${target.id} inside ${resolved}'s Internal Behavior; cite External Behavior or move the reliance to a composition (META-14)`,
+          `citation targets ${target.id} in ${resolved}'s ${target.section ?? "front matter"}; a peer may rely only on External Behavior (META-14, META-28)`,
         );
       }
     }
   }
 
-  // Peers are cited from preconditions and triggers only: a peer
-  // citation whose nearest preceding clause keyword is `shall` sits
-  // in the outcome (META-13, META-14).
+  // The positive rule: in a behavior item, a peer citation is legal
+  // only inside a precondition or trigger clause — its nearest
+  // preceding clause keyword is Where/While/When (给定/如果/当) with
+  // no shall (应) after it — and only naming a peer item. Anything
+  // else is an error (META-13, META-14).
   for (const item of items) {
     if (!isUnder(item.file.relPath, "packages")) continue;
     if (
@@ -1082,11 +1089,26 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
       ) {
         continue;
       }
+      const fragment = link.url.split("#").slice(1).join("#");
+      if (fragment === "") {
+        report(
+          ctx,
+          item.file.relPath,
+          link.line,
+          "error",
+          "cite/internal",
+          `item ${item.id} cites ${resolved} without an item anchor; cite a specific External Behavior item (META-14)`,
+        );
+        continue;
+      }
       const prefix = paragraphPrefix(item, link);
-      const shallIndex = lastMatchIndex(prefix, SHALL_KEYWORD_RE);
+      const preconditionIndex = lastMatchIndex(
+        prefix,
+        PRECONDITION_KEYWORD_RE,
+      );
       if (
-        shallIndex !== -1 &&
-        shallIndex > lastMatchIndex(prefix, PRECONDITION_KEYWORD_RE)
+        preconditionIndex === -1 ||
+        lastMatchIndex(prefix, SHALL_KEYWORD_RE) > preconditionIndex
       ) {
         report(
           ctx,
@@ -1094,7 +1116,7 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
           link.line,
           "error",
           "cite/outcome",
-          `item ${item.id} cites a peer package in its outcome clause; peers are cited from Where/While/When preconditions only (META-13, META-14)`,
+          `item ${item.id} cites a peer package outside a precondition clause; peers are cited from Where/While/When preconditions and triggers only (META-13, META-14)`,
         );
       }
     }
@@ -1107,14 +1129,21 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
 
 function lintCitations(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
-    // Textual IR references are citations too (META-18).
-    if (
-      file.relPath !== "specs/map.md" &&
-      !isUnder(file.relPath, "iterations")
-    ) {
+    // Textual IR references are citations too (META-18). An
+    // iteration record is exempt only for its own ID.
+    if (file.relPath !== "specs/map.md") {
+      const ownIteration = isUnder(file.relPath, "iterations")
+        ? Number.parseInt(posix.basename(file.relPath), 10)
+        : null;
       for (const [index, line] of file.lines.entries()) {
         if (file.fenced[index]) continue;
-        if (/\bIR-\d+\b/.test(line)) {
+        for (const match of line.matchAll(/\bIR-(\d+)\b/g)) {
+          if (
+            ownIteration !== null &&
+            Number.parseInt(match[1], 10) === ownIteration
+          ) {
+            continue;
+          }
           report(
             ctx,
             file.relPath,

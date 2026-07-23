@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import type { Code, Node, Root, Table, TableRow } from "mdast";
+import type { Code, Heading, Node, Root, Table, TableRow } from "mdast";
 import type { ScaffoldLanguage } from "./copy-templates.js";
 import {
   applyEdits,
@@ -187,14 +187,18 @@ export function restructureMap(
   return result === text ? null : result;
 }
 
+// Heading names of the map's layout section in the bundled
+// templates, past and present.
+const LAYOUT_HEADINGS = new Set(["Layout", "目录结构", "布局"]);
+
 /**
  * SCAF-50: rename legacy interactions entries of a map — a
  * `## Interactions` (or `## 交互`) heading and an `interactions/`
- * line inside the layout code block — to the active-language
- * Compositions forms. The layout block is identified by its
- * path-listing signature, so an `interactions/` line in a prose
- * example is never rewritten. Returns null when the map has
- * neither entry.
+ * line inside the code block under the map's Layout heading — to
+ * the active-language Compositions forms. Only the block
+ * structurally under the Layout heading is rewritten, so a
+ * lookalike example elsewhere in the map is never touched.
+ * Returns null when the map has neither entry.
  */
 export function renameInteractionsHeading(
   text: string,
@@ -207,16 +211,27 @@ export function renameInteractionsHeading(
   );
 
   const tree: Root = parseMarkdown(result);
+  let layoutDepth: number | null = null;
+  let inLayout = false;
   let edit: TextEdit | null = null;
   visit(tree, (node: Node) => {
-    if (node.type !== "code" || edit !== null) return;
+    if (edit !== null) return;
+    if (node.type === "heading") {
+      const heading = node as Heading;
+      const title = sliceNode(result, heading).replace(/^#+\s*/, "").trim();
+      if (LAYOUT_HEADINGS.has(title)) {
+        layoutDepth = heading.depth;
+        inLayout = true;
+      } else if (layoutDepth !== null && heading.depth <= layoutDepth) {
+        inLayout = false;
+      }
+      return;
+    }
+    if (!inLayout || node.type !== "code") return;
     const code = node as Code;
     const lines = code.value.split("\n");
     const isInteractions = (line: string) => /^interactions\/[ \t]/.test(line);
     if (!lines.some(isInteractions)) return;
-    if (!lines.some((line) => /^(packages\/|decisions\/|map\.md|meta\.md)/.test(line))) {
-      return;
-    }
     const replaced = lines
       .map((line) => (isInteractions(line) ? strings.layoutLines[1] : line))
       .join("\n");
