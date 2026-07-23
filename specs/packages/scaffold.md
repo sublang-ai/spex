@@ -103,7 +103,7 @@ working tree is clean, the CLI shall:
    citation-rewrite sets unmodified.
 7. Print per-file indicators, a clear completion message that
    points to `spex lint`, a copy-paste-ready LLM merge prompt, and —
-   under the conditions of [SCAF-42](#scaf-42) — an interactions
+   under the conditions of [SCAF-42](#scaf-42) — a compositions
    prompt after it. Per-file indicators shall be the only path-level
    summary printed to stdout for the run, with exactly one indicator
    line per path; no path summary shall follow the prompts. The
@@ -140,13 +140,13 @@ file shall be classified as either **framework** or **seed**:
   - `specs/iterations/000-spdx-headers.md`
   - `specs/packages/git.md`
   - `specs/packages/licensing.md`
-  - `specs/interactions/.gitkeep`
+  - `specs/compositions/.gitkeep`
 
 When a new file is added under `scaffold/specs/`, it shall be
 assigned to exactly one of these classes.
 
 Bundled support assets outside `scaffold/specs/` (for example,
-`scaffold/update-merge-prompt.md`, `scaffold/interactions-prompt.md`,
+`scaffold/update-merge-prompt.md`, `scaffold/compositions-prompt.md`,
 the file-history manifests, and `scaffold/LICENSE`) are not framework
 or seed files.
 The bundled root `scaffold/LICENSE` is emitted to the target root by
@@ -214,24 +214,41 @@ restructure the map in place and report it as
 
 - In the first fenced layout block containing lines starting with
   `user/`, `dev/`, or `test/`, those lines shall be replaced by
-  active-language `packages/` and `interactions/` lines.
+  active-language `packages/` and `compositions/` lines.
 - Each table whose first-column body cells are all `user`, `dev`, or
   `test` shall be reshaped to a single row without the group column,
   keeping the remaining header cells, pointing the file cell at the
   `specs/packages/` path, and joining distinct summaries with `; `
   in user, dev, test order.
-- An Interactions section shall be appended when the map has none.
+- A Compositions section shall be appended when the map has none.
 - All other map content shall be preserved.
+
+#### SCAF-50
+
+Where `--update` runs while `specs/interactions/` exists, the CLI
+shall move each of its entries to the same path under
+`specs/compositions/`, keeping any entry whose target already
+exists in place and reporting it as a conflict; rewrite every
+relative citation across `specs/` that resolved into
+`specs/interactions/` to the `specs/compositions/` path; rewrite each
+moved file's `Verifies:` metadata lines as inline `Verifies …`
+sentences ([META-20](../meta.md#meta-20)); rename a
+`## Interactions` map heading to the active-language Compositions
+heading; drop a pristine bundled `interactions/.gitkeep` via the
+legacy manifest; and remove the emptied directory.
+Moved files shall be reported as
+`(migrated from specs/interactions/...)` indicator lines.
 
 #### SCAF-42
 
 Where `--update` completes after migrating at least one package per
-[SCAF-39](#scaf-39), or while `specs/interactions/` contains no
-markdown file although `specs/packages/` contains at least one, the
-CLI shall print — after the merge prompt — a copy-paste-ready agent
-prompt for filling `specs/interactions/` with cross-package
-behaviors and the tests that span packages.
-Otherwise no interactions prompt shall be printed.
+[SCAF-39](#scaf-39) or at least one file per [SCAF-50](#scaf-50), or
+while `specs/compositions/` contains no markdown file although
+`specs/packages/` contains at least one, the CLI shall print — after
+the merge prompt — a copy-paste-ready agent prompt for filling
+`specs/compositions/` with bindings, integrated scenarios, and the
+tests that span packages.
+Otherwise no compositions prompt shall be printed.
 
 ### Language Selection
 
@@ -294,7 +311,7 @@ shall print an error message to stderr and exit non-zero.
 
 Where `createSpecsStructure()` is called, it shall create a
 `specs/` directory with subdirectories `decisions/`, `iterations/`,
-`packages/`, and `interactions/` under the resolved base path, and
+`packages/`, and `compositions/` under the resolved base path, and
 shall not create the legacy `user/`, `dev/`, or `test/` directories.
 
 ### Template Copying
@@ -536,8 +553,10 @@ shall produce one markdown file with:
   match.
 
 Body content shall move byte-faithfully except for the heading,
-reference-number, and line-ending changes above; CRLF and CR line
-endings are normalized to LF.
+reference-number, and line-ending changes above — CRLF and CR line
+endings are normalized to LF — and `Verifies:` metadata lines,
+each rewritten as an inline `Verifies …` sentence so the merged
+tree satisfies [META-20](../meta.md#meta-20).
 Localized Intent and References section names from the bundled
 templates shall be recognized.
 
@@ -611,14 +630,15 @@ snapshot the pristine state of every framework and seed path before
 any byte edits (so [SCAF-40](#scaf-40)/[SCAF-41](#scaf-41) never
 dirty a file that steps below replace wholesale), migrate the legacy
 item layout ([SCAF-26](#scaf-26)), migrate the package layout
-([SCAF-43](#scaf-43)), rewrite legacy citations
+([SCAF-43](#scaf-43)), migrate `specs/interactions/` to
+`specs/compositions/` ([SCAF-50](#scaf-50)), rewrite legacy citations
 ([SCAF-45](#scaf-45)), restructure a user-modified map
 ([SCAF-46](#scaf-46)), overwrite framework files
 ([SCAF-14](#scaf-14)), refresh pristine seeds with the combined
 migration sources and indicator overrides ([SCAF-23](#scaf-23)),
 refresh existing agent files ([SCAF-10](#scaf-10)), read the bundled
 prompts from `scaffold/update-merge-prompt.md` and
-`scaffold/interactions-prompt.md`, and print the per-file
+`scaffold/compositions-prompt.md`, and print the per-file
 indicators, clear completion message, and prompts specified by
 [SCAF-11](#scaf-11) and [SCAF-42](#scaf-42).
 
@@ -771,13 +791,16 @@ end to end that:
   `(citations rewritten)`;
 - a customized legacy-shape map is restructured in place — layout
   block lines replaced, group tables reshaped to one `File | Summary`
-  row with `; `-joined summaries, an Interactions section appended —
+  row with `; `-joined summaries, a Compositions section appended —
   and reported as `(restructured for the packages layout)`;
-- the interactions prompt is printed after a migrating run and the
+- a tree with `specs/interactions/` files has them moved to
+  `specs/compositions/` with citations and the map heading rewritten
+  ([SCAF-50](#scaf-50));
+- the compositions prompt is printed after a migrating run and the
   migrated tree lints clean with `spex lint`;
 - the packaged npm artifact ships both file-history manifests, both
   prompts, and the bundled `specs/packages/` and
-  `specs/interactions/` seeds.
+  `specs/compositions/` seeds.
 
 #### SCAF-35
 Verifies: [SCAF-11](#scaf-11), [SCAF-14](#scaf-14), [SCAF-18](#scaf-18), [SCAF-19](#scaf-19)

@@ -47,12 +47,12 @@ exists, and zero otherwise; warnings alone shall not fail the run.
 
 Where the specs tree is linted, structural rules shall report:
 
-- an error for each legacy item directory (`specs/user/`,
-  `specs/dev/`, `specs/test/`, `specs/items/`), pointing at
+- an error for each legacy directory (`specs/user/`, `specs/dev/`,
+  `specs/test/`, `specs/items/`, `specs/interactions/`), pointing at
   `spex scaffold --update`;
 - an error when `specs/meta.md` or `specs/map.md` is missing;
 - a warning for any other unexpected top-level entry under `specs/`;
-- an error for a `packages/` or `interactions/` file or directory
+- an error for a `packages/` or `compositions/` file or directory
   segment that is not kebab-case, and for a `decisions/` or
   `iterations/` file not named `<NNN>-<kebab-case>.md`.
 
@@ -68,37 +68,49 @@ accepted.
 `specs/meta.md` and `specs/map.md` are exempt from these
 package-file rules.
 
-Where a file under `specs/interactions/` is linted, an error shall
-be reported for a missing H1 short form or `## Intent`; other
-sections are free-form ([META-30](../meta.md#meta-30)).
-A warning shall be reported when an interactions file name is a
+Where a file under `specs/compositions/` is linted, it shall satisfy
+[META-34](../meta.md#meta-34): an error shall be reported for a
+missing H1 short form, a missing `## Intent` or `## Tests`, the
+absence of both `## Binding` and `## Scenario`, an unexpected or
+duplicate `##` section, or sections out of the order Intent,
+Binding, Scenario, Tests, References.
+A warning shall be reported when a compositions file name is a
 composition of existing package names or short forms.
 
 #### LINT-6
 
 Where item-ID headings (`<PACK>-<N>`) are linted across
-`specs/packages/`, `specs/interactions/`, and `specs/meta.md`,
+`specs/packages/`, `specs/compositions/`, and `specs/meta.md`,
 errors shall be reported for an item whose prefix differs from its
 file's short form, an item ID defined more than once across
 `specs/`, and a short form used by more than one file
 ([META-10](../meta.md#meta-10), [META-11](../meta.md#meta-11)).
 A warning shall be reported for an item sitting inside an Intent or
-References section of a package or interaction file.
+References section of a package or compositions file.
 
 #### LINT-7
 
-Where `Verifies:` lines are linted ([META-20](../meta.md#meta-20)):
+Where item relationships are linted, the citations in an item's
+clauses are the single source ([META-20](../meta.md#meta-20)):
 
-- an item under a package's `## Verification` section without a
-  `Verifies:` line immediately below its heading shall be an error;
-- a `Verifies:` line on a package item outside Verification shall be
-  a warning;
-- a package Verification item whose `Verifies:` cites another
-  package's file shall be a warning pointing at
-  `specs/interactions/`;
-- an interactions test item whose `Verifies:` cites exactly one
-  package file shall be a warning suggesting that package's
-  Verification section.
+- a relationship-metadata line (`Verifies:`, `Binds:`, `Composes:`,
+  `Clients:`, `Suppliers:`, `Scope:`, `Requires:`, or `Uses:` at the
+  start of a line inside an item) shall be an error;
+- a package `## Verification` item citing no same-file item anchor
+  shall be an error;
+- a composition `## Tests` item citing no same-file Binding or
+  Scenario item anchor shall be an error;
+- a Binding or Scenario item cited by no same-file Tests item shall
+  be an error ([META-21](../meta.md#meta-21));
+- a package Verification item citing another package's file shall be
+  a warning pointing at `specs/compositions/`;
+- a Tests item that cites a same-file Scenario item while citing
+  fewer than two distinct package files shall be a warning
+  ([META-21](../meta.md#meta-21)).
+
+Where a `## Binding` item is linted, a `When` or `While` clause
+keyword in its text shall be an error: a binding is static
+([META-36](../meta.md#meta-36)).
 
 #### LINT-8
 
@@ -123,7 +135,7 @@ Where records are linted, a DR missing a section of
 [META-4](../meta.md#meta-4) or an IR missing a section of
 [META-5](../meta.md#meta-5) shall be a warning.
 
-Where the map is linted, a `packages/` or `interactions/` file not
+Where the map is linted, a `packages/` or `compositions/` file not
 linked from `specs/map.md` shall be a warning.
 
 ## Internal Behavior
@@ -137,8 +149,9 @@ file under `specs/` once with the same GFM-capable parser the
 migration uses, derive heading anchors with GitHub slug semantics,
 and return the finding list; printing and exit codes belong to the
 CLI layer.
-`Verifies:` detection shall anchor to the first non-blank line below
-an item heading, never to a file-wide text search.
+An item's body shall span from its heading to the next heading of
+the same or shallower depth, and relationship-metadata and clause
+keywords shall be detected outside fenced code blocks only.
 
 ## Verification
 
@@ -146,22 +159,24 @@ an item heading, never to a file-wide text search.
 
 #### LINT-11
 
-Verifies: [LINT-3](#lint-3), [LINT-4](#lint-4), [LINT-5](#lint-5), [LINT-6](#lint-6), [LINT-7](#lint-7), [LINT-8](#lint-8), [LINT-9](#lint-9)
-
 Where the linter is exercised, the test suite shall cover at least
-one fixture per rule family — structure, naming, package sections
-(including localized zh section names), interaction sections and
-name composition, item IDs, Verifies lines (missing, outside,
-cross-package, single-package interaction), citations (broken link,
-broken anchor, legacy path), reference markers, records, map
-listing, and duplicate anchors — asserting rule IDs and severities,
-plus a clean fixture asserting zero findings.
+one fixture per rule family, asserting rule IDs and severities:
+structure and naming ([LINT-4](#lint-4)); package sections with
+localized zh names, composition sections, and name composition
+([LINT-5](#lint-5)); item IDs and misplaced items
+([LINT-6](#lint-6)); relationship metadata, uncited Verification
+and Tests items, uncovered Binding and Scenario items,
+cross-package Verification, the scenario two-package floor, and a
+triggered Binding ([LINT-7](#lint-7)); citations — broken link,
+broken anchor, legacy path ([LINT-8](#lint-8)); reference markers,
+records, and map listing ([LINT-9](#lint-9)); finding format and
+summary ([LINT-3](#lint-3)); plus a clean fixture asserting zero
+findings.
 
 #### LINT-12
 
-Verifies: [LINT-1](#lint-1), [LINT-2](#lint-2), [LINT-3](#lint-3)
-
 Where the real CLI is exercised, the test suite shall assert that a
 failing tree exits non-zero with `<path>:<line>` findings and a
-summary, that a clean freshly scaffolded tree exits zero with the
-no-problems line, and that a missing specs tree exits non-zero.
+summary ([LINT-3](#lint-3)), that a clean freshly scaffolded tree
+exits zero with the no-problems line ([LINT-1](#lint-1)), and that
+a missing specs tree exits non-zero ([LINT-2](#lint-2)).
