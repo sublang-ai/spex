@@ -3,7 +3,11 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { humanizeBasename, mergePackageSources } from "./merge-package.js";
+import {
+  convertVerifiesLines,
+  humanizeBasename,
+  mergePackageSources,
+} from "./merge-package.js";
 
 const SPDX = `<!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 Test -->`;
@@ -176,5 +180,59 @@ describe("humanizeBasename", () => {
   it("title-cases kebab names", () => {
     assert.equal(humanizeBasename("core-service"), "Core Service");
     assert.equal(humanizeBasename("scaffold"), "Scaffold");
+  });
+});
+
+describe("convertVerifiesLines", () => {
+  it("collapses a wrapped Verifies: block to one clean sentence", () => {
+    const text = [
+      "#### RUN-49",
+      "Verifies: [RUN-25](#run-25),",
+      "[RUN-26](#run-26)",
+      "",
+      "The suite shall check.",
+      "",
+    ].join("\n");
+    assert.equal(
+      convertVerifiesLines(text),
+      [
+        "#### RUN-49",
+        "Verifies [RUN-25](#run-25), [RUN-26](#run-26).",
+        "",
+        "The suite shall check.",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("strips the trailing separator of a single-line Verifies:", () => {
+    assert.equal(
+      convertVerifiesLines("Verifies: [A-1](#a-1),\n\nBody.\n"),
+      "Verifies [A-1](#a-1).\n\nBody.\n",
+    );
+  });
+
+  it("never swallows prose lines or fenced content", () => {
+    const text = [
+      "Verifies: [A-1](#a-1)",
+      "Where the CLI runs, it shall pass.",
+      "",
+      "```text",
+      "Verifies: [B-1](#b-1)",
+      "```",
+      "",
+    ].join("\n");
+    assert.equal(
+      convertVerifiesLines(text),
+      [
+        "Verifies [A-1](#a-1).",
+        "Where the CLI runs, it shall pass.",
+        "",
+        "```text",
+        "Verifies: [B-1](#b-1)",
+        "```",
+        "",
+      ].join("\n"),
+    );
   });
 });

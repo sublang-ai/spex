@@ -367,6 +367,10 @@ export type MergeResult = {
 
 const VERIFIES_LINE_RE = /^(\s*)Verifies:\s*(.+?)\s*$/;
 const FENCE_LINE_RE = /^\s*(```|~~~)/;
+// A wrapped continuation of a Verifies: block: citations and
+// separators only, so prose lines are never swallowed.
+const VERIFIES_CONTINUATION_RE =
+  /^\s*(?:\[[^\]]+\]\([^)\s]*\)|,|and|\.|\s)+$/;
 
 /**
  * Rewrite detached `Verifies:` metadata lines as inline
@@ -375,21 +379,45 @@ const FENCE_LINE_RE = /^\s*(```|~~~)/;
  */
 export function convertVerifiesLines(text: string): string {
   const lines = text.split("\n");
+  const out: string[] = [];
   let inFence = false;
   let changed = false;
   for (let index = 0; index < lines.length; index += 1) {
     if (FENCE_LINE_RE.test(lines[index])) {
       inFence = !inFence;
+      out.push(lines[index]);
       continue;
     }
-    if (inFence) continue;
-    const match = lines[index].match(VERIFIES_LINE_RE);
-    if (match !== null) {
-      lines[index] = `${match[1]}Verifies ${match[2].replace(/[.\s]+$/, "")}.`;
-      changed = true;
+    if (inFence) {
+      out.push(lines[index]);
+      continue;
     }
+    const match = lines[index].match(VERIFIES_LINE_RE);
+    if (match === null) {
+      out.push(lines[index]);
+      continue;
+    }
+    // A wrapped block collapses to one sentence: consume the
+    // continuation lines that hold only citations and separators.
+    const parts = [match[2]];
+    while (
+      index + 1 < lines.length &&
+      lines[index + 1].trim() !== "" &&
+      !FENCE_LINE_RE.test(lines[index + 1]) &&
+      VERIFIES_CONTINUATION_RE.test(lines[index + 1])
+    ) {
+      index += 1;
+      parts.push(lines[index]);
+    }
+    const list = parts
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[,.\s]+$/, "");
+    out.push(`${match[1]}Verifies ${list}.`);
+    changed = true;
   }
-  return changed ? lines.join("\n") : text;
+  return changed ? out.join("\n") : text;
 }
 
 /**

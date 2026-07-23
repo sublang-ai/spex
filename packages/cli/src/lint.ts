@@ -25,17 +25,17 @@ export type LintFinding = {
 };
 
 // Localized section names accepted alongside the English ones,
-// matching the bundled zh templates. Composition sections ship in
-// English only.
+// matching the section names the bundled zh meta.md defines for
+// package and composition files.
 const SECTION_ALIASES: Record<string, string[]> = {
   Intent: ["Intent", "意图"],
   "External Behavior": ["External Behavior", "外部行为"],
   "Internal Behavior": ["Internal Behavior", "内部行为"],
   Verification: ["Verification", "验证"],
   References: ["References", "参考资料"],
-  Binding: ["Binding"],
-  Scenario: ["Scenario"],
-  Tests: ["Tests"],
+  Binding: ["Binding", "绑定"],
+  Scenario: ["Scenario", "场景"],
+  Tests: ["Tests", "测试"],
 };
 
 const PACKAGE_SECTION_ORDER = [
@@ -77,6 +77,12 @@ const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 // Detached relationship metadata prohibited by META-20.
 const METADATA_LINE_RE =
   /^(Verifies|Binds|Composes|Clients|Suppliers|Scope|Requires|Uses):(\s|$)/;
+// A relationship-only sentence left by mechanical migration:
+// "Verifies" plus citations and separators. META-20 wants each
+// citation woven into the assertion it supports.
+const HAS_CITATION_RE = /\[[^\]]*\]\([^)]*\)/;
+const CITATION_SCAN_RE = /\[[^\]]*\]\([^)]*\)/g;
+const DETACHED_VERIFIES_RE = /^Verifies\b(?:[\s,.;]|and\b)*$/;
 // Clause keywords a static Binding item must not carry (META-36).
 const TRIGGER_RE = /\b(When|While)\b/;
 const FENCE_RE = /^\s*(```|~~~)/;
@@ -564,7 +570,15 @@ function collectItems(ctx: LintContext): ItemInfo[] {
       if (heading.depth < 2) continue;
       const match = heading.plain.trim().match(ITEM_RE);
       if (match === null) continue;
-      const next = file.headings[index + 1];
+      // LINT-10: the body runs to the next heading of the same or
+      // shallower depth, so nested subsections stay in the item.
+      let bodyEnd = file.lines.length + 1;
+      for (let after = index + 1; after < file.headings.length; after += 1) {
+        if (file.headings[after].depth <= heading.depth) {
+          bodyEnd = file.headings[after].line;
+          break;
+        }
+      }
       items.push({
         file,
         heading,
@@ -572,7 +586,7 @@ function collectItems(ctx: LintContext): ItemInfo[] {
         prefix: match[1],
         section: sectionOf(file, heading),
         bodyStart: heading.line + 1,
-        bodyEnd: next === undefined ? file.lines.length + 1 : next.line,
+        bodyEnd,
       });
     }
   }
@@ -729,13 +743,38 @@ function citedPackageFiles(item: ItemInfo): Set<string> {
   return cited;
 }
 
-function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
+/**
+ * Distinct specs/packages/ files whose items the body cites. A file
+ * link without an item anchor counts toward no package (META-21).
+ */
+function citedPackageItems(
+  item: ItemInfo,
+  bySlug: Map<string, Map<string, ItemInfo>>,
+): Set<string> {
+  const cited = new Set<string>();
+  for (const link of bodyLinks(item)) {
+    const [, ...fragmentParts] = link.url.split("#");
+    const fragment = fragmentParts.join("#");
+    if (fragment === "") continue;
+    const resolved = resolveCitation(item.file, link.url);
+    if (resolved === null || !resolved.startsWith("specs/packages/")) continue;
+    if (bySlug.get(resolved)?.has(fragment)) cited.add(resolved);
+  }
+  return cited;
+}
+
+function itemsBySlug(items: ItemInfo[]): Map<string, Map<string, ItemInfo>> {
   const bySlug = new Map<string, Map<string, ItemInfo>>();
   for (const item of items) {
     const map = bySlug.get(item.file.relPath) ?? new Map<string, ItemInfo>();
     map.set(item.heading.slug, item);
     bySlug.set(item.file.relPath, map);
   }
+  return bySlug;
+}
+
+function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
+  const bySlug = itemsBySlug(items);
 
   // Same-file Tests coverage of Binding/Scenario items (META-21).
   const coveredByTests = new Set<ItemInfo>();
@@ -745,11 +784,15 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
     const inCompositions = isUnder(item.file.relPath, "compositions");
     if (!inPackages && !inCompositions) continue;
 
-    // Relationship-metadata lines are prohibited (META-20).
+    // Relationship-metadata lines are prohibited (META-20), and a
+    // relationship-only "Verifies …" sentence is flagged for
+    // weaving into the assertions it belongs to.
     for (let line = item.bodyStart; line < item.bodyEnd; line += 1) {
       if (item.file.fenced[line - 1]) continue;
       const content = item.file.lines[line - 1];
-      if (content !== undefined && METADATA_LINE_RE.test(content.trimStart())) {
+      if (content === undefined) continue;
+      const trimmed = content.trimStart();
+      if (METADATA_LINE_RE.test(trimmed)) {
         report(
           ctx,
           item.file.relPath,
@@ -757,6 +800,21 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           "error",
           "meta/metadata-line",
           `item ${item.id} carries a relationship-metadata line; inline citations are the single source of relationships (META-20)`,
+        );
+        continue;
+      }
+      if (
+        trimmed.startsWith("Verifies") &&
+        HAS_CITATION_RE.test(trimmed) &&
+        DETACHED_VERIFIES_RE.test(trimmed.replace(CITATION_SCAN_RE, ""))
+      ) {
+        report(
+          ctx,
+          item.file.relPath,
+          line,
+          "warning",
+          "cite/detached",
+          `item ${item.id} carries a detached "Verifies …" sentence; weave each citation into the assertion it supports (META-20)`,
         );
       }
     }
@@ -809,14 +867,14 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
       const citesScenario = bindingOrScenario.some(
         (cited) => cited.section === "Scenario",
       );
-      if (citesScenario && citedPackageFiles(item).size < 2) {
+      if (citesScenario && citedPackageItems(item, bySlug).size < 2) {
         report(
           ctx,
           item.file.relPath,
           item.heading.line,
           "warning",
           "tests/scenario-two-packages",
-          `Tests item ${item.id} exercises a scenario but cites fewer than two package files (META-21)`,
+          `Tests item ${item.id} exercises a scenario but cites items in fewer than two distinct package files (META-21)`,
         );
       }
     }
@@ -853,6 +911,101 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
         "tests/uncovered",
         `${item.section} item ${item.id} is cited by no same-file Tests item (META-21)`,
       );
+    }
+  }
+
+  // META-34: in a file holding both kinds, every Binding item is
+  // depended on by at least one same-file Scenario item.
+  const compositionItems = new Map<string, ItemInfo[]>();
+  for (const item of items) {
+    if (!isUnder(item.file.relPath, "compositions")) continue;
+    const list = compositionItems.get(item.file.relPath) ?? [];
+    list.push(item);
+    compositionItems.set(item.file.relPath, list);
+  }
+  for (const [relPath, fileItems] of compositionItems) {
+    const bindings = fileItems.filter((entry) => entry.section === "Binding");
+    const scenarios = fileItems.filter(
+      (entry) => entry.section === "Scenario",
+    );
+    if (bindings.length === 0 || scenarios.length === 0) continue;
+    const slugMap = bySlug.get(relPath) ?? new Map<string, ItemInfo>();
+    const citedByScenario = new Set<ItemInfo>();
+    for (const scenario of scenarios) {
+      for (const cited of citedSameFileItems(scenario, slugMap)) {
+        citedByScenario.add(cited);
+      }
+    }
+    for (const binding of bindings) {
+      if (!citedByScenario.has(binding)) {
+        report(
+          ctx,
+          relPath,
+          binding.heading.line,
+          "error",
+          "binding/no-scenario",
+          `Binding item ${binding.id} is cited by no same-file Scenario item; a binding no scenario here depends on belongs in a bindings-only file (META-34)`,
+        );
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------
+// Citation discipline (META-14, META-15) — LINT-13
+// ---------------------------------------------------------------
+
+function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
+  const bySlug = itemsBySlug(items);
+  for (const file of ctx.files.values()) {
+    if (!isUnder(file.relPath, "packages")) continue;
+
+    // A package Intent is self-contained prose (META-15).
+    const h2s = file.headings.filter((heading) => heading.depth === 2);
+    for (const [index, heading] of h2s.entries()) {
+      if (SECTION_BY_NAME.get(heading.plain.trim()) !== "Intent") continue;
+      const end = h2s[index + 1]?.line ?? file.lines.length + 1;
+      for (const link of file.links) {
+        if (link.kind !== "link") continue;
+        if (link.line > heading.line && link.line < end) {
+          report(
+            ctx,
+            file.relPath,
+            link.line,
+            "warning",
+            "intent/cited",
+            "the Intent section carries a citation; keep Intent self-contained prose (META-15)",
+          );
+        }
+      }
+    }
+
+    // Package citations never target a peer's Internal Behavior
+    // (META-14).
+    for (const link of file.links) {
+      if (link.kind !== "link") continue;
+      const [path, ...fragmentParts] = link.url.split("#");
+      const fragment = fragmentParts.join("#");
+      if (path === "" || fragment === "") continue;
+      const resolved = resolveCitation(file, link.url);
+      if (
+        resolved === null ||
+        resolved === file.relPath ||
+        !resolved.startsWith("specs/packages/")
+      ) {
+        continue;
+      }
+      const target = bySlug.get(resolved)?.get(fragment);
+      if (target !== undefined && target.section === "Internal Behavior") {
+        report(
+          ctx,
+          file.relPath,
+          link.line,
+          "warning",
+          "cite/internal",
+          `citation targets ${target.id} inside ${resolved}'s Internal Behavior; cite External Behavior or move the reliance to a composition (META-14)`,
+        );
+      }
     }
   }
 }
@@ -1131,6 +1284,7 @@ export function lintSpecs(basePath: string): LintFinding[] {
   const items = collectItems(ctx);
   lintItems(ctx, items);
   lintItemRelationships(ctx, items);
+  lintCitationDiscipline(ctx, items);
   lintCitations(ctx);
   lintReferences(ctx);
   lintRecords(ctx);

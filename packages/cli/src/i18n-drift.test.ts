@@ -19,6 +19,8 @@ const TRANSLATED_META_ITEMS = new Set([
   "META-7",
   "META-19",
   "META-27",
+  "META-28",
+  "META-34",
 ]);
 
 function listOverlayLanguages(): string[] {

@@ -745,7 +745,10 @@ describe("CLI integration", () => {
   });
 
   // SCAF-50: interactions files move to compositions with citations
-  // and the map heading rewritten.
+  // and the map heading rewritten; a wrapped Verifies: block joins
+  // into one inline sentence; the tool does not reshape moved files
+  // into the META-34 grammar, so the remaining lint errors stay
+  // confined to the moved composition files (SCAF-49).
   it("update: specs/interactions/ migrates to specs/compositions/", () => {
     const dir = makeTmp();
     try {
@@ -755,12 +758,34 @@ describe("CLI integration", () => {
       write(
         dir,
         "specs/interactions/login-flow.md",
-        "# LF: Login Flow\n\n## Intent\n\nSee [git](../packages/git.md#git-1).\n",
+        [
+          "# LF: Login Flow",
+          "",
+          "## Intent",
+          "",
+          "End-to-end login.",
+          "",
+          "## Behaviors",
+          "",
+          "### LF-1",
+          "",
+          "When a user signs in, the system shall record it",
+          "([NOTES-1](../packages/notes.md#notes-1)).",
+          "",
+          "## Tests",
+          "",
+          "### LF-2",
+          "Verifies: [LF-1](#lf-1),",
+          "[NOTES-1](../packages/notes.md#notes-1)",
+          "",
+          "The suite shall assert sign-in is recorded.",
+          "",
+        ].join("\n"),
       );
       write(
         dir,
         "specs/packages/notes.md",
-        "# NOTES: Notes\n\n## Intent\n\nSee [flow](../interactions/login-flow.md).\n\n## External Behavior\n\n### NOTES-1\n\nX shall Y.\n",
+        "# NOTES: Notes\n\n## Intent\n\nNote keeping.\n\n## External Behavior\n\n### NOTES-1\n\nX shall Y (see [flow](../interactions/login-flow.md)).\n",
       );
       const map = readFileSync(join(dir, "specs", "map.md"), "utf-8");
       writeFileSync(
@@ -771,13 +796,18 @@ describe("CLI integration", () => {
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.ok(
-        existsSync(join(dir, "specs", "compositions", "login-flow.md")),
-      );
       assert.ok(!existsSync(join(dir, "specs", "interactions")));
       assert.equal(
         parseIndicators(result.stdout).get("specs/compositions/login-flow.md"),
         "migrated from specs/interactions/login-flow.md",
+      );
+      const moved = readFileSync(
+        join(dir, "specs", "compositions", "login-flow.md"),
+        "utf-8",
+      );
+      assert.match(
+        moved,
+        /^Verifies \[LF-1\]\(#lf-1\), \[NOTES-1\]\(\.\.\/packages\/notes\.md#notes-1\)\.$/m,
       );
       const notes = readFileSync(
         join(dir, "specs", "packages", "notes.md"),
@@ -791,6 +821,16 @@ describe("CLI integration", () => {
       assert.ok(
         result.stdout.includes(readBundledMarkdown("compositions-prompt.md")),
       );
+
+      const lint = run(["lint"], { cwd: dir });
+      assert.notEqual(lint.exitCode, 0, lint.stdout);
+      const errorLines = lint.stdout
+        .split("\n")
+        .filter((line) => line.includes(": error "));
+      assert.ok(errorLines.length > 0, lint.stdout);
+      for (const line of errorLines) {
+        assert.match(line, /^specs\/compositions\/login-flow\.md:/, line);
+      }
     } finally {
       rmSync(dir, { recursive: true });
     }

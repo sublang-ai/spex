@@ -123,22 +123,23 @@ A spec package shall have a basename \<kebab-case\>.md unique across `specs/pack
 
 Example: `package-management.md` has short form `PKGMGT`.
 
+<!-- spex-i18n-source: META-28 sha256-a59811f451c59e2b0139b9c5acd314f792a5c0f2186128e25d812b958ea680b0 -->
 ### META-28
 
-Each package file shall contain only the following `##` sections, in this order:
+每个包文件应只包含下列 `##` 章节，并按此顺序排列：
 
-| Section | Presence | Content |
+| 章节 | 是否必需 | 内容 |
 | ------- | -------- | ------- |
-| `## Intent` | required | the package's purpose ([META-3](#meta-3)) |
-| `## External Behavior` | optional | outcomes and guarantees the package's users may rely on |
-| `## Internal Behavior` | optional | consumed requirements and private invariants, hidden from the package's users |
-| `## Verification` | optional | test items checking this package's claims ([META-21](#meta-21)) |
-| `## References` | optional | external sources ([META-19](#meta-19)) |
+| `## 意图` | 必需 | 包的目的（[META-3](#meta-3)） |
+| `## 外部行为` | 可选 | 包的使用者可以依赖的结果与保证 |
+| `## 内部行为` | 可选 | 消费型需求与私有不变量，对包的使用者隐藏 |
+| `## 验证` | 可选 | 检验本包主张的测试条目（[META-21](#meta-21)） |
+| `## 参考资料` | 可选 | 外部来源（[META-19](#meta-19)） |
 
-At least one of `## External Behavior` and `## Internal Behavior` shall be present.
-A package's user is any human, host, or peer component using its contract; classification is package-relative, and a peer may rely only on External Behavior.
-Topic subsections (`###`) and item headings (`###` or `####`) live inside the behavior and Verification sections.
-Localized scaffolds translate these section headings; the bundled templates define the active names.
+`## 外部行为` 与 `## 内部行为` 至少应有其一。
+包的使用者是使用其契约的任何人、宿主或对等组件；这一分类相对于包而言，对等组件只可依赖外部行为。
+主题小节（`###`）与条目标题（`###` 或 `####`）位于行为章节和验证章节内部。
+本地化 scaffold 会翻译这些章节名；以捆绑模板定义的名称为准。
 
 ### META-11
 
@@ -202,22 +203,23 @@ A file's identity is its basename and short form ([META-10](#meta-10)); moving a
 
 Files under `packages/` shall not cite files under `compositions/`.
 
+<!-- spex-i18n-source: META-34 sha256-40ce5f0f4330d47a4c16ac679907238905696b52f0b6ecb4fa983ad6ef390e7b -->
 ### META-34
 
-Each composition file shall contain only the following `##` sections, in this order:
+每个组合文件应只包含下列 `##` 章节，并按此顺序排列：
 
-| Section | Presence | Content |
+| 章节 | 是否必需 | 内容 |
 | ------- | -------- | ------- |
-| `## Intent` | required | the concern's purpose ([META-3](#meta-3)) |
-| `## Binding` | optional | binding items ([META-36](#meta-36)) |
-| `## Scenario` | optional | integrated-behavior items over the composed system |
-| `## Tests` | required | test items citing what they verify ([META-20](#meta-20)) |
-| `## References` | optional | external sources ([META-19](#meta-19)) |
+| `## 意图` | 必需 | 该组合关注点的目的（[META-3](#meta-3)） |
+| `## 绑定` | 可选 | 绑定条目（[META-36](#meta-36)） |
+| `## 场景` | 可选 | 面向组合系统的集成行为条目 |
+| `## 测试` | 必需 | 引用其所验证内容的测试条目（[META-20](#meta-20)） |
+| `## 参考资料` | 可选 | 外部来源（[META-19](#meta-19)） |
 
-At least one of `## Binding` and `## Scenario` shall be present.
-Where both sections are present, each binding item shall be cited by at least one same-file scenario item whose outcome depends on it — a binding no same-file scenario depends on, or one that serves several files' concerns, shall live in a bindings-only file.
-Binding overlays, package-focused indexes, and other projections over these files shall be derived, read-only views.
-Localized scaffolds translate these section headings; the bundled templates define the active names.
+`## 绑定` 与 `## 场景` 至少应有其一。
+当两个章节同时存在时，每个绑定条目应被至少一个结果依赖于它的同文件场景条目引用——没有任何同文件场景依赖的绑定，或服务于多个文件关注点的绑定，应放入仅含绑定的文件。
+绑定总览、以包为中心的索引等基于这些文件的投影应是派生的只读视图。
+本地化 scaffold 会翻译这些章节名；以捆绑模板定义的名称为准。
 
 ## Citation
 

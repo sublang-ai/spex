@@ -397,6 +397,86 @@ describe("lintSpecs", () => {
     assert.ok(!rules(clean).includes("anchors/duplicate"));
   });
 
+  it("spans an item body to nested subheadings (LINT-10)", () => {
+    const findings = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y.\n\n## Verification\n\n### A-2\n\nCoverage notes.\n\n#### Evidence\n\nThe suite shall assert Y ([A-1](#a-1)).\n\nBinds: leftover metadata\n",
+    });
+    assert.ok(!rules(findings).includes("verify/uncited"));
+    assert.ok(rules(findings).includes("meta/metadata-line"));
+  });
+
+  it("does not count anchor-less package links toward the scenario floor", () => {
+    const findings = findingsFor({
+      "specs/packages/auth.md": CLEAN_PACKAGE,
+      "specs/packages/audit.md": AUDIT_PACKAGE,
+      "specs/compositions/flow.md":
+        "# FLOW: Flow\n\n## Intent\n\nX.\n\n## Scenario\n\n### FLOW-1\n\nWhen a login succeeds ([AUTH-1](../packages/auth.md#auth-1)), the audit log shall record it ([AUD-1](../packages/audit.md#aud-1)).\n\n## Tests\n\n### FLOW-2\n\nThe suite shall assert the flow ([FLOW-1](#flow-1)) across [auth](../packages/auth.md) and [audit](../packages/audit.md).\n",
+    });
+    assert.ok(rules(findings).includes("tests/scenario-two-packages"));
+  });
+
+  it("errors on a Binding no same-file Scenario cites in a mixed file", () => {
+    const mixed = findingsFor({
+      "specs/packages/auth.md": CLEAN_PACKAGE,
+      "specs/compositions/flow.md":
+        "# FLOW: Flow\n\n## Intent\n\nX.\n\n## Binding\n\n### FLOW-1\n\nWhere logins are needed ([AUTH-1](../packages/auth.md#auth-1)), the deployment shall use Example Auth.\n\n## Scenario\n\n### FLOW-2\n\nThe composed system shall proceed ([AUTH-1](../packages/auth.md#auth-1)).\n\n## Tests\n\n### FLOW-3\n\nThe suite shall assert both ([FLOW-1](#flow-1), [FLOW-2](#flow-2), [AUTH-1](../packages/auth.md#auth-1)).\n",
+    });
+    assert.ok(rules(mixed).includes("binding/no-scenario"));
+
+    const woven = findingsFor({
+      "specs/packages/auth.md": CLEAN_PACKAGE,
+      "specs/compositions/flow.md":
+        "# FLOW: Flow\n\n## Intent\n\nX.\n\n## Binding\n\n### FLOW-1\n\nWhere logins are needed ([AUTH-1](../packages/auth.md#auth-1)), the deployment shall use Example Auth.\n\n## Scenario\n\n### FLOW-2\n\nWhere the login binding holds ([FLOW-1](#flow-1)), the composed system shall proceed ([AUTH-1](../packages/auth.md#auth-1)).\n\n## Tests\n\n### FLOW-3\n\nThe suite shall assert both ([FLOW-1](#flow-1), [FLOW-2](#flow-2), [AUTH-1](../packages/auth.md#auth-1)).\n",
+    });
+    assert.ok(!rules(woven).includes("binding/no-scenario"));
+  });
+
+  it("warns on a detached Verifies sentence (LINT-13)", () => {
+    const findings = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y.\n\n## Verification\n\n### A-2\n\nVerifies [A-1](#a-1).\n\nThe suite shall assert Y.\n",
+    });
+    assert.ok(rules(findings).includes("cite/detached"));
+    assert.ok(!rules(findings).includes("meta/metadata-line"));
+    assert.ok(!rules(findings).includes("verify/uncited"));
+  });
+
+  it("warns on Intent citations and peer-Internal citations (LINT-13)", () => {
+    const findings = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nBuilt per [DR-001](../decisions/001-a.md).\n\n## External Behavior\n\n### A-1\n\nWhere audit is reported ([AUD-1](audit.md#aud-1)), X shall Y.\n",
+      "specs/packages/audit.md": AUDIT_PACKAGE,
+      "specs/decisions/001-a.md":
+        "# DR-001: A\n\n## Status\n\nAccepted\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n",
+    });
+    assert.ok(rules(findings).includes("intent/cited"));
+    assert.ok(rules(findings).includes("cite/internal"));
+
+    const composition = findingsFor({
+      "specs/packages/audit.md": AUDIT_PACKAGE,
+      "specs/compositions/trail.md":
+        "# TRAIL: Trail\n\n## Intent\n\nX.\n\n## Scenario\n\n### TRAIL-1\n\nThe composed system shall record ([AUD-1](../packages/audit.md#aud-1)).\n\n## Tests\n\n### TRAIL-2\n\nThe suite shall assert recording ([TRAIL-1](#trail-1), [AUD-1](../packages/audit.md#aud-1)).\n",
+    });
+    assert.ok(!rules(composition).includes("cite/internal"));
+    assert.ok(!rules(composition).includes("intent/cited"));
+  });
+
+  it("accepts localized zh composition sections", () => {
+    const findings = findingsFor({
+      "specs/packages/auth.md":
+        "# AUTH: 认证\n\n## 意图\n\n认证行为。\n\n## 外部行为\n\n### AUTH-1\n\n当凭据有效时，系统应登录。\n\n## 验证\n\n### AUTH-2\n\n测试套件应断言有效登录成功（[AUTH-1](#auth-1)）。\n",
+      "specs/packages/audit.md":
+        "# AUD: 审计\n\n## 意图\n\n审计行为。\n\n## 外部行为\n\n### AUD-1\n\n当事件上报时，审计日志应记录。\n",
+      "specs/compositions/login-audit.md":
+        "# LAT: 登录审计\n\n## 意图\n\n登录留痕。\n\n## 场景\n\n### LAT-1\n\n当登录成功（[AUTH-1](../packages/auth.md#auth-1)）时，审计日志应记录（[AUD-1](../packages/audit.md#aud-1)）。\n\n## 测试\n\n### LAT-2\n\n验收套件应断言桩登录留下一条审计记录（[LAT-1](#lat-1)、[AUTH-1](../packages/auth.md#auth-1)、[AUD-1](../packages/audit.md#aud-1)）。\n",
+      "specs/map.md": MAP(
+        "| 文件 | 摘要 |\n| --- | --- |\n| [auth.md](packages/auth.md) | 认证 |\n| [audit.md](packages/audit.md) | 审计 |\n| [login-audit.md](compositions/login-audit.md) | 登录审计 |",
+      ),
+    });
+    assert.deepEqual(findings, []);
+  });
+
   it("skips metadata and trigger detection inside fenced code", () => {
     const findings = findingsFor({
       "specs/compositions/platform.md":
