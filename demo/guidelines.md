@@ -68,7 +68,7 @@ consumed requirements and private invariants.
 No peer package may rely on or cite an internal item; the
 outsiders with standing are the installation's binding items,
 which may target a consumed requirement as their client
-([META-31](specs/meta.md#meta-31)); scenario items, where an
+([META-35](specs/meta.md#meta-35)); scenario items, where an
 integrated claim materially needs an internal gate —
 [GUARD-2](specs/compositions/protected-content.md#guard-2)
 pins four without exposing one; and tests, which may inspect
@@ -143,7 +143,7 @@ drop into another product unchanged.
   A replaceable code library gets less still — no binding item
   at all: its behavioral guarantee, if any, belongs to the
   package that owns the outcome, and its selection to a
-  decision record ([META-31](specs/meta.md#meta-31)).
+  decision record ([META-35](specs/meta.md#meta-35)).
   The exception proves the rule: GitHub appears in
   [AUTH](specs/packages/identity/github-login.md) items because
   the user sees GitHub; the technology is the behavior there.
@@ -208,7 +208,7 @@ integrated.
   scenario test spans two or more packages; a binding inspection
   may touch one package and its service
   ([META-20](specs/meta.md#meta-20),
-  [META-31](specs/meta.md#meta-31)).
+  [META-21](specs/meta.md#meta-21)).
   These inline citations make coverage mechanically auditable —
   in the demo's adversarial review, every stale citation and
   unverified map cell was caught by walking them.
@@ -272,7 +272,7 @@ cannot tell, which is the point.
   suppliers or the inputs of a rule the installation owns — and
   the provision side cites only offered behavior: External
   items or a named service
-  ([META-31](specs/meta.md#meta-31)).
+  ([META-36](specs/meta.md#meta-36)).
   When no single supplier serves the need, the shall clause
   states a rule the installation itself owns:
   [GUARD-5](specs/compositions/protected-content.md#guard-5)
@@ -319,7 +319,7 @@ cannot tell, which is the point.
   names no collaborator — excluding drafts at the data layer is
   the catalog's own discipline — so it is a private invariant,
   and inventing a "draft-filter provider" to bind it would not
-  make it consumed ([META-31](specs/meta.md#meta-31)).
+  make it consumed ([META-35](specs/meta.md#meta-35)).
 - **The litmus is the swap.**
   Rebind a supplier and every package item reads unchanged:
   swapping Supabase is a new DR plus rewritten PLAT items,

@@ -14,7 +14,7 @@ store", "the deployment's media provider", "the pipeline" — per
 [META-15](../meta.md#meta-15).
 The deployment must bind each subject to one concrete service;
 each binding is an inspectable installation obligation, so it
-is a spec item ([META-31](../meta.md#meta-31)): the supply
+is a spec item ([META-36](../meta.md#meta-36)): the supply
 bindings of
 [platform-services.md](../compositions/platform-services.md).
 This record holds the choice of services and its tradeoffs.
