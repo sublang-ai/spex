@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the spec view's data layout and group model are amended by [DR-015](015-reference-content.md) — packages-layout parsing with section-kind groups replaces the user/dev/test triple.
 
 ## Context
 

@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; registry generation amended by [DR-014](014-released-toolchain.md) — slc now emits the registry entry, and Spex wraps it instead of synthesizing one.
 
 ## Context
 

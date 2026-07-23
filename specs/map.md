@@ -36,6 +36,8 @@ meta.md       The spec of specs
 | DR-011 | [011-project-workspace.md](decisions/011-project-workspace.md) | Project-first workspace: four-surface taxonomy, project palette, per-project tabs + Specs/Repo, interactive spec view |
 | DR-012 | [012-spec-package-files.md](decisions/012-spec-package-files.md) | One-file spec packages + interactions; mechanical migration; spec linter |
 | DR-013 | [013-sublang-brand.md](decisions/013-sublang-brand.md) | SubLang brand adoption: purple interaction hue, warm light neutrals, brand-recolored product logo and app icon |
+| DR-014 | [014-released-toolchain.md](decisions/014-released-toolchain.md) | Released toolchain adoption: playbook 2.0 / cligent 0.16 host boundary, effort key, slc-emitted registry wrapper, invalidation, session cwd |
+| DR-015 | [015-reference-content.md](decisions/015-reference-content.md) | Reference content: built-in sources + catalog, slc demo example, Academy seed project, packages-layout spec view |
 
 ## Iterations
 
@@ -60,6 +62,8 @@ meta.md       The spec of specs
 | IR-016 | [016-project-workspace.md](iterations/016-project-workspace.md) | DR-011 implemented: workspace IA, project palette, spec view |
 | IR-017 | [017-spec-structure-refactor.md](iterations/017-spec-structure-refactor.md) | DR-012 implemented: packages/interactions layout, migration, linter, repo migration |
 | IR-018 | [018-brand-round.md](iterations/018-brand-round.md) | DR-013 applied: brand theme tokens, indigo→brand sweep, product logo, app icon |
+| IR-019 | [019-toolchain-upgrade.md](iterations/019-toolchain-upgrade.md) | DR-014 applied: playbook 2.0 / cligent 0.16 upgrade, effort rename, slc entry adoption, invalidation, session cwd |
+| IR-020 | [020-reference-content.md](iterations/020-reference-content.md) | DR-015 applied: built-in sources + catalog, slc demo example, Academy seed, packages-layout spec view |
 
 ## Packages
 
