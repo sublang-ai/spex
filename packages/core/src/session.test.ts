@@ -31,8 +31,15 @@ function registryEntry() {
 
 async function setup(records: RecordEnvelope[]) {
   const top = parseYaml(readFileSync(templatePath(), "utf8"));
-  const composed = await composeConfig(top, async () => ({
-    default: registryEntry(),
+  const composed = await composeConfig(top, async (specifier) => ({
+    default: specifier.includes("discuss")
+      ? {
+          ...registryEntry(),
+          id: "discuss",
+          command: "discuss",
+          requiredRoleIds: ["host", "participant"],
+        }
+      : registryEntry(),
   }));
   const store = new Store(join(mkdtempSync(join(tmpdir(), "spex-sess-")), "s.db"));
   const { imports, stats } = fakeAdapterImports({
@@ -70,9 +77,14 @@ test("end-to-end turn produces ordered persisted records with visibility flags",
   const info = await manager.createSession(project, composed);
   assert.deepEqual(
     info.players.map((p) => p.id),
-    ["code-coder", "code-reviewer"],
+    ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
   );
-  assert.deepEqual(info.initialVisible, ["code-coder", "code-reviewer"]);
+  assert.deepEqual(info.initialVisible, [
+    "code-coder",
+    "code-reviewer",
+    "discuss-host",
+    "discuss-participant",
+  ]);
 
   manager.submitTurn(info.id, "fix the bug");
   assert.throws(

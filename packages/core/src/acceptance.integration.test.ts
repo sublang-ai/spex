@@ -133,7 +133,7 @@ test("ACCEPT: the bundled template composes against the real CODE registry", asy
 
   assert.deepEqual(
     composed.players.map((p) => p.id),
-    ["code-coder", "code-reviewer"],
+    ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
   );
   assert.equal(composed.captainAgent.adapter, "claude");
   assert.equal(composed.playbooks[0].id, "code");
@@ -174,9 +174,9 @@ test("ACCEPT: a real session starts over the real shell and CODE registry", asyn
   });
   assert.deepEqual(
     session.players.map((p) => p.id),
-    ["code-coder", "code-reviewer"],
+    ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
   );
-  assert.deepEqual(session.initialVisible, ["code-coder", "code-reviewer"]);
+  assert.deepEqual(session.initialVisible, ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"]);
 
   client.close();
   await service.stop();

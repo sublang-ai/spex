@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export type { TmuxPlayRecord };
 
@@ -227,6 +227,8 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     path: z.string().min(1),
     scaffold: z.boolean().optional(),
+    /** Seed the Academy example corpus (DR-015); excludes scaffold. */
+    example: z.boolean().optional(),
   }),
   z.object({ type: z.literal("project.status"), id, projectId: z.string().min(1) }),
   z.object({
@@ -279,6 +281,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     playbookId: z.string().min(1),
   }),
+  z.object({ type: z.literal("library.builtins"), id }),
   z.object({ type: z.literal("specs.get"), id, projectId: z.string().min(1) }),
   z.object({
     type: z.literal("specs.read"),
@@ -333,6 +336,7 @@ export interface CommandResults {
   "compile.run": ConfigState;
   "compile.abort": null;
   "playbook.artifacts": PlaybookArtifacts;
+  "library.builtins": { builtins: BuiltinPlaybookInfo[] };
   "specs.get": SpecTreeState;
   "specs.read": { markdown: string };
 }
@@ -341,46 +345,50 @@ export interface CommandResults {
 // Spec view data (SPECV, DR-011)
 // ---------------------------------------------------------------------------
 
+export type SpecGroup = "external" | "internal" | "test";
+
 export interface SpecItemInfo {
   /** Item ID, e.g. "RUN-9". */
   id: string;
-  group: "user" | "dev" | "test";
-  /** Nearest `##` section heading above the item (Intent excluded). */
-  section?: string;
+  /** Section-kind group (DR-015): external = External Behavior +
+   * Scenario, internal = Internal Behavior + Binding, test =
+   * Verification + Tests. */
+  group: SpecGroup;
+  /** Containing `##` section heading, verbatim. */
+  section: string;
+  /** Nearest `###` topic heading above a `####` item, when present. */
+  topic?: string;
   /** One-line digest: the item's first sentence. */
   firstLine: string;
   /** Full markdown body of the item. */
   text: string;
-  /** Item IDs cited on a test item's Verifies line. */
-  verifies: string[];
+  /** Item IDs cited by inline links in the item body. */
+  cites: string[];
 }
 
-export interface SpecGroupFile {
+export interface SpecFileInfo {
   /** Path relative to the project root. */
   path: string;
+  /** Collection the file lives in (DR-012 layout). */
+  kind: "package" | "composition";
+  /** Collection-relative path minus .md, e.g. "identity/github-login". */
+  key: string;
+  /** Collection subdirectory ("" at collection root) — navigation only. */
+  dir: string;
+  basename: string;
+  /** Short form from the `# <SHORT>: <Title>` heading, falling back
+   * to the majority item prefix. */
+  shortForm?: string;
+  /** Title from the H1 heading, after the short form. */
+  title?: string;
   /** First paragraph of the file's `## Intent` section. */
   intent?: string;
   /** Items in document order — never sorted by ID. */
   items: SpecItemInfo[];
+  /** Consistency notices (prefix disagreements, section surprises). */
+  notices: string[];
   /** Parse-failure notice; items may be partial when set. */
   error?: string;
-}
-
-export interface SpecPackageInfo {
-  /** Package key: relative dir + basename, e.g. "auth/login". */
-  key: string;
-  /** Directory part of the key ("" for top-level packages). */
-  dir: string;
-  basename: string;
-  /** Shared item-ID prefix, e.g. "RUN"; absent when no items. */
-  shortForm?: string;
-  /** Consistency notices (prefix disagreements, path mismatches). */
-  notices: string[];
-  groups: {
-    user?: SpecGroupFile;
-    dev?: SpecGroupFile;
-    test?: SpecGroupFile;
-  };
 }
 
 export interface SpecRecordInfo {
@@ -394,13 +402,34 @@ export interface SpecRecordInfo {
 export interface SpecTreeState {
   /** False when the project has no specs/ directory. */
   present: boolean;
-  packages: SpecPackageInfo[];
+  /** True when the tree uses the pre-DR-012 user/dev/test layout;
+   * files stay empty and the view shows migration guidance. */
+  legacy: boolean;
+  files: SpecFileInfo[];
   decisions: SpecRecordInfo[];
   iterations: SpecRecordInfo[];
   /** Tree-level notices (unknown top-level entries, etc.). */
   notices: string[];
   /** When the tree was read, ms epoch. */
   readAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// Built-in playbook catalog (DR-015)
+// ---------------------------------------------------------------------------
+
+export interface BuiltinPlaybookInfo {
+  id: string;
+  command: string;
+  intent: string;
+  /** Registry module specifier for the config `from` key. */
+  from: string;
+  /** Role ids the registry entry requires. */
+  roles: string[];
+  /** True when the active config already registers this id. */
+  configured: boolean;
+  /** Playbook source markdown (vendored; DR-015). */
+  source?: string;
 }
 
 // ---------------------------------------------------------------------------

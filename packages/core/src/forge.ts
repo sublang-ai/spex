@@ -7,8 +7,9 @@
 // the v1 implementation. No credentials are ever stored.
 
 import { execFile } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, realpathSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { ForgeItem, ForgeState, RepoStatusInfo } from "./protocol.js";
 
@@ -153,6 +154,70 @@ export async function createProjectRepo(
     );
   }
   return { scaffolded };
+}
+
+export interface SeedExampleOptions {
+  path: string;
+  run?: RunCommand;
+  /** Corpus dir override for tests; defaults to the staged Academy. */
+  corpusDir?: string;
+}
+
+/** The staged Academy corpus (DR-015): built from the repo demo/. */
+export function academyCorpusDir(): string {
+  return fileURLToPath(new URL("../assets/academy", import.meta.url));
+}
+
+/**
+ * Materialize the Academy example (DR-015): empty or absent target
+ * only, copy the corpus, git init, add everything, one seed commit.
+ * The commit tolerates failure (e.g. an unusable signing setup) —
+ * the project still registers with the files in place.
+ */
+export async function seedExampleProject(
+  options: SeedExampleOptions,
+): Promise<void> {
+  const run = options.run ?? defaultRunCommand;
+  const target = resolvePath(options.path);
+  if (existsSync(target) && readdirSync(target).length > 0) {
+    throw new Error(
+      `${target} is not empty; the example seeds only a new or empty directory`,
+    );
+  }
+  const corpus = options.corpusDir ?? academyCorpusDir();
+  if (!existsSync(corpus)) {
+    throw new Error(`example corpus missing at ${corpus}`);
+  }
+  mkdirSync(target, { recursive: true });
+  cpSync(corpus, target, { recursive: true });
+  const init = await run("git", ["init", target]);
+  if (init.code !== 0) {
+    throw new Error(`git init failed: ${init.stderr.trim() || init.stdout.trim()}`);
+  }
+  await run("git", ["add", "-A"], target);
+  const message = "chore: seed the Academy example";
+  const commit = await run("git", ["commit", "-m", message], target);
+  if (commit.code !== 0) {
+    // A signing policy without a usable key, or a machine with no git
+    // identity, must not strand the seed: retry unsigned with a
+    // neutral fallback identity. Normal setups keep the signed,
+    // user-authored commit from the first attempt.
+    await run(
+      "git",
+      [
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "user.name=Spex",
+        "-c",
+        "user.email=spex@sublang.ai",
+        "commit",
+        "-m",
+        message,
+      ],
+      target,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

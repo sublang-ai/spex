@@ -47,3 +47,9 @@ playbooks:
       coder: claude-opus-1m
       reviewer: claude-opus   # single-vendor default; swap in codex-gpt if configured
     committer: coder      # which role commits - `coder` or `reviewer`
+  discuss:
+    from: "@sublang/playbook/discuss/registry"
+    players:
+      host: claude-opus
+      participant: claude-opus   # pairs well with a second-vendor profile
+    committer: host       # which role commits - `host` or `participant`

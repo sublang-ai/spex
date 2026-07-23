@@ -1,46 +1,81 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The spec-view data plane (SPECV, DR-011): parse a project's specs/
-// tree into the protocol's SpecTreeState in one pass, and confine
-// specs.read fetches to the specs/ directory. Sync fs is deliberate —
-// spec trees are small and reads happen on request (no watcher).
+// The spec-view data plane (SPECV; DR-011, DR-015): parse a project's
+// specs/ tree — the DR-012 packages layout — into the protocol's
+// SpecTreeState in one pass, and confine specs.read fetches to the
+// specs/ directory. Sync fs is deliberate — spec trees are small and
+// reads happen on request (no watcher).
 
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 
 import type {
-  SpecGroupFile,
-  SpecItemInfo,
-  SpecPackageInfo,
+  SpecFileInfo,
+  SpecGroup,
   SpecRecordInfo,
   SpecTreeState,
 } from "./protocol.js";
 
-const GROUPS = ["user", "dev", "test"] as const;
-type GroupName = (typeof GROUPS)[number];
+type SpecFileKind = SpecFileInfo["kind"];
 
-/** `### <ALLCAPS>-<N>` item heading, tolerating a trailing {#anchor}. */
-const ITEM_HEADING = /^###\s+([A-Z][A-Z0-9]*-\d+)\s*(?:\{#[^}]*\})?\s*$/;
-const FENCE = /^\s*(?:```|~~~)/;
+/** Collection directory -> file kind (DR-012 layout). */
+const COLLECTIONS: readonly {
+  dir: "packages" | "compositions";
+  kind: SpecFileKind;
+}[] = [
+  { dir: "packages", kind: "package" },
+  { dir: "compositions", kind: "composition" },
+];
+
+/** Pre-DR-012 group directories: any of them marks a legacy tree. */
+const LEGACY_DIRS = ["user", "dev", "test"] as const;
+
 const KNOWN_TOP_LEVEL = new Set([
-  "user",
-  "dev",
-  "test",
+  "packages",
+  "compositions",
   "decisions",
   "iterations",
   "map.md",
   "meta.md",
 ]);
 
+/** `### PACK-N` / `#### PACK-N` item heading (META-11). */
+const ITEM_HEADING = /^(#{3,4})\s+([A-Z][A-Z0-9]*-\d+)\s*$/;
+/** A bare item ID, as used in citation link text (META-16, META-20). */
+const ITEM_ID = /^[A-Z][A-Z0-9]*-\d+$/;
+/** A link fragment that targets an item heading's anchor. */
+const ITEM_ANCHOR = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
+/** `# <SHORT>: <Title>` H1 (META-10). */
+const H1_SHORT_FORM = /^([A-Z][A-Z0-9]*):\s*(.+)$/;
+const FENCE = /^\s*(?:```|~~~)/;
+const INLINE_LINK = /\[([^\]]+)\]\(([^()\s]+)\)/g;
+
+/** Known `##` sections -> filter group (DR-015; META-28, META-34). */
+const SECTION_GROUPS: Record<SpecFileKind, ReadonlyMap<string, SpecGroup>> = {
+  package: new Map([
+    ["External Behavior", "external"],
+    ["Internal Behavior", "internal"],
+    ["Verification", "test"],
+  ]),
+  composition: new Map([
+    ["Binding", "internal"],
+    ["Scenario", "external"],
+    ["Tests", "test"],
+  ]),
+};
+
 // ---------------------------------------------------------------------------
-// Per-file parsing (pure text -> SpecGroupFile)
+// Per-file parsing (pure text -> SpecFileInfo)
 // ---------------------------------------------------------------------------
 
 interface OpenItem {
   id: string;
+  /** Heading level: 3 or 4. */
+  level: number;
   section: string | undefined;
+  topic: string | undefined;
   body: string[];
 }
 
@@ -48,51 +83,102 @@ function stripAnchor(heading: string): string {
   return heading.replace(/\s*\{#[^}]*\}\s*$/, "").trim();
 }
 
-function finishItem(open: OpenItem, group: GroupName): SpecItemInfo {
-  const body = [...open.body];
-  while (body.length > 0 && body[0].trim() === "") body.shift();
-  while (body.length > 0 && body[body.length - 1].trim() === "") body.pop();
-  const text = body.join("\n");
-  let verifies: string[] = [];
-  let digestLines = body;
-  if (body.length > 0 && body[0].trim().startsWith("Verifies:")) {
-    verifies = body[0].match(/[A-Z][A-Z0-9]*-\d+/g) ?? [];
-    digestLines = body.slice(1);
-  }
-  const firstText = digestLines.find((line) => line.trim() !== "")?.trim() ?? "";
-  // First sentence, or the whole first line when no sentence end is
-  // found before the line break. Raw markdown is kept as-is.
-  const sentence = /^(.*?[.!?])(?=\s|$)/.exec(firstText);
-  const firstLine = sentence ? sentence[1] : firstText;
+/** Empty file shell carrying identity fields derived from kind + key. */
+function fileShell(kind: SpecFileKind, key: string): SpecFileInfo {
+  const collection = COLLECTIONS.find((entry) => entry.kind === kind)?.dir;
+  const slash = key.lastIndexOf("/");
   return {
-    id: open.id,
-    group,
-    ...(open.section !== undefined ? { section: open.section } : {}),
-    firstLine,
-    text,
-    verifies,
+    path: `specs/${collection}/${key}.md`,
+    kind,
+    key,
+    dir: slash === -1 ? "" : key.slice(0, slash),
+    basename: slash === -1 ? key : key.slice(slash + 1),
+    items: [],
+    notices: [],
   };
 }
 
-/** Parse one group file's markdown text (exported for tests). */
+/** Ordered unique item IDs cited by inline links whose anchor targets
+ * an item (META-16/META-20); fenced lines never cite. */
+function extractCites(body: string[]): string[] {
+  const cites: string[] = [];
+  const seen = new Set<string>();
+  let inFence = false;
+  for (const line of body) {
+    if (FENCE.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    for (const match of line.matchAll(INLINE_LINK)) {
+      const text = match[1];
+      if (!ITEM_ID.test(text)) continue;
+      const hash = match[2].indexOf("#");
+      if (hash === -1) continue;
+      if (!ITEM_ANCHOR.test(match[2].slice(hash + 1))) continue;
+      if (!seen.has(text)) {
+        seen.add(text);
+        cites.push(text);
+      }
+    }
+  }
+  return cites;
+}
+
+/** First sentence of the body, or the whole first non-empty line when
+ * no sentence end is found before the line break. Raw markdown kept. */
+function firstSentence(body: string[]): string {
+  const firstText = body.find((line) => line.trim() !== "")?.trim() ?? "";
+  const sentence = /^(.*?[.!?])(?=\s|$)/.exec(firstText);
+  return sentence ? sentence[1] : firstText;
+}
+
+/** Parse one spec file's markdown text (exported for tests). */
 export function parseSpecFileText(
   text: string,
-  group: GroupName,
-  path: string,
-): SpecGroupFile {
-  const items: SpecItemInfo[] = [];
-  let intent: string | undefined;
+  kind: SpecFileKind,
+  key: string,
+): SpecFileInfo {
+  const file = fileShell(kind, key);
+  const sectionGroups = SECTION_GROUPS[kind];
+  const unexpectedSections = new Set<string>();
+
+  let h1: string | undefined;
   let section: string | undefined;
+  let topic: string | undefined;
+  let intent: string | undefined;
   let inFence = false;
   let open: OpenItem | undefined;
   let collectingIntent = false;
   let intentPara: string[] = [];
 
-  const flushItem = (): void => {
-    if (open) {
-      items.push(finishItem(open, group));
-      open = undefined;
+  const closeItem = (): void => {
+    if (!open) return;
+    const body = [...open.body];
+    while (body.length > 0 && body[0].trim() === "") body.shift();
+    while (body.length > 0 && body[body.length - 1].trim() === "") body.pop();
+    let group = open.section === undefined ? undefined : sectionGroups.get(open.section);
+    if (group === undefined) {
+      // Best-guess group for items outside the known behavior and
+      // verification sections; the file notice flags the surprise.
+      group = "external";
+      if (open.section === undefined) {
+        file.notices.push(`item ${open.id} appears before any ## section`);
+      } else if (!unexpectedSections.has(open.section)) {
+        unexpectedSections.add(open.section);
+        file.notices.push(`items under unexpected section "${open.section}"`);
+      }
     }
+    file.items.push({
+      id: open.id,
+      group,
+      section: open.section ?? "",
+      ...(open.topic !== undefined ? { topic: open.topic } : {}),
+      firstLine: firstSentence(body),
+      text: body.join("\n"),
+      cites: extractCites(body),
+    });
+    open = undefined;
   };
   const endIntent = (): void => {
     if (collectingIntent && intentPara.length > 0 && intent === undefined) {
@@ -112,71 +198,116 @@ export function parseSpecFileText(
       if (open) open.body.push(line);
       continue;
     }
-    const h2 = /^##(?!#)\s+(.*)$/.exec(line);
-    if (h2) {
-      flushItem();
-      endIntent();
-      const title = stripAnchor(h2[1]);
-      if (title === "Intent") {
-        section = undefined;
-        collectingIntent = intent === undefined;
-      } else {
-        section = title === "References" ? undefined : title;
+    const heading = /^(#{1,6})(?!#)\s+(.*)$/.exec(line);
+    if (!heading) {
+      if (open) {
+        open.body.push(line);
+      } else if (collectingIntent) {
+        if (line.trim() === "") {
+          if (intentPara.length > 0) endIntent();
+        } else {
+          intentPara.push(line.trim());
+        }
       }
       continue;
     }
-    if (/^#(?!#)\s/.test(line)) {
-      flushItem();
+    const level = heading[1].length;
+    const item = ITEM_HEADING.exec(line);
+    if (item) {
+      // Any item heading starts a new item, closing the open one.
+      closeItem();
       endIntent();
+      if (level === 3) topic = undefined;
+      open = {
+        id: item[2],
+        level,
+        section,
+        // A ### heading between the section start and a #### item is
+        // its topic; a ### item in between clears it (nearest wins).
+        topic: level === 4 ? topic : undefined,
+        body: [],
+      };
       continue;
     }
-    if (/^###(?!#)\s/.test(line)) {
-      flushItem();
-      endIntent();
-      const match = ITEM_HEADING.exec(line);
-      if (match) open = { id: match[1], section, body: [] };
-      continue;
-    }
+    // A non-item heading at the open item's level or above closes it;
+    // deeper headings stay inside the item body.
+    if (open && level <= open.level) closeItem();
     if (open) {
       open.body.push(line);
       continue;
     }
-    if (collectingIntent) {
-      if (line.trim() === "") {
-        if (intentPara.length > 0) endIntent();
-      } else {
-        intentPara.push(line.trim());
-      }
+    endIntent();
+    const title = stripAnchor(heading[2]);
+    if (level === 1) {
+      if (h1 === undefined) h1 = title;
+      section = undefined;
+      topic = undefined;
+    } else if (level === 2) {
+      section = title;
+      topic = undefined;
+      if (title === "Intent") collectingIntent = intent === undefined;
+    } else if (level === 3) {
+      topic = title;
     }
   }
-  flushItem();
+  closeItem();
   endIntent();
 
-  return {
-    path,
-    ...(intent !== undefined ? { intent } : {}),
-    items,
-  };
+  if (intent !== undefined) file.intent = intent;
+
+  // Majority item-ID prefix, ties broken by first appearance.
+  const prefixes = new Map<string, { count: number; order: number }>();
+  for (const item of file.items) {
+    const prefix = item.id.replace(/-\d+$/, "");
+    const entry = prefixes.get(prefix);
+    if (entry) entry.count += 1;
+    else prefixes.set(prefix, { count: 1, order: prefixes.size });
+  }
+  const ranked = [...prefixes.entries()].sort(
+    (a, b) => b[1].count - a[1].count || a[1].order - b[1].order,
+  );
+  const majority = ranked[0]?.[0];
+
+  const headed = h1 === undefined ? null : H1_SHORT_FORM.exec(h1);
+  if (headed) {
+    file.shortForm = headed[1];
+    file.title = headed[2].trim();
+    if (majority !== undefined && majority !== headed[1]) {
+      file.notices.push(
+        `short form ${headed[1]} disagrees with the majority item prefix ${majority}`,
+      );
+    }
+  } else {
+    if (h1 !== undefined) file.title = h1;
+    if (majority !== undefined) file.shortForm = majority;
+  }
+  if (ranked.length > 1) {
+    file.notices.push(
+      `mixed item prefixes: ${ranked.map(([prefix]) => prefix).join(", ")}`,
+    );
+  }
+
+  return file;
 }
 
-/** Read + parse one group file; never throws (SPECV-15 degradation). */
-export function parseSpecGroupFile(
+/** Read + parse one spec file; never throws (SPECV degradation). */
+export function parseSpecFile(
   absPath: string,
-  group: GroupName,
-  path: string,
-): SpecGroupFile {
+  kind: SpecFileKind,
+  key: string,
+): SpecFileInfo {
   let text: string;
   try {
     text = readFileSync(absPath, "utf8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { path, items: [], error: `cannot read file: ${message}` };
+    return { ...fileShell(kind, key), error: `cannot read file: ${message}` };
   }
   try {
-    return parseSpecFileText(text, group, path);
+    return parseSpecFileText(text, kind, key);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { path, items: [], error: `parse failed: ${message}` };
+    return { ...fileShell(kind, key), error: `parse failed: ${message}` };
   }
 }
 
@@ -207,14 +338,14 @@ function sortedEntries(dir: string): Dirent[] {
 }
 
 interface WalkedFile {
-  /** Relative path from the group root, `/`-separated, minus `.md`. */
+  /** Relative path from the collection root, `/`-separated, minus `.md`. */
   keyRel: string;
   abs: string;
 }
 
-function walkGroup(
-  groupDir: string,
-  group: GroupName,
+function walkCollection(
+  collectionDir: string,
+  collection: "packages" | "compositions",
   baseReal: string,
   notices: string[],
 ): WalkedFile[] {
@@ -225,7 +356,7 @@ function walkGroup(
       const relPath = rel === "" ? entry.name : `${rel}/${entry.name}`;
       if (entry.isSymbolicLink() && realInside(abs, baseReal) === undefined) {
         notices.push(
-          `skipped symlink escaping the project: specs/${group}/${relPath}`,
+          `skipped symlink escaping the project: specs/${collection}/${relPath}`,
         );
         continue;
       }
@@ -241,50 +372,8 @@ function walkGroup(
       }
     }
   };
-  if (realInside(groupDir, baseReal) !== undefined) visit(groupDir, "");
+  if (realInside(collectionDir, baseReal) !== undefined) visit(collectionDir, "");
   return out;
-}
-
-// ---------------------------------------------------------------------------
-// Packages: short form + consistency notices
-// ---------------------------------------------------------------------------
-
-function deriveShortForm(pkg: SpecPackageInfo): void {
-  const stats = new Map<string, { count: number; files: Set<string>; order: number }>();
-  for (const group of GROUPS) {
-    const file = pkg.groups[group];
-    if (!file) continue;
-    // Notice label per the DR examples: path relative to specs/.
-    const label = file.path.replace(/^specs\//, "");
-    for (const item of file.items) {
-      const prefix = item.id.replace(/-\d+$/, "");
-      let entry = stats.get(prefix);
-      if (!entry) {
-        entry = { count: 0, files: new Set(), order: stats.size };
-        stats.set(prefix, entry);
-      }
-      entry.count += 1;
-      entry.files.add(label);
-    }
-  }
-  if (stats.size === 0) return;
-  const ranked = [...stats.entries()].sort(
-    (a, b) => b[1].count - a[1].count || a[1].order - b[1].order,
-  );
-  pkg.shortForm = ranked[0][0];
-  if (ranked.length > 1) {
-    const minorityFiles = new Set<string>();
-    for (const [, info] of ranked.slice(1)) {
-      for (const file of info.files) minorityFiles.add(file);
-    }
-    pkg.notices.push(
-      `mixed item prefixes: ${ranked.map(([prefix]) => prefix).join(", ")} (${[
-        ...minorityFiles,
-      ]
-        .sort()
-        .join(", ")})`,
-    );
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -341,7 +430,8 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
   const readAt = Date.now();
   const absent: SpecTreeState = {
     present: false,
-    packages: [],
+    legacy: false,
+    files: [],
     decisions: [],
     iterations: [],
     notices: [],
@@ -361,6 +451,28 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
   }
   if (realInside(specsDir, baseReal) === undefined) return absent;
 
+  // Legacy layout (pre-DR-012 user/dev/test groups): report the flag
+  // so the UI can render migration guidance; records still parse.
+  const legacy = LEGACY_DIRS.some((name) => {
+    try {
+      return statSync(join(specsDir, name)).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+  if (legacy) {
+    const discarded: string[] = [];
+    return {
+      present: true,
+      legacy: true,
+      files: [],
+      decisions: parseRecords(specsDir, "decisions", baseReal, discarded),
+      iterations: parseRecords(specsDir, "iterations", baseReal, discarded),
+      notices: [],
+      readAt,
+    };
+  }
+
   const notices: string[] = [];
 
   // Unknown entries directly under specs/ (dotfiles like .DS_Store are
@@ -372,55 +484,21 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
     notices.push(`unknown entries under specs/: ${unknown.join(", ")}`);
   }
 
-  // Walk the three groups, merging files into packages by key.
-  const packages = new Map<string, SpecPackageInfo>();
-  for (const group of GROUPS) {
-    for (const file of walkGroup(join(specsDir, group), group, baseReal, notices)) {
-      const key = file.keyRel;
-      let pkg = packages.get(key);
-      if (!pkg) {
-        const slash = key.lastIndexOf("/");
-        pkg = {
-          key,
-          dir: slash === -1 ? "" : key.slice(0, slash),
-          basename: slash === -1 ? key : key.slice(slash + 1),
-          notices: [],
-          groups: {},
-        };
-        packages.set(key, pkg);
-      }
-      pkg.groups[group] = parseSpecGroupFile(
-        file.abs,
-        group,
-        `specs/${group}/${file.keyRel}.md`,
-      );
-    }
-  }
-
-  const list = [...packages.values()].sort((a, b) =>
-    a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
-  );
-  for (const pkg of list) deriveShortForm(pkg);
-
-  // Same basename at different dirs: separate nodes, mutual notices.
-  const byBasename = new Map<string, SpecPackageInfo[]>();
-  for (const pkg of list) {
-    const peers = byBasename.get(pkg.basename) ?? [];
-    peers.push(pkg);
-    byBasename.set(pkg.basename, peers);
-  }
-  for (const peers of byBasename.values()) {
-    if (peers.length < 2) continue;
-    for (const pkg of peers) {
-      for (const other of peers) {
-        if (other !== pkg) pkg.notices.push(`basename also exists at ${other.key}`);
-      }
+  // Walk both collections; collection subdirectories are navigation
+  // only (META-32), so files stay flat, keyed by relative path.
+  const files: SpecFileInfo[] = [];
+  for (const { dir, kind } of COLLECTIONS) {
+    const walked = walkCollection(join(specsDir, dir), dir, baseReal, notices)
+      .sort((a, b) => (a.keyRel < b.keyRel ? -1 : a.keyRel > b.keyRel ? 1 : 0));
+    for (const entry of walked) {
+      files.push(parseSpecFile(entry.abs, kind, entry.keyRel));
     }
   }
 
   return {
     present: true,
-    packages: list,
+    legacy: false,
+    files,
     decisions: parseRecords(specsDir, "decisions", baseReal, notices),
     iterations: parseRecords(specsDir, "iterations", baseReal, notices),
     notices,

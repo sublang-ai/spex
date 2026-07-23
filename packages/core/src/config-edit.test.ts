@@ -13,21 +13,23 @@ import { join } from "node:path";
 import { applyConfigOp, editConfigFile, profileReferences } from "./config-edit.js";
 import { templatePath, type LoadModule } from "./config.js";
 
+function stubEntry(id: string, roles: string[]) {
+  return {
+    id,
+    command: id,
+    intent: `${id} stub`,
+    requiredRoleIds: roles,
+    validateOptions: () => ({}),
+    createRuntime: () => ({}),
+  };
+}
+
 const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/code/registry") {
-    return {
-      default: {
-        id: "code",
-        command: "code",
-        intent: "coding",
-        requiredRoleIds: ["coder", "reviewer"],
-        idleStateId: "ready",
-        finalStateId: "done",
-        parkStateIds: [],
-        validateOptions: () => ({}),
-        createRuntime: () => ({}),
-      },
-    };
+    return { default: stubEntry("code", ["coder", "reviewer"]) };
+  }
+  if (specifier === "@sublang/playbook/discuss/registry") {
+    return { default: stubEntry("discuss", ["host", "participant"]) };
   }
   throw new Error(`no module ${specifier}`);
 };
@@ -130,6 +132,8 @@ test("profileReferences finds captain and player references", () => {
   assert.deepEqual(profileReferences(text, "claude-opus"), [
     "captain",
     "playbooks.code.players.reviewer",
+    "playbooks.discuss.players.host",
+    "playbooks.discuss.players.participant",
   ]);
   assert.deepEqual(profileReferences(text, "claude-opus-1m"), [
     "playbooks.code.players.coder",

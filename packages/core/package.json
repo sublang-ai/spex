@@ -23,9 +23,9 @@
     "assets/"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/stage-academy.mjs && tsc",
     "dev:fake": "npm run build && node dist/bin/dev-core.js --fake",
-    "test": "node scripts/run-tests.cjs",
+    "test": "node scripts/stage-academy.mjs && node scripts/run-tests.cjs",
     "test:integration": "node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
   },
   "engines": {

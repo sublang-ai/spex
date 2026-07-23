@@ -47,9 +47,22 @@ function registryEntry(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function discussEntry(overrides: Record<string, unknown> = {}) {
+  return registryEntry({
+    id: "discuss",
+    command: "discuss",
+    intent: "design discussion: two agents converge on records",
+    requiredRoleIds: ["host", "participant"],
+    ...overrides,
+  });
+}
+
 const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/code/registry") {
     return { default: registryEntry() };
+  }
+  if (specifier === "@sublang/playbook/discuss/registry") {
+    return { default: discussEntry() };
   }
   throw new Error(`no module ${specifier}`);
 };
@@ -66,9 +79,14 @@ test("bundled template composes with launcher-equivalent output", async () => {
   assert.equal(composed.captainAgent.adapter, "claude");
   assert.deepEqual(
     composed.players.map((player) => player.id),
-    ["code-coder", "code-reviewer"],
+    ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
   );
-  assert.deepEqual(composed.initialVisible, ["code-coder", "code-reviewer"]);
+  assert.deepEqual(composed.initialVisible, [
+    "code-coder",
+    "code-reviewer",
+    "discuss-host",
+    "discuss-participant",
+  ]);
   assert.deepEqual(composed.captainOptions.playbooks.code, {
     from: "@sublang/playbook/code/registry",
     options: { committer: "coder" },
@@ -192,6 +210,9 @@ test("unknown agent fields and adapters are rejected", async () => {
 
 test("cwd acceptance probe marks entries that take a cwd option", async () => {
   const cwdLoader: LoadModule = async (specifier) => {
+    if (specifier === "@sublang/playbook/discuss/registry") {
+      return { default: discussEntry() };
+    }
     if (specifier === "@sublang/playbook/code/registry") {
       return {
         default: registryEntry({

@@ -40,6 +40,7 @@ import { Store } from "./store.js";
 import {
   GitHubForgeAdapter,
   createProjectRepo,
+  seedExampleProject,
   defaultRunCommand,
   isWorkTreeRoot,
   repoStatus,
@@ -52,6 +53,7 @@ import {
   type ConfigEditOp,
 } from "./config-edit.js";
 import { resolveArtifacts } from "./artifacts.js";
+import { loadBuiltinCatalog } from "./builtins.js";
 import { parseSpecTree, resolveSpecPath } from "./specs.js";
 import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
 import type { ForgeState } from "./protocol.js";
@@ -454,15 +456,25 @@ export class CoreService {
         if (this.store.getProjectByPath(path)) {
           throw new CoreError("conflict", `${path} is already registered`);
         }
+        if (command.example && command.scaffold) {
+          throw new CoreError(
+            "invalid_request",
+            "example seeding and scaffold are mutually exclusive",
+          );
+        }
         try {
-          await createProjectRepo({
-            path,
-            scaffold: command.scaffold,
-            run: this.runCommand,
-            ...(this.options.scaffoldCommand
-              ? { scaffoldCommand: this.options.scaffoldCommand }
-              : {}),
-          });
+          if (command.example) {
+            await seedExampleProject({ path, run: this.runCommand });
+          } else {
+            await createProjectRepo({
+              path,
+              scaffold: command.scaffold,
+              run: this.runCommand,
+              ...(this.options.scaffoldCommand
+                ? { scaffoldCommand: this.options.scaffoldCommand }
+                : {}),
+            });
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           throw new CoreError("invalid_request", message);
@@ -595,6 +607,17 @@ export class CoreService {
           { id: playbook.id, from: playbook.from },
           this.env,
         );
+      }
+      case "library.builtins": {
+        const configuredIds = new Set(
+          this.composed?.playbooks.map((playbook) => playbook.id) ?? [],
+        );
+        return {
+          builtins: await loadBuiltinCatalog(
+            configuredIds,
+            this.options.loadModule,
+          ),
+        };
       }
       case "compile.run": {
         if (!existsSync(this.configPath)) {

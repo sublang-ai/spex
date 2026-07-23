@@ -513,7 +513,10 @@ export async function composeConfig(
       players.push({ id: hostId, ...agent });
       generatedIds.push(hostId);
     }
-    if (initialVisible.length === 0) initialVisible = generatedIds;
+    // Launcher parity: the default visible set is every player across
+    // all playbooks (cligent resolveLayoutConfig); the previous
+    // first-playbook-only assignment was a single-playbook latent bug.
+    initialVisible.push(...generatedIds);
 
     const optionSlice: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(block)) {

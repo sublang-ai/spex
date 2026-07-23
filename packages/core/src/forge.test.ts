@@ -8,16 +8,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
   GitHubForgeAdapter,
+  academyCorpusDir,
   createProjectRepo,
   isWorkTreeRoot,
   parseGitHubRepo,
   repoStatus,
+  seedExampleProject,
   type RunCommand,
 } from "./forge.js";
 
@@ -186,4 +188,37 @@ test("no origin remote degrades to guidance", async () => {
   const state = await adapter.state("/tmp/x", undefined);
   assert.equal(state.authenticated, null);
   assert.match(state.guidance ?? "", /origin remote/);
+});
+
+test("seedExampleProject materializes the corpus into an empty dir", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-seed-"));
+  const corpus = join(dir, "corpus");
+  mkdirSync(join(corpus, "specs"), { recursive: true });
+  writeFileSync(join(corpus, "README.md"), "# Example\n");
+  writeFileSync(join(corpus, "specs", "map.md"), "# Map\n");
+
+  const target = join(dir, "project");
+  await seedExampleProject({ path: target, corpusDir: corpus });
+  assert.ok(existsSync(join(target, "README.md")));
+  assert.ok(existsSync(join(target, "specs", "map.md")));
+  assert.ok(existsSync(join(target, ".git")));
+  const log = execFileSync("git", ["-C", target, "log", "--oneline"], {
+    encoding: "utf8",
+  });
+  assert.match(log, /seed the Academy example/);
+
+  // Non-empty targets are refused before any write.
+  await assert.rejects(
+    seedExampleProject({ path: target, corpusDir: corpus }),
+    /not empty/,
+  );
+});
+
+test("the staged Academy corpus is present and seedable", async () => {
+  const corpus = academyCorpusDir();
+  assert.ok(existsSync(join(corpus, "specs", "map.md")));
+  assert.ok(existsSync(join(corpus, "guidelines.md")));
+  const target = join(mkdtempSync(join(tmpdir(), "spex-seed-")), "academy");
+  await seedExampleProject({ path: target });
+  assert.ok(existsSync(join(target, "specs", "meta.md")));
 });

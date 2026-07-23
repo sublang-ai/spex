@@ -8,6 +8,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { resolveModulePath } from "./config.js";
 import { listFsmStates } from "./compile.js";
@@ -19,6 +20,19 @@ function firstExisting(candidates: string[]): string | undefined {
 
 function readOrNull(path: string | undefined): string | null {
   return path ? readFileSync(path, "utf8") : null;
+}
+
+/**
+ * Vendored source fallback (DR-015): the published playbook package
+ * omits the built-in prose sources, so Spex ships copies as assets.
+ * Returns the asset path when one exists for the id.
+ */
+export function bundledSourcePath(id: string): string | undefined {
+  if (!/^[a-z][a-z0-9_-]*$/.test(id)) return undefined;
+  const path = fileURLToPath(
+    new URL(`../assets/playbook-sources/${id}.md`, import.meta.url),
+  );
+  return existsSync(path) ? path : undefined;
 }
 
 /**
@@ -46,10 +60,10 @@ export async function resolveArtifacts(
   const dir = dirname(modulePath);
   const id = playbook.id;
 
-  const sourcePath = firstExisting([
-    join(dir, `${id}.md`),
-    join(dir, "..", `${id}.md`),
-  ]);
+  const sourceCandidates = [join(dir, `${id}.md`), join(dir, "..", `${id}.md`)];
+  const bundled = bundledSourcePath(id);
+  if (bundled) sourceCandidates.push(bundled);
+  const sourcePath = firstExisting(sourceCandidates);
   const gearsPath = firstExisting([
     join(dir, `${id}.playbook`, `${id}.gears.md`),
     join(dir, `${id}.gears.md`),
