@@ -225,12 +225,11 @@ load, the run view shall say so and offer a retry that reloads it
 
 #### RUN-34
 
-While any session needs a human (a pending Boss question or a
-failure), the Workspace navigation entry shall show a badge with
-the count across all projects, derived from the same attention
-rules as the Dashboard ([DASH-9](dashboard.md#dash-9));
-while a non-current project needs a human, the project bar's chip
-shall carry a dot in the most severe color. The slash menu shall
+While the Dashboard's published attention count
+([DASH-9](dashboard.md#dash-9)) is non-zero, the Workspace
+navigation entry shall show a badge with that count across all
+projects; while a non-current project needs a human, the project
+bar's chip shall carry a dot in the most severe color. The slash menu shall
 end with a compile-a-new-playbook entry that opens the Playbooks
 surface's compile flow.
 

@@ -50,8 +50,10 @@ stream over the WebSocket protocol
 pane renders them in arrival order with their glyphs
 ([RUN-1](../packages/run-view.md#run-1)); and while the session
 awaits the Boss's reply with the window unfocused, the OS
-notification, dock badge, and composer awaiting state all surface
-from the same record stream ([DESK-2](#desk-2)).
+notification ([SHELL-3](../packages/app-shell.md#shell-3)), dock
+badge ([SHELL-4](../packages/app-shell.md#shell-4)), and composer
+awaiting state ([RUN-9](../packages/run-view.md#run-9)) all
+surface from the same record stream ([DESK-2](#desk-2)).
 
 ### DESK-4
 

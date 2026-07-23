@@ -44,8 +44,9 @@ this tree demonstrates: `compositions/` with binding items and
 supply bindings, the [META-34](specs/meta.md#meta-34) section
 grammar, standalone Intents, and DRs without implementation
 detail.
-Tooling lags the conventions: the shipped linter still expects
-`interactions/`; its migration is tracked separately.
+The shipped tooling matches: `spex lint` enforces these
+conventions, and `spex scaffold --update` migrates
+`interactions/`-era trees to them.
 
 ## Research pointers
 

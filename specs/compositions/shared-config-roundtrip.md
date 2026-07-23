@@ -45,8 +45,11 @@ integration suite shall assert that the core service reloads each
 intermediate config without a validation failure
 ([CONF-1](#conf-1), [CORE-2](../packages/core-service.md#core-2)),
 that a config rejected by the Settings validator is byte-identical
-on disk afterwards, and that the fixture's comments survive both
-writers ([CONF-2](#conf-2)) — one rule set, observed at every seam.
+on disk afterwards, and that the fixture's comments survive the
+Settings save ([SET-13](../packages/settings.md#set-13)) and the
+registration write
+([PBLIB-16](../packages/playbook-library.md#pblib-16)) alike
+([CONF-2](#conf-2)) — one rule set, observed at every seam.
 
 ### CONF-4
 

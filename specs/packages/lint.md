@@ -22,9 +22,8 @@ and be a directory, otherwise the CLI shall exit non-zero with an
 error on stderr.
 
 Where it is invoked without a path argument, the CLI shall resolve
-the target like the `scaffold` subcommand: the enclosing git
-repository root, or the current working directory outside any
-repository ([SCAF-2](scaffold.md#scaf-2), [SCAF-3](scaffold.md#scaf-3)).
+the target to the enclosing git repository root, or to the current
+working directory outside any repository.
 
 #### LINT-2
 

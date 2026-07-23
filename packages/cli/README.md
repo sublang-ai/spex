@@ -35,9 +35,10 @@ This creates:
 - **`specs/`** — directories and starter templates for writing behavioral
   specs, decision records, and iteration plans:
   - `specs/packages/` holds one file per spec package, with its
-    user-visible behavior (`## External Behavior`), implementation
-    requirements (`## Internal Behavior`), and the tests of its own
-    claims (`## Verification`) — one read covers one package.
+    user-visible behavior (`## External Behavior`), its hidden
+    contract — consumed requirements and private invariants
+    (`## Internal Behavior`) — and the tests of its own claims
+    (`## Verification`) — one read covers one package.
   - `specs/compositions/` holds how the installed system is composed:
     binding items (static installed relationships), scenario items
     (integrated behavior over the composed system), and the

@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [0.4.0] - 2026-07-23
 
 ### Added
@@ -27,11 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`,
   `Scope:`, `Requires:`, `Uses:`) are errors: the citations in an
   item's clauses are the single source of its relationships
-  (META-20). Citation-discipline warnings flag a citation inside a
-  package `## Intent` (META-15), a package link into a peer's
-  `## Internal Behavior` (META-14), and a detached `Verifies …`
-  sentence left by mechanical migration (META-20). Errors exit
-  non-zero; warnings do not.
+  (META-20). So are a detached `Verifies …` sentence left by
+  mechanical migration (META-20), a package link into
+  `specs/compositions/` (META-33), and an iteration citation
+  outside `specs/map.md` (META-18); warnings flag a citation inside
+  a package `## Intent` (META-15) and a package link into a peer's
+  `## Internal Behavior` (META-14). Binding-trigger detection
+  covers the Chinese clause keywords, and all keyword detection
+  follows the parsed code spans — GFM-correct for fences of any
+  delimiter length and indented code. Errors exit non-zero;
+  warnings do not.
 - `spex scaffold --update` migrates the legacy `specs/user`/`dev`/`test`
   layout to the new structure: each package's item files are merged
   into a single `specs/packages/<name>.md` (`## External Behavior`,
@@ -44,12 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `spex scaffold --update` migrates `specs/interactions/` to
   `specs/compositions/` (SCAF-50): files move with conflict-keeping,
   each `Verifies:` block — including wrapped continuation lines —
-  collapses to one inline sentence, citations and a
-  `## Interactions` map heading are rewritten, and the retired
-  `.gitkeep` is dropped via the legacy manifest. Moved files are
-  not reshaped into the META-34 grammar; the remaining lint
-  findings are reconciliation work for the printed compositions
-  prompt.
+  collapses to one inline sentence, citations, a `## Interactions`
+  map heading, and an `interactions/` layout-block line are
+  rewritten, and the retired `.gitkeep` is dropped via the legacy
+  manifest. Moved files are not reshaped into the META-34 grammar;
+  the remaining lint errors are reconciliation work for the
+  printed compositions prompt.
 - Composition section headings have Chinese names: the bundled zh
   `meta.md` translates META-28 and META-34, defining
   意图/外部行为/内部行为/验证/参考资料 for packages and

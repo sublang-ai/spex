@@ -35,4 +35,4 @@ executable returns fixture issues and pull requests
 suite shall assert that the Repo tab's lists and the Dashboard's
 next-work lists ([DASH-6](../packages/dashboard.md#dash-6)) render
 the same fixture items for that project ([FORGE-1](#forge-1)) —
-the two surfaces agree on the adapter-delivered data.
+the two surfaces present the same forge data for the project.

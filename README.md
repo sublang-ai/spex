@@ -28,7 +28,8 @@ Playbooks are workflows around your specs; the specs are the point.
 The convention Spex scaffolds is shared across the SubLang repos:
 decision records, iteration records, spec packages (one file per
 package with External Behavior / Internal Behavior / Verification
-sections), and cross-package interaction specs.
+sections), and cross-package composition specs — bindings,
+scenarios, and the tests that span packages.
 
 ```sh
 npx @sublang/spex scaffold            # seed specs/ in the current repo
@@ -36,13 +37,16 @@ npx @sublang/spex scaffold --update   # refresh templates, migrate legacy layout
 npx @sublang/spex lint                # check structure, IDs, and citations
 ```
 
-It is idempotent: existing spec files are never overwritten
+Rerunning is safe: `scaffold` skips files that already exist, and
+your own spec content is never touched
 (`CLAUDE.md`/`AGENTS.md` only get their managed specs section added
 or refreshed). `--update` requires a clean `specs/` tree, migrates
-the legacy `user/`/`dev/`/`test/` layout into `specs/packages/` +
-`specs/interactions/` (merging files and rewriting citations with a
-real Markdown parser), and warns before replacing locally modified
-framework files, so the previous version stays recoverable in git.
+the legacy `user/`/`dev/`/`test/` layout into `specs/packages/` and
+`specs/interactions/` into `specs/compositions/` (merging files and
+rewriting citations with a real Markdown parser), and refreshes the
+spex-owned framework files and uncustomized starters — warning
+before it replaces locally modified framework content, so the
+previous version stays recoverable in git.
 `--lang zh` selects the bundled Chinese templates.
 
 ## Desktop app

@@ -32,9 +32,7 @@ project.
 
 When the confirmed directory is inside a work tree below its top
 level, the palette shall register nothing and show a message
-naming the work tree's top-level path; a directory that is no git
-work tree at all is initialized silently per
-[RUN-27](run-view.md#run-27).
+naming the work tree's top-level path.
 
 #### PROJ-2
 
@@ -52,9 +50,8 @@ path and the specs-scaffold option on or off, the palette shall:
 
 1. create the project directory under the parent directory,
 2. initialize a git repository in it,
-3. generate the spex specs scaffold
-   ([SCAF-1](scaffold.md#scaf-1)) in it when the scaffold option is
-   on, and generate no scaffold when it is off,
+3. generate the spex specs scaffold in it when the scaffold option
+   is on, and generate no scaffold when it is off,
 4. create an initial commit containing the generated files, and
 5. register the project and make it the workspace's current
    project.
