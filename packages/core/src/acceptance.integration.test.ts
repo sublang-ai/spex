@@ -112,6 +112,7 @@ function realRepo(): string {
   execFileSync("git", ["init", "-q", projectDir]);
   execFileSync("git", ["-C", projectDir, "config", "user.email", "dev@example.com"]);
   execFileSync("git", ["-C", projectDir, "config", "user.name", "Dev"]);
+  execFileSync("git", ["-C", projectDir, "config", "commit.gpgsign", "false"]);
   writeFileSync(join(projectDir, "greet.ts"), "export const greet = () => 'hi';\n");
   execFileSync("git", ["-C", projectDir, "add", "."]);
   execFileSync("git", ["-C", projectDir, "commit", "-q", "-m", "seed"]);
