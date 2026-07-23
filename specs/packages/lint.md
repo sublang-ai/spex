@@ -117,6 +117,8 @@ clauses are the single source ([META-20](../meta.md#meta-20)):
 Where a `## Binding` item is linted, a `When` or `While` clause
 keyword in its text shall be an error: a binding is static
 ([META-36](../meta.md#meta-36)).
+The zh trigger keywords of the bundled templates — `当` and `如果`
+at a clause start — shall be detected likewise.
 
 #### LINT-8
 
@@ -124,6 +126,10 @@ Where citations are linted, an error shall be reported for a
 relative link whose target file does not exist, a link into the
 legacy layout, and a fragment that matches no heading anchor of the
 target file (GitHub anchor semantics).
+An error shall also be reported for a link from a `packages/` file
+into `specs/compositions/` ([META-33](../meta.md#meta-33)), and for
+a link into `specs/iterations/` from any file but `specs/map.md`
+([META-18](../meta.md#meta-18)).
 Scheme, protocol-relative, and absolute URLs shall not be checked.
 
 A warning shall be reported for duplicate heading anchors within one
@@ -146,18 +152,18 @@ linked from `specs/map.md` shall be a warning.
 
 #### LINT-13
 
-Where citation discipline is linted, warnings shall be reported
-for:
+Where citation discipline is linted:
 
-- a citation link inside a package file's `## Intent` section
-  ([META-15](../meta.md#meta-15));
-- a link in a package file resolving to an item inside another
-  package's `## Internal Behavior` section
-  ([META-14](../meta.md#meta-14));
 - an item body line that is a detached relationship sentence —
-  `Verifies` followed by citations and separators only — pointing
-  at weaving each citation into the assertion it supports
-  ([META-20](../meta.md#meta-20)).
+  `Verifies` followed by citations and separators only — shall be
+  an error pointing at weaving each citation into the assertion it
+  supports ([META-20](../meta.md#meta-20)), so a mechanically
+  migrated tree cannot pass the gate unreconciled;
+- a citation link inside a package file's `## Intent` section shall
+  be a warning ([META-15](../meta.md#meta-15));
+- a link in a package file resolving to an item inside another
+  package's `## Internal Behavior` section shall be a warning
+  ([META-14](../meta.md#meta-14)).
 
 ## Internal Behavior
 
@@ -172,7 +178,10 @@ and return the finding list; printing and exit codes belong to the
 CLI layer.
 An item's body shall span from its heading to the next heading of
 the same or shallower depth, and relationship-metadata and clause
-keywords shall be detected outside fenced code blocks only.
+keywords shall be detected outside code blocks only, using the
+parsed tree's code spans — GFM fences of any delimiter length and
+indented code — so a literal fence inside a longer fence cannot
+leak lines into detection.
 
 ## Verification
 
@@ -189,16 +198,18 @@ name composition ([LINT-5](#lint-5)); item IDs and misplaced items
 and Tests items, uncovered Binding and Scenario items, a Binding
 uncited by any same-file Scenario in a mixed file, cross-package
 Verification, the scenario two-package floor with an anchor-less
-file link not counting, and a triggered Binding
+file link not counting, and a triggered Binding in each language
 ([LINT-7](#lint-7)); citations — broken link, broken anchor,
-legacy path ([LINT-8](#lint-8)); reference markers, records, and
-map listing ([LINT-9](#lint-9)); citation discipline — an Intent
-citation, a peer-Internal citation, and a detached `Verifies`
-sentence ([LINT-13](#lint-13)); an item body spanning a nested
-subheading whose citations count for the item
-([LINT-10](#lint-10)); finding format and summary
-([LINT-3](#lint-3)); plus a clean fixture asserting zero
-findings.
+legacy path, a package link into `specs/compositions/`, and an
+iteration citation outside the map ([LINT-8](#lint-8)); reference
+markers, records, and map listing ([LINT-9](#lint-9)); citation
+discipline — an Intent citation, a peer-Internal citation, and a
+detached `Verifies` sentence as an error ([LINT-13](#lint-13));
+an item body spanning a nested subheading whose citations count
+for the item, and a literal triple-backtick line inside a longer
+fence staying undetected ([LINT-10](#lint-10)); finding format
+and summary ([LINT-3](#lint-3)); plus a clean fixture asserting
+zero findings.
 
 #### LINT-12
 

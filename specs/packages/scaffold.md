@@ -233,9 +233,10 @@ relative citation across `specs/` that resolved into
 `specs/interactions/` to the `specs/compositions/` path; rewrite each
 moved file's `Verifies:` metadata blocks as inline `Verifies …`
 sentences ([SCAF-44](#scaf-44)); rename a
-`## Interactions` map heading to the active-language Compositions
-heading; drop a pristine bundled `interactions/.gitkeep` via the
-legacy manifest; and remove the emptied directory.
+`## Interactions` map heading and an `interactions/` layout-block
+line to the active-language Compositions forms; drop a pristine
+bundled `interactions/.gitkeep` via the legacy manifest; and
+remove the emptied directory.
 Moved files shall be reported as
 `(migrated from specs/interactions/...)` indicator lines.
 The CLI shall not reshape a moved file into the META-34 section
@@ -801,13 +802,17 @@ end to end that:
   and reported as `(restructured for the packages layout)`
   ([SCAF-41](#scaf-41), [SCAF-46](#scaf-46));
 - a tree with `specs/interactions/` files has them moved to
-  `specs/compositions/` with citations and the map heading
-  rewritten, a wrapped `Verifies:` block collapsing to one inline
-  sentence, and the remaining lint errors confined to the moved
-  composition files ([SCAF-50](#scaf-50));
+  `specs/compositions/` with citations, the map heading, and an
+  `interactions/` layout-block line rewritten, a wrapped
+  `Verifies:` block collapsing to one inline sentence, and the
+  remaining lint errors confined to the moved composition files
+  plus package citations into `specs/compositions/` kept navigable
+  by the rewrite ([SCAF-50](#scaf-50));
 - the compositions prompt is printed after a migrating run
-  ([SCAF-42](#scaf-42)) and a package-layout migration leaves a
-  tree `spex lint` passes with zero errors;
+  ([SCAF-42](#scaf-42)); a package-layout migration of pristine
+  seeds leaves a tree `spex lint` passes with zero errors, and in
+  custom content the converted `Verifies …` sentences are the only
+  errors it reports;
 - the packaged npm artifact ships both file-history manifests, both
   prompts ([SCAF-42](#scaf-42)), and the bundled `specs/packages/`
   and `specs/compositions/` seeds.
