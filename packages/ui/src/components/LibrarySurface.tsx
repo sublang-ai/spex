@@ -6,14 +6,16 @@
 // plus the compile flow driving slc through the core with streamed,
 // persistent progress.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
+  BuiltinPlaybookInfo,
   CommandResults,
   ConfigEditOpInput,
   PlaybookArtifacts,
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
+import { SLC_DEMO } from "../examples/slc-demo.js";
 import { saveProfileEssentials, setPlaybookPlayer } from "../lib/config-ops.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
@@ -150,6 +152,201 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
   );
 }
 
+/** An unconfigured built-in from the catalog (DR-015): browsable
+ * source plus an add flow mapping roles to profiles. */
+function BuiltinCard({
+  info,
+  profiles,
+}: {
+  info: BuiltinPlaybookInfo;
+  profiles: string[];
+}) {
+  const [showSource, setShowSource] = useState(false);
+  const [playerRefs, setPlayerRefs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  function add(): void {
+    setBusy(true);
+    setError(undefined);
+    getClient()
+      .command("config.edit", {
+        op: {
+          kind: "playbook.add",
+          playbookId: info.id,
+          from: info.from,
+          players: Object.fromEntries(
+            info.roles.map((role) => [
+              role,
+              playerRefs[role] ?? profiles[0] ?? "claude",
+            ]),
+          ),
+        },
+      })
+      // Success arrives as a config.state broadcast: the entry moves
+      // to the configured list and this card unmounts.
+      .catch((cause: Error) => setError(cause.message))
+      .finally(() => setBusy(false));
+  }
+
+  return (
+    <div
+      data-testid={`builtin-${info.id}`}
+      className="flex flex-col gap-2 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900"
+    >
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-sm font-semibold">/{info.command}</span>
+        <span className="truncate text-xs text-neutral-500" title={info.intent}>
+          {info.intent}
+        </span>
+        <span className="ml-auto rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+          available built-in
+        </span>
+        {info.source ? (
+          <button
+            type="button"
+            data-testid={`builtin-source-toggle-${info.id}`}
+            onClick={() => setShowSource((current) => !current)}
+            className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          >
+            {showSource ? "Hide source" : "View source"}
+          </button>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
+        {info.roles.map((role) => (
+          <label key={role} className="flex items-center gap-1">
+            <span className="font-mono">{role}:</span>
+            <MappingSelect
+              value={playerRefs[role] ?? profiles[0] ?? "claude"}
+              profiles={profiles}
+              onChange={(ref) =>
+                setPlayerRefs((current) => ({ ...current, [role]: ref }))
+              }
+            />
+          </label>
+        ))}
+        <button
+          type="button"
+          data-testid={`builtin-add-${info.id}`}
+          disabled={busy}
+          onClick={add}
+          className="ml-auto rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+        >
+          Add to config
+        </button>
+      </div>
+      {error ? (
+        <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          {error}
+        </div>
+      ) : null}
+      {showSource && info.source ? (
+        <div className="max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+          <Markdown text={info.source} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const EXAMPLE_STAGES = [
+  { key: "source", label: "Source", hint: "The raw prose the demo starts from" },
+  {
+    key: "normalized",
+    label: "Normalized text",
+    hint: "slc's normalize phase turns the prose into workflow markdown",
+  },
+  {
+    key: "gears",
+    label: "Gears",
+    hint: "One normative spec item per state behavior — the compiler's middle stage",
+  },
+  {
+    key: "fsm",
+    label: "State machine",
+    hint: "The compiled XState machine that drives the players",
+  },
+] as const;
+type ExampleStageKey = (typeof EXAMPLE_STAGES)[number]["key"];
+
+/** Read-only slc demo card (DR-015): the two-agent workflow in the
+ * pipeline grammar, with a compile-form prefill. */
+function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [stage, setStage] = useState<ExampleStageKey>("source");
+  const content = SLC_DEMO.stages[stage];
+
+  return (
+    <div
+      data-testid="example-card"
+      className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold">
+          Example: {SLC_DEMO.title}
+        </span>
+        <span className="truncate text-xs text-neutral-400">
+          from {SLC_DEMO.credit}
+        </span>
+        <span className="ml-auto" />
+        <button
+          type="button"
+          data-testid="example-prefill"
+          onClick={onPrefill}
+          className="rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+        >
+          Prefill compile form
+        </button>
+        <button
+          type="button"
+          data-testid="example-toggle"
+          onClick={() => setOpen((current) => !current)}
+          className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        >
+          {open ? "Hide pipeline" : "Pipeline"}
+        </button>
+      </div>
+      {open ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-1">
+            {EXAMPLE_STAGES.map((entry, index) => (
+              <span key={entry.key} className="flex items-center gap-1">
+                {index > 0 ? (
+                  <span className="text-neutral-300 dark:text-neutral-600">
+                    →
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  title={entry.hint}
+                  onClick={() => setStage(entry.key)}
+                  className={`rounded-md px-2 py-0.5 text-xs ${
+                    stage === entry.key
+                      ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                      : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                  }`}
+                >
+                  {entry.label}
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+            {stage === "fsm" || stage === "source" ? (
+              <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
+                {content}
+              </pre>
+            ) : (
+              <Markdown text={content} />
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function LibrarySurface({
   onNavigate,
 }: {
@@ -162,6 +359,8 @@ export function LibrarySurface({
   const runCompile = useAppStore((state) => state.runCompile);
   const abortCompile = useAppStore((state) => state.abortCompile);
   const connection = useAppStore((state) => state.connection);
+  const builtins = useAppStore((state) => state.builtins);
+  const loadBuiltins = useAppStore((state) => state.loadBuiltins);
 
   const [toolchain, setToolchain] = useState<Toolchain>();
   const [error, setError] = useState<string>();
@@ -180,12 +379,16 @@ export function LibrarySurface({
   const [sourceText, setSourceText] = useState("");
   const [sourcePath, setSourcePath] = useState("");
   const [playerRefs, setPlayerRefs] = useState<Record<string, string>>({});
+  const compileFormRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (connection === "open") {
       getClient().command("compile.check", {}).then(setToolchain).catch(() => {});
+      // Surface activation refreshes the catalog (DR-015); config
+      // edits refresh it again via the config.state broadcast.
+      void loadBuiltins().catch(() => {});
     }
-  }, [connection]);
+  }, [connection, loadBuiltins]);
 
   if (!configState || configState.status !== "valid") {
     return (
@@ -262,6 +465,26 @@ export function LibrarySurface({
         // The progress log carries the failure line.
       });
   }
+
+  /** Prefill the compile form from the slc demo (DR-015): the
+   * normalized text, never the raw prose — the compile pipeline
+   * skips slc's normalize phase. */
+  function prefillFromExample(): void {
+    setPlaybookId(SLC_DEMO.playbookId);
+    setCommand(SLC_DEMO.command);
+    setIntent(SLC_DEMO.intent);
+    setRolesText(SLC_DEMO.roles);
+    setSourceText(SLC_DEMO.stages.normalized);
+    setSourcePath("");
+    compileFormRef.current?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  const availableBuiltins = (builtins ?? []).filter(
+    (entry) => !entry.configured,
+  );
 
   const progressId = activeCompile?.playbookId;
   const progressLines = progressId ? (compileProgress[progressId] ?? []) : [];
@@ -398,7 +621,26 @@ export function LibrarySurface({
         ) : null}
       </section>
 
+      {availableBuiltins.length > 0 ? (
+        <section
+          data-testid="builtins-section"
+          className="flex flex-col gap-2"
+        >
+          <h2 className="text-sm font-semibold text-neutral-500">
+            Available built-ins
+          </h2>
+          {availableBuiltins.map((entry) => (
+            <BuiltinCard key={entry.id} info={entry} profiles={profileIds} />
+          ))}
+        </section>
+      ) : null}
+
       <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-neutral-500">Example</h2>
+        <ExampleCard onPrefill={prefillFromExample} />
+      </section>
+
+      <section ref={compileFormRef} className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
           Compile a new playbook
         </h2>
@@ -417,6 +659,7 @@ export function LibrarySurface({
           <label className="flex flex-col gap-0.5">
             <span className="text-xs text-neutral-500">Playbook id</span>
             <input
+              data-testid="compile-playbook-id"
               value={playbookId}
               onChange={(event) => setPlaybookId(event.target.value)}
               placeholder="e.g. triage"
@@ -428,6 +671,7 @@ export function LibrarySurface({
               Slash command (default: id)
             </span>
             <input
+              data-testid="compile-command"
               value={command}
               onChange={(event) => setCommand(event.target.value)}
               placeholder="e.g. triage"
@@ -439,6 +683,7 @@ export function LibrarySurface({
               Intent (one line; the Captain routes free text with it)
             </span>
             <input
+              data-testid="compile-intent"
               value={intent}
               onChange={(event) => setIntent(event.target.value)}
               placeholder="e.g. triage new bug reports into labeled issues"
@@ -450,6 +695,7 @@ export function LibrarySurface({
               Player roles (comma-separated local role ids)
             </span>
             <input
+              data-testid="compile-roles"
               value={rolesText}
               onChange={(event) => setRolesText(event.target.value)}
               placeholder="e.g. triager, verifier"
@@ -477,6 +723,7 @@ export function LibrarySurface({
               Workflow source (or give a source file path below)
             </span>
             <textarea
+              data-testid="compile-source-text"
               value={sourceText}
               onChange={(event) => setSourceText(event.target.value)}
               rows={6}
@@ -489,6 +736,7 @@ export function LibrarySurface({
               Source file path (optional, overrides the text)
             </span>
             <input
+              data-testid="compile-source-path"
               value={sourcePath}
               onChange={(event) => setSourcePath(event.target.value)}
               placeholder="/path/to/workflow.md"

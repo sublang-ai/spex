@@ -1,146 +1,205 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Pure view-model helpers for the spec view (SPECV, DR-011): tree
-// shaping, counts, citation indices, search matching, and relative
-// time — no DOM, so logic stays testable without rendering.
+// Pure view-model helpers for the spec view (SPECV; DR-011 as amended
+// by DR-015): branch/dir tree shaping over the flat SpecFileInfo list,
+// counts, citation indices, search matching, inline-link resolution,
+// and relative time — no DOM, so logic stays testable without
+// rendering.
 
 import type {
-  SpecGroupFile,
+  SpecFileInfo,
+  SpecGroup,
   SpecItemInfo,
-  SpecPackageInfo,
+  SpecRecordInfo,
 } from "@sublang/spex-core/protocol";
 
-export type SpecGroup = "user" | "dev" | "test";
+export type { SpecGroup };
 
-/** Group render order inside an expanded package (DR-011). */
-export const GROUP_ORDER: readonly SpecGroup[] = ["user", "dev", "test"];
+/** Filter toggle and count order (DR-015 group model). */
+export const GROUP_ORDER: readonly SpecGroup[] = [
+  "external",
+  "internal",
+  "test",
+];
 
 // ---------------------------------------------------------------------------
 // View state (lifted to the host so it survives project switches)
 // ---------------------------------------------------------------------------
 
 export interface SpecViewState {
-  filters: { user: boolean; dev: boolean; test: boolean };
+  filters: { external: boolean; internal: boolean; test: boolean };
   search: string;
-  /** Package keys with the node expanded. */
-  expandedPackages: string[];
+  /** Namespaced file keys (`<kind>:<key>`) with the node expanded. */
+  expandedFiles: string[];
   /** Item IDs with the full body expanded. */
   expandedItems: string[];
 }
 
 export const initialSpecViewState: SpecViewState = {
-  filters: { user: true, dev: true, test: true },
+  filters: { external: true, internal: true, test: true },
   search: "",
-  expandedPackages: [],
+  expandedFiles: [],
   expandedItems: [],
 };
 
+/** Coerce a possibly-stale persisted view state to the current shape.
+ * The pre-DR-015 shape (user/dev/test filters, expandedPackages) — or
+ * anything else unrecognizable — resets to defaults instead of
+ * crashing the view. */
+export function normalizeSpecViewState(value: unknown): SpecViewState {
+  if (typeof value !== "object" || value === null) {
+    return initialSpecViewState;
+  }
+  const state = value as {
+    filters?: Record<string, unknown>;
+    search?: unknown;
+    expandedFiles?: unknown;
+    expandedItems?: unknown;
+  };
+  const strings = (entry: unknown): entry is string[] =>
+    Array.isArray(entry) && entry.every((e) => typeof e === "string");
+  if (
+    typeof state.filters !== "object" ||
+    state.filters === null ||
+    GROUP_ORDER.some((group) => typeof state.filters?.[group] !== "boolean") ||
+    typeof state.search !== "string" ||
+    !strings(state.expandedFiles) ||
+    !strings(state.expandedItems)
+  ) {
+    return initialSpecViewState;
+  }
+  return value as SpecViewState;
+}
+
+/** Namespaced identity for expansion state and test ids — package and
+ * composition keys may collide (both collections can hold "foo.md"). */
+export function fileKey(file: Pick<SpecFileInfo, "kind" | "key">): string {
+  return `${file.kind}:${file.key}`;
+}
+
 // ---------------------------------------------------------------------------
-// Directory tree
+// Branch and directory tree
 // ---------------------------------------------------------------------------
 
 export interface SpecDirNode {
-  /** Last path segment; "" only on the root. */
+  /** Last path segment; the collection label on a branch root. */
   name: string;
-  /** Full directory path relative to the group roots. */
+  /** Collapse key: `<kind>` on the branch root, `<kind>:<dir>` below. */
   path: string;
   dirs: SpecDirNode[];
-  packages: SpecPackageInfo[];
+  files: SpecFileInfo[];
 }
 
-function packageSortKey(pkg: SpecPackageInfo): string {
-  return (pkg.shortForm ?? pkg.basename).toUpperCase();
+export interface SpecBranch {
+  kind: SpecFileInfo["kind"];
+  /** "Packages" / "Compositions". */
+  label: string;
+  root: SpecDirNode;
+  fileCount: number;
 }
 
-/** Nest packages under their (possibly multi-segment) directories.
- * Directories sort by name; packages by short form (fallback
+const BRANCHES: readonly { kind: SpecFileInfo["kind"]; label: string }[] = [
+  { kind: "package", label: "Packages" },
+  { kind: "composition", label: "Compositions" },
+];
+
+function fileSortKey(file: SpecFileInfo): string {
+  return (file.shortForm ?? file.basename).toUpperCase();
+}
+
+/** The two top branches — Packages, then Compositions — each nesting
+ * collection-directory nodes and file nodes. Branches without files
+ * are omitted. Directories sort by name; files by short form (fallback
  * basename) within their directory, like `map.md` (DR-011). */
-export function buildDirTree(packages: SpecPackageInfo[]): SpecDirNode {
-  const root: SpecDirNode = { name: "", path: "", dirs: [], packages: [] };
-  const byPath = new Map<string, SpecDirNode>([["", root]]);
-  const dirNode = (path: string): SpecDirNode => {
-    const existing = byPath.get(path);
-    if (existing) return existing;
-    const slash = path.lastIndexOf("/");
-    const parent = dirNode(slash === -1 ? "" : path.slice(0, slash));
-    const node: SpecDirNode = {
-      name: slash === -1 ? path : path.slice(slash + 1),
-      path,
-      dirs: [],
-      packages: [],
+export function buildBranches(files: SpecFileInfo[]): SpecBranch[] {
+  const branches: SpecBranch[] = [];
+  for (const { kind, label } of BRANCHES) {
+    const own = files.filter((file) => file.kind === kind);
+    if (own.length === 0) continue;
+    const root: SpecDirNode = { name: label, path: kind, dirs: [], files: [] };
+    const byPath = new Map<string, SpecDirNode>([["", root]]);
+    const dirNode = (path: string): SpecDirNode => {
+      const existing = byPath.get(path);
+      if (existing) return existing;
+      const slash = path.lastIndexOf("/");
+      const parent = dirNode(slash === -1 ? "" : path.slice(0, slash));
+      const node: SpecDirNode = {
+        name: slash === -1 ? path : path.slice(slash + 1),
+        path: `${kind}:${path}`,
+        dirs: [],
+        files: [],
+      };
+      parent.dirs.push(node);
+      byPath.set(path, node);
+      return node;
     };
-    parent.dirs.push(node);
-    byPath.set(path, node);
-    return node;
-  };
-  for (const pkg of packages) dirNode(pkg.dir).packages.push(pkg);
-  const sortNode = (node: SpecDirNode) => {
-    node.dirs.sort((a, b) => a.name.localeCompare(b.name));
-    node.packages.sort((a, b) =>
-      packageSortKey(a).localeCompare(packageSortKey(b)),
-    );
-    node.dirs.forEach(sortNode);
-  };
-  sortNode(root);
-  return root;
-}
-
-/** Ancestor directory paths of a package, outermost first
- * (e.g. dir "a/b" → ["a", "a/b"]). */
-export function ancestorDirs(dir: string): string[] {
-  if (!dir) return [];
-  const segments = dir.split("/");
-  return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
-}
-
-// ---------------------------------------------------------------------------
-// Package digests
-// ---------------------------------------------------------------------------
-
-/** Present group files in user → dev → test order. */
-export function presentGroups(
-  pkg: SpecPackageInfo,
-): { group: SpecGroup; file: SpecGroupFile }[] {
-  const out: { group: SpecGroup; file: SpecGroupFile }[] = [];
-  for (const group of GROUP_ORDER) {
-    const file = pkg.groups[group];
-    if (file) out.push({ group, file });
+    for (const file of own) dirNode(file.dir).files.push(file);
+    const sortNode = (node: SpecDirNode): void => {
+      node.dirs.sort((a, b) => a.name.localeCompare(b.name));
+      node.files.sort((a, b) => fileSortKey(a).localeCompare(fileSortKey(b)));
+      node.dirs.forEach(sortNode);
+    };
+    sortNode(root);
+    branches.push({ kind, label, root, fileCount: own.length });
   }
-  return out;
+  return branches;
 }
 
-/** Intent one-liner: the user file's intent, falling back dev then
- * test (DR-011). */
-export function packageIntent(pkg: SpecPackageInfo): string | undefined {
-  return (
-    pkg.groups.user?.intent ?? pkg.groups.dev?.intent ?? pkg.groups.test?.intent
-  );
+/** Collapse keys above a file, outermost first: its branch, then each
+ * ancestor directory (e.g. package + "a/b" → ["package", "package:a",
+ * "package:a/b"]). */
+export function ancestorKeys(
+  kind: SpecFileInfo["kind"],
+  dir: string,
+): string[] {
+  const keys: string[] = [kind];
+  if (dir) {
+    const segments = dir.split("/");
+    for (let index = 0; index < segments.length; index += 1) {
+      keys.push(`${kind}:${segments.slice(0, index + 1).join("/")}`);
+    }
+  }
+  return keys;
 }
 
-export function packageCounts(pkg: SpecPackageInfo): Record<SpecGroup, number> {
-  return {
-    user: pkg.groups.user?.items.length ?? 0,
-    dev: pkg.groups.dev?.items.length ?? 0,
-    test: pkg.groups.test?.items.length ?? 0,
+// ---------------------------------------------------------------------------
+// Counts
+// ---------------------------------------------------------------------------
+
+export function fileCounts(file: SpecFileInfo): Record<SpecGroup, number> {
+  const counts: Record<SpecGroup, number> = {
+    external: 0,
+    internal: 0,
+    test: 0,
   };
+  for (const item of file.items) counts[item.group] += 1;
+  return counts;
 }
 
-export function treeCounts(packages: SpecPackageInfo[]): {
+export function treeCounts(files: SpecFileInfo[]): {
   perGroup: Record<SpecGroup, number>;
   items: number;
   packages: number;
+  compositions: number;
 } {
-  const perGroup: Record<SpecGroup, number> = { user: 0, dev: 0, test: 0 };
-  for (const pkg of packages) {
-    for (const group of GROUP_ORDER) {
-      perGroup[group] += pkg.groups[group]?.items.length ?? 0;
-    }
+  const perGroup: Record<SpecGroup, number> = {
+    external: 0,
+    internal: 0,
+    test: 0,
+  };
+  let packages = 0;
+  let compositions = 0;
+  for (const file of files) {
+    if (file.kind === "package") packages += 1;
+    else compositions += 1;
+    for (const item of file.items) perGroup[item.group] += 1;
   }
   return {
     perGroup,
-    items: perGroup.user + perGroup.dev + perGroup.test,
-    packages: packages.length,
+    items: perGroup.external + perGroup.internal + perGroup.test,
+    packages,
+    compositions,
   };
 }
 
@@ -149,53 +208,87 @@ export function treeCounts(packages: SpecPackageInfo[]): {
 // ---------------------------------------------------------------------------
 
 export interface ItemLocation {
-  packageKey: string;
-  packageDir: string;
+  /** Namespaced file key (`<kind>:<key>`). */
+  fileKey: string;
+  kind: SpecFileInfo["kind"];
+  dir: string;
   group: SpecGroup;
   item: SpecItemInfo;
 }
 
 /** Item ID → location, for citation jumps. */
 export function buildItemIndex(
-  packages: SpecPackageInfo[],
+  files: SpecFileInfo[],
 ): Map<string, ItemLocation> {
   const index = new Map<string, ItemLocation>();
-  for (const pkg of packages) {
-    for (const { group, file } of presentGroups(pkg)) {
-      for (const item of file.items) {
-        index.set(item.id, {
-          packageKey: pkg.key,
-          packageDir: pkg.dir,
-          group,
-          item,
-        });
-      }
+  for (const file of files) {
+    for (const item of file.items) {
+      index.set(item.id, {
+        fileKey: fileKey(file),
+        kind: file.kind,
+        dir: file.dir,
+        group: item.group,
+        item,
+      });
     }
   }
   return index;
 }
 
-/** Inbound Verifies index: cited item ID → citing item IDs in
- * encounter order ("verified by" backlinks, DR-011). */
+/** Inbound citation index: cited item ID → citing item IDs in
+ * encounter order ("cited by" backlinks; DR-011 as amended). */
 export function buildInboundIndex(
-  packages: SpecPackageInfo[],
+  files: SpecFileInfo[],
 ): Map<string, string[]> {
   const inbound = new Map<string, string[]>();
-  for (const pkg of packages) {
-    for (const { file } of presentGroups(pkg)) {
-      for (const item of file.items) {
-        for (const target of item.verifies) {
-          const list = inbound.get(target);
-          if (list) {
-            if (!list.includes(item.id)) list.push(item.id);
-          } else {
-            inbound.set(target, [item.id]);
-          }
+  for (const file of files) {
+    for (const item of file.items) {
+      for (const target of item.cites) {
+        const list = inbound.get(target);
+        if (list) {
+          if (!list.includes(item.id)) list.push(item.id);
+        } else {
+          inbound.set(target, [item.id]);
         }
       }
     }
   }
   return inbound;
+}
+
+// ---------------------------------------------------------------------------
+// Inline-link resolution (citations live in item bodies per META-20)
+// ---------------------------------------------------------------------------
+
+const ITEM_ID_PATTERN = /^[A-Z][A-Z0-9]*-\d+$/;
+
+/** The item ID an inline markdown link targets: the link text when it
+ * is a bare item ID, else the href's `#anchor` uppercased when it
+ * looks like an item anchor. Undefined for every other link. */
+export function linkItemTarget(
+  text: string,
+  href: string,
+): string | undefined {
+  const trimmed = text.trim();
+  if (ITEM_ID_PATTERN.test(trimmed)) return trimmed;
+  const hash = href.indexOf("#");
+  if (hash === -1) return undefined;
+  const anchor = href.slice(hash + 1).toUpperCase();
+  return ITEM_ID_PATTERN.test(anchor) ? anchor : undefined;
+}
+
+/** The DR/IR record an inline link's relative href points at, matched
+ * by file basename (record paths are specs/-relative while hrefs are
+ * file-relative, so prefixes differ). */
+export function recordForHref(
+  href: string,
+  records: SpecRecordInfo[],
+): SpecRecordInfo | undefined {
+  const path = href.split("#")[0];
+  if (!path.endsWith(".md")) return undefined;
+  const base = path.split("/").pop();
+  if (!base) return undefined;
+  return records.find((record) => record.path.split("/").pop() === base);
 }
 
 // ---------------------------------------------------------------------------
@@ -213,44 +306,41 @@ export function itemMatches(item: SpecItemInfo, query: string): boolean {
   );
 }
 
-/** Items of one group file that render under the active filters,
- * search, and force-reveals (citation jumps bypass a toggled-off
- * group filter, DR-011). */
-export function visibleGroupItems(
-  file: SpecGroupFile,
-  group: SpecGroup,
+/** Items of one file that render under the active filters, search,
+ * and force-reveals (citation jumps bypass a toggled-off group
+ * filter, DR-011). Document order is preserved. */
+export function visibleFileItems(
+  file: SpecFileInfo,
   state: Pick<SpecViewState, "filters" | "search">,
   revealed: ReadonlySet<string>,
 ): SpecItemInfo[] {
   const searching = state.search.trim().length > 0;
   return file.items.filter((item) => {
     if (revealed.has(item.id)) return true;
-    if (!state.filters[group]) return false;
+    if (!state.filters[item.group]) return false;
     return !searching || itemMatches(item, state.search);
   });
 }
 
 /** Search digest: how many filter-visible items match, and which
- * packages auto-expand while the search is active. */
+ * files auto-expand while the search is active. */
 export function searchDigest(
-  packages: SpecPackageInfo[],
+  files: SpecFileInfo[],
   state: Pick<SpecViewState, "filters" | "search">,
-): { count: number; packageKeys: Set<string> } {
-  const packageKeys = new Set<string>();
+): { count: number; fileKeys: Set<string> } {
+  const fileKeys = new Set<string>();
   let count = 0;
-  if (!state.search.trim()) return { count, packageKeys };
-  for (const pkg of packages) {
-    for (const { group, file } of presentGroups(pkg)) {
-      if (!state.filters[group]) continue;
-      for (const item of file.items) {
-        if (itemMatches(item, state.search)) {
-          count += 1;
-          packageKeys.add(pkg.key);
-        }
+  if (!state.search.trim()) return { count, fileKeys };
+  for (const file of files) {
+    for (const item of file.items) {
+      if (!state.filters[item.group]) continue;
+      if (itemMatches(item, state.search)) {
+        count += 1;
+        fileKeys.add(fileKey(file));
       }
     }
   }
-  return { count, packageKeys };
+  return { count, fileKeys };
 }
 
 // ---------------------------------------------------------------------------

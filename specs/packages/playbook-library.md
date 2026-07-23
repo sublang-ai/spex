@@ -159,6 +159,29 @@ stays visible outside any truncation, and shall expose the full,
 untruncated path — introduced as the source the playbook was
 loaded from — in the entry's tooltip.
 
+### Built-ins and Example
+
+#### PBLIB-34
+
+When the Library surface is opened, the Library shall list each
+known built-in playbook absent from the shared config
+([DR-015](../decisions/015-reference-content.md)) with its
+command, intent, required roles, and browsable source markdown,
+and shall offer an add flow that maps the built-in's roles to
+profiles and registers it through the shared-config write path
+([PBLIB-16](#pblib-16)); browsing a built-in's source shall
+require no config change.
+
+#### PBLIB-35
+
+When the Library surface is opened, the Library shall present the
+slc demo workflow as a read-only example
+([DR-015](../decisions/015-reference-content.md)) in the pipeline
+grammar — source, normalized text, gears, and state machine —
+and shall offer a prefill action that fills the compile form with
+the example's normalized text and judgment fields without
+starting a compile.
+
 ### Compile Cancellation
 
 #### PBLIB-27

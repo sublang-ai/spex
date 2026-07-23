@@ -9,6 +9,7 @@
 
 import { create } from "zustand";
 import type {
+  BuiltinPlaybookInfo,
   ConfigState,
   ForgeState,
   ProjectInfo,
@@ -56,6 +57,8 @@ export interface AppState {
   projectMeta: Record<string, ProjectMeta>;
   compileProgress: Record<string, string[]>;
   activeCompile?: CompileTracker;
+  /** Built-in playbook catalog (DR-015); undefined until first load. */
+  builtins?: BuiltinPlaybookInfo[];
   sessions: SessionInfo[];
   views: Record<string, SessionView>;
   composers: Record<string, ComposerState>;
@@ -84,6 +87,11 @@ export interface AppState {
   /** Register a folder, silently git-initializing non-repos
    * (RUN-27); the palette and any surface share this one action. */
   addProjectByPath(path: string): Promise<ProjectInfo>;
+  /** Load (or refresh) the built-in playbook catalog (DR-015). */
+  loadBuiltins(): Promise<void>;
+  /** Seed the Academy example project (DR-015) and make it current.
+   * Paths pass through as typed — the core expands a leading ~. */
+  openAcademyExample(path?: string): Promise<ProjectInfo>;
   loadSpecs(projectId: string): Promise<void>;
   readSpecRecord(projectId: string, path: string): Promise<string>;
   refreshReadiness(): Promise<void>;
@@ -247,6 +255,13 @@ export const useAppStore = create<AppState>((set, get) => {
     switch (message.type) {
       case "config.state":
         set({ configState: message.state });
+        // Config edits flip catalog `configured` flags (DR-015):
+        // refresh an already-loaded catalog so the Library stays true.
+        if (get().builtins) {
+          void get()
+            .loadBuiltins()
+            .catch(() => {});
+        }
         break;
       case "readiness.state":
         set({ readiness: message.profiles });
@@ -412,6 +427,27 @@ export const useAppStore = create<AppState>((set, get) => {
           throw cause;
         }
       }
+      return project;
+    },
+
+    async loadBuiltins(): Promise<void> {
+      const { builtins } = await getClient().command("library.builtins", {});
+      set({ builtins });
+    },
+
+    async openAcademyExample(path?: string): Promise<ProjectInfo> {
+      // Same path UX as the palette's typed paths: pass through as
+      // written and let the core expand ~ (DR-015 example mode).
+      const target = path?.trim() || "~/spex-academy";
+      const project = await getClient().command("project.create", {
+        path: target,
+        example: true,
+      });
+      // Registration happened server-side: mirror the post-create
+      // flow of addProjectByPath, then make the example current.
+      set({ projects: await getClient().command("project.list", {}) });
+      void get().loadProjectMeta(project.id);
+      get().setCurrentProject(project.id);
       return project;
     },
 

@@ -26,34 +26,34 @@ directories.
 
 When the spec view is opened for a project whose `specs/` tree has
 been read, the spec view shall present the tree as a left-rooted
-collapsible outline of directories and package nodes — organized
-by spec packages, never by the user/dev/test grouping at the top
-level ([DR-011](../decisions/011-project-workspace.md)) — with
-directory levels expanded and package nodes collapsed by default,
-directories ordered by name, and packages ordered by short form
+collapsible outline with a packages branch and a compositions
+branch ([DR-015](../decisions/015-reference-content.md)) of
+collection directories and file nodes — organized by spec files,
+never by item grouping at the top level
+([DR-011](../decisions/011-project-workspace.md)) — with
+directory levels expanded and file nodes collapsed by default,
+directories ordered by name, and files ordered by short form
 (falling back to basename) within their directory.
 
 ### Package Nodes
 
 #### SPECV-2
 
-While a package node is displayed, the spec view shall show its
-short-form chip (omitted when the package has no shared item-ID
-prefix), basename, intent one-liner (the user file's intent,
-falling back to dev, then test), and per-group item counts in the
-fixed group colors — user sky, dev fuchsia, test teal
-([DR-011](../decisions/011-project-workspace.md)) — where every
+While a file node is displayed, the spec view shall show its
+short-form chip (omitted when the file has no short form), its
+basename, its intent one-liner, and per-group item counts in the
+fixed group colors — external sky, internal fuchsia, test teal
+([DR-015](../decisions/015-reference-content.md)) — where every
 count carries its group word and an aria-label, a zero count
 renders muted rather than absent, and color is never the only
 channel ([DR-010](../decisions/010-interface-craft.md) §7, §8).
-When the node is expanded, the view shall show each present group
-file's tagged intent line followed by its items in per-file
-document order with the file's `##` section values preserved as
-sub-headings wherever the section changes between consecutive
-items — never sorted by ID ([META-12](../meta.md#meta-12)) —
-along with any package consistency notices, and shall offer a
-per-package control that expands or collapses every item body at
-once.
+When the node is expanded, the view shall show the file's intent
+line followed by its items in document order with the file's `##`
+section values preserved as sub-headings wherever the section
+changes between consecutive items — never sorted by ID
+([META-12](../meta.md#meta-12)) — along with any file consistency
+notices, and shall offer a per-file control that expands or
+collapses every item body at once.
 
 ### Items
 
@@ -61,14 +61,13 @@ once.
 
 While an item row is collapsed, the spec view shall show the
 item's ID chip in its group color, its group tag, and its first
-line, plus a muted verifies hint on items carrying a `Verifies:`
-line and a muted computed "verified by" backlink hint on items
-cited by other items' `Verifies:` lines. When the row is expanded,
-the view shall render the item's full markdown body with
-horizontal overflow contained and its Verifies citations and
-backlinks as in-view links; when the ID chip is activated, the
-view shall copy the item ID to the clipboard and acknowledge with
-a transient tick
+line, plus a muted cites hint on test-group items carrying inline
+item citations and a muted computed "cited by" backlink hint on
+items cited by other items. When the row is expanded, the view
+shall render the item's full markdown body with horizontal
+overflow contained and its citations and backlinks as in-view
+links; when the ID chip is activated, the view shall copy the
+item ID to the clipboard and acknowledge with a transient tick
 ([DR-010](../decisions/010-interface-craft.md) §3).
 
 ### Filters
@@ -99,7 +98,7 @@ expansion state from before the search.
 
 #### SPECV-6
 
-When a Verifies citation or a backlink is activated, the spec view
+When an item citation or a backlink is activated, the spec view
 shall expand the target item's ancestors, reveal the target even
 when its group filter is toggled off — marking it "shown despite
 filter" — and scroll to and briefly highlight it, without leaving
@@ -138,11 +137,25 @@ the read in flight
 Where the project has no `specs/` directory, the spec view shall
 render an instructive empty state that states what `specs/` holds
 and presents the scaffold command (`npx @sublang/spex`) as a
-copyable block. Where a group file fails to parse, the spec view
-shall render a per-file notice inside its package while keeping
-parsed content visible; tree-level notices shall render under the
+copyable block. Where a file fails to parse, the spec view shall
+render a per-file notice inside its node while keeping parsed
+content visible; tree-level notices shall render under the
 header, and the view shall never render blank
 ([DR-011](../decisions/011-project-workspace.md)).
+
+#### SPECV-17
+
+Where the project has no `specs/` directory, the spec view's empty
+state shall also offer the Academy example
+([DR-015](../decisions/015-reference-content.md)) as one action
+that seeds and opens the example project.
+
+#### SPECV-18
+
+Where the project's `specs/` tree uses the legacy user/dev/test
+layout, the spec view shall render a migration notice naming
+`npx @sublang/spex scaffold --update` as a copyable block instead
+of a tree ([DR-015](../decisions/015-reference-content.md)).
 
 ## Internal Behavior
 
@@ -154,43 +167,52 @@ When `specs.get` names a known project, the core package shall parse
 the project's `specs/` tree within that request — no file watcher,
 no cache — and reply with the parsed tree carrying its wall-clock
 read time, so the view can show data freshness.
-Packages shall be keyed by relative directory path plus basename
-under `user/`, `dev/`, and `test/` ([META-9](../meta.md#meta-9)),
-merging a package's group files under one key, with each file's
-items kept in document order and never sorted by ID.
-Files sharing a basename at different relative paths shall remain
-separate packages, each carrying a consistency notice naming the
-other key.
+Files shall be listed per collection — `packages/` and
+`compositions/` ([META-1](../meta.md#meta-1)) — keyed by
+collection-relative path minus the extension, with collection
+subdirectories carried as navigation-only structure
+([META-32](../meta.md#meta-32)) and each file's items kept in
+document order and never sorted by ID.
+When the tree contains a `user/`, `dev/`, or `test/` directory,
+the reply shall flag the tree as legacy with no files parsed
+([DR-015](../decisions/015-reference-content.md)).
 When the project has no `specs/` directory, the reply shall state
 absence with empty lists rather than fail.
 
 #### SPECV-11
 
-The core package shall derive a package's short form as the item-ID
-prefix shared by all items across the package's group files.
-When files disagree, the short form shall be the prefix carried by
-the most items, and the package shall carry a notice naming the
-mixed prefixes and the files holding minority prefixes.
-A package with no items shall have no short form.
+The core package shall take a file's short form from its
+`# <SHORT>: <Title>` heading ([META-10](../meta.md#meta-10)),
+falling back to the item-ID prefix carried by the most items when
+the heading does not declare one.
+When the declared short form disagrees with the majority item
+prefix, or item prefixes are mixed, the file shall carry a notice
+naming the disagreement.
+A file with no declared short form and no items shall have no
+short form.
 
 #### SPECV-12
 
 For each parsed item, the core package shall report the item's ID,
-group, full markdown body, nearest preceding `##` section heading —
-with `Intent` and `References` yielding no section — and a one-line
-digest cut at the first sentence end or line break of the body's
-first paragraph, keeping raw markdown.
-When a test item's body starts with a `Verifies:` line
-([META-20](../meta.md#meta-20)), the core package shall extract
-every cited item ID from that line and exclude the line from the
-digest, which shall start at the first sentence after it.
+its section-kind group — External Behavior and Scenario external,
+Internal Behavior and Binding internal, Verification and Tests
+test ([DR-015](../decisions/015-reference-content.md)) — its
+containing `##` section heading, its nearest `###` topic heading
+for `####` items, its full markdown body, and a one-line digest
+cut at the first sentence end or line break of the body's first
+paragraph, keeping raw markdown.
+The core package shall extract the item's citations from inline
+item-ID links in the body ([META-20](../meta.md#meta-20)) in
+order, without duplicates; an item under a section outside its
+collection's grammar shall carry the external group and a file
+notice naming the unexpected section.
 
 #### SPECV-13
 
-The core package shall return the first paragraph under `## Intent`
-([META-3](../meta.md#meta-3)) for every group file that has one, on
-that file, so the view can apply its own display fallback across
-groups without a second fetch.
+The core package shall return the first paragraph under
+`## Intent` ([META-3](../meta.md#meta-3)) for every file that has
+one, on that file, together with the H1 title, so the view renders
+a file's summary without a second fetch.
 
 ### Records Parsing
 
@@ -234,33 +256,35 @@ file's raw markdown.
 ### Parse Coverage
 
 #### SPECV-30
-Where a fixture tree defines a top-level package with all three
-group files, a package nested in a directory, and a package present
-in only one group, the test suite shall parse the tree and assert
-that packages are keyed by directory path plus basename, that a
-package's group files merge under one key, that items keep document
-order when it differs from ID order, and that two packages sharing
-a basename at different paths each carry a notice naming the other
+Where a fixture tree defines package files at the collection root
+and nested in a collection directory plus composition files, the
+test suite shall parse the tree and assert that files are keyed by
+collection-relative path, that collection directories carry no
+semantic grouping, that items keep document order when it differs
+from ID order ([SPECV-10](#specv-10)), and that a tree holding a
+legacy `user/` directory is flagged legacy with no files
 ([SPECV-10](#specv-10)).
 
 #### SPECV-31
-Where a fixture file mixes a majority and a minority item-ID
-prefix, the test suite shall assert that the package's short form
-is the majority prefix and that a package notice names the mixed
-prefixes and the minority file ([SPECV-11](#specv-11)); where a
-package has no items, the suite shall assert it has no short form
+Where a fixture file declares an H1 short form disagreeing with
+its majority item prefix, the test suite shall assert the declared
+short form wins with a disagreement notice
+([SPECV-11](#specv-11)); where a fixture file has no short-form
+heading, the suite shall assert the majority item prefix is used,
+and no short form when there are no items
 ([SPECV-11](#specv-11)).
 
 #### SPECV-32
-Where fixture items sit under `##` sections, under `## Intent`, and
-after `## References`, and carry `Verifies:` lines and fenced code
-blocks, the test suite shall assert section attribution (none under
-Intent or References), digest truncation at the first sentence end,
-`Verifies:` ID extraction with the line excluded from the digest,
-and that fenced `###` lines start no item ([SPECV-12](#specv-12)).
+Where fixture items sit under package and composition sections,
+under topic headings, and carry inline item citations and fenced
+code blocks, the test suite shall assert section-kind group
+mapping, topic attribution for `####` items, digest truncation at
+the first sentence end, ordered de-duplicated citation extraction,
+and that fenced `###` lines start no item and fenced links never
+cite ([SPECV-12](#specv-12)).
 
 #### SPECV-33
-Where a group file carries a multi-line first paragraph under
+Where a file carries a multi-line first paragraph under
 `## Intent` followed by further paragraphs, the test suite shall
 assert that the file's intent is the first paragraph only, joined
 to one line ([SPECV-13](#specv-13)).
@@ -277,7 +301,7 @@ prefix stripped, `specs/`-relative paths, and filename ordering
 ### Degradation Coverage
 
 #### SPECV-35
-Where a fixture tree contains an unreadable group file and unknown
+Where a fixture tree contains an unreadable file and unknown
 entries directly under `specs/`, the test suite shall assert that
 the parse still succeeds, carrying a per-file error for the
 unreadable file, one tree notice listing the unknown entries

@@ -9,15 +9,15 @@ Ship the reference content and the packages-layout spec view per [DR-015](../dec
 
 ## Deliverables
 
-- [ ] Vendored `code.md` and `discuss.md` core assets with provenance headers; artifact resolution falls back to them for package registries missing an adjacent source.
-- [ ] `library.builtins` catalog command; Library renders unconfigured built-ins with browsable sources and an add flow over `playbook.add`.
-- [ ] Config template ships `code` and `discuss`.
-- [ ] slc demo example card in the Playbooks surface from vendored raw-text assets, with a normalized-text compile prefill.
-- [ ] Academy corpus staged as a core asset from `demo/`; example mode on project creation (materialize, `git init`, add-all commit, register); palette and spec-view empty state offer it.
-- [ ] `specs.get` parses the packages layout (H1 short forms, section-kind groups, inline citations, collection dirs, legacy detection flag); protocol version 2.
-- [ ] Spec view renders packages and compositions with the external/internal/test toggles and the legacy migration notice.
-- [ ] dev-core fake mode seeds the Academy corpus; core and UI fixtures move to the packages layout.
-- [ ] SPECV package spec amended; new items for the catalog, example card, and seeding; map rows added.
+- [x] Vendored `code.md` and `discuss.md` core assets with provenance headers; artifact resolution falls back to them for package registries missing an adjacent source.
+- [x] `library.builtins` catalog command; Library renders unconfigured built-ins with browsable sources and an add flow over `playbook.add`.
+- [x] Config template ships `code` and `discuss`.
+- [x] slc demo example card in the Playbooks surface from vendored raw-text assets, with a normalized-text compile prefill.
+- [x] Academy corpus staged as a core asset from `demo/`; example mode on project creation (materialize, `git init`, add-all commit, register); palette and spec-view empty state offer it.
+- [x] `specs.get` parses the packages layout (H1 short forms, section-kind groups, inline citations, collection dirs, legacy detection flag); protocol version 2.
+- [x] Spec view renders packages and compositions with the external/internal/test toggles and the legacy migration notice.
+- [x] dev-core fake mode seeds the Academy corpus; core and UI fixtures move to the packages layout.
+- [x] SPECV package spec amended; new items for the catalog, example card, and seeding; map rows added.
 
 ## Tasks
 

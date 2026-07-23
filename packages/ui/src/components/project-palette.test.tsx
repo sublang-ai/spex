@@ -10,6 +10,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 afterEach(cleanup);
 
 import { ProjectPalette } from "./ProjectPalette.js";
+import { useAppStore } from "../state/store.js";
 import {
   applyRecords,
   initialSessionView,
@@ -131,5 +132,46 @@ describe("palette owns add-by-path", () => {
       expect(onAddPath).toHaveBeenCalledWith("/tmp/somewhere");
       expect(onPick).toHaveBeenCalledWith("p1");
     });
+  });
+});
+
+describe("DR-015: the palette offers the Academy example", () => {
+  test("the action seeds via the store and picks the project", async () => {
+    const openAcademyExample = vi.fn(async () => PROJECTS[1]);
+    useAppStore.setState({ openAcademyExample });
+    const { onPick, onClose } = renderPalette();
+    fireEvent.click(screen.getByTestId("palette-academy"));
+    await vi.waitFor(() => {
+      expect(openAcademyExample).toHaveBeenCalledWith(undefined);
+      expect(onPick).toHaveBeenCalledWith("p2");
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  test("a typed path becomes the example target", async () => {
+    const openAcademyExample = vi.fn(async () => PROJECTS[1]);
+    useAppStore.setState({ openAcademyExample });
+    renderPalette();
+    fireEvent.change(screen.getByTestId("palette-path"), {
+      target: { value: "~/academy-here" },
+    });
+    fireEvent.click(screen.getByTestId("palette-academy"));
+    await vi.waitFor(() =>
+      expect(openAcademyExample).toHaveBeenCalledWith("~/academy-here"),
+    );
+  });
+
+  test("a seeding failure surfaces inline without closing", async () => {
+    const openAcademyExample = vi.fn(async (): Promise<never> => {
+      throw new Error("target directory is not empty");
+    });
+    useAppStore.setState({ openAcademyExample });
+    const { onPick, onClose } = renderPalette();
+    fireEvent.click(screen.getByTestId("palette-academy"));
+    await vi.waitFor(() =>
+      expect(screen.getByText(/not empty/).textContent).toBeTruthy(),
+    );
+    expect(onPick).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

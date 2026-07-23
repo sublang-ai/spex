@@ -12,6 +12,7 @@ import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { SessionView } from "../state/reducer.js";
 import { deriveAttention } from "../state/dashboard.js";
+import { useAppStore } from "../state/store.js";
 import { Icon } from "./Icon.js";
 
 export interface ProjectPaletteProps {
@@ -42,6 +43,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const [error, setError] = useState<string>();
   const searchRef = useRef<HTMLInputElement>(null);
   const openerRef = useRef<Element | null>(null);
+  // Academy seeding (DR-015) lives on the store: registration and
+  // project selection happen there, the palette only offers the row.
+  const openAcademyExample = useAppStore((state) => state.openAcademyExample);
 
   // The palette owns focus while open and hands it back on close.
   useEffect(() => {
@@ -101,6 +105,22 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       const project = create
         ? await props.onCreatePath(path, scaffold)
         : await props.onAddPath(path);
+      pick(project.id);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runAcademy(): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      // A typed path becomes the example's target; else the store's
+      // default. The core expands ~ like any typed path.
+      const project = await openAcademyExample(pathDraft.trim() || undefined);
       pick(project.id);
     } catch (cause) {
       setError((cause as Error).message);
@@ -296,6 +316,20 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               Scaffold specs when creating
             </label>
           ) : null}
+          <button
+            type="button"
+            data-testid="palette-academy"
+            disabled={busy}
+            onClick={() => void runAcademy()}
+            className="flex items-center gap-1.5 rounded px-0.5 py-0.5 text-left text-xs text-brand-600 hover:underline disabled:opacity-40 dark:text-brand-300"
+          >
+            Try the Academy example
+            <span className="text-[11px] text-neutral-400">
+              {pathDraft.trim()
+                ? `— seeds ${pathDraft.trim()}`
+                : "— seeds a sample project"}
+            </span>
+          </button>
           {error ? (
             <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
               {error}

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Per-project spec view (SPECV, DR-011): a read-only, left-rooted
-// collapsible outline of the project's specs/ tree — directories →
-// package nodes → grouped items in document order — with group
-// filters, filter-as-you-type search, citation jumps, and a records
-// reader. Pure props: the host wires specs.get / specs.read and
-// persists the lifted SpecViewState per project.
+// Per-project spec view (SPECV; DR-011 as amended by DR-015): a
+// read-only, left-rooted collapsible outline of the project's specs/
+// tree — Packages and Compositions branches → collection directories →
+// file nodes → items in document order under their section headings —
+// with group filters, filter-as-you-type search, citation jumps, and a
+// records reader. Pure props: the host wires specs.get / specs.read
+// and persists the lifted SpecViewState per project.
 
 import {
   useCallback,
@@ -14,30 +15,32 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
 import type {
-  SpecGroupFile,
+  SpecFileInfo,
   SpecItemInfo,
-  SpecPackageInfo,
   SpecRecordInfo,
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
 import {
-  ancestorDirs,
-  buildDirTree,
+  ancestorKeys,
+  buildBranches,
   buildInboundIndex,
   buildItemIndex,
+  fileCounts,
+  fileKey,
   initialSpecViewState,
-  itemMatches,
-  packageCounts,
-  packageIntent,
-  presentGroups,
+  linkItemTarget,
+  normalizeSpecViewState,
+  recordForHref,
   relativeReadTime,
   searchDigest,
   treeCounts,
-  visibleGroupItems,
+  visibleFileItems,
+  GROUP_ORDER,
   type SpecDirNode,
   type SpecGroup,
   type SpecViewState,
@@ -48,27 +51,36 @@ import { Markdown } from "./Markdown.js";
 export { initialSpecViewState };
 export type { SpecViewState };
 
-// Group colors are fixed by DR-011: user sky, dev fuchsia, test teal —
-// three hues outside the status palette (DR-010 §8 with DR-013:
-// emerald, amber, red, brand purple keep their meanings). Color is
-// never the only channel:
-// every chip and count carries the group word and an aria-label.
+// Group colors keep DR-011's three hues under DR-015's section-kind
+// groups: external sky, internal fuchsia, test teal — outside the
+// status palette (DR-010 §8 with DR-013: emerald, amber, red, brand
+// purple keep their meanings). Color is never the only channel: every
+// chip and count carries the group word and an aria-label.
 const GROUP_CHIP: Record<SpecGroup, string> = {
-  user: "text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950",
-  dev: "text-fuchsia-700 bg-fuchsia-50 dark:text-fuchsia-300 dark:bg-fuchsia-950",
+  external: "text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950",
+  internal:
+    "text-fuchsia-700 bg-fuchsia-50 dark:text-fuchsia-300 dark:bg-fuchsia-950",
   test: "text-teal-700 bg-teal-50 dark:text-teal-300 dark:bg-teal-950",
 };
 const GROUP_TEXT: Record<SpecGroup, string> = {
-  user: "text-sky-600 dark:text-sky-400",
-  dev: "text-fuchsia-600 dark:text-fuchsia-400",
+  external: "text-sky-600 dark:text-sky-400",
+  internal: "text-fuchsia-600 dark:text-fuchsia-400",
   test: "text-teal-600 dark:text-teal-400",
+};
+/** Filter toggle labels (DR-015). */
+const FILTER_LABEL: Record<SpecGroup, string> = {
+  external: "External",
+  internal: "Internal",
+  test: "Tests",
 };
 
 const MUTED_CHIP =
   "bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500";
 
-const LINK_CLASS =
-  "text-brand-600 hover:underline dark:text-brand-300";
+const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";
+
+const COPY_BUTTON_CLASS =
+  "rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800";
 
 function itemDomId(id: string): string {
   return `specv-item-${id}`;
@@ -108,6 +120,9 @@ export interface SpecViewProps {
   onRefresh: () => void;
   /** Fetch one DR/IR's markdown (specs.read). */
   onReadRecord: (path: string) => Promise<string>;
+  /** Seed the Academy example into this project (DR-015); the empty
+   * state offers it only when wired. */
+  onSeedExample?: () => void;
   viewState: SpecViewState;
   onViewState: (next: SpecViewState) => void;
 }
@@ -120,19 +135,24 @@ type ReaderState = {
 };
 
 export function SpecView(props: SpecViewProps) {
-  const { viewState, onViewState } = props;
+  const { onViewState } = props;
+  // A stale persisted shape (pre-DR-015 user/dev/test state) resets to
+  // defaults instead of crashing the view.
+  const viewState = normalizeSpecViewState(props.viewState);
   // A missing tree is the first load (or its failure) — never
   // dereferenced (DR-010 §5: loading is a state, not a crash).
   const tree: SpecTreeState = props.tree ?? {
     present: false,
-    packages: [],
+    legacy: false,
+    files: [],
     decisions: [],
     iterations: [],
     notices: [],
     readAt: 0,
   };
 
-  // Directory collapse is cosmetic and local: levels default open.
+  // Branch/directory collapse is cosmetic and local: levels default
+  // open.
   const [collapsedDirs, setCollapsedDirs] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -146,28 +166,32 @@ export function SpecView(props: SpecViewProps) {
   const [flashId, setFlashId] = useTransient(1200);
   const [now, setNow] = useState(() => Date.now());
 
-  const dirRoot = useMemo(() => buildDirTree(tree.packages), [tree]);
-  const itemIndex = useMemo(() => buildItemIndex(tree.packages), [tree]);
-  const inbound = useMemo(() => buildInboundIndex(tree.packages), [tree]);
-  const totals = useMemo(() => treeCounts(tree.packages), [tree]);
+  const branches = useMemo(() => buildBranches(tree.files), [tree]);
+  const itemIndex = useMemo(() => buildItemIndex(tree.files), [tree]);
+  const inbound = useMemo(() => buildInboundIndex(tree.files), [tree]);
+  const totals = useMemo(() => treeCounts(tree.files), [tree]);
+  const records = useMemo(
+    () => [...tree.decisions, ...tree.iterations],
+    [tree],
+  );
 
   const searching = viewState.search.trim().length > 0;
   const search = useMemo(
-    () => searchDigest(tree.packages, viewState),
+    () => searchDigest(tree.files, viewState),
     [tree, viewState.search, viewState.filters], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const revealedPackages = useMemo(() => {
+  const revealedFiles = useMemo(() => {
     const keys = new Set<string>();
     for (const id of revealed) {
       const loc = itemIndex.get(id);
-      if (loc) keys.add(loc.packageKey);
+      if (loc) keys.add(loc.fileKey);
     }
     return keys;
   }, [revealed, itemIndex]);
 
-  const expandedPackages = useMemo(
-    () => new Set(viewState.expandedPackages),
-    [viewState.expandedPackages],
+  const expandedFiles = useMemo(
+    () => new Set(viewState.expandedFiles),
+    [viewState.expandedFiles],
   );
   const expandedItems = useMemo(
     () => new Set(viewState.expandedItems),
@@ -202,21 +226,21 @@ export function SpecView(props: SpecViewProps) {
     setPendingJump(undefined);
   }, [pendingJump, setFlashId]);
 
-  /** A package is effectively expanded while searching when it has
-   * matches (computed — expandedPackages is not mutated, so clearing
+  /** A file is effectively expanded while searching when it has
+   * matches (computed — expandedFiles is not mutated, so clearing
    * the search restores the prior expansion). */
-  function isPackageExpanded(pkg: SpecPackageInfo): boolean {
+  function isFileExpanded(key: string): boolean {
     if (searching) {
-      return search.packageKeys.has(pkg.key) || revealedPackages.has(pkg.key);
+      return search.fileKeys.has(key) || revealedFiles.has(key);
     }
-    return expandedPackages.has(pkg.key);
+    return expandedFiles.has(key);
   }
 
-  function togglePackage(key: string) {
-    const next = expandedPackages.has(key)
-      ? viewState.expandedPackages.filter((entry) => entry !== key)
-      : [...viewState.expandedPackages, key];
-    onViewState({ ...viewState, expandedPackages: next });
+  function toggleFile(key: string) {
+    const next = expandedFiles.has(key)
+      ? viewState.expandedFiles.filter((entry) => entry !== key)
+      : [...viewState.expandedFiles, key];
+    onViewState({ ...viewState, expandedFiles: next });
   }
 
   function toggleItem(id: string) {
@@ -226,12 +250,8 @@ export function SpecView(props: SpecViewProps) {
     onViewState({ ...viewState, expandedItems: next });
   }
 
-  function setAllItems(pkg: SpecPackageInfo, expand: boolean) {
-    const ids = new Set(
-      presentGroups(pkg).flatMap(({ file }) =>
-        file.items.map((item) => item.id),
-      ),
-    );
+  function setAllItems(file: SpecFileInfo, expand: boolean) {
+    const ids = new Set(file.items.map((item) => item.id));
     const kept = viewState.expandedItems.filter((id) => !ids.has(id));
     onViewState({
       ...viewState,
@@ -246,10 +266,10 @@ export function SpecView(props: SpecViewProps) {
     });
   }
 
-  function copyItemId(id: string) {
+  function copyText(text: string) {
     void navigator.clipboard
-      ?.writeText(id)
-      .then(() => setCopiedId(id))
+      ?.writeText(text)
+      .then(() => setCopiedId(text))
       .catch(() => {});
   }
 
@@ -266,17 +286,17 @@ export function SpecView(props: SpecViewProps) {
       setRevealed((current) => new Set(current).add(targetId));
     }
     setCollapsedDirs((current) => {
-      const dirs = ancestorDirs(loc.packageDir);
-      if (!dirs.some((dir) => current.has(dir))) return current;
+      const keys = ancestorKeys(loc.kind, loc.dir);
+      if (!keys.some((key) => current.has(key))) return current;
       const next = new Set(current);
-      for (const dir of dirs) next.delete(dir);
+      for (const key of keys) next.delete(key);
       return next;
     });
     onViewState({
       ...viewState,
-      expandedPackages: expandedPackages.has(loc.packageKey)
-        ? viewState.expandedPackages
-        : [...viewState.expandedPackages, loc.packageKey],
+      expandedFiles: expandedFiles.has(loc.fileKey)
+        ? viewState.expandedFiles
+        : [...viewState.expandedFiles, loc.fileKey],
       expandedItems: expandedItems.has(targetId)
         ? viewState.expandedItems
         : [...viewState.expandedItems, targetId],
@@ -303,6 +323,26 @@ export function SpecView(props: SpecViewProps) {
             : current,
         ),
       );
+  }
+
+  /** Inline links in item bodies (META-20 citations): item IDs jump
+   * in-view, DR/IR links open the records reader, external URLs pass
+   * through to the OS browser, and everything else is inert. */
+  function onBodyLinkClick(itemId: string, event: ReactMouseEvent) {
+    const anchor = (event.target as Element | null)?.closest?.("a");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href") ?? "";
+    if (/^https?:\/\//.test(href)) return;
+    event.preventDefault();
+    const target = linkItemTarget(anchor.textContent ?? "", href);
+    if (target && itemIndex.has(target)) {
+      jumpTo(`${itemId}:${target}`, target);
+      return;
+    }
+    const record = recordForHref(href, records);
+    if (record) openRecord(record);
+    // Anything else (dead anchors, sibling spec files, map.md) is
+    // inert: no navigation ever happens inside the view.
   }
 
   // -------------------------------------------------------------------------
@@ -358,6 +398,22 @@ export function SpecView(props: SpecViewProps) {
   // Empty and degraded whole-view states (DR-011: never blank).
   // -------------------------------------------------------------------------
 
+  const copyCommand = (command: string) => (
+    <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-950">
+      <code className="min-w-0 flex-1 text-left font-mono text-sm">
+        {command}
+      </code>
+      <button
+        type="button"
+        aria-label={`Copy command ${command}`}
+        onClick={() => copyText(command)}
+        className={COPY_BUTTON_CLASS}
+      >
+        {copiedId === command ? "Copied ✓" : "Copy"}
+      </button>
+    </div>
+  );
+
   if (!tree.present) {
     if (props.loading) {
       return (
@@ -383,23 +439,46 @@ export function SpecView(props: SpecViewProps) {
         </h1>
         <p>
           This project has no <span className="font-mono">specs/</span>{" "}
-          directory yet — it holds the spec packages (user, dev, and test
-          item files) and decision records this view navigates.
+          directory yet — it holds the spec packages, compositions, and
+          decision records this view navigates.
         </p>
         <p>Scaffold one in the project directory:</p>
-        <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-950">
-          <code className="min-w-0 flex-1 text-left font-mono text-sm">
-            npx @sublang/spex
-          </code>
-          <button
-            type="button"
-            aria-label="Copy scaffold command"
-            onClick={() => copyItemId("npx @sublang/spex")}
-            className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-          >
-            {copiedId === "npx @sublang/spex" ? "Copied ✓" : "Copy"}
-          </button>
-        </div>
+        {copyCommand("npx @sublang/spex")}
+        {props.onSeedExample ? (
+          <div>
+            <button
+              type="button"
+              data-testid="specs-empty-academy"
+              onClick={props.onSeedExample}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              Try the Academy example
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // The pre-DR-012 user/dev/test layout renders migration guidance
+  // instead of a tree (DR-015).
+  if (tree.legacy) {
+    return (
+      <div
+        className="m-auto flex max-w-md flex-col gap-3 p-6 text-center text-sm text-neutral-500"
+        data-testid="specs-legacy"
+      >
+        <h1 className="text-lg font-semibold text-neutral-700 dark:text-neutral-200">
+          This project uses the legacy specs layout
+        </h1>
+        <p>
+          Its <span className="font-mono">specs/</span> tree still holds the
+          old <span className="font-mono">user/</span>,{" "}
+          <span className="font-mono">dev/</span>, and{" "}
+          <span className="font-mono">test/</span> group directories. Update
+          it to the packages layout to browse it here:
+        </p>
+        {copyCommand("npx @sublang/spex scaffold --update")}
       </div>
     );
   }
@@ -408,26 +487,18 @@ export function SpecView(props: SpecViewProps) {
   // Main outline view.
   // -------------------------------------------------------------------------
 
-  const renderPackage = (pkg: SpecPackageInfo): ReactNode => {
-    const expanded = isPackageExpanded(pkg);
-    const counts = packageCounts(pkg);
-    const intent = packageIntent(pkg);
-    const groups = presentGroups(pkg);
-    const visibleByGroup = groups.map(({ group, file }) => ({
-      group,
-      file,
-      items: visibleGroupItems(file, group, viewState, revealed),
-    }));
-    const anyVisible = visibleByGroup.some((entry) => entry.items.length > 0);
+  const renderFile = (file: SpecFileInfo): ReactNode => {
+    const key = fileKey(file);
+    const expanded = isFileExpanded(key);
+    const counts = fileCounts(file);
+    const items = visibleFileItems(file, viewState, revealed);
     const dimmed = searching && !expanded;
-    const allIds = groups.flatMap(({ file }) =>
-      file.items.map((item) => item.id),
-    );
+    const allIds = file.items.map((item) => item.id);
     const allExpanded =
       allIds.length > 0 && allIds.every((id) => expandedItems.has(id));
 
     return (
-      <li key={pkg.key} data-testid={`pkg-${pkg.key}`}>
+      <li key={key} data-testid={`file-${key}`}>
         <div
           className={`flex items-center gap-2 rounded px-1 py-1 ${
             dimmed ? "opacity-50" : ""
@@ -435,9 +506,9 @@ export function SpecView(props: SpecViewProps) {
         >
           <button
             type="button"
-            data-testid={`pkg-toggle-${pkg.key}`}
+            data-testid={`file-toggle-${key}`}
             aria-expanded={expanded}
-            onClick={() => togglePackage(pkg.key)}
+            onClick={() => toggleFile(key)}
             className="flex min-w-0 flex-1 items-center gap-2 rounded text-left hover:bg-neutral-50 dark:hover:bg-neutral-900"
           >
             <Icon
@@ -446,25 +517,25 @@ export function SpecView(props: SpecViewProps) {
                 expanded ? "" : "-rotate-90"
               }`}
             />
-            {pkg.shortForm ? (
+            {file.shortForm ? (
               <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                {pkg.shortForm}
+                {file.shortForm}
               </span>
             ) : null}
             <span className="shrink-0 text-sm font-medium">
-              {pkg.basename}
+              {file.basename}
             </span>
-            {intent ? (
+            {file.intent ? (
               <span
                 className="truncate text-xs text-neutral-500 dark:text-neutral-400"
-                title={intent}
+                title={file.intent}
               >
-                {intent}
+                {file.intent}
               </span>
             ) : null}
           </button>
           <span className="flex shrink-0 items-center gap-1">
-            {(["user", "dev", "test"] as const).map((group) => (
+            {GROUP_ORDER.map((group) => (
               <span
                 key={group}
                 aria-label={`${counts[group]} ${group} items`}
@@ -481,7 +552,7 @@ export function SpecView(props: SpecViewProps) {
         </div>
         {expanded ? (
           <div className="ml-[7px] flex flex-col gap-1 border-l border-neutral-200 py-1 pl-4 dark:border-neutral-800">
-            {pkg.notices.map((notice) => (
+            {file.notices.map((notice) => (
               <div
                 key={notice}
                 className="text-[11px] text-amber-600 dark:text-amber-400"
@@ -489,37 +560,38 @@ export function SpecView(props: SpecViewProps) {
                 {notice}
               </div>
             ))}
-            {allIds.length > 0 && anyVisible ? (
+            {file.error ? (
+              <div className="text-[11px] text-amber-600 dark:text-amber-400">
+                {file.path}: {file.error}
+              </div>
+            ) : null}
+            {allIds.length > 0 && items.length > 0 ? (
               <div>
                 <button
                   type="button"
-                  data-testid={`expand-all-${pkg.key}`}
-                  onClick={() => setAllItems(pkg, !allExpanded)}
+                  data-testid={`expand-all-${key}`}
+                  onClick={() => setAllItems(file, !allExpanded)}
                   className={`text-[11px] ${LINK_CLASS}`}
                 >
                   {allExpanded ? "Collapse all" : "Expand all"}
                 </button>
               </div>
             ) : null}
-            {visibleByGroup.map(({ group, file, items }) => (
-              <GroupSection
-                key={group}
-                group={group}
-                file={file}
-                items={items}
-                filterOn={viewState.filters[group]}
-                expandedItems={expandedItems}
-                revealed={revealed}
-                inbound={inbound}
-                copiedId={copiedId}
-                flashId={flashId}
-                notFoundKey={notFoundKey}
-                onToggleItem={toggleItem}
-                onCopy={copyItemId}
-                onJump={jumpTo}
-              />
-            ))}
-            {!anyVisible ? (
+            <FileItems
+              items={items}
+              expandedItems={expandedItems}
+              filters={viewState.filters}
+              revealed={revealed}
+              inbound={inbound}
+              copiedId={copiedId}
+              flashId={flashId}
+              notFoundKey={notFoundKey}
+              onToggleItem={toggleItem}
+              onCopy={copyText}
+              onJump={jumpTo}
+              onBodyLinkClick={onBodyLinkClick}
+            />
+            {items.length === 0 ? (
               <div className="text-xs text-neutral-400">
                 {searching
                   ? "no items match the search"
@@ -532,13 +604,14 @@ export function SpecView(props: SpecViewProps) {
     );
   };
 
-  const renderDir = (dir: SpecDirNode): ReactNode => {
+  const renderDir = (dir: SpecDirNode, label?: string): ReactNode => {
     const open = searching || !collapsedDirs.has(dir.path);
     return (
       <li key={dir.path}>
         <button
           type="button"
           aria-expanded={open}
+          data-testid={label ? `branch-${dir.path}` : undefined}
           onClick={() =>
             setCollapsedDirs((current) => {
               const next = new Set(current);
@@ -547,7 +620,11 @@ export function SpecView(props: SpecViewProps) {
               return next;
             })
           }
-          className="flex items-center gap-1.5 rounded px-1 py-0.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+          className={`flex items-center gap-1.5 rounded px-1 py-0.5 text-xs font-medium hover:bg-neutral-50 dark:hover:bg-neutral-900 ${
+            label
+              ? "text-neutral-600 dark:text-neutral-300"
+              : "text-neutral-500"
+          }`}
         >
           <Icon
             name="caretDown"
@@ -555,13 +632,15 @@ export function SpecView(props: SpecViewProps) {
               open ? "" : "-rotate-90"
             }`}
           />
-          <Icon name="folder" className="h-3.5 w-3.5 text-neutral-400" />
-          {dir.name}/
+          {label ? null : (
+            <Icon name="folder" className="h-3.5 w-3.5 text-neutral-400" />
+          )}
+          {label ?? `${dir.name}/`}
         </button>
         {open ? (
           <ul className="ml-[7px] flex flex-col border-l border-neutral-200 pl-3 dark:border-neutral-800">
-            {dir.dirs.map(renderDir)}
-            {dir.packages.map(renderPackage)}
+            {dir.dirs.map((child) => renderDir(child))}
+            {dir.files.map(renderFile)}
           </ul>
         ) : null}
       </li>
@@ -573,7 +652,9 @@ export function SpecView(props: SpecViewProps) {
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold">Specs</h1>
         <span className="text-xs text-neutral-400">
-          {totals.packages} packages · {totals.items} items
+          {totals.packages} package{totals.packages === 1 ? "" : "s"} ·{" "}
+          {totals.compositions} composition
+          {totals.compositions === 1 ? "" : "s"} · {totals.items} items
         </span>
         <span className="ml-auto flex items-center gap-1.5">
           <button
@@ -599,7 +680,7 @@ export function SpecView(props: SpecViewProps) {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        {(["user", "dev", "test"] as const).map((group) => {
+        {GROUP_ORDER.map((group) => {
           const on = viewState.filters[group];
           return (
             <button
@@ -608,7 +689,9 @@ export function SpecView(props: SpecViewProps) {
               data-testid={`filter-${group}`}
               aria-pressed={on}
               title={
-                on ? `Hide ${group} items` : `Show ${group} items`
+                on
+                  ? `Hide ${group} items`
+                  : `Show ${group} items`
               }
               onClick={() => toggleFilter(group)}
               className={`rounded-full border px-2.5 py-0.5 text-xs ${
@@ -617,7 +700,7 @@ export function SpecView(props: SpecViewProps) {
                   : "border-neutral-200 text-neutral-400 dark:border-neutral-700 dark:text-neutral-500"
               }`}
             >
-              {group}{" "}
+              {FILTER_LABEL[group]}{" "}
               <span
                 aria-label={`${totals.perGroup[group]} ${group} items`}
                 className={on ? "font-semibold" : "opacity-60"}
@@ -651,12 +734,11 @@ export function SpecView(props: SpecViewProps) {
       ) : null}
 
       <ul className="flex flex-col">
-        {dirRoot.dirs.map(renderDir)}
-        {dirRoot.packages.map(renderPackage)}
+        {branches.map((branch) => renderDir(branch.root, branch.label))}
       </ul>
-      {tree.packages.length === 0 ? (
+      {tree.files.length === 0 ? (
         <div className="text-sm text-neutral-400">
-          specs/ is present but holds no spec packages yet.
+          specs/ is present but holds no spec files yet.
         </div>
       ) : null}
 
@@ -678,7 +760,7 @@ export function SpecView(props: SpecViewProps) {
             aria-label="Decision and iteration records"
             className="absolute bottom-full left-0 z-10 mb-1 flex max-h-80 w-96 max-w-full flex-col overflow-y-auto rounded-lg border border-neutral-200 bg-white p-1.5 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
           >
-            {[...tree.decisions, ...tree.iterations].map((record) => (
+            {records.map((record) => (
               <button
                 key={record.id}
                 type="button"
@@ -691,7 +773,7 @@ export function SpecView(props: SpecViewProps) {
                 <span className="min-w-0 flex-1 truncate">{record.title}</span>
               </button>
             ))}
-            {tree.decisions.length + tree.iterations.length === 0 ? (
+            {records.length === 0 ? (
               <div className="px-2 py-1 text-xs text-neutral-400">
                 no records yet
               </div>
@@ -725,18 +807,16 @@ function ErrorStrip({
 }
 
 // ---------------------------------------------------------------------------
-// One group inside an expanded package: intent line, then items in
-// document order with `##` section values as sub-headings whenever
-// the section changes between consecutive items (DR-011 — never
-// sorted by ID; META-12 makes numbering non-positional).
+// One expanded file's items in document order, grouped under their
+// verbatim `##` section headings with `###` topics as nested labels
+// whenever they change between consecutive items (DR-011/DR-015 —
+// never sorted by ID; META-12 makes numbering non-positional).
 // ---------------------------------------------------------------------------
 
-function GroupSection({
-  group,
-  file,
+function FileItems({
   items,
-  filterOn,
   expandedItems,
+  filters,
   revealed,
   inbound,
   copiedId,
@@ -745,12 +825,11 @@ function GroupSection({
   onToggleItem,
   onCopy,
   onJump,
+  onBodyLinkClick,
 }: {
-  group: SpecGroup;
-  file: SpecGroupFile;
   items: SpecItemInfo[];
-  filterOn: boolean;
   expandedItems: ReadonlySet<string>;
+  filters: SpecViewState["filters"];
   revealed: ReadonlySet<string>;
   inbound: Map<string, string[]>;
   copiedId?: string;
@@ -759,11 +838,12 @@ function GroupSection({
   onToggleItem: (id: string) => void;
   onCopy: (id: string) => void;
   onJump: (linkKey: string, targetId: string) => void;
+  onBodyLinkClick: (itemId: string, event: ReactMouseEvent) => void;
 }) {
-  const showError = Boolean(file.error);
-  if (items.length === 0 && !showError) return null;
+  if (items.length === 0) return null;
   const rows: ReactNode[] = [];
   let previousSection: string | undefined;
+  let previousTopic: string | undefined;
   for (const item of items) {
     if (item.section && item.section !== previousSection) {
       rows.push(
@@ -775,15 +855,27 @@ function GroupSection({
           {item.section}
         </li>,
       );
+      previousTopic = undefined;
     }
-    previousSection = item.section ?? previousSection;
+    previousSection = item.section || previousSection;
+    if (item.topic && item.topic !== previousTopic) {
+      rows.push(
+        <li
+          key={`topic-${item.id}`}
+          aria-hidden="true"
+          className="ml-2 text-[11px] font-medium text-neutral-400"
+        >
+          {item.topic}
+        </li>,
+      );
+    }
+    previousTopic = item.topic;
     rows.push(
       <ItemRow
         key={item.id}
-        group={group}
         item={item}
         expanded={expandedItems.has(item.id)}
-        despiteFilter={!filterOn && revealed.has(item.id)}
+        despiteFilter={!filters[item.group] && revealed.has(item.id)}
         backlinks={inbound.get(item.id) ?? []}
         copied={copiedId === item.id}
         flashed={flashId === item.id}
@@ -791,38 +883,14 @@ function GroupSection({
         onToggle={() => onToggleItem(item.id)}
         onCopy={() => onCopy(item.id)}
         onJump={onJump}
+        onBodyLinkClick={onBodyLinkClick}
       />,
     );
   }
-  return (
-    <div className="flex flex-col gap-0.5">
-      <div className="flex items-baseline gap-1.5 text-xs">
-        <span
-          className={`rounded-full px-1.5 py-0.5 text-[11px] ${GROUP_CHIP[group]}`}
-        >
-          {group}
-        </span>
-        {file.intent ? (
-          <span
-            className="truncate text-neutral-500 dark:text-neutral-400"
-            title={file.intent}
-          >
-            {file.intent}
-          </span>
-        ) : null}
-      </div>
-      {showError ? (
-        <div className="text-[11px] text-amber-600 dark:text-amber-400">
-          {file.path}: {file.error}
-        </div>
-      ) : null}
-      <ul className="flex flex-col">{rows}</ul>
-    </div>
-  );
+  return <ul className="flex flex-col">{rows}</ul>;
 }
 
 function ItemRow({
-  group,
   item,
   expanded,
   despiteFilter,
@@ -833,8 +901,8 @@ function ItemRow({
   onToggle,
   onCopy,
   onJump,
+  onBodyLinkClick,
 }: {
-  group: SpecGroup;
   item: SpecItemInfo;
   expanded: boolean;
   despiteFilter: boolean;
@@ -845,7 +913,15 @@ function ItemRow({
   onToggle: () => void;
   onCopy: () => void;
   onJump: (linkKey: string, targetId: string) => void;
+  onBodyLinkClick: (itemId: string, event: ReactMouseEvent) => void;
 }) {
+  const group = item.group;
+  // Cites rows render on test items; external/internal items carry
+  // the computed inbound "cited by" backlinks instead (DR-011 as
+  // amended by DR-015).
+  const showCites = group === "test" && item.cites.length > 0;
+  const showBacklinks = group !== "test" && backlinks.length > 0;
+
   const citation = (target: string) => {
     const linkKey = `${item.id}:${target}`;
     return (
@@ -897,17 +973,17 @@ function ItemRow({
           <span className="truncate" title={item.firstLine}>
             {item.firstLine}
           </span>
-          {item.verifies.length > 0 ? (
+          {showCites ? (
             <span className="shrink-0 text-[11px] text-neutral-400">
-              → verifies {item.verifies.length}
+              → cites {item.cites.length}
             </span>
           ) : null}
-          {backlinks.length > 0 ? (
+          {showBacklinks ? (
             <span
               className="shrink-0 truncate text-[11px] text-neutral-400"
-              title={`Verified by ${backlinks.join(", ")}`}
+              title={`Cited by ${backlinks.join(", ")}`}
             >
-              ✓ verified by {backlinks.join(", ")}
+              ✓ cited by {backlinks.join(", ")}
             </span>
           ) : null}
         </button>
@@ -919,18 +995,21 @@ function ItemRow({
       </div>
       {expanded ? (
         <div className="mb-1 ml-2 flex flex-col gap-1 border-l border-neutral-200 pl-3 dark:border-neutral-800">
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto"
+            onClick={(event) => onBodyLinkClick(item.id, event)}
+          >
             <Markdown text={item.text} />
           </div>
-          {item.verifies.length > 0 ? (
+          {showCites ? (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-neutral-400">Verifies:</span>
-              {item.verifies.map(citation)}
+              <span className="text-neutral-400">Cites:</span>
+              {item.cites.map(citation)}
             </div>
           ) : null}
-          {backlinks.length > 0 ? (
+          {showBacklinks ? (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-neutral-400">Verified by:</span>
+              <span className="text-neutral-400">Cited by:</span>
               {backlinks.map(citation)}
             </div>
           ) : null}

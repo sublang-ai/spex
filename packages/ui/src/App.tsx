@@ -188,6 +188,9 @@ function WorkspaceSurface({
   const specErrors = useAppStore((state) => state.specErrors);
   const loadSpecs = useAppStore((state) => state.loadSpecs);
   const readSpecRecord = useAppStore((state) => state.readSpecRecord);
+  const openAcademyExample = useAppStore(
+    (state) => state.openAcademyExample,
+  );
 
   const [pastId, setPastId] = useState<string>();
   const [pastScope, setPastScope] = useState<"project" | "all">("project");
@@ -589,6 +592,7 @@ function WorkspaceSurface({
           error={specErrors[project.id]}
           onRefresh={() => void loadSpecs(project.id)}
           onReadRecord={(path) => readSpecRecord(project.id, path)}
+          onSeedExample={() => void openAcademyExample().catch(() => {})}
           viewState={specViewStates[project.id] ?? initialSpecViewState}
           onViewState={(next) =>
             setSpecViewStates((current) => ({

@@ -65,6 +65,17 @@ When any step fails, the palette shall report the failure, shall
 not register the project, and shall leave already-created files on
 disk for inspection.
 
+#### PROJ-27
+
+When the user picks the palette's Academy-example action
+([DR-015](../decisions/015-reference-content.md)), the palette
+shall create the project from the bundled Academy corpus — into a
+new or empty directory only — initialize a git repository with
+one seed commit of the corpus, and register the project and make
+it the workspace's current project.
+When the target directory is not empty, the palette shall report
+the refusal and register nothing.
+
 ### The Repo Tab
 
 #### PROJ-4
