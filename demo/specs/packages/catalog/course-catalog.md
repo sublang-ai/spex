@@ -35,8 +35,10 @@ when it carries a media attachment that the deployment's media
 provider resolves.
 When a visitor opens a lesson from the syllabus, the lesson view
 shall show the lesson title, its course and section context,
-and — where the lesson carries a media attachment — the media
-area delegated to the deployment's media provider.
+and — where the lesson carries a media attachment the provider
+resolves — the media area delegated to the deployment's media
+provider; an attachment the provider does not resolve shall
+present as no media.
 
 #### CAT-3
 

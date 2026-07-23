@@ -20,8 +20,8 @@ Where the shell's header carries the deployment's navigation
 entries, session control, and admin entry
 ([SHELL-1](../packages/site/web-shell.md#shell-1),
 [SHELL-2](../packages/site/web-shell.md#shell-2)), the
-deployment shall bind them as follows: the session control is
-the account menu
+deployment shall bind them as follows: the site name reads
+"Academy"; the session control is the account menu
 ([AUTH-4](../packages/identity/github-login.md#auth-4)); one
 navigation entry, labeled "Courses", leads to the course list
 ([CAT-1](../packages/catalog/course-catalog.md#cat-1)); and the
@@ -48,6 +48,7 @@ signed-out visitor on a seeded deployment, the acceptance suite
 shall assert: the home page presents the course list
 ([NAV-2](#nav-2),
 [CAT-1](../packages/catalog/course-catalog.md#cat-1)); the
+header's site name reads "Academy" ([NAV-1](#nav-1)); the
 header's "Courses" entry leads to the course list
 ([NAV-1](#nav-1),
 [SHELL-1](../packages/site/web-shell.md#shell-1)); the session

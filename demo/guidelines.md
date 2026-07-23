@@ -198,7 +198,9 @@ integrated.
   Deny paths are inherently cross-package, so security
   acceptance lands in compositions naturally.
 - **Composition tests cite what they execute: their own scenario
-  or binding items plus items from at least two packages**
+  or binding items plus the package items they check** — a
+  scenario test spans two or more packages; a binding inspection
+  may touch one package and its service
   ([META-20](specs/meta.md#meta-20),
   [META-31](specs/meta.md#meta-31)).
   These inline citations make coverage mechanically auditable —
@@ -219,8 +221,9 @@ integrated.
 
 ## 5. Split composition from supply by audience
 
-Guideline 2's split recurs between packages, and every seam is
-a binding item in `compositions/`
+Guideline 2's split recurs between packages, and every open
+slot resolves through a binding item in `compositions/` — a
+fixed dependency is just a precondition citation (guideline 1)
 ([META-13](specs/meta.md#meta-13),
 [META-15](specs/meta.md#meta-15)).
 Composition is the external relationship: the product's user
@@ -234,8 +237,8 @@ item and inspection tests.
 A supplier may be a vendor or an in-house package; the client
 cannot tell, which is the point.
 
-- **Every seam is an item; the decision record keeps the why**
-  ([META-24](specs/meta.md#meta-24)).
+- **Every open slot is an item; the decision record keeps the
+  why** ([META-24](specs/meta.md#meta-24)).
   [PUB-1](specs/compositions/course-publishing.md#pub-1) binds
   the catalog's media slot
   ([CAT-8](specs/packages/catalog/course-catalog.md#cat-8)) to
@@ -260,8 +263,9 @@ cannot tell, which is the point.
   closes it.
   Every binding declares its endpoints by clause — its
   preconditions cite the clients, its shall clause the
-  suppliers — and the supplier side cites only offered
-  behavior: External items or a named service
+  suppliers or the inputs of a rule the installation owns — and
+  the provision side cites only offered behavior: External
+  items or a named service
   ([META-31](specs/meta.md#meta-31)).
   When no single supplier serves the need, the shall clause
   states a rule the installation itself owns:

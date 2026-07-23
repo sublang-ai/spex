@@ -120,8 +120,10 @@ the observed egress.
 
 Where a fixture pull request runs through the pipeline, the
 audit suite shall assert the required checks report from GitHub
-Actions ([PLAT-5](#plat-5)), the preview publishes on Vercel
-against a non-production Supabase project disjoint from
+Actions ([PLAT-5](#plat-5)), the pipeline's credentials resolve
+from the repository's GitHub Actions secrets with none in
+tracked content ([PLAT-8](#plat-8)), the preview publishes on
+Vercel against a non-production Supabase project disjoint from
 production's ([PLAT-4](#plat-4),
 [DELIV-4](../packages/ops/delivery.md#deliv-4)), and the
 serving production revision reports a commit that exists on the

@@ -74,10 +74,12 @@ A DR shall specify design decisions and constraints, not duplicate
 implementation logic.
 A DR is sufficient when an implementer can generate or audit code
 from the design intent, constraints, and tradeoffs.
-DRs shall carry no implementation details: a detail that code
-generation requires shall be a spec item with its observable
-outcome stated ([META-26](#meta-26)); a detail that code
-generation does not require shall appear in no spec.
+DRs shall carry no implementation logic: an observable outcome
+that code generation must honor shall be a spec item
+([META-26](#meta-26)); a technology or architecture choice
+shall be recorded as the decision with its rationale; a detail
+that neither constrains observable behavior nor records a
+choice shall appear in no spec.
 
 ### META-25
 
@@ -252,9 +254,11 @@ bound to suppliers or services.
   bind an abstract subject to an external service instead (a
   supply binding); its tests are inspections of a deployment
   rather than user journeys.
-  What a controlled stand-in could satisfy is consumed behavior
-  and bindable; what no stand-in could satisfy is a private
-  invariant, and no binding may target it.
+  What a controlled stand-in could supply is consumed behavior
+  and bindable — the item states the supplied meaning together
+  with the package's own acceptance and rejection handling of
+  it; what no stand-in could supply is a private invariant, and
+  no binding may target it.
   A replaceable code dependency — a library, a framework — is
   no seam at all: it gets no binding item, and its selection
   lives in a decision record.

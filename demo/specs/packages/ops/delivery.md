@@ -71,14 +71,6 @@ versioned migration applied in order before the new revision
 serves traffic; when a migration fails, the deployment shall not
 switch traffic to the new revision.
 
-### Deployment Paths
-
-#### DELIV-11
-
-Where production deployments are created, the pipeline from the
-repository's default branch shall be the only path: no
-deployment route shall exist that bypasses the repository.
-
 ## Verification
 
 ### Check Coverage
@@ -110,8 +102,6 @@ endpoints are disjoint from production's
 
 The audit suite shall assert a repository scan finds no secret
 values, the example environment file lists every required
-variable name with no values ([DELIV-5](#deliv-5)), the
+variable name with no values ([DELIV-5](#deliv-5)), and the
 serving production revision reports a commit identifier that
-exists on the default branch ([DELIV-7](#deliv-7)), and the
-platform's deployment configuration admits no deploy source
-other than the repository integration ([DELIV-11](#deliv-11)).
+exists on the default branch ([DELIV-7](#deliv-7)).

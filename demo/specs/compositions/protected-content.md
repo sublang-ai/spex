@@ -19,16 +19,18 @@ they add up to.
 Where playback grants issue only for requests the embedding
 host authorizes
 ([VID-15](../packages/catalog/video-library.md#vid-15)), the
-deployment shall authorize an admin-session requester for any
-listed asset, and every other requester exactly for assets
-referenced by a lesson of a currently published course
+deployment's answer shall be content eligibility: a requester
+with an admin session is eligible exactly for assets a lesson
+of an existing course references, and every other requester
+exactly for assets a lesson of a currently published course
+references
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2),
-[CAT-3](../packages/catalog/course-catalog.md#cat-3)), so new
+[CAT-3](../packages/catalog/course-catalog.md#cat-3)) — so new
 non-admin grants for an asset stop as soon as no currently
-published course references it — unpublishing or deleting the
+published course references it, unpublishing or deleting the
 last referencing course closes access at once, and a grant
 already issued lasts only to its expiry.
-This answer feeds the library's own gates and replaces none of
+Eligibility feeds the library's own gates and replaces none of
 them: session verification and grant checks stay the library's.
 
 ## Scenario
@@ -42,10 +44,11 @@ navigation, and data requests:
 | Surface | Signed out | Member | Admin |
 | --- | --- | --- | --- |
 | Course list; published course and lesson pages ([CAT-1](../packages/catalog/course-catalog.md#cat-1), [CAT-2](../packages/catalog/course-catalog.md#cat-2)) | shown | shown | shown |
-| Lesson playback ([VID-5](../packages/catalog/video-library.md#vid-5), [VID-6](../packages/catalog/video-library.md#vid-6)) | sign-in-required state | plays | plays |
+| Playback on lessons with a resolvable attachment ([VID-5](../packages/catalog/video-library.md#vid-5), [VID-6](../packages/catalog/video-library.md#vid-6)) | sign-in-required state | plays | plays |
 | Unpublished course and lesson pages ([CAT-3](../packages/catalog/course-catalog.md#cat-3)) | not-found | not-found | shown |
 | Course manager and video library ([ROLE-2](../packages/identity/access-control.md#role-2), [CAT-4](../packages/catalog/course-catalog.md#cat-4), [VID-1](../packages/catalog/video-library.md#vid-1)) | sent to sign-in | not-authorized | shown |
-| Assets referenced by no currently published course ([GUARD-5](#guard-5)) | denied | denied | plays on the unpublished lesson page |
+| Assets referenced only by unpublished courses ([GUARD-5](#guard-5)) | denied | denied | plays on the unpublished lesson page |
+| Assets no lesson references ([GUARD-5](#guard-5)) | denied | denied | denied |
 | Stored media content without a valid grant ([VID-7](../packages/catalog/video-library.md#vid-7)) | denied | denied | denied |
 
 ### GUARD-2
@@ -99,9 +102,9 @@ unpublished fixture course is denied with no grant issued,
 while a grant the member obtained before the unpublish still
 plays until its expiry and the admin's player on that
 unpublished lesson still plays ([GUARD-5](#guard-5)); after the
-only course referencing a fixture asset is deleted, a member
-playback request for that asset is likewise denied with no
-grant issued, while an asset also referenced by a second
+only course referencing a fixture asset is deleted, member and
+admin playback requests for that asset are likewise denied with
+no grant issued, while an asset also referenced by a second
 published fixture course keeps serving member playback after
 the first course unpublishes ([GUARD-5](#guard-5)); and every
 session cookie observed during the sweep is scoped to the

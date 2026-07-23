@@ -15,8 +15,8 @@ the product's flagship acceptance scenario.
 
 ### PLAY-1
 
-Where a published course carries a lesson with a media
-attachment
+Where a published course carries a lesson with a resolvable
+media attachment
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2)), when an
 anonymous visitor opens that lesson, the lesson view shall show
 the player in its sign-in-required state
@@ -30,8 +30,8 @@ sign-in between landing and playback.
 ### PLAY-2
 
 While a signed-in session is active, when the member opens any
-published lesson carrying a media attachment, the player shall
-stream it
+published lesson carrying a resolvable media attachment, the
+player shall stream it
 ([VID-5](../packages/catalog/video-library.md#vid-5)); no
 enrollment, purchase, or approval step shall exist between
 sign-in and playback, per

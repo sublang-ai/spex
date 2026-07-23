@@ -31,9 +31,7 @@ slot's resolution queries shall be answered by the library
 for a stored reference the library resolves, the media area
 shall embed the library's player
 ([VID-5](../packages/catalog/video-library.md#vid-5),
-[VID-6](../packages/catalog/video-library.md#vid-6)) — an
-unresolving reference leaves the catalog's own no-media state
-in place.
+[VID-6](../packages/catalog/video-library.md#vid-6)).
 
 ## Scenario
 

@@ -179,9 +179,10 @@ denied, with no grant issued ([VID-15](#vid-15)).
 
 #### VID-13
 
-Where the same fixture content is uploaded twice, the test suite
-shall assert two assets exist with distinct stable identifiers
-([VID-9](#vid-9)); when the admin edits one asset's title, the
+Where the same fixture content is uploaded twice and the stub
+host authorizes both assets for the signed-in session's
+requests, the test suite shall assert two assets exist with
+distinct stable identifiers ([VID-9](#vid-9)); when the admin edits one asset's title, the
 suite shall assert the list shows the new title with the asset's
 size and upload date after a reload ([VID-4](#vid-4)), and that
 the records survive a service restart under test control
