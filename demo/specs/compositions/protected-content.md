@@ -23,10 +23,11 @@ deployment shall authorize an admin-session requester for any
 listed asset, and every other requester exactly for assets
 referenced by a lesson of a currently published course
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2),
-[CAT-3](../packages/catalog/course-catalog.md#cat-3)), so
-unpublishing or deleting a course stops new non-admin grants
-for its media at once — a grant already issued lasts only to
-its expiry.
+[CAT-3](../packages/catalog/course-catalog.md#cat-3)), so new
+non-admin grants for an asset stop as soon as no currently
+published course references it — unpublishing or deleting the
+last referencing course closes access at once, and a grant
+already issued lasts only to its expiry.
 
 ## Scenario
 
@@ -95,10 +96,12 @@ member's playback request for an asset referenced only by an
 unpublished fixture course is denied with no grant issued,
 while a grant the member obtained before the unpublish still
 plays until its expiry and the admin's player on that
-unpublished lesson still plays ([GUARD-5](#guard-5)); after a
-fixture course is deleted, a member playback request for its
-formerly referenced asset is likewise denied with no grant
-issued ([GUARD-5](#guard-5)); and every
+unpublished lesson still plays ([GUARD-5](#guard-5)); after the
+only course referencing a fixture asset is deleted, a member
+playback request for that asset is likewise denied with no
+grant issued, while an asset also referenced by a second
+published fixture course keeps serving member playback after
+the first course unpublishes ([GUARD-5](#guard-5)); and every
 session cookie observed during the sweep is scoped to the
 site's origin and marked Secure
 ([AUTH-8](../packages/identity/github-login.md#auth-8)).

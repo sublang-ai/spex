@@ -33,11 +33,11 @@ video library
 
 ### NAV-2
 
-Where the shell's site name links to the home page
-([SHELL-1](../packages/site/web-shell.md#shell-1)), the
-deployment shall present the course list
-([CAT-1](../packages/catalog/course-catalog.md#cat-1)) as the
-home page's content for every visitor.
+Where the home page is the deployment's surface to fill — no
+package owns its content — the deployment shall present the
+course list
+([CAT-1](../packages/catalog/course-catalog.md#cat-1)) as that
+content for every visitor.
 
 ## Tests
 

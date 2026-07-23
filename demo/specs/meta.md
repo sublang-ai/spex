@@ -275,6 +275,10 @@ packages work together.
   may state a rule the installation itself owns — an
   authorization policy, an exclusivity constraint — citing the
   External Behavior it depends on as the rule's inputs.
+  Clause placement alone fixes the direction: a provision-side
+  citation reads as the supplier serving the need or, under an
+  installation-owned rule, as the rule's input — both provide,
+  neither consumes.
   Each slot or abstract subject shall have exactly one
   effective binding per deployment, unless the client item
   itself defines aggregation or selection; a slot with no

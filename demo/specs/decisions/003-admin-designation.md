@@ -41,9 +41,10 @@ Options considered:
 - Rotating the admin is a configuration change; it takes effect
   at each affected account's next sign-in.
 - Between a rotation and the demoted account's next sign-in,
-  both accounts may hold admin sessions; forcing sign-out is out
-  of scope, so rotation completes only when the old admin's
-  session ends.
+  both accounts may act as admin; the window closes at that
+  account's next sign-in anywhere — the re-recorded role governs
+  all its sessions at once — or when its sessions end, whichever
+  comes first.
 - A compromised configuration store equals a compromised admin;
   the configuration is a secret-grade value
   ([DELIV-5](../packages/ops/delivery.md#deliv-5)).

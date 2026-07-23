@@ -19,8 +19,8 @@ package:
 - **Reference other packages only in preconditions.** A Where,
   While, or When clause may cite another package's External
   Behavior — a fixed semantic dependency; a selectable
-  counterparty gets a slot instead — and the shall clause may
-  cite nothing
+  counterparty gets a slot instead — and the shall clause cites
+  no other package
   ([META-13](specs/meta.md#meta-13),
   [META-14](specs/meta.md#meta-14)).
   [CAT-4](specs/packages/catalog/course-catalog.md#cat-4) is
@@ -64,8 +64,13 @@ package:
 
 External behavior is what a package's users — humans, hosts, or
 peer packages — may rely on; internal behavior is the package's
-consumed requirements and private invariants, which no outsider
-may cite.
+consumed requirements and private invariants.
+No peer package may rely on or cite an internal item; the two
+outsiders with standing are the installation's binding items,
+which may target a consumed requirement as their client
+([META-31](specs/meta.md#meta-31)), and tests, which may
+inspect anything they verify
+([META-20](specs/meta.md#meta-20)).
 Observability grade is independent of the split: some external
 guarantees show only under deliberate inspection (payload
 inspection, security testing, restart survival).
@@ -197,8 +202,8 @@ integrated.
   These inline citations make coverage mechanically auditable —
   in the demo's adversarial review, every stale citation and
   unverified map cell was caught by walking them.
-  Items carry no metadata lines; the citations in an item's
-  clauses are the single source of its relationships
+  Items carry no relationship-metadata lines; the citations in
+  an item's clauses are the single source of its relationships
   ([META-20](specs/meta.md#meta-20)).
 - **Know what compositions do not cover.** Single-package
   behavior that is still acceptance-relevant — upload refusal
@@ -271,7 +276,12 @@ cannot tell, which is the point.
   sign in, then play
   ([PLAY-1](specs/compositions/lesson-playback.md#play-1)) — it
   is a scenario item.
-  Visibility does not decide the kind; the trigger does.
+  Visibility does not decide the kind, and a trigger only
+  disqualifies: what makes a binding is the installed
+  relationship it declares, while a scenario states integrated
+  runtime behavior — triggered or standing, like
+  [GUARD-1](specs/compositions/protected-content.md#guard-1)'s
+  map, which has no trigger and is still a scenario.
   And a binding only declares the installed relationship:
   whether a deployment realizes it is its tests' question,
   which is why
@@ -286,8 +296,9 @@ cannot tell, which is the point.
   when the answer is no, so
   [GUARD-5](specs/compositions/protected-content.md#guard-5)
   can bind it whole.
-  The test for socket-hood is the stand-in: a stub host could
-  satisfy VID-15, so it is consumed and bindable; no stub could
+  The test for socket-hood is the stand-in: a stub host can
+  supply the authorization answer VID-15 consumes, so it is
+  consumed and bindable; no stub could
   satisfy
   [CAT-12](specs/packages/catalog/course-catalog.md#cat-12) —
   excluding drafts at the data layer is the catalog's own

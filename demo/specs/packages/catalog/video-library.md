@@ -50,8 +50,9 @@ its content shall no longer be served.
 
 #### VID-5
 
-Where a host surface embeds the player for an asset, while a
-signed-in session is active
+Where a host surface embeds the player for an asset and the
+host authorizes that asset for the requester
+([VID-15](#vid-15)), while a signed-in session is active
 ([AUTH-2](../identity/github-login.md#auth-2)), the player shall
 stream the asset with standard controls — play, pause, seek,
 volume, and fullscreen.
@@ -113,10 +114,11 @@ reaches ([VID-4](#vid-4)).
 #### VID-15
 
 Where a playback request targets an asset, the server shall
-issue an access grant only when the embedding host authorizes
-that asset for that requester; a request the host does not
-authorize shall be denied, with no grant issued and no content
-served.
+obtain from the embedding host its answer — whether that asset
+is authorized for that requester — and shall issue an access
+grant only on an affirmative answer; a request the host does
+not authorize shall be denied, with no grant issued and no
+content served.
 Stored-content requests are governed by the grant alone
 ([VID-7](#vid-7), [VID-8](#vid-8)); the host is not re-asked at
 redemption.

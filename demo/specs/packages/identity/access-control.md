@@ -24,9 +24,12 @@ lists, promotion flows — is out of scope.
 Where the deployment configuration names a GitHub account by its
 stable account ID as the initial admin, when an account completes
 sign-in ([AUTH-2](github-login.md#auth-2)), the site shall hold
-the admin role for that session when the account's stable ID
-matches the configured one, and the member role otherwise —
-usernames are mutable and shall never designate.
+the admin role for the account when its stable ID matches the
+configured one, and the member role otherwise — usernames are
+mutable and shall never designate.
+A request acts under its account's currently held role — held
+per account, not per session — so a role recorded at a later
+sign-in governs every session of the account.
 The package shall expose no operation that changes, grants, or
 transfers a role at runtime; changing the configured
 designation is the only path.
@@ -77,8 +80,11 @@ admin, when that account and a second stub account sign in, the
 test suite shall assert the configured account holds the admin
 role and the other holds member ([ROLE-1](#role-1)); when the
 configured ID changes to the second account and both sign in
-again, the suite shall assert the roles have swapped
-([ROLE-3](#role-3)); when a third account adopts the first
+again, the suite shall assert the roles have swapped, and that
+a still-active earlier session of the first account acts as
+member from its next request — the recomputed role governs
+every session of the account ([ROLE-1](#role-1),
+[ROLE-3](#role-3)); when a third account adopts the first
 account's former username and signs in, the suite shall assert
 it holds member; and the suite shall assert the package exposes
 no operation that changes, grants, or transfers a role at

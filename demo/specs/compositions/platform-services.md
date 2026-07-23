@@ -37,9 +37,11 @@ installation's policy
 Where the identity store maintains user records
 ([AUTH-7](../packages/identity/github-login.md#auth-7)), the
 role store records each account's role
-([ROLE-3](../packages/identity/access-control.md#role-3)), and
+([ROLE-3](../packages/identity/access-control.md#role-3)),
 catalog content is stored with explicit ordering
-([CAT-11](../packages/catalog/course-catalog.md#cat-11)), the
+([CAT-11](../packages/catalog/course-catalog.md#cat-11)), and
+the video library's listing rests on its asset records
+([VID-4](../packages/catalog/video-library.md#vid-4)), the
 deployment shall keep those stores in the environment's
 Supabase Postgres project — the binding allocates storage;
 each package's invariants over that storage remain its own.
@@ -82,9 +84,9 @@ Where the audit suite inspects a deployed environment's
 configuration and network egress, the suite shall assert:
 session issuance and verification go through Supabase Auth with
 GitHub OAuth the only enabled method and the sign-in page
-offering no other ([PLAT-1](#plat-1)); user records, roles, and
-catalog content live in that environment's Supabase Postgres
-project ([PLAT-2](#plat-2)); asset content is served only from
+offering no other ([PLAT-1](#plat-1)); user records, roles,
+catalog content, and video asset records live in that
+environment's Supabase Postgres project ([PLAT-2](#plat-2)); asset content is served only from
 the private bucket
 ([VID-7](../packages/catalog/video-library.md#vid-7)) through
 signed URLs that stop working at expiry ([PLAT-3](#plat-3));

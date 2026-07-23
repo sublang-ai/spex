@@ -18,14 +18,20 @@ library here, and nowhere else.
 
 Where a lesson's media actions delegate asset selection to the
 deployment's media provider
-([CAT-8](../packages/catalog/course-catalog.md#cat-8)), the
+([CAT-8](../packages/catalog/course-catalog.md#cat-8)) and the
+lesson view delegates its media area to that provider
+([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
 deployment shall present the video library's asset list
 ([VID-4](../packages/catalog/video-library.md#vid-4)) as the
 picker, the stored reference shall be the chosen asset's stable
 identifier
-([VID-9](../packages/catalog/video-library.md#vid-9)), and the
+([VID-9](../packages/catalog/video-library.md#vid-9)), the
 slot's resolution queries shall be answered by the library
-([VID-14](../packages/catalog/video-library.md#vid-14)).
+([VID-14](../packages/catalog/video-library.md#vid-14)), and
+the media area shall embed the library's player for the stored
+reference
+([VID-5](../packages/catalog/video-library.md#vid-5),
+[VID-6](../packages/catalog/video-library.md#vid-6)).
 
 ## Scenario
 
@@ -66,8 +72,10 @@ uploads a fixture video
 it through the picker ([PUB-1](#pub-1)), and publishes, the
 suite shall assert the public course page shows the syllabus
 with that lesson — and only that lesson — marked playable
-([PUB-2](#pub-2)), and that the lesson's stored reference
-equals the uploaded asset's identifier
+([PUB-2](#pub-2)), that the lesson view's media area embeds the
+library's player through the installed slot ([PUB-1](#pub-1)),
+and that the lesson's stored reference equals the uploaded
+asset's identifier
 ([CAT-8](../packages/catalog/course-catalog.md#cat-8)); when it
 adds a second lesson and attaches the same asset there, the
 suite shall assert both lessons are marked playable with equal
