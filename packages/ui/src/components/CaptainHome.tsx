@@ -52,7 +52,7 @@ export interface CaptainHomeProps {
   onSelectCaptain: (ref: string) => Promise<unknown>;
   onSaveProfile: (
     profile: ProfileSummary,
-    patch: { model?: string; reasoningEffort?: string },
+    patch: { model?: string; effort?: string },
   ) => Promise<unknown>;
   onOpenPast?: (sessionId: string) => void;
   onStart: (text: string) => Promise<void>;

@@ -28,7 +28,7 @@ export function setPlaybookPlayer(
  * field (instruction, permission policies, comments) is untouched. */
 export function saveProfileEssentials(
   profile: ProfileSummary,
-  patch: { model?: string; reasoningEffort?: string },
+  patch: { model?: string; effort?: string },
 ): Promise<unknown> {
   return getClient().command("config.edit", {
     op: { kind: "profile.patch", id: profile.id, patch },

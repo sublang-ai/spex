@@ -28,6 +28,9 @@ const AGENT_FIELDS = new Set([
   "model",
   "instruction",
   "permissions",
+  "effort",
+  // Read-only legacy alias for `effort` (cligent 0.14 rename, DR-014);
+  // composition normalizes it and Spex never writes it back.
   "reasoningEffort",
 ]);
 const PERMISSION_FIELDS = new Set([
@@ -37,7 +40,7 @@ const PERMISSION_FIELDS = new Set([
   "networkAccess",
   "writablePaths",
 ]);
-const REASONING_EFFORTS = new Set([
+const EFFORT_NAMES = new Set([
   "minimal",
   "low",
   "medium",
@@ -46,7 +49,7 @@ const REASONING_EFFORTS = new Set([
   "max",
 ]);
 
-export type ReasoningEffortName =
+export type EffortName =
   | "minimal"
   | "low"
   | "medium"
@@ -67,7 +70,7 @@ export interface ResolvedAgent {
   model?: string;
   instruction?: string;
   permissions?: PermissionPolicyLike;
-  reasoningEffort?: ReasoningEffortName;
+  effort?: EffortName;
 }
 
 export interface ComposedPlayer extends ResolvedAgent {
@@ -249,13 +252,17 @@ function validateAgentBlock(
       throw new Error(`${path}.permissions.writablePaths must be a string list`);
     }
   }
-  if (
-    block.reasoningEffort !== undefined &&
-    !REASONING_EFFORTS.has(String(block.reasoningEffort))
-  ) {
+  if (block.effort !== undefined && block.reasoningEffort !== undefined) {
     throw new Error(
-      `${path}.reasoningEffort must be one of minimal, low, medium, high, xhigh, max`,
+      `${path} must not set both effort and its legacy alias reasoningEffort`,
     );
+  }
+  for (const key of ["effort", "reasoningEffort"] as const) {
+    if (block[key] !== undefined && !EFFORT_NAMES.has(String(block[key]))) {
+      throw new Error(
+        `${path}.${key} must be one of minimal, low, medium, high, xhigh, max`,
+      );
+    }
   }
 }
 
@@ -308,7 +315,9 @@ function toResolvedAgent(
       `Unknown adapter "${adapter}" for ${path}. Valid adapters: ${KNOWN_ADAPTERS.join(", ")}`,
     );
   }
-  return block as unknown as ResolvedAgent;
+  const { reasoningEffort, ...rest } = block;
+  if (reasoningEffort !== undefined) rest.effort = reasoningEffort;
+  return rest as unknown as ResolvedAgent;
 }
 
 // ---------------------------------------------------------------------------
@@ -553,9 +562,11 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
               ...(typeof value.model === "string"
                 ? { model: value.model }
                 : {}),
-              ...(typeof value.reasoningEffort === "string"
-                ? { reasoningEffort: value.reasoningEffort }
-                : {}),
+              ...(typeof value.effort === "string"
+                ? { effort: value.effort }
+                : typeof value.reasoningEffort === "string"
+                  ? { effort: value.reasoningEffort }
+                  : {}),
               ...(isPlainObject(value.permissions)
                 ? {
                     permissions: value.permissions as {

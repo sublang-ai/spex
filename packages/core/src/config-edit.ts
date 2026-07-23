@@ -19,7 +19,7 @@ export type ConfigEditOp =
       profile: {
         adapter: string;
         model?: string;
-        reasoningEffort?: string;
+        effort?: string;
         permissions?: {
           mode?: string;
           writablePaths?: string[];
@@ -30,7 +30,7 @@ export type ConfigEditOp =
   | {
       kind: "profile.patch";
       id: string;
-      patch: { model?: string; reasoningEffort?: string };
+      patch: { model?: string; effort?: string };
     }
   | { kind: "captain.set"; ref: string }
   | { kind: "notifications.set"; prefs: Record<string, string> }
@@ -73,6 +73,11 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
       // Merge, never replace: unlisted fields and comments survive.
       for (const [key, value] of Object.entries(op.patch)) {
         if (value !== undefined) doc.setIn(["profiles", op.id, key], value);
+      }
+      // Canonicalize on write (DR-014): setting effort retires the
+      // legacy alias so the block never carries both keys.
+      if (op.patch.effort !== undefined) {
+        doc.deleteIn(["profiles", op.id, "reasoningEffort"]);
       }
       break;
     }

@@ -179,10 +179,20 @@ export class SessionManager {
     };
 
     try {
+      // Spex validates agents against its own launcher-parity rules
+      // (adapter set, effort names), so the composed shapes satisfy
+      // cligent's per-adapter discriminated config union; the casts
+      // bridge the union without widening what cligent checks at
+      // runtime.
       entry.runtime = await createTmuxPlayRuntime({
         captain,
-        captainConfig: composed.captainAgent,
-        players: composed.players,
+        captainConfig:
+          composed.captainAgent as Parameters<
+            typeof createTmuxPlayRuntime
+          >[0]["captainConfig"],
+        players: composed.players as unknown as Parameters<
+          typeof createTmuxPlayRuntime
+        >[0]["players"],
         observers: [observer],
         cwd: project.path,
         ...(this.adapterImports ? { adapterImports: this.adapterImports } : {}),

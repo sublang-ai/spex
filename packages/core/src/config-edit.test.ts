@@ -161,11 +161,26 @@ playbooks:
   const patched = applyConfigOp(text, {
     kind: "profile.patch",
     id: "claude-opus",
-    patch: { reasoningEffort: "high" },
+    patch: { effort: "high" },
   });
-  assert.match(patched, /reasoningEffort: high/);
+  assert.match(patched, /effort: high/);
   assert.match(patched, /instruction: keep answers short/);
   assert.match(patched, /# hand-written/);
   assert.match(patched, /shellExecute: ask/);
   assert.match(patched, /model: claude-opus-4-8/);
+});
+
+test("profile.patch with effort retires the legacy reasoningEffort key", () => {
+  const text = `profiles:
+  claude-opus:
+    adapter: claude
+    reasoningEffort: low
+`;
+  const patched = applyConfigOp(text, {
+    kind: "profile.patch",
+    id: "claude-opus",
+    patch: { effort: "high" },
+  });
+  assert.match(patched, /effort: high/);
+  assert.doesNotMatch(patched, /reasoningEffort/);
 });

@@ -182,6 +182,29 @@ test("unknown agent fields and adapters are rejected", async () => {
   );
 });
 
+test("legacy reasoningEffort composes as effort; both keys are invalid", async () => {
+  const top = baseConfig();
+  const profiles = top.profiles as Record<string, Record<string, unknown>>;
+  // The template writes canonical `effort`; swap in the legacy alias.
+  assert.equal(profiles["claude-opus-1m"].effort, "xhigh");
+  delete profiles["claude-opus-1m"].effort;
+  profiles["claude-opus-1m"].reasoningEffort = "xhigh";
+  const composed = await composeConfig(top, stubLoader);
+  const coder = composed.players.find((p) => p.id === "code-coder");
+  assert.equal(coder?.effort, "xhigh");
+  assert.ok(!("reasoningEffort" in (coder ?? {})));
+
+  profiles["claude-opus-1m"].effort = "high";
+  await expectError(
+    top,
+    /must not set both effort and its legacy alias reasoningEffort/,
+  );
+
+  delete profiles["claude-opus-1m"].reasoningEffort;
+  profiles["claude-opus-1m"].effort = "extreme";
+  await expectError(top, /effort must be one of/);
+});
+
 test("inline agent blocks extend a profile and drop the profile key", async () => {
   const top = baseConfig();
   (top.profiles as Record<string, unknown>)["codex-gpt"] = {

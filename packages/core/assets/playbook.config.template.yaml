@@ -9,20 +9,20 @@ profiles:
   claude-opus:
     adapter: claude
     model: claude-opus-4-8
-    reasoningEffort: high
+    effort: high
     permissions:
       mode: auto        # protected auto mode for the Claude Captain
   claude-opus-1m:
     adapter: claude
     model: claude-opus-4-8[1m]
-    reasoningEffort: xhigh
+    effort: xhigh
     permissions:
       mode: auto        # protected auto mode for the Claude Coder
   # Example second-vendor profile — uncomment if you use the Codex CLI:
   # codex-gpt:
   #   adapter: codex
   #   model: gpt-5.5
-  #   reasoningEffort: xhigh
+  #   effort: xhigh
   #   permissions:
   #     mode: auto
   #     writablePaths:

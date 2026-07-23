@@ -63,7 +63,7 @@ function ProfileEditor({
   const [id, setId] = useState(initial?.id ?? "");
   const [adapter, setAdapter] = useState(initial?.adapter ?? "claude");
   const [model, setModel] = useState(initial?.model ?? "");
-  const [effort, setEffort] = useState(initial?.reasoningEffort ?? "");
+  const [effort, setEffort] = useState(initial?.effort ?? "");
   const [mode, setMode] = useState(initial?.permissions?.mode ?? "auto");
   const [writablePaths, setWritablePaths] = useState(
     (initial?.permissions?.writablePaths ?? []).join(", "),
@@ -84,7 +84,7 @@ function ProfileEditor({
       profile: {
         adapter,
         ...(model.trim() ? { model: model.trim() } : {}),
-        ...(effort ? { reasoningEffort: effort } : {}),
+        ...(effort ? { effort: effort } : {}),
         permissions: {
           mode,
           ...(paths.length > 0 ? { writablePaths: paths } : {}),
@@ -355,7 +355,7 @@ export function SettingsSurface() {
               <span className="font-mono font-medium">{profile.id}</span>
               <span className="text-xs text-neutral-500">
                 {profile.model ?? profile.adapter}
-                {profile.reasoningEffort ? ` · ${profile.reasoningEffort}` : ""}
+                {profile.effort ? ` · ${profile.effort}` : ""}
               </span>
               <ReadinessBadge entry={readinessById.get(profile.id)} />
               {readinessById.get(profile.id)?.requirement ? (

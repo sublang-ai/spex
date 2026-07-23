@@ -29,7 +29,7 @@ export interface ProfilePopoverProps {
   onSelect: (ref: string) => Promise<unknown> | void;
   onSaveProfile: (
     profile: ProfileSummary,
-    patch: { model?: string; reasoningEffort?: string },
+    patch: { model?: string; effort?: string },
   ) => Promise<unknown>;
   onOpenSettings?: () => void;
   onClose: () => void;
@@ -39,15 +39,15 @@ export function ProfilePopover(props: ProfilePopoverProps) {
   const { profiles, readiness, currentRef } = props;
   const selected = profiles.find((profile) => profile.id === currentRef);
   const [model, setModel] = useState(selected?.model ?? "");
-  const [effort, setEffort] = useState(selected?.reasoningEffort ?? "");
+  const [effort, setEffort] = useState(selected?.effort ?? "");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setModel(selected?.model ?? "");
-    setEffort(selected?.reasoningEffort ?? "");
-  }, [selected?.id, selected?.model, selected?.reasoningEffort]);
+    setEffort(selected?.effort ?? "");
+  }, [selected?.id, selected?.model, selected?.effort]);
 
   // Focus discipline (DR-010 §6): move focus into the dialog on
   // mount — the current option, else the first focusable — and hand
@@ -87,7 +87,7 @@ export function ProfilePopover(props: ProfilePopoverProps) {
   const dirty =
     selected !== undefined &&
     (model !== (selected.model ?? "") ||
-      effort !== (selected.reasoningEffort ?? ""));
+      effort !== (selected.effort ?? ""));
 
   function save() {
     if (!selected || !dirty) return;
@@ -96,7 +96,7 @@ export function ProfilePopover(props: ProfilePopoverProps) {
     Promise.resolve(
       props.onSaveProfile(selected, {
         ...(model.trim() ? { model: model.trim() } : {}),
-        ...(effort ? { reasoningEffort: effort } : {}),
+        ...(effort ? { effort: effort } : {}),
       }),
     )
       .catch((cause: Error) => setError(cause.message))

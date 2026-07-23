@@ -29,7 +29,7 @@ export interface ProfileSummary {
   id: string;
   adapter: AdapterName;
   model?: string;
-  reasoningEffort?: string;
+  effort?: string;
   instruction?: string;
   permissions?: {
     mode?: string;
@@ -159,7 +159,7 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
     profile: z.object({
       adapter: z.string().min(1),
       model: z.string().optional(),
-      reasoningEffort: z.string().optional(),
+      effort: z.string().optional(),
       instruction: z.string().optional(),
       permissions: z
         .object({
@@ -178,7 +178,7 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
     id: z.string().min(1),
     patch: z.object({
       model: z.string().optional(),
-      reasoningEffort: z.string().optional(),
+      effort: z.string().optional(),
     }),
   }),
   z.object({ kind: z.literal("captain.set"), ref: z.string().min(1) }),
