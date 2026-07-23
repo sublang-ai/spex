@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, posix, relative } from "node:path";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import { join, posix, relative, sep } from "node:path";
 import type { Heading, Node, Root } from "mdast";
 import {
   baseHeadingSlugs,
@@ -1561,9 +1567,23 @@ export function lintSpecs(basePath: string): LintFinding[] {
   return ctx.findings;
 }
 
+/**
+ * The path prefix findings are printed under: the base path
+ * relative to the working directory, canonicalized on both sides
+ * so Windows 8.3 short names and symlinks cannot fake a
+ * difference, and always in forward slashes (LINT-3).
+ */
 function relativeToCwd(basePath: string): string {
-  const rel = relative(process.cwd(), basePath);
-  return rel === "" ? "." : rel;
+  const canonical = (path: string): string => {
+    try {
+      return realpathSync.native(path);
+    } catch {
+      return path;
+    }
+  };
+  const rel = relative(canonical(process.cwd()), canonical(basePath));
+  if (rel === "") return ".";
+  return rel.split(sep).join("/");
 }
 
 /**

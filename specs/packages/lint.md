@@ -36,6 +36,9 @@ When linting completes, the CLI shall print one line per finding in
 the form `<path>:<line>: <severity> <rule>: <message>`, sorted by
 path then line, followed by a summary counting errors and warnings —
 or a no-problems line when the tree is clean.
+Printed paths shall use forward-slash separators on every platform,
+and a base path equal to the working directory shall print bare
+tree-relative paths however either is spelled.
 
 The CLI shall exit non-zero when at least one error-severity finding
 exists, and zero otherwise; warnings alone shall not fail the run.
