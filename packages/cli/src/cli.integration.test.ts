@@ -13,7 +13,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
@@ -1451,6 +1451,35 @@ meta.md     The spec of specs
       assert.equal(result.exitCode, 1);
       assert.match(result.stdout, /structure\/legacy-layout/);
       assert.match(result.stdout, /spex scaffold --update/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // LINT-3: printed paths use forward slashes from any cwd — on
+  // Windows, neither the OS separator nor an 8.3 short-form cwd may
+  // leak into the reported paths.
+  it("lint prints forward-slash paths from any working directory", () => {
+    const dir = makeTmp();
+    try {
+      run(["scaffold"], { cwd: dir });
+      mkdirSync(join(dir, "specs", "user"));
+
+      const result = run(["lint", basename(dir)], { cwd: dirname(dir) });
+      assert.notEqual(result.exitCode, 0, result.stdout);
+      const findingLines = result.stdout
+        .split("\n")
+        .filter((line) => line.includes(": error "));
+      assert.ok(findingLines.length > 0, result.stdout);
+      for (const line of findingLines) {
+        assert.ok(!line.includes("\\"), line);
+      }
+      assert.ok(
+        findingLines.some((line) =>
+          line.startsWith(`${basename(dir)}/specs/user:`),
+        ),
+        result.stdout,
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }
