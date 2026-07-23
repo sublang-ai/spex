@@ -40,5 +40,8 @@ package quietly grows features.
   ([PLAY-2](../compositions/lesson-playback.md#play-2)), exactly
   one sign-in method
   ([PLAT-1](../compositions/platform-services.md#plat-1)).
+- No transcoding means an upload must already be
+  browser-playable, so the library accepts one declared profile
+  ([VID-1](../packages/catalog/video-library.md#vid-1)).
 - Adding any out-of-scope capability later starts with a new DR,
   not with code.

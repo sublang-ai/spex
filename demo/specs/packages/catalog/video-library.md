@@ -20,16 +20,18 @@ reference means to the host is the host's business.
 
 Where the library is designated admin-only
 ([ROLE-2](../identity/access-control.md#role-2)), when the admin
-selects a video file in an accepted format (MP4 or WebM) within
-the configured size cap, the library shall upload it, showing
-progress until completion, and then list the asset with its
-title defaulted from the file name.
+selects a video file matching the accepted profile — MP4
+container with H.264 video, and AAC audio where an audio track
+is present — within the configured size cap, the library shall
+upload it, showing progress until completion, and then list the
+asset with its title defaulted from the file name.
 
 #### VID-2
 
-When the selected file's format is not accepted or its size
+When the selected file misses the accepted profile — a wrong
+container or an unsupported codec inside it — or its size
 exceeds the configured cap, the library shall refuse before any
-content is uploaded, naming the violated limit.
+content is uploaded, naming the violated constraint.
 
 #### VID-3
 
@@ -151,8 +153,9 @@ store with it ([VID-10](#vid-10)).
 Where an admin session drives the library against a storage test
 double, the test suite shall assert: an accepted fixture file
 uploads with visible progress and is then listed with its title
-defaulted from the file name ([VID-1](#vid-1)); a wrong-format
-file and an oversize file are refused with the violated limit
+defaulted from the file name ([VID-1](#vid-1)); a
+wrong-container file, an MP4 carrying an unsupported codec, and
+an oversize file are each refused with the violated constraint
 named, before any content request reaches the double
 ([VID-2](#vid-2)); and an interrupted upload leaves no listed
 asset, with a retry starting from zero ([VID-3](#vid-3)).
