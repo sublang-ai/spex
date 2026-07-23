@@ -133,6 +133,39 @@ Some prose.
     assert.match(zh, /^## 组合$/m);
   });
 
+  it("targets the layout block, never a prose example block", () => {
+    const renamed = renameInteractionsHeading(
+      [
+        "# Map",
+        "",
+        "## Notes",
+        "",
+        "```text",
+        "interactions/ is where the old cross-package files lived",
+        "```",
+        "",
+        "## Layout",
+        "",
+        "```text",
+        "packages/     Spec packages (one file per package)",
+        "interactions/ Cross-package behaviors and tests",
+        "```",
+        "",
+      ].join("\n"),
+      "en",
+    );
+    assert.ok(renamed !== null);
+    assert.match(
+      renamed,
+      /^interactions\/ is where the old cross-package files lived$/m,
+    );
+    assert.match(
+      renamed,
+      /^compositions\/ Cross-package compositions: scenarios, bindings, tests$/m,
+    );
+    assert.doesNotMatch(renamed, /^interactions\/ Cross-package behaviors/m);
+  });
+
   it("rewrites an interactions/ layout-block line alongside the heading", () => {
     const renamed = renameInteractionsHeading(
       [

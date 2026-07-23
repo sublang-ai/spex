@@ -302,13 +302,17 @@ describe("lintSpecs", () => {
     assert.ok(rules(findings).includes("tests/uncovered"));
   });
 
-  it("warns when a scenario test cites fewer than two packages", () => {
+  it("errors when a scenario test cites fewer than two packages", () => {
     const findings = findingsFor({
       "specs/packages/auth.md": CLEAN_PACKAGE,
       "specs/compositions/flow.md":
         "# FLOW: Flow\n\n## Intent\n\nX.\n\n## Scenario\n\n### FLOW-1\n\nWhen a login succeeds ([AUTH-1](../packages/auth.md#auth-1)), the system shall proceed.\n\n## Tests\n\n### FLOW-2\n\nThe suite shall assert the flow ([FLOW-1](#flow-1), [AUTH-1](../packages/auth.md#auth-1)).\n",
     });
-    assert.ok(rules(findings).includes("tests/scenario-two-packages"));
+    const floor = findings.find(
+      (f) => f.rule === "tests/scenario-two-packages",
+    );
+    assert.ok(floor, "expected a two-package floor finding");
+    assert.equal(floor.severity, "error");
   });
 
   it("allows a binding inspection citing one package and its service", () => {
@@ -472,6 +476,12 @@ describe("lintSpecs", () => {
     });
     assert.ok(rules(triggered).includes("binding/trigger"));
 
+    const listWrapped = findingsFor({
+      "specs/compositions/platform.md":
+        "# PLAT: 平台\n\n## 意图\n\n平台绑定。\n\n## 绑定\n\n### PLAT-1\n\n部署应满足：\n\n- 当用户登录时切换到 Example Auth。\n\n## 测试\n\n### PLAT-2\n\n审计套件应检查部署配置（[PLAT-1](#plat-1)）。\n",
+    });
+    assert.ok(rules(listWrapped).includes("binding/trigger"));
+
     const clean = findingsFor({
       "specs/compositions/platform.md":
         "# PLAT: 平台\n\n## 意图\n\n平台绑定。\n\n## 绑定\n\n### PLAT-1\n\n部署当前的认证服务应为 Example Auth。\n\n## 测试\n\n### PLAT-2\n\n审计套件应检查部署配置（[PLAT-1](#plat-1)）。\n",
@@ -489,7 +499,7 @@ describe("lintSpecs", () => {
     assert.ok(!rules(findings).includes("meta/metadata-line"));
   });
 
-  it("warns on Intent citations and peer-Internal citations (LINT-13)", () => {
+  it("errors on Intent citations and peer-Internal citations (LINT-13)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# A: A\n\n## Intent\n\nBuilt per [DR-001](../decisions/001-a.md).\n\n## External Behavior\n\n### A-1\n\nWhere audit is reported ([AUD-1](audit.md#aud-1)), X shall Y.\n",
@@ -497,8 +507,12 @@ describe("lintSpecs", () => {
       "specs/decisions/001-a.md":
         "# DR-001: A\n\n## Status\n\nAccepted\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n",
     });
-    assert.ok(rules(findings).includes("intent/cited"));
-    assert.ok(rules(findings).includes("cite/internal"));
+    for (const rule of ["intent/cited", "cite/internal"]) {
+      const finding = findings.find((f) => f.rule === rule);
+      assert.ok(finding, `expected a ${rule} finding`);
+      assert.equal(finding.severity, "error");
+    }
+    assert.ok(!rules(findings).includes("cite/outcome"));
 
     const composition = findingsFor({
       "specs/packages/audit.md": AUDIT_PACKAGE,
@@ -507,6 +521,45 @@ describe("lintSpecs", () => {
     });
     assert.ok(!rules(composition).includes("cite/internal"));
     assert.ok(!rules(composition).includes("intent/cited"));
+  });
+
+  it("errors on peer citations in outcome clauses (LINT-13)", () => {
+    const outcome = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere credentials are valid, the system shall record the login in the audit log ([AUD-1](audit.md#aud-1)).\n",
+      "specs/packages/audit.md": AUDIT_PACKAGE,
+    });
+    assert.ok(rules(outcome).includes("cite/outcome"));
+
+    const listOutcome = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhen the user confirms, the system shall:\n\n1. validate the input,\n2. record it in the audit log ([AUD-1](audit.md#aud-1)).\n",
+      "specs/packages/audit.md": AUDIT_PACKAGE,
+    });
+    assert.ok(rules(listOutcome).includes("cite/outcome"));
+
+    const precondition = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile the audit log accepts events ([AUD-1](audit.md#aud-1)), the system shall record logins.\n",
+      "specs/packages/audit.md": AUDIT_PACKAGE,
+    });
+    assert.ok(!rules(precondition).includes("cite/outcome"));
+
+    const sameFile = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y.\n\n### A-3\n\nThe system shall reuse the login rule ([A-1](#a-1)).\n",
+    });
+    assert.ok(!rules(sameFile).includes("cite/outcome"));
+  });
+
+  it("errors on textual IR references outside the map (META-18)", () => {
+    const findings = findingsFor({
+      "specs/decisions/001-a.md":
+        "# DR-001: A\n\n## Status\n\nAccepted\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\n- IR-015 materializes this decision.\n",
+    });
+    const textual = findings.find((f) => f.rule === "cite/iteration");
+    assert.ok(textual, "expected a textual cite/iteration finding");
+    assert.equal(textual.severity, "error");
   });
 
   it("accepts localized zh composition sections", () => {

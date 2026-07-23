@@ -190,19 +190,48 @@ export function restructureMap(
 /**
  * SCAF-50: rename legacy interactions entries of a map — a
  * `## Interactions` (or `## 交互`) heading and an `interactions/`
- * layout-block line — to the active-language Compositions forms.
- * Returns null when the map has neither.
+ * line inside the layout code block — to the active-language
+ * Compositions forms. The layout block is identified by its
+ * path-listing signature, so an `interactions/` line in a prose
+ * example is never rewritten. Returns null when the map has
+ * neither entry.
  */
 export function renameInteractionsHeading(
   text: string,
   language: ScaffoldLanguage,
 ): string | null {
   const strings = MAP_STRINGS[language];
-  const compositionsLine = strings.layoutLines[1];
   let result = text.replace(
     /^##(\s+)(Interactions|交互)(\s*)$/m,
     `##$1${strings.compositionsHeading}$3`,
   );
-  result = result.replace(/^interactions\/[ \t].*$/m, compositionsLine);
+
+  const tree: Root = parseMarkdown(result);
+  let edit: TextEdit | null = null;
+  visit(tree, (node: Node) => {
+    if (node.type !== "code" || edit !== null) return;
+    const code = node as Code;
+    const lines = code.value.split("\n");
+    const isInteractions = (line: string) => /^interactions\/[ \t]/.test(line);
+    if (!lines.some(isInteractions)) return;
+    if (!lines.some((line) => /^(packages\/|decisions\/|map\.md|meta\.md)/.test(line))) {
+      return;
+    }
+    const replaced = lines
+      .map((line) => (isInteractions(line) ? strings.layoutLines[1] : line))
+      .join("\n");
+    const source = sliceNode(result, code);
+    const fenceMatch = source.match(
+      /^(\s*(?:```|~~~)[^\n]*\n)([\s\S]*?)(\n\s*(?:```|~~~)\s*)$/,
+    );
+    if (fenceMatch === null) return;
+    edit = {
+      start: startOffset(code),
+      end: endOffset(code),
+      replacement: fenceMatch[1] + replaced + fenceMatch[3],
+    };
+  });
+  if (edit !== null) result = applyEdits(result, [edit]);
+
   return result === text ? null : result;
 }

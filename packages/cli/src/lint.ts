@@ -110,6 +110,8 @@ type HeadingInfo = {
 type LinkInfo = {
   url: string;
   line: number;
+  /** 1-based start column, for clause-position checks. */
+  column: number;
   kind: "link" | "image" | "definition";
 };
 
@@ -127,6 +129,8 @@ type SpecFile = {
   shortForm: string | null;
   /** Per-line flag: inside a fenced code block. */
   fenced: boolean[];
+  /** Inline text spans (mdast text nodes) with their start lines. */
+  texts: { line: number; value: string }[];
 };
 
 type LintContext = {
@@ -167,6 +171,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
 
   const rawHeadings: Omit<HeadingInfo, "slug">[] = [];
   const links: LinkInfo[] = [];
+  const texts: { line: number; value: string }[] = [];
   visit(tree, (node: Node) => {
     if (node.type === "heading") {
       const heading = node as Heading;
@@ -178,6 +183,13 @@ function loadFile(basePath: string, relPath: string): SpecFile {
       });
       return;
     }
+    if (node.type === "text") {
+      texts.push({
+        line: node.position?.start.line ?? 1,
+        value: (node as unknown as { value: string }).value,
+      });
+      return;
+    }
     if (
       node.type === "link" ||
       node.type === "image" ||
@@ -186,6 +198,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
       links.push({
         url: (node as unknown as { url: string }).url,
         line: node.position?.start.line ?? 1,
+        column: node.position?.start.column ?? 1,
         kind: node.type as LinkInfo["kind"],
       });
     }
@@ -212,6 +225,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
     h1,
     shortForm: h1Match === null ? null : h1Match[1],
     fenced: codeLineMap(tree, lines.length),
+    texts,
   };
 }
 
@@ -861,7 +875,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           ctx,
           item.file.relPath,
           item.heading.line,
-          "warning",
+          "error",
           "tests/scenario-two-packages",
           `Tests item ${item.id} exercises a scenario but cites items in fewer than two distinct package files (META-21)`,
         );
@@ -869,20 +883,27 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
     }
 
     // A binding is static: no trigger or stateful clause (META-36).
+    // Keywords are matched over parsed inline text, so list markers,
+    // blockquotes, and emphasis cannot hide a trigger and inline
+    // code cannot fake one.
     if (inCompositions && item.section === "Binding") {
-      for (let line = item.bodyStart; line < item.bodyEnd; line += 1) {
-        if (item.file.fenced[line - 1]) continue;
-        const content = item.file.lines[line - 1];
-        if (content !== undefined && TRIGGER_RE.test(content)) {
-          report(
-            ctx,
-            item.file.relPath,
-            line,
-            "error",
-            "binding/trigger",
-            `Binding item ${item.id} carries a When/While clause; a binding is static (META-36)`,
-          );
-          break;
+      let reported = false;
+      for (const span of item.file.texts) {
+        if (reported) break;
+        if (span.line < item.bodyStart || span.line >= item.bodyEnd) continue;
+        for (const [offset, valueLine] of span.value.split("\n").entries()) {
+          if (TRIGGER_RE.test(valueLine)) {
+            report(
+              ctx,
+              item.file.relPath,
+              span.line + offset,
+              "error",
+              "binding/trigger",
+              `Binding item ${item.id} carries a When/While clause; a binding is static (META-36)`,
+            );
+            reported = true;
+            break;
+          }
         }
       }
     }
@@ -944,6 +965,49 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
 // Citation discipline (META-14, META-15) — LINT-13
 // ---------------------------------------------------------------
 
+// English clause keywords deciding a citation's clause (META-6).
+const PRECONDITION_KEYWORD_RE = /\b(Where|While|When)\b/g;
+const SHALL_KEYWORD_RE = /\bshall\b/g;
+
+function lastMatchIndex(text: string, re: RegExp): number {
+  let last = -1;
+  re.lastIndex = 0;
+  for (const match of text.matchAll(re)) last = match.index ?? -1;
+  return last;
+}
+
+/**
+ * The paragraph prefix before a link: from the paragraph's first
+ * line (a list attaches to a lead-in ending in a colon) to the
+ * link's start column.
+ */
+function paragraphPrefix(item: ItemInfo, link: LinkInfo): string {
+  const lines = item.file.lines;
+  let start = link.line;
+  while (start - 1 > item.heading.line) {
+    const previous = lines[start - 2].trim();
+    if (previous !== "") {
+      start -= 1;
+      continue;
+    }
+    // Blank line: attach a list or table to its lead-in sentence.
+    let above = start - 2;
+    while (above > item.heading.line && lines[above - 1].trim() === "") {
+      above -= 1;
+    }
+    if (above > item.heading.line && /[:：]$/.test(lines[above - 1].trim())) {
+      start = above;
+      continue;
+    }
+    break;
+  }
+  let prefix = "";
+  for (let line = start; line < link.line; line += 1) {
+    prefix += `${lines[line - 1]}\n`;
+  }
+  return prefix + lines[link.line - 1].slice(0, link.column - 1);
+}
+
 function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
   const bySlug = itemsBySlug(items);
   for (const file of ctx.files.values()) {
@@ -961,7 +1025,7 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
             ctx,
             file.relPath,
             link.line,
-            "warning",
+            "error",
             "intent/cited",
             "the Intent section carries a citation; keep Intent self-contained prose (META-15)",
           );
@@ -990,9 +1054,47 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
           ctx,
           file.relPath,
           link.line,
-          "warning",
+          "error",
           "cite/internal",
           `citation targets ${target.id} inside ${resolved}'s Internal Behavior; cite External Behavior or move the reliance to a composition (META-14)`,
+        );
+      }
+    }
+  }
+
+  // Peers are cited from preconditions and triggers only: a peer
+  // citation whose nearest preceding clause keyword is `shall` sits
+  // in the outcome (META-13, META-14).
+  for (const item of items) {
+    if (!isUnder(item.file.relPath, "packages")) continue;
+    if (
+      item.section !== "External Behavior" &&
+      item.section !== "Internal Behavior"
+    ) {
+      continue;
+    }
+    for (const link of bodyLinks(item)) {
+      const resolved = resolveCitation(item.file, link.url);
+      if (
+        resolved === null ||
+        resolved === item.file.relPath ||
+        !resolved.startsWith("specs/packages/")
+      ) {
+        continue;
+      }
+      const prefix = paragraphPrefix(item, link);
+      const shallIndex = lastMatchIndex(prefix, SHALL_KEYWORD_RE);
+      if (
+        shallIndex !== -1 &&
+        shallIndex > lastMatchIndex(prefix, PRECONDITION_KEYWORD_RE)
+      ) {
+        report(
+          ctx,
+          item.file.relPath,
+          link.line,
+          "error",
+          "cite/outcome",
+          `item ${item.id} cites a peer package in its outcome clause; peers are cited from Where/While/When preconditions only (META-13, META-14)`,
         );
       }
     }
@@ -1005,6 +1107,26 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
 
 function lintCitations(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
+    // Textual IR references are citations too (META-18).
+    if (
+      file.relPath !== "specs/map.md" &&
+      !isUnder(file.relPath, "iterations")
+    ) {
+      for (const [index, line] of file.lines.entries()) {
+        if (file.fenced[index]) continue;
+        if (/\bIR-\d+\b/.test(line)) {
+          report(
+            ctx,
+            file.relPath,
+            index + 1,
+            "error",
+            "cite/iteration",
+            "iteration records are cited only from specs/map.md — naming an IR is citing it (META-18)",
+          );
+        }
+      }
+    }
+
     const fileDir = posix.dirname(file.relPath);
     for (const link of file.links) {
       const url = link.url;
