@@ -132,6 +132,11 @@ a link into `specs/iterations/` from any file but `specs/map.md`
 outside `specs/map.md` is likewise an error — naming an IR is
 citing it — where an iteration record is exempt only for its own
 ID.
+A reference-style link with a non-numeric identifier in a
+`packages/` or `compositions/` file shall be an error: item
+citations are inline links ([META-16](../meta.md#meta-16)), and
+numbered markers stay reserved for `## References`
+([META-19](../meta.md#meta-19)).
 Scheme, protocol-relative, and absolute URLs shall not be checked.
 
 A warning shall be reported for duplicate heading anchors within one
@@ -167,14 +172,17 @@ Where citation discipline is linted:
   that peer's `## External Behavior` section shall be an error — a
   peer may rely only on External Behavior
   ([META-14](../meta.md#meta-14), [META-28](../meta.md#meta-28));
-- in a package behavior item, a peer citation is legal only inside
-  a precondition or trigger clause: its nearest preceding clause
-  keyword — `Where`, `While`, `When` (给定, 如果, clause-start 当),
-  with a list attached to its lead-in when that lead-in ends in a
-  colon — is a precondition keyword with no `shall` (应) after it,
-  and the citation names a peer item; any other peer citation in a
-  behavior item shall be an error
-  ([META-13](../meta.md#meta-13), [META-14](../meta.md#meta-14)).
+- in a package behavior item, a peer citation is legal only when
+  it belongs to a precondition or trigger clause and resolves to a
+  peer item: its nearest preceding clause keyword — `Where`,
+  `While`, `When` (给定, 如果, clause-start 当), with a list
+  attached to its lead-in when that lead-in ends in a colon — is a
+  precondition keyword with no `shall` (应) after it, a clause
+  boundary (a separator not introducing a further citation) stands
+  between the citation and any following `shall`, and its anchor
+  is an item of the peer file; every other peer citation shall be
+  an error ([META-13](../meta.md#meta-13),
+  [META-14](../meta.md#meta-14)).
 
 ## Internal Behavior
 
