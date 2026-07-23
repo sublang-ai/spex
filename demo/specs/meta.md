@@ -254,11 +254,15 @@ bound to suppliers or services.
   bind an abstract subject to an external service instead (a
   supply binding); its tests are inspections of a deployment
   rather than user journeys.
-  What a controlled stand-in could supply is consumed behavior
-  and bindable — the item states the supplied meaning together
-  with the package's own acceptance and rejection handling of
-  it; what no stand-in could supply is a private invariant, and
-  no binding may target it.
+  What a stand-in for a declared collaborator — the abstract
+  party the item already names — could supply is consumed
+  behavior and bindable; the item states the supplied meaning
+  together with the package's own acceptance and rejection
+  handling of it.
+  What no declared collaborator could supply is a private
+  invariant: no binding may target it, and inventing a
+  collaborator to externalize an invariant does not make it
+  consumed.
   A replaceable code dependency — a library, a framework — is
   no seam at all: it gets no binding item, and its selection
   lives in a decision record.

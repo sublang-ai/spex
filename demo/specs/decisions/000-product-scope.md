@@ -18,8 +18,10 @@ package quietly grows features.
 - Public, read-only catalog: anyone may browse published courses
   and their syllabi without an account.
 - Watching lesson videos requires a signed-in account.
-- GitHub OAuth is the only sign-in method
-  ([AUTH](../packages/identity/github-login.md)).
+- GitHub OAuth is the only sign-in method: sign-in itself is
+  [AUTH](../packages/identity/github-login.md); the exclusivity
+  is installation policy
+  ([PLAT-1](../compositions/platform-services.md#plat-1)).
 - Exactly two roles: one configured admin
   ([DR-003](003-admin-designation.md)) and members; every
   signed-in non-admin is a member.
@@ -37,6 +39,6 @@ package quietly grows features.
   sign-in and playback
   ([PLAY-2](../compositions/lesson-playback.md#play-2)), exactly
   one sign-in method
-  ([AUTH-1](../packages/identity/github-login.md#auth-1)).
+  ([PLAT-1](../compositions/platform-services.md#plat-1)).
 - Adding any out-of-scope capability later starts with a new DR,
   not with code.

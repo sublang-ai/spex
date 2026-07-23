@@ -167,7 +167,9 @@ assert: with that session, the embedded player obtains a grant
 and the media element reaches the playing state
 ([VID-5](#vid-5)); with
 no session, the player shows the sign-in-required state and no
-media request is made ([VID-6](#vid-6)); and direct
+media request is made ([VID-6](#vid-6)); a direct
+playback-grant request with no session is denied, with no
+grant issued ([VID-8](#vid-8)); and direct
 stored-content requests without a grant ([VID-7](#vid-7)), with
 an expired grant, and with a tampered grant are all denied even
 with a signed-in session, while a grant issued before sign-out

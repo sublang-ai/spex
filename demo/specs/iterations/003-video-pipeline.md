@@ -33,7 +33,8 @@ the full composition suite green — the release acceptance.
 
 ## Acceptance criteria
 
-- VID-11 through VID-13 pass.
-- BOOT-3, NAV-3, PUB-4, PUB-5, PLAY-3, PLAY-4, GUARD-3,
-  GUARD-4, PLAT-6, and PLAT-7 pass against a fresh preview
-  deployment — the product's release acceptance.
+- One closed gate: every package Verification item and every
+  composition test item passes.
+- Journey and sweep tests run against a seeded controlled-test
+  installation; the PLAT substrate audits inspect the deployed
+  environment. Both belong to the same gate.

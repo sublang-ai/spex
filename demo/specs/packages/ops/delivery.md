@@ -51,8 +51,6 @@ Every production deployment shall report the one default-branch
 commit that produced it, so the operator can trace what is
 serving to what was merged.
 
-## Internal Behavior
-
 ### Secrets
 
 #### DELIV-5
@@ -62,6 +60,8 @@ platform's environment configuration; the repository shall carry
 no secret values, and shall carry an example environment file
 listing every required variable name with no values.
 
+## Internal Behavior
+
 ### Migrations
 
 #### DELIV-6
@@ -70,6 +70,9 @@ Where the database schema changes, the change shall ship as a
 versioned migration applied in order before the new revision
 serves traffic; when a migration fails, the deployment shall not
 switch traffic to the new revision.
+A migration applied before cutover shall stay compatible with
+the still-serving revision, so a failure after migration leaves
+that revision serving correctly.
 
 ## Verification
 
@@ -91,10 +94,13 @@ pull request ([DELIV-2](#deliv-2)).
 Where a preview environment rehearses deployment, the audit suite
 shall assert: a revision with a deliberately failing migration
 leaves the serving revision unchanged ([DELIV-6](#deliv-6)); a
-passing revision serves after its migrations apply
-([DELIV-3](#deliv-3)); and the preview's backing-service
-endpoints are disjoint from production's
-([DELIV-4](#deliv-4)).
+revision whose migration succeeds but whose activation then
+fails leaves the previous revision serving correctly against
+the migrated schema ([DELIV-3](#deliv-3),
+[DELIV-6](#deliv-6)); a passing revision serves after its
+migrations apply ([DELIV-3](#deliv-3)); and the
+preview's backing-service endpoints are disjoint from
+production's ([DELIV-4](#deliv-4)).
 
 ### Hygiene Coverage
 

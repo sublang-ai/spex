@@ -90,11 +90,13 @@ inspection, security testing, restart survival).
   another role's entries).
 - **The audience is per-package, and peers count as users.**
   For the delivery package the user is the developer-operator:
-  pull-request checks and preview links are external
-  ([DELIV-1](specs/packages/ops/delivery.md#deliv-1)); secret
-  storage and migration ordering are internal
-  ([DELIV-5](specs/packages/ops/delivery.md#deliv-5),
-  [DELIV-6](specs/packages/ops/delivery.md#deliv-6)).
+  pull-request checks, preview links, and the secret-handling
+  contract the operator works with — the example environment
+  file, the no-tracked-secrets guarantee — are external
+  ([DELIV-1](specs/packages/ops/delivery.md#deliv-1),
+  [DELIV-5](specs/packages/ops/delivery.md#deliv-5));
+  migration ordering is internal
+  ([DELIV-6](specs/packages/ops/delivery.md#deliv-6)).
   [AUTH-9](specs/packages/identity/github-login.md#auth-9)'s
   verification guarantee is external because
   [VID-8](specs/packages/catalog/video-library.md#vid-8)
@@ -109,9 +111,10 @@ inspection, security testing, restart survival).
   a pixel-identical hand-rolled one.
 - **Decisions are not where implementation details live**
   ([META-24](specs/meta.md#meta-24)).
-  A detail that code generation requires is a spec item with its
-  outcome stated; a detail that code generation does not require
-  appears in no spec.
+  Three buckets: an observable outcome code generation must
+  honor is a spec item; a technology or architecture choice is
+  a decision with its rationale; what neither constrains
+  behavior nor records a choice appears in no spec.
   Decision records hold choices, constraints, and tradeoffs —
   the why, never the how.
 
@@ -175,16 +178,18 @@ integrated.
   are acceptance tests**
   ([META-21](specs/meta.md#meta-21),
   [META-31](specs/meta.md#meta-31)).
-  The demo's release acceptance
-  ([IR-003](specs/iterations/003-video-pipeline.md)) is
-  literally the composition test list: the member journey
+  The demo's release gate
+  ([IR-003](specs/iterations/003-video-pipeline.md)) is one
+  closed rule — every package Verification item plus every
+  composition test item — whose composition half spans the
+  member journey
   ([PLAY-3](specs/compositions/lesson-playback.md#play-3)),
   authoring and publishing
   ([PUB-4](specs/compositions/course-publishing.md#pub-4)),
   day zero
   ([BOOT-3](specs/compositions/admin-bootstrap.md#boot-3)),
   navigation bindings
-  ([NAV-3](specs/compositions/site-navigation.md#nav-3)), and
+  ([NAV-3](specs/compositions/site-navigation.md#nav-3)),
   the gating sweep
   ([GUARD-3](specs/compositions/protected-content.md#guard-3),
   [GUARD-4](specs/compositions/protected-content.md#guard-4)),
@@ -305,14 +310,15 @@ cannot tell, which is the point.
   when the answer is no, so
   [GUARD-5](specs/compositions/protected-content.md#guard-5)
   can bind it whole.
-  The test for socket-hood is the stand-in: a stub host can
-  supply the authorization answer VID-15 consumes, so it is
-  consumed and bindable; no stub could
-  satisfy
-  [CAT-12](specs/packages/catalog/course-catalog.md#cat-12) —
-  excluding drafts at the data layer is the catalog's own
-  discipline — so it is a private invariant, and nothing may
-  bind it ([META-31](specs/meta.md#meta-31)).
+  The test for socket-hood is the stand-in for a declared
+  collaborator: VID-15 names the embedding host, and a stub
+  host can supply the answer it consumes, so it is consumed and
+  bindable.
+  [CAT-12](specs/packages/catalog/course-catalog.md#cat-12)
+  names no collaborator — excluding drafts at the data layer is
+  the catalog's own discipline — so it is a private invariant,
+  and inventing a "draft-filter provider" to bind it would not
+  make it consumed ([META-31](specs/meta.md#meta-31)).
 - **The litmus is the swap.**
   Rebind a supplier and every package item reads unchanged:
   swapping Supabase is a new DR plus rewritten PLAT items,

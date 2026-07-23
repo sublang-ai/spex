@@ -20,10 +20,11 @@ manages the referenced assets.
 #### CAT-1
 
 When any visitor opens the course list, the catalog shall show
-every published course — title and summary — newest publication
-first by default (ties broken by title, then slug), with an
-alphabetical-by-title order selectable (ties broken by slug),
-and shall not show unpublished courses.
+every published course — title, and summary where the course
+has one — newest publication first by default (ties broken by
+title, then slug), with an alphabetical-by-title order
+selectable (ties broken by slug), and shall not show
+unpublished courses.
 
 #### CAT-2
 
@@ -168,12 +169,13 @@ data request — carries unpublished content to non-admins.
 #### CAT-13
 
 Where fixture data holds three published courses with known
-publication times — two sharing one time — and one unpublished
-course, the test suite shall assert: the course list shows
-exactly the published three, newest publication first by
-default with the shared-time pair ordered by title, and
-alphabetical by title with slug tiebreak when that order is
-selected ([CAT-1](#cat-1)); a published course
+publication times — two sharing one time, one carrying no
+description — and one unpublished course, the test suite shall
+assert: the course list shows exactly the published three,
+newest publication first by default with the shared-time pair
+ordered by title, alphabetical by title with slug tiebreak when
+that order is selected, and the no-description course listed by
+title alone ([CAT-1](#cat-1)); a published course
 page shows its syllabus in the defined order with
 resolvable-attachment lessons marked playable ([CAT-2](#cat-2));
 the unpublished course's URL responds not-found without an admin

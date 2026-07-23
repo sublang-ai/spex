@@ -12,10 +12,10 @@ Accepted
 Packages name their platform subjects abstractly — "the identity
 store", "the deployment's media provider", "the pipeline" — per
 [META-15](../meta.md#meta-15).
-The deployment must bind each subject to one concrete service or
-the specs are not ready for code generation; those bindings are
-codegen-required detail, so they are spec items
-([META-24](../meta.md#meta-24)): the supply bindings of
+The deployment must bind each subject to one concrete service;
+each binding is an inspectable installation obligation, so it
+is a spec item ([META-31](../meta.md#meta-31)): the supply
+bindings of
 [platform-services.md](../compositions/platform-services.md).
 This record holds the choice of services and its tradeoffs.
 
