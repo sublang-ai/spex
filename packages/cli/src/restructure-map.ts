@@ -125,11 +125,17 @@ function rewriteLayoutBlock(
   return fenceMatch[1] + result.join("\n") + fenceMatch[3];
 }
 
+// Heading names of the map's packages section in the bundled
+// templates.
+const PACKAGES_HEADINGS = new Set(["Packages", "包"]);
+
 /**
  * Restructure a user-maintained map.md for the packages/interactions
- * layout: layout block lines, group tables reshaped to one row per
- * package, and an Interactions section appended when absent. All
- * other content is preserved. Returns null when nothing changed.
+ * layout: layout block lines under the Layout heading, group tables
+ * under the Packages heading reshaped to one row per package, and an
+ * Interactions section appended when absent. Transforms are scoped
+ * through the parsed sections, so lookalike blocks and tables
+ * elsewhere are preserved. Returns null when nothing changed.
  */
 export function restructureMap(
   text: string,
@@ -139,9 +145,22 @@ export function restructureMap(
   const tree: Root = parseMarkdown(text);
   const edits: TextEdit[] = [];
 
+  let section: string | null = null;
   let layoutPending = true;
   visit(tree, (node: Node) => {
-    if (node.type === "code" && layoutPending) {
+    if (node.type === "heading") {
+      const heading = node as Heading;
+      if (heading.depth === 2) {
+        section = sliceNode(text, heading).replace(/^#+\s*/, "").trim();
+      }
+      return;
+    }
+    if (
+      node.type === "code" &&
+      layoutPending &&
+      section !== null &&
+      LAYOUT_HEADINGS.has(section)
+    ) {
       const replacement = rewriteLayoutBlock(
         text,
         node as Code,
@@ -157,7 +176,11 @@ export function restructureMap(
       }
       return;
     }
-    if (node.type === "table") {
+    if (
+      node.type === "table" &&
+      section !== null &&
+      PACKAGES_HEADINGS.has(section)
+    ) {
       const replacement = reshapeGroupTable(text, node as Table);
       if (replacement !== null) {
         edits.push({
@@ -205,20 +228,26 @@ export function renameInteractionsHeading(
   language: ScaffoldLanguage,
 ): string | null {
   const strings = MAP_STRINGS[language];
-  let result = text.replace(
-    /^##(\s+)(Interactions|交互)(\s*)$/m,
-    `##$1${strings.compositionsHeading}$3`,
-  );
-
-  const tree: Root = parseMarkdown(result);
+  const tree: Root = parseMarkdown(text);
+  const edits: TextEdit[] = [];
   let layoutDepth: number | null = null;
   let inLayout = false;
-  let edit: TextEdit | null = null;
+  let layoutDone = false;
   visit(tree, (node: Node) => {
-    if (edit !== null) return;
     if (node.type === "heading") {
       const heading = node as Heading;
-      const title = sliceNode(result, heading).replace(/^#+\s*/, "").trim();
+      const title = sliceNode(text, heading).replace(/^#+\s*/, "").trim();
+      if (heading.depth === 2 && (title === "Interactions" || title === "交互")) {
+        const source = sliceNode(text, heading);
+        edits.push({
+          start: startOffset(heading),
+          end: endOffset(heading),
+          replacement: source.replace(
+            /(Interactions|交互)/,
+            strings.compositionsHeading,
+          ),
+        });
+      }
       if (LAYOUT_HEADINGS.has(title)) {
         layoutDepth = heading.depth;
         inLayout = true;
@@ -227,7 +256,7 @@ export function renameInteractionsHeading(
       }
       return;
     }
-    if (!inLayout || node.type !== "code") return;
+    if (!inLayout || layoutDone || node.type !== "code") return;
     const code = node as Code;
     const lines = code.value.split("\n");
     const isInteractions = (line: string) => /^interactions\/[ \t]/.test(line);
@@ -235,18 +264,18 @@ export function renameInteractionsHeading(
     const replaced = lines
       .map((line) => (isInteractions(line) ? strings.layoutLines[1] : line))
       .join("\n");
-    const source = sliceNode(result, code);
+    const source = sliceNode(text, code);
     const fenceMatch = source.match(
       /^(\s*(?:```|~~~)[^\n]*\n)([\s\S]*?)(\n\s*(?:```|~~~)\s*)$/,
     );
     if (fenceMatch === null) return;
-    edit = {
+    layoutDone = true;
+    edits.push({
       start: startOffset(code),
       end: endOffset(code),
       replacement: fenceMatch[1] + replaced + fenceMatch[3],
-    };
+    });
   });
-  if (edit !== null) result = applyEdits(result, [edit]);
-
-  return result === text ? null : result;
+  if (edits.length === 0) return null;
+  return applyEdits(text, edits);
 }

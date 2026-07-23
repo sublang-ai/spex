@@ -131,6 +131,8 @@ type SpecFile = {
   fenced: boolean[];
   /** Inline text spans (mdast text nodes) with their start lines. */
   texts: { line: number; value: string }[];
+  /** Reference-style links with non-numeric identifiers. */
+  referenceLinks: { line: number }[];
 };
 
 type LintContext = {
@@ -172,6 +174,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
   const rawHeadings: Omit<HeadingInfo, "slug">[] = [];
   const links: LinkInfo[] = [];
   const texts: { line: number; value: string }[] = [];
+  const referenceLinks: { line: number }[] = [];
   visit(tree, (node: Node) => {
     if (node.type === "heading") {
       const heading = node as Heading;
@@ -188,6 +191,14 @@ function loadFile(basePath: string, relPath: string): SpecFile {
         line: node.position?.start.line ?? 1,
         value: (node as unknown as { value: string }).value,
       });
+      return;
+    }
+    if (node.type === "linkReference" || node.type === "imageReference") {
+      const identifier = (node as unknown as { identifier: string })
+        .identifier;
+      if (!/^\d+$/.test(identifier)) {
+        referenceLinks.push({ line: node.position?.start.line ?? 1 });
+      }
       return;
     }
     if (
@@ -226,6 +237,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
     shortForm: h1Match === null ? null : h1Match[1],
     fenced: codeLineMap(tree, lines.length),
     texts,
+    referenceLinks,
   };
 }
 
@@ -981,6 +993,31 @@ function lastMatchIndex(text: string, re: RegExp): number {
   return last;
 }
 
+// A clause boundary after a citation: a separator that does not
+// merely introduce a further citation in the same group.
+const CLAUSE_SEPARATOR_RE = /[,，、;；](?!\s*\[)/;
+
+/**
+ * The paragraph text from the link onward, for the forward
+ * clause-boundary check.
+ */
+function paragraphSuffix(item: ItemInfo, link: LinkInfo): string {
+  const lines = item.file.lines;
+  let end = link.line;
+  while (
+    end < item.bodyEnd - 1 &&
+    end < lines.length &&
+    lines[end].trim() !== ""
+  ) {
+    end += 1;
+  }
+  let suffix = lines[link.line - 1].slice(link.column - 1);
+  for (let line = link.line + 1; line <= end; line += 1) {
+    suffix += `\n${lines[line - 1]}`;
+  }
+  return suffix;
+}
+
 /**
  * The paragraph prefix before a link: from the paragraph's first
  * line (a list attaches to a lead-in ending in a colon) to the
@@ -1101,6 +1138,20 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
         );
         continue;
       }
+      if (
+        ctx.files.has(resolved) &&
+        bySlug.get(resolved)?.get(fragment) === undefined
+      ) {
+        report(
+          ctx,
+          item.file.relPath,
+          link.line,
+          "error",
+          "cite/internal",
+          `item ${item.id} cites ${resolved}#${fragment}, which is no item anchor; cite a specific External Behavior item (META-14, META-16)`,
+        );
+        continue;
+      }
       const prefix = paragraphPrefix(item, link);
       const preconditionIndex = lastMatchIndex(
         prefix,
@@ -1118,7 +1169,49 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
           "cite/outcome",
           `item ${item.id} cites a peer package outside a precondition clause; peers are cited from Where/While/When preconditions and triggers only (META-13, META-14)`,
         );
+        continue;
       }
+      // Clause membership, forward: a citation still inside the
+      // precondition clause is separated from the following shall
+      // by a clause boundary; a subject-position citation is not.
+      const suffix = paragraphSuffix(item, link);
+      SHALL_KEYWORD_RE.lastIndex = 0;
+      const shallAhead = SHALL_KEYWORD_RE.exec(suffix);
+      if (
+        shallAhead !== null &&
+        !CLAUSE_SEPARATOR_RE.test(suffix.slice(0, shallAhead.index))
+      ) {
+        report(
+          ctx,
+          item.file.relPath,
+          link.line,
+          "error",
+          "cite/outcome",
+          `item ${item.id} cites a peer package in the clause that carries its shall; peers are cited from Where/While/When preconditions and triggers only (META-13, META-14)`,
+        );
+      }
+    }
+  }
+
+  // Reference-style links dodge every citation rule above, so item
+  // files use inline citations only (META-16); numbered markers
+  // stay reserved for ## References (META-19).
+  for (const file of ctx.files.values()) {
+    if (
+      !isUnder(file.relPath, "packages") &&
+      !isUnder(file.relPath, "compositions")
+    ) {
+      continue;
+    }
+    for (const reference of file.referenceLinks) {
+      report(
+        ctx,
+        file.relPath,
+        reference.line,
+        "error",
+        "cite/reference-style",
+        "reference-style links are not citations; use an inline link (META-16)",
+      );
     }
   }
 }

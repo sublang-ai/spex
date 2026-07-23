@@ -110,6 +110,59 @@ Some prose.
     assert.match(result, /\n## Compositions\n\nNone yet\./);
   });
 
+  it("scopes transforms to the Layout and Packages sections", () => {
+    const custom = [
+      "# Map",
+      "",
+      "## Notes",
+      "",
+      "An example of the old layout and an old table:",
+      "",
+      "```text",
+      "user/       Example old layout line",
+      "map.md      This index",
+      "```",
+      "",
+      "| Group | File | Summary |",
+      "| --- | --- | --- |",
+      "| user | [a.md](user/a.md) | Example row |",
+      "",
+      "```text",
+      "## Interactions",
+      "```",
+      "",
+      "## Layout",
+      "",
+      "```text",
+      "user/       User-visible item files",
+      "map.md      This index",
+      "```",
+      "",
+      "## Packages",
+      "",
+      "### AUTH",
+      "",
+      "| Group | File | Summary |",
+      "| --- | --- | --- |",
+      "| user | [auth.md](packages/auth.md) | Login |",
+      "",
+    ].join("\n");
+    const result = restructureMap(custom, "en");
+    assert.ok(result !== null);
+    // The Notes decoys are untouched: example layout line, example
+    // group table, and the fenced Interactions heading.
+    assert.match(result, /^user\/ {7}Example old layout line$/m);
+    assert.match(result, /\| user \| \[a\.md\]\(user\/a\.md\) \| Example row \|/);
+    assert.match(result, /```text\n## Interactions\n```/);
+    // The real sections are transformed.
+    assert.match(result, /packages\/ {5}Spec packages/);
+    assert.doesNotMatch(result, /^user\/ {7}User-visible item files$/m);
+    assert.match(
+      result,
+      /\| \[auth\.md\]\(packages\/auth\.md\) \| Login \|/,
+    );
+  });
+
   it("does not append Compositions when one exists", () => {
     const withCompositions = `${EN_MAP}\n## Compositions\n\n| File | Summary |\n| --- | --- |\n| [login-flow.md](compositions/login-flow.md) | End-to-end login |\n`;
     const result = restructureMap(withCompositions, "en");

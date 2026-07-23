@@ -548,6 +548,31 @@ describe("lintSpecs", () => {
     });
     assert.ok(rules(subjectPosition).includes("cite/outcome"));
 
+    // A subject-position citation after a real precondition: the
+    // cite belongs to the clause that carries the shall.
+    const subjectAfterPrecondition = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere credentials are valid, the audit log ([AUD-1](audit.md#aud-1)) shall receive every login event.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(subjectAfterPrecondition).includes("cite/outcome"));
+
+    // A non-item anchor is no citation of a peer contract.
+    const sectionAnchor = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile audit is available ([intent](audit.md#intent)), the system shall log in.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(sectionAnchor).includes("cite/internal"));
+
+    // Reference-style links dodge the citation rules; prohibited.
+    const referenceStyle = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile audit accepts events ([AUD-1][aud]), the system shall log in.\n\n[aud]: audit.md#aud-1\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(referenceStyle).includes("cite/reference-style"));
+
     const zhOutcome = findingsFor({
       "specs/packages/a.md":
         "# A: 甲\n\n## 意图\n\n甲行为。\n\n## 外部行为\n\n### A-1\n\n系统应使用对等审计（[AUD-1](audit.md#aud-1)）记录登录。\n",
