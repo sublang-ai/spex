@@ -20,14 +20,15 @@ Where a fresh production deployment is serving
 ([DELIV-3](../packages/ops/delivery.md#deliv-3)) with an
 initial-admin account configured
 ([ROLE-1](../packages/identity/access-control.md#role-1)) and no
-user record exists, when that account completes GitHub sign-in
-([AUTH-2](../packages/identity/github-login.md#auth-2)), the
+user record exists, when that account requests the course
+manager and completes GitHub sign-in from the guard's redirect
+([ROLE-2](../packages/identity/access-control.md#role-2),
+[AUTH-2](../packages/identity/github-login.md#auth-2)), the
 site shall treat it as admin from the first response after
 sign-in: the header carries the Admin entry
 ([SHELL-2](../packages/site/web-shell.md#shell-2)) and the
-course manager opens
-([ROLE-2](../packages/identity/access-control.md#role-2)) — with
-no manual role-assignment step anywhere in the path.
+course manager — the guarded target — opens, with no manual
+role-assignment step anywhere in the path.
 
 ### BOOT-2
 
@@ -42,12 +43,14 @@ action deep: creation is the manager's primary action
 
 Where a deployment with an empty database is configured with a
 stub GitHub provider and an initial-admin account, when the
-acceptance suite signs in as the configured account
+acceptance suite requests the course manager and signs in as
+the configured account from the guard's redirect
 ([AUTH-2](../packages/identity/github-login.md#auth-2),
 [ROLE-1](../packages/identity/access-control.md#role-1)), the
 suite shall assert the header carries the Admin entry
 ([SHELL-2](../packages/site/web-shell.md#shell-2)) and the
-course manager loads ([BOOT-1](#boot-1)); when it signs in as
+course manager — the requested target — loads
+([BOOT-1](#boot-1)); when it signs in as
 another account, the suite shall assert no Admin entry appears
 and the course manager responds not-authorized
 ([ROLE-2](../packages/identity/access-control.md#role-2)).

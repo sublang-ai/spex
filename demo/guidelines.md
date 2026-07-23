@@ -116,7 +116,8 @@ inspection, security testing, restart survival).
   a decision with its rationale; what neither constrains
   behavior nor records a choice appears in no spec.
   Decision records hold choices, constraints, and tradeoffs —
-  the why, never the how.
+  the choice and its rationale, never duplicated behavioral
+  logic.
 
 ## 3. Keep packages standalone and reusable; bind them in decisions and compositions
 
@@ -260,7 +261,7 @@ cannot tell, which is the point.
   [DR-002](specs/decisions/002-platform-and-devops.md) only
   chooses the vendors, citing the PLAT items; when its table
   carried "private bucket, signed URLs" as prose, that
-  codegen-required detail sat in the why layer and hid a hole —
+  installation obligation sat in the why layer and hid a hole —
   the role store
   ([ROLE-3](specs/packages/identity/access-control.md#role-3))
   was bound nowhere.

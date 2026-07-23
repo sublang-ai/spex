@@ -38,7 +38,7 @@ Where the identity store maintains user records
 ([AUTH-7](../packages/identity/github-login.md#auth-7)), the
 role store records each account's role
 ([ROLE-3](../packages/identity/access-control.md#role-3)),
-catalog content is stored with explicit ordering
+the catalog store keeps content in explicit order
 ([CAT-11](../packages/catalog/course-catalog.md#cat-11)), and
 asset records live in the library's asset store
 ([VID-16](../packages/catalog/video-library.md#vid-16)), the
@@ -48,13 +48,13 @@ each package's invariants over that storage remain its own.
 
 ### PLAT-3
 
-Where asset content is stored privately
-([VID-7](../packages/catalog/video-library.md#vid-7)) and
-playback runs on short-lived access grants
-([VID-8](../packages/catalog/video-library.md#vid-8)), the
-deployment shall store assets in a private Supabase Storage
-bucket and realize each access grant as a signed URL whose
-expiry is the grant's configured expiry.
+Where the content store holds asset content privately
+([VID-7](../packages/catalog/video-library.md#vid-7)) and the
+deployment's grant mechanism backs the short-lived access
+grants ([VID-8](../packages/catalog/video-library.md#vid-8)),
+the deployment shall bind the content store to a private
+Supabase Storage bucket and realize each grant as a signed URL
+whose expiry is the grant's configured expiry.
 
 ### PLAT-4
 
@@ -120,12 +120,17 @@ the observed egress.
 
 Where a fixture pull request runs through the pipeline, the
 audit suite shall assert the required checks report from GitHub
-Actions ([PLAT-5](#plat-5)), the pipeline's credentials resolve
-from the repository's GitHub Actions secrets with none in
-tracked content ([PLAT-8](#plat-8)), the preview publishes on
-Vercel against a non-production Supabase project disjoint from
-production's ([PLAT-4](#plat-4),
-[DELIV-4](../packages/ops/delivery.md#deliv-4)), and the
+Actions and branch protection refuses the merge while one fails
+([PLAT-5](#plat-5),
+[DELIV-1](../packages/ops/delivery.md#deliv-1)), the pipeline's
+credentials resolve from the repository's GitHub Actions
+secrets with none in tracked content ([PLAT-8](#plat-8)), the
+preview publishes on Vercel against a non-production Supabase
+project disjoint from production's ([PLAT-4](#plat-4),
+[DELIV-4](../packages/ops/delivery.md#deliv-4)), a
+default-branch commit reaches production through the Git
+integration with no manual step ([PLAT-4](#plat-4),
+[DELIV-3](../packages/ops/delivery.md#deliv-3)), and the
 serving production revision reports a commit that exists on the
 default branch of the GitHub repository
 ([DELIV-7](../packages/ops/delivery.md#deliv-7)).

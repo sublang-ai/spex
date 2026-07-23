@@ -69,7 +69,10 @@ shall support adding, renaming, reordering, and removing sections
 and lessons, and the course page shall reflect exactly the
 arranged order.
 When the admin removes a section, the course manager shall ask
-for confirmation naming the count of lessons removed with it.
+for confirmation naming the count of lessons removed with it;
+confirmed removal takes the section's lessons and their stored
+references with it and touches no provider asset, and cancel
+changes nothing.
 
 #### CAT-6
 
@@ -149,9 +152,10 @@ media provider — references are the catalog's, assets are not.
 
 #### CAT-11
 
-Where section and lesson order is stored, it shall be stored as
-explicit positions independent of names and timestamps, so a
-rename or a re-save never reorders a syllabus.
+Where the catalog store keeps section and lesson order, it
+shall keep explicit positions independent of names and
+timestamps, so a rename or a re-save never reorders a
+syllabus.
 
 ### Draft Isolation
 
@@ -200,7 +204,9 @@ page with its first paragraph as the list summary
 arranged order, and after reordering and renaming plus a reload,
 the order matches the explicit positions ([CAT-5](#cat-5),
 [CAT-11](#cat-11)); removing a section asks for confirmation
-naming its lesson count; a save with an empty required field
+naming its lesson count — cancel leaves the syllabus unchanged,
+confirm removes the section with its lessons
+([CAT-5](#cat-5)); a save with an empty required field
 marks the field, keeps the entered state, and persists nothing
 ([CAT-7](#cat-7)); and a read issued while a multi-field save
 commits shows either the complete previous or the complete
@@ -222,7 +228,10 @@ a title change and collides into a suffixed form
 naming its section and lesson counts ([CAT-17](#cat-17)) —
 removes the course from the list, its sections, lessons, and
 references, while the stub provider's assets remain untouched
-([CAT-10](#cat-10)).
+([CAT-10](#cat-10)); and when the admin confirms removal of a
+section whose lesson carries a stored reference, the reference
+goes with the lesson while the stub provider's assets remain
+untouched ([CAT-5](#cat-5)).
 
 ### Isolation Coverage
 

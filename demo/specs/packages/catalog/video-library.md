@@ -88,19 +88,19 @@ the asset is deleted.
 
 #### VID-7
 
-Where asset content is stored, it shall be stored privately: no
-permanently valid public URL shall exist, and a direct request
-for stored content without a valid access grant shall be denied
-regardless of the requester's session state.
+Where the content store holds asset content, it shall hold it
+privately: no permanently valid public URL shall exist, and a
+direct request for stored content without a valid access grant
+shall be denied regardless of the requester's session state.
 
 #### VID-8
 
 While a playback request carries a session verified per
 [AUTH-9](../identity/github-login.md#auth-9) and the embedding
 host authorizes it ([VID-15](#vid-15)), when the player starts
-playback, the server shall issue a short-lived access
-grant scoped to that one asset and bounded by the configured
-expiry; the server shall deny a playback request without a
+playback, the server shall issue — through the deployment's
+grant mechanism — a short-lived access grant scoped to that one
+asset and bounded by the configured expiry; the server shall deny a playback request without a
 verified session and any content request bearing an expired or
 tampered grant.
 Authorization is evaluated at issuance: an issued grant shall

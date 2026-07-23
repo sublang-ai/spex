@@ -30,6 +30,11 @@ site shall establish a signed-in session and return the visitor
 to the page sign-in started from — a same-site path only — or
 to the home page when no origin is recorded or the recorded
 origin is not same-site.
+A callback shall complete sign-in only when it matches a live
+sign-in attempt begun in the same browser and not yet consumed;
+an unsolicited, mismatched, expired, or replayed callback shall
+establish no session and shall show the not-completed notice
+([AUTH-3](#auth-3)).
 
 #### AUTH-3
 
@@ -104,9 +109,12 @@ page offers the GitHub action ([AUTH-1](#auth-1)), that the
 browser is sent to the stub's authorization URL and returns
 signed in ([AUTH-2](#auth-2)), and that after the stub grants,
 the account menu shows the stub account's username and avatar
-on the page sign-in started from ([AUTH-4](#auth-4)); and when
+on the page sign-in started from ([AUTH-4](#auth-4)); when
 the recorded origin is not same-site, the return lands on the
-home page instead ([AUTH-2](#auth-2)).
+home page instead; and an unsolicited callback, one bound to
+another browser's attempt, an expired one, and a replay of a
+consumed one each establish no session and show the
+not-completed notice ([AUTH-2](#auth-2)).
 
 #### AUTH-11
 
