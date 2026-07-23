@@ -74,6 +74,8 @@ missing H1 short form, a missing `## Intent` or `## Tests`, the
 absence of both `## Binding` and `## Scenario`, an unexpected or
 duplicate `##` section, or sections out of the order Intent,
 Binding, Scenario, Tests, References.
+The localized section names of the bundled templates shall be
+accepted here too.
 A warning shall be reported when a compositions file name is a
 composition of existing package names or short forms.
 
@@ -102,11 +104,15 @@ clauses are the single source ([META-20](../meta.md#meta-20)):
   Scenario item anchor shall be an error;
 - a Binding or Scenario item cited by no same-file Tests item shall
   be an error ([META-21](../meta.md#meta-21));
+- in a file holding both Binding and Scenario items, a Binding item
+  cited by no same-file Scenario item shall be an error pointing at
+  a bindings-only file ([META-34](../meta.md#meta-34));
 - a package Verification item citing another package's file shall be
   a warning pointing at `specs/compositions/`;
 - a Tests item that cites a same-file Scenario item while citing
-  fewer than two distinct package files shall be a warning
-  ([META-21](../meta.md#meta-21)).
+  items in fewer than two distinct package files shall be a warning
+  ([META-21](../meta.md#meta-21)); a file link without an item
+  anchor counts toward no package.
 
 Where a `## Binding` item is linted, a `When` or `While` clause
 keyword in its text shall be an error: a binding is static
@@ -138,6 +144,21 @@ Where records are linted, a DR missing a section of
 Where the map is linted, a `packages/` or `compositions/` file not
 linked from `specs/map.md` shall be a warning.
 
+#### LINT-13
+
+Where citation discipline is linted, warnings shall be reported
+for:
+
+- a citation link inside a package file's `## Intent` section
+  ([META-15](../meta.md#meta-15));
+- a link in a package file resolving to an item inside another
+  package's `## Internal Behavior` section
+  ([META-14](../meta.md#meta-14));
+- an item body line that is a detached relationship sentence —
+  `Verifies` followed by citations and separators only — pointing
+  at weaving each citation into the assertion it supports
+  ([META-20](../meta.md#meta-20)).
+
 ## Internal Behavior
 
 ### Rule Engine
@@ -162,15 +183,21 @@ keywords shall be detected outside fenced code blocks only.
 Where the linter is exercised, the test suite shall cover at least
 one fixture per rule family, asserting rule IDs and severities:
 structure and naming ([LINT-4](#lint-4)); package sections with
-localized zh names, composition sections, and name composition
-([LINT-5](#lint-5)); item IDs and misplaced items
+localized zh names, composition sections in both languages, and
+name composition ([LINT-5](#lint-5)); item IDs and misplaced items
 ([LINT-6](#lint-6)); relationship metadata, uncited Verification
-and Tests items, uncovered Binding and Scenario items,
-cross-package Verification, the scenario two-package floor, and a
-triggered Binding ([LINT-7](#lint-7)); citations — broken link,
-broken anchor, legacy path ([LINT-8](#lint-8)); reference markers,
-records, and map listing ([LINT-9](#lint-9)); finding format and
-summary ([LINT-3](#lint-3)); plus a clean fixture asserting zero
+and Tests items, uncovered Binding and Scenario items, a Binding
+uncited by any same-file Scenario in a mixed file, cross-package
+Verification, the scenario two-package floor with an anchor-less
+file link not counting, and a triggered Binding
+([LINT-7](#lint-7)); citations — broken link, broken anchor,
+legacy path ([LINT-8](#lint-8)); reference markers, records, and
+map listing ([LINT-9](#lint-9)); citation discipline — an Intent
+citation, a peer-Internal citation, and a detached `Verifies`
+sentence ([LINT-13](#lint-13)); an item body spanning a nested
+subheading whose citations count for the item
+([LINT-10](#lint-10)); finding format and summary
+([LINT-3](#lint-3)); plus a clean fixture asserting zero
 findings.
 
 #### LINT-12

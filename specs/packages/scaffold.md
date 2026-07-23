@@ -231,13 +231,17 @@ shall move each of its entries to the same path under
 exists in place and reporting it as a conflict; rewrite every
 relative citation across `specs/` that resolved into
 `specs/interactions/` to the `specs/compositions/` path; rewrite each
-moved file's `Verifies:` metadata lines as inline `Verifies …`
-sentences ([META-20](../meta.md#meta-20)); rename a
+moved file's `Verifies:` metadata blocks as inline `Verifies …`
+sentences ([SCAF-44](#scaf-44)); rename a
 `## Interactions` map heading to the active-language Compositions
 heading; drop a pristine bundled `interactions/.gitkeep` via the
 legacy manifest; and remove the emptied directory.
 Moved files shall be reported as
 `(migrated from specs/interactions/...)` indicator lines.
+The CLI shall not reshape a moved file into the META-34 section
+grammar; lint findings remaining inside moved files are
+reconciliation work owned by the printed compositions prompt
+([SCAF-42](#scaf-42)).
 
 #### SCAF-42
 
@@ -554,9 +558,15 @@ shall produce one markdown file with:
 
 Body content shall move byte-faithfully except for the heading,
 reference-number, and line-ending changes above — CRLF and CR line
-endings are normalized to LF — and `Verifies:` metadata lines,
-each rewritten as an inline `Verifies …` sentence so the merged
-tree satisfies [META-20](../meta.md#meta-20).
+endings are normalized to LF — and `Verifies:` metadata blocks:
+each block, including wrapped continuation lines holding only
+citations and separators, collapses to one inline `Verifies …`
+sentence with no trailing separator.
+The rewrite preserves the declared relationships but does not place
+citations at their assertions; weaving them inline per
+[META-20](../meta.md#meta-20) is reconciliation work for the merge
+prompt of [SCAF-11](#scaf-11) step 7, and lint marks each unwoven
+sentence until then.
 Localized Intent and References section names from the bundled
 templates shall be recognized.
 
@@ -794,10 +804,13 @@ end to end that:
   row with `; `-joined summaries, a Compositions section appended —
   and reported as `(restructured for the packages layout)`;
 - a tree with `specs/interactions/` files has them moved to
-  `specs/compositions/` with citations and the map heading rewritten
-  ([SCAF-50](#scaf-50));
-- the compositions prompt is printed after a migrating run and the
-  migrated tree lints clean with `spex lint`;
+  `specs/compositions/` with citations and the map heading
+  rewritten, a wrapped `Verifies:` block collapsing to one inline
+  sentence, and the remaining lint errors confined to the moved
+  composition files ([SCAF-50](#scaf-50));
+- the compositions prompt is printed after a migrating run and a
+  package-layout migration leaves a tree `spex lint` passes with
+  zero errors;
 - the packaged npm artifact ships both file-history manifests, both
   prompts, and the bundled `specs/packages/` and
   `specs/compositions/` seeds.
