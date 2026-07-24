@@ -43,9 +43,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clause membership is checked on both sides over the parsed
   inline text — inline code and link labels excluded — so a
   subject-position citation after a real precondition still fails
-  and markup cannot fake a keyword or separator; reference-style
-  links are errors in item files, exempting only literal `[[N]]`
-  markers — citations are inline (META-16).
+  and markup cannot fake a keyword or separator; the citation must
+  share a separator-free span with its clause keyword, so an
+  appositive comma after a shall-clause subject, or a trailing
+  `where` clause behind a shall, cannot pose as a precondition
+  (META-13). Reference-style links are errors in item files,
+  exempting only the literal wrapped `[[N]]` marker form — a bare
+  `[N]`, collapsed `[N][]`, or full reference is an error even
+  with a numeric label, and a numbered definition must sit under
+  `## References` pointing at an external URL, so the marker
+  mechanism cannot smuggle an item citation — citations are
+  inline (META-16, META-19).
   Binding-trigger detection covers the Chinese clause keywords over
   the parsed inline text, so lists, quotes, and emphasis cannot
   hide a trigger; all keyword detection follows the parsed code
@@ -58,11 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   demoted; reference markers renumbered; `Verifies:` lines rewritten
   as inline sentences), citations across `specs/` are rewritten to
   the new paths, a customized `map.md` is restructured in place —
-  every map transform scoped through parsed H2 Layout, Packages,
-  and Interactions sections, so fenced examples and nested
-  lookalike headings are never mistaken for the real ones — and a
-  prompt for filling `specs/compositions/` is printed for your AI
-  agent.
+  every map transform scoped through root-level H2 Layout,
+  Packages, and Interactions sections, so fenced, blockquoted,
+  listed, and nested lookalike headings are never mistaken for
+  the real ones — and a prompt for filling `specs/compositions/`
+  is printed for your AI agent.
 - `spex scaffold --update` migrates `specs/interactions/` to
   `specs/compositions/` (SCAF-50): files move with conflict-keeping,
   each `Verifies:` block — including wrapped continuation lines —

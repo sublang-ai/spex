@@ -139,6 +139,8 @@ type SpecFile = {
   texts: { line: number; value: string }[];
   /** Reference-style links other than literal [[N]] markers. */
   referenceLinks: { line: number }[];
+  /** Every reference-style use, [[N]] markers included. */
+  referenceUses: { line: number }[];
   /** Inline prose outside links and code, for clause checks. */
   clauseTexts: { line: number; column: number; value: string }[];
 };
@@ -183,6 +185,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
   const links: LinkInfo[] = [];
   const texts: { line: number; value: string }[] = [];
   const referenceLinks: { line: number }[] = [];
+  const referenceUses: { line: number }[] = [];
   visit(tree, (node: Node) => {
     if (node.type === "heading") {
       const heading = node as Heading;
@@ -206,14 +209,28 @@ function loadFile(basePath: string, relPath: string): SpecFile {
         identifier: string;
         referenceType?: string;
       };
+      const line = node.position?.start.line ?? 1;
+      referenceUses.push({ line });
       // Only the literal [[N]] marker form of META-19 is exempt: a
-      // numeric shortcut/collapsed reference. A full reference like
-      // [AUD-1][1] is a disguised citation even with a numeric label.
+      // numeric shortcut reference wrapped in the outer brackets.
+      // A bare [1], a collapsed [1][], and any full reference are
+      // disguised citations even with numeric labels.
+      const startColumn = node.position?.start.column;
+      const endColumn = node.position?.end.column;
+      const sameLine = node.position?.start.line === node.position?.end.line;
+      const source = sameLine ? (text.split("\n")[line - 1] ?? "") : "";
+      const wrapped =
+        sameLine &&
+        startColumn !== undefined &&
+        endColumn !== undefined &&
+        source.charAt(startColumn - 2) === "[" &&
+        source.charAt(endColumn - 1) === "]";
       const isMarker =
         /^\d+$/.test(reference.identifier) &&
-        reference.referenceType !== "full";
+        reference.referenceType === "shortcut" &&
+        wrapped;
       if (!isMarker) {
-        referenceLinks.push({ line: node.position?.start.line ?? 1 });
+        referenceLinks.push({ line });
       }
       return;
     }
@@ -282,6 +299,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
     fenced: codeLineMap(tree, lines.length),
     texts,
     referenceLinks,
+    referenceUses,
     clauseTexts,
   };
 }
@@ -1027,7 +1045,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
 // at clause starts only (excluding 当前-class words), and zh 应
 // excludes common non-shall compounds like 应用 and 反应.
 const PRECONDITION_KEYWORD_RE =
-  /\b(Where|While|When)\b|给定|如果|(^|[，。；：、（("'「]|\s)\s*当(?![前中下然])/g;
+  /\b(Where|While|When)\b|(^|[,，、;；]\s*)(where|while|when)\b|给定|如果|(^|[，。；：、（("'「]|\s)\s*当(?![前中下然])/g;
 const SHALL_KEYWORD_RE =
   /\bshall\b|(?<![反相对适响供效回报感一])应(?![用对答邀酬])/g;
 function lastMatchIndex(text: string, re: RegExp): number {
@@ -1042,6 +1060,10 @@ function lastMatchIndex(text: string, re: RegExp): number {
 // links appear in the clause window as a placeholder.
 const LINK_PLACEHOLDER = "\uE000";
 const CLAUSE_SEPARATOR_RE = /[,\uFF0C\u3001;\uFF1B](?!\s*\uE000)/;
+const CLAUSE_SEPARATOR_GLOBAL_RE = new RegExp(CLAUSE_SEPARATOR_RE.source, "g");
+// Sentence ends that let a later clause open a fresh precondition
+// (a multi-sentence item, or parallel arms joined by semicolons).
+const SENTENCE_BOUNDARY_RE = /[.\u3002;\uFF1B!?\uFF01\uFF1F]/;
 
 /**
  * The clause window around a link: the paragraph's inline prose
@@ -1102,7 +1124,12 @@ function clauseWindow(
       (token.line === link.line && token.column < link.column)
     ) {
       before.push(token.value);
-    } else if (!(token.line === link.line && token.column === link.column)) {
+    } else if (token.line === link.line && token.column === link.column) {
+      // The citation itself closes the prefix as a placeholder, so
+      // a separator that merely introduces it — "(A), ([B-1])" — is
+      // not read as a clause boundary before it.
+      before.push(LINK_PLACEHOLDER);
+    } else {
       after.push(token.value);
     }
   }
@@ -1129,6 +1156,19 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
             "error",
             "intent/cited",
             "the Intent section carries a citation; keep Intent self-contained prose (META-15)",
+          );
+        }
+      }
+      // Reference markers included — [[N]] is a citation too.
+      for (const use of file.referenceUses) {
+        if (use.line > heading.line && use.line < end) {
+          report(
+            ctx,
+            file.relPath,
+            use.line,
+            "error",
+            "intent/cited",
+            "the Intent section carries a reference marker; keep Intent self-contained prose (META-15)",
           );
         }
       }
@@ -1217,9 +1257,21 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
         prefix,
         PRECONDITION_KEYWORD_RE,
       );
+      const shallBehind = lastMatchIndex(prefix, SHALL_KEYWORD_RE);
+      // The keyword must govern the citation: they share one
+      // separator-free span — an appositive comma after a
+      // shall-clause subject opens a new span — and no shall stands
+      // before the keyword within its own sentence, so a trailing
+      // "…, where …" clause after a shall cannot pose as a
+      // precondition.
       if (
         preconditionIndex === -1 ||
-        lastMatchIndex(prefix, SHALL_KEYWORD_RE) > preconditionIndex
+        shallBehind > preconditionIndex ||
+        (shallBehind !== -1 &&
+          !SENTENCE_BOUNDARY_RE.test(
+            prefix.slice(shallBehind, preconditionIndex),
+          )) ||
+        lastMatchIndex(prefix, CLAUSE_SEPARATOR_GLOBAL_RE) > preconditionIndex
       ) {
         report(
           ctx,
@@ -1422,15 +1474,60 @@ function lintCitations(ctx: LintContext): void {
 
 function lintReferences(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
+    // The ## References ranges: numbered definitions live there and
+    // nowhere else, pointing outward (META-19).
+    const h2s = file.headings.filter((heading) => heading.depth === 2);
+    const referencesRanges = h2s
+      .map((heading, index) => ({ heading, next: h2s[index + 1] }))
+      .filter(
+        ({ heading }) =>
+          SECTION_BY_NAME.get(heading.plain.trim()) === "References",
+      )
+      .map(({ heading, next }) => ({
+        start: heading.line,
+        end: next?.line ?? file.lines.length + 1,
+      }));
+
     const defined = new Set<string>();
     const used = new Set<string>();
     const definitionLines = new Map<string, number>();
     visit(file.tree, (node: Node) => {
       if (node.type === "definition") {
-        const identifier = (node as unknown as { identifier: string }).identifier;
-        if (/^\d+$/.test(identifier)) {
-          defined.add(identifier);
-          definitionLines.set(identifier, node.position?.start.line ?? 1);
+        const definition = node as unknown as {
+          identifier: string;
+          url: string;
+        };
+        if (/^\d+$/.test(definition.identifier)) {
+          const line = node.position?.start.line ?? 1;
+          defined.add(definition.identifier);
+          definitionLines.set(definition.identifier, line);
+          if (
+            !referencesRanges.some(
+              (range) => line > range.start && line < range.end,
+            )
+          ) {
+            report(
+              ctx,
+              file.relPath,
+              line,
+              "error",
+              "refs/definition",
+              `numbered definition [${definition.identifier}] sits outside ## References (META-19)`,
+            );
+          }
+          if (
+            !SCHEME_RE.test(definition.url) &&
+            !definition.url.startsWith("//")
+          ) {
+            report(
+              ctx,
+              file.relPath,
+              line,
+              "error",
+              "refs/definition",
+              `numbered definition [${definition.identifier}] targets "${definition.url}"; reference markers point at external URLs — item citations are inline links (META-19, META-16)`,
+            );
+          }
         }
       }
       if (node.type === "linkReference" || node.type === "imageReference") {

@@ -202,6 +202,56 @@ Some prose.
     );
   });
 
+  it("ignores blockquoted and listed H2 lookalikes (root-level only)", () => {
+    // A quoted "## Compositions" does not suppress the append.
+    const quotedCompositions = restructureMap(
+      "# Map\n\n## Notes\n\n> ## Compositions\n> A quoted example.\n",
+      "en",
+    );
+    assert.ok(quotedCompositions !== null);
+    assert.match(quotedCompositions, /\n## Compositions\n\nNone yet\./);
+    assert.match(quotedCompositions, /^> ## Compositions$/m);
+
+    // Neither does one carried in a list item.
+    const listedCompositions = restructureMap(
+      "# Map\n\n## Notes\n\n- ## Compositions\n",
+      "en",
+    );
+    assert.ok(listedCompositions !== null);
+    assert.match(listedCompositions, /\n## Compositions\n\nNone yet\./);
+
+    // A quoted "## Layout" opens no section scope: the code block
+    // after the quote keeps its legacy-looking line.
+    const quotedLayout = restructureMap(
+      [
+        "# Map",
+        "",
+        "## Notes",
+        "",
+        "> ## Layout",
+        "",
+        "```text",
+        "user/       Old line in an example",
+        "```",
+        "",
+      ].join("\n"),
+      "en",
+    );
+    assert.ok(quotedLayout !== null);
+    assert.match(quotedLayout, /^user\/ {7}Old line in an example$/m);
+
+    // A quoted "## Interactions" is content: the real heading is
+    // renamed, the quoted one is kept.
+    const quotedInteractions = renameInteractionsHeading(
+      "# Map\n\n## Notes\n\n> ## Interactions\n> A quoted example.\n\n## Interactions\n\nBody.\n",
+      "en",
+    );
+    assert.ok(quotedInteractions !== null);
+    assert.match(quotedInteractions, /^> ## Interactions$/m);
+    assert.match(quotedInteractions, /^## Compositions$/m);
+    assert.doesNotMatch(quotedInteractions, /^## Interactions$/m);
+  });
+
   it("does not append Compositions when one exists", () => {
     const withCompositions = `${EN_MAP}\n## Compositions\n\n| File | Summary |\n| --- | --- |\n| [login-flow.md](compositions/login-flow.md) | End-to-end login |\n`;
     const result = restructureMap(withCompositions, "en");
