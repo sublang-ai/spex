@@ -54,6 +54,9 @@ Accepted; the logo recolor is reverted by owner decision (2026-07-23) — the Lo
   It keeps its original warm sunset palette (amended 2026-07-23;
   the initial release shipped a brand-ramp recolor that read as a
   night scene and lost the artwork's sunset story).
+  The owner-supplied SVG is the vector master; the in-app mark
+  renders it directly, and the raster assets — 480px PNG, favicon,
+  app icon — derive from it.
   The warm palette is artwork-only, like the bright wordmark
   purple: it never appears as UI text, border, or fill, and brand
   purple stays the sole interaction hue.

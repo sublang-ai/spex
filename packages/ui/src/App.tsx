@@ -28,7 +28,7 @@ import {
 } from "./components/SpecView.js";
 import { InlineConfirm } from "./components/InlineConfirm.js";
 import { Icon } from "./components/Icon.js";
-import logo from "./assets/spex-logo.png";
+import logo from "./assets/spex-logo.svg";
 
 const SURFACES = ["Workspace", "Dashboard", "Playbooks", "Settings"] as const;
 export type Surface = (typeof SURFACES)[number];
