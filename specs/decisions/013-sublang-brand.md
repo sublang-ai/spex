@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the logo recolor is reverted by owner decision (2026-07-23) — the Logo bullet below records the standing rule.
 
 ## Context
 
@@ -51,10 +51,12 @@ Accepted
 - **Logo.** The Spex product logo — the owner-supplied circular
   beach-rabbit badge — is the app icon, favicon, and the in-app
   mark beside the Spex name.
-  Its warm original palette is recolored onto the brand ramp by a
-  luminance gradient map anchored at the source palette's measured
-  luminances: fronds `#27063D`, trunk brand-800, ring and sky-top
-  `#890FBC`, one `#A416EF` glow mid-sky, rabbit white.
+  It keeps its original warm sunset palette (amended 2026-07-23;
+  the initial release shipped a brand-ramp recolor that read as a
+  night scene and lost the artwork's sunset story).
+  The warm palette is artwork-only, like the bright wordmark
+  purple: it never appears as UI text, border, or fill, and brand
+  purple stays the sole interaction hue.
   The SubLang monogram and wordmarks remain the Lab's marks; those
   assets come from the design-system project unmodified — never
   redrawn or re-typeset.
