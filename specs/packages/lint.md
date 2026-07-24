@@ -182,6 +182,11 @@ Where citation discipline is linted:
   that peer's `## External Behavior` section shall be an error — a
   peer may rely only on External Behavior
   ([META-14](../meta.md#meta-14), [META-28](../meta.md#meta-28));
+- a link in a package file resolving to a peer package file from
+  section prose outside every item body shall be an error — item
+  clauses are the single relationship source, so free prose
+  declares no dependency ([META-14](../meta.md#meta-14),
+  [META-20](../meta.md#meta-20));
 - in a package behavior item, a peer citation is legal only when
   it belongs to a precondition or trigger clause and resolves to a
   peer item: the citation and a precondition keyword — `Where`,
@@ -189,13 +194,16 @@ Where citation discipline is linted:
   after a separator, or 给定, 如果, clause-start 当, with a list
   attached to its lead-in when that lead-in ends in a colon —
   share one separator-free span holding no `shall` (应), no
-  earlier `shall` stands in the keyword's own sentence, a clause
-  boundary (a separator not introducing a further citation) stands
+  earlier `shall` stands in the keyword's own sentence — sentences
+  end at closing punctuation before whitespace or text end, so a
+  dot inside a version number ends nothing — a clause boundary (a
+  separator not sitting between two citations of one group) stands
   between the citation and any following `shall`, and its anchor
   is an item of the peer file; every other peer citation shall be
   an error — an appositive comma after a shall-clause subject, or
   a trailing `where` clause behind a `shall`, does not make a
-  precondition ([META-13](../meta.md#meta-13),
+  precondition, and a linked subject cannot ride its introducing
+  comma into the span ([META-13](../meta.md#meta-13),
   [META-14](../meta.md#meta-14)).
 
 ## Internal Behavior
@@ -209,12 +217,17 @@ file under `specs/` once with the same GFM-capable parser the
 migration uses, derive heading anchors with GitHub slug semantics,
 and return the finding list; printing and exit codes belong to the
 CLI layer.
-An item's body shall span from its heading to the next heading of
-the same or shallower depth, and relationship-metadata and clause
-keywords shall be detected outside code blocks only, using the
-parsed tree's code spans — GFM fences of any delimiter length and
-indented code — so a literal fence inside a longer fence cannot
-leak lines into detection.
+Structure shall live on root-level headings only: the H1, the
+`##` sections, and item headings count when they are direct
+children of the document, so a heading nested in a blockquote or
+list is content that neither satisfies nor disturbs structure —
+while anchors still cover every heading per GitHub semantics.
+An item's body shall span from its heading to the next root-level
+heading of the same or shallower depth, and relationship-metadata
+and clause keywords shall be detected outside code blocks only,
+using the parsed tree's code spans — GFM fences of any delimiter
+length and indented code — so a literal fence inside a longer
+fence cannot leak lines into detection.
 Binding trigger keywords, and the clause keywords and boundaries
 of citation discipline, shall be matched over the parsed inline
 text — excluding inline code and link labels — so markup can
@@ -243,11 +256,12 @@ the map, linked and textual ([LINT-8](#lint-8)); reference
 markers, records, and map listing ([LINT-9](#lint-9)); citation
 discipline — an Intent citation, a peer citation outside External
 Behavior, out-of-clause peer citations in both languages beside
-accepted precondition forms, and a detached `Verifies` sentence
-([LINT-13](#lint-13));
+accepted precondition forms, a section-prose peer citation, and a
+detached `Verifies` sentence ([LINT-13](#lint-13));
 an item body spanning a nested subheading whose citations count
-for the item, and a literal triple-backtick line inside a longer
-fence staying undetected ([LINT-10](#lint-10)); finding format
+for the item, a blockquote-wrapped package failing structure, and
+a literal triple-backtick line inside a longer fence staying
+undetected ([LINT-10](#lint-10)); finding format
 and summary ([LINT-3](#lint-3)); plus a clean fixture asserting
 zero findings.
 
