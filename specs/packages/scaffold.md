@@ -225,8 +225,10 @@ restructure the map in place and report it as
 - Every transform is scoped through the parsed sections: the
   layout rewrite applies only to the code block under the Layout
   heading, group tables reshape only under the Packages heading,
-  and the Interactions heading rename edits heading nodes — a
-  fenced example or a lookalike elsewhere is never rewritten.
+  and the Interactions heading rename edits heading nodes — where
+  a section heading means a root-level `##` node, so a fenced
+  example, a blockquoted or list-nested heading, or a lookalike
+  elsewhere is never rewritten and never suppresses a transform.
 
 #### SCAF-50
 

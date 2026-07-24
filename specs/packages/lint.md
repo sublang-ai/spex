@@ -137,10 +137,11 @@ citing it — where an iteration record is exempt only for its own
 ID.
 A reference-style link in a `packages/` or `compositions/` file
 shall be an error unless it is a literal `[[N]]` reference
-marker — a numeric shortcut reference whose text is its own
-number ([META-19](../meta.md#meta-19)); a full-form reference is
-an error even with a numeric label, since item citations are
-inline links ([META-16](../meta.md#meta-16)).
+marker — a numeric shortcut reference wrapped in the outer
+brackets ([META-19](../meta.md#meta-19)); a bare `[N]`, a
+collapsed `[N][]`, and a full-form reference are errors even with
+numeric labels, since item citations are inline links
+([META-16](../meta.md#meta-16)).
 Scheme, protocol-relative, and absolute URLs shall not be checked.
 
 A warning shall be reported for duplicate heading anchors within one
@@ -153,6 +154,10 @@ Where reference markers are linted ([META-19](../meta.md#meta-19)),
 a `[[N]]` marker without a matching numbered definition shall be an
 error, and a numbered definition that is never cited shall be a
 warning.
+A numbered definition shall sit under `## References` and point at
+an external URL; a definition elsewhere or targeting a spec file
+shall be an error, so the marker mechanism cannot smuggle an item
+citation.
 
 Where records are linted, a DR missing a section of
 [META-4](../meta.md#meta-4) or an IR missing a section of
@@ -170,22 +175,27 @@ Where citation discipline is linted:
   an error pointing at weaving each citation into the assertion it
   supports ([META-20](../meta.md#meta-20)), so a mechanically
   migrated tree cannot pass the gate unreconciled;
-- a citation link inside a package file's `## Intent` section shall
-  be an error ([META-15](../meta.md#meta-15));
+- a citation link or reference marker inside a package file's
+  `## Intent` section shall be an error
+  ([META-15](../meta.md#meta-15));
 - a link in a package file resolving to a peer package item outside
   that peer's `## External Behavior` section shall be an error — a
   peer may rely only on External Behavior
   ([META-14](../meta.md#meta-14), [META-28](../meta.md#meta-28));
 - in a package behavior item, a peer citation is legal only when
   it belongs to a precondition or trigger clause and resolves to a
-  peer item: its nearest preceding clause keyword — `Where`,
-  `While`, `When` (给定, 如果, clause-start 当), with a list
-  attached to its lead-in when that lead-in ends in a colon — is a
-  precondition keyword with no `shall` (应) after it, a clause
+  peer item: the citation and a precondition keyword — `Where`,
+  `While`, `When`, a lowercase chain keyword at a clause start
+  after a separator, or 给定, 如果, clause-start 当, with a list
+  attached to its lead-in when that lead-in ends in a colon —
+  share one separator-free span holding no `shall` (应), no
+  earlier `shall` stands in the keyword's own sentence, a clause
   boundary (a separator not introducing a further citation) stands
   between the citation and any following `shall`, and its anchor
   is an item of the peer file; every other peer citation shall be
-  an error ([META-13](../meta.md#meta-13),
+  an error — an appositive comma after a shall-clause subject, or
+  a trailing `where` clause behind a `shall`, does not make a
+  precondition ([META-13](../meta.md#meta-13),
   [META-14](../meta.md#meta-14)).
 
 ## Internal Behavior
