@@ -218,7 +218,7 @@ Localized scaffolds translate these section headings; the bundled templates defi
 
 ### META-16
 
-Citations to specific items shall use relative links with anchors (e.g., `[META-1](meta.md#meta-1)`).
+Citations to specific items shall use relative links with anchors (e.g., `[META-1](meta.md#meta-1)`), written inline at their phrase; a reference-style link is not a citation.
 
 ### META-17
 

@@ -135,11 +135,12 @@ a link into `specs/iterations/` from any file but `specs/map.md`
 outside `specs/map.md` is likewise an error — naming an IR is
 citing it — where an iteration record is exempt only for its own
 ID.
-A reference-style link with a non-numeric identifier in a
-`packages/` or `compositions/` file shall be an error: item
-citations are inline links ([META-16](../meta.md#meta-16)), and
-numbered markers stay reserved for `## References`
-([META-19](../meta.md#meta-19)).
+A reference-style link in a `packages/` or `compositions/` file
+shall be an error unless it is a literal `[[N]]` reference
+marker — a numeric shortcut reference whose text is its own
+number ([META-19](../meta.md#meta-19)); a full-form reference is
+an error even with a numeric label, since item citations are
+inline links ([META-16](../meta.md#meta-16)).
 Scheme, protocol-relative, and absolute URLs shall not be checked.
 
 A warning shall be reported for duplicate heading anchors within one
@@ -204,9 +205,10 @@ keywords shall be detected outside code blocks only, using the
 parsed tree's code spans — GFM fences of any delimiter length and
 indented code — so a literal fence inside a longer fence cannot
 leak lines into detection.
-Binding trigger keywords shall be matched over the parsed inline
-text, so list markers, blockquotes, and emphasis cannot hide a
-trigger and inline code cannot fake one.
+Binding trigger keywords, and the clause keywords and boundaries
+of citation discipline, shall be matched over the parsed inline
+text — excluding inline code and link labels — so markup can
+neither hide a trigger nor fake a keyword or clause separator.
 
 ## Verification
 
