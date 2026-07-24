@@ -25,7 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the static-binding rule (no `When`/`While` clause in a
   `## Binding` item), citations (files and anchors), reference
   markers, record sections, and the `map.md` index. Item bodies
-  span nested subheadings. Relationship-metadata lines
+  span nested subheadings, and structure lives on root-level
+  headings only — a package wrapped in a blockquote satisfies
+  nothing, and a quoted lookalike heading disturbs nothing, while
+  anchors still cover every heading. Relationship-metadata lines
   (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`,
   `Scope:`, `Requires:`, `Uses:`) are errors: the citations in an
   item's clauses are the single source of its relationships
@@ -46,8 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and markup cannot fake a keyword or separator; the citation must
   share a separator-free span with its clause keyword, so an
   appositive comma after a shall-clause subject, or a trailing
-  `where` clause behind a shall, cannot pose as a precondition
-  (META-13). Reference-style links are errors in item files,
+  `where` clause behind a shall, cannot pose as a precondition —
+  sentence ends require closing punctuation before whitespace, so
+  a dot inside a version number reopens nothing; a separator
+  counts as inside a citation group only between two citations,
+  so a directly linked shall-subject fails; and a peer citation
+  in section prose outside every item body is an error, since
+  item clauses are the single relationship source (META-13,
+  META-14, META-20). Reference-style links are errors in item files,
   exempting only the literal wrapped `[[N]]` marker form — a bare
   `[N]`, collapsed `[N][]`, or full reference is an error even
   with a numeric label, and a numbered definition must sit under
