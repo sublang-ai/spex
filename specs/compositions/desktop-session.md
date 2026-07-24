@@ -20,21 +20,21 @@ config, when the Boss starts a session for a registered project and
 completes a turn, every non-hidden record the embedded runtime emits
 shall reach the run view through the same WebSocket protocol a
 browser client would use
-([SHELL-11](../packages/app-shell.md#shell-11),
-[CORE-7](../packages/core-service.md#core-7)) and shall be
-rendered from that stream alone
-([RUN-14](../packages/run-view.md#run-14)), with no record marked
-hidden appearing in the view
+([SHELL-10](../packages/app-shell.md#shell-10),
+[CORE-7](../packages/core-service.md#core-7)), the view shall
+present the session from that received stream alone
+([RUN-14](../packages/run-view.md#run-14)), and no record marked
+hidden shall appear in the view
 ([CORE-8](../packages/core-service.md#core-8),
 [RUN-13](../packages/run-view.md#run-13)).
 
 ### DESK-2
 
 Where the shared config enables the awaiting-reply notification
-kind, while a session awaits a Boss reply, when the app window is
-not focused, the attention shall surface at every layer the Boss
-can see: an OS notification and dock badge from the shell, and the
-composer's awaiting state in the run view.
+kind, while the app window is not focused, when a session begins
+awaiting a Boss reply, the attention shall surface at every layer
+the Boss can see: an OS notification and dock badge from the
+shell, and the composer's awaiting state in the run view.
 
 ## Tests
 
@@ -51,7 +51,7 @@ created with the project directory as its working directory
 ([CORE-4](../packages/core-service.md#core-4)), the turn's records
 stream over the WebSocket protocol
 ([CORE-7](../packages/core-service.md#core-7)), and the Captain
-pane renders them in arrival order with their glyphs
+pane renders its status lines in arrival order with their glyphs
 ([RUN-1](../packages/run-view.md#run-1)); and while the session
 awaits the Boss's reply with the window unfocused, the OS
 notification ([SHELL-3](../packages/app-shell.md#shell-3)), dock

@@ -24,7 +24,8 @@ pull requests are displayed anywhere in the app — the project's
 Repo tab ([PROJ-6](../packages/projects.md#proj-6)) or the
 Dashboard's next-work lists
 ([DASH-6](../packages/dashboard.md#dash-6)) — both surfaces shall
-present the same items.
+apply one selection and representation, presenting identical items
+whenever they render the same adapter fetch.
 
 ## Tests
 
