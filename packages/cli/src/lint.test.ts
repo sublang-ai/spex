@@ -365,6 +365,8 @@ describe("lintSpecs", () => {
     const found = rules(findings);
     assert.ok(found.includes("refs/undefined"));
     assert.ok(found.includes("refs/unused"));
+    // Literal [[N]] markers are not reference-style citations.
+    assert.ok(!found.includes("cite/reference-style"));
   });
 
   it("warns on records missing required sections", () => {
@@ -572,6 +574,33 @@ describe("lintSpecs", () => {
       "specs/packages/audit.md": AUDIT_EXTERNAL,
     });
     assert.ok(rules(referenceStyle).includes("cite/reference-style"));
+
+    // A numeric label does not make a full reference a [[N]] marker,
+    // and the definition's target is still section-checked.
+    const numericFullReference = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile audit holds ([AUD-2][1]), the system shall log in.\n\n[1]: audit.md#aud-2\n",
+      "specs/packages/audit.md":
+        "# AUD: Audit\n\n## Intent\n\nAudit behavior.\n\n## External Behavior\n\n### AUD-1\n\nWhere an event is reported, the audit log shall record it.\n\n## Verification\n\n### AUD-2\n\nThe suite shall assert recording ([AUD-1](#aud-1)).\n",
+    });
+    assert.ok(rules(numericFullReference).includes("cite/reference-style"));
+    assert.ok(rules(numericFullReference).includes("cite/internal"));
+
+    // Inline-code keywords cannot fake a precondition clause.
+    const inlineCodeKeyword = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nThe `Where` handling shall follow the audit contract ([AUD-1](audit.md#aud-1)).\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(inlineCodeKeyword).includes("cite/outcome"));
+
+    // A comma inside a link label is no clause boundary.
+    const labelComma = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere credentials are valid, the log ([AUD-1, audit entry](audit.md#aud-1)) shall receive events.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(labelComma).includes("cite/outcome"));
 
     const zhOutcome = findingsFor({
       "specs/packages/a.md":

@@ -163,6 +163,45 @@ Some prose.
     );
   });
 
+  it("appends Compositions despite a fenced example heading", () => {
+    const withFencedExample =
+      "# Map\n\n## Notes\n\n```text\n## Compositions\n```\n";
+    const result = restructureMap(withFencedExample, "en");
+    assert.ok(result !== null);
+    assert.match(result, /\n## Compositions\n\nNone yet\./);
+  });
+
+  it("ignores a nested Layout heading when rewriting the layout line", () => {
+    const renamed = renameInteractionsHeading(
+      [
+        "# Map",
+        "",
+        "## Notes",
+        "",
+        "### Layout",
+        "",
+        "```text",
+        "interactions/ Example line",
+        "```",
+        "",
+        "## Layout",
+        "",
+        "```text",
+        "packages/     Spec packages (one file per package)",
+        "interactions/ Cross-package behaviors and tests",
+        "```",
+        "",
+      ].join("\n"),
+      "en",
+    );
+    assert.ok(renamed !== null);
+    assert.match(renamed, /^interactions\/ Example line$/m);
+    assert.match(
+      renamed,
+      /^compositions\/ Cross-package compositions: scenarios, bindings, tests$/m,
+    );
+  });
+
   it("does not append Compositions when one exists", () => {
     const withCompositions = `${EN_MAP}\n## Compositions\n\n| File | Summary |\n| --- | --- |\n| [login-flow.md](compositions/login-flow.md) | End-to-end login |\n`;
     const result = restructureMap(withCompositions, "en");

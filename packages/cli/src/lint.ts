@@ -137,8 +137,10 @@ type SpecFile = {
   fenced: boolean[];
   /** Inline text spans (mdast text nodes) with their start lines. */
   texts: { line: number; value: string }[];
-  /** Reference-style links with non-numeric identifiers. */
+  /** Reference-style links other than literal [[N]] markers. */
   referenceLinks: { line: number }[];
+  /** Inline prose outside links and code, for clause checks. */
+  clauseTexts: { line: number; column: number; value: string }[];
 };
 
 type LintContext = {
@@ -200,9 +202,17 @@ function loadFile(basePath: string, relPath: string): SpecFile {
       return;
     }
     if (node.type === "linkReference" || node.type === "imageReference") {
-      const identifier = (node as unknown as { identifier: string })
-        .identifier;
-      if (!/^\d+$/.test(identifier)) {
+      const reference = node as unknown as {
+        identifier: string;
+        referenceType?: string;
+      };
+      // Only the literal [[N]] marker form of META-19 is exempt: a
+      // numeric shortcut/collapsed reference. A full reference like
+      // [AUD-1][1] is a disguised citation even with a numeric label.
+      const isMarker =
+        /^\d+$/.test(reference.identifier) &&
+        reference.referenceType !== "full";
+      if (!isMarker) {
         referenceLinks.push({ line: node.position?.start.line ?? 1 });
       }
       return;
@@ -220,6 +230,34 @@ function loadFile(basePath: string, relPath: string): SpecFile {
       });
     }
   });
+
+  // Inline prose for clause checks: text nodes outside links,
+  // images, references, and code, so a keyword in inline code or a
+  // separator inside a link label cannot fool clause detection.
+  const clauseTexts: { line: number; column: number; value: string }[] = [];
+  const collectClauseTexts = (node: Node): void => {
+    if (
+      node.type === "link" ||
+      node.type === "linkReference" ||
+      node.type === "image" ||
+      node.type === "imageReference" ||
+      node.type === "inlineCode" ||
+      node.type === "code"
+    ) {
+      return;
+    }
+    if (node.type === "text") {
+      clauseTexts.push({
+        line: node.position?.start.line ?? 1,
+        column: node.position?.start.column ?? 1,
+        value: (node as unknown as { value: string }).value,
+      });
+      return;
+    }
+    const children = (node as unknown as { children?: Node[] }).children;
+    for (const child of children ?? []) collectClauseTexts(child);
+  };
+  collectClauseTexts(tree);
 
   const slugList = headingSlugs(text, tree);
   const headings: HeadingInfo[] = rawHeadings.map((heading, index) => ({
@@ -244,6 +282,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
     fenced: codeLineMap(tree, lines.length),
     texts,
     referenceLinks,
+    clauseTexts,
   };
 }
 
@@ -984,14 +1023,13 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
 // ---------------------------------------------------------------
 
 // Clause keywords deciding a citation's clause (META-6), in both
-// bundled languages. zh 当 counts at clause starts only (excluding
-// 当前-class words), and zh 应 excludes common non-shall compounds
-// like 应用 and 反应.
+// bundled languages, matched over parsed inline text. zh 当 counts
+// at clause starts only (excluding 当前-class words), and zh 应
+// excludes common non-shall compounds like 应用 and 反应.
 const PRECONDITION_KEYWORD_RE =
-  /\b(Where|While|When)\b|给定|如果|(^|[，。；：、（("'「])\s*当(?![前中下然])/g;
+  /\b(Where|While|When)\b|给定|如果|(^|[，。；：、（("'「]|\s)\s*当(?![前中下然])/g;
 const SHALL_KEYWORD_RE =
   /\bshall\b|(?<![反相对适响供效回报感一])应(?![用对答邀酬])/g;
-
 function lastMatchIndex(text: string, re: RegExp): number {
   let last = -1;
   re.lastIndex = 0;
@@ -1000,36 +1038,21 @@ function lastMatchIndex(text: string, re: RegExp): number {
 }
 
 // A clause boundary after a citation: a separator that does not
-// merely introduce a further citation in the same group.
-const CLAUSE_SEPARATOR_RE = /[,，、;；](?!\s*\[)/;
+// merely introduce a further citation of the same group. Other
+// links appear in the clause window as a placeholder.
+const LINK_PLACEHOLDER = "\uE000";
+const CLAUSE_SEPARATOR_RE = /[,\uFF0C\u3001;\uFF1B](?!\s*\uE000)/;
 
 /**
- * The paragraph text from the link onward, for the forward
- * clause-boundary check.
+ * The clause window around a link: the paragraph's inline prose
+ * before and after it, built from parsed text nodes — inline code
+ * and link labels excluded, other links reduced to a placeholder —
+ * with a list or table attached to a lead-in ending in a colon.
  */
-function paragraphSuffix(item: ItemInfo, link: LinkInfo): string {
-  const lines = item.file.lines;
-  let end = link.line;
-  while (
-    end < item.bodyEnd - 1 &&
-    end < lines.length &&
-    lines[end].trim() !== ""
-  ) {
-    end += 1;
-  }
-  let suffix = lines[link.line - 1].slice(link.column - 1);
-  for (let line = link.line + 1; line <= end; line += 1) {
-    suffix += `\n${lines[line - 1]}`;
-  }
-  return suffix;
-}
-
-/**
- * The paragraph prefix before a link: from the paragraph's first
- * line (a list attaches to a lead-in ending in a colon) to the
- * link's start column.
- */
-function paragraphPrefix(item: ItemInfo, link: LinkInfo): string {
+function clauseWindow(
+  item: ItemInfo,
+  link: LinkInfo,
+): { prefix: string; suffix: string } {
   const lines = item.file.lines;
   let start = link.line;
   while (start - 1 > item.heading.line) {
@@ -1043,17 +1066,47 @@ function paragraphPrefix(item: ItemInfo, link: LinkInfo): string {
     while (above > item.heading.line && lines[above - 1].trim() === "") {
       above -= 1;
     }
-    if (above > item.heading.line && /[:：]$/.test(lines[above - 1].trim())) {
+    if (above > item.heading.line && /[:\uFF1A]$/.test(lines[above - 1].trim())) {
       start = above;
       continue;
     }
     break;
   }
-  let prefix = "";
-  for (let line = start; line < link.line; line += 1) {
-    prefix += `${lines[line - 1]}\n`;
+  let end = link.line;
+  while (
+    end < item.bodyEnd - 1 &&
+    end < lines.length &&
+    lines[end].trim() !== ""
+  ) {
+    end += 1;
   }
-  return prefix + lines[link.line - 1].slice(0, link.column - 1);
+
+  const tokens = [
+    ...item.file.clauseTexts,
+    ...item.file.links
+      .filter((other) => other.kind === "link")
+      .map((other) => ({
+        line: other.line,
+        column: other.column,
+        value: LINK_PLACEHOLDER,
+      })),
+  ]
+    .filter((token) => token.line >= start && token.line <= end)
+    .sort((a, b) => a.line - b.line || a.column - b.column);
+
+  const before: string[] = [];
+  const after: string[] = [];
+  for (const token of tokens) {
+    if (
+      token.line < link.line ||
+      (token.line === link.line && token.column < link.column)
+    ) {
+      before.push(token.value);
+    } else if (!(token.line === link.line && token.column === link.column)) {
+      after.push(token.value);
+    }
+  }
+  return { prefix: before.join(" "), suffix: after.join(" ") };
 }
 
 function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
@@ -1082,9 +1135,10 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
     }
 
     // Package citations never target a peer's Internal Behavior
-    // (META-14).
+    // (META-14) — definitions included, so a reference-style
+    // definition cannot smuggle the target either.
     for (const link of file.links) {
-      if (link.kind !== "link") continue;
+      if (link.kind !== "link" && link.kind !== "definition") continue;
       const [path, ...fragmentParts] = link.url.split("#");
       const fragment = fragmentParts.join("#");
       if (path === "" || fragment === "") continue;
@@ -1158,7 +1212,7 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
         );
         continue;
       }
-      const prefix = paragraphPrefix(item, link);
+      const { prefix, suffix } = clauseWindow(item, link);
       const preconditionIndex = lastMatchIndex(
         prefix,
         PRECONDITION_KEYWORD_RE,
@@ -1180,7 +1234,6 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
       // Clause membership, forward: a citation still inside the
       // precondition clause is separated from the following shall
       // by a clause boundary; a subject-position citation is not.
-      const suffix = paragraphSuffix(item, link);
       SHALL_KEYWORD_RE.lastIndex = 0;
       const shallAhead = SHALL_KEYWORD_RE.exec(suffix);
       if (

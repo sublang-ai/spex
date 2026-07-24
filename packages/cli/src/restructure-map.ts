@@ -197,10 +197,17 @@ export function restructureMap(
   const renamed = renameInteractionsHeading(result, language);
   if (renamed !== null) result = renamed;
 
-  const hasCompositions = new RegExp(
-    `^##\\s+(${strings.compositionsHeading}|Compositions)\\s*$`,
-    "m",
-  ).test(result);
+  // Detect an existing Compositions section on actual H2 nodes, so
+  // a fenced "## Compositions" example cannot suppress the append.
+  const h2Titles = new Set<string>();
+  visit(parseMarkdown(result), (node: Node) => {
+    if (node.type !== "heading") return;
+    const heading = node as Heading;
+    if (heading.depth !== 2) return;
+    h2Titles.add(sliceNode(result, heading).replace(/^#+\s*/, "").trim());
+  });
+  const hasCompositions =
+    h2Titles.has(strings.compositionsHeading) || h2Titles.has("Compositions");
   if (!hasCompositions) {
     result =
       result.trimEnd() +
@@ -230,7 +237,6 @@ export function renameInteractionsHeading(
   const strings = MAP_STRINGS[language];
   const tree: Root = parseMarkdown(text);
   const edits: TextEdit[] = [];
-  let layoutDepth: number | null = null;
   let inLayout = false;
   let layoutDone = false;
   visit(tree, (node: Node) => {
@@ -248,11 +254,10 @@ export function renameInteractionsHeading(
           ),
         });
       }
-      if (LAYOUT_HEADINGS.has(title)) {
-        layoutDepth = heading.depth;
-        inLayout = true;
-      } else if (layoutDepth !== null && heading.depth <= layoutDepth) {
-        inLayout = false;
+      // Only an actual H2 section heading opens or closes the
+      // Layout scope (SCAF-41); a nested "### Layout" is content.
+      if (heading.depth === 2) {
+        inLayout = LAYOUT_HEADINGS.has(title);
       }
       return;
     }
