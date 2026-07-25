@@ -95,6 +95,14 @@ When preparing a release tag, the developer/agent shall verify that `CHANGELOG.m
 
 When preparing a release tag, the developer/agent shall verify that the tarball contains only production files (e.g., via `npm pack --dry-run`).
 
+#### RELEASE-20
+
+When preparing a release tag, the developer/agent shall run the automated smoke suite (`npm run smoke`, with the desktop stage for app releases) and it shall pass every stage: build, spec lint, unit and integration tests, and a core round-trip that seeds the bundled template, serves the built-in catalog and artifacts, and seeds and parses the example project.
+
+#### RELEASE-21
+
+When preparing a release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — desktop pass, real playbook run, and packaging pass — and a failing step shall block the tag until resolved.
+
 ## References
 
 [1]: https://semver.org/spec/v2.0.0.html "Semantic Versioning 2.0.0"

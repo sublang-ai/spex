@@ -15,7 +15,8 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "npm test --workspaces --if-present",
-    "test:integration": "npm run test:integration --workspaces --if-present"
+    "test:integration": "npm run test:integration --workspaces --if-present",
+    "smoke": "node scripts/smoke.mjs"
   },
   "engines": {
     "node": ">=20"
