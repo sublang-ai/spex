@@ -42,12 +42,14 @@ In the first step of each round, Participant shall review the latest changes, ad
 In the second step of each round, Host shall address any findings.
 Rounds continue until Participant raises no findings.
 
-While any new or updated spec item (under @specs/user, @specs/dev or @specs/test) is under review, Captain shall include the following prompt for Participant:
+Spec item files are the files under @specs/ that hold spec items — @specs/packages/ and @specs/compositions/ in the current layout, or @specs/user/, @specs/dev/, and @specs/test/ in the legacy one; decision and iteration records, @specs/map.md, and @specs/meta.md are not spec item files.
+
+While any new or updated spec item (in spec item files) is under review, Captain shall include the following prompt for Participant:
 
 > Verify any new or updated spec items are:
 >
 > - Complete & coherent: sufficient for you to reimplement code.
-> - Right level: user requirements (in @specs/user) or system behavior (in @specs/dev), not implementation specifics; integration/system testing (in @specs/test), not unit testing.
+> - Right level: external behavior users rely on or internal system behavior (organized per @specs/meta.md), not implementation specifics; integration/system testing, not unit testing.
 > - Minimal: essential and concise; every item earns its place; also check with other items.
 > - Well organized: spec packages are finely scoped, with high cohesion and low coupling.
 >
@@ -81,9 +83,14 @@ When Host raises any rebuttals, Captain shall relay them to Participant along wi
 
 When the spec items or DRs are written at the end of the initial discussion, or Participant raises no findings on uncommitted changes, Captain shall ask Committer to commit with the following prompt:
 
-> Then make a commit of the changes that belong in the repo, following @specs/dev/git.md (reread if necessary).
+> Then make a commit of the changes that belong in the repo, following @specs/packages/git.md (reread if necessary).
+> If that spec is absent, follow the legacy @specs/dev/git.md; if neither exists, follow the repository's existing commit conventions and do not search elsewhere.
 > Write the commit message concisely.
 > Host is \<host-llm\>.
 > Participant is \<participant-llm\>.
 
 `<*-llm>` shall be the conventional human form of the substituted ID (e.g., `claude-opus-4-7` → `Claude-Opus-4.7`, `gpt-5.5` → `GPT-5.5`).
+
+For the initial-discussion commit outcome, any adjudicated `reviewScope`
+payload shall be exactly `specItems`, `decisionRecords`, or `mixed`; a prose
+summary is not a review scope.

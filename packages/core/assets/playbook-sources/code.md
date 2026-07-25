@@ -37,9 +37,9 @@ When an IR is done, Captain shall prompt Coder:
 > Read IR-<#> and corresponding commits.
 > According to @specs/meta.md, add or update spec items to fully capture:
 >
-> - the user requirements in @specs/user,
-> - the system behavior in @specs/dev, and
-> - the integration/system test cases in @specs/test.
+> - the external behavior users rely on,
+> - the internal system behavior, and
+> - the integration/system test cases.
 >
 > The spec items should be the *minimal* set needed to reimplement code without the IR.
 > The set should be complete and coherent.
@@ -53,6 +53,8 @@ For each finding in a review round, Coder either addresses it with changes or ch
 Any code change to address findings starts a new round of review, even if some findings are also rebutted.
 Rounds continue until Reviewer raises no findings.
 
+Spec item files are the files under @specs/ that hold spec items — @specs/packages/ and @specs/compositions/ in the current layout, or @specs/user/, @specs/dev/, and @specs/test/ in the legacy one; decision and iteration records, @specs/map.md, and @specs/meta.md are not spec item files.
+
 When Reviewer begins the first review round on changes from a Boss coding intent, Captain shall relay the intent to Reviewer.
 
 When Reviewer begins the first review round on changes from an IR task, Captain shall relay the IR's task description to Reviewer.
@@ -65,17 +67,17 @@ When any changes are made by Coder but not reviewed (outside of any Initial Chan
 > Review the unstaged and untracked changes in the context of the staged changes.
 > Understand the intent.
 
-When Reviewer begins a review round involving @specs/user/, @specs/dev/, or @specs/test/, Captain shall prompt Reviewer:
+When Reviewer begins a review round involving spec item files, Captain shall prompt Reviewer:
 > Verify any affected spec items are:
 >
 > - Complete & coherent: sufficient for you to reimplement code.
-> - Right level: user requirements (in @specs/user) or system behavior (in @specs/dev), not implementation specifics; integration/system testing (in @specs/test), not unit testing.
+> - Right level: external behavior users rely on or internal system behavior (organized per @specs/meta.md), not implementation specifics; integration/system testing, not unit testing.
 > - Minimal: essential and concise; every item earns its place; also check with other items.
 > - Well organized: spec packages are finely scoped, with high cohesion and low coupling.
 >
 > Flag anything missing, redundant, over-specified, or under-specified.
 
-When Reviewer begins a review round involving any changes outside @specs/user/, @specs/dev/, and @specs/test/, Captain shall prompt Reviewer:
+When Reviewer begins a review round involving any changes outside spec item files, Captain shall prompt Reviewer:
 > Flag any issues or improvements (numbered; no duplication).
 > Think thoroughly — don't just approve or reject.
 
@@ -92,7 +94,8 @@ When Coder raises any rebuttals, Captain shall relay them to Reviewer along with
 ## Committer
 
 When Coder makes any Initial Changes or Reviewer raises no findings on uncommitted changes, Captain shall prompt Committer:
-> Make a commit of the changes that belong in the repo, following @specs/dev/git.md (reread if necessary).
+> Make a commit of the changes that belong in the repo, following @specs/packages/git.md (reread if necessary).
+> If that spec is absent, follow the legacy @specs/dev/git.md; if neither exists, follow the repository's existing commit conventions and do not search elsewhere.
 > Write the commit message concisely.
 
 When Captain prompts Committer and only Coder has played since the last commit, Captain shall also append:
