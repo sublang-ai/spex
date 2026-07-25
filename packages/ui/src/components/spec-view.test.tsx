@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// SPECV component coverage over the DR-015 packages-layout model: the
-// spec view rendered from a fixture SpecTreeState — branch/dir/file
-// outline, document order with section and topic labels, group
-// filters, search, citation jumps and backlinks, inline-link
-// resolution, records reader, and the empty/legacy states.
+// SPECV component coverage over the DR-015 packages-layout model as
+// amended by DR-016: the spec view rendered from a fixture
+// SpecTreeState — branch/dir/file outline, document order with
+// section and topic labels, group filters, search, classified
+// relationship rows and inbound groups, citation jumps, rollups,
+// inline-link resolution, records reader, and the empty/legacy
+// states.
 
 import { useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -27,10 +29,14 @@ import {
 } from "./SpecView.js";
 import type { SpecTreeState } from "@sublang/spex-core/protocol";
 
-// A mini-corpus in the DR-012/DR-015 shape: two packages in collection
-// directories (external + internal + verification sections with
-// topics), one composition at the collection root (binding + scenario
-// + tests), and one parse-degraded file.
+// An Academy-shaped mini-corpus in the DR-012/DR-015 shape that
+// exercises every DR-016 relationship kind: a package using a peer
+// (uses), a same-file internal reference, a package Verification test
+// (verifies), a binding with clients and provisions around its
+// `shall` (serves/provides), a no-`shall` binding (degraded plain
+// cites), a scenario composing a package via a same-file binding
+// (composes/via), and a composition test (executes/verifies) — plus
+// one parse-degraded file.
 const TREE: SpecTreeState = {
   present: true,
   legacy: false,
@@ -69,8 +75,10 @@ const TREE: SpecTreeState = {
           section: "External Behavior",
           topic: "Sign-In",
           firstLine: "The form shall validate credentials.",
-          text: "The form shall validate **credentials** before submit.",
-          cites: [],
+          // The same-file citation is an unlabeled internal reference
+          // (DR-016): no outgoing row, a generic cited-by backlink.
+          text: "The form shall validate **credentials** before submit ([AUTH-1](#auth-1)).",
+          cites: ["AUTH-1"],
         },
         {
           id: "AUTH-1",
@@ -127,8 +135,9 @@ const TREE: SpecTreeState = {
           group: "external",
           section: "External Behavior",
           firstLine: "The catalog shall list published courses.",
-          text: "The catalog shall list published courses.",
-          cites: [],
+          // A peer-file citation from a package behavior item: uses.
+          text: "The catalog shall list published courses, reusing credential validation ([AUTH-2](../identity/auth.md#auth-2)).",
+          cites: ["AUTH-2"],
         },
       ],
     },
@@ -148,7 +157,18 @@ const TREE: SpecTreeState = {
           group: "internal",
           section: "Binding",
           firstLine: "Eligibility shall be the deployment's answer.",
-          text: "Eligibility shall be the deployment's answer, feeding session mechanics ([AUTH-8](../packages/identity/auth.md#auth-8)); see the [index](../map.md).",
+          // One-sentence binding grammar: CAT-1 before `shall` is a
+          // client (serves), AUTH-8 after it a provision (provides).
+          text: "Where the catalog lists published courses ([CAT-1](../packages/catalog/courses.md#cat-1)), eligibility shall be the deployment's answer, feeding session mechanics ([AUTH-8](../packages/identity/auth.md#auth-8)); see the [index](../map.md).",
+          cites: ["CAT-1", "AUTH-8"],
+        },
+        {
+          id: "GUARD-6",
+          group: "internal",
+          section: "Binding",
+          firstLine: "Eligibility also covers the media path.",
+          // No standalone `shall`: degrades to a plain cites row.
+          text: "Eligibility also covers the media path ([AUTH-8](../packages/identity/auth.md#auth-8)).",
           cites: ["AUTH-8"],
         },
         {
@@ -156,16 +176,20 @@ const TREE: SpecTreeState = {
           group: "external",
           section: "Scenario",
           firstLine: "The site shall present each surface per the map.",
-          text: "The site shall present each surface per the map ([AUTH-1](../packages/identity/auth.md#auth-1)).",
-          cites: ["AUTH-1"],
+          // Scenario: the package target composes, the same-file
+          // binding is the via.
+          text: "The site shall present each surface per the map ([AUTH-1](../packages/identity/auth.md#auth-1)), gated via eligibility ([GUARD-5](#guard-5)).",
+          cites: ["AUTH-1", "GUARD-5"],
         },
         {
           id: "GUARD-3",
           group: "test",
           section: "Tests",
           firstLine: "The suite shall sweep the map.",
-          text: "The acceptance suite shall sweep the map ([GUARD-1](#guard-1)).",
-          cites: ["GUARD-1"],
+          // Composition test: same-file scenario and binding targets
+          // execute; the package behavior target verifies.
+          text: "The acceptance suite shall sweep the map ([GUARD-1](#guard-1), [GUARD-5](#guard-5)) and check the catalog listing ([CAT-1](../packages/catalog/courses.md#cat-1)).",
+          cites: ["GUARD-1", "GUARD-5", "CAT-1"],
         },
       ],
     },
@@ -262,7 +286,7 @@ describe("SPECV-1/2: outline shape and file nodes", () => {
     expect(within(auth).getByLabelText("1 test items")).toBeTruthy();
     // Header totals across both collections.
     expect(
-      screen.getByText("2 packages · 1 composition · 9 items"),
+      screen.getByText("2 packages · 1 composition · 10 items"),
     ).toBeTruthy();
     // Files default collapsed: no item rows yet.
     expect(screen.queryByTestId("item-AUTH-2")).toBeNull();
@@ -402,9 +426,11 @@ describe("SPECV-5: search", () => {
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     const input = screen.getByPlaceholderText("Filter items — ID or text…");
     fireEvent.change(input, { target: { value: "cat-1" } });
-    // Case-insensitive ID match; the matching file auto-expands.
-    expect(screen.getByTestId("match-count").textContent).toBe("1 match");
+    // Case-insensitive match on ID and text (GUARD-5 and GUARD-3 cite
+    // CAT-1 in their bodies); matching files auto-expand.
+    expect(screen.getByTestId("match-count").textContent).toBe("3 matches");
     expect(screen.getByTestId("item-CAT-1")).toBeTruthy();
+    expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
     expect(screen.queryByTestId("item-AUTH-2")).toBeNull();
     // Clearing restores the prior expansion state.
     fireEvent.change(input, { target: { value: "" } });
@@ -416,7 +442,7 @@ describe("SPECV-5: search", () => {
     render(<Harness />);
     const input = screen.getByPlaceholderText("Filter items — ID or text…");
     fireEvent.change(input, { target: { value: "shall" } });
-    // Every item in the corpus says "shall".
+    // Every item but the degraded no-shall binding says "shall".
     expect(screen.getByTestId("match-count").textContent).toBe("9 matches");
     // Filtered-off groups leave the count.
     fireEvent.click(screen.getByTestId("filter-test"));
@@ -424,25 +450,161 @@ describe("SPECV-5: search", () => {
   });
 });
 
-describe("SPECV-6: citations", () => {
-  test("cites rows on test items; inbound cited-by on cited items", () => {
+describe("SPECV-6: relationship classification (DR-016)", () => {
+  test("package peer citations are uses; same-file stay unlabeled", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    fireEvent.click(screen.getByTestId("item-toggle-CAT-1"));
+    const uses = screen.getByTestId("row-CAT-1-uses");
+    expect(uses.textContent).toContain("uses");
+    expect(within(uses).getByTestId("link-CAT-1-AUTH-2")).toBeTruthy();
+    // The glyph is decorative: aria-hidden, the word is the channel.
+    expect(
+      uses.querySelector('[aria-hidden="true"]')?.textContent,
+    ).toContain("→");
+    // AUTH-2's same-file citation of AUTH-1 renders no outgoing row.
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-2"));
+    expect(screen.queryByTestId("row-AUTH-2-uses")).toBeNull();
+    expect(screen.queryByTestId("row-AUTH-2-cites")).toBeNull();
+    // The target still gets the generic cited-by backlink group.
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-1"));
+    const citedBy = screen.getByTestId("inbound-AUTH-1-cites");
+    expect(citedBy.textContent).toContain("cited by 1");
+  });
+
+  test("a binding splits clients from provisions around its shall", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-5"));
+    const serves = screen.getByTestId("row-GUARD-5-serves");
+    expect(serves.textContent).toContain("serves");
+    expect(within(serves).getByTestId("link-GUARD-5-CAT-1")).toBeTruthy();
+    const provides = screen.getByTestId("row-GUARD-5-provides");
+    expect(provides.textContent).toContain("provides");
+    expect(within(provides).getByTestId("link-GUARD-5-AUTH-8")).toBeTruthy();
+  });
+
+  test("a binding outside the grammar keeps a plain cites row", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-6"));
+    const plain = screen.getByTestId("row-GUARD-6-cites");
+    expect(plain.textContent).toContain("cites");
+    expect(within(plain).getByTestId("link-GUARD-6-AUTH-8")).toBeTruthy();
+    // Never an invented clause side.
+    expect(screen.queryByTestId("row-GUARD-6-serves")).toBeNull();
+    expect(screen.queryByTestId("row-GUARD-6-provides")).toBeNull();
+  });
+
+  test("a scenario composes package targets via same-file bindings", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-1"));
+    const composes = screen.getByTestId("row-GUARD-1-composes");
+    expect(composes.textContent).toContain("composes");
+    expect(within(composes).getByTestId("link-GUARD-1-AUTH-1")).toBeTruthy();
+    const via = screen.getByTestId("row-GUARD-1-via");
+    expect(via.textContent).toContain("via");
+    expect(within(via).getByTestId("link-GUARD-1-GUARD-5")).toBeTruthy();
+  });
+
+  test("tests verify behavior and execute same-file scenario/bindings", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-3"));
+    const executes = screen.getByTestId("row-GUARD-3-executes");
+    expect(executes.textContent).toContain("executes");
+    expect(within(executes).getByTestId("link-GUARD-3-GUARD-1")).toBeTruthy();
+    expect(within(executes).getByTestId("link-GUARD-3-GUARD-5")).toBeTruthy();
+    const verifies = screen.getByTestId("row-GUARD-3-verifies");
+    expect(within(verifies).getByTestId("link-GUARD-3-CAT-1")).toBeTruthy();
+    // A package Verification item verifies its targets, dead or not.
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-10"));
+    const authVerifies = screen.getByTestId("row-AUTH-10-verifies");
+    expect(
+      within(authVerifies).getByTestId("link-AUTH-10-AUTH-1"),
+    ).toBeTruthy();
+    expect(
+      within(authVerifies).getByTestId("link-AUTH-10-AUTH-99"),
+    ).toBeTruthy();
+  });
+
+  test("collapsed rows carry at most two kind-aware hints", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
-    // Backlinks are computed from every file's cites, cross-file.
-    const target = screen.getByTestId("item-AUTH-1");
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    // Outgoing kind first, then verified-by.
+    expect(screen.getByTestId("item-toggle-CAT-1").textContent).toContain(
+      "→ uses 1 · ✓ verified by 1",
+    );
+    // Outgoing only.
+    expect(screen.getByTestId("item-toggle-AUTH-10").textContent).toContain(
+      "✓ verifies 2",
+    );
+    expect(screen.getByTestId("item-toggle-GUARD-3").textContent).toContain(
+      "✓ verifies 1 · ▸ executes 2",
+    );
+    // Two outgoing kinds cap the hints; inbound drops off.
+    expect(screen.getByTestId("item-toggle-GUARD-5").textContent).toContain(
+      "⊸ serves 1 · ⊸ provides 1",
+    );
+    // Inbound-only: verified-by outranks the other inbound kinds.
+    expect(screen.getByTestId("item-toggle-AUTH-1").textContent).toContain(
+      "✓ verified by 1 · ∘ composed in 1",
+    );
+    expect(screen.getByTestId("item-toggle-AUTH-2").textContent).toContain(
+      "→ used by 1",
+    );
+  });
+
+  test("inbound groups render collapsed by count and expand to jumps", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
+    // AUTH-8 is the provision GUARD-5 resolves to ("supplies") and is
+    // plainly cited by the degraded GUARD-6 ("cited by").
+    const supplies = screen.getByTestId("inbound-AUTH-8-provides");
+    expect(supplies.textContent).toContain("supplies 1");
+    expect(supplies.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("link-AUTH-8-GUARD-5")).toBeNull();
+    fireEvent.click(supplies);
+    expect(supplies.getAttribute("aria-expanded")).toBe("true");
+    const citedBy = screen.getByTestId("inbound-AUTH-8-cites");
+    expect(citedBy.textContent).toContain("cited by 1");
+    fireEvent.click(citedBy);
+    expect(screen.getByTestId("link-AUTH-8-GUARD-6")).toBeTruthy();
+    // A backlink is a full jump: the citing binding opens in view.
+    fireEvent.click(screen.getByTestId("link-AUTH-8-GUARD-5"));
     expect(
-      within(target).getByText(/cited by AUTH-10, GUARD-1/),
-    ).toBeTruthy();
-    // The test item carries a cites summary and, expanded, link rows.
-    const test10 = screen.getByTestId("item-AUTH-10");
-    expect(within(test10).getByText("→ cites 2")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("item-toggle-AUTH-10"));
-    expect(within(test10).getByText("Cites:")).toBeTruthy();
-    expect(screen.getByTestId("link-AUTH-10-AUTH-1")).toBeTruthy();
-    // Expanded cited items list their citers as jump links.
-    fireEvent.click(screen.getByTestId("item-toggle-AUTH-1"));
-    expect(within(target).getByText("Cited by:")).toBeTruthy();
-    expect(screen.getByTestId("link-AUTH-1-AUTH-10")).toBeTruthy();
+      screen.getByTestId("item-toggle-GUARD-5").getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  test("relationship targets jump in view for every kind", () => {
+    render(<Harness />);
+    // uses: CAT-1 → AUTH-2.
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    fireEvent.click(screen.getByTestId("item-toggle-CAT-1"));
+    fireEvent.click(screen.getByTestId("link-CAT-1-AUTH-2"));
+    expect(
+      screen.getByTestId("item-toggle-AUTH-2").getAttribute("aria-expanded"),
+    ).toBe("true");
+    // via: GUARD-1 → GUARD-5.
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-1"));
+    fireEvent.click(screen.getByTestId("link-GUARD-1-GUARD-5"));
+    expect(
+      screen.getByTestId("item-toggle-GUARD-5").getAttribute("aria-expanded"),
+    ).toBe("true");
+    // executes: GUARD-3 → GUARD-1 (already expanded target stays).
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-3"));
+    fireEvent.click(screen.getByTestId("link-GUARD-3-GUARD-1"));
+    expect(
+      screen.getByTestId("item-toggle-GUARD-1").getAttribute("aria-expanded"),
+    ).toBe("true");
   });
 
   test("a cite link reveals a filtered-off target with a note", () => {
@@ -500,6 +662,31 @@ describe("SPECV-6: citations", () => {
     );
     await screen.findByText("Decided.");
     expect(screen.getByTestId("record-reader")).toBeTruthy();
+  });
+});
+
+describe("SPECV-2/6: file relationship rollups (DR-016)", () => {
+  test("an expanded file header rolls up per-kind counts, in and out", () => {
+    render(<Harness />);
+    // Collapsed files carry no rollup line.
+    expect(screen.queryByTestId(`rollup-${AUTH}`)).toBeNull();
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    const auth = screen.getByTestId(`rollup-${AUTH}`);
+    expect(auth.textContent).toBe(
+      "used by 1 · supplies 1 · composed in 1 · verifies 2 · verified by 1 · cited by 2",
+    );
+    expect(auth.getAttribute("aria-label")).toBe(
+      `Relationships: ${auth.textContent}`,
+    );
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    expect(screen.getByTestId(`rollup-${CAT}`).textContent).toBe(
+      "uses 1 · served by 1 · verified by 1",
+    );
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    expect(screen.getByTestId(`rollup-${GUARD}`).textContent).toBe(
+      "serves 1 · provides 1 · composes 1 · via 1 · composed via 1 · " +
+        "verifies 1 · executes 2 · executed by 2 · cites 1",
+    );
   });
 });
 

@@ -9,8 +9,8 @@ Land the branch on main release-ready: the classified relationship presentation 
 
 ## Deliverables
 
-- [ ] Spec view classifies citation edges (uses; serves/provides; composes/via; verifies/executes) with labeled rows, grouped inbound backlinks, and per-file relationship rollups; Academy renders every kind.
-- [ ] SPECV items amended to the classified model.
+- [x] Spec view classifies citation edges (uses; serves/provides; composes/via; verifies/executes) with labeled rows, grouped inbound backlinks, and per-file relationship rollups; Academy renders every kind.
+- [x] SPECV items amended to the classified model.
 - [x] `npm run smoke` drives the automated pre-release checks; `docs/release-smoke.md` carries the full checklist including the manual steps; RELEASE spec gains the smoke gate.
 - [x] Vendored `/code` and `/discuss` sources refreshed from the layout-agnostic upstream.
 - [ ] Branch merged to main with CI green.

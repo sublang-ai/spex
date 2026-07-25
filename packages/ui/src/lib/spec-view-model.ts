@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Pure view-model helpers for the spec view (SPECV; DR-011 as amended
-// by DR-015): branch/dir tree shaping over the flat SpecFileInfo list,
-// counts, citation indices, search matching, inline-link resolution,
-// and relative time — no DOM, so logic stays testable without
-// rendering.
+// by DR-015/DR-016): branch/dir tree shaping over the flat
+// SpecFileInfo list, counts, citation classification and relationship
+// indices, search matching, inline-link resolution, and relative time
+// — no DOM, so logic stays testable without rendering.
 
 import type {
   SpecFileInfo,
@@ -235,25 +235,370 @@ export function buildItemIndex(
   return index;
 }
 
-/** Inbound citation index: cited item ID → citing item IDs in
- * encounter order ("cited by" backlinks; DR-011 as amended). */
-export function buildInboundIndex(
+// ---------------------------------------------------------------------------
+// Relationship classification (DR-016): each citation edge classified
+// from the citing item alone — the protocol carries no relationship
+// metadata, so the split is a client-side derivation over the tree.
+// ---------------------------------------------------------------------------
+
+/** Classified citation-edge kinds; "cites" is the unclassified rest —
+ * degraded bindings and out-of-grammar citations keep today's plain
+ * row (classification never invents an edge it cannot place). */
+export type RelationKind =
+  | "uses"
+  | "serves"
+  | "provides"
+  | "composes"
+  | "via"
+  | "verifies"
+  | "executes"
+  | "cites";
+
+/** Canonical kind order for rows, inbound groups, and rollups. */
+export const RELATION_ORDER: readonly RelationKind[] = [
+  "uses",
+  "serves",
+  "provides",
+  "composes",
+  "via",
+  "verifies",
+  "executes",
+  "cites",
+];
+
+/** Fixed glyph-and-word grammar (DR-016 §Presentation). The word is
+ * the channel — glyphs are decorative (aria-hidden) and kind is never
+ * conveyed by color. `out` labels the citing item's row; `in` labels
+ * the inbound backlink group on the target:
+ * uses→used by, serves→served by (the binding serves this client),
+ * provides→supplies (this provision supplies the binding),
+ * composes→composed in, via→composed via, verifies→verified by,
+ * executes→executed by, cites→cited by. */
+export const RELATION_LABEL: Record<
+  RelationKind,
+  { glyph: string; out: string; in: string }
+> = {
+  uses: { glyph: "→", out: "uses", in: "used by" },
+  serves: { glyph: "⊸", out: "serves", in: "served by" },
+  provides: { glyph: "⊸", out: "provides", in: "supplies" },
+  composes: { glyph: "∘", out: "composes", in: "composed in" },
+  via: { glyph: "∘", out: "via", in: "composed via" },
+  verifies: { glyph: "✓", out: "verifies", in: "verified by" },
+  executes: { glyph: "▸", out: "executes", in: "executed by" },
+  cites: { glyph: "→", out: "cites", in: "cited by" },
+};
+
+/** The row/group/rollup wording for one edge kind and direction. */
+export function relationPhrase(
+  kind: RelationKind,
+  direction: "out" | "in",
+): string {
+  const label = RELATION_LABEL[kind];
+  return direction === "out" ? label.out : label.in;
+}
+
+const INLINE_LINK = /\[([^\]]+)\]\(([^()\s]+)\)/g;
+const FENCE = /^\s*(?:```|~~~)/;
+const STANDALONE_SHALL = /\bshall\b/i;
+
+/** The cited item ID an inline-link match carries, mirroring the
+ * server's citation extraction (META-16/META-20): bare-ID link text
+ * and an item-anchor fragment in the href. */
+function citedId(text: string, href: string): string | undefined {
+  if (!ITEM_ID_PATTERN.test(text)) return undefined;
+  const hash = href.indexOf("#");
+  if (hash === -1) return undefined;
+  return /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(href.slice(hash + 1))
+    ? text
+    : undefined;
+}
+
+export interface BindingClauses {
+  /** Citations before the binding's `shall` — the clients it serves. */
+  clients: string[];
+  /** Citations after it — the provisions it resolves to. */
+  provisions: string[];
+}
+
+/** Split a Binding item's citations by clause side per the
+ * one-sentence binding grammar (DR-016): the split point is the
+ * body's first standalone `shall` outside code fences, inline code,
+ * and link hrefs. Undefined when the body has no such `shall` — the
+ * caller degrades to a plain cites row. A citation cited on both
+ * sides classifies by its first occurrence. */
+export function splitBindingClauses(text: string): BindingClauses | undefined {
+  const clients: string[] = [];
+  const provisions: string[] = [];
+  const seen = new Set<string>();
+  let inFence = false;
+  let shallSeen = false;
+  for (const line of text.split(/\r?\n/)) {
+    if (FENCE.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    // Blank inline code spans and link hrefs (space-padded, so
+    // offsets hold): `shall` inside either is not clause text.
+    const bare = line.replace(/`[^`]*`/g, (span) => " ".repeat(span.length));
+    const prose = bare.replace(
+      /\]\([^()\s]+\)/g,
+      (span) => `]${" ".repeat(span.length - 1)}`,
+    );
+    const shallAt = shallSeen ? -1 : prose.search(STANDALONE_SHALL);
+    for (const match of bare.matchAll(INLINE_LINK)) {
+      const id = citedId(match[1], match[2]);
+      if (id === undefined || seen.has(id)) continue;
+      seen.add(id);
+      const at = match.index ?? 0;
+      const after = shallSeen || (shallAt !== -1 && at > shallAt);
+      (after ? provisions : clients).push(id);
+    }
+    if (shallAt !== -1) shallSeen = true;
+  }
+  return shallSeen ? { clients, provisions } : undefined;
+}
+
+export interface RelationRow {
+  kind: RelationKind;
+  /** Target item IDs in citation order. */
+  targets: string[];
+}
+
+export interface ClassifiedCites {
+  /** Labeled relationship rows, RELATION_ORDER order, never empty. */
+  rows: RelationRow[];
+  /** Same-file targets left as unlabeled internal references — no
+   * outgoing row (rendered as today); the target still gets a
+   * generic cited-by backlink. */
+  internal: string[];
+}
+
+/** Classify one item's citation edges from the citing item alone
+ * (DR-016 §Classification). Sections outside the DR-012 grammar keep
+ * today's behavior: plain cites on test items, unlabeled internal
+ * references elsewhere. */
+export function classifyCites(
+  item: SpecItemInfo,
+  file: Pick<SpecFileInfo, "kind" | "key" | "shortForm">,
+  itemIndex: Map<string, ItemLocation>,
+): ClassifiedCites {
+  const key = fileKey(file);
+  const buckets = new Map<RelationKind, string[]>();
+  const internal: string[] = [];
+  const add = (kind: RelationKind, target: string): void => {
+    const list = buckets.get(kind);
+    if (list) list.push(target);
+    else buckets.set(kind, [target]);
+  };
+  /** Same-file test: resolved targets by location; dead targets by
+   * prefix against the citing file's short form (the citing side is
+   * all the classifier has — dead IDs keep their inert handling). */
+  const sameFile = (target: string): boolean => {
+    const loc = itemIndex.get(target);
+    if (loc) return loc.fileKey === key;
+    return (
+      file.shortForm !== undefined &&
+      target.replace(/-\d+$/, "") === file.shortForm
+    );
+  };
+  const fallback = (): void => {
+    if (item.group === "test") for (const t of item.cites) add("cites", t);
+    else internal.push(...item.cites);
+  };
+  if (file.kind === "package") {
+    if (
+      item.section === "External Behavior" ||
+      item.section === "Internal Behavior"
+    ) {
+      // Peer-file targets are uses; same-file citations stay
+      // unlabeled internal references.
+      for (const t of item.cites) {
+        if (sameFile(t)) internal.push(t);
+        else add("uses", t);
+      }
+    } else if (item.section === "Verification") {
+      for (const t of item.cites) add("verifies", t);
+    } else {
+      fallback();
+    }
+  } else if (item.section === "Binding") {
+    const split = splitBindingClauses(item.text);
+    if (!split) {
+      // Out-of-grammar binding: plain cites row, never an invented edge.
+      for (const t of item.cites) add("cites", t);
+    } else {
+      const placed = new Set([...split.clients, ...split.provisions]);
+      for (const t of split.clients) {
+        if (item.cites.includes(t)) add("serves", t);
+      }
+      for (const t of split.provisions) {
+        if (item.cites.includes(t)) add("provides", t);
+      }
+      // A cite the splitter could not place (extraction drift) stays plain.
+      for (const t of item.cites) {
+        if (!placed.has(t)) add("cites", t);
+      }
+    }
+  } else if (item.section === "Scenario") {
+    for (const t of item.cites) {
+      const loc = itemIndex.get(t);
+      if (loc && loc.fileKey === key) {
+        // Same-file binding targets are the bindings the scenario
+        // runs via; other same-file citations stay unlabeled.
+        if (loc.group === "internal") add("via", t);
+        else internal.push(t);
+      } else if (sameFile(t)) {
+        internal.push(t);
+      } else {
+        add("composes", t);
+      }
+    }
+  } else if (item.section === "Tests") {
+    for (const t of item.cites) {
+      const loc = itemIndex.get(t);
+      // Same-file scenario and binding targets are what the
+      // composition test executes; everything else it verifies.
+      if (loc && loc.fileKey === key && loc.group !== "test") {
+        add("executes", t);
+      } else {
+        add("verifies", t);
+      }
+    }
+  } else {
+    fallback();
+  }
+  return {
+    rows: RELATION_ORDER.filter((kind) => buckets.has(kind)).map((kind) => ({
+      kind,
+      targets: buckets.get(kind) as string[],
+    })),
+    internal,
+  };
+}
+
+export interface InboundGroup {
+  kind: RelationKind;
+  /** Citing item IDs in encounter order. */
+  sources: string[];
+}
+
+export interface RollupEntry {
+  kind: RelationKind;
+  direction: "out" | "in";
+  count: number;
+}
+
+export interface RelationModel {
+  /** Citing item ID → its classified outgoing edges. */
+  outgoing: Map<string, ClassifiedCites>;
+  /** Target item ID → inbound backlink groups in RELATION_ORDER;
+   * internal references and plain cites arrive as generic "cites". */
+  inbound: Map<string, InboundGroup[]>;
+  /** File key → per-kind relationship rollup, kind-major with out
+   * before in; zero-count kinds omitted; files without edges absent. */
+  rollups: Map<string, RollupEntry[]>;
+}
+
+/** Classify every citation edge in the tree and index both directions
+ * plus per-file rollups (DR-016). */
+export function buildRelationModel(
   files: SpecFileInfo[],
-): Map<string, string[]> {
-  const inbound = new Map<string, string[]>();
+  itemIndex: Map<string, ItemLocation>,
+): RelationModel {
+  const outgoing = new Map<string, ClassifiedCites>();
+  const inboundRaw = new Map<string, Map<RelationKind, string[]>>();
+  const record = (target: string, kind: RelationKind, from: string): void => {
+    let groups = inboundRaw.get(target);
+    if (!groups) {
+      groups = new Map();
+      inboundRaw.set(target, groups);
+    }
+    const list = groups.get(kind);
+    if (list) {
+      if (!list.includes(from)) list.push(from);
+    } else {
+      groups.set(kind, [from]);
+    }
+  };
   for (const file of files) {
     for (const item of file.items) {
-      for (const target of item.cites) {
-        const list = inbound.get(target);
-        if (list) {
-          if (!list.includes(item.id)) list.push(item.id);
-        } else {
-          inbound.set(target, [item.id]);
-        }
+      const classified = classifyCites(item, file, itemIndex);
+      outgoing.set(item.id, classified);
+      for (const row of classified.rows) {
+        for (const target of row.targets) record(target, row.kind, item.id);
+      }
+      for (const target of classified.internal) {
+        record(target, "cites", item.id);
       }
     }
   }
-  return inbound;
+  const inbound = new Map<string, InboundGroup[]>();
+  for (const [target, groups] of inboundRaw) {
+    inbound.set(
+      target,
+      RELATION_ORDER.filter((kind) => groups.has(kind)).map((kind) => ({
+        kind,
+        sources: groups.get(kind) as string[],
+      })),
+    );
+  }
+  const rollups = new Map<string, RollupEntry[]>();
+  for (const file of files) {
+    const out = new Map<RelationKind, number>();
+    const inn = new Map<RelationKind, number>();
+    for (const item of file.items) {
+      for (const row of outgoing.get(item.id)?.rows ?? []) {
+        out.set(row.kind, (out.get(row.kind) ?? 0) + row.targets.length);
+      }
+      for (const group of inbound.get(item.id) ?? []) {
+        inn.set(group.kind, (inn.get(group.kind) ?? 0) + group.sources.length);
+      }
+    }
+    const entries: RollupEntry[] = [];
+    for (const kind of RELATION_ORDER) {
+      const o = out.get(kind);
+      if (o) entries.push({ kind, direction: "out", count: o });
+      const i = inn.get(kind);
+      if (i) entries.push({ kind, direction: "in", count: i });
+    }
+    if (entries.length > 0) rollups.set(fileKey(file), entries);
+  }
+  return { outgoing, inbound, rollups };
+}
+
+export interface RelationHint {
+  kind: RelationKind;
+  direction: "out" | "in";
+  count: number;
+}
+
+/** Inbound kinds by hint strength: verified-by first (DR-016
+ * collapsed hints), then the canonical order. */
+const INBOUND_HINT_ORDER: readonly RelationKind[] = [
+  "verifies",
+  ...RELATION_ORDER.filter((kind) => kind !== "verifies"),
+];
+
+/** At most two kind-aware hints for a collapsed item row: outgoing
+ * rows first in canonical order, then inbound groups led by
+ * verified-by. */
+export function collapsedHints(
+  outgoing: ClassifiedCites | undefined,
+  inbound: InboundGroup[] | undefined,
+): RelationHint[] {
+  const hints: RelationHint[] = [];
+  for (const row of outgoing?.rows ?? []) {
+    hints.push({ kind: row.kind, direction: "out", count: row.targets.length });
+  }
+  const groups = inbound ?? [];
+  for (const kind of INBOUND_HINT_ORDER) {
+    const group = groups.find((entry) => entry.kind === kind);
+    if (group) {
+      hints.push({ kind, direction: "in", count: group.sources.length });
+    }
+  }
+  return hints.slice(0, 2);
 }
 
 // ---------------------------------------------------------------------------

@@ -28,19 +28,26 @@ import type {
 import {
   ancestorKeys,
   buildBranches,
-  buildInboundIndex,
   buildItemIndex,
+  buildRelationModel,
+  collapsedHints,
   fileCounts,
   fileKey,
   initialSpecViewState,
   linkItemTarget,
   normalizeSpecViewState,
   recordForHref,
+  relationPhrase,
   relativeReadTime,
   searchDigest,
   treeCounts,
   visibleFileItems,
   GROUP_ORDER,
+  RELATION_LABEL,
+  type ClassifiedCites,
+  type InboundGroup,
+  type RelationKind,
+  type RelationModel,
   type SpecDirNode,
   type SpecGroup,
   type SpecViewState,
@@ -170,7 +177,11 @@ export function SpecView(props: SpecViewProps) {
 
   const branches = useMemo(() => buildBranches(tree.files), [tree]);
   const itemIndex = useMemo(() => buildItemIndex(tree.files), [tree]);
-  const inbound = useMemo(() => buildInboundIndex(tree.files), [tree]);
+  // Classified relationship edges, both directions (DR-016).
+  const relations = useMemo(
+    () => buildRelationModel(tree.files, itemIndex),
+    [tree, itemIndex],
+  );
   const totals = useMemo(() => treeCounts(tree.files), [tree]);
   const records = useMemo(
     () => [...tree.decisions, ...tree.iterations],
@@ -507,6 +518,11 @@ export function SpecView(props: SpecViewProps) {
     const allIds = file.items.map((item) => item.id);
     const allExpanded =
       allIds.length > 0 && allIds.every((id) => expandedItems.has(id));
+    // Per-kind relationship rollup: the file's coupling before any
+    // item opens (DR-016) — words only, zero kinds omitted.
+    const rollup = (relations.rollups.get(key) ?? [])
+      .map((entry) => `${relationPhrase(entry.kind, entry.direction)} ${entry.count}`)
+      .join(" · ");
 
     return (
       <li key={key} data-testid={`file-${key}`}>
@@ -563,6 +579,15 @@ export function SpecView(props: SpecViewProps) {
         </div>
         {expanded ? (
           <div className="ml-[7px] flex flex-col gap-1 border-l border-neutral-200 py-1 pl-4 dark:border-neutral-800">
+            {rollup ? (
+              <div
+                data-testid={`rollup-${key}`}
+                aria-label={`Relationships: ${rollup}`}
+                className="text-[11px] text-neutral-400"
+              >
+                {rollup}
+              </div>
+            ) : null}
             {file.notices.map((notice) => (
               <div
                 key={notice}
@@ -593,7 +618,7 @@ export function SpecView(props: SpecViewProps) {
               expandedItems={expandedItems}
               filters={viewState.filters}
               revealed={revealed}
-              inbound={inbound}
+              relations={relations}
               copiedId={copiedId}
               flashId={flashId}
               notFoundKey={notFoundKey}
@@ -829,7 +854,7 @@ function FileItems({
   expandedItems,
   filters,
   revealed,
-  inbound,
+  relations,
   copiedId,
   flashId,
   notFoundKey,
@@ -842,7 +867,7 @@ function FileItems({
   expandedItems: ReadonlySet<string>;
   filters: SpecViewState["filters"];
   revealed: ReadonlySet<string>;
-  inbound: Map<string, string[]>;
+  relations: RelationModel;
   copiedId?: string;
   flashId?: string;
   notFoundKey?: string;
@@ -887,7 +912,8 @@ function FileItems({
         item={item}
         expanded={expandedItems.has(item.id)}
         despiteFilter={!filters[item.group] && revealed.has(item.id)}
-        backlinks={inbound.get(item.id) ?? []}
+        outgoing={relations.outgoing.get(item.id)}
+        inbound={relations.inbound.get(item.id) ?? []}
         copied={copiedId === item.id}
         flashed={flashId === item.id}
         notFoundKey={notFoundKey}
@@ -905,7 +931,8 @@ function ItemRow({
   item,
   expanded,
   despiteFilter,
-  backlinks,
+  outgoing,
+  inbound,
   copied,
   flashed,
   notFoundKey,
@@ -917,7 +944,8 @@ function ItemRow({
   item: SpecItemInfo;
   expanded: boolean;
   despiteFilter: boolean;
-  backlinks: string[];
+  outgoing?: ClassifiedCites;
+  inbound: InboundGroup[];
   copied: boolean;
   flashed: boolean;
   notFoundKey?: string;
@@ -927,11 +955,15 @@ function ItemRow({
   onBodyLinkClick: (itemId: string, event: ReactMouseEvent) => void;
 }) {
   const group = item.group;
-  // Cites rows render on test items; external/internal items carry
-  // the computed inbound "cited by" backlinks instead (DR-011 as
-  // amended by DR-015).
-  const showCites = group === "test" && item.cites.length > 0;
-  const showBacklinks = group !== "test" && backlinks.length > 0;
+  // Outgoing rows carry the classified relationship kinds (DR-016);
+  // inbound backlink groups render collapsed by count and expand to
+  // jump links. Which inbound groups are open is cosmetic and local.
+  const rows = outgoing?.rows ?? [];
+  const [openInbound, setOpenInbound] = useState<ReadonlySet<RelationKind>>(
+    new Set(),
+  );
+  // Collapsed rows keep at most two kind-aware hints.
+  const hints = collapsedHints(outgoing, inbound);
 
   const citation = (target: string) => {
     const linkKey = `${item.id}:${target}`;
@@ -984,17 +1016,17 @@ function ItemRow({
           <span className="truncate" title={item.firstLine}>
             {item.firstLine}
           </span>
-          {showCites ? (
+          {hints.length > 0 ? (
             <span className="shrink-0 text-[11px] text-neutral-400">
-              → cites {item.cites.length}
-            </span>
-          ) : null}
-          {showBacklinks ? (
-            <span
-              className="shrink-0 truncate text-[11px] text-neutral-400"
-              title={`Cited by ${backlinks.join(", ")}`}
-            >
-              ✓ cited by {backlinks.join(", ")}
+              {hints.map((hint, index) => (
+                <span key={`${hint.kind}-${hint.direction}`}>
+                  {index > 0 ? " · " : ""}
+                  <span aria-hidden="true">
+                    {RELATION_LABEL[hint.kind].glyph}{" "}
+                  </span>
+                  {relationPhrase(hint.kind, hint.direction)} {hint.count}
+                </span>
+              ))}
             </span>
           ) : null}
         </button>
@@ -1012,18 +1044,52 @@ function ItemRow({
           >
             <Markdown text={item.text} />
           </div>
-          {showCites ? (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-neutral-400">Cites:</span>
-              {item.cites.map(citation)}
+          {rows.map((row) => (
+            <div
+              key={row.kind}
+              data-testid={`row-${item.id}-${row.kind}`}
+              className="flex flex-wrap items-center gap-1.5 text-xs"
+            >
+              <span className="text-neutral-400">
+                <span aria-hidden="true">
+                  {RELATION_LABEL[row.kind].glyph}{" "}
+                </span>
+                {relationPhrase(row.kind, "out")}
+              </span>
+              {row.targets.map(citation)}
             </div>
-          ) : null}
-          {showBacklinks ? (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-neutral-400">Cited by:</span>
-              {backlinks.map(citation)}
-            </div>
-          ) : null}
+          ))}
+          {inbound.map((backlinks) => {
+            const open = openInbound.has(backlinks.kind);
+            return (
+              <div
+                key={backlinks.kind}
+                className="flex flex-wrap items-center gap-1.5 text-xs"
+              >
+                <button
+                  type="button"
+                  data-testid={`inbound-${item.id}-${backlinks.kind}`}
+                  aria-expanded={open}
+                  onClick={() =>
+                    setOpenInbound((current) => {
+                      const next = new Set(current);
+                      if (open) next.delete(backlinks.kind);
+                      else next.add(backlinks.kind);
+                      return next;
+                    })
+                  }
+                  className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                >
+                  <span aria-hidden="true">
+                    {RELATION_LABEL[backlinks.kind].glyph}{" "}
+                  </span>
+                  {relationPhrase(backlinks.kind, "in")}{" "}
+                  {backlinks.sources.length}
+                </button>
+                {open ? backlinks.sources.map(citation) : null}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </li>

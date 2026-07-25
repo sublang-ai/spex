@@ -61,14 +61,35 @@ collapses every item body at once.
 
 While an item row is collapsed, the spec view shall show the
 item's ID chip in its group color, its group tag, and its first
-line, plus a muted cites hint on test-group items carrying inline
-item citations and a muted computed "cited by" backlink hint on
-items cited by other items. When the row is expanded, the view
-shall render the item's full markdown body with horizontal
-overflow contained and its citations and backlinks as in-view
-links; when the ID chip is activated, the view shall copy the
-item ID to the clipboard and acknowledge with a transient tick
+line, plus muted kind-aware relationship hints
+([DR-016](../decisions/016-relationship-presentation.md)). When
+the row is expanded, the view shall render the item's full
+markdown body with horizontal overflow contained and its
+relationships as labeled rows and grouped backlinks per
+[SPECV-19](#specv-19), every entry an in-view link; when the ID
+chip is activated, the view shall copy the item ID to the
+clipboard and acknowledge with a transient tick
 ([DR-010](../decisions/010-interface-craft.md) §3).
+
+### Relationships
+
+#### SPECV-19
+
+While an expanded item carries citations, the spec view shall
+label each citation edge by a kind derived from the citing item
+alone ([DR-016](../decisions/016-relationship-presentation.md)):
+peer-file citations from package behavior items as uses; a
+Binding-section item's citations before its `shall` as the
+clients it serves and after it as its provisions; Scenario-section
+citations as composes, with same-file binding targets as via; and
+Verification- or Tests-section citations as verifies, with a
+composition test's same-file scenario and binding targets as
+executes. Inbound relationships shall render as grouped backlink
+rows named by the citing kind, an expanded file node's header
+shall carry a per-kind relationship rollup with counts, kind
+shall never be conveyed by color alone, and a binding whose text
+defies the one-sentence grammar shall keep plain unlabeled
+citation rows.
 
 ### Filters
 
@@ -313,6 +334,20 @@ unreadable file, one tree notice listing the unknown entries
 ([SPECV-10](#specv-10)); where a project has no `specs/`
 directory, the suite shall assert the reply states absence with
 empty lists ([SPECV-15](#specv-15)).
+
+### Relationship Coverage
+
+#### SPECV-37
+
+Where a fixture tree carries a package item citing a peer, a
+binding with client and provision citations around its `shall`, a
+scenario citing package items and a same-file binding, a
+composition test citing a same-file scenario plus package items,
+and a binding without a `shall`, the test suite shall assert the
+derived edge kinds and row labels, the grouped inbound backlinks,
+the file-header rollup counts, an in-view jump from each kind
+([SPECV-19](#specv-19)), and the unlabeled degradation of the
+grammarless binding ([SPECV-19](#specv-19)).
 
 ### Confinement Coverage
 
