@@ -1,0 +1,5 @@
+# Vendored reference assets are byte-exact artifacts (DR-015): keep
+# LF on every checkout so raw imports and content assertions match
+# the committed bytes on Windows too.
+packages/ui/src/examples/slc-demo/* text eol=lf
+packages/core/assets/playbook-sources/*.md text eol=lf
