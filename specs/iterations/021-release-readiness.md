@@ -13,7 +13,7 @@ Land the branch on main release-ready: the classified relationship presentation 
 - [x] SPECV items amended to the classified model.
 - [x] `npm run smoke` drives the automated pre-release checks; `docs/release-smoke.md` carries the full checklist including the manual steps; RELEASE spec gains the smoke gate.
 - [x] Vendored `/code` and `/discuss` sources refreshed from the layout-agnostic upstream.
-- [ ] Branch merged to main with CI green.
+- [x] Branch merged to main with CI green.
 
 ## Tasks
 
