@@ -360,11 +360,54 @@ describe("lintSpecs", () => {
   it("checks reference markers per META-19", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
-        '# A: A\n\n## Intent\n\nSee [[1]] and [[9]].\n\n## External Behavior\n\n### A-1\n\nX shall Y.\n\n## References\n\n[1]: https://one.example "One"\n[2]: https://two.example "Two"\n',
+        '# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y per [[1]] and [[9]].\n\n## References\n\n[1]: https://one.example "One"\n[2]: https://two.example "Two"\n',
     });
     const found = rules(findings);
     assert.ok(found.includes("refs/undefined"));
     assert.ok(found.includes("refs/unused"));
+    // Literal [[N]] markers are not reference-style citations.
+    assert.ok(!found.includes("cite/reference-style"));
+    assert.ok(!found.includes("refs/definition"));
+  });
+
+  it("pins reference markers to the exact [[N]] form (META-19)", () => {
+    // A bare [1] and a collapsed [2][] are reference-style
+    // citations, not markers, numeric labels notwithstanding.
+    const shortcutForms = findingsFor({
+      "specs/packages/a.md":
+        '# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall follow [1] and [2][].\n\n## References\n\n[1]: https://one.example "One"\n[2]: https://two.example "Two"\n',
+    });
+    assert.equal(
+      shortcutForms.filter((f) => f.rule === "cite/reference-style").length,
+      2,
+      JSON.stringify(shortcutForms),
+    );
+
+    // A numbered definition lives under ## References only.
+    const strayDefinition = findingsFor({
+      "specs/packages/a.md":
+        '# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y per [[1]].\n\n[1]: https://one.example "One"\n',
+    });
+    const stray = strayDefinition.find((f) => f.rule === "refs/definition");
+    assert.ok(stray, "expected a refs/definition finding");
+    assert.equal(stray.severity, "error");
+
+    // ...and points outward, never at a spec file, so a marker
+    // cannot smuggle a peer item citation past clause discipline.
+    const specTarget = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nThe system shall record logins per [[1]].\n\n## References\n\n[1]: audit.md#aud-1\n",
+      "specs/packages/audit.md":
+        "# AUD: Audit\n\n## Intent\n\nAudit behavior.\n\n## External Behavior\n\n### AUD-1\n\nWhere an event is reported, the audit log shall record it.\n",
+    });
+    assert.ok(rules(specTarget).includes("refs/definition"));
+
+    // A marker is still a citation inside Intent (META-15).
+    const intentMarker = findingsFor({
+      "specs/packages/a.md":
+        '# A: A\n\n## Intent\n\nShaped by [[1]].\n\n## External Behavior\n\n### A-1\n\nX shall Y per [[1]].\n\n## References\n\n[1]: https://one.example "One"\n',
+    });
+    assert.ok(rules(intentMarker).includes("intent/cited"));
   });
 
   it("warns on records missing required sections", () => {
@@ -399,6 +442,27 @@ describe("lintSpecs", () => {
       "specs/map.md": MAP("| File | Summary |\n| --- | --- |\n| [auth.md](packages/auth.md) | Auth |"),
     });
     assert.ok(!rules(clean).includes("anchors/duplicate"));
+  });
+
+  it("counts only root-level headings as structure (LINT-10)", () => {
+    // A package quoted wholesale carries no structure at all.
+    const quoted = findingsFor({
+      "specs/packages/a.md":
+        "> # AAA: Quoted\n>\n> ## Intent\n>\n> X.\n>\n> ## External Behavior\n>\n> ### AAA-1\n>\n> X shall Y.\n",
+    });
+    assert.ok(rules(quoted).includes("package/heading"));
+    assert.ok(rules(quoted).includes("package/sections"));
+
+    // Quoted lookalikes inside a real package are content: no
+    // unexpected section, no foreign item, no truncated body.
+    const decoys = findingsFor({
+      "specs/packages/auth.md":
+        "# AUTH: Auth\n\n## Intent\n\nX.\n\n## External Behavior\n\n### AUTH-1\n\nAn example under discussion:\n\n> ## Layout\n>\n> ### AUD-9\n>\n> A quoted example.\n\nWhen credentials are valid, the system shall log the user in.\n\n## Verification\n\n### AUTH-2\n\nThe suite shall assert login ([AUTH-1](#auth-1)).\n",
+      "specs/map.md": MAP(
+        "| File | Summary |\n| --- | --- |\n| [auth.md](packages/auth.md) | Auth |",
+      ),
+    });
+    assert.deepEqual(decoys, []);
   });
 
   it("spans an item body to nested subheadings (LINT-10)", () => {
@@ -548,6 +612,129 @@ describe("lintSpecs", () => {
     });
     assert.ok(rules(subjectPosition).includes("cite/outcome"));
 
+    // A subject-position citation after a real precondition: the
+    // cite belongs to the clause that carries the shall.
+    const subjectAfterPrecondition = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere credentials are valid, the audit log ([AUD-1](audit.md#aud-1)) shall receive every login event.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(subjectAfterPrecondition).includes("cite/outcome"));
+
+    // An appositive comma after the shall-clause subject does not
+    // hand the citation to the precondition: keyword and citation
+    // must share one separator-free span.
+    const appositive = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere credentials are valid, the audit stream ([AUD-1](audit.md#aud-1)), arriving in order, shall be recorded.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(appositive).includes("cite/outcome"));
+
+    // A chained precondition stays legal: the separator introduces
+    // a further clause-start keyword that governs the citation.
+    const chainedPrecondition = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere the feature is enabled, when the audit log accepts an event ([AUD-1](audit.md#aud-1)), the system shall record it.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(!rules(chainedPrecondition).includes("cite/outcome"));
+
+    // An "and"-joined condition shares the keyword's span.
+    const andChain = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere the user is signed in and the audit log accepts events ([AUD-1](audit.md#aud-1)), the system shall record logins.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(!rules(andChain).includes("cite/outcome"));
+
+    // A trailing "…, where …" clause after the shall is not a
+    // precondition of it.
+    const trailingRelative = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nThe system shall link to the audit surface, where events are recorded ([AUD-1](audit.md#aud-1)).\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(trailingRelative).includes("cite/outcome"));
+
+    // A fresh sentence reopens preconditions after an earlier shall.
+    const multiSentence = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nThe system shall accept logins. Where the audit log accepts events ([AUD-1](audit.md#aud-1)), the system shall record them.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(!rules(multiSentence).includes("cite/outcome"));
+
+    // The dot inside a version number ends no sentence, so a
+    // trailing where-clause cannot reopen preconditions.
+    const versionNumber = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nThe system shall speak protocol 1.2, where events are recorded ([AUD-1](audit.md#aud-1)).\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(versionNumber).includes("cite/outcome"));
+
+    // A directly linked shall-subject cannot ride its introducing
+    // comma into the precondition span.
+    const linkedSubject = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere credentials are valid, [AUD-1](audit.md#aud-1), arriving in order, shall be recorded.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(linkedSubject).includes("cite/outcome"));
+
+    // Citations grouped in one precondition share one span: the
+    // comma between them joins the group, closing no clause.
+    const groupedPrecondition = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere the audit endpoints respond ([AUD-1](audit.md#aud-1), [AUD-3](audit.md#aud-3)), the system shall sync.\n",
+      "specs/packages/audit.md": `${AUDIT_EXTERNAL}\n### AUD-3\n\nWhere polled, the audit endpoint shall answer.\n`,
+    });
+    assert.ok(!rules(groupedPrecondition).includes("cite/outcome"));
+
+    // A non-item anchor is no citation of a peer contract.
+    const sectionAnchor = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile audit is available ([intent](audit.md#intent)), the system shall log in.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(sectionAnchor).includes("cite/internal"));
+
+    // Reference-style links dodge the citation rules; prohibited.
+    const referenceStyle = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile audit accepts events ([AUD-1][aud]), the system shall log in.\n\n[aud]: audit.md#aud-1\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(referenceStyle).includes("cite/reference-style"));
+
+    // A numeric label does not make a full reference a [[N]] marker,
+    // and the definition's target is still section-checked.
+    const numericFullReference = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhile audit holds ([AUD-2][1]), the system shall log in.\n\n[1]: audit.md#aud-2\n",
+      "specs/packages/audit.md":
+        "# AUD: Audit\n\n## Intent\n\nAudit behavior.\n\n## External Behavior\n\n### AUD-1\n\nWhere an event is reported, the audit log shall record it.\n\n## Verification\n\n### AUD-2\n\nThe suite shall assert recording ([AUD-1](#aud-1)).\n",
+    });
+    assert.ok(rules(numericFullReference).includes("cite/reference-style"));
+    assert.ok(rules(numericFullReference).includes("cite/internal"));
+
+    // Inline-code keywords cannot fake a precondition clause.
+    const inlineCodeKeyword = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nThe `Where` handling shall follow the audit contract ([AUD-1](audit.md#aud-1)).\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(inlineCodeKeyword).includes("cite/outcome"));
+
+    // A comma inside a link label is no clause boundary.
+    const labelComma = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nWhere credentials are valid, the log ([AUD-1, audit entry](audit.md#aud-1)) shall receive events.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(labelComma).includes("cite/outcome"));
+
     const zhOutcome = findingsFor({
       "specs/packages/a.md":
         "# A: 甲\n\n## 意图\n\n甲行为。\n\n## 外部行为\n\n### A-1\n\n系统应使用对等审计（[AUD-1](audit.md#aud-1)）记录登录。\n",
@@ -593,6 +780,42 @@ describe("lintSpecs", () => {
         "# AUD: Audit\n\n## Intent\n\nAudit behavior.\n\n## External Behavior\n\n### AUD-1\n\nWhere an event is reported, the audit log shall record it.\n",
     });
     assert.ok(rules(bareLink).includes("cite/internal"));
+  });
+
+  it("errors on peer citations in section prose (LINT-13)", () => {
+    const AUDIT_EXTERNAL =
+      "# AUD: Audit\n\n## Intent\n\nAudit behavior.\n\n## External Behavior\n\n### AUD-1\n\nWhere an event is reported, the audit log shall record it.\n";
+
+    // Prose between the section heading and the first item cannot
+    // declare a package dependency.
+    const prose = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\nThis package builds on the audit log ([AUD-1](audit.md#aud-1)).\n\n### A-1\n\nX shall Y.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    const finding = prose.find((f) => f.rule === "cite/prose");
+    assert.ok(finding, "expected a cite/prose finding");
+    assert.equal(finding.severity, "error");
+
+    // References prose is outside every item too.
+    const referencesProse = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### A-1\n\nX shall Y.\n\n## References\n\nSee also [AUD-1](audit.md#aud-1).\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+    });
+    assert.ok(rules(referencesProse).includes("cite/prose"));
+
+    // A record link in section prose names no package dependency,
+    // and an Intent citation keeps its own rule.
+    const nonPeer = findingsFor({
+      "specs/packages/a.md":
+        "# A: A\n\n## Intent\n\nSee [AUD-1](audit.md#aud-1).\n\n## External Behavior\n\nShaped by [DR-001](../decisions/001-a.md).\n\n### A-1\n\nX shall Y.\n",
+      "specs/packages/audit.md": AUDIT_EXTERNAL,
+      "specs/decisions/001-a.md":
+        "# DR-001: A\n\n## Status\n\nAccepted\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n",
+    });
+    assert.ok(!rules(nonPeer).includes("cite/prose"));
+    assert.ok(rules(nonPeer).includes("intent/cited"));
   });
 
   it("errors on textual IR references outside the map (META-18)", () => {

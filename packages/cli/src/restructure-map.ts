@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import type { Code, Heading, Node, Root, Table, TableRow } from "mdast";
+import type { Code, Heading, Root, Table, TableRow } from "mdast";
 import type { ScaffoldLanguage } from "./copy-templates.js";
 import {
   applyEdits,
@@ -9,7 +9,6 @@ import {
   parseMarkdown,
   sliceNode,
   startOffset,
-  visit,
   type TextEdit,
 } from "./markdown.js";
 
@@ -125,11 +124,17 @@ function rewriteLayoutBlock(
   return fenceMatch[1] + result.join("\n") + fenceMatch[3];
 }
 
+// Heading names of the map's packages section in the bundled
+// templates.
+const PACKAGES_HEADINGS = new Set(["Packages", "包"]);
+
 /**
  * Restructure a user-maintained map.md for the packages/interactions
- * layout: layout block lines, group tables reshaped to one row per
- * package, and an Interactions section appended when absent. All
- * other content is preserved. Returns null when nothing changed.
+ * layout: layout block lines under the Layout heading, group tables
+ * under the Packages heading reshaped to one row per package, and an
+ * Interactions section appended when absent. Transforms are scoped
+ * through the parsed sections, so lookalike blocks and tables
+ * elsewhere are preserved. Returns null when nothing changed.
  */
 export function restructureMap(
   text: string,
@@ -139,9 +144,25 @@ export function restructureMap(
   const tree: Root = parseMarkdown(text);
   const edits: TextEdit[] = [];
 
+  // Only root-level nodes are walked: a heading quoted, listed, or
+  // fenced inside other content is content, not a section (SCAF-41),
+  // and nested blocks are never rewritten.
+  let section: string | null = null;
   let layoutPending = true;
-  visit(tree, (node: Node) => {
-    if (node.type === "code" && layoutPending) {
+  for (const node of tree.children) {
+    if (node.type === "heading") {
+      const heading = node as Heading;
+      if (heading.depth === 2) {
+        section = sliceNode(text, heading).replace(/^#+\s*/, "").trim();
+      }
+      continue;
+    }
+    if (
+      node.type === "code" &&
+      layoutPending &&
+      section !== null &&
+      LAYOUT_HEADINGS.has(section)
+    ) {
       const replacement = rewriteLayoutBlock(
         text,
         node as Code,
@@ -155,9 +176,13 @@ export function restructureMap(
           replacement,
         });
       }
-      return;
+      continue;
     }
-    if (node.type === "table") {
+    if (
+      node.type === "table" &&
+      section !== null &&
+      PACKAGES_HEADINGS.has(section)
+    ) {
       const replacement = reshapeGroupTable(text, node as Table);
       if (replacement !== null) {
         edits.push({
@@ -167,17 +192,25 @@ export function restructureMap(
         });
       }
     }
-  });
+  }
 
   let result = edits.length > 0 ? applyEdits(text, edits) : text;
 
   const renamed = renameInteractionsHeading(result, language);
   if (renamed !== null) result = renamed;
 
-  const hasCompositions = new RegExp(
-    `^##\\s+(${strings.compositionsHeading}|Compositions)\\s*$`,
-    "m",
-  ).test(result);
+  // Detect an existing Compositions section on root-level H2 nodes,
+  // so a fenced, blockquoted, or listed "## Compositions" example
+  // cannot suppress the append.
+  const h2Titles = new Set<string>();
+  for (const node of parseMarkdown(result).children) {
+    if (node.type !== "heading") continue;
+    const heading = node as Heading;
+    if (heading.depth !== 2) continue;
+    h2Titles.add(sliceNode(result, heading).replace(/^#+\s*/, "").trim());
+  }
+  const hasCompositions =
+    h2Titles.has(strings.compositionsHeading) || h2Titles.has("Compositions");
   if (!hasCompositions) {
     result =
       result.trimEnd() +
@@ -205,48 +238,53 @@ export function renameInteractionsHeading(
   language: ScaffoldLanguage,
 ): string | null {
   const strings = MAP_STRINGS[language];
-  let result = text.replace(
-    /^##(\s+)(Interactions|交互)(\s*)$/m,
-    `##$1${strings.compositionsHeading}$3`,
-  );
-
-  const tree: Root = parseMarkdown(result);
-  let layoutDepth: number | null = null;
+  const tree: Root = parseMarkdown(text);
+  const edits: TextEdit[] = [];
   let inLayout = false;
-  let edit: TextEdit | null = null;
-  visit(tree, (node: Node) => {
-    if (edit !== null) return;
+  let layoutDone = false;
+  // Root-level nodes only: a quoted or listed "## Interactions" is
+  // content to keep, and a nested block never opens the Layout
+  // scope (SCAF-41).
+  for (const node of tree.children) {
     if (node.type === "heading") {
       const heading = node as Heading;
-      const title = sliceNode(result, heading).replace(/^#+\s*/, "").trim();
-      if (LAYOUT_HEADINGS.has(title)) {
-        layoutDepth = heading.depth;
-        inLayout = true;
-      } else if (layoutDepth !== null && heading.depth <= layoutDepth) {
-        inLayout = false;
+      const title = sliceNode(text, heading).replace(/^#+\s*/, "").trim();
+      if (heading.depth === 2 && (title === "Interactions" || title === "交互")) {
+        const source = sliceNode(text, heading);
+        edits.push({
+          start: startOffset(heading),
+          end: endOffset(heading),
+          replacement: source.replace(
+            /(Interactions|交互)/,
+            strings.compositionsHeading,
+          ),
+        });
       }
-      return;
+      if (heading.depth === 2) {
+        inLayout = LAYOUT_HEADINGS.has(title);
+      }
+      continue;
     }
-    if (!inLayout || node.type !== "code") return;
+    if (!inLayout || layoutDone || node.type !== "code") continue;
     const code = node as Code;
     const lines = code.value.split("\n");
     const isInteractions = (line: string) => /^interactions\/[ \t]/.test(line);
-    if (!lines.some(isInteractions)) return;
+    if (!lines.some(isInteractions)) continue;
     const replaced = lines
       .map((line) => (isInteractions(line) ? strings.layoutLines[1] : line))
       .join("\n");
-    const source = sliceNode(result, code);
+    const source = sliceNode(text, code);
     const fenceMatch = source.match(
       /^(\s*(?:```|~~~)[^\n]*\n)([\s\S]*?)(\n\s*(?:```|~~~)\s*)$/,
     );
-    if (fenceMatch === null) return;
-    edit = {
+    if (fenceMatch === null) continue;
+    layoutDone = true;
+    edits.push({
       start: startOffset(code),
       end: endOffset(code),
       replacement: fenceMatch[1] + replaced + fenceMatch[3],
-    };
-  });
-  if (edit !== null) result = applyEdits(result, [edit]);
-
-  return result === text ? null : result;
+    });
+  }
+  if (edits.length === 0) return null;
+  return applyEdits(text, edits);
 }

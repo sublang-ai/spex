@@ -222,6 +222,13 @@ restructure the map in place and report it as
   in user, dev, test order.
 - A Compositions section shall be appended when the map has none.
 - All other map content shall be preserved.
+- Every transform is scoped through the parsed sections: the
+  layout rewrite applies only to the code block under the Layout
+  heading, group tables reshape only under the Packages heading,
+  and the Interactions heading rename edits heading nodes — where
+  a section heading means a root-level `##` node, so a fenced
+  example, a blockquoted or list-nested heading, or a lookalike
+  elsewhere is never rewritten and never suppresses a transform.
 
 #### SCAF-50
 

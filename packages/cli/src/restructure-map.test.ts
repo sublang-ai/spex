@@ -110,6 +110,148 @@ Some prose.
     assert.match(result, /\n## Compositions\n\nNone yet\./);
   });
 
+  it("scopes transforms to the Layout and Packages sections", () => {
+    const custom = [
+      "# Map",
+      "",
+      "## Notes",
+      "",
+      "An example of the old layout and an old table:",
+      "",
+      "```text",
+      "user/       Example old layout line",
+      "map.md      This index",
+      "```",
+      "",
+      "| Group | File | Summary |",
+      "| --- | --- | --- |",
+      "| user | [a.md](user/a.md) | Example row |",
+      "",
+      "```text",
+      "## Interactions",
+      "```",
+      "",
+      "## Layout",
+      "",
+      "```text",
+      "user/       User-visible item files",
+      "map.md      This index",
+      "```",
+      "",
+      "## Packages",
+      "",
+      "### AUTH",
+      "",
+      "| Group | File | Summary |",
+      "| --- | --- | --- |",
+      "| user | [auth.md](packages/auth.md) | Login |",
+      "",
+    ].join("\n");
+    const result = restructureMap(custom, "en");
+    assert.ok(result !== null);
+    // The Notes decoys are untouched: example layout line, example
+    // group table, and the fenced Interactions heading.
+    assert.match(result, /^user\/ {7}Example old layout line$/m);
+    assert.match(result, /\| user \| \[a\.md\]\(user\/a\.md\) \| Example row \|/);
+    assert.match(result, /```text\n## Interactions\n```/);
+    // The real sections are transformed.
+    assert.match(result, /packages\/ {5}Spec packages/);
+    assert.doesNotMatch(result, /^user\/ {7}User-visible item files$/m);
+    assert.match(
+      result,
+      /\| \[auth\.md\]\(packages\/auth\.md\) \| Login \|/,
+    );
+  });
+
+  it("appends Compositions despite a fenced example heading", () => {
+    const withFencedExample =
+      "# Map\n\n## Notes\n\n```text\n## Compositions\n```\n";
+    const result = restructureMap(withFencedExample, "en");
+    assert.ok(result !== null);
+    assert.match(result, /\n## Compositions\n\nNone yet\./);
+  });
+
+  it("ignores a nested Layout heading when rewriting the layout line", () => {
+    const renamed = renameInteractionsHeading(
+      [
+        "# Map",
+        "",
+        "## Notes",
+        "",
+        "### Layout",
+        "",
+        "```text",
+        "interactions/ Example line",
+        "```",
+        "",
+        "## Layout",
+        "",
+        "```text",
+        "packages/     Spec packages (one file per package)",
+        "interactions/ Cross-package behaviors and tests",
+        "```",
+        "",
+      ].join("\n"),
+      "en",
+    );
+    assert.ok(renamed !== null);
+    assert.match(renamed, /^interactions\/ Example line$/m);
+    assert.match(
+      renamed,
+      /^compositions\/ Cross-package compositions: scenarios, bindings, tests$/m,
+    );
+  });
+
+  it("ignores blockquoted and listed H2 lookalikes (root-level only)", () => {
+    // A quoted "## Compositions" does not suppress the append.
+    const quotedCompositions = restructureMap(
+      "# Map\n\n## Notes\n\n> ## Compositions\n> A quoted example.\n",
+      "en",
+    );
+    assert.ok(quotedCompositions !== null);
+    assert.match(quotedCompositions, /\n## Compositions\n\nNone yet\./);
+    assert.match(quotedCompositions, /^> ## Compositions$/m);
+
+    // Neither does one carried in a list item.
+    const listedCompositions = restructureMap(
+      "# Map\n\n## Notes\n\n- ## Compositions\n",
+      "en",
+    );
+    assert.ok(listedCompositions !== null);
+    assert.match(listedCompositions, /\n## Compositions\n\nNone yet\./);
+
+    // A quoted "## Layout" opens no section scope: the code block
+    // after the quote keeps its legacy-looking line.
+    const quotedLayout = restructureMap(
+      [
+        "# Map",
+        "",
+        "## Notes",
+        "",
+        "> ## Layout",
+        "",
+        "```text",
+        "user/       Old line in an example",
+        "```",
+        "",
+      ].join("\n"),
+      "en",
+    );
+    assert.ok(quotedLayout !== null);
+    assert.match(quotedLayout, /^user\/ {7}Old line in an example$/m);
+
+    // A quoted "## Interactions" is content: the real heading is
+    // renamed, the quoted one is kept.
+    const quotedInteractions = renameInteractionsHeading(
+      "# Map\n\n## Notes\n\n> ## Interactions\n> A quoted example.\n\n## Interactions\n\nBody.\n",
+      "en",
+    );
+    assert.ok(quotedInteractions !== null);
+    assert.match(quotedInteractions, /^> ## Interactions$/m);
+    assert.match(quotedInteractions, /^## Compositions$/m);
+    assert.doesNotMatch(quotedInteractions, /^## Interactions$/m);
+  });
+
   it("does not append Compositions when one exists", () => {
     const withCompositions = `${EN_MAP}\n## Compositions\n\n| File | Summary |\n| --- | --- |\n| [login-flow.md](compositions/login-flow.md) | End-to-end login |\n`;
     const result = restructureMap(withCompositions, "en");

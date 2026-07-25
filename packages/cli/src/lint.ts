@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, posix, relative } from "node:path";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import { join, posix, relative, sep } from "node:path";
 import type { Heading, Node, Root } from "mdast";
 import {
   baseHeadingSlugs,
@@ -105,6 +111,12 @@ type HeadingInfo = {
   plain: string;
   line: number;
   slug: string;
+  /**
+   * A direct child of the document root. Only root-level headings
+   * carry structure — H1, sections, items; a heading nested in a
+   * blockquote or list is content. Anchors cover every heading.
+   */
+  root: boolean;
 };
 
 type LinkInfo = {
@@ -131,6 +143,12 @@ type SpecFile = {
   fenced: boolean[];
   /** Inline text spans (mdast text nodes) with their start lines. */
   texts: { line: number; value: string }[];
+  /** Reference-style links other than literal [[N]] markers. */
+  referenceLinks: { line: number }[];
+  /** Every reference-style use, [[N]] markers included. */
+  referenceUses: { line: number }[];
+  /** Inline prose outside links and code, for clause checks. */
+  clauseTexts: { line: number; column: number; value: string }[];
 };
 
 type LintContext = {
@@ -169,9 +187,11 @@ function loadFile(basePath: string, relPath: string): SpecFile {
   const text = readFileSync(join(basePath, relPath), "utf-8");
   const tree = parseMarkdown(text);
 
-  const rawHeadings: Omit<HeadingInfo, "slug">[] = [];
+  const rawHeadings: Omit<HeadingInfo, "slug" | "root">[] = [];
   const links: LinkInfo[] = [];
   const texts: { line: number; value: string }[] = [];
+  const referenceLinks: { line: number }[] = [];
+  const referenceUses: { line: number }[] = [];
   visit(tree, (node: Node) => {
     if (node.type === "heading") {
       const heading = node as Heading;
@@ -190,6 +210,36 @@ function loadFile(basePath: string, relPath: string): SpecFile {
       });
       return;
     }
+    if (node.type === "linkReference" || node.type === "imageReference") {
+      const reference = node as unknown as {
+        identifier: string;
+        referenceType?: string;
+      };
+      const line = node.position?.start.line ?? 1;
+      referenceUses.push({ line });
+      // Only the literal [[N]] marker form of META-19 is exempt: a
+      // numeric shortcut reference wrapped in the outer brackets.
+      // A bare [1], a collapsed [1][], and any full reference are
+      // disguised citations even with numeric labels.
+      const startColumn = node.position?.start.column;
+      const endColumn = node.position?.end.column;
+      const sameLine = node.position?.start.line === node.position?.end.line;
+      const source = sameLine ? (text.split("\n")[line - 1] ?? "") : "";
+      const wrapped =
+        sameLine &&
+        startColumn !== undefined &&
+        endColumn !== undefined &&
+        source.charAt(startColumn - 2) === "[" &&
+        source.charAt(endColumn - 1) === "]";
+      const isMarker =
+        /^\d+$/.test(reference.identifier) &&
+        reference.referenceType === "shortcut" &&
+        wrapped;
+      if (!isMarker) {
+        referenceLinks.push({ line });
+      }
+      return;
+    }
     if (
       node.type === "link" ||
       node.type === "image" ||
@@ -204,13 +254,49 @@ function loadFile(basePath: string, relPath: string): SpecFile {
     }
   });
 
+  // Inline prose for clause checks: text nodes outside links,
+  // images, references, and code, so a keyword in inline code or a
+  // separator inside a link label cannot fool clause detection.
+  const clauseTexts: { line: number; column: number; value: string }[] = [];
+  const collectClauseTexts = (node: Node): void => {
+    if (
+      node.type === "link" ||
+      node.type === "linkReference" ||
+      node.type === "image" ||
+      node.type === "imageReference" ||
+      node.type === "inlineCode" ||
+      node.type === "code"
+    ) {
+      return;
+    }
+    if (node.type === "text") {
+      clauseTexts.push({
+        line: node.position?.start.line ?? 1,
+        column: node.position?.start.column ?? 1,
+        value: (node as unknown as { value: string }).value,
+      });
+      return;
+    }
+    const children = (node as unknown as { children?: Node[] }).children;
+    for (const child of children ?? []) collectClauseTexts(child);
+  };
+  collectClauseTexts(tree);
+
   const slugList = headingSlugs(text, tree);
+  const rootHeadingLines = new Set<number>();
+  for (const child of tree.children) {
+    if (child.type === "heading") {
+      rootHeadingLines.add(child.position?.start.line ?? 1);
+    }
+  }
   const headings: HeadingInfo[] = rawHeadings.map((heading, index) => ({
     ...heading,
     slug: slugList[index] ?? "",
+    root: rootHeadingLines.has(heading.line),
   }));
   const lines = text.split("\n");
-  const h1 = headings.find((heading) => heading.depth === 1) ?? null;
+  const h1 =
+    headings.find((heading) => heading.depth === 1 && heading.root) ?? null;
   const h1Match = h1?.plain.match(H1_RE) ?? null;
 
   return {
@@ -226,6 +312,9 @@ function loadFile(basePath: string, relPath: string): SpecFile {
     shortForm: h1Match === null ? null : h1Match[1],
     fenced: codeLineMap(tree, lines.length),
     texts,
+    referenceLinks,
+    referenceUses,
+    clauseTexts,
   };
 }
 
@@ -353,7 +442,9 @@ function lintSections(
   ruleId: string,
   kind: string,
 ): string[] {
-  const h2s = file.headings.filter((heading) => heading.depth === 2);
+  const h2s = file.headings.filter(
+    (heading) => heading.depth === 2 && heading.root,
+  );
   const present: string[] = [];
   for (const heading of h2s) {
     const canonical = SECTION_BY_NAME.get(heading.plain.trim());
@@ -570,13 +661,15 @@ function collectItems(ctx: LintContext): ItemInfo[] {
       file.relPath === "specs/meta.md";
     if (!eligible) continue;
     for (const [index, heading] of file.headings.entries()) {
-      if (heading.depth < 2) continue;
+      if (heading.depth < 2 || !heading.root) continue;
       const match = heading.plain.trim().match(ITEM_RE);
       if (match === null) continue;
-      // LINT-10: the body runs to the next heading of the same or
-      // shallower depth, so nested subsections stay in the item.
+      // LINT-10: the body runs to the next root-level heading of
+      // the same or shallower depth, so nested subsections stay in
+      // the item and a quoted heading never truncates its body.
       let bodyEnd = file.lines.length + 1;
       for (let after = index + 1; after < file.headings.length; after += 1) {
+        if (!file.headings[after].root) continue;
         if (file.headings[after].depth <= heading.depth) {
           bodyEnd = file.headings[after].line;
           break;
@@ -600,7 +693,7 @@ function sectionOf(file: SpecFile, heading: HeadingInfo): string | null {
   let current: string | null = null;
   for (const candidate of file.headings) {
     if (candidate.line > heading.line) break;
-    if (candidate.depth === 2) {
+    if (candidate.depth === 2 && candidate.root) {
       current = SECTION_BY_NAME.get(candidate.plain.trim()) ?? candidate.plain;
     }
   }
@@ -966,14 +1059,13 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
 // ---------------------------------------------------------------
 
 // Clause keywords deciding a citation's clause (META-6), in both
-// bundled languages. zh 当 counts at clause starts only (excluding
-// 当前-class words), and zh 应 excludes common non-shall compounds
-// like 应用 and 反应.
+// bundled languages, matched over parsed inline text. zh 当 counts
+// at clause starts only (excluding 当前-class words), and zh 应
+// excludes common non-shall compounds like 应用 and 反应.
 const PRECONDITION_KEYWORD_RE =
-  /\b(Where|While|When)\b|给定|如果|(^|[，。；：、（("'「])\s*当(?![前中下然])/g;
+  /\b(Where|While|When)\b|(^|[,，、;；]\s*)(where|while|when)\b|给定|如果|(^|[，。；：、（("'「]|\s)\s*当(?![前中下然])/g;
 const SHALL_KEYWORD_RE =
   /\bshall\b|(?<![反相对适响供效回报感一])应(?![用对答邀酬])/g;
-
 function lastMatchIndex(text: string, re: RegExp): number {
   let last = -1;
   re.lastIndex = 0;
@@ -981,12 +1073,55 @@ function lastMatchIndex(text: string, re: RegExp): number {
   return last;
 }
 
+// Links appear in the clause window as a placeholder. A separator
+// is a clause boundary unless it sits between two citations of one
+// group \u2014 "([A-1], [B-2])" \u2014 where the comma joins the group
+// instead of closing the clause; a separator merely preceding or
+// merely following a citation still bounds it, so a linked subject
+// cannot ride an introducing comma into the precondition.
+const LINK_PLACEHOLDER = "\uE000";
+const SEPARATOR_CHAR_RE = /[,\uFF0C\u3001;\uFF1B]/g;
+function isClauseBoundary(text: string, index: number): boolean {
+  return !(
+    /\uE000\s*$/.test(text.slice(0, index)) &&
+    /^\s*\uE000/.test(text.slice(index + 1))
+  );
+}
+function lastBoundaryIndex(text: string): number {
+  let last = -1;
+  SEPARATOR_CHAR_RE.lastIndex = 0;
+  for (const match of text.matchAll(SEPARATOR_CHAR_RE)) {
+    const index = match.index ?? 0;
+    if (isClauseBoundary(text, index)) last = index;
+  }
+  return last;
+}
+function hasBoundaryBefore(text: string, end: number): boolean {
+  SEPARATOR_CHAR_RE.lastIndex = 0;
+  for (const match of text.matchAll(SEPARATOR_CHAR_RE)) {
+    const index = match.index ?? 0;
+    if (index >= end) break;
+    if (isClauseBoundary(text, index)) return true;
+  }
+  return false;
+}
+// Sentence ends that let a later clause open a fresh precondition
+// (a multi-sentence item, or parallel arms joined by semicolons).
+// The en enders count only before whitespace or end of text, so
+// the dot inside "1.2" never ends a sentence; the zh enders stand
+// alone, since zh writes no space after them.
+const SENTENCE_BOUNDARY_RE = /[.;!?](?=\s|$)|[\u3002\uFF1B\uFF01\uFF1F]/;
+
 /**
- * The paragraph prefix before a link: from the paragraph's first
- * line (a list attaches to a lead-in ending in a colon) to the
- * link's start column.
+ * The clause window around a link: the paragraph's inline prose
+ * before and after it, built from parsed text nodes — inline code
+ * and link labels excluded, other links reduced to a placeholder —
+ * with a list or table attached to a lead-in ending in a colon.
  */
-function paragraphPrefix(item: ItemInfo, link: LinkInfo): string {
+function clauseWindow(
+  item: ItemInfo,
+  link: LinkInfo,
+): { prefix: string; suffix: string } {
   const lines = item.file.lines;
   let start = link.line;
   while (start - 1 > item.heading.line) {
@@ -1000,17 +1135,55 @@ function paragraphPrefix(item: ItemInfo, link: LinkInfo): string {
     while (above > item.heading.line && lines[above - 1].trim() === "") {
       above -= 1;
     }
-    if (above > item.heading.line && /[:：]$/.test(lines[above - 1].trim())) {
+    if (above > item.heading.line && /[:\uFF1A]$/.test(lines[above - 1].trim())) {
       start = above;
       continue;
     }
     break;
   }
-  let prefix = "";
-  for (let line = start; line < link.line; line += 1) {
-    prefix += `${lines[line - 1]}\n`;
+  let end = link.line;
+  while (
+    end < item.bodyEnd - 1 &&
+    end < lines.length &&
+    lines[end].trim() !== ""
+  ) {
+    end += 1;
   }
-  return prefix + lines[link.line - 1].slice(0, link.column - 1);
+
+  const tokens = [
+    ...item.file.clauseTexts,
+    ...item.file.links
+      .filter((other) => other.kind === "link")
+      .map((other) => ({
+        line: other.line,
+        column: other.column,
+        value: LINK_PLACEHOLDER,
+      })),
+  ]
+    .filter((token) => token.line >= start && token.line <= end)
+    .sort((a, b) => a.line - b.line || a.column - b.column);
+
+  const before: string[] = [];
+  const after: string[] = [];
+  for (const token of tokens) {
+    if (
+      token.line < link.line ||
+      (token.line === link.line && token.column < link.column)
+    ) {
+      before.push(token.value);
+    } else if (token.line === link.line && token.column === link.column) {
+      // The citation itself closes the prefix and opens the suffix
+      // as a placeholder, so a separator between it and a grouped
+      // neighbor citation reads as inside the group on both sides.
+      before.push(LINK_PLACEHOLDER);
+    } else {
+      after.push(token.value);
+    }
+  }
+  return {
+    prefix: before.join(" "),
+    suffix: [LINK_PLACEHOLDER, ...after].join(" "),
+  };
 }
 
 function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
@@ -1019,7 +1192,9 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
     if (!isUnder(file.relPath, "packages")) continue;
 
     // A package Intent is self-contained prose (META-15).
-    const h2s = file.headings.filter((heading) => heading.depth === 2);
+    const h2s = file.headings.filter(
+      (heading) => heading.depth === 2 && heading.root,
+    );
     for (const [index, heading] of h2s.entries()) {
       if (SECTION_BY_NAME.get(heading.plain.trim()) !== "Intent") continue;
       const end = h2s[index + 1]?.line ?? file.lines.length + 1;
@@ -1036,12 +1211,26 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
           );
         }
       }
+      // Reference markers included — [[N]] is a citation too.
+      for (const use of file.referenceUses) {
+        if (use.line > heading.line && use.line < end) {
+          report(
+            ctx,
+            file.relPath,
+            use.line,
+            "error",
+            "intent/cited",
+            "the Intent section carries a reference marker; keep Intent self-contained prose (META-15)",
+          );
+        }
+      }
     }
 
     // Package citations never target a peer's Internal Behavior
-    // (META-14).
+    // (META-14) — definitions included, so a reference-style
+    // definition cannot smuggle the target either.
     for (const link of file.links) {
-      if (link.kind !== "link") continue;
+      if (link.kind !== "link" && link.kind !== "definition") continue;
       const [path, ...fragmentParts] = link.url.split("#");
       const fragment = fragmentParts.join("#");
       if (path === "" || fragment === "") continue;
@@ -1064,6 +1253,44 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
           `citation targets ${target.id} in ${resolved}'s ${target.section ?? "front matter"}; a peer may rely only on External Behavior (META-14, META-28)`,
         );
       }
+    }
+
+    // Item clauses are the single relationship source (META-20): a
+    // peer citation from section prose outside every item body
+    // declares a dependency no clause carries (META-14). Intent
+    // links are skipped here — they carry intent/cited already.
+    const itemRanges = items
+      .filter((item) => item.file === file)
+      .map((item) => ({ start: item.heading.line, end: item.bodyEnd }));
+    const intentRanges: { start: number; end: number }[] = [];
+    for (const [index, heading] of h2s.entries()) {
+      if (SECTION_BY_NAME.get(heading.plain.trim()) !== "Intent") continue;
+      intentRanges.push({
+        start: heading.line,
+        end: h2s[index + 1]?.line ?? file.lines.length + 1,
+      });
+    }
+    for (const link of file.links) {
+      if (link.kind !== "link") continue;
+      const within = (range: { start: number; end: number }) =>
+        link.line >= range.start && link.line < range.end;
+      if (itemRanges.some(within) || intentRanges.some(within)) continue;
+      const resolved = resolveCitation(file, link.url);
+      if (
+        resolved === null ||
+        resolved === file.relPath ||
+        !resolved.startsWith("specs/packages/")
+      ) {
+        continue;
+      }
+      report(
+        ctx,
+        file.relPath,
+        link.line,
+        "error",
+        "cite/prose",
+        "section prose cites a peer package; peers are cited from item precondition clauses only (META-14, META-20)",
+      );
     }
   }
 
@@ -1101,14 +1328,40 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
         );
         continue;
       }
-      const prefix = paragraphPrefix(item, link);
+      if (
+        ctx.files.has(resolved) &&
+        bySlug.get(resolved)?.get(fragment) === undefined
+      ) {
+        report(
+          ctx,
+          item.file.relPath,
+          link.line,
+          "error",
+          "cite/internal",
+          `item ${item.id} cites ${resolved}#${fragment}, which is no item anchor; cite a specific External Behavior item (META-14, META-16)`,
+        );
+        continue;
+      }
+      const { prefix, suffix } = clauseWindow(item, link);
       const preconditionIndex = lastMatchIndex(
         prefix,
         PRECONDITION_KEYWORD_RE,
       );
+      const shallBehind = lastMatchIndex(prefix, SHALL_KEYWORD_RE);
+      // The keyword must govern the citation: they share one
+      // separator-free span — an appositive comma after a
+      // shall-clause subject opens a new span — and no shall stands
+      // before the keyword within its own sentence, so a trailing
+      // "…, where …" clause after a shall cannot pose as a
+      // precondition.
       if (
         preconditionIndex === -1 ||
-        lastMatchIndex(prefix, SHALL_KEYWORD_RE) > preconditionIndex
+        shallBehind > preconditionIndex ||
+        (shallBehind !== -1 &&
+          !SENTENCE_BOUNDARY_RE.test(
+            prefix.slice(shallBehind, preconditionIndex),
+          )) ||
+        lastBoundaryIndex(prefix) > preconditionIndex
       ) {
         report(
           ctx,
@@ -1118,7 +1371,48 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
           "cite/outcome",
           `item ${item.id} cites a peer package outside a precondition clause; peers are cited from Where/While/When preconditions and triggers only (META-13, META-14)`,
         );
+        continue;
       }
+      // Clause membership, forward: a citation still inside the
+      // precondition clause is separated from the following shall
+      // by a clause boundary; a subject-position citation is not.
+      SHALL_KEYWORD_RE.lastIndex = 0;
+      const shallAhead = SHALL_KEYWORD_RE.exec(suffix);
+      if (
+        shallAhead !== null &&
+        !hasBoundaryBefore(suffix, shallAhead.index)
+      ) {
+        report(
+          ctx,
+          item.file.relPath,
+          link.line,
+          "error",
+          "cite/outcome",
+          `item ${item.id} cites a peer package in the clause that carries its shall; peers are cited from Where/While/When preconditions and triggers only (META-13, META-14)`,
+        );
+      }
+    }
+  }
+
+  // Reference-style links dodge every citation rule above, so item
+  // files use inline citations only (META-16); numbered markers
+  // stay reserved for ## References (META-19).
+  for (const file of ctx.files.values()) {
+    if (
+      !isUnder(file.relPath, "packages") &&
+      !isUnder(file.relPath, "compositions")
+    ) {
+      continue;
+    }
+    for (const reference of file.referenceLinks) {
+      report(
+        ctx,
+        file.relPath,
+        reference.line,
+        "error",
+        "cite/reference-style",
+        "reference-style links are not citations; use an inline link (META-16)",
+      );
     }
   }
 }
@@ -1270,15 +1564,62 @@ function lintCitations(ctx: LintContext): void {
 
 function lintReferences(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
+    // The ## References ranges: numbered definitions live there and
+    // nowhere else, pointing outward (META-19).
+    const h2s = file.headings.filter(
+      (heading) => heading.depth === 2 && heading.root,
+    );
+    const referencesRanges = h2s
+      .map((heading, index) => ({ heading, next: h2s[index + 1] }))
+      .filter(
+        ({ heading }) =>
+          SECTION_BY_NAME.get(heading.plain.trim()) === "References",
+      )
+      .map(({ heading, next }) => ({
+        start: heading.line,
+        end: next?.line ?? file.lines.length + 1,
+      }));
+
     const defined = new Set<string>();
     const used = new Set<string>();
     const definitionLines = new Map<string, number>();
     visit(file.tree, (node: Node) => {
       if (node.type === "definition") {
-        const identifier = (node as unknown as { identifier: string }).identifier;
-        if (/^\d+$/.test(identifier)) {
-          defined.add(identifier);
-          definitionLines.set(identifier, node.position?.start.line ?? 1);
+        const definition = node as unknown as {
+          identifier: string;
+          url: string;
+        };
+        if (/^\d+$/.test(definition.identifier)) {
+          const line = node.position?.start.line ?? 1;
+          defined.add(definition.identifier);
+          definitionLines.set(definition.identifier, line);
+          if (
+            !referencesRanges.some(
+              (range) => line > range.start && line < range.end,
+            )
+          ) {
+            report(
+              ctx,
+              file.relPath,
+              line,
+              "error",
+              "refs/definition",
+              `numbered definition [${definition.identifier}] sits outside ## References (META-19)`,
+            );
+          }
+          if (
+            !SCHEME_RE.test(definition.url) &&
+            !definition.url.startsWith("//")
+          ) {
+            report(
+              ctx,
+              file.relPath,
+              line,
+              "error",
+              "refs/definition",
+              `numbered definition [${definition.identifier}] targets "${definition.url}"; reference markers point at external URLs — item citations are inline links (META-19, META-16)`,
+            );
+          }
         }
       }
       if (node.type === "linkReference" || node.type === "imageReference") {
@@ -1334,7 +1675,7 @@ function lintRecords(ctx: LintContext): void {
     const sections = isDr ? DR_SECTIONS : IR_SECTIONS;
     const h2s = new Set(
       file.headings
-        .filter((heading) => heading.depth === 2)
+        .filter((heading) => heading.depth === 2 && heading.root)
         .map((heading) => heading.plain.trim()),
     );
     for (const [canonical, names] of Object.entries(sections)) {
@@ -1468,9 +1809,23 @@ export function lintSpecs(basePath: string): LintFinding[] {
   return ctx.findings;
 }
 
+/**
+ * The path prefix findings are printed under: the base path
+ * relative to the working directory, canonicalized on both sides
+ * so Windows 8.3 short names and symlinks cannot fake a
+ * difference, and always in forward slashes (LINT-3).
+ */
 function relativeToCwd(basePath: string): string {
-  const rel = relative(process.cwd(), basePath);
-  return rel === "" ? "." : rel;
+  const canonical = (path: string): string => {
+    try {
+      return realpathSync.native(path);
+    } catch {
+      return path;
+    }
+  };
+  const rel = relative(canonical(process.cwd()), canonical(basePath));
+  if (rel === "") return ".";
+  return rel.split(sep).join("/");
 }
 
 /**

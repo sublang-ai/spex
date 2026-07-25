@@ -216,6 +216,9 @@ integrated.
   Items carry no relationship-metadata lines; the citations in
   an item's clauses are the single source of its relationships
   ([META-20](specs/meta.md#meta-20)).
+  Citations are written inline at the phrase they support
+  ([META-16](specs/meta.md#meta-16)); a reference-style link is
+  not a citation.
 - **Know what compositions do not cover.** Single-package
   behavior that is still acceptance-relevant — upload refusal
   ([VID-2](specs/packages/catalog/video-library.md#vid-2)),

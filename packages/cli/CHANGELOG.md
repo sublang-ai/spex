@@ -25,7 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the static-binding rule (no `When`/`While` clause in a
   `## Binding` item), citations (files and anchors), reference
   markers, record sections, and the `map.md` index. Item bodies
-  span nested subheadings. Relationship-metadata lines
+  span nested subheadings, and structure lives on root-level
+  headings only — a package wrapped in a blockquote satisfies
+  nothing, and a quoted lookalike heading disturbs nothing, while
+  anchors still cover every heading. Relationship-metadata lines
   (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`,
   `Scope:`, `Requires:`, `Uses:`) are errors: the citations in an
   item's clauses are the single source of its relationships
@@ -38,7 +41,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into `specs/compositions/` (META-33), an iteration reference
   outside `specs/map.md`, linked or textual, with an iteration
   record exempt only for its own ID (META-18), and a scenario test
-  citing items in fewer than two packages (META-21).
+  citing items in fewer than two packages (META-21). A peer
+  citation must resolve to an item anchor of the peer file, and
+  clause membership is checked on both sides over the parsed
+  inline text — inline code and link labels excluded — so a
+  subject-position citation after a real precondition still fails
+  and markup cannot fake a keyword or separator; the citation must
+  share a separator-free span with its clause keyword, so an
+  appositive comma after a shall-clause subject, or a trailing
+  `where` clause behind a shall, cannot pose as a precondition —
+  sentence ends require closing punctuation before whitespace, so
+  a dot inside a version number reopens nothing; a separator
+  counts as inside a citation group only between two citations,
+  so a directly linked shall-subject fails; and a peer citation
+  in section prose outside every item body is an error, since
+  item clauses are the single relationship source (META-13,
+  META-14, META-20). Reference-style links are errors in item files,
+  exempting only the literal wrapped `[[N]]` marker form — a bare
+  `[N]`, collapsed `[N][]`, or full reference is an error even
+  with a numeric label, and a numbered definition must sit under
+  `## References` pointing at an external URL, so the marker
+  mechanism cannot smuggle an item citation — citations are
+  inline (META-16, META-19).
   Binding-trigger detection covers the Chinese clause keywords over
   the parsed inline text, so lists, quotes, and emphasis cannot
   hide a trigger; all keyword detection follows the parsed code
@@ -50,9 +74,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `## Internal Behavior`, `## Verification` sections; heading levels
   demoted; reference markers renumbered; `Verifies:` lines rewritten
   as inline sentences), citations across `specs/` are rewritten to
-  the new paths, a customized `map.md` is restructured in place, and
-  a prompt for filling `specs/compositions/` is printed for your AI
-  agent.
+  the new paths, a customized `map.md` is restructured in place —
+  every map transform scoped through root-level H2 Layout,
+  Packages, and Interactions sections, so fenced, blockquoted,
+  listed, and nested lookalike headings are never mistaken for
+  the real ones — and a prompt for filling `specs/compositions/`
+  is printed for your AI agent.
 - `spex scaffold --update` migrates `specs/interactions/` to
   `specs/compositions/` (SCAF-50): files move with conflict-keeping,
   each `Verifies:` block — including wrapped continuation lines —

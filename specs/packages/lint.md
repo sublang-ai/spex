@@ -36,6 +36,9 @@ When linting completes, the CLI shall print one line per finding in
 the form `<path>:<line>: <severity> <rule>: <message>`, sorted by
 path then line, followed by a summary counting errors and warnings —
 or a no-problems line when the tree is clean.
+Printed paths shall use forward-slash separators on every platform,
+and a base path equal to the working directory shall print bare
+tree-relative paths however either is spelled.
 
 The CLI shall exit non-zero when at least one error-severity finding
 exists, and zero otherwise; warnings alone shall not fail the run.
@@ -132,6 +135,13 @@ a link into `specs/iterations/` from any file but `specs/map.md`
 outside `specs/map.md` is likewise an error — naming an IR is
 citing it — where an iteration record is exempt only for its own
 ID.
+A reference-style link in a `packages/` or `compositions/` file
+shall be an error unless it is a literal `[[N]]` reference
+marker — a numeric shortcut reference wrapped in the outer
+brackets ([META-19](../meta.md#meta-19)); a bare `[N]`, a
+collapsed `[N][]`, and a full-form reference are errors even with
+numeric labels, since item citations are inline links
+([META-16](../meta.md#meta-16)).
 Scheme, protocol-relative, and absolute URLs shall not be checked.
 
 A warning shall be reported for duplicate heading anchors within one
@@ -144,6 +154,10 @@ Where reference markers are linted ([META-19](../meta.md#meta-19)),
 a `[[N]]` marker without a matching numbered definition shall be an
 error, and a numbered definition that is never cited shall be a
 warning.
+A numbered definition shall sit under `## References` and point at
+an external URL; a definition elsewhere or targeting a spec file
+shall be an error, so the marker mechanism cannot smuggle an item
+citation.
 
 Where records are linted, a DR missing a section of
 [META-4](../meta.md#meta-4) or an IR missing a section of
@@ -161,20 +175,36 @@ Where citation discipline is linted:
   an error pointing at weaving each citation into the assertion it
   supports ([META-20](../meta.md#meta-20)), so a mechanically
   migrated tree cannot pass the gate unreconciled;
-- a citation link inside a package file's `## Intent` section shall
-  be an error ([META-15](../meta.md#meta-15));
+- a citation link or reference marker inside a package file's
+  `## Intent` section shall be an error
+  ([META-15](../meta.md#meta-15));
 - a link in a package file resolving to a peer package item outside
   that peer's `## External Behavior` section shall be an error — a
   peer may rely only on External Behavior
   ([META-14](../meta.md#meta-14), [META-28](../meta.md#meta-28));
-- in a package behavior item, a peer citation is legal only inside
-  a precondition or trigger clause: its nearest preceding clause
-  keyword — `Where`, `While`, `When` (给定, 如果, clause-start 当),
-  with a list attached to its lead-in when that lead-in ends in a
-  colon — is a precondition keyword with no `shall` (应) after it,
-  and the citation names a peer item; any other peer citation in a
-  behavior item shall be an error
-  ([META-13](../meta.md#meta-13), [META-14](../meta.md#meta-14)).
+- a link in a package file resolving to a peer package file from
+  section prose outside every item body shall be an error — item
+  clauses are the single relationship source, so free prose
+  declares no dependency ([META-14](../meta.md#meta-14),
+  [META-20](../meta.md#meta-20));
+- in a package behavior item, a peer citation is legal only when
+  it belongs to a precondition or trigger clause and resolves to a
+  peer item: the citation and a precondition keyword — `Where`,
+  `While`, `When`, a lowercase chain keyword at a clause start
+  after a separator, or 给定, 如果, clause-start 当, with a list
+  attached to its lead-in when that lead-in ends in a colon —
+  share one separator-free span holding no `shall` (应), no
+  earlier `shall` stands in the keyword's own sentence — sentences
+  end at closing punctuation before whitespace or text end, so a
+  dot inside a version number ends nothing — a clause boundary (a
+  separator not sitting between two citations of one group) stands
+  between the citation and any following `shall`, and its anchor
+  is an item of the peer file; every other peer citation shall be
+  an error — an appositive comma after a shall-clause subject, or
+  a trailing `where` clause behind a `shall`, does not make a
+  precondition, and a linked subject cannot ride its introducing
+  comma into the span ([META-13](../meta.md#meta-13),
+  [META-14](../meta.md#meta-14)).
 
 ## Internal Behavior
 
@@ -187,15 +217,21 @@ file under `specs/` once with the same GFM-capable parser the
 migration uses, derive heading anchors with GitHub slug semantics,
 and return the finding list; printing and exit codes belong to the
 CLI layer.
-An item's body shall span from its heading to the next heading of
-the same or shallower depth, and relationship-metadata and clause
-keywords shall be detected outside code blocks only, using the
-parsed tree's code spans — GFM fences of any delimiter length and
-indented code — so a literal fence inside a longer fence cannot
-leak lines into detection.
-Binding trigger keywords shall be matched over the parsed inline
-text, so list markers, blockquotes, and emphasis cannot hide a
-trigger and inline code cannot fake one.
+Structure shall live on root-level headings only: the H1, the
+`##` sections, and item headings count when they are direct
+children of the document, so a heading nested in a blockquote or
+list is content that neither satisfies nor disturbs structure —
+while anchors still cover every heading per GitHub semantics.
+An item's body shall span from its heading to the next root-level
+heading of the same or shallower depth, and relationship-metadata
+and clause keywords shall be detected outside code blocks only,
+using the parsed tree's code spans — GFM fences of any delimiter
+length and indented code — so a literal fence inside a longer
+fence cannot leak lines into detection.
+Binding trigger keywords, and the clause keywords and boundaries
+of citation discipline, shall be matched over the parsed inline
+text — excluding inline code and link labels — so markup can
+neither hide a trigger nor fake a keyword or clause separator.
 
 ## Verification
 
@@ -220,11 +256,12 @@ the map, linked and textual ([LINT-8](#lint-8)); reference
 markers, records, and map listing ([LINT-9](#lint-9)); citation
 discipline — an Intent citation, a peer citation outside External
 Behavior, out-of-clause peer citations in both languages beside
-accepted precondition forms, and a detached `Verifies` sentence
-([LINT-13](#lint-13));
+accepted precondition forms, a section-prose peer citation, and a
+detached `Verifies` sentence ([LINT-13](#lint-13));
 an item body spanning a nested subheading whose citations count
-for the item, and a literal triple-backtick line inside a longer
-fence staying undetected ([LINT-10](#lint-10)); finding format
+for the item, a blockquote-wrapped package failing structure, and
+a literal triple-backtick line inside a longer fence staying
+undetected ([LINT-10](#lint-10)); finding format
 and summary ([LINT-3](#lint-3)); plus a clean fixture asserting
 zero findings.
 

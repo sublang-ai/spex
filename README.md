@@ -37,9 +37,10 @@ npx @sublang/spex scaffold --update   # refresh templates, migrate legacy layout
 npx @sublang/spex lint                # check structure, IDs, and citations
 ```
 
-Rerunning `scaffold` is safe: it only adds missing files and never
-edits existing ones (`CLAUDE.md`/`AGENTS.md` only get their managed
-specs section added or refreshed). `--update` does edit, mechanically
+Rerunning `scaffold` is safe: it only adds missing files; the one
+in-place edit it makes is to an existing `CLAUDE.md`/`AGENTS.md`,
+whose managed specs section is added or refreshed.
+`--update` edits more, mechanically
 — it requires a clean `specs/` tree so every change stays reviewable
 in git: it merges the legacy `user/`/`dev/`/`test/` layout into
 `specs/packages/`, moves `specs/interactions/` into
