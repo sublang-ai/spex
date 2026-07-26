@@ -69,10 +69,10 @@ index. Relationship-metadata lines like `Verifies:` are errors — the
 citations in an item's clauses are the single source of its
 relationships. Errors exit non-zero; warnings do not.
 
-**Try it:** review the sample iteration `specs/iterations/000-spdx-headers.md`, update the copyright text, then prompt your AI coding agent:
+**Try it:** review the sample intent record `specs/intents/000-spdx-headers.md`, update the copyright text, then prompt your AI coding agent:
 
 ```text
-Complete Iteration #0
+Complete IR-000
 ```
 
 ### Localization
@@ -127,10 +127,10 @@ Spex does *not* enforce a heavyweight workflow.
 We believe spec-driven development is a flexible combination of a few primitives.
 
 1. **Make Decisions** — Discuss requirements, architecture, and design with AI agents. Let AI generate and review decision records in `specs/decisions/`.
-2. **Plan Iterations** — Break down work into tasks with AI agents. Let AI generate and review iteration records in `specs/iterations/`.
+2. **Record Intents** — Break down work into tasks with AI agents. Let AI generate and review intent records in `specs/intents/`.
 3. **Agents Execute** — Let AI agents complete the tasks autonomously. They generate code and update `specs/packages/` and `specs/compositions/`.
 
-Then loop back to the next decision or iteration.
+Then loop back to the next decision or intent.
 
 ## Requirements
 
