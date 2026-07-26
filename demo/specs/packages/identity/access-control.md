@@ -86,13 +86,13 @@ admin, when that account and a second stub account sign in, the
 test suite shall assert the configured account holds the admin
 role and the other holds member ([ROLE-1](#role-1)); when the
 configured ID changes to the second account and both sign in
-again, the suite shall assert the roles have swapped, and that
+again, the roles have swapped, and
 a still-active earlier session of the first account acts as
 member from its next request — the recomputed role governs
 every session of the account ([ROLE-7](#role-7),
 [ROLE-3](#role-3)); when a third account adopts the first
-account's former username and signs in, the suite shall assert
-it holds member; and the suite shall assert the package exposes
+account's former username and signs in, it holds member; and
+the package exposes
 no operation that changes, grants, or transfers a role at
 runtime ([ROLE-8](#role-8)).
 

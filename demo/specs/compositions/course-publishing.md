@@ -26,17 +26,20 @@ resolves its attachment
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2)), and the
 manager marks an unresolvable stored reference unavailable
 ([CAT-24](../packages/catalog/course-catalog.md#cat-24)), the
-deployment shall present the video library's asset list
-([VID-4](../packages/catalog/video-library.md#vid-4)) as the
-picker, the stored reference shall be the chosen asset's stable
-identifier
-([VID-9](../packages/catalog/video-library.md#vid-9)), the
-slot's resolution queries shall be answered by the library
-([VID-14](../packages/catalog/video-library.md#vid-14)), and,
-for a stored reference the library resolves, the media area
-shall embed the library's player
-([VID-5](../packages/catalog/video-library.md#vid-5),
-[VID-6](../packages/catalog/video-library.md#vid-6)).
+deployment shall serve every delegated slot through the video
+library:
+
+1. asset selection presents the library's asset list
+   ([VID-4](../packages/catalog/video-library.md#vid-4)) as the
+   picker;
+2. the stored reference is the chosen asset's stable identifier
+   ([VID-9](../packages/catalog/video-library.md#vid-9));
+3. the slot's resolution queries are answered by the library
+   ([VID-14](../packages/catalog/video-library.md#vid-14));
+4. for a stored reference the library resolves, the media area
+   embeds the library's player
+   ([VID-5](../packages/catalog/video-library.md#vid-5),
+   [VID-6](../packages/catalog/video-library.md#vid-6)).
 
 ## Scenario
 
@@ -71,30 +74,31 @@ library now reports the reference unresolvable
 ### PUB-4
 
 Where the acceptance suite signs in as the admin on a seeded
-deployment, when it creates a course, adds a section and a
-lesson ([CAT-5](../packages/catalog/course-catalog.md#cat-5)),
-uploads a fixture video
-([VID-1](../packages/catalog/video-library.md#vid-1)), attaches
-it through the picker ([PUB-1](#pub-1)), and publishes, the
-suite shall assert the public course page shows the syllabus
-with that lesson — and only that lesson — marked playable
-([PUB-2](#pub-2)), that the lesson view's media area embeds the
-library's player through the installed slot ([PUB-1](#pub-1)),
-and that the lesson's stored reference equals the uploaded
-asset's identifier
-([CAT-8](../packages/catalog/course-catalog.md#cat-8)); when it
-adds a second lesson and attaches the same asset there, the
-suite shall assert both lessons are marked playable with equal
-stored references and no second upload
-([VID-9](../packages/catalog/video-library.md#vid-9)); and when
-it deletes the course after the confirmation naming its section
-and lesson counts
-([CAT-17](../packages/catalog/course-catalog.md#cat-17)), the
-suite shall assert the course's routes respond not-found while
-the uploaded asset remains listed in the library, its content
-untouched by the deletion
-([CAT-10](../packages/catalog/course-catalog.md#cat-10),
-[VID-4](../packages/catalog/video-library.md#vid-4)).
+deployment, when it drives a course from creation through
+deletion, the suite shall assert each stage:
+
+1. creating a course, adding a section and a lesson
+   ([CAT-5](../packages/catalog/course-catalog.md#cat-5)),
+   uploading a fixture video
+   ([VID-1](../packages/catalog/video-library.md#vid-1)),
+   attaching it through the picker ([PUB-1](#pub-1)), and
+   publishing shows the public course page's syllabus with that
+   lesson — and only that lesson — marked playable
+   ([PUB-2](#pub-2)), the lesson view's media area embedding the
+   library's player through the installed slot
+   ([PUB-1](#pub-1)), and the lesson's stored reference equal to
+   the uploaded asset's identifier
+   ([CAT-8](../packages/catalog/course-catalog.md#cat-8));
+2. adding a second lesson attaching the same asset shows both
+   lessons playable with equal stored references and no second
+   upload ([VID-9](../packages/catalog/video-library.md#vid-9));
+3. deleting the course after the confirmation naming its section
+   and lesson counts
+   ([CAT-17](../packages/catalog/course-catalog.md#cat-17))
+   leaves the course's routes not-found while the uploaded asset
+   remains listed in the library, its content untouched
+   ([CAT-10](../packages/catalog/course-catalog.md#cat-10),
+   [VID-4](../packages/catalog/video-library.md#vid-4)).
 
 ### PUB-5
 

@@ -24,10 +24,9 @@ deployment's session control — and a footer naming the site.
 #### SHELL-2
 
 While an admin-role session is active
-([ROLE-7](../identity/access-control.md#role-7)), the header
-shall include the deployment's admin entry; while a member
-session or no session is active, the header shall contain no
-admin entry.
+([ROLE-7](../identity/access-control.md#role-7)), and only then,
+the header shall include the deployment's admin entry — a member
+session or no session sees no admin entry.
 
 #### SHELL-3
 

@@ -52,9 +52,9 @@ that sign-in did not complete, and shall establish no session.
 
 #### AUTH-4
 
-While a session is active, the account menu shall show the
-session's GitHub username and avatar; while no session is active,
-the account menu shall offer a sign-in action leading to the
+The account menu shall present the session state: while a
+session is active, the session's GitHub username and avatar;
+while no session is active, a sign-in action leading to the
 sign-in page.
 
 #### AUTH-5

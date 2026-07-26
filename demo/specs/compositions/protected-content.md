@@ -29,9 +29,7 @@ references
 non-admin grants for an asset stop as soon as no currently
 published course references it, unpublishing or deleting the
 last referencing course closes access at once, and a grant
-already issued lasts only to its expiry
-([VID-17](../packages/catalog/video-library.md#vid-17)) —
-eligibility feeding
+already issued lasts only to its expiry — eligibility feeding
 the library's own gates and replacing none of them, since
 session verification and grant checks stay the library's.
 

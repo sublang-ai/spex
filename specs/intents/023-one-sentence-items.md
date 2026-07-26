@@ -5,7 +5,7 @@
 
 ## Goal
 
-Apply [DR-018](../decisions/018-one-sentence-items.md): split META-21 along its concerns, state the one-GEARS-sentence rule with its structured-behavior allowance, re-home META-1's record-identity sentence, and stage lint enforcement.
+Apply [DR-018](../decisions/018-one-sentence-items.md): split META-21 along its concerns, state the one-GEARS-pattern rule with its structured-behavior allowance, re-home META-1's record-identity sentence, and stage lint enforcement.
 
 ## Deliverables
 

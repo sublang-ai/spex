@@ -43,17 +43,20 @@ action deep: creation is the manager's primary action
 
 Where a deployment with an empty database is configured with a
 stub GitHub provider and an initial-admin account, when the
-acceptance suite requests the course manager and signs in as
-the configured account from the guard's redirect
-([AUTH-2](../packages/identity/github-login.md#auth-2),
-[ROLE-1](../packages/identity/access-control.md#role-1)), the
-suite shall assert the header carries the Admin entry
-([SHELL-2](../packages/site/web-shell.md#shell-2)) and the
-course manager — the requested target — loads
-([BOOT-1](#boot-1)); when it signs in as
-another account, the suite shall assert no Admin entry appears
-and the course manager responds not-authorized
-([ROLE-2](../packages/identity/access-control.md#role-2)).
+acceptance suite requests the course manager and signs in from
+the guard's redirect, the suite shall assert each audience's
+admin surface:
+
+1. signed in as the configured account
+   ([AUTH-2](../packages/identity/github-login.md#auth-2),
+   [ROLE-1](../packages/identity/access-control.md#role-1)),
+   the header carries the Admin entry
+   ([SHELL-2](../packages/site/web-shell.md#shell-2)) and the
+   course manager — the requested target — loads
+   ([BOOT-1](#boot-1));
+2. signed in as another account, no Admin entry appears and the
+   course manager responds not-authorized
+   ([ROLE-2](../packages/identity/access-control.md#role-2)).
 
 ### BOOT-4
 
@@ -64,6 +67,5 @@ the admin role
 ([ROLE-3](../packages/identity/access-control.md#role-3)), and
 that the course manager presents creation as its primary action
 ([BOOT-2](#boot-2),
-[CAT-22](../packages/catalog/course-catalog.md#cat-22)); after the
-admin creates the first course, the suite shall assert the
-manager lists it.
+[CAT-22](../packages/catalog/course-catalog.md#cat-22)); and
+after the admin creates the first course, the manager lists it.

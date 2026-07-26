@@ -51,9 +51,10 @@ landing to playback, the suite shall assert each leg:
 
 1. walking from the home page's course list
    ([CAT-1](../packages/catalog/course-catalog.md#cat-1)) into
-   the course and the lesson
+   the course and the lesson shows the lesson title with its
+   course and section context
    ([CAT-20](../packages/catalog/course-catalog.md#cat-20))
-   shows the player in its sign-in-required state
+   and the player in its sign-in-required state
    ([VID-6](../packages/catalog/video-library.md#vid-6));
 2. signing in from that lesson
    ([AUTH-2](../packages/identity/github-login.md#auth-2))

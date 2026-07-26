@@ -40,7 +40,7 @@ meta.md       The spec of specs
 | DR-015 | [015-reference-content.md](decisions/015-reference-content.md) | Reference content: built-in sources + catalog, slc demo example, Academy seed project, packages-layout spec view |
 | DR-016 | [016-relationship-presentation.md](decisions/016-relationship-presentation.md) | Classified spec-relationship presentation: uses, binding clients/provisions, composes, verifies — derived from clause citations |
 | DR-017 | [017-intent-records.md](decisions/017-intent-records.md) | Iterations become intents: intent records (IRs) with flexible, duplication-free recording (META-37), bare `IR-<N>` commit references (GIT-5), unchanged META-18, and mechanical migration |
-| DR-018 | [018-one-sentence-items.md](decisions/018-one-sentence-items.md) | One GEARS sentence per item (META-42) with structured behavior attachments; META-21 split along its concerns (META-38..41); record identity re-homed to META-43; warning-first lint |
+| DR-018 | [018-one-sentence-items.md](decisions/018-one-sentence-items.md) | One GEARS pattern per item (META-42) with structured behavior attachments; META-21 split along its concerns (META-38..41); record identity re-homed to META-43; warning-first lint |
 
 ## Intents
 

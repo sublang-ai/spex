@@ -189,13 +189,13 @@ denied, with no grant issued ([VID-15](#vid-15)).
 Where the same fixture content is uploaded twice and the stub
 host authorizes both assets for the signed-in session's
 requests, the test suite shall assert two assets exist with
-distinct stable identifiers ([VID-9](#vid-9)); when the admin edits one asset's title, the
-suite shall assert the list shows the new title with the asset's
-size and upload date after a reload ([VID-4](#vid-4)), and that
-the records survive a service restart under test control
-([VID-16](#vid-16)); when one
-asset is deleted after confirmation, the suite shall assert its
-content is no longer served while the other still plays, that a
+distinct stable identifiers ([VID-9](#vid-9)); when the admin
+edits one asset's title, the list shows the new title with the
+asset's size and upload date after a reload ([VID-4](#vid-4)),
+and the records survive a service restart under test control
+([VID-16](#vid-16)); and when one
+asset is deleted after confirmation, its
+content is no longer served while the other still plays, a
 stub host's stored reference to the deleted asset remains unread
 and unmodified by the library ([VID-10](#vid-10)), and that the
 stub host's resolution query reports the deleted asset's

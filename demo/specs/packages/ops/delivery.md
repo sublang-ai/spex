@@ -33,9 +33,9 @@ request.
 #### DELIV-3
 
 When commits land on the default branch, the pipeline shall
-deploy that revision to production with no further manual action;
-when the deployment fails, the previously deployed revision shall
-keep serving.
+deploy that revision to production with no further manual
+action — a failed deployment leaving the previously deployed
+revision serving.
 
 #### DELIV-4
 
