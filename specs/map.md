@@ -135,7 +135,7 @@ meta.md       The spec of specs
 
 | File | Summary |
 | --- | --- |
-| [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader; specs.get/specs.read parse contract (pre-DR-012 layout; adaptation deferred per IR-017) |
+| [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader; specs.get/specs.read parse contract for the packages layout (deferred from IR-017, realized in IR-020) |
 
 ### SET
 

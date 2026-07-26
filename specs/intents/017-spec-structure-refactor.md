@@ -27,11 +27,11 @@ repo's own migration.
   intents reconciled; SCAF rewritten for the new behavior; LINT
   package added; interactions seeded (DESK, CONF, FORGE); DR-012;
   map.md
-- [ ] Deferred: adapt the desktop app to the new layout — `specs.get`
-  parser in `packages/core`, protocol group triple, SPECV spec view
-  (tree, filters, counts), DR-011 amendments. Until then the Specs
-  tab cannot render a `packages/`-layout tree, including this
-  repo's.
+- [x] Deferred here: adapt the desktop app to the new layout —
+  `specs.get` parser in `packages/core`, protocol group triple,
+  SPECV spec view (tree, filters, counts), DR-011 amendments.
+  Landed with the later reference-content round, which realized
+  the packages-layout spec view.
 
 ## Tasks
 
