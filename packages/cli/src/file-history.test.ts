@@ -145,6 +145,7 @@ describe("file-history manifest is append-only (SCAF-21)", () => {
     ) as Record<string, string[]>;
     const errors = new Set<string>();
     const seenVersions = new Set<string>();
+    const committedVersions: Array<Record<string, string[]>> = [];
     for (const [commit, path] of versions) {
       let text: string;
       try {
@@ -158,7 +159,11 @@ describe("file-history manifest is append-only (SCAF-21)", () => {
       }
       if (seenVersions.has(text)) continue;
       seenVersions.add(text);
-      const committed = JSON.parse(text) as Record<string, string[]>;
+      committedVersions.push(JSON.parse(text) as Record<string, string[]>);
+    }
+    // Membership is absolute: every hash any committed manifest
+    // listed must survive in the working manifests.
+    for (const committed of committedVersions) {
       for (const [relPath, hashes] of Object.entries(committed)) {
         const now = new Set([
           ...(working[relPath] ?? []),
@@ -174,6 +179,41 @@ describe("file-history manifest is append-only (SCAF-21)", () => {
               `${relPath}: ${hash} is gone — a recognized version must be kept and new hashes appended`,
             );
           }
+        }
+      }
+    }
+    // Order is enforced where history is unambiguous: append-only
+    // means chronological, so a pair committed in one order must
+    // keep it. History already carries one contradiction — an early
+    // restoration inserted recovered hashes ahead of hashes the
+    // pre-monorepo manifests order before them — and a pair
+    // committed in both orders is therefore exempt; membership
+    // above never is.
+    const forward = new Map<string, Set<string>>();
+    for (const committed of committedVersions) {
+      for (const [relPath, hashes] of Object.entries(committed)) {
+        let pairs = forward.get(relPath);
+        if (!pairs) forward.set(relPath, (pairs = new Set()));
+        for (let i = 0; i < hashes.length; i += 1) {
+          for (let j = i + 1; j < hashes.length; j += 1) {
+            pairs.add(`${hashes[i]}\u0000${hashes[j]}`);
+          }
+        }
+      }
+    }
+    for (const [relPath, pairs] of forward) {
+      const now = working[relPath] ?? legacy[relPath];
+      if (now === undefined) continue; // membership already flagged
+      const position = new Map(now.map((hash, index) => [hash, index]));
+      for (const pair of pairs) {
+        const [a, b] = pair.split("\u0000");
+        if (pairs.has(`${b}\u0000${a}`)) continue; // contradicted in history
+        const ia = position.get(a);
+        const ib = position.get(b);
+        if (ia !== undefined && ib !== undefined && ia >= ib) {
+          errors.add(
+            `${relPath}: ${a} must stay before ${b} — history is append-only`,
+          );
         }
       }
     }

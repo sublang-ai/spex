@@ -29,7 +29,11 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      # Full history: the file-history append-only guard audits every
+      # committed manifest version, which a shallow clone would skip.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
