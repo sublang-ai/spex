@@ -378,6 +378,19 @@ function lintStructure(ctx: LintContext): void {
       `unexpected entry under specs/ (expected decisions/, intents/, packages/, compositions/, map.md, meta.md)`,
     );
   }
+  if (
+    existsSync(join(ctx.basePath, "specs", "intents")) &&
+    existsSync(join(ctx.basePath, "specs", "iterations"))
+  ) {
+    report(
+      ctx,
+      "specs/iterations",
+      1,
+      "warning",
+      "structure/legacy-records",
+      "legacy specs/iterations/ coexists with specs/intents/ — migrate with `spex scaffold --update` (DR-017)",
+    );
+  }
   for (const required of ["specs/meta.md", "specs/map.md"]) {
     if (!existsSync(join(ctx.basePath, required))) {
       report(
@@ -421,7 +434,11 @@ function lintNaming(ctx: LintContext): void {
         }
       }
     }
-    if (isUnder(relPath, "decisions") || isUnder(relPath, "intents")) {
+    if (
+      isUnder(relPath, "decisions") ||
+      isUnder(relPath, "intents") ||
+      isUnder(relPath, "iterations")
+    ) {
       const basename = posix.basename(relPath);
       if (!RECORD_NAME_RE.test(basename)) {
         report(
@@ -1677,7 +1694,8 @@ function lintReferences(ctx: LintContext): void {
 function lintRecords(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
     const isDr = isUnder(file.relPath, "decisions");
-    const isIr = isUnder(file.relPath, "intents");
+    const isIr =
+      isUnder(file.relPath, "intents") || isUnder(file.relPath, "iterations");
     if (!isDr && !isIr) continue;
 
     const sections = isDr ? DR_SECTIONS : IR_SECTIONS;

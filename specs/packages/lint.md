@@ -54,9 +54,12 @@ Where the specs tree is linted, structural rules shall report:
   `spex scaffold --update`;
 - an error when `specs/meta.md` or `specs/map.md` is missing;
 - a warning for any other unexpected top-level entry under `specs/`;
+- a warning when a legacy `specs/iterations/` directory coexists with
+  `specs/intents/` ([DR-017](../decisions/017-intent-records.md));
 - an error for a `packages/` or `compositions/` file or directory
-  segment that is not kebab-case, and for a `decisions/` or
-  `intents/` file not named `<NNN>-<kebab-case>.md`.
+  segment that is not kebab-case, and for a `decisions/`,
+  `intents/`, or legacy `iterations/` file not named
+  `<NNN>-<kebab-case>.md`.
 
 #### LINT-5
 
