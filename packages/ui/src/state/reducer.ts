@@ -374,12 +374,25 @@ export function applyRecord(
     case "captain_telemetry": {
       const topic = String(r.topic);
       const payload = r.payload as {
-        to?: string;
-        state?: string;
+        to?: unknown;
+        state?: unknown;
         pendingBossQuestion?: unknown;
       };
+      // The playbook 2.0 shell reports states as rich objects
+      // ({stateId, value, tags, …}); the fake harness and older
+      // playbooks report bare strings. Accept both — never hand a
+      // non-string to the label pipeline.
+      const stateText = (value: unknown): string | undefined => {
+        if (typeof value === "string") return value;
+        if (value && typeof value === "object") {
+          const shape = value as { stateId?: unknown; value?: unknown };
+          if (typeof shape.stateId === "string") return shape.stateId;
+          if (typeof shape.value === "string") return shape.value;
+        }
+        return undefined;
+      };
       if (topic === "playbook.fsm.state") {
-        view.fsmState = payload?.to ?? payload?.state;
+        view.fsmState = stateText(payload?.to) ?? stateText(payload?.state);
         if (view.fsmState === "awaitBossReply") {
           const parsed = parseBossQuestion(payload?.pendingBossQuestion);
           view.pendingQuestion = parsed?.question ?? view.pendingQuestion ?? "";
@@ -412,7 +425,7 @@ export function applyRecord(
           view.pendingQuestionPlayer = undefined;
         }
       } else if (topic === "playbook.captain.fsm.state") {
-        view.captainMode = payload?.to;
+        view.captainMode = stateText(payload?.to);
       }
       break;
     }

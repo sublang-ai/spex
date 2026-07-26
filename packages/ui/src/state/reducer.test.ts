@@ -168,3 +168,80 @@ describe("streaming deltas coalesce", () => {
     expect(text.kind === "text" && text.streaming).toBe(false);
   });
 });
+
+describe("playbook 2.0 shell telemetry: object-shaped states fold safely", () => {
+  // Regression: the real captain shell reports states as rich objects
+  // ({stateId, value, tags, …}) where the fake harness sends strings;
+  // the reducer once passed the object through to the label pipeline,
+  // which crashed the render with "e.replace is not a function" and
+  // masked the actual turn failure.
+  test("object to/from resolve to stateId; error events leave state intact", () => {
+    const view = applyRecords(fresh(), [
+      {
+        seq: 950,
+        record: {
+          type: "captain_telemetry",
+          turnId: 9,
+          timestamp: 5000,
+          topic: "playbook.fsm.state",
+          payload: {
+            event: { type: "xstate.init" },
+            from: null,
+            to: {
+              value: "ready",
+              activeStateIds: ["ready"],
+              tags: ["playbook.parked"],
+              status: "active",
+              quiescent: true,
+              stateId: "ready",
+            },
+          },
+        },
+      },
+      {
+        seq: 951,
+        record: {
+          type: "captain_telemetry",
+          turnId: 9,
+          timestamp: 5001,
+          topic: "playbook.fsm.state",
+          payload: {
+            event: {
+              type: "xstate.error.actor.0.routing",
+              error: { name: "Error", message: "adapter refused" },
+            },
+            to: { value: { engaged: "routing" }, stateId: "routing" },
+          },
+        },
+      },
+      {
+        seq: 952,
+        record: {
+          type: "captain_telemetry",
+          turnId: 9,
+          timestamp: 5002,
+          topic: "playbook.captain.fsm.state",
+          payload: { from: "engaged.driving", to: "engaged.parked" },
+        },
+      },
+    ]);
+    expect(view.fsmState).toBe("routing");
+    expect(view.captainMode).toBe("engaged.parked");
+  });
+
+  test("a payload with no resolvable state clears nothing it should not", () => {
+    const view = applyRecords(fresh(), [
+      {
+        seq: 960,
+        record: {
+          type: "captain_telemetry",
+          turnId: 9,
+          timestamp: 5010,
+          topic: "playbook.fsm.state",
+          payload: { event: { type: "noise" }, to: { odd: true } },
+        },
+      },
+    ]);
+    expect(view.fsmState).toBeUndefined();
+  });
+});

@@ -15,9 +15,12 @@ const STATE_LABELS: Record<string, string> = {
   ready: "ready",
 };
 
-/** camelCase / snake_case / kebab-case → spaced lowercase words. */
+/** camelCase / snake_case / kebab-case → spaced lowercase words.
+ * Coerces defensively: ids arrive from protocol payloads, and a
+ * non-string here once masked a real error as
+ * "e.replace is not a function". */
 export function humanizeId(id: string): string {
-  return id
+  return String(id)
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .toLowerCase()
