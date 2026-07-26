@@ -20,7 +20,7 @@ Where a lesson's media actions delegate asset selection to the
 deployment's media provider
 ([CAT-8](../packages/catalog/course-catalog.md#cat-8)) and the
 lesson view delegates its media area to that provider
-([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
+([CAT-20](../packages/catalog/course-catalog.md#cat-20)), the
 deployment shall present the video library's asset list
 ([VID-4](../packages/catalog/video-library.md#vid-4)) as the
 picker, the stored reference shall be the chosen asset's stable
@@ -56,7 +56,7 @@ course-page entry shall lose its playable marking
 lesson view shall fall back to its no-media presentation, and
 the course manager shall mark the attachment unavailable with
 replace and remove offered
-([CAT-8](../packages/catalog/course-catalog.md#cat-8)) — the
+([CAT-24](../packages/catalog/course-catalog.md#cat-24)) — the
 library now reports the reference unresolvable
 ([VID-14](../packages/catalog/video-library.md#vid-14)).
 

@@ -574,7 +574,7 @@ test("the staged Academy corpus parses end-to-end", () => {
   assert.equal(authCheck.group, "test");
   assert.equal(authCheck.section, "Verification");
   assert.equal(authCheck.topic, "Sign-In Coverage");
-  assert.deepEqual(authCheck.cites, ["AUTH-1", "AUTH-2", "AUTH-4"]);
+  assert.deepEqual(authCheck.cites, ["AUTH-1", "AUTH-2", "AUTH-4", "AUTH-14"]);
 
   // At least one composition item carries citations.
   const play = file(tree, "lesson-playback");

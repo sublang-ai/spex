@@ -35,7 +35,7 @@ role-assignment step anywhere in the path.
 While no course exists, when the admin opens the course manager,
 the path from an empty site to its first course shall be one
 action deep: creation is the manager's primary action
-([CAT-4](../packages/catalog/course-catalog.md#cat-4)).
+([CAT-22](../packages/catalog/course-catalog.md#cat-22)).
 
 ## Tests
 
@@ -64,6 +64,6 @@ the admin role
 ([ROLE-3](../packages/identity/access-control.md#role-3)), and
 that the course manager presents creation as its primary action
 ([BOOT-2](#boot-2),
-[CAT-4](../packages/catalog/course-catalog.md#cat-4)); after the
+[CAT-22](../packages/catalog/course-catalog.md#cat-22)); after the
 admin creates the first course, the suite shall assert the
 manager lists it.

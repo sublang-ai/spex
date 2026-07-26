@@ -105,11 +105,14 @@ grant mechanism — a short-lived access grant scoped to that one
 asset and bounded by the configured expiry; the server shall deny a playback request without a
 verified session and any content request bearing an expired or
 tampered grant.
-Authorization is evaluated at issuance: an issued grant shall
-stay redeemable until its expiry regardless of later session or
-authorization changes — expiry is the only revocation of the
-grant itself, and deleting the asset removes the content it
-reaches ([VID-4](#vid-4)).
+
+#### VID-17
+
+An issued grant shall stay redeemable until its expiry regardless
+of later session or authorization changes — authorization is
+evaluated at issuance, expiry is the only revocation of the grant
+itself, and deleting the asset removes the content it reaches
+([VID-4](#vid-4)).
 
 ### Host Authorization
 
@@ -120,10 +123,9 @@ obtain from the embedding host its answer — whether that asset
 is authorized for that requester — and shall issue an access
 grant only on an affirmative answer; a request the host does
 not authorize shall be denied, with no grant issued and no
-content served.
-Stored-content requests are governed by the grant alone
-([VID-7](#vid-7), [VID-8](#vid-8)); the host is not re-asked at
-redemption.
+content served — stored-content requests staying governed by the
+grant alone ([VID-7](#vid-7), [VID-8](#vid-8)), the host not
+re-asked at redemption.
 
 ### Deletion Boundary
 
@@ -176,7 +178,7 @@ grant issued ([VID-8](#vid-8)); and direct
 stored-content requests without a grant ([VID-7](#vid-7)), with
 an expired grant, and with a tampered grant are all denied even
 with a signed-in session, while a grant issued before sign-out
-still serves content until its expiry ([VID-8](#vid-8)); and a
+still serves content until its expiry ([VID-17](#vid-17)); and a
 request for an asset the stub host does not authorize is
 denied, with no grant issued ([VID-15](#vid-15)).
 

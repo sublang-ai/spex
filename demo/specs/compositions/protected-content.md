@@ -43,9 +43,9 @@ navigation, and data requests:
 
 | Surface | Signed out | Member | Admin |
 | --- | --- | --- | --- |
-| Course list; published course and lesson pages ([CAT-1](../packages/catalog/course-catalog.md#cat-1), [CAT-2](../packages/catalog/course-catalog.md#cat-2)) | shown | shown | shown |
+| Course list; published course and lesson pages ([CAT-1](../packages/catalog/course-catalog.md#cat-1), [CAT-2](../packages/catalog/course-catalog.md#cat-2), [CAT-20](../packages/catalog/course-catalog.md#cat-20)) | shown | shown | shown |
 | Playback on lessons with a resolvable attachment ([VID-5](../packages/catalog/video-library.md#vid-5), [VID-6](../packages/catalog/video-library.md#vid-6)) | sign-in-required state | plays | plays |
-| Unpublished course and lesson pages ([CAT-3](../packages/catalog/course-catalog.md#cat-3)) | not-found | not-found | shown |
+| Unpublished course and lesson pages ([CAT-3](../packages/catalog/course-catalog.md#cat-3), [CAT-21](../packages/catalog/course-catalog.md#cat-21)) | not-found | not-found | shown |
 | Course manager and video library ([ROLE-2](../packages/identity/access-control.md#role-2), [CAT-4](../packages/catalog/course-catalog.md#cat-4), [VID-1](../packages/catalog/video-library.md#vid-1)) | sent to sign-in | not-authorized | shown |
 | Assets referenced only by unpublished courses ([GUARD-5](#guard-5)) | denied | denied | plays on the unpublished lesson page |
 | Assets no lesson references ([GUARD-5](#guard-5)) | denied | denied | denied |
@@ -78,7 +78,7 @@ assert every response matches the map's cell for that audience
 [ROLE-2](../packages/identity/access-control.md#role-2)),
 including the unpublished pages shown to the admin marked as
 unpublished
-([CAT-3](../packages/catalog/course-catalog.md#cat-3)), and
+([CAT-21](../packages/catalog/course-catalog.md#cat-21)), and
 that no non-admin response body carries unpublished content or
 admin markup
 ([CAT-12](../packages/catalog/course-catalog.md#cat-12),

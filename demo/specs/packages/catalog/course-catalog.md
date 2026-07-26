@@ -34,6 +34,9 @@ sections in their defined order, each with its lessons in their
 defined order, and a lesson entry marked as playable exactly
 when it carries a media attachment that the deployment's media
 provider resolves.
+
+#### CAT-20
+
 When a visitor opens a lesson from the syllabus, the lesson view
 shall show the lesson title, its course and section context,
 and — where the lesson carries a media attachment the provider
@@ -47,6 +50,9 @@ When a request targets a course or lesson that does not exist, or
 one that is unpublished while the requester holds no admin
 session, the site shall respond not-found, making an unpublished
 course indistinguishable from a nonexistent one to non-admins.
+
+#### CAT-21
+
 While an admin session is active, when a request targets an
 unpublished course or one of its lessons, the site shall show
 the page, marked as unpublished.
@@ -59,8 +65,13 @@ Where the course manager is designated admin-only
 ([ROLE-2](../identity/access-control.md#role-2)), when the admin
 creates a course with a title, the catalog shall create it
 unpublished.
-While no course exists, the course manager shall present course
-creation as its primary action.
+
+#### CAT-22
+
+Where the course manager is designated admin-only
+([ROLE-2](../identity/access-control.md#role-2)), while no course
+exists, the course manager shall present course creation as its
+primary action.
 
 #### CAT-5
 
@@ -68,6 +79,9 @@ When the admin edits a course's syllabus, the course manager
 shall support adding, renaming, reordering, and removing sections
 and lessons, and the course page shall reflect exactly the
 arranged order.
+
+#### CAT-23
+
 When the admin removes a section, the course manager shall ask
 for confirmation naming the count of lessons removed with it;
 confirmed removal takes the section's lessons and their stored
@@ -76,14 +90,13 @@ changes nothing.
 
 #### CAT-6
 
-When the admin publishes a course, the course shall appear in the
-course list ([CAT-1](#cat-1)) and its page shall become publicly
-reachable; when the admin unpublishes it, the course shall return
-to the unpublished state and public requests shall again see
-not-found ([CAT-3](#cat-3)).
-Publishing — including republishing after an unpublish — shall
-set the publication time that orders the course list
-([CAT-1](#cat-1)).
+When the admin publishes a course — any publish, including
+republishing after an unpublish, setting the publication time
+that orders the course list ([CAT-1](#cat-1)) — the course shall
+appear in that list and its page shall become publicly reachable;
+when the admin unpublishes it, the course shall return to the
+unpublished state and public requests shall again see not-found
+([CAT-3](#cat-3)).
 
 #### CAT-7
 
@@ -126,6 +139,9 @@ deployment's media provider and store the returned reference on
 the lesson — at most one reference per lesson — without
 interpreting it; the remove action shall clear the reference
 only.
+
+#### CAT-24
+
 While a lesson's stored reference no longer resolves with the
 provider, the course manager shall keep it, mark the attachment
 unavailable, and offer the replace and remove actions on it.
@@ -183,7 +199,7 @@ page shows its syllabus in the defined order with
 resolvable-attachment lessons marked playable ([CAT-2](#cat-2));
 the unpublished course's URL responds not-found without an admin
 session while an admin session sees its page marked as
-unpublished ([CAT-3](#cat-3)); publishing then unpublishing it
+unpublished ([CAT-21](#cat-21)); publishing then unpublishing it
 flips the list and the URL between the two states; republishing
 places the course first in the list under its new publication
 time ([CAT-6](#cat-6)); and a detail save to a published course
@@ -196,8 +212,8 @@ is visible on the immediately following list and page reads
 
 Where an admin session drives the course manager from an empty
 catalog, the test suite shall assert: creation is presented as
-the primary action; a created course starts unpublished
-([CAT-4](#cat-4)); a saved description appears on the course
+the primary action ([CAT-22](#cat-22)); a created course starts
+unpublished ([CAT-4](#cat-4)); a saved description appears on the course
 page with its first paragraph as the list summary
 ([CAT-18](#cat-18)); added sections and lessons appear in the
 arranged order, and after reordering and renaming plus a reload,
@@ -205,7 +221,7 @@ the order matches the explicit positions ([CAT-5](#cat-5),
 [CAT-11](#cat-11)); removing a section asks for confirmation
 naming its lesson count — cancel leaves the syllabus unchanged,
 confirm removes the section with its lessons
-([CAT-5](#cat-5)); a save with an empty required field
+([CAT-23](#cat-23)); a save with an empty required field
 marks the field, keeps the entered state, and persists nothing
 ([CAT-7](#cat-7)); and a read issued while a multi-field save
 commits shows either the complete previous or the complete
@@ -218,10 +234,10 @@ saved course, never a mixture ([CAT-19](#cat-19)).
 Where a stub media provider returns fixed references, the test
 suite shall assert: attach, replace, and remove store, swap, and
 clear the lesson's single reference without the catalog reading
-the referenced asset, and when the stub stops resolving a stored
-reference, the manager keeps it, marks the attachment
-unavailable, and still offers replace and remove
-([CAT-8](#cat-8)); a course's slug survives
+the referenced asset ([CAT-8](#cat-8)), and when the stub stops
+resolving a stored reference, the manager keeps it, marks the
+attachment unavailable, and still offers replace and remove
+([CAT-24](#cat-24)); a course's slug survives
 a title change and collides into a suffixed form
 ([CAT-9](#cat-9)); and deleting a course — after a confirmation
 naming its section and lesson counts ([CAT-17](#cat-17)) —
@@ -230,7 +246,7 @@ references, while the stub provider's assets remain untouched
 ([CAT-10](#cat-10)); and when the admin confirms removal of a
 section whose lesson carries a stored reference, the reference
 goes with the lesson while the stub provider's assets remain
-untouched ([CAT-5](#cat-5)).
+untouched ([CAT-23](#cat-23)).
 
 ### Isolation Coverage
 

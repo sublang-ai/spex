@@ -69,9 +69,12 @@ Where the database schema changes, the change shall ship as a
 versioned migration applied in order before the new revision
 serves traffic; when a migration fails, the deployment shall not
 switch traffic to the new revision.
-A migration applied before cutover shall stay compatible with
-the still-serving revision, so a failure after migration leaves
-that revision serving correctly.
+
+#### DELIV-11
+
+A migration applied before cutover ([DELIV-6](#deliv-6)) shall
+stay compatible with the still-serving revision, so a failure
+after migration leaves that revision serving correctly.
 
 ## Verification
 
@@ -96,7 +99,7 @@ leaves the serving revision unchanged ([DELIV-6](#deliv-6)); a
 revision whose migration succeeds but whose activation then
 fails leaves the previous revision serving correctly against
 the migrated schema ([DELIV-3](#deliv-3),
-[DELIV-6](#deliv-6)); a passing revision serves after its
+[DELIV-11](#deliv-11)); a passing revision serves after its
 migrations apply ([DELIV-3](#deliv-3)); and the
 preview's backing-service endpoints are disjoint from
 production's ([DELIV-4](#deliv-4)).

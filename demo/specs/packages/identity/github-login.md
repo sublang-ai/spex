@@ -30,6 +30,9 @@ site shall establish a signed-in session and return the visitor
 to the page sign-in started from — a same-site path only — or
 to the home page when no origin is recorded or the recorded
 origin is not same-site.
+
+#### AUTH-14
+
 A callback shall complete sign-in only when it matches a live
 sign-in attempt begun in the same browser and not yet consumed;
 an unsolicited, mismatched, expired, or replayed callback shall
@@ -71,7 +74,11 @@ working unchanged.
 When a GitHub account completes sign-in for the first time, the
 identity store shall create exactly one user record carrying the
 account's stable GitHub ID, username, and avatar URL.
-When the same account signs in again, the identity store shall
+
+#### AUTH-15
+
+When a GitHub account with an existing user record
+([AUTH-7](#auth-7)) signs in again, the identity store shall
 update the username and avatar on that record and shall not
 create another record.
 
@@ -114,7 +121,7 @@ the recorded origin is not same-site, the return lands on the
 home page instead; and an unsolicited callback, one bound to
 another browser's attempt, an expired one, and a replay of a
 consumed one each establish no session and show the
-not-completed notice ([AUTH-2](#auth-2)).
+not-completed notice ([AUTH-14](#auth-14)).
 
 #### AUTH-11
 
@@ -144,4 +151,4 @@ absent session credential is treated as signed out
 When the same stub account signs in twice with a changed username
 and avatar between the sign-ins, the test suite shall assert
 exactly one user record exists for the account's stable ID,
-carrying the latest username and avatar ([AUTH-7](#auth-7)).
+carrying the latest username and avatar ([AUTH-15](#auth-15)).

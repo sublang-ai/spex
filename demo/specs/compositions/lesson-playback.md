@@ -47,7 +47,7 @@ is configured, when the acceptance suite walks from the home
 page's course list
 ([CAT-1](../packages/catalog/course-catalog.md#cat-1)), opens
 the course, and opens the lesson
-([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
+([CAT-20](../packages/catalog/course-catalog.md#cat-20)), the
 suite shall assert the player shows the sign-in-required state
 ([VID-6](../packages/catalog/video-library.md#vid-6)); when the
 suite signs in from that lesson

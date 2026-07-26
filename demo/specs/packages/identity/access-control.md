@@ -27,12 +27,18 @@ sign-in ([AUTH-2](github-login.md#auth-2)), the site shall hold
 the admin role for the account when its stable ID matches the
 configured one, and the member role otherwise — usernames are
 mutable and shall never designate.
-A request acts under its account's currently held role — held
-per account, not per session — so a role recorded at a later
-sign-in governs every session of the account.
+
+#### ROLE-7
+
+A request shall act under its account's currently held role —
+held per account, not per session — so a role recorded at a
+later sign-in governs every session of the account.
+
+#### ROLE-8
+
 The package shall expose no operation that changes, grants, or
-transfers a role at runtime; changing the configured
-designation is the only path.
+transfers a role at runtime; changing the configured designation
+is the only path.
 
 ### The Guard
 
@@ -83,12 +89,12 @@ configured ID changes to the second account and both sign in
 again, the suite shall assert the roles have swapped, and that
 a still-active earlier session of the first account acts as
 member from its next request — the recomputed role governs
-every session of the account ([ROLE-1](#role-1),
+every session of the account ([ROLE-7](#role-7),
 [ROLE-3](#role-3)); when a third account adopts the first
 account's former username and signs in, the suite shall assert
 it holds member; and the suite shall assert the package exposes
 no operation that changes, grants, or transfers a role at
-runtime ([ROLE-1](#role-1)).
+runtime ([ROLE-8](#role-8)).
 
 ### Guard Coverage
 

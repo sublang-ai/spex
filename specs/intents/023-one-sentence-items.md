@@ -9,9 +9,9 @@ Apply [DR-018](../decisions/018-one-sentence-items.md): split META-21 along its 
 
 ## Deliverables
 
-- [ ] DR-018 recorded; META-21 split into META-38..41; META-42 and META-43 added; META-1 slimmed — across this tree, both scaffold locales, and `demo/`, with citations re-pointed per claim
-- [ ] `spex lint` warns on multi-sentence items (`item/sentence`) while Binding items keep their error; messages cite the split items
-- [ ] Scaffold templates and `demo/` lint with no problems; this tree's warning backlog is measured and reported
+- [x] DR-018 recorded; META-21 split into META-38..41; META-42 and META-43 added; META-1 slimmed — across this tree, both scaffold locales, and `demo/`, with citations re-pointed per claim
+- [x] `spex lint` warns on multi-sentence items (`item/sentence`) while Binding items keep their error; messages cite the split items
+- [x] Scaffold templates and `demo/` lint with no problems; this tree's warning backlog is measured and reported
 
 ## Tasks
 
