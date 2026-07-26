@@ -14,6 +14,7 @@ import {
   buildRelationModel,
   classifyCites,
   collapsedHints,
+  recordForHref,
   relationPhrase,
   splitBindingClauses,
   RELATION_LABEL,
@@ -49,6 +50,28 @@ function file(
     ...partial,
   };
 }
+
+describe("recordForHref: directory-qualified record matching", () => {
+  const records = [
+    { id: "DR-001", title: "Decision", path: "decisions/001-shared.md" },
+    { id: "IR-001", title: "Intent", path: "intents/001-shared.md" },
+  ];
+
+  test("the directory segment picks the right record kind", () => {
+    expect(recordForHref("../intents/001-shared.md", records)?.id).toBe(
+      "IR-001",
+    );
+    expect(recordForHref("../decisions/001-shared.md#goal", records)?.id).toBe(
+      "DR-001",
+    );
+    expect(recordForHref("../packages/001-shared.md", records)).toBeUndefined();
+  });
+
+  test("a bare basename still matches when the href has no directory", () => {
+    expect(recordForHref("001-shared.md", records)?.id).toBe("DR-001");
+    expect(recordForHref("notes.txt", records)).toBeUndefined();
+  });
+});
 
 describe("splitBindingClauses: clause sides around the standalone shall", () => {
   test("citations before shall are clients, after are provisions", () => {

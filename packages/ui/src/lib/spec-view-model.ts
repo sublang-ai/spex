@@ -675,17 +675,30 @@ export function linkItemTarget(
   return ITEM_ID_PATTERN.test(anchor) ? anchor : undefined;
 }
 
-/** The DR/IR record an inline link's relative href points at, matched
- * by file basename (record paths are specs/-relative while hrefs are
- * file-relative, so prefixes differ). */
+/** The DR/IR record an inline link's relative href points at.
+ * Record paths are specs/-relative while hrefs are file-relative, so
+ * prefixes differ; the trailing `<dir>/<basename>` pair is matched
+ * when the href carries a directory segment — `decisions/001-x.md`
+ * and `intents/001-x.md` are distinct records — and bare basenames
+ * only match when the href has no directory at all. */
 export function recordForHref(
   href: string,
   records: SpecRecordInfo[],
 ): SpecRecordInfo | undefined {
   const path = href.split("#")[0];
   if (!path.endsWith(".md")) return undefined;
-  const base = path.split("/").pop();
+  const segments = path
+    .split("/")
+    .filter((segment) => segment !== "" && segment !== "." && segment !== "..");
+  const base = segments.pop();
   if (!base) return undefined;
+  const dir = segments.pop();
+  if (dir !== undefined) {
+    return records.find((record) => {
+      const parts = record.path.split("/");
+      return parts.pop() === base && parts.pop() === dir;
+    });
+  }
   return records.find((record) => record.path.split("/").pop() === base);
 }
 
