@@ -676,30 +676,34 @@ export function linkItemTarget(
 }
 
 /** The DR/IR record an inline link's relative href points at.
- * Record paths are specs/-relative while hrefs are file-relative, so
- * prefixes differ; the trailing `<dir>/<basename>` pair is matched
- * when the href carries a directory segment — `decisions/001-x.md`
- * and `intents/001-x.md` are distinct records — and bare basenames
- * only match when the href has no directory at all. */
+ * The href is resolved against the citing file's specs/-relative
+ * path — hrefs are file-relative — and only an exact `record.path`
+ * match opens a record, so `../packages/decisions/001-x.md` (a
+ * collection subdirectory, META-32) and a bare sibling basename in
+ * a non-record directory stay inert, and `..` escaping specs/ never
+ * matches. */
 export function recordForHref(
+  sourcePath: string,
   href: string,
   records: SpecRecordInfo[],
 ): SpecRecordInfo | undefined {
   const path = href.split("#")[0];
   if (!path.endsWith(".md")) return undefined;
-  const segments = path
-    .split("/")
-    .filter((segment) => segment !== "" && segment !== "." && segment !== "..");
-  const base = segments.pop();
-  if (!base) return undefined;
-  const dir = segments.pop();
-  if (dir !== undefined) {
-    return records.find((record) => {
-      const parts = record.path.split("/");
-      return parts.pop() === base && parts.pop() === dir;
-    });
+  if (path.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(path)) {
+    return undefined;
   }
-  return records.find((record) => record.path.split("/").pop() === base);
+  const stack = sourcePath.split("/").slice(0, -1);
+  for (const segment of path.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      if (stack.length === 0) return undefined;
+      stack.pop();
+      continue;
+    }
+    stack.push(segment);
+  }
+  const resolved = stack.join("/");
+  return records.find((record) => record.path === resolved);
 }
 
 // ---------------------------------------------------------------------------

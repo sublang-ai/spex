@@ -352,7 +352,15 @@ export function SpecView(props: SpecViewProps) {
       jumpTo(`${itemId}:${target}`, target);
       return;
     }
-    const record = recordForHref(href, records);
+    // fileKey is `<kind>:<key>`; the citing file's specs-relative
+    // path anchors the href resolution.
+    const location = itemIndex.get(itemId);
+    const colon = location?.fileKey.indexOf(":") ?? -1;
+    const sourcePath =
+      location === undefined || colon === -1
+        ? ""
+        : `${location.fileKey.slice(0, colon)}/${location.fileKey.slice(colon + 1)}`;
+    const record = recordForHref(sourcePath, href, records);
     if (record) openRecord(record);
     // Anything else (dead anchors, sibling spec files, map.md) is
     // inert: no navigation ever happens inside the view.

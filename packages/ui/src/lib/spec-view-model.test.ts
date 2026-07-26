@@ -51,25 +51,50 @@ function file(
   };
 }
 
-describe("recordForHref: directory-qualified record matching", () => {
+describe("recordForHref: resolved-path record matching", () => {
   const records = [
     { id: "DR-001", title: "Decision", path: "decisions/001-shared.md" },
     { id: "IR-001", title: "Intent", path: "intents/001-shared.md" },
   ];
 
-  test("the directory segment picks the right record kind", () => {
-    expect(recordForHref("../intents/001-shared.md", records)?.id).toBe(
-      "IR-001",
-    );
-    expect(recordForHref("../decisions/001-shared.md#goal", records)?.id).toBe(
-      "DR-001",
-    );
-    expect(recordForHref("../packages/001-shared.md", records)).toBeUndefined();
+  test("resolution against the citing file picks the exact record", () => {
+    expect(
+      recordForHref("packages/auth.md", "../intents/001-shared.md", records)
+        ?.id,
+    ).toBe("IR-001");
+    expect(
+      recordForHref(
+        "packages/catalog/course.md",
+        "../../decisions/001-shared.md#goal",
+        records,
+      )?.id,
+    ).toBe("DR-001");
   });
 
-  test("a bare basename still matches when the href has no directory", () => {
-    expect(recordForHref("001-shared.md", records)?.id).toBe("DR-001");
-    expect(recordForHref("notes.txt", records)).toBeUndefined();
+  test("lookalike paths that resolve elsewhere stay inert", () => {
+    // A collection subdirectory (META-32) is not a record.
+    expect(
+      recordForHref(
+        "packages/auth.md",
+        "../packages/decisions/001-shared.md",
+        records,
+      ),
+    ).toBeUndefined();
+    // A bare sibling basename in a non-record directory.
+    expect(
+      recordForHref("packages/auth.md", "001-shared.md", records),
+    ).toBeUndefined();
+    // Escaping specs/ never matches.
+    expect(
+      recordForHref("packages/auth.md", "../../../intents/001-shared.md", records),
+    ).toBeUndefined();
+    expect(recordForHref("packages/auth.md", "notes.txt", records)).toBeUndefined();
+  });
+
+  test("a record's own sibling links resolve inside its directory", () => {
+    expect(
+      recordForHref("decisions/002-other.md", "001-shared.md", records)?.id,
+    ).toBe("DR-001");
   });
 });
 
