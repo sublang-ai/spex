@@ -159,7 +159,7 @@ const TREE: SpecTreeState = {
           firstLine: "Eligibility shall be the deployment's answer.",
           // One-sentence binding grammar: CAT-1 before `shall` is a
           // client (serves), AUTH-8 after it a provision (provides).
-          text: "Where the catalog lists published courses ([CAT-1](../packages/catalog/courses.md#cat-1)), eligibility shall be the deployment's answer, feeding session mechanics ([AUTH-8](../packages/identity/auth.md#auth-8)); see the [index](../map.md).",
+          text: "Where the catalog lists published courses ([CAT-1](../packages/catalog/courses.md#cat-1)), eligibility shall be the deployment's answer, feeding session mechanics ([AUTH-8](../packages/identity/auth.md#auth-8)); see the [index](../map.md) and ([SET-99](../packages/settings.md#set-99)).",
           cites: ["CAT-1", "AUTH-8"],
         },
         {
@@ -629,6 +629,17 @@ describe("SPECV-6: relationship classification (DR-016)", () => {
     fireEvent.click(screen.getByTestId("link-AUTH-10-AUTH-99"));
     expect(screen.getByText("not found")).toBeTruthy();
     expect(screen.queryByTestId("item-AUTH-99")).toBeNull();
+  });
+
+  test("an inline dead citation says not found and never navigates", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-5"));
+    // SET-99 is citation-shaped but neither an item nor a record.
+    fireEvent.click(screen.getByRole("link", { name: "SET-99" }));
+    expect(screen.getByText("not found")).toBeTruthy();
+    expect(screen.queryByTestId("record-reader")).toBeNull();
+    expect(screen.queryByTestId("item-SET-99")).toBeNull();
   });
 
   test("an inline body link to an item ID jumps cross-file", () => {

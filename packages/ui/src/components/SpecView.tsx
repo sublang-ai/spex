@@ -361,9 +361,21 @@ export function SpecView(props: SpecViewProps) {
         ? ""
         : `${location.fileKey.slice(0, colon)}/${location.fileKey.slice(colon + 1)}`;
     const record = recordForHref(sourcePath, href, records);
-    if (record) openRecord(record);
-    // Anything else (dead anchors, sibling spec files, map.md) is
-    // inert: no navigation ever happens inside the view.
+    if (record) {
+      openRecord(record);
+      return;
+    }
+    // A citation-shaped link that is neither a live item nor a
+    // record gets the SPECV-6 "not found" note; jumpTo owns that
+    // path. Record links are tried first because their label ("DR-011")
+    // is citation-shaped too. The body: prefix keeps the note off
+    // the identically keyed relationship rows.
+    if (target) {
+      jumpTo(`body:${itemId}:${target}`, target);
+      return;
+    }
+    // Anything else (sibling spec files, map.md) is inert: no
+    // navigation ever happens inside the view.
   }
 
   // -------------------------------------------------------------------------
@@ -1052,6 +1064,14 @@ function ItemRow({
           >
             <Markdown text={item.text} />
           </div>
+          {notFoundKey?.startsWith(`body:${item.id}:`) ? (
+            <div className="flex items-center gap-1 text-xs">
+              <span className="font-mono text-neutral-500">
+                {notFoundKey.slice(`body:${item.id}:`.length)}
+              </span>
+              <span className="text-[11px] text-neutral-400">not found</span>
+            </div>
+          ) : null}
           {rows.map((row) => (
             <div
               key={row.kind}
