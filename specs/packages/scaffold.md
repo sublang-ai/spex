@@ -270,6 +270,10 @@ by the citation rewrite ([SCAF-45](#scaf-45)); a `## Iterations`
 code block under the map's Layout heading shall be renamed to the
 active-language Intents forms — a lookalike block elsewhere in the
 map is never rewritten.
+A legacy file whose leading number is already held by a
+differently named `intents/` file shall likewise be kept in place
+and reported as a conflict against that id holder, since the
+number is the record id ([META-11](../meta.md#meta-11)).
 Moved files shall be reported as
 `(migrated from specs/iterations/...)` indicator lines, with a
 moved seed folding into its seed refresh line.

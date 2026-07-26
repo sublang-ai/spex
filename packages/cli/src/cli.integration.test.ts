@@ -682,6 +682,28 @@ describe("CLI integration", () => {
     }
   });
 
+  // SCAF-51: a number-colliding move is kept and reported.
+  it("update: id-colliding legacy record is kept in place", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      write(dir, "specs/iterations/000-old-headers.md", "# IR-000: Old\n");
+      gitCommit(dir, "legacy record beside the intents seed");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(
+        result.stdout,
+        /specs\/iterations\/000-old-headers\.md \(kept — target exists at specs\/intents\/000-spdx-headers\.md\)/,
+      );
+      assert.ok(existsSync(join(dir, "specs", "iterations", "000-old-headers.md")));
+      assert.ok(!existsSync(join(dir, "specs", "intents", "000-old-headers.md")));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   // SCAF-52: a legacy tree must migrate, not re-scaffold.
   it("scaffold refuses a legacy tree and points at --update", () => {
     const dir = makeLegacyRepo();

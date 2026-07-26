@@ -392,6 +392,28 @@ function walkCollection(
 // Records (decisions/, intents/)
 // ---------------------------------------------------------------------------
 
+// Record ids form from the filename's leading number, so two
+// differently named files can carry the same id. Keep both so
+// nothing is hidden — the view keys records by path and lint
+// reports the collision — but notice each duplicate.
+function noticeDuplicateRecordIds(
+  records: SpecRecordInfo[],
+  notices: string[],
+): SpecRecordInfo[] {
+  const firstById = new Map<string, string>();
+  for (const record of records) {
+    const first = firstById.get(record.id);
+    if (first === undefined) {
+      firstById.set(record.id, record.path);
+    } else {
+      notices.push(
+        `duplicate record id ${record.id}: ${first} and ${record.path}`,
+      );
+    }
+  }
+  return records;
+}
+
 // Intent records live in intents/; a tree not yet migrated keeps
 // them in the legacy iterations/ directory, and a partially
 // migrated tree — a scaffold --update conflict, or an agent run
@@ -406,8 +428,8 @@ function parseIntentRecords(
 ): SpecRecordInfo[] {
   const current = parseRecords(specsDir, "intents", baseReal, notices);
   const legacy = parseRecords(specsDir, "iterations", baseReal, notices);
-  if (legacy.length === 0) return current;
-  if (current.length === 0) return legacy;
+  if (legacy.length === 0) return noticeDuplicateRecordIds(current, notices);
+  if (current.length === 0) return noticeDuplicateRecordIds(legacy, notices);
   notices.push(
     "legacy specs/iterations/ records coexist with specs/intents/; migrate with `spex scaffold --update`",
   );
@@ -421,11 +443,12 @@ function parseIntentRecords(
     );
     return false;
   });
-  return [...current, ...kept].sort((a, b) => {
+  const merged = [...current, ...kept].sort((a, b) => {
     const nameA = posix.basename(a.path);
     const nameB = posix.basename(b.path);
     return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
   });
+  return noticeDuplicateRecordIds(merged, notices);
 }
 
 function parseRecords(
@@ -514,7 +537,10 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
       present: true,
       legacy: true,
       files: [],
-      decisions: parseRecords(specsDir, "decisions", baseReal, discarded),
+      decisions: noticeDuplicateRecordIds(
+        parseRecords(specsDir, "decisions", baseReal, discarded),
+        discarded,
+      ),
       intents: parseIntentRecords(specsDir, baseReal, discarded),
       notices: [],
       readAt,
@@ -547,7 +573,10 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
     present: true,
     legacy: false,
     files,
-    decisions: parseRecords(specsDir, "decisions", baseReal, notices),
+    decisions: noticeDuplicateRecordIds(
+      parseRecords(specsDir, "decisions", baseReal, notices),
+      notices,
+    ),
     intents: parseIntentRecords(specsDir, baseReal, notices),
     notices,
     readAt,

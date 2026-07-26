@@ -457,6 +457,30 @@ describe("lintSpecs", () => {
     );
   });
 
+  it("errors on duplicate record numbers (META-11)", () => {
+    const findings = findingsFor({
+      "specs/decisions/001-a.md":
+        "# DR-001: A\n\n## Status\n\nAccepted\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n",
+      "specs/decisions/001-b.md":
+        "# DR-001: B\n\n## Status\n\nAccepted\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n",
+      "specs/intents/002-a.md":
+        "# IR-002: A\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
+      "specs/iterations/002-b.md":
+        "# IR-002: B\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
+    });
+    const duplicates = findings.filter((f) => f.rule === "record/duplicate-id");
+    assert.equal(duplicates.length, 2, JSON.stringify(duplicates));
+    assert.ok(duplicates.every((f) => f.severity === "error"));
+    assert.ok(
+      duplicates.some((f) => f.path === "specs/decisions/001-b.md"),
+      JSON.stringify(duplicates),
+    );
+    assert.ok(
+      duplicates.some((f) => f.path === "specs/iterations/002-b.md"),
+      JSON.stringify(duplicates),
+    );
+  });
+
   it("warns when legacy iterations/ coexists with intents/", () => {
     const both = findingsFor({
       "specs/intents/001-a.md":

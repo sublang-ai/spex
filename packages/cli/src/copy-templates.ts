@@ -244,6 +244,21 @@ export function migrateIterationsLayout(
     return results;
   }
 
+  // Record ids form from the leading number, so a move may collide
+  // with a differently named intents/ file on the same number; such
+  // a move is kept in place and reported against the id holder.
+  const numberTaken = new Map<string, string>();
+  const targetRoot = join(basePath, "specs", "intents");
+  if (existsSync(targetRoot) && statSync(targetRoot).isDirectory()) {
+    for (const existing of listFiles(targetRoot)) {
+      const rel = relative(targetRoot, existing).replace(/\\/g, "/");
+      const digits = /^(\d+)/.exec(posix.basename(rel))?.[1];
+      if (digits !== undefined && !numberTaken.has(digits)) {
+        numberTaken.set(digits, posix.join("specs/intents", rel));
+      }
+    }
+  }
+
   for (const source of listFiles(legacyRoot)) {
     const suffix = relative(legacyRoot, source).replace(/\\/g, "/");
     const legacyRelPath = posix.join("specs/iterations", suffix);
@@ -254,8 +269,19 @@ export function migrateIterationsLayout(
       results.push({ status: "conflict", targetRelPath, legacyRelPath });
       continue;
     }
+    const digits = /^(\d+)/.exec(posix.basename(suffix))?.[1];
+    const idHolder = digits === undefined ? undefined : numberTaken.get(digits);
+    if (idHolder !== undefined) {
+      results.push({
+        status: "conflict",
+        targetRelPath: idHolder,
+        legacyRelPath,
+      });
+      continue;
+    }
     mkdirSync(dirname(target), { recursive: true });
     renameSync(source, target);
+    if (digits !== undefined) numberTaken.set(digits, targetRelPath);
     results.push({ status: "migrated", targetRelPath, legacyRelPath });
   }
 

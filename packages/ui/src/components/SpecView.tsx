@@ -324,14 +324,14 @@ export function SpecView(props: SpecViewProps) {
       .onReadRecord(record.path)
       .then((markdown) =>
         setReader((current) =>
-          current?.record.id === record.id
+          current?.record.path === record.path
             ? { record, loading: false, markdown }
             : current,
         ),
       )
       .catch((cause: Error) =>
         setReader((current) =>
-          current?.record.id === record.id
+          current?.record.path === record.path
             ? { record, loading: false, error: cause.message }
             : current,
         ),
@@ -798,7 +798,7 @@ export function SpecView(props: SpecViewProps) {
           >
             {records.map((record) => (
               <button
-                key={record.id}
+                key={record.path}
                 type="button"
                 onClick={() => openRecord(record)}
                 className="flex items-baseline gap-2 rounded px-2 py-1 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"

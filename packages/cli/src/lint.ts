@@ -1724,11 +1724,33 @@ function lintReferences(ctx: LintContext): void {
 // ---------------------------------------------------------------
 
 function lintRecords(ctx: LintContext): void {
+  // Record ids form from the filename's leading number (META-11), so
+  // two differently named files on the same number are one id —
+  // decisions/ for DRs, intents/ with legacy iterations/ for IRs.
+  const firstById = new Map<string, string>();
   for (const file of ctx.files.values()) {
     const isDr = isUnder(file.relPath, "decisions");
     const isIr =
       isUnder(file.relPath, "intents") || isUnder(file.relPath, "iterations");
     if (!isDr && !isIr) continue;
+
+    const digits = /^(\d+)/.exec(posix.basename(file.relPath))?.[1];
+    if (digits !== undefined) {
+      const id = `${isDr ? "DR" : "IR"}-${digits}`;
+      const first = firstById.get(id);
+      if (first === undefined) {
+        firstById.set(id, file.relPath);
+      } else {
+        report(
+          ctx,
+          file.relPath,
+          1,
+          "error",
+          "record/duplicate-id",
+          `record id ${id} is already defined by ${first} (META-11)`,
+        );
+      }
+    }
 
     const sections = isDr ? DR_SECTIONS : IR_SECTIONS;
     const h2s = new Set(

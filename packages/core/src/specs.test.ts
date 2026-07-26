@@ -432,6 +432,30 @@ test("decisions and intents parse id, title, and path sorted by filename", () =>
   ]);
 });
 
+test("duplicate record numbers are kept and noticed", () => {
+  const dir = fixture({
+    "specs/decisions/001-first.md": "# DR-001: First\n",
+    "specs/decisions/001-second.md": "# DR-001: Second\n",
+    "specs/intents/002-current.md": "# IR-002: Current\n",
+    "specs/iterations/002-legacy.md": "# IR-002: Legacy\n",
+  });
+  const tree = parseSpecTree(dir);
+  assert.equal(tree.decisions.length, 2);
+  assert.equal(tree.intents.length, 2);
+  assert.ok(
+    tree.notices.includes(
+      "duplicate record id DR-001: decisions/001-first.md and decisions/001-second.md",
+    ),
+    JSON.stringify(tree.notices),
+  );
+  assert.ok(
+    tree.notices.includes(
+      "duplicate record id IR-002: intents/002-current.md and iterations/002-legacy.md",
+    ),
+    JSON.stringify(tree.notices),
+  );
+});
+
 test("intent records merge a coexisting legacy iterations directory", () => {
   const dir = fixture({
     "specs/intents/001-first.md": "# IR-001: First intent\n",

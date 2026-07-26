@@ -59,7 +59,11 @@ Where the specs tree is linted, structural rules shall report:
 - an error for a `packages/` or `compositions/` file or directory
   segment that is not kebab-case, and for a `decisions/`,
   `intents/`, or legacy `iterations/` file not named
-  `<NNN>-<kebab-case>.md`.
+  `<NNN>-<kebab-case>.md`;
+- an error when two record files of one kind carry the same leading
+  number — `decisions/` for DRs, `intents/` together with legacy
+  `iterations/` for IRs — since the number is the record id
+  ([META-11](../meta.md#meta-11)).
 
 #### LINT-5
 

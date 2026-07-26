@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Duplicate record numbers are caught instead of colliding silently.** Record ids form from the filename's leading number, so two differently named files could both become `IR-001`: `spex lint` now errors (`record/duplicate-id`) on a repeated number per record kind — `decisions/` for DRs, `intents/` together with legacy `iterations/` for IRs — and `spex scaffold --update` keeps an id-colliding legacy record in place, reporting the conflict against the id holder instead of migrating it into the collision ([META-11](../../specs/meta.md#meta-11), [SCAF-51](../../specs/packages/scaffold.md#scaf-51)).
+
 - **Plain `spex scaffold` no longer traps legacy trees.** Scaffolding over a tree with a legacy `specs/` directory (`user/`, `dev/`, `test/`, `items/`, `interactions/`, or `iterations/`) used to create current seed targets beside the legacy files, making every later `--update` conflict-keep the legacy content indefinitely; create mode now writes nothing, exits non-zero, and directs the user to `spex scaffold --update` ([SCAF-52](../../specs/packages/scaffold.md#scaf-52)).
 
 ### Changed

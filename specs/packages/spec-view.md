@@ -249,7 +249,8 @@ records, and the union of `specs/intents/*.md` and legacy
 ([DR-017](../decisions/017-intent-records.md)) — a legacy file
 whose basename reappears under `intents/` is omitted, and both the
 shadowing and the directory coexistence are reported as tree
-notices — records sorted
+notices; differently named files sharing a leading number all
+list, with each duplicated record id a tree notice — records sorted
 by filename, each with an
 ID formed from the record kind and the filename's leading number
 (e.g. `DR-011`), a title taken from the file's first `#` heading
