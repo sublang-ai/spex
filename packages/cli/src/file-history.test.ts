@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,6 +79,55 @@ describe("legacy file-history manifest", () => {
     for (const relPath of Object.keys(legacy)) {
       assert.ok(!(relPath in live), `${relPath} is in both manifests`);
     }
+  });
+});
+
+describe("file-history manifest is append-only (SCAF-21)", () => {
+  // SCAF-21 requires a new hash to be *appended*: replacing an entry
+  // makes an earlier pristine scaffold read as user-modified, so
+  // --update keeps it instead of refreshing. Compare the working
+  // manifest with the one committed at HEAD — during an edit-then-test
+  // run they differ, which is exactly when the mistake is catchable;
+  // on a clean tree they are identical and this passes trivially.
+  it("preserves every hash committed at HEAD, in order", () => {
+    let committed: Record<string, string[]>;
+    try {
+      committed = JSON.parse(
+        execFileSync("git", ["show", "HEAD:scaffold/.file-history.json"], {
+          cwd: REPO_ROOT,
+          encoding: "utf-8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }),
+      ) as Record<string, string[]>;
+    } catch {
+      return; // no git, shallow clone, or manifest not yet committed
+    }
+    const working = JSON.parse(
+      readFileSync(join(REPO_ROOT, "scaffold", ".file-history.json"), "utf-8"),
+    ) as Record<string, string[]>;
+    const errors: string[] = [];
+    for (const [relPath, hashes] of Object.entries(committed)) {
+      const now = working[relPath];
+      if (now === undefined) {
+        errors.push(`${relPath}: dropped from the manifest`);
+        continue;
+      }
+      // Subsequence, not prefix: every committed hash must survive in
+      // its original relative order. Appending and restoring a dropped
+      // earlier hash both pass; replacing one does not.
+      let cursor = 0;
+      for (const hash of hashes) {
+        const at = now.indexOf(hash, cursor);
+        if (at === -1) {
+          errors.push(
+            `${relPath}: ${hash} is gone — a recognized version must be kept and new hashes appended`,
+          );
+          break;
+        }
+        cursor = at + 1;
+      }
+    }
+    assert.deepEqual(errors, [], errors.join("\n"));
   });
 });
 
