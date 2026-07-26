@@ -124,7 +124,7 @@ A spec item shall describe behavior as observable outcomes (e.g., file state, ex
 
 ### META-42
 
-Each behavior, binding, scenario, or test item shall be one GEARS sentence ([META-6](#meta-6)), whose `<behavior>` may attach structured content the sentence's shall clause governs — an ordered list as algorithm, a table as mapping, a fenced block as format or grammar, or a text chart — introducing no requirement the sentence does not state.
+Each behavior, binding, scenario, or test item shall be one GEARS pattern ([META-6](#meta-6)) — at most one trigger governing one shall clause, so a second `When` or a second governing `shall` makes a second item — whose `<behavior>` may attach structured content that clause governs, an ordered list carrying a journey's or algorithm's steps, a table carrying a mapping or case set, a fenced block carrying a format or grammar, or a text chart, introducing no requirement the clause does not state.
 
 ## Spec packages
 

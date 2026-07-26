@@ -184,10 +184,11 @@ linked from `specs/map.md` shall be a warning.
 Where an item outside `## Binding` is linted, prose outside fenced
 blocks, lists, tables, blockquotes, and headings carrying more
 than one sentence shall be a warning: an item is one GEARS
-sentence with structured behavior attachments
+pattern with structured behavior attachments
 ([META-42](../meta.md#meta-42)), counted with the [LINT-7](#lint-7)
-terminators, staged as a warning while existing trees reduce their
-multi-sentence backlog.
+terminators. The warning is advisory — a sentence proxy for the
+pattern rule, leaving a multi-trigger single sentence to review —
+and stays a warning while existing trees reduce their backlog.
 
 #### LINT-13
 
