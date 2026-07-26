@@ -127,6 +127,10 @@ the view; when the cited ID does not exist in the tree, the view
 shall show a transient "not found" note beside the activated link
 and shall not navigate
 ([DR-011](../decisions/011-project-workspace.md)).
+When an activated link resolves — against the citing file's
+`specs/`-relative path — to a decision or intent record's exact
+path, the view shall open that record in the records reader
+([SPECV-7](#specv-7)); any other local link shall stay inert.
 
 ### Records
 
