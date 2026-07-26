@@ -85,49 +85,72 @@ describe("legacy file-history manifest", () => {
 describe("file-history manifest is append-only (SCAF-21)", () => {
   // SCAF-21 requires a new hash to be *appended*: replacing an entry
   // makes an earlier pristine scaffold read as user-modified, so
-  // --update keeps it instead of refreshing. Compare the working
-  // manifest with the one committed at HEAD — during an edit-then-test
-  // run they differ, which is exactly when the mistake is catchable;
-  // on a clean tree they are identical and this passes trivially.
-  it("preserves every hash committed at HEAD, in order", () => {
-    let committed: Record<string, string[]>;
+  // --update keeps it instead of refreshing. Comparing only the
+  // worktree against HEAD is vacuous once a deletion is committed,
+  // so every committed version of the manifest in the available
+  // history must survive as an in-order subsequence of the working
+  // manifests — a path may migrate from the live manifest to the
+  // legacy one (a retired bundled path), but its hashes must not
+  // disappear. Shallow clones check the history they have.
+  it("preserves every hash committed in history, in order", () => {
+    let revs: string[];
     try {
-      committed = JSON.parse(
-        execFileSync("git", ["show", "HEAD:scaffold/.file-history.json"], {
-          cwd: REPO_ROOT,
-          encoding: "utf-8",
-          stdio: ["ignore", "pipe", "ignore"],
-        }),
-      ) as Record<string, string[]>;
+      revs = execFileSync(
+        "git",
+        ["rev-list", "HEAD", "--", "scaffold/.file-history.json"],
+        { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+      )
+        .trim()
+        .split("\n")
+        .filter(Boolean);
     } catch {
-      return; // no git, shallow clone, or manifest not yet committed
+      return; // no git available
     }
     const working = JSON.parse(
       readFileSync(join(REPO_ROOT, "scaffold", ".file-history.json"), "utf-8"),
     ) as Record<string, string[]>;
-    const errors: string[] = [];
-    for (const [relPath, hashes] of Object.entries(committed)) {
-      const now = working[relPath];
-      if (now === undefined) {
-        errors.push(`${relPath}: dropped from the manifest`);
-        continue;
+    const legacy = JSON.parse(
+      readFileSync(
+        join(REPO_ROOT, "scaffold", ".legacy-file-history.json"),
+        "utf-8",
+      ),
+    ) as Record<string, string[]>;
+    const errors = new Set<string>();
+    const seenVersions = new Set<string>();
+    for (const rev of revs) {
+      let text: string;
+      try {
+        text = execFileSync(
+          "git",
+          ["show", `${rev}:scaffold/.file-history.json`],
+          { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+        );
+      } catch {
+        continue; // shallow-history boundary
       }
-      // Subsequence, not prefix: every committed hash must survive in
-      // its original relative order. Appending and restoring a dropped
-      // earlier hash both pass; replacing one does not.
-      let cursor = 0;
-      for (const hash of hashes) {
-        const at = now.indexOf(hash, cursor);
-        if (at === -1) {
-          errors.push(
-            `${relPath}: ${hash} is gone — a recognized version must be kept and new hashes appended`,
-          );
-          break;
+      if (seenVersions.has(text)) continue;
+      seenVersions.add(text);
+      const committed = JSON.parse(text) as Record<string, string[]>;
+      for (const [relPath, hashes] of Object.entries(committed)) {
+        const now = working[relPath] ?? legacy[relPath];
+        if (now === undefined) {
+          errors.add(`${relPath}: dropped from both manifests`);
+          continue;
         }
-        cursor = at + 1;
+        let cursor = 0;
+        for (const hash of hashes) {
+          const at = now.indexOf(hash, cursor);
+          if (at === -1) {
+            errors.add(
+              `${relPath}: ${hash} is gone — a recognized version must be kept and new hashes appended`,
+            );
+            break;
+          }
+          cursor = at + 1;
+        }
       }
     }
-    assert.deepEqual(errors, [], errors.join("\n"));
+    assert.deepEqual([...errors], [], [...errors].join("\n"));
   });
 });
 
