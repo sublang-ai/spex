@@ -178,7 +178,7 @@ integrated.
 - **Each composition is one integrated concern, and its tests
   are release evidence — acceptance for visible seams,
   inspection for hidden ones**
-  ([META-21](specs/meta.md#meta-21),
+  ([META-41](specs/meta.md#meta-41),
   [META-31](specs/meta.md#meta-31)).
   The demo's release gate
   ([IR-003](specs/intents/003-video-pipeline.md)) is one
@@ -209,7 +209,7 @@ integrated.
   scenario test spans two or more packages; a binding inspection
   may touch one package and its service
   ([META-20](specs/meta.md#meta-20),
-  [META-21](specs/meta.md#meta-21)).
+  [META-39](specs/meta.md#meta-39)).
   These inline citations make coverage mechanically auditable —
   in the demo's adversarial review, every stale citation and
   unverified map cell was caught by walking them.
@@ -375,7 +375,7 @@ cannot tell, which is the point.
   ([VID-13](specs/packages/catalog/video-library.md#vid-13)) —
   no scenario required.
 - **Files take four shapes; visibility picks the test kind,
-  never the residence** ([META-21](specs/meta.md#meta-21),
+  never the residence** ([META-41](specs/meta.md#meta-41),
   [META-34](specs/meta.md#meta-34)).
   Scenario-only
   ([PLAY](specs/compositions/lesson-playback.md),

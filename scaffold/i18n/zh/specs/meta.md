@@ -22,7 +22,9 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
-A record's ID is its kind prefix joined to the filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — and the leading number shall be unique per record kind.
+### META-43
+
+A record's ID shall be its kind prefix joined to the filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — with the leading number unique per record kind.
 
 <!-- spex-i18n-source: META-3 sha256-12d340f3809b0e5b716d164ba2e81ee7189d22ecb18331f8910277f65203efc6 -->
 ### META-3
@@ -31,16 +33,23 @@ A record's ID is its kind prefix joined to the filename's leading number — `DR
 
 ### META-21
 
-Test items shall focus on integration and system testing.
+Test items shall focus on integration and system testing; unit tests are part of the implementation and shall not be specified as spec items.
 
-A package's `## Verification` section shall hold test items that check that package's own claims.
-Package test items shall drive the package against controlled collaborators — stubs standing in for its peers and services — never by executing a selected supplier; supplier-facing checks are composition tests ([META-31](#meta-31)).
-Test items that involve multiple spec packages shall live in `compositions/` files: integration and acceptance test items, each citing ([META-20](#meta-20)) the same-file scenario or binding items it executes plus the package items it directly checks.
-A scenario test shall cite items from two or more packages; a binding inspection may involve one package and its service.
+### META-38
+
+A package's `## Verification` section shall hold test items that check that package's own claims, driving the package against controlled collaborators — stubs standing in for its peers and services — never by executing a selected supplier, whose checks are composition tests ([META-31](#meta-31)).
+
+### META-39
+
+Test items that involve multiple spec packages shall live in `compositions/` files as integration and acceptance test items — each citing ([META-20](#meta-20)) the same-file scenario or binding items it executes plus the package items it directly checks — where a scenario test cites items from two or more packages and a binding inspection may involve one package and its service.
+
+### META-40
+
 Every binding and scenario item shall be cited by at least one same-file test item.
-A composition test's grade follows visibility: composed behavior or a relationship observable at the installed system's external boundary shall be exercised there as acceptance; what stays hidden inside the installation may be verified by deployment inspection.
 
-Unit tests shall be part of the implementation and shall not be specified as spec items.
+### META-41
+
+A composition test's grade shall follow visibility: composed behavior or a relationship observable at the installed system's external boundary shall be exercised there as acceptance, while what stays hidden inside the installation may be verified by deployment inspection.
 
 ## Record format
 
@@ -118,6 +127,10 @@ Each item shall be self-contained:
 
 A spec item shall describe behavior as observable outcomes (e.g., file state, exit code, printed output, return value, network call) under named conditions, including any conditions under which a particular outcome shall not occur.
 
+### META-42
+
+Each behavior, binding, scenario, or test item shall be one GEARS sentence ([META-6](#meta-6)), whose `<behavior>` may attach structured content the sentence's shall clause governs — an ordered list as algorithm, a table as mapping, a fenced block as format or grammar, or a text chart — introducing no requirement the sentence does not state.
+
 ## Spec packages
 
 ### META-9
@@ -131,7 +144,7 @@ A spec package shall have a basename \<kebab-case\>.md unique across `specs/pack
 
 Example: `package-management.md` has short form `PKGMGT`.
 
-<!-- spex-i18n-source: META-28 sha256-a59811f451c59e2b0139b9c5acd314f792a5c0f2186128e25d812b958ea680b0 -->
+<!-- spex-i18n-source: META-28 sha256-ea6dc9bea9ea4be49651e4fbaef207c5e3e78cf369e4f3fdeb0142d9822a5f25 -->
 ### META-28
 
 每个包文件应只包含下列 `##` 章节，并按此顺序排列：
@@ -141,7 +154,7 @@ Example: `package-management.md` has short form `PKGMGT`.
 | `## 意图` | 必需 | 包的目的（[META-3](#meta-3)） |
 | `## 外部行为` | 可选 | 包的使用者可以依赖的结果与保证 |
 | `## 内部行为` | 可选 | 消费型需求与私有不变量，对包的使用者隐藏 |
-| `## 验证` | 可选 | 检验本包主张的测试条目（[META-21](#meta-21)） |
+| `## 验证` | 可选 | 检验本包主张的测试条目（[META-38](#meta-38)） |
 | `## 参考资料` | 可选 | 外部来源（[META-19](#meta-19)） |
 
 `## 外部行为` 与 `## 内部行为` 至少应有其一。
@@ -193,7 +206,7 @@ Replaceability alone creates no seam: an implementation dependency no package it
 A binding item declares one installed relationship by clause: its precondition clauses cite the client items — or name the deployment surface — it serves, and its shall clause states the provision.
 The provision shall consist of one or more mappings, each in one of two forms: resolve a client need to another package's External Behavior or to a named external service; or state what the installation itself supplies — a rule over cited External inputs (an authorization policy, an exclusivity constraint) or a concrete installed value (a name, a label). Clause placement identifies client versus provision; the item's prose distinguishes the provision forms.
 Provision-side citations shall be External Behavior — what the supplier offers its users — never another package's internal items; citations to decision records in either clause are policy references, not endpoints.
-A binding item is static: Where preconditions and a shall clause, never a While or When trigger — a triggered sequence is a scenario item. A binding declares the installed relationship; whether the deployment realizes it is its tests' question ([META-21](#meta-21)).
+A binding item is static: Where preconditions and a shall clause, never a While or When trigger — a triggered sequence is a scenario item. A binding declares the installed relationship; whether the deployment realizes it is its tests' question ([META-39](#meta-39)).
 Each declared client need — a slot, an abstract subject, or a named installation surface — shall have exactly one effective binding per deployment, unless its declaration defines aggregation or selection; a need with no effective binding is an incomplete installation, not a disabled feature.
 
 A binding item reads as one GEARS sentence:
@@ -250,7 +263,7 @@ IRs shall not be cited by any spec except `map.md`; naming an IR in prose is a c
 
 ### META-20
 
-A test item shall cite every behavior item it verifies, inline at the assertion that verifies it: same-file anchors for a package's own Verification items, and `packages/` citations plus same-file scenario or binding anchors for composition test items ([META-21](#meta-21)).
+A test item shall cite every behavior item it verifies, inline at the assertion that verifies it: same-file anchors for a package's own Verification items, and `packages/` citations plus same-file scenario or binding anchors for composition test items ([META-39](#meta-39)).
 A citation binds its adjacent phrase: cite exactly the behavior that phrase directly relies on, exercises, or checks — never ambient, transitive, or merely invoked behavior.
 A binding item's precondition may cite a consumed Internal requirement as its client ([META-35](#meta-35)); a scenario or test item may cite a package's Internal Behavior where its integrated claim materially needs it.
 Such a citation neither reclassifies nor exposes the item.

@@ -273,7 +273,7 @@ map is never rewritten.
 A legacy file whose leading number is already held by a
 differently named `intents/` file shall likewise be kept in place
 and reported as a conflict against that id holder, since the
-number is the record id ([META-1](../meta.md#meta-1)).
+number is the record id ([META-43](../meta.md#meta-43)).
 Moved files shall be reported as
 `(migrated from specs/iterations/...)` indicator lines, with a
 moved seed folding into its seed refresh line.

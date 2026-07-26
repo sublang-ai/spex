@@ -40,6 +40,7 @@ meta.md       The spec of specs
 | DR-015 | [015-reference-content.md](decisions/015-reference-content.md) | Reference content: built-in sources + catalog, slc demo example, Academy seed project, packages-layout spec view |
 | DR-016 | [016-relationship-presentation.md](decisions/016-relationship-presentation.md) | Classified spec-relationship presentation: uses, binding clients/provisions, composes, verifies — derived from clause citations |
 | DR-017 | [017-intent-records.md](decisions/017-intent-records.md) | Iterations become intents: intent records (IRs) with flexible, duplication-free recording (META-37), bare `IR-<N>` commit references (GIT-5), unchanged META-18, and mechanical migration |
+| DR-018 | [018-one-sentence-items.md](decisions/018-one-sentence-items.md) | One GEARS sentence per item (META-42) with structured behavior attachments; META-21 split along its concerns (META-38..41); record identity re-homed to META-43; warning-first lint |
 
 ## Intents
 
@@ -68,6 +69,7 @@ meta.md       The spec of specs
 | IR-020 | [020-reference-content.md](intents/020-reference-content.md) | DR-015 applied: built-in sources + catalog, slc demo example, Academy seed, packages-layout spec view |
 | IR-021 | [021-release-readiness.md](intents/021-release-readiness.md) | DR-016 applied + smoke suite + source re-vendor + mainline merge |
 | IR-022 | [022-intent-records.md](intents/022-intent-records.md) | DR-017 applied: intents rename across framework, scaffold, tooling, and this tree |
+| IR-023 | [023-one-sentence-items.md](intents/023-one-sentence-items.md) | DR-018 applied: META surgery, item/sentence lint warning, template and demo conformance |
 
 ## Packages
 

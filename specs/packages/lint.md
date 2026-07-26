@@ -63,7 +63,7 @@ Where the specs tree is linted, structural rules shall report:
 - an error when two record files of one kind carry the same leading
   number — `decisions/` for DRs, `intents/` together with legacy
   `iterations/` for IRs — since the number is the record id
-  ([META-1](../meta.md#meta-1)).
+  ([META-43](../meta.md#meta-43)).
 
 #### LINT-5
 
@@ -112,7 +112,7 @@ clauses are the single source ([META-20](../meta.md#meta-20)):
 - a composition `## Tests` item citing no same-file Binding or
   Scenario item anchor shall be an error;
 - a Binding or Scenario item cited by no same-file Tests item shall
-  be an error ([META-21](../meta.md#meta-21));
+  be an error ([META-40](../meta.md#meta-40));
 - in a file holding both Binding and Scenario items, a Binding item
   cited by no same-file Scenario item shall be an error pointing at
   a bindings-only file ([META-34](../meta.md#meta-34));
@@ -120,7 +120,7 @@ clauses are the single source ([META-20](../meta.md#meta-20)):
   a warning pointing at `specs/compositions/`;
 - a Tests item that cites a same-file Scenario item while citing
   items in fewer than two distinct package files shall be an error
-  ([META-21](../meta.md#meta-21)); a file link without an item
+  ([META-39](../meta.md#meta-39)); a file link without an item
   anchor counts toward no package.
 
 Where a `## Binding` item is linted, a `When` or `While` clause

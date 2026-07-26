@@ -71,7 +71,7 @@ For example, a spec package for generating short URLs may be `specs/packages/sig
 ### Compositions
 
 Behavior that emerges from multiple packages working together lives in `compositions/`, organized by behavior or scenario per [META-31](../meta.md#meta-31) — never as a concatenation of package names.
-Integration and acceptance tests that span packages are specified there; unit tests are never specified ([META-21](../meta.md#meta-21)).
+Integration and acceptance tests that span packages are specified there; unit tests are never specified ([META-21](../meta.md#meta-21), [META-39](../meta.md#meta-39)).
 
 `map.md` indexes packages and compositions.
 
