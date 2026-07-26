@@ -115,6 +115,8 @@ inspection, security testing, restart survival).
   four provision mappings as an ordered list under one `shall`;
   [DELIV-3](specs/packages/ops/delivery.md#deliv-3) folds its
   failure case into a rider of the one deploy action.
+  A rider refines the one governed action; a clause that needs
+  its own trigger is another item, not a rider.
   A second `When` or a second governing `shall` is a second
   item — [SHELL-12](specs/packages/site/web-shell.md#shell-12)
   was born when the error surface outgrew the loading state's

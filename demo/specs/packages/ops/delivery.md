@@ -19,8 +19,12 @@ they observe on the repository and its deployments.
 
 When a pull request is opened or updated, the pipeline shall run
 and report the required checks — lint, type check, tests, and
-production build — on that pull request; while any required check
-fails, merging into the default branch shall be blocked.
+production build — on that pull request.
+
+#### DELIV-12
+
+While any required check fails on a pull request, merging it
+into the default branch shall be blocked.
 
 #### DELIV-2
 
@@ -83,9 +87,10 @@ after migration leaves that revision serving correctly.
 #### DELIV-8
 
 Where a fixture pull request carries a failing check, the audit
-suite shall assert the required checks are reported on it and
+suite shall assert the required checks are reported on it
+([DELIV-1](#deliv-1)) and
 that merging it into the default branch is blocked
-([DELIV-1](#deliv-1)); where the fixture's build passes, the
+([DELIV-12](#deliv-12)); where the fixture's build passes, the
 suite shall assert a preview deployment link appears on the
 pull request ([DELIV-2](#deliv-2)).
 

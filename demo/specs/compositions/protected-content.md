@@ -20,7 +20,9 @@ Where playback grants issue only for requests the embedding
 host authorizes
 ([VID-15](../packages/catalog/video-library.md#vid-15)), the
 deployment's answer shall be content eligibility: a requester
-with an admin session is eligible exactly for assets a lesson
+with an admin session
+([ROLE-7](../packages/identity/access-control.md#role-7)) is
+eligible exactly for assets a lesson
 of an existing course references, and every other requester
 exactly for assets a lesson of a currently published course
 references
@@ -47,8 +49,8 @@ navigation, and data requests:
 | Playback on lessons with a resolvable attachment ([VID-5](../packages/catalog/video-library.md#vid-5), [VID-6](../packages/catalog/video-library.md#vid-6)) | sign-in-required state | plays | plays |
 | Unpublished course and lesson pages ([CAT-3](../packages/catalog/course-catalog.md#cat-3), [CAT-21](../packages/catalog/course-catalog.md#cat-21)) | not-found | not-found | shown |
 | Course manager and video library ([ROLE-2](../packages/identity/access-control.md#role-2), [CAT-4](../packages/catalog/course-catalog.md#cat-4), [VID-1](../packages/catalog/video-library.md#vid-1)) | sent to sign-in | not-authorized | shown |
-| Assets referenced only by unpublished courses ([GUARD-5](#guard-5)) | denied | denied | plays on the unpublished lesson page |
-| Assets no lesson references ([GUARD-5](#guard-5)) | denied | denied | denied |
+| New playback grants for assets referenced only by unpublished courses ([GUARD-5](#guard-5)) | denied | denied | granted — plays on the unpublished lesson page |
+| New playback grants for assets no lesson references ([GUARD-5](#guard-5)) | denied | denied | denied |
 | Stored media content without a valid grant ([VID-7](../packages/catalog/video-library.md#vid-7)) | denied | denied | denied |
 
 ### GUARD-2

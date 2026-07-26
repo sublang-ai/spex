@@ -96,14 +96,13 @@ URL returns the not-found page with HTTP status 404
 
 #### SHELL-8
 
-Where fixture pages render at a 360 px viewport, the test suite
-shall assert no horizontal overflow and an operable compact menu
-([SHELL-4](#shell-4)); where a fixture page's data is throttled,
-the suite shall assert a loading state precedes content
-([SHELL-5](#shell-5)); and
-where a request is forced to fail, the suite shall assert the
-error surface offers a retry and the response carries no stack
-trace ([SHELL-12](#shell-12)).
+Where fixture pages exercise the fit and feedback states, the
+test suite shall assert each: at a 360 px viewport, no
+horizontal overflow and an operable compact menu
+([SHELL-4](#shell-4)); with page data throttled, a loading state
+preceding content ([SHELL-5](#shell-5)); and with a request
+forced to fail, an error surface offering a retry and a response
+carrying no stack trace ([SHELL-12](#shell-12)).
 
 ### Chrome Isolation Coverage
 

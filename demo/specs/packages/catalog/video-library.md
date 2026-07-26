@@ -44,9 +44,12 @@ shall start the upload from the beginning.
 #### VID-4
 
 The library shall list each asset with an editable title, its
-size, and its upload date, each entry with a delete action; when
-the admin confirms deletion, the asset shall leave the list and
-its content shall no longer be served.
+size, and its upload date, each entry with a delete action.
+
+#### VID-18
+
+When the admin confirms an asset's deletion, the asset shall
+leave the list and its content shall no longer be served.
 
 ### Playback
 
@@ -112,7 +115,7 @@ An issued grant shall stay redeemable until its expiry regardless
 of later session or authorization changes — authorization is
 evaluated at issuance, expiry is the only revocation of the grant
 itself, and deleting the asset removes the content it reaches
-([VID-4](#vid-4)).
+([VID-18](#vid-18)).
 
 ### Host Authorization
 
@@ -195,7 +198,8 @@ asset's size and upload date after a reload ([VID-4](#vid-4)),
 and the records survive a service restart under test control
 ([VID-16](#vid-16)); and when one
 asset is deleted after confirmation, its
-content is no longer served while the other still plays, a
+content is no longer served while the other still plays
+([VID-18](#vid-18)), a
 stub host's stored reference to the deleted asset remains unread
 and unmodified by the library ([VID-10](#vid-10)), and that the
 stub host's resolution query reports the deleted asset's
