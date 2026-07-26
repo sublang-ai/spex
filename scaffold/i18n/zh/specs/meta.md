@@ -22,6 +22,8 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
+A record's ID is its kind prefix joined to the filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — and the leading number shall be unique per record kind.
+
 <!-- spex-i18n-source: META-3 sha256-12d340f3809b0e5b716d164ba2e81ee7189d22ecb18331f8910277f65203efc6 -->
 ### META-3
 

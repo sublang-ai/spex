@@ -63,7 +63,7 @@ Where the specs tree is linted, structural rules shall report:
 - an error when two record files of one kind carry the same leading
   number — `decisions/` for DRs, `intents/` together with legacy
   `iterations/` for IRs — since the number is the record id
-  ([META-11](../meta.md#meta-11)).
+  ([META-1](../meta.md#meta-1)).
 
 #### LINT-5
 

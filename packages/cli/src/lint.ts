@@ -1724,7 +1724,7 @@ function lintReferences(ctx: LintContext): void {
 // ---------------------------------------------------------------
 
 function lintRecords(ctx: LintContext): void {
-  // Record ids form from the filename's leading number (META-11), so
+  // Record ids form from the filename's leading number (META-1), so
   // two differently named files on the same number are one id —
   // decisions/ for DRs, intents/ with legacy iterations/ for IRs.
   const firstById = new Map<string, string>();
@@ -1747,7 +1747,7 @@ function lintRecords(ctx: LintContext): void {
           1,
           "error",
           "record/duplicate-id",
-          `record id ${id} is already defined by ${first} (META-11)`,
+          `record id ${id} is already defined by ${first} (META-1)`,
         );
       }
     }

@@ -27,6 +27,8 @@ and files:
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
+A record's ID is its kind prefix joined to the filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — and the leading number shall be unique per record kind.
+
 ### META-3
 
 Each item file shall include an `## Intent` section stating its
