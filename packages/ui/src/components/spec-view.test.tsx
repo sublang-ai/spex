@@ -49,11 +49,11 @@ const TREE: SpecTreeState = {
       path: "decisions/011-project-workspace.md",
     },
   ],
-  iterations: [
+  intents: [
     {
       id: "IR-016",
-      title: "Workspace iteration",
-      path: "iterations/016-project-workspace.md",
+      title: "Workspace intent",
+      path: "intents/016-project-workspace.md",
     },
   ],
   files: [
@@ -201,7 +201,7 @@ const EMPTY_TREE: SpecTreeState = {
   legacy: false,
   files: [],
   decisions: [],
-  iterations: [],
+  intents: [],
   notices: [],
   readAt: Date.now(),
 };
@@ -217,7 +217,7 @@ const LEGACY_TREE: SpecTreeState = {
       path: "decisions/001-old-decision.md",
     },
   ],
-  iterations: [],
+  intents: [],
   notices: [],
   readAt: Date.now(),
 };

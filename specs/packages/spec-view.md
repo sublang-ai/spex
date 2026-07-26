@@ -132,9 +132,9 @@ and shall not navigate
 
 #### SPECV-7
 
-When the records footer line ("N decisions · M iterations") is
+When the records footer line ("N decisions · M intents") is
 activated, the spec view shall open an at-hand list of the tree's
-decision and iteration records by id and title
+decision and intent records by id and title
 ([DR-009](../decisions/009-at-hand-interaction.md)), closable with
 Escape; when a record is picked, the view shall replace itself
 with that record's rendered markdown behind a Back control,
@@ -244,7 +244,10 @@ a file's summary without a second fetch.
 #### SPECV-14
 
 The core package shall list `specs/decisions/*.md` and
-`specs/iterations/*.md` as records sorted by filename, each with an
+`specs/intents/*.md` — falling back to the legacy
+`specs/iterations/*.md` where `specs/intents/` is absent
+([DR-017](../decisions/017-intent-records.md)) — as records sorted
+by filename, each with an
 ID formed from the record kind and the filename's leading number
 (e.g. `DR-011`), a title taken from the file's first `#` heading
 minus any leading `DR-nnn:`/`IR-nnn:` prefix, and a path relative
@@ -317,7 +320,7 @@ to one line ([SPECV-13](#specv-13)).
 ### Records Coverage
 
 #### SPECV-34
-Where fixture decision and iteration files carry prefixed and
+Where fixture decision and intent files carry prefixed and
 unprefixed `#` headings, the test suite shall assert record IDs
 formed from filename numbers, titles with any `DR-nnn:`/`IR-nnn:`
 prefix stripped, `specs/`-relative paths, and filename ordering

@@ -276,7 +276,7 @@ describe("DR-015: repeated Academy seeding opens the existing project", () => {
           legacy: false,
           files: [],
           decisions: [],
-          iterations: [],
+          intents: [],
           notices: [],
           readAt: 0,
         };

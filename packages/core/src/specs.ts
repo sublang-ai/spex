@@ -36,6 +36,8 @@ const KNOWN_TOP_LEVEL = new Set([
   "packages",
   "compositions",
   "decisions",
+  "intents",
+  // Tolerated while a tree migrates to intent records (DR-017).
   "iterations",
   "map.md",
   "meta.md",
@@ -377,12 +379,23 @@ function walkCollection(
 }
 
 // ---------------------------------------------------------------------------
-// Records (decisions/, iterations/)
+// Records (decisions/, intents/)
 // ---------------------------------------------------------------------------
+
+// Intent records live in intents/; a tree not yet migrated keeps
+// them in the legacy iterations/ directory (DR-017).
+function recordsDir(
+  specsDir: string,
+  baseReal: string,
+): "intents" | "iterations" {
+  return realInside(join(specsDir, "intents"), baseReal) !== undefined
+    ? "intents"
+    : "iterations";
+}
 
 function parseRecords(
   specsDir: string,
-  sub: "decisions" | "iterations",
+  sub: "decisions" | "intents" | "iterations",
   baseReal: string,
   notices: string[],
 ): SpecRecordInfo[] {
@@ -433,7 +446,7 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
     legacy: false,
     files: [],
     decisions: [],
-    iterations: [],
+    intents: [],
     notices: [],
     readAt,
   };
@@ -467,7 +480,7 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
       legacy: true,
       files: [],
       decisions: parseRecords(specsDir, "decisions", baseReal, discarded),
-      iterations: parseRecords(specsDir, "iterations", baseReal, discarded),
+      intents: parseRecords(specsDir, recordsDir(specsDir, baseReal), baseReal, discarded),
       notices: [],
       readAt,
     };
@@ -500,7 +513,7 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
     legacy: false,
     files,
     decisions: parseRecords(specsDir, "decisions", baseReal, notices),
-    iterations: parseRecords(specsDir, "iterations", baseReal, notices),
+    intents: parseRecords(specsDir, recordsDir(specsDir, baseReal), baseReal, notices),
     notices,
     readAt,
   };

@@ -408,15 +408,15 @@ test("a top-level file named like a legacy dir is unknown, not legacy", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Records (decisions/, iterations/)
+// Records (decisions/, intents/)
 // ---------------------------------------------------------------------------
 
-test("decisions and iterations parse id, title, and path sorted by filename", () => {
+test("decisions and intents parse id, title, and path sorted by filename", () => {
   const dir = fixture({
     "specs/decisions/011-project-workspace.md":
       "# DR-011: Project workspace\n\nBody.\n",
     "specs/decisions/002-arch.md": "# Architecture only\n",
-    "specs/iterations/001-first.md": "# IR-001: First iteration\n",
+    "specs/intents/001-first.md": "# IR-001: First intent\n",
   });
   const tree = parseSpecTree(dir);
   assert.deepEqual(tree.decisions, [
@@ -427,8 +427,8 @@ test("decisions and iterations parse id, title, and path sorted by filename", ()
       path: "decisions/011-project-workspace.md",
     },
   ]);
-  assert.deepEqual(tree.iterations, [
-    { id: "IR-001", title: "First iteration", path: "iterations/001-first.md" },
+  assert.deepEqual(tree.intents, [
+    { id: "IR-001", title: "First intent", path: "intents/001-first.md" },
   ]);
 });
 
@@ -547,7 +547,7 @@ test("the staged Academy corpus parses end-to-end", () => {
     ["DR-000", "DR-001", "DR-002", "DR-003"],
   );
   assert.deepEqual(
-    tree.iterations.map((record) => record.id),
+    tree.intents.map((record) => record.id),
     ["IR-001", "IR-002", "IR-003"],
   );
 });

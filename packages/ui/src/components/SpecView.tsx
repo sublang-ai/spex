@@ -155,7 +155,7 @@ export function SpecView(props: SpecViewProps) {
     legacy: false,
     files: [],
     decisions: [],
-    iterations: [],
+    intents: [],
     notices: [],
     readAt: 0,
   };
@@ -184,7 +184,7 @@ export function SpecView(props: SpecViewProps) {
   );
   const totals = useMemo(() => treeCounts(tree.files), [tree]);
   const records = useMemo(
-    () => [...tree.decisions, ...tree.iterations],
+    () => [...tree.decisions, ...tree.intents],
     [tree],
   );
 
@@ -786,14 +786,14 @@ export function SpecView(props: SpecViewProps) {
           onClick={() => setRecordsOpen((open) => !open)}
           className="text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
         >
-          {tree.decisions.length} decisions · {tree.iterations.length}{" "}
-          iterations
+          {tree.decisions.length} decisions · {tree.intents.length}{" "}
+          intents
         </button>
         {recordsOpen ? (
           <div
             data-testid="records-popover"
             role="dialog"
-            aria-label="Decision and iteration records"
+            aria-label="Decision and intent records"
             className="absolute bottom-full left-0 z-10 mb-1 flex max-h-80 w-96 max-w-full flex-col overflow-y-auto rounded-lg border border-neutral-200 bg-white p-1.5 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
           >
             {records.map((record) => (

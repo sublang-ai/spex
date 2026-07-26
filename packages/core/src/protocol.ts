@@ -407,7 +407,8 @@ export interface SpecTreeState {
   legacy: boolean;
   files: SpecFileInfo[];
   decisions: SpecRecordInfo[];
-  iterations: SpecRecordInfo[];
+  /** Intent records, read from intents/ or a legacy iterations/. */
+  intents: SpecRecordInfo[];
   /** Tree-level notices (unknown top-level entries, etc.). */
   notices: string[];
   /** When the tree was read, ms epoch. */
