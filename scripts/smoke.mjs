@@ -118,12 +118,13 @@ try {
   run("integration", "npm", ["run", "test:integration", "-w", "packages/core"]);
   await coreRoundTrip();
   if (desktop) {
-    // The ABI flip must never outlive the run: restore the Node build
-    // even when the render or screenshot check fails, so a red smoke
-    // does not leave better-sqlite3 built for Electron.
-    run("desktop-abi", "npm", ["run", "rebuild:electron", "-w", "apps/desktop"]);
+    // The ABI flip must never outlive the run: node-gyp cleans the
+    // Node build before compiling for Electron, so even a failed
+    // rebuild:electron needs the restore — the flip itself lives
+    // inside the protected region.
     let restoreFailed = false;
     try {
+      run("desktop-abi", "npm", ["run", "rebuild:electron", "-w", "apps/desktop"]);
       const shot = join(tmpdir(), `spex-smoke-${Date.now()}.png`);
       run("desktop-render", "npm", ["start", "-w", "apps/desktop"], {
         env: { ...process.env, SPEX_ACCEPTANCE: shot },
