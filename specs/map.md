@@ -39,6 +39,7 @@ meta.md       The spec of specs
 | DR-014 | [014-released-toolchain.md](decisions/014-released-toolchain.md) | Released toolchain adoption: playbook 2.0 / cligent 0.16 host boundary, effort key, slc-emitted registry wrapper, invalidation, session cwd |
 | DR-015 | [015-reference-content.md](decisions/015-reference-content.md) | Reference content: built-in sources + catalog, slc demo example, Academy seed project, packages-layout spec view |
 | DR-016 | [016-relationship-presentation.md](decisions/016-relationship-presentation.md) | Classified spec-relationship presentation: uses, binding clients/provisions, composes, verifies — derived from clause citations |
+| DR-017 | [017-intent-records.md](decisions/017-intent-records.md) | Iterations become intents: intent records (IRs) with flexible, duplication-free recording (META-37), bare `IR-<N>` commit references (GIT-5), unchanged META-18, and mechanical migration |
 
 ## Iterations
 
@@ -66,6 +67,7 @@ meta.md       The spec of specs
 | IR-019 | [019-toolchain-upgrade.md](iterations/019-toolchain-upgrade.md) | DR-014 applied: playbook 2.0 / cligent 0.16 upgrade, effort rename, slc entry adoption, invalidation, session cwd |
 | IR-020 | [020-reference-content.md](iterations/020-reference-content.md) | DR-015 applied: built-in sources + catalog, slc demo example, Academy seed, packages-layout spec view |
 | IR-021 | [021-release-readiness.md](iterations/021-release-readiness.md) | DR-016 applied + smoke suite + source re-vendor + mainline merge |
+| IR-022 | [022-intent-records.md](iterations/022-intent-records.md) | DR-017 applied: intents rename across framework, scaffold, tooling, and this tree |
 
 ## Packages
 

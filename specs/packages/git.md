@@ -28,3 +28,7 @@ Where a commit message includes a body, when writing the body, the commit body s
 When AI assists in coding or authoring, the commit message shall include a `Co-authored-by` trailer in the format `<model> (<role>) <email>`, where `<role>` is one of `coder|reviewer|maintainer` and `<email>` is `cligent@sublang.ai`.
 
 Example: `Co-authored-by: GPT-5.2-Codex (coder) <cligent@sublang.ai>`
+
+### GIT-5
+
+Where a commit realizes a recorded intent, the commit message shall reference the intent record by its bare ID in the `IR-<N>` form, in the subject or body.

@@ -65,6 +65,11 @@ In prose paragraphs of DRs and IRs, each sentence shall begin on a new line for 
 List items and table cells are exempt, since their delimiters already isolate per-entry changes.
 Fixed-width column wrapping within a sentence is allowed.
 
+### META-37
+
+An intent realized in a single commit needs no intent record; an intent shall be recorded when its realization spans commits or must be tracked before completion.
+An intent record shall carry only what is needed to understand the intent and its realization state, citing commits and issues rather than duplicating their content.
+
 ## Item syntax
 
 ### META-6
