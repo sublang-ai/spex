@@ -21,6 +21,11 @@ deployment's media provider
 ([CAT-8](../packages/catalog/course-catalog.md#cat-8)) and the
 lesson view delegates its media area to that provider
 ([CAT-20](../packages/catalog/course-catalog.md#cat-20)), the
+course page marks a lesson playable exactly when the provider
+resolves its attachment
+([CAT-2](../packages/catalog/course-catalog.md#cat-2)), and the
+manager marks an unresolvable stored reference unavailable
+([CAT-24](../packages/catalog/course-catalog.md#cat-24)), the
 deployment shall present the video library's asset list
 ([VID-4](../packages/catalog/video-library.md#vid-4)) as the
 picker, the stored reference shall be the chosen asset's stable
@@ -53,7 +58,8 @@ lesson ([VID-10](../packages/catalog/video-library.md#vid-10)),
 the course and its syllabus shall remain intact, the lesson's
 course-page entry shall lose its playable marking
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
-lesson view shall fall back to its no-media presentation, and
+lesson view shall fall back to its no-media presentation
+([CAT-20](../packages/catalog/course-catalog.md#cat-20)), and
 the course manager shall mark the attachment unavailable with
 replace and remove offered
 ([CAT-24](../packages/catalog/course-catalog.md#cat-24)) — the
@@ -98,7 +104,9 @@ admin deletes that asset from the library
 acceptance suite shall assert the course page still shows the
 full syllabus with that lesson's playable marking gone
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
-lesson view shows the no-media presentation, and the course
+lesson view shows the no-media presentation
+([CAT-20](../packages/catalog/course-catalog.md#cat-20)), and the
+course
 manager marks the dangling reference — the library reporting it
 unresolvable
 ([VID-14](../packages/catalog/video-library.md#vid-14),

@@ -35,7 +35,8 @@ installation's policy
 ### PLAT-2
 
 Where the identity store maintains user records
-([AUTH-7](../packages/identity/github-login.md#auth-7)), the
+([AUTH-7](../packages/identity/github-login.md#auth-7),
+[AUTH-15](../packages/identity/github-login.md#auth-15)), the
 role store records each account's role
 ([ROLE-3](../packages/identity/access-control.md#role-3)),
 the catalog store keeps content in explicit order

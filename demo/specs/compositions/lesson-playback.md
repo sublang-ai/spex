@@ -18,14 +18,17 @@ the product's flagship acceptance scenario.
 Where a published course carries a lesson with a resolvable
 media attachment
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2)), when an
-anonymous visitor opens that lesson, the lesson view shall show
-the player in its sign-in-required state
-([VID-6](../packages/catalog/video-library.md#vid-6)); when the
-visitor signs in with GitHub from there
-([AUTH-2](../packages/identity/github-login.md#auth-2)), the
-site shall return them to the same lesson with the player active
-([VID-5](../packages/catalog/video-library.md#vid-5)) — one
-sign-in between landing and playback.
+anonymous visitor opens that lesson
+([CAT-20](../packages/catalog/course-catalog.md#cat-20)), the
+deployment shall carry them from landing to playback across one
+sign-in:
+
+1. the lesson view shows the player in its sign-in-required state
+   ([VID-6](../packages/catalog/video-library.md#vid-6));
+2. signing in with GitHub from there
+   ([AUTH-2](../packages/identity/github-login.md#auth-2))
+   returns the visitor to the same lesson with the player active
+   ([VID-5](../packages/catalog/video-library.md#vid-5)).
 
 ### PLAY-2
 

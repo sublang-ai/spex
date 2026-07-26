@@ -90,13 +90,13 @@ changes nothing.
 
 #### CAT-6
 
-When the admin publishes a course — any publish, including
-republishing after an unpublish, setting the publication time
-that orders the course list ([CAT-1](#cat-1)) — the course shall
-appear in that list and its page shall become publicly reachable;
-when the admin unpublishes it, the course shall return to the
-unpublished state and public requests shall again see not-found
-([CAT-3](#cat-3)).
+When the admin changes a course's publication state, the catalog
+shall apply that transition:
+
+| Transition | Outcome |
+| --- | --- |
+| publish, including republishing after an unpublish | the course appears in the course list under a publication time set by this publish, and its page becomes publicly reachable ([CAT-1](#cat-1)) |
+| unpublish | the course returns to the unpublished state and public requests see not-found again ([CAT-3](#cat-3)) |
 
 #### CAT-7
 
@@ -198,8 +198,8 @@ title alone ([CAT-1](#cat-1)); a published course
 page shows its syllabus in the defined order with
 resolvable-attachment lessons marked playable ([CAT-2](#cat-2));
 the unpublished course's URL responds not-found without an admin
-session while an admin session sees its page marked as
-unpublished ([CAT-21](#cat-21)); publishing then unpublishing it
+session ([CAT-3](#cat-3)) while an admin session sees its page
+marked as unpublished ([CAT-21](#cat-21)); publishing then unpublishing it
 flips the list and the URL between the two states; republishing
 places the course first in the list under its new publication
 time ([CAT-6](#cat-6)); and a detail save to a published course

@@ -582,7 +582,13 @@ test("the staged Academy corpus parses end-to-end", () => {
   const journey = item(play, "PLAY-1");
   assert.equal(journey.group, "external");
   assert.equal(journey.section, "Scenario");
-  assert.deepEqual(journey.cites, ["CAT-2", "VID-6", "AUTH-2", "VID-5"]);
+  assert.deepEqual(journey.cites, [
+    "CAT-2",
+    "CAT-20",
+    "VID-6",
+    "AUTH-2",
+    "VID-5",
+  ]);
   assert.ok(
     compositions.some((entry) =>
       entry.items.some((candidate) => candidate.cites.length > 0),

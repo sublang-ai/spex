@@ -24,12 +24,15 @@ offer a "Continue with GitHub" action.
 #### AUTH-2
 
 When the visitor activates "Continue with GitHub", the site shall
-send them to GitHub's authorization page for the site's OAuth
-app; when GitHub redirects back with an authorization grant, the
-site shall establish a signed-in session and return the visitor
-to the page sign-in started from — a same-site path only — or
-to the home page when no origin is recorded or the recorded
-origin is not same-site.
+run the OAuth exchange:
+
+1. send the visitor to GitHub's authorization page for the site's
+   OAuth app;
+2. on GitHub's redirect back with an authorization grant,
+   establish a signed-in session;
+3. return the visitor to the page sign-in started from — a
+   same-site path only — or to the home page when no origin is
+   recorded or the recorded origin is not same-site.
 
 #### AUTH-14
 
