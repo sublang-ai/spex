@@ -182,37 +182,40 @@ describe("file-history manifest is append-only (SCAF-21)", () => {
         }
       }
     }
-    // Order is enforced where history is unambiguous: append-only
-    // means chronological, so a pair committed in one order must
-    // keep it. History already carries one contradiction — an early
-    // restoration inserted recovered hashes ahead of hashes the
-    // pre-monorepo manifests order before them — and a pair
-    // committed in both orders is therefore exempt; membership
-    // above never is.
-    const forward = new Map<string, Set<string>>();
-    for (const committed of committedVersions) {
+    // Precedence comes from earlier commits only: the FIRST commit
+    // to co-list a pair fixes its direction permanently, so a
+    // committed reorder cannot supply its own exemption — the
+    // reverse pair it introduces never overrides the earlier one.
+    const direction = new Map<string, Map<string, "lo-hi" | "hi-lo">>();
+    for (const committed of [...committedVersions].reverse()) {
       for (const [relPath, hashes] of Object.entries(committed)) {
-        let pairs = forward.get(relPath);
-        if (!pairs) forward.set(relPath, (pairs = new Set()));
+        let pairs = direction.get(relPath);
+        if (!pairs) direction.set(relPath, (pairs = new Map()));
         for (let i = 0; i < hashes.length; i += 1) {
           for (let j = i + 1; j < hashes.length; j += 1) {
-            pairs.add(`${hashes[i]}\u0000${hashes[j]}`);
+            const a = hashes[i];
+            const b = hashes[j];
+            const key = a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`;
+            if (!pairs.has(key)) {
+              pairs.set(key, a < b ? "lo-hi" : "hi-lo");
+            }
           }
         }
       }
     }
-    for (const [relPath, pairs] of forward) {
+    for (const [relPath, pairs] of direction) {
       const now = working[relPath] ?? legacy[relPath];
       if (now === undefined) continue; // membership already flagged
       const position = new Map(now.map((hash, index) => [hash, index]));
-      for (const pair of pairs) {
-        const [a, b] = pair.split("\u0000");
-        if (pairs.has(`${b}\u0000${a}`)) continue; // contradicted in history
-        const ia = position.get(a);
-        const ib = position.get(b);
+      for (const [key, dir] of pairs) {
+        const [lo, hi] = key.split("\u0000");
+        const first = dir === "lo-hi" ? lo : hi;
+        const second = dir === "lo-hi" ? hi : lo;
+        const ia = position.get(first);
+        const ib = position.get(second);
         if (ia !== undefined && ib !== undefined && ia >= ib) {
           errors.add(
-            `${relPath}: ${a} must stay before ${b} — history is append-only`,
+            `${relPath}: ${first} must stay before ${second} — the first committed order governs`,
           );
         }
       }
