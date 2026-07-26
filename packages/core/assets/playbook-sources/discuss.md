@@ -42,7 +42,7 @@ In the first step of each round, Participant shall review the latest changes, ad
 In the second step of each round, Host shall address any findings.
 Rounds continue until Participant raises no findings.
 
-Spec item files are the files under @specs/ that hold spec items — @specs/packages/ and @specs/compositions/ in the current layout, or @specs/user/, @specs/dev/, and @specs/test/ in the legacy one; decision and iteration records, @specs/map.md, and @specs/meta.md are not spec item files.
+Spec item files are the files under @specs/ that hold spec items — @specs/packages/ and @specs/compositions/ in the current layout, or @specs/user/, @specs/dev/, and @specs/test/ in the legacy one; decision and intent records (iteration records in older scaffolds), @specs/map.md, and @specs/meta.md are not spec item files.
 
 While any new or updated spec item (in spec item files) is under review, Captain shall include the following prompt for Participant:
 

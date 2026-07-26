@@ -16,7 +16,7 @@ Players:
 
 When Boss gives a coding intent, Captain shall relay it to Coder along with the following prompt:
 > Assess whether this can be completed in a single commit, following best practices.
-> If yes, implement and test, updating both code and specs; otherwise, decompose into tasks as a new IR under @specs/iterations and stop without implementing any IR task.
+> If yes, implement and test, updating both code and specs; otherwise, decompose into tasks as a new IR under @specs/intents (or @specs/iterations in older scaffolds) and stop without implementing any IR task.
 > For context discovery, @specs/map.md indexes all spec files and @specs/meta.md describes the spec format.
 > Ensure @specs/map.md reflects the changes.
 > Do not commit.
@@ -53,7 +53,7 @@ For each finding in a review round, Coder either addresses it with changes or ch
 Any code change to address findings starts a new round of review, even if some findings are also rebutted.
 Rounds continue until Reviewer raises no findings.
 
-Spec item files are the files under @specs/ that hold spec items — @specs/packages/ and @specs/compositions/ in the current layout, or @specs/user/, @specs/dev/, and @specs/test/ in the legacy one; decision and iteration records, @specs/map.md, and @specs/meta.md are not spec item files.
+Spec item files are the files under @specs/ that hold spec items — @specs/packages/ and @specs/compositions/ in the current layout, or @specs/user/, @specs/dev/, and @specs/test/ in the legacy one; decision and intent records (iteration records in older scaffolds), @specs/map.md, and @specs/meta.md are not spec item files.
 
 When Reviewer begins the first review round on changes from a Boss coding intent, Captain shall relay the intent to Reviewer.
 
