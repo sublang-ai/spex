@@ -29,7 +29,9 @@ references
 non-admin grants for an asset stop as soon as no currently
 published course references it, unpublishing or deleting the
 last referencing course closes access at once, and a grant
-already issued lasts only to its expiry — eligibility feeding
+already issued lasts only to its expiry
+([VID-17](../packages/catalog/video-library.md#vid-17)) —
+eligibility feeding
 the library's own gates and replacing none of them, since
 session verification and grant checks stay the library's.
 
@@ -99,7 +101,9 @@ course stays published ([GUARD-2](#guard-2),
 member's playback request for an asset referenced only by an
 unpublished fixture course is denied with no grant issued,
 while a grant the member obtained before the unpublish still
-plays until its expiry and the admin's player on that
+plays until its expiry
+([VID-17](../packages/catalog/video-library.md#vid-17)) and the
+admin's player on that
 unpublished lesson still plays ([GUARD-5](#guard-5)); after the
 only course referencing a fixture asset is deleted, member and
 admin playback requests for that asset are likewise denied with

@@ -46,19 +46,21 @@ sign-in and playback, per
 
 Where a deployment is seeded with a published fixture course
 whose lesson carries a fixture asset, and a stub GitHub provider
-is configured, when the acceptance suite walks from the home
-page's course list
-([CAT-1](../packages/catalog/course-catalog.md#cat-1)), opens
-the course, and opens the lesson
-([CAT-20](../packages/catalog/course-catalog.md#cat-20)), the
-suite shall assert the player shows the sign-in-required state
-([VID-6](../packages/catalog/video-library.md#vid-6)); when the
-suite signs in from that lesson
-([AUTH-2](../packages/identity/github-login.md#auth-2)), it
-shall assert the site returns to the same lesson
-([PLAY-1](#play-1)) and the media element reaches the playing
-state through a fresh access grant ([PLAY-2](#play-2),
-[VID-5](../packages/catalog/video-library.md#vid-5)).
+is configured, when the acceptance suite walks the journey from
+landing to playback, the suite shall assert each leg:
+
+1. walking from the home page's course list
+   ([CAT-1](../packages/catalog/course-catalog.md#cat-1)) into
+   the course and the lesson
+   ([CAT-20](../packages/catalog/course-catalog.md#cat-20))
+   shows the player in its sign-in-required state
+   ([VID-6](../packages/catalog/video-library.md#vid-6));
+2. signing in from that lesson
+   ([AUTH-2](../packages/identity/github-login.md#auth-2))
+   returns the site to the same lesson ([PLAY-1](#play-1)), and
+   the media element reaches the playing state through a fresh
+   access grant ([PLAY-2](#play-2),
+   [VID-5](../packages/catalog/video-library.md#vid-5)).
 
 ### PLAY-4
 

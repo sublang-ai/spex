@@ -106,11 +106,13 @@ entered state, mark the offending field, and save nothing.
 
 #### CAT-17
 
-When the admin deletes a course, the course manager shall ask
-for confirmation naming the counts of sections and lessons
-removed with it; when the admin confirms, the course shall leave
-the course list and its page shall respond not-found
-([CAT-3](#cat-3)).
+When the admin deletes a course, the course manager shall run
+the confirmed deletion:
+
+1. ask for confirmation naming the counts of sections and
+   lessons removed with it;
+2. on confirmation, remove the course — it leaves the course
+   list and its page responds not-found ([CAT-3](#cat-3)).
 
 #### CAT-18
 

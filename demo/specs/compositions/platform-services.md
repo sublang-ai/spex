@@ -52,7 +52,9 @@ each package's invariants over that storage remain its own.
 Where the content store holds asset content privately
 ([VID-7](../packages/catalog/video-library.md#vid-7)) and the
 deployment's grant mechanism backs the short-lived access
-grants ([VID-8](../packages/catalog/video-library.md#vid-8)),
+grants, redeemable until expiry with no earlier revocation
+([VID-8](../packages/catalog/video-library.md#vid-8),
+[VID-17](../packages/catalog/video-library.md#vid-17)),
 the deployment shall bind the content store to a private
 Supabase Storage bucket and realize each grant as a signed URL
 whose expiry is the grant's configured expiry.
