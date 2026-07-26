@@ -16,7 +16,7 @@ The `specs/` directory shall contain the following subdirectories and files:
 | Path | Content | File Naming |
 | --------- | ------- | ------ |
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
-| `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
+| `intents/` | Intent records (IRs) | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | spec packages, one item file per package | [\<path\>/]\<kebab-case\>.md |
 | `compositions/` | cross-package compositions: scenarios, bindings, and their tests | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
@@ -47,10 +47,10 @@ Unit tests shall be part of the implementation and shall not be specified as spe
 
 每个决策记录（DR）应遵循 ADR 格式 [[2]]，并包含以下章节：状态、背景、决策、影响。
 
-<!-- spex-i18n-source: META-5 sha256-f50b8ba3ae8a9c1e8ebb9d7f368a1acb3159de392169c2e9296ab37883572ef1 -->
+<!-- spex-i18n-source: META-5 sha256-86ea1842f2ac9ce659d0c2981e97eb3c4753a9653a8d9e2c1ae23911a42d8dfe -->
 ### META-5
 
-每个迭代记录（IR）应包含以下章节：目标、交付项（带复选框）、任务（编号且每项为一次提交大小）和验收标准。
+每个意图记录（IR）应包含以下章节：目标、交付项（带复选框）、任务（编号且每项为一次提交大小）和验收标准。
 
 ### META-23
 
@@ -67,6 +67,11 @@ DRs shall carry no implementation logic: an observable outcome that code generat
 In prose paragraphs of DRs and IRs, each sentence shall begin on a new line for diff readability.
 List items and table cells are exempt, since their delimiters already isolate per-entry changes.
 Fixed-width column wrapping within a sentence is allowed.
+
+### META-37
+
+An intent realized in a single commit needs no intent record; an intent shall be recorded when its realization spans commits or must be tracked before completion.
+An intent record shall carry only what is needed to understand the intent and its realization state, citing commits and issues rather than duplicating their content.
 
 ## Item syntax
 

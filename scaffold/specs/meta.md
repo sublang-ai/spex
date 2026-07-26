@@ -16,7 +16,7 @@ The `specs/` directory shall contain the following subdirectories and files:
 | Path | Content | File Naming |
 | --------- | ------- | ------ |
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
-| `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
+| `intents/` | Intent records (IRs) | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | spec packages, one item file per package | [\<path\>/]\<kebab-case\>.md |
 | `compositions/` | cross-package compositions: scenarios, bindings, and their tests | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
@@ -47,7 +47,7 @@ Each decision record (DR) shall follow the ADR format [[2]] with the following s
 
 ### META-5
 
-Each iteration record (IR) shall contain the following sections: Goal, Deliverables (with checkboxes), Tasks (numbered, each in one-commit size), and Acceptance criteria.
+Each intent record (IR) shall contain the following sections: Goal, Deliverables (with checkboxes), Tasks (numbered, each in one-commit size), and Acceptance criteria.
 
 ### META-23
 
@@ -64,6 +64,11 @@ DRs shall carry no implementation logic: an observable outcome that code generat
 In prose paragraphs of DRs and IRs, each sentence shall begin on a new line for diff readability.
 List items and table cells are exempt, since their delimiters already isolate per-entry changes.
 Fixed-width column wrapping within a sentence is allowed.
+
+### META-37
+
+An intent realized in a single commit needs no intent record; an intent shall be recorded when its realization spans commits or must be tracked before completion.
+An intent record shall carry only what is needed to understand the intent and its realization state, citing commits and issues rather than duplicating their content.
 
 ## Item syntax
 

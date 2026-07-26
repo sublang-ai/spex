@@ -10,7 +10,7 @@ import { join } from "node:path";
 const DIRS = [
   "specs",
   "specs/decisions",
-  "specs/iterations",
+  "specs/intents",
   "specs/packages",
   "specs/compositions",
 ];

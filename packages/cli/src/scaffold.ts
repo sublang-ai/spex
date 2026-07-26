@@ -15,6 +15,7 @@ import {
   isPristine,
   isSupportedLanguage,
   listFiles,
+  migrateIterationsLayout,
   migrateLegacyItemLayout,
   overwriteFrameworkSpecFiles,
   refreshPristineSeeds,
@@ -28,7 +29,11 @@ import {
   type PackageMigrationOutcome,
 } from "./migrate-package-layout.js";
 import { resolveBase } from "./resolve-base.js";
-import { renameInteractionsHeading, restructureMap } from "./restructure-map.js";
+import {
+  renameInteractionsHeading,
+  renameIterationsEntries,
+  restructureMap,
+} from "./restructure-map.js";
 
 type ScaffoldOptions =
   | { mode: "create"; pathArg?: string; language?: ScaffoldLanguage }
@@ -204,6 +209,16 @@ function updateScaffoldTemplates(): void {
   assertCleanSpecsTree(basePath);
   const language = readActiveLanguage(basePath);
 
+  // Move intent records to their current directory before sampling
+  // pristine paths: a move changes no bytes, and sampling after it
+  // lets a pristine legacy seed be recognized at its migrated path
+  // (SCAF-51), skipped by the citation rewrite, and then refreshed
+  // wholesale like any pristine seed.
+  const iterationsResults = migrateIterationsLayout(basePath);
+  const iterationsMoved = iterationsResults.some(
+    (result) => result.status === "migrated",
+  );
+
   // Classify framework/seed files before any byte edits: recognized
   // bundled versions get replaced wholesale below, so the citation
   // rewrite and map restructure must leave them alone.
@@ -252,6 +267,17 @@ function updateScaffoldTemplates(): void {
     if (renamed !== null) {
       writeFileSync(mapPath, renamed);
       mapHeadingRenamed = true;
+    }
+  }
+  let mapIterationsRenamed = false;
+  if (iterationsMoved && mapEditable) {
+    const renamed = renameIterationsEntries(
+      readFileSync(mapPath, "utf-8"),
+      language,
+    );
+    if (renamed !== null) {
+      writeFileSync(mapPath, renamed);
+      mapIterationsRenamed = true;
     }
   }
 
@@ -322,6 +348,23 @@ function updateScaffoldTemplates(): void {
     reportedPaths.add(result.targetRelPath);
   }
 
+  for (const result of iterationsResults) {
+    if (result.status === "conflict") {
+      console.log(
+        `  ${result.legacyRelPath} (kept — target exists at ${result.targetRelPath})`,
+      );
+      continue;
+    }
+    if (seedPaths.has(result.targetRelPath)) {
+      migratedSeedSources.set(result.targetRelPath, result.legacyRelPath);
+      continue;
+    }
+    console.log(
+      `  ${result.targetRelPath} (migrated from ${result.legacyRelPath})`,
+    );
+    reportedPaths.add(result.targetRelPath);
+  }
+
   for (const relPath of rewritten) {
     if (
       seedPaths.has(relPath) ||
@@ -345,6 +388,15 @@ function updateScaffoldTemplates(): void {
     indicatorOverrides.set(
       "specs/map.md",
       "kept — user-modified; interactions entries renamed",
+    );
+  }
+  if (mapIterationsRenamed) {
+    const prior = indicatorOverrides.get("specs/map.md");
+    indicatorOverrides.set(
+      "specs/map.md",
+      prior === undefined
+        ? "kept — user-modified; iterations entries renamed"
+        : `${prior}; iterations entries renamed`,
     );
   }
   for (const relPath of rewritten) {

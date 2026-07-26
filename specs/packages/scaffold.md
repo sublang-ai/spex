@@ -137,7 +137,7 @@ file shall be classified as either **framework** or **seed**:
   extend, or replace. Written once on initial `scaffold` and only
   refreshed by `--update` when the user has not customized it.
   - `specs/map.md`
-  - `specs/iterations/000-spdx-headers.md`
+  - `specs/intents/000-spdx-headers.md`
   - `specs/packages/git.md`
   - `specs/packages/licensing.md`
   - `specs/compositions/.gitkeep`
@@ -253,6 +253,27 @@ grammar; lint findings remaining inside moved files are
 reconciliation work owned by the printed compositions prompt
 ([SCAF-42](#scaf-42)).
 
+#### SCAF-51
+
+Where `--update` runs while `specs/iterations/` exists, the CLI
+shall move each of its entries to the same path under
+`specs/intents/` ([DR-017](../decisions/017-intent-records.md)),
+keeping any entry whose target already exists in place and
+reporting it as a conflict, and remove the emptied directory.
+The move changes no bytes and precedes the pristine snapshot, so a
+recognized legacy seed is refreshed wholesale at its migrated path
+rather than dirtied by the citation rewrite.
+Relative citations across `specs/` that resolved into
+`specs/iterations/` shall be rewritten to the `specs/intents/` path
+by the citation rewrite ([SCAF-45](#scaf-45)); a `## Iterations`
+(or `## 迭代`) map heading and an `iterations/` line inside the
+code block under the map's Layout heading shall be renamed to the
+active-language Intents forms — a lookalike block elsewhere in the
+map is never rewritten.
+Moved files shall be reported as
+`(migrated from specs/iterations/...)` indicator lines, with a
+moved seed folding into its seed refresh line.
+
 #### SCAF-42
 
 Where `--update` completes after migrating at least one package per
@@ -324,7 +345,7 @@ shall print an error message to stderr and exit non-zero.
 #### SCAF-7
 
 Where `createSpecsStructure()` is called, it shall create a
-`specs/` directory with subdirectories `decisions/`, `iterations/`,
+`specs/` directory with subdirectories `decisions/`, `intents/`,
 `packages/`, and `compositions/` under the resolved base path, and
 shall not create the legacy `user/`, `dev/`, or `test/` directories.
 
@@ -646,14 +667,18 @@ Where `updateScaffoldTemplates()` is called, it shall resolve the
 current git repository root, enforce update preconditions
 ([SCAF-15](#scaf-15), [SCAF-16](#scaf-16)), allow missing
 framework files ([SCAF-17](#scaf-17)), and then, in order:
-snapshot the pristine state of every framework and seed path before
+move `specs/iterations/` records to `specs/intents/`
+([SCAF-51](#scaf-51)) — a byte-preserving move that precedes the
+pristine snapshot — then snapshot the pristine state of every
+framework and seed path before
 any byte edits (so [SCAF-40](#scaf-40)/[SCAF-41](#scaf-41) never
 dirty a file that steps below replace wholesale), migrate the legacy
 item layout ([SCAF-26](#scaf-26)), migrate the package layout
 ([SCAF-43](#scaf-43)), migrate `specs/interactions/` to
 `specs/compositions/` ([SCAF-50](#scaf-50)), rewrite legacy citations
 ([SCAF-45](#scaf-45)), restructure a user-modified map
-([SCAF-46](#scaf-46)), overwrite framework files
+([SCAF-46](#scaf-46)), rename the map's iterations entries
+([SCAF-51](#scaf-51)), overwrite framework files
 ([SCAF-14](#scaf-14)), refresh pristine seeds with the combined
 migration sources and indicator overrides ([SCAF-23](#scaf-23)),
 refresh existing agent files ([SCAF-10](#scaf-10)), read the bundled

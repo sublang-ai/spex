@@ -18,7 +18,7 @@
 
 ```text
 decisions/    决策记录（DRs）
-iterations/   迭代记录（IRs）
+intents/      意图记录（IRs）
 packages/     规约包（每包一个文件）
 compositions/ 跨包组合：场景、绑定与测试
 map.md        本索引
@@ -31,11 +31,11 @@ meta.md       规约的规约
 | --- | --- | --- |
 | DR-000 | [000-spec-structure-format.md](decisions/000-spec-structure-format.md) | 规约结构、格式和命名约定 |
 
-## 迭代
+## 意图
 
 | ID | 文件 | 目标 |
 | --- | --- | --- |
-| IR-000 | [000-spdx-headers.md](iterations/000-spdx-headers.md) | 为适用文件添加 SPDX 头 |
+| IR-000 | [000-spdx-headers.md](intents/000-spdx-headers.md) | 为适用文件添加 SPDX 头 |
 
 ## 包
 

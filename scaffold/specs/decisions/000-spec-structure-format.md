@@ -19,7 +19,7 @@ Earlier revisions of this record split each spec package across up to three file
 Spex organizes specs around three essential elements of software development:
 
 - **Decisions**. The choices made in product and system *design*.
-- **Iterations**. The incremental plans for *implementation*.
+- **Intents**. The recorded development intents and their *implementation* plans.
 - **Requirements**. The *behaviors* and *constraints* of the product and system.
 
 ### Forms
@@ -27,9 +27,9 @@ Spex organizes specs around three essential elements of software development:
 Spex uses two forms of specs to balance unification and flexibility.
 
 - **Records** must follow specified formats and may use free-form content within those formats.
-Decisions and iterations are stored as records.
+Decisions and intents are stored as records.
   - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]], with active section titles defined by [META-4](../meta.md#meta-4).
-  - Iteration records (IRs) contain the sections defined by [META-5](../meta.md#meta-5).
+  - Intent records (IRs) contain the sections defined by [META-5](../meta.md#meta-5).
 - **Items** must follow the active GEARS pattern defined by [META-6](../meta.md#meta-6) to specify behaviors and constraints; citation and metadata rules follow the active `meta.md`.
 Each item file must include the active intent section defined by [META-3](../meta.md#meta-3).
 
@@ -40,7 +40,7 @@ Spex creates the default `specs/` directory under the repo root, with the follow
 | Path | Content | File Naming |
 | --------- | ------- | ------ |
 | `decisions/` | DRs. Design decisions and rationale. | \<NNN\>-\<kebab-case\>.md |
-| `iterations/` | IRs. Implementation plans. | \<NNN\>-\<kebab-case\>.md |
+| `intents/` | IRs. Intent realization plans. | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | Spec packages: one item file per package. | [\<path\>/]\<kebab-case\>.md |
 | `compositions/` | Cross-package compositions: scenarios, bindings, and their tests. | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |

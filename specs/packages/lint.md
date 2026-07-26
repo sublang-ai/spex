@@ -56,7 +56,7 @@ Where the specs tree is linted, structural rules shall report:
 - a warning for any other unexpected top-level entry under `specs/`;
 - an error for a `packages/` or `compositions/` file or directory
   segment that is not kebab-case, and for a `decisions/` or
-  `iterations/` file not named `<NNN>-<kebab-case>.md`.
+  `intents/` file not named `<NNN>-<kebab-case>.md`.
 
 #### LINT-5
 
@@ -130,10 +130,11 @@ legacy layout, and a fragment that matches no heading anchor of the
 target file (GitHub anchor semantics).
 An error shall also be reported for a link from a `packages/` file
 into `specs/compositions/` ([META-33](../meta.md#meta-33)), and for
-a link into `specs/iterations/` from any file but `specs/map.md`
+a link into `specs/intents/` — or the legacy `specs/iterations/` —
+from any file but `specs/map.md`
 ([META-18](../meta.md#meta-18)); a textual `IR-<n>` reference
 outside `specs/map.md` is likewise an error — naming an IR is
-citing it — where an iteration record is exempt only for its own
+citing it — where an intent record is exempt only for its own
 ID.
 A reference-style link in a `packages/` or `compositions/` file
 shall be an error unless it is a literal `[[N]]` reference
@@ -251,8 +252,8 @@ Verification, the scenario two-package floor with an anchor-less
 file link not counting, and a triggered Binding in each language
 including a list-wrapped zh trigger ([LINT-7](#lint-7));
 citations — broken link, broken anchor, legacy path, a package
-link into `specs/compositions/`, and iteration references outside
-the map, linked and textual ([LINT-8](#lint-8)); reference
+link into `specs/compositions/`, and intent-record references
+outside the map, linked and textual ([LINT-8](#lint-8)); reference
 markers, records, and map listing ([LINT-9](#lint-9)); citation
 discipline — an Intent citation, a peer citation outside External
 Behavior, out-of-clause peer citations in both languages beside

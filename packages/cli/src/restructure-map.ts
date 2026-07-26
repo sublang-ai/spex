@@ -20,6 +20,8 @@ const MAP_STRINGS: Record<
     layoutLines: string[];
     compositionsHeading: string;
     compositionsEmpty: string;
+    intentsLayoutLine: string;
+    intentsHeading: string;
   }
 > = {
   en: {
@@ -30,6 +32,8 @@ const MAP_STRINGS: Record<
     compositionsHeading: "Compositions",
     compositionsEmpty:
       "None yet. Add files under `compositions/` as packages start working together.",
+    intentsLayoutLine: "intents/      Intent records (IRs)",
+    intentsHeading: "Intents",
   },
   zh: {
     layoutLines: [
@@ -39,6 +43,8 @@ const MAP_STRINGS: Record<
     compositionsHeading: "组合",
     compositionsEmpty:
       "暂无。当多个包开始协作时，在 `compositions/` 下添加文件。",
+    intentsLayoutLine: "intents/      意图记录（IRs）",
+    intentsHeading: "意图",
   },
 };
 
@@ -272,6 +278,71 @@ export function renameInteractionsHeading(
     if (!lines.some(isInteractions)) continue;
     const replaced = lines
       .map((line) => (isInteractions(line) ? strings.layoutLines[1] : line))
+      .join("\n");
+    const source = sliceNode(text, code);
+    const fenceMatch = source.match(
+      /^(\s*(?:```|~~~)[^\n]*\n)([\s\S]*?)(\n\s*(?:```|~~~)\s*)$/,
+    );
+    if (fenceMatch === null) continue;
+    layoutDone = true;
+    edits.push({
+      start: startOffset(code),
+      end: endOffset(code),
+      replacement: fenceMatch[1] + replaced + fenceMatch[3],
+    });
+  }
+  if (edits.length === 0) return null;
+  return applyEdits(text, edits);
+}
+
+/**
+ * SCAF-51: rename legacy iterations entries of a map — an
+ * `## Iterations` (or `## 迭代`) heading and an `iterations/`
+ * line inside the code block under the map's Layout heading — to
+ * the active-language Intents forms (DR-017). Only the block
+ * structurally under the Layout heading is rewritten, so a
+ * lookalike example elsewhere in the map is never touched.
+ * Returns null when the map has neither entry.
+ */
+export function renameIterationsEntries(
+  text: string,
+  language: ScaffoldLanguage,
+): string | null {
+  const strings = MAP_STRINGS[language];
+  const tree: Root = parseMarkdown(text);
+  const edits: TextEdit[] = [];
+  let inLayout = false;
+  let layoutDone = false;
+  // Root-level nodes only: a quoted or listed "## Iterations" is
+  // content to keep, and a nested block never opens the Layout
+  // scope (SCAF-41).
+  for (const node of tree.children) {
+    if (node.type === "heading") {
+      const heading = node as Heading;
+      const title = sliceNode(text, heading).replace(/^#+\s*/, "").trim();
+      if (heading.depth === 2 && (title === "Iterations" || title === "迭代")) {
+        const source = sliceNode(text, heading);
+        edits.push({
+          start: startOffset(heading),
+          end: endOffset(heading),
+          replacement: source.replace(
+            /(Iterations|迭代)/,
+            strings.intentsHeading,
+          ),
+        });
+      }
+      if (heading.depth === 2) {
+        inLayout = LAYOUT_HEADINGS.has(title);
+      }
+      continue;
+    }
+    if (!inLayout || layoutDone || node.type !== "code") continue;
+    const code = node as Code;
+    const lines = code.value.split("\n");
+    const isIterations = (line: string) => /^iterations\/[ \t]/.test(line);
+    if (!lines.some(isIterations)) continue;
+    const replaced = lines
+      .map((line) => (isIterations(line) ? strings.intentsLayoutLine : line))
       .join("\n");
     const source = sliceNode(text, code);
     const fenceMatch = source.match(

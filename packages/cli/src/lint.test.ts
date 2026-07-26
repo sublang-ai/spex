@@ -413,7 +413,7 @@ describe("lintSpecs", () => {
   it("warns on records missing required sections", () => {
     const findings = findingsFor({
       "specs/decisions/001-a.md": "# DR-001: A\n\n## Status\n\nAccepted\n",
-      "specs/iterations/001-b.md": "# IR-001: B\n\n## Goal\n\nShip.\n",
+      "specs/intents/001-b.md": "# IR-001: B\n\n## Goal\n\nShip.\n",
     });
     const records = findings.filter((f) => f.rule === "record/sections");
     assert.ok(records.length >= 4, JSON.stringify(records));
@@ -512,25 +512,25 @@ describe("lintSpecs", () => {
     assert.ok(!rules(findings).includes("verify/uncited"));
   });
 
-  it("errors on package→composition and non-map iteration citations", () => {
+  it("errors on package→composition and non-map intent citations", () => {
     const findings = findingsFor({
       "specs/packages/auth.md":
-        "# AUTH: Auth\n\n## Intent\n\nAuth behavior.\n\n## External Behavior\n\n### AUTH-1\n\nWhen credentials are valid, the system shall log in (see [flow](../compositions/flow.md), [IR-001](../iterations/001-a.md)).\n\n## Verification\n\n### AUTH-2\n\nThe suite shall assert a valid login succeeds ([AUTH-1](#auth-1)).\n",
+        "# AUTH: Auth\n\n## Intent\n\nAuth behavior.\n\n## External Behavior\n\n### AUTH-1\n\nWhen credentials are valid, the system shall log in (see [flow](../compositions/flow.md), [IR-001](../intents/001-a.md)).\n\n## Verification\n\n### AUTH-2\n\nThe suite shall assert a valid login succeeds ([AUTH-1](#auth-1)).\n",
       "specs/compositions/flow.md":
         "# FLOW: Flow\n\n## Intent\n\nX.\n\n## Scenario\n\n### FLOW-1\n\nThe composed system shall proceed ([AUTH-1](../packages/auth.md#auth-1)).\n\n## Tests\n\n### FLOW-2\n\nThe suite shall assert it ([FLOW-1](#flow-1), [AUTH-1](../packages/auth.md#auth-1)).\n",
-      "specs/iterations/001-a.md":
+      "specs/intents/001-a.md":
         "# IR-001: A\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
     });
     const found = rules(findings);
     assert.ok(found.includes("cite/composition"));
-    assert.ok(found.includes("cite/iteration"));
+    assert.ok(found.includes("cite/intent"));
 
     const mapOnly = findingsFor({
-      "specs/map.md": `${MAP("")}\n## Iterations\n\n| ID | File |\n| --- | --- |\n| IR-001 | [001-a.md](iterations/001-a.md) |\n`,
-      "specs/iterations/001-a.md":
+      "specs/map.md": `${MAP("")}\n## Intents\n\n| ID | File |\n| --- | --- |\n| IR-001 | [001-a.md](intents/001-a.md) |\n`,
+      "specs/intents/001-a.md":
         "# IR-001: A\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
     });
-    assert.ok(!rules(mapOnly).includes("cite/iteration"));
+    assert.ok(!rules(mapOnly).includes("cite/intent"));
   });
 
   it("errors on zh trigger keywords in a Binding item", () => {
@@ -823,18 +823,29 @@ describe("lintSpecs", () => {
       "specs/decisions/001-a.md":
         "# DR-001: A\n\n## Status\n\nAccepted\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\n- IR-015 materializes this decision.\n",
     });
-    const textual = findings.find((f) => f.rule === "cite/iteration");
-    assert.ok(textual, "expected a textual cite/iteration finding");
+    const textual = findings.find((f) => f.rule === "cite/intent");
+    assert.ok(textual, "expected a textual cite/intent finding");
     assert.equal(textual.severity, "error");
 
-    // An iteration record is exempt only for its own ID.
+    // An intent record is exempt only for its own ID.
     const crossIteration = findingsFor({
+      "specs/intents/002-b.md":
+        "# IR-002: B\n\n## Goal\n\nBuild on the IR-001 groundwork.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nIR-002 is done.\n",
+    });
+    const cross = crossIteration.filter((f) => f.rule === "cite/intent");
+    assert.equal(cross.length, 1, JSON.stringify(cross));
+    assert.equal(cross[0].line, 5);
+
+    // A record still under legacy specs/iterations/ keeps the same
+    // own-ID exemption, and links into the legacy directory still
+    // count as intent-record citations.
+    const legacyDir = findingsFor({
       "specs/iterations/002-b.md":
         "# IR-002: B\n\n## Goal\n\nBuild on the IR-001 groundwork.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nIR-002 is done.\n",
     });
-    const cross = crossIteration.filter((f) => f.rule === "cite/iteration");
-    assert.equal(cross.length, 1, JSON.stringify(cross));
-    assert.equal(cross[0].line, 5);
+    const legacyCross = legacyDir.filter((f) => f.rule === "cite/intent");
+    assert.equal(legacyCross.length, 1, JSON.stringify(legacyCross));
+    assert.equal(legacyCross[0].line, 5);
   });
 
   it("accepts localized zh composition sections", () => {

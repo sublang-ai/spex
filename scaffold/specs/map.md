@@ -18,7 +18,7 @@ Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing
 
 ```text
 decisions/    Decision records (DRs)
-iterations/   Iteration records (IRs)
+intents/      Intent records (IRs)
 packages/     Spec packages (one file per package)
 compositions/ Cross-package compositions: scenarios, bindings, tests
 map.md        This index
@@ -31,11 +31,11 @@ meta.md       The spec of specs
 | --- | --- | --- |
 | DR-000 | [000-spec-structure-format.md](decisions/000-spec-structure-format.md) | Spec structure, format, and naming conventions |
 
-## Iterations
+## Intents
 
 | ID | File | Goal |
 | --- | --- | --- |
-| IR-000 | [000-spdx-headers.md](iterations/000-spdx-headers.md) | Add SPDX headers to applicable files |
+| IR-000 | [000-spdx-headers.md](intents/000-spdx-headers.md) | Add SPDX headers to applicable files |
 
 ## Packages
 

@@ -165,7 +165,7 @@ describe("CLI integration", () => {
       // Directories
       assert.ok(existsSync(join(dir, "specs")));
       assert.ok(existsSync(join(dir, "specs", "decisions")));
-      assert.ok(existsSync(join(dir, "specs", "iterations")));
+      assert.ok(existsSync(join(dir, "specs", "intents")));
       assert.ok(existsSync(join(dir, "specs", "packages")));
       assert.ok(existsSync(join(dir, "specs", "compositions")));
       for (const legacy of ["user", "dev", "test"]) {
@@ -683,15 +683,15 @@ describe("CLI integration", () => {
   });
 
   // SCAF-24 cell: seed, file absent.
-  it("update: sample iteration seed deleted → (created)", () => {
+  it("update: sample intent seed deleted → (created)", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
       run(["scaffold"], { cwd: dir });
       gitCommit(dir, "initial specs");
 
-      const target = join(dir, "specs", "iterations", "000-spdx-headers.md");
-      execSync("git rm specs/iterations/000-spdx-headers.md", {
+      const target = join(dir, "specs", "intents", "000-spdx-headers.md");
+      execSync("git rm specs/intents/000-spdx-headers.md", {
         cwd: dir,
         stdio: "ignore",
       });
@@ -701,13 +701,13 @@ describe("CLI integration", () => {
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(
         parseIndicators(result.stdout).get(
-          "specs/iterations/000-spdx-headers.md",
+          "specs/intents/000-spdx-headers.md",
         ),
         "created",
       );
       assert.deepEqual(
         readFileSync(target),
-        readFileSync(bundledPath("specs/iterations/000-spdx-headers.md")),
+        readFileSync(bundledPath("specs/intents/000-spdx-headers.md")),
       );
     } finally {
       rmSync(dir, { recursive: true });
@@ -1061,7 +1061,7 @@ meta.md     The spec of specs
       );
       assert.equal(
         indicators.get("specs/map.md"),
-        "restructured for the packages layout",
+        "restructured for the packages layout; iterations entries renamed",
       );
 
       // Migration and citation-rewrite lines precede framework and

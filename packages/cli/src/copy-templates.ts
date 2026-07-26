@@ -26,7 +26,7 @@ const FRAMEWORK_FILES = [
 
 const SEED_FILES = [
   "specs/map.md",
-  "specs/iterations/000-spdx-headers.md",
+  "specs/intents/000-spdx-headers.md",
   "specs/packages/git.md",
   "specs/packages/licensing.md",
   "specs/compositions/.gitkeep",
@@ -231,6 +231,35 @@ export function migrateLegacyItemLayout(
   }
 
   removeEmptyDirectories(join(basePath, "specs", "items"));
+  return results;
+}
+
+// SCAF-51: iteration records become intent records (DR-017).
+export function migrateIterationsLayout(
+  basePath: string,
+): LegacyItemLayoutResult[] {
+  const results: LegacyItemLayoutResult[] = [];
+  const legacyRoot = join(basePath, "specs", "iterations");
+  if (!existsSync(legacyRoot) || !statSync(legacyRoot).isDirectory()) {
+    return results;
+  }
+
+  for (const source of listFiles(legacyRoot)) {
+    const suffix = relative(legacyRoot, source).replace(/\\/g, "/");
+    const legacyRelPath = posix.join("specs/iterations", suffix);
+    const targetRelPath = posix.join("specs/intents", suffix);
+    const target = join(basePath, targetRelPath);
+
+    if (existsSync(target)) {
+      results.push({ status: "conflict", targetRelPath, legacyRelPath });
+      continue;
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(source, target);
+    results.push({ status: "migrated", targetRelPath, legacyRelPath });
+  }
+
+  removeEmptyDirectories(legacyRoot);
   return results;
 }
 

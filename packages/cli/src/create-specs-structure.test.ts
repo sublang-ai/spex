@@ -18,7 +18,7 @@ import { createSpecsStructure } from "./create-specs-structure.js";
 const EXPECTED_DIRS = [
   "specs",
   "specs/decisions",
-  "specs/iterations",
+  "specs/intents",
   "specs/packages",
   "specs/compositions",
 ];
@@ -78,11 +78,11 @@ describe("createSpecsStructure", () => {
       );
 
       // Newly created dirs should NOT have "(already exists)"
-      const iterLine = output.find((l) => l.includes("specs/iterations/"));
-      assert.ok(iterLine, "should have a line for specs/iterations/");
+      const iterLine = output.find((l) => l.includes("specs/intents/"));
+      assert.ok(iterLine, "should have a line for specs/intents/");
       assert.ok(
         !iterLine.includes("(already exists)"),
-        `specs/iterations/ should be newly created: ${iterLine}`,
+        `specs/intents/ should be newly created: ${iterLine}`,
       );
 
       // All dirs should still exist

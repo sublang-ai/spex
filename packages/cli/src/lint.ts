@@ -98,7 +98,7 @@ const TRIGGER_RE =
 const LEGACY_ITEM_DIRS = ["user", "dev", "test", "items"];
 const KNOWN_TOP_LEVEL = new Set([
   "decisions",
-  "iterations",
+  "intents",
   "packages",
   "compositions",
   "map.md",
@@ -362,14 +362,20 @@ function lintStructure(ctx: LintContext): void {
   }
   for (const entry of readdirSync(specsDir).sort()) {
     if (entry === ".DS_Store" || KNOWN_TOP_LEVEL.has(entry)) continue;
-    if (LEGACY_ITEM_DIRS.includes(entry) || entry === "interactions") continue;
+    if (
+      LEGACY_ITEM_DIRS.includes(entry) ||
+      entry === "interactions" ||
+      entry === "iterations"
+    ) {
+      continue;
+    }
     report(
       ctx,
       `specs/${entry}`,
       1,
       "warning",
       "structure/unknown-entry",
-      `unexpected entry under specs/ (expected decisions/, iterations/, packages/, compositions/, map.md, meta.md)`,
+      `unexpected entry under specs/ (expected decisions/, intents/, packages/, compositions/, map.md, meta.md)`,
     );
   }
   for (const required of ["specs/meta.md", "specs/map.md"]) {
@@ -415,7 +421,7 @@ function lintNaming(ctx: LintContext): void {
         }
       }
     }
-    if (isUnder(relPath, "decisions") || isUnder(relPath, "iterations")) {
+    if (isUnder(relPath, "decisions") || isUnder(relPath, "intents")) {
       const basename = posix.basename(relPath);
       if (!RECORD_NAME_RE.test(basename)) {
         report(
@@ -1424,11 +1430,12 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
 function lintCitations(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
     // Textual IR references are citations too (META-18). An
-    // iteration record is exempt only for its own ID.
+    // intent record is exempt only for its own ID.
     if (file.relPath !== "specs/map.md") {
-      const ownIteration = isUnder(file.relPath, "iterations")
-        ? Number.parseInt(posix.basename(file.relPath), 10)
-        : null;
+      const ownIteration =
+        isUnder(file.relPath, "intents") || isUnder(file.relPath, "iterations")
+          ? Number.parseInt(posix.basename(file.relPath), 10)
+          : null;
       for (const [index, line] of file.lines.entries()) {
         if (file.fenced[index]) continue;
         for (const match of line.matchAll(/\bIR-(\d+)\b/g)) {
@@ -1443,8 +1450,8 @@ function lintCitations(ctx: LintContext): void {
             file.relPath,
             index + 1,
             "error",
-            "cite/iteration",
-            "iteration records are cited only from specs/map.md — naming an IR is citing it (META-18)",
+            "cite/intent",
+            "intent records are cited only from specs/map.md — naming an IR is citing it (META-18)",
           );
         }
       }
@@ -1516,7 +1523,8 @@ function lintCitations(ctx: LintContext): void {
       }
 
       if (
-        resolved.startsWith("specs/iterations/") &&
+        (resolved.startsWith("specs/intents/") ||
+          resolved.startsWith("specs/iterations/")) &&
         file.relPath !== "specs/map.md"
       ) {
         report(
@@ -1524,8 +1532,8 @@ function lintCitations(ctx: LintContext): void {
           file.relPath,
           link.line,
           "error",
-          "cite/iteration",
-          `iteration records are cited only from specs/map.md (META-18)`,
+          "cite/intent",
+          `intent records are cited only from specs/map.md (META-18)`,
         );
       }
 
@@ -1669,7 +1677,7 @@ function lintReferences(ctx: LintContext): void {
 function lintRecords(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
     const isDr = isUnder(file.relPath, "decisions");
-    const isIr = isUnder(file.relPath, "iterations");
+    const isIr = isUnder(file.relPath, "intents");
     if (!isDr && !isIr) continue;
 
     const sections = isDr ? DR_SECTIONS : IR_SECTIONS;

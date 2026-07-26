@@ -15,6 +15,7 @@ import {
 const LEGACY_ITEM_TARGET_RE =
   /^specs\/(?:user|dev|test|items\/(?:user|dev|test))\/(.+)$/;
 const LEGACY_INTERACTIONS_RE = /^specs\/interactions\/(.+)$/;
+const LEGACY_ITERATIONS_RE = /^specs\/iterations\/(.+)$/;
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
 export type CitationRewriteOptions = {
@@ -68,6 +69,11 @@ export function remapLegacyUrl(
     const interactionsMatch = resolved.match(LEGACY_INTERACTIONS_RE);
     if (interactionsMatch !== null) {
       newTarget = posix.join("specs/compositions", interactionsMatch[1]);
+    } else {
+      const iterationsMatch = resolved.match(LEGACY_ITERATIONS_RE);
+      if (iterationsMatch !== null) {
+        newTarget = posix.join("specs/intents", iterationsMatch[1]);
+      }
     }
   }
   if (newTarget === null) return null;

@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Iteration records become intent records ([DR-017](../../specs/decisions/017-intent-records.md)).** `spex scaffold` seeds `specs/intents/` instead of `specs/iterations/`, and the bundled templates describe intent records (IRs) in both languages, add META-37 (an intent realized in a single commit needs no record; records cite, never duplicate, commits and issues) and GIT-5 (commits realizing a recorded intent reference its bare `IR-<N>` id). `spex lint` guards the renamed layout — the citation rule is now `cite/intent`, links into legacy `specs/iterations/` still count, and an un-migrated `iterations/` directory is tolerated without unknown-entry warnings. `spex scaffold --update` migrates a legacy tree mechanically: record files move to `specs/intents/` (conflict-keeping, byte-preserving, before the pristine snapshot so a recognized legacy seed refreshes wholesale), citations rewrite once the move lands, and the map's Iterations heading and layout line rename in the active language.
+
 ## [0.4.0] - 2026-07-23
 
 ### Added

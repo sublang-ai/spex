@@ -9,10 +9,10 @@ Apply [DR-017](../decisions/017-intent-records.md): rename iteration records to 
 
 ## Deliverables
 
-- [ ] DR-017 recorded; META-1/META-5 renamed, META-37 and GIT-5 added
-- [ ] Scaffold templates (en and zh) seed `specs/intents/` and describe intent records
-- [ ] `spex scaffold --update` migrates `specs/iterations/` to `specs/intents/`: files, citations, and map entries
-- [ ] `spex lint` guards the intents layout with legacy tolerance
+- [x] DR-017 recorded; META-37 and GIT-5 added (META-1/META-5 rename lands with the tree migration)
+- [x] Scaffold templates (en and zh) seed `specs/intents/` and describe intent records
+- [x] `spex scaffold --update` migrates `specs/iterations/` to `specs/intents/`: files, citations, and map entries
+- [x] `spex lint` guards the intents layout with legacy tolerance
 - [ ] Core parses and the spec view presents intent records, with a legacy-directory fallback
 - [ ] This tree and `demo/` migrated; wording updated in `map.md`, `meta.md`, `README.md`, and DR-000
 
