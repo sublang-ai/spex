@@ -172,6 +172,19 @@ test("attention tracker counts parked sessions and clears on end", () => {
   assert.equal(tracker.clear("s1"), 0);
 });
 
+test("notificationFor surfaces the 2.0 shell's failed state", () => {
+  const failure = notificationFor(
+    envelope({
+      type: "captain_telemetry",
+      topic: "playbook.fsm.state",
+      payload: { to: { stateId: "failed", value: "failed" } },
+    }),
+    {},
+  );
+  assert.equal(failure?.event, "failure");
+  assert.equal(failure?.sink, "desktop");
+});
+
 test("attention tracker folds object-shaped shell states", () => {
   // The tracker shares notificationFor's normalizer: the production
   // {stateId, value, …} records must badge exactly like the fake

@@ -131,6 +131,18 @@ export function notificationFor(
           sessionId,
         };
       }
+      // Playbook 2.0 resolves recoverable failures as a `failed`
+      // workflow state without any runtime_error record, so the
+      // failure notification must come from the state stream.
+      if (String(record.topic) === "playbook.fsm.state" && to === "failed") {
+        return {
+          event: "failure",
+          sink: "desktop",
+          title: "Playbook failed",
+          body: "A playbook entered its failed state and needs attention.",
+          sessionId,
+        };
+      }
       return null;
     }
     case "runtime_error":
