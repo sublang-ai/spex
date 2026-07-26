@@ -11,7 +11,7 @@ Code can be inconsistent with specs during development.
 
 ```text
 decisions/    Decision records (DRs)
-iterations/   Iteration records (IRs)
+intents/      Intent records (IRs)
 packages/     Spec packages (one file per package)
 compositions/ Cross-package compositions: scenarios, bindings, tests
 map.md        This index
@@ -41,33 +41,33 @@ meta.md       The spec of specs
 | DR-016 | [016-relationship-presentation.md](decisions/016-relationship-presentation.md) | Classified spec-relationship presentation: uses, binding clients/provisions, composes, verifies — derived from clause citations |
 | DR-017 | [017-intent-records.md](decisions/017-intent-records.md) | Iterations become intents: intent records (IRs) with flexible, duplication-free recording (META-37), bare `IR-<N>` commit references (GIT-5), unchanged META-18, and mechanical migration |
 
-## Iterations
+## Intents
 
 | ID | File | Goal |
 | --- | --- | --- |
-| IR-000 | [000-spdx-headers.md](iterations/000-spdx-headers.md) | Add SPDX headers to applicable files |
-| IR-001 | [001-scaffold-cli.md](iterations/001-scaffold-cli.md) | Implement scaffold CLI per SCAF package |
-| IR-002 | [002-workspace-restructure.md](iterations/002-workspace-restructure.md) | Move the scaffold CLI to packages/cli in an npm-workspaces monorepo |
-| IR-003 | [003-core-service.md](iterations/003-core-service.md) | Implement the headless core service per the CORE package |
-| IR-004 | [004-run-view-ui.md](iterations/004-run-view-ui.md) | Implement the web UI run view per the RUN package |
-| IR-005 | [005-desktop-shell.md](iterations/005-desktop-shell.md) | Implement the Electron desktop shell per the SHELL package |
-| IR-006 | [006-projects-forge.md](iterations/006-projects-forge.md) | Implement Projects and the gh forge adapter per the PROJ package |
-| IR-007 | [007-dashboard.md](iterations/007-dashboard.md) | Implement the Dashboard per the DASH package |
-| IR-008 | [008-settings.md](iterations/008-settings.md) | Implement Settings over the shared config per the SET package |
-| IR-009 | [009-library-compile.md](iterations/009-library-compile.md) | Implement the Library and slc compile flow per the PBLIB package |
-| IR-010 | [010-hardening.md](iterations/010-hardening.md) | Real-shell verification, docs, and deferred-work inventory |
-| IR-011 | [011-ux-round.md](iterations/011-ux-round.md) | Conversational start, native picker, pipeline view, organized work lists |
-| IR-012 | [012-captain-chat-home.md](iterations/012-captain-chat-home.md) | IM-style Captain home: greeting, chip menu with silent init, quick start, slash menu |
-| IR-013 | [013-at-hand-round.md](iterations/013-at-hand-round.md) | At-hand round: profile popover, nav badge, slash compile entry, past sessions |
-| IR-014 | [014-public-readiness.md](iterations/014-public-readiness.md) | Blockers/majors from the adversarial public-readiness review |
-| IR-015 | [015-interface-craft.md](iterations/015-interface-craft.md) | DR-010 applied: 51 audit findings across chat, async, keyboard, visual grammar, microcopy |
-| IR-016 | [016-project-workspace.md](iterations/016-project-workspace.md) | DR-011 implemented: workspace IA, project palette, spec view |
-| IR-017 | [017-spec-structure-refactor.md](iterations/017-spec-structure-refactor.md) | DR-012 implemented: packages/interactions layout, migration, linter, repo migration |
-| IR-018 | [018-brand-round.md](iterations/018-brand-round.md) | DR-013 applied: brand theme tokens, indigo→brand sweep, product logo, app icon |
-| IR-019 | [019-toolchain-upgrade.md](iterations/019-toolchain-upgrade.md) | DR-014 applied: playbook 2.0 / cligent 0.16 upgrade, effort rename, slc entry adoption, invalidation, session cwd |
-| IR-020 | [020-reference-content.md](iterations/020-reference-content.md) | DR-015 applied: built-in sources + catalog, slc demo example, Academy seed, packages-layout spec view |
-| IR-021 | [021-release-readiness.md](iterations/021-release-readiness.md) | DR-016 applied + smoke suite + source re-vendor + mainline merge |
-| IR-022 | [022-intent-records.md](iterations/022-intent-records.md) | DR-017 applied: intents rename across framework, scaffold, tooling, and this tree |
+| IR-000 | [000-spdx-headers.md](intents/000-spdx-headers.md) | Add SPDX headers to applicable files |
+| IR-001 | [001-scaffold-cli.md](intents/001-scaffold-cli.md) | Implement scaffold CLI per SCAF package |
+| IR-002 | [002-workspace-restructure.md](intents/002-workspace-restructure.md) | Move the scaffold CLI to packages/cli in an npm-workspaces monorepo |
+| IR-003 | [003-core-service.md](intents/003-core-service.md) | Implement the headless core service per the CORE package |
+| IR-004 | [004-run-view-ui.md](intents/004-run-view-ui.md) | Implement the web UI run view per the RUN package |
+| IR-005 | [005-desktop-shell.md](intents/005-desktop-shell.md) | Implement the Electron desktop shell per the SHELL package |
+| IR-006 | [006-projects-forge.md](intents/006-projects-forge.md) | Implement Projects and the gh forge adapter per the PROJ package |
+| IR-007 | [007-dashboard.md](intents/007-dashboard.md) | Implement the Dashboard per the DASH package |
+| IR-008 | [008-settings.md](intents/008-settings.md) | Implement Settings over the shared config per the SET package |
+| IR-009 | [009-library-compile.md](intents/009-library-compile.md) | Implement the Library and slc compile flow per the PBLIB package |
+| IR-010 | [010-hardening.md](intents/010-hardening.md) | Real-shell verification, docs, and deferred-work inventory |
+| IR-011 | [011-ux-round.md](intents/011-ux-round.md) | Conversational start, native picker, pipeline view, organized work lists |
+| IR-012 | [012-captain-chat-home.md](intents/012-captain-chat-home.md) | IM-style Captain home: greeting, chip menu with silent init, quick start, slash menu |
+| IR-013 | [013-at-hand-round.md](intents/013-at-hand-round.md) | At-hand round: profile popover, nav badge, slash compile entry, past sessions |
+| IR-014 | [014-public-readiness.md](intents/014-public-readiness.md) | Blockers/majors from the adversarial public-readiness review |
+| IR-015 | [015-interface-craft.md](intents/015-interface-craft.md) | DR-010 applied: 51 audit findings across chat, async, keyboard, visual grammar, microcopy |
+| IR-016 | [016-project-workspace.md](intents/016-project-workspace.md) | DR-011 implemented: workspace IA, project palette, spec view |
+| IR-017 | [017-spec-structure-refactor.md](intents/017-spec-structure-refactor.md) | DR-012 implemented: packages/interactions layout, migration, linter, repo migration |
+| IR-018 | [018-brand-round.md](intents/018-brand-round.md) | DR-013 applied: brand theme tokens, indigo→brand sweep, product logo, app icon |
+| IR-019 | [019-toolchain-upgrade.md](intents/019-toolchain-upgrade.md) | DR-014 applied: playbook 2.0 / cligent 0.16 upgrade, effort rename, slc entry adoption, invalidation, session cwd |
+| IR-020 | [020-reference-content.md](intents/020-reference-content.md) | DR-015 applied: built-in sources + catalog, slc demo example, Academy seed, packages-layout spec view |
+| IR-021 | [021-release-readiness.md](intents/021-release-readiness.md) | DR-016 applied + smoke suite + source re-vendor + mainline merge |
+| IR-022 | [022-intent-records.md](intents/022-intent-records.md) | DR-017 applied: intents rename across framework, scaffold, tooling, and this tree |
 
 ## Packages
 

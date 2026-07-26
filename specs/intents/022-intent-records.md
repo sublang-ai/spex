@@ -14,7 +14,7 @@ Apply [DR-017](../decisions/017-intent-records.md): rename iteration records to 
 - [x] `spex scaffold --update` migrates `specs/iterations/` to `specs/intents/`: files, citations, and map entries
 - [x] `spex lint` guards the intents layout with legacy tolerance
 - [x] Core parses and the spec view presents intent records, with a legacy-directory fallback
-- [ ] This tree and `demo/` migrated; wording updated in `map.md`, `meta.md`, `README.md`, and DR-000
+- [x] This tree and `demo/` migrated; wording updated in `map.md`, `meta.md`, `README.md`, and DR-000
 
 ## Tasks
 

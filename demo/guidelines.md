@@ -181,7 +181,7 @@ integrated.
   ([META-21](specs/meta.md#meta-21),
   [META-31](specs/meta.md#meta-31)).
   The demo's release gate
-  ([IR-003](specs/iterations/003-video-pipeline.md)) is one
+  ([IR-003](specs/intents/003-video-pipeline.md)) is one
   closed rule — every package Verification item plus every
   composition test item — whose composition half spans the
   member journey

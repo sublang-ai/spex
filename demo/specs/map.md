@@ -11,7 +11,7 @@ Code can be inconsistent with specs during development.
 
 ```text
 decisions/     Decision records (DRs)
-iterations/    Iteration records (IRs)
+intents/       Intent records (IRs)
 packages/      Spec packages (one file per package)
 compositions/  Cross-package compositions: scenarios, bindings, tests
 map.md         This index
@@ -31,13 +31,13 @@ navigation collections with no semantics
 | DR-002 | [002-platform-and-devops.md](decisions/002-platform-and-devops.md) | Chooses Vercel + Supabase (Auth, Postgres, Storage) + GitHub; the bindings themselves are PLAT's supply items |
 | DR-003 | [003-admin-designation.md](decisions/003-admin-designation.md) | Initial admin as configured GitHub account ID, recomputed at each sign-in |
 
-## Iterations
+## Intents
 
 | ID | File | Goal |
 | --- | --- | --- |
-| IR-001 | [001-walking-skeleton.md](iterations/001-walking-skeleton.md) | Pipeline, deployment, sign-in, and guard proven end to end |
-| IR-002 | [002-course-catalog.md](iterations/002-course-catalog.md) | Course structure, browsing, publishing; admin bootstrap green |
-| IR-003 | [003-video-pipeline.md](iterations/003-video-pipeline.md) | Upload to playback; full composition acceptance green |
+| IR-001 | [001-walking-skeleton.md](intents/001-walking-skeleton.md) | Pipeline, deployment, sign-in, and guard proven end to end |
+| IR-002 | [002-course-catalog.md](intents/002-course-catalog.md) | Course structure, browsing, publishing; admin bootstrap green |
+| IR-003 | [003-video-pipeline.md](intents/003-video-pipeline.md) | Upload to playback; full composition acceptance green |
 
 ## Packages
 

@@ -16,7 +16,7 @@ The `specs/` directory shall contain the following subdirectories and files:
 | Path | Content | File Naming |
 | --------- | ------- | ------ |
 | `decisions/` | Decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
-| `iterations/` | Iteration records (IRs) | \<NNN\>-\<kebab-case\>.md |
+| `intents/` | Intent records (IRs) | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | spec packages, one item file per package | [\<path\>/]\<kebab-case\>.md |
 | `compositions/` | cross-package compositions: scenarios, bindings, and their tests | [\<path\>/]\<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
@@ -47,7 +47,7 @@ Each decision record (DR) shall follow the ADR format [[2]] with the following s
 
 ### META-5
 
-Each iteration record (IR) shall contain the following sections: Goal, Deliverables (with checkboxes), Tasks (numbered, each in one-commit size), and Acceptance criteria.
+Each intent record (IR) shall contain the following sections: Goal, Deliverables (with checkboxes), Tasks (numbered, each in one-commit size), and Acceptance criteria.
 
 ### META-23
 

@@ -45,7 +45,7 @@ Accepted
 
 ### Spec view: packages layout
 
-- `specs.get` parses the [DR-012](012-spec-package-files.md) layout: `packages/**` and `compositions/**` (collection directories are navigation only), `decisions/`, `iterations/`, `map.md`, `meta.md`.
+- `specs.get` parses the [DR-012](012-spec-package-files.md) layout: `packages/**` and `compositions/**` (collection directories are navigation only), `decisions/`, `intents/`, `map.md`, `meta.md`.
 - A file's short form comes from its `# <SHORT>: <Title>` heading, falling back to the majority item prefix.
 - The three filter groups become section kinds, keeping the [DR-011](011-project-workspace.md) three-toggle model and hues:
   external (sky: External Behavior and Scenario items), internal (fuchsia: Internal Behavior and Binding items), test (teal: Verification and Tests items).

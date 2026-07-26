@@ -10,7 +10,7 @@
 *See and act on your specs.*
 
 **Spex** is a spec tool. It builds on a small convention — a
-`specs/` tree of decision records, iteration records, and spec
+`specs/` tree of decision records, intent records, and spec
 packages (external behavior, internal behavior, verification) that
 people and AI agents both build against. Spex helps you author that
 tree, read it, and drive work through it:
@@ -26,7 +26,7 @@ Playbooks are workflows around your specs; the specs are the point.
 ## Specs
 
 The convention Spex scaffolds is shared across the SubLang repos:
-decision records, iteration records, spec packages (one file per
+decision records, intent records, spec packages (one file per
 package with External Behavior / Internal Behavior / Verification
 sections), and cross-package composition specs — bindings,
 scenarios, and the tests that span packages.
