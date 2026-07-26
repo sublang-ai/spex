@@ -118,14 +118,31 @@ try {
   run("integration", "npm", ["run", "test:integration", "-w", "packages/core"]);
   await coreRoundTrip();
   if (desktop) {
+    // The ABI flip must never outlive the run: restore the Node build
+    // even when the render or screenshot check fails, so a red smoke
+    // does not leave better-sqlite3 built for Electron.
     run("desktop-abi", "npm", ["run", "rebuild:electron", "-w", "apps/desktop"]);
-    const shot = join(tmpdir(), `spex-smoke-${Date.now()}.png`);
-    run("desktop-render", "npm", ["start", "-w", "apps/desktop"], {
-      env: { ...process.env, SPEX_ACCEPTANCE: shot },
-    });
-    if (!existsSync(shot)) throw new Error("desktop render wrote no screenshot");
-    process.stdout.write(`desktop screenshot: ${shot}\n`);
-    run("desktop-abi-restore", "npm", ["run", "rebuild:node", "-w", "apps/desktop"]);
+    try {
+      const shot = join(tmpdir(), `spex-smoke-${Date.now()}.png`);
+      run("desktop-render", "npm", ["start", "-w", "apps/desktop"], {
+        env: { ...process.env, SPEX_ACCEPTANCE: shot },
+      });
+      if (!existsSync(shot)) {
+        throw new Error("desktop render wrote no screenshot");
+      }
+      process.stdout.write(`desktop screenshot: ${shot}\n`);
+    } finally {
+      const restore = spawnSync(
+        "npm",
+        ["run", "rebuild:node", "-w", "apps/desktop"],
+        { cwd: root, stdio: "inherit" },
+      );
+      if (restore.status !== 0) {
+        process.stderr.write(
+          "WARNING: ABI restore failed — run `npm run rebuild:node -w apps/desktop` before using system-Node tooling\n",
+        );
+      }
+    }
   } else {
     process.stdout.write(
       "\n(desktop render skipped — pass --desktop before a release)\n",

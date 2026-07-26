@@ -431,3 +431,98 @@ describe("relationship vocabulary", () => {
     expect(relationPhrase("cites", "in")).toBe("cited by");
   });
 });
+
+describe("review round: grammar conformance and localized specs", () => {
+  test("coordinated shall clauses keep first-shall placement", () => {
+    // META-36 allows several provision mappings in the one sentence
+    // (Academy's PUB-1 carries four shalls); the first shall is the
+    // clause boundary, so later shalls never reclassify a citation.
+    const split = splitBindingClauses(
+      [
+        "Where the need ([A-1](#a-1)), the deployment shall serve it",
+        "([B-2](#b-2)), and the stored value shall be the identifier",
+        "([C-3](#c-3)).",
+      ].join("\n"),
+    );
+    expect(split).toEqual({ clients: ["A-1"], provisions: ["B-2", "C-3"] });
+  });
+
+  test("a second prose paragraph degrades the binding", () => {
+    const split = splitBindingClauses(
+      [
+        "Where the need ([A-1](#a-1)), the deployment shall serve it",
+        "([B-2](#b-2)).",
+        "",
+        "This trailing rationale paragraph is out of grammar.",
+      ].join("\n"),
+    );
+    expect(split).toBeUndefined();
+  });
+
+  test("one paragraph, one shall — internal punctuation still splits", () => {
+    // The accepted conformance boundary: a single-paragraph body with
+    // exactly one shall places every citation unambiguously, however
+    // much internal punctuation the provision list carries; full
+    // grammar enforcement stays with lint (DR-016).
+    const split = splitBindingClauses(
+      [
+        'Where the header carries entries ([A-1](#a-1)), the deployment',
+        'shall bind them: the name reads "Academy"; the menu is',
+        "([B-2](#b-2)); and the list is ([C-3](#c-3)).",
+      ].join("\n"),
+    );
+    expect(split).toEqual({ clients: ["A-1"], provisions: ["B-2", "C-3"] });
+  });
+
+  test("zh binding splits at 应 and compounds never count as shall", () => {
+    const split = splitBindingClauses(
+      "在门户需要目录时（[CAT-1](#cat-1)），本应用部署应绑定课程列表（[NAV-2](#nav-2)）。",
+    );
+    expect(split).toEqual({ clients: ["CAT-1"], provisions: ["NAV-2"] });
+    // 应用 (application) and 反应 (reaction) are not shall markers: no
+    // standalone 应 means the body degrades rather than mis-splitting.
+    expect(
+      splitBindingClauses(
+        "该应用的反应（[A-1](#a-1)）绑定到（[B-2](#b-2)）。",
+      ),
+    ).toBeUndefined();
+  });
+
+  test("zh section names classify like their English counterparts", () => {
+    const file = {
+      kind: "composition" as const,
+      key: "site-navigation",
+      shortForm: "NAV",
+    };
+    const index = new Map();
+    const binding = classifyCites(
+      {
+        id: "NAV-1",
+        group: "internal" as const,
+        section: "绑定",
+        firstLine: "",
+        text: "在门户需要目录时（[CAT-1](#cat-1)），部署应提供列表（[SHELL-2](#shell-2)）。",
+        cites: ["CAT-1", "SHELL-2"],
+      },
+      file,
+      index,
+    );
+    expect(binding.rows).toEqual([
+      { kind: "serves", targets: ["CAT-1"] },
+      { kind: "provides", targets: ["SHELL-2"] },
+    ]);
+    const test_ = classifyCites(
+      {
+        id: "NAV-9",
+        group: "test" as const,
+        section: "测试",
+        firstLine: "",
+        text: "验证 [CAT-1](#cat-1)。",
+        cites: ["CAT-1"],
+      },
+      file,
+      index,
+    );
+    expect(test_.rows).toEqual([{ kind: "verifies", targets: ["CAT-1"] }]);
+  });
+});

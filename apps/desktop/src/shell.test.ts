@@ -87,6 +87,50 @@ test("notificationFor surfaces boss questions with the question text", () => {
   assert.equal(notification?.body, "Which flow?");
 });
 
+test("notificationFor folds the 2.0 shell's object-shaped telemetry", () => {
+  // The real captain shell reports states as rich objects and the
+  // pending question as a {player, question, …} record; the string
+  // forms above come from the fake harness and older playbooks.
+  const notification = notificationFor(
+    envelope({
+      type: "captain_telemetry",
+      topic: "playbook.fsm.state",
+      payload: {
+        event: { type: "NEEDS_BOSS" },
+        to: {
+          value: "awaitBossReply",
+          activeStateIds: ["awaitBossReply"],
+          tags: ["playbook.parked"],
+          stateId: "awaitBossReply",
+        },
+        pendingBossQuestion: {
+          player: "coder",
+          question: "Should I migrate the legacy sessions?",
+          resumeStateId: "coding",
+        },
+      },
+    }),
+    {},
+  );
+  assert.equal(notification?.event, "boss_question");
+  assert.equal(
+    notification?.body,
+    "Should I migrate the legacy sessions?",
+  );
+  // A non-parked object state stays silent.
+  assert.equal(
+    notificationFor(
+      envelope({
+        type: "captain_telemetry",
+        topic: "playbook.fsm.state",
+        payload: { to: { stateId: "coding", value: "coding" } },
+      }),
+      {},
+    ),
+    null,
+  );
+});
+
 test("boss questions and failures are always desktop notifications", () => {
   const failure = notificationFor(
     envelope({ type: "runtime_error", message: "boom" }),

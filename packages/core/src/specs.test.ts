@@ -677,3 +677,89 @@ test("specs.get and specs.read serve over the protocol", async () => {
     await service.stop();
   }
 });
+
+test("localized zh sections map to groups and intent parses", () => {
+  const root = mkdtempSync(join(tmpdir(), "spex-specs-zh-"));
+  mkdirSync(join(root, "specs", "packages"), { recursive: true });
+  mkdirSync(join(root, "specs", "compositions"), { recursive: true });
+  writeFileSync(
+    join(root, "specs", "packages", "auth.md"),
+    [
+      "# AUTH: 登录",
+      "",
+      "## 意图",
+      "",
+      "本包覆盖登录行为。",
+      "",
+      "## 外部行为",
+      "",
+      "### AUTH-1",
+      "",
+      "当用户提交凭证时，站点应开启会话。",
+      "",
+      "## 内部行为",
+      "",
+      "### AUTH-2",
+      "",
+      "会话状态应仅通过加密通道传输。",
+      "",
+      "## 验证",
+      "",
+      "### AUTH-3",
+      "",
+      "测试套件应验证 [AUTH-1](#auth-1)。",
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "specs", "compositions", "nav.md"),
+    [
+      "# NAV: 导航",
+      "",
+      "## 意图",
+      "",
+      "本组合覆盖站点导航。",
+      "",
+      "## 绑定",
+      "",
+      "### NAV-1",
+      "",
+      "在门户需要目录时，部署应提供列表。",
+      "",
+      "## 场景",
+      "",
+      "### NAV-2",
+      "",
+      "当访客打开首页时，组合系统应展示目录。",
+      "",
+      "## 测试",
+      "",
+      "### NAV-3",
+      "",
+      "测试套件应验证 [NAV-2](#nav-2)。",
+      "",
+    ].join("\n"),
+  );
+  const tree = parseSpecTree(root);
+  const auth = tree.files.find((f) => f.key === "auth");
+  assert.equal(auth?.intent, "本包覆盖登录行为。");
+  assert.deepEqual(
+    auth?.items.map((i) => [i.id, i.group]),
+    [
+      ["AUTH-1", "external"],
+      ["AUTH-2", "internal"],
+      ["AUTH-3", "test"],
+    ],
+  );
+  const nav = tree.files.find((f) => f.key === "nav");
+  assert.deepEqual(
+    nav?.items.map((i) => [i.id, i.group]),
+    [
+      ["NAV-1", "internal"],
+      ["NAV-2", "external"],
+      ["NAV-3", "test"],
+    ],
+  );
+  assert.deepEqual(auth?.notices, []);
+  assert.deepEqual(nav?.notices, []);
+});

@@ -54,17 +54,25 @@ const H1_SHORT_FORM = /^([A-Z][A-Z0-9]*):\s*(.+)$/;
 const FENCE = /^\s*(?:```|~~~)/;
 const INLINE_LINK = /\[([^\]]+)\]\(([^()\s]+)\)/g;
 
-/** Known `##` sections -> filter group (DR-015; META-28, META-34). */
+/** Known `##` sections -> filter group (DR-015; META-28, META-34).
+ * Localized scaffolds translate the section headings (META-28); the
+ * zh names mirror the scaffold/linter vocabulary. */
 const SECTION_GROUPS: Record<SpecFileKind, ReadonlyMap<string, SpecGroup>> = {
   package: new Map([
     ["External Behavior", "external"],
+    ["外部行为", "external"],
     ["Internal Behavior", "internal"],
+    ["内部行为", "internal"],
     ["Verification", "test"],
+    ["验证", "test"],
   ]),
   composition: new Map([
     ["Binding", "internal"],
+    ["绑定", "internal"],
     ["Scenario", "external"],
+    ["场景", "external"],
     ["Tests", "test"],
+    ["测试", "test"],
   ]),
 };
 
@@ -247,7 +255,9 @@ export function parseSpecFileText(
     } else if (level === 2) {
       section = title;
       topic = undefined;
-      if (title === "Intent") collectingIntent = intent === undefined;
+      if (title === "Intent" || title === "意图") {
+        collectingIntent = intent === undefined;
+      }
     } else if (level === 3) {
       topic = title;
     }

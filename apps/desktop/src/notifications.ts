@@ -88,18 +88,43 @@ export function notificationFor(
     }
     case "captain_telemetry": {
       const payload = record.payload as {
-        to?: string;
-        pendingBossQuestion?: string;
+        to?: unknown;
+        state?: unknown;
+        pendingBossQuestion?: unknown;
       };
+      // The playbook 2.0 shell reports states as rich objects
+      // ({stateId, value, …}) and the pending question as a
+      // {player, question, …} record; the fake harness and older
+      // playbooks send bare strings. Accept both, like the renderer.
+      const stateText = (value: unknown): string | undefined => {
+        if (typeof value === "string") return value;
+        if (value && typeof value === "object") {
+          const shape = value as { stateId?: unknown; value?: unknown };
+          if (typeof shape.stateId === "string") return shape.stateId;
+          if (typeof shape.value === "string") return shape.value;
+        }
+        return undefined;
+      };
+      const questionText = (value: unknown): string | undefined => {
+        if (typeof value === "string") return value;
+        if (value && typeof value === "object") {
+          const shape = value as { question?: unknown };
+          if (typeof shape.question === "string") return shape.question;
+        }
+        return undefined;
+      };
+      const to = stateText(payload?.to) ?? stateText(payload?.state);
       if (
         String(record.topic) === "playbook.fsm.state" &&
-        payload?.to === "awaitBossReply"
+        to === "awaitBossReply"
       ) {
         return {
           event: "boss_question",
           sink: "desktop",
           title: "A player needs you",
-          body: payload.pendingBossQuestion ?? "A playbook is waiting for your reply.",
+          body:
+            questionText(payload?.pendingBossQuestion) ??
+            "A playbook is waiting for your reply.",
           sessionId,
         };
       }

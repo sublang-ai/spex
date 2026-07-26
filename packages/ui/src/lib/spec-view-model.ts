@@ -299,7 +299,33 @@ export function relationPhrase(
 
 const INLINE_LINK = /\[([^\]]+)\]\(([^()\s]+)\)/g;
 const FENCE = /^\s*(?:```|~~~)/;
-const STANDALONE_SHALL = /\bshall\b/i;
+/** The GEARS shall marker, mirroring the linter's vocabulary: the
+ * English word, or zh 应 excluding common non-shall compounds
+ * (应用, 反应, …). */
+const STANDALONE_SHALL =
+  /\bshall\b|(?<![反相对适响供效回报感一])应(?![用对答邀酬])/;
+
+/** Localized section headings normalize to the canonical grammar
+ * names (META-28/34: localized scaffolds translate the headings; the
+ * zh names mirror the scaffold/linter vocabulary). */
+const CANONICAL_SECTION: ReadonlyMap<string, string> = new Map([
+  ["External Behavior", "External Behavior"],
+  ["外部行为", "External Behavior"],
+  ["Internal Behavior", "Internal Behavior"],
+  ["内部行为", "Internal Behavior"],
+  ["Verification", "Verification"],
+  ["验证", "Verification"],
+  ["Binding", "Binding"],
+  ["绑定", "Binding"],
+  ["Scenario", "Scenario"],
+  ["场景", "Scenario"],
+  ["Tests", "Tests"],
+  ["测试", "Tests"],
+]);
+
+function canonicalSection(section: string): string {
+  return CANONICAL_SECTION.get(section) ?? section;
+}
 
 /** The cited item ID an inline-link match carries, mirroring the
  * server's citation extraction (META-16/META-20): bare-ID link text
@@ -332,12 +358,23 @@ export function splitBindingClauses(text: string): BindingClauses | undefined {
   const seen = new Set<string>();
   let inFence = false;
   let shallSeen = false;
+  let paragraphs = 0;
+  let inParagraph = false;
   for (const line of text.split(/\r?\n/)) {
     if (FENCE.test(line)) {
       inFence = !inFence;
       continue;
     }
     if (inFence) continue;
+    // Paragraph accounting (grammar conformance, DR-016): a binding
+    // reads as one GEARS sentence (META-36), so a second prose
+    // paragraph is out of grammar.
+    if (line.trim() === "") {
+      inParagraph = false;
+    } else if (!inParagraph) {
+      inParagraph = true;
+      paragraphs += 1;
+    }
     // Blank inline code spans and link hrefs (space-padded, so
     // offsets hold): `shall` inside either is not clause text.
     const bare = line.replace(/`[^`]*`/g, (span) => " ".repeat(span.length));
@@ -356,7 +393,13 @@ export function splitBindingClauses(text: string): BindingClauses | undefined {
     }
     if (shallAt !== -1) shallSeen = true;
   }
-  return shallSeen ? { clients, provisions } : undefined;
+  // Out-of-grammar bodies degrade (DR-016): no shall, or a second
+  // prose paragraph. Multiple shalls in ONE sentence stay classified:
+  // META-36 allows several coordinated provision mappings (Academy's
+  // PUB-1 carries four), and the FIRST shall is still the Where/
+  // provision boundary that places every citation.
+  if (!shallSeen || paragraphs > 1) return undefined;
+  return { clients, provisions };
 }
 
 export interface RelationRow {
@@ -406,10 +449,11 @@ export function classifyCites(
     if (item.group === "test") for (const t of item.cites) add("cites", t);
     else internal.push(...item.cites);
   };
+  const section = canonicalSection(item.section);
   if (file.kind === "package") {
     if (
-      item.section === "External Behavior" ||
-      item.section === "Internal Behavior"
+      section === "External Behavior" ||
+      section === "Internal Behavior"
     ) {
       // Peer-file targets are uses; same-file citations stay
       // unlabeled internal references.
@@ -417,12 +461,12 @@ export function classifyCites(
         if (sameFile(t)) internal.push(t);
         else add("uses", t);
       }
-    } else if (item.section === "Verification") {
+    } else if (section === "Verification") {
       for (const t of item.cites) add("verifies", t);
     } else {
       fallback();
     }
-  } else if (item.section === "Binding") {
+  } else if (section === "Binding") {
     const split = splitBindingClauses(item.text);
     if (!split) {
       // Out-of-grammar binding: plain cites row, never an invented edge.
@@ -440,7 +484,7 @@ export function classifyCites(
         if (!placed.has(t)) add("cites", t);
       }
     }
-  } else if (item.section === "Scenario") {
+  } else if (section === "Scenario") {
     for (const t of item.cites) {
       const loc = itemIndex.get(t);
       if (loc && loc.fileKey === key) {
@@ -454,7 +498,7 @@ export function classifyCites(
         add("composes", t);
       }
     }
-  } else if (item.section === "Tests") {
+  } else if (section === "Tests") {
     for (const t of item.cites) {
       const loc = itemIndex.get(t);
       // Same-file scenario and binding targets are what the
