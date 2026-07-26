@@ -179,6 +179,16 @@ Where records are linted, a DR missing a section of
 Where the map is linted, a `packages/` or `compositions/` file not
 linked from `specs/map.md` shall be a warning.
 
+#### LINT-14
+
+Where an item outside `## Binding` is linted, prose outside fenced
+blocks, lists, tables, blockquotes, and headings carrying more
+than one sentence shall be a warning: an item is one GEARS
+sentence with structured behavior attachments
+([META-42](../meta.md#meta-42)), counted with the [LINT-7](#lint-7)
+terminators, staged as a warning while existing trees reduce their
+multi-sentence backlog.
+
 #### LINT-13
 
 Where citation discipline is linted:

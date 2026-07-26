@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`spex lint` enforces the one-sentence binding grammar.** A `## Binding` item body carrying more than one sentence is now a `binding/sentence` error ([META-36](../../specs/meta.md#meta-36)): ASCII terminators count only before whitespace or line end, the fullwidth `。`/`！`/`？` count anywhere, and `e.g.`/`i.e.` never end a sentence, so coordinated multi-`shall` bindings stay clean while a trailing rider sentence — whose citations the clause classifier would misread — is caught at lint time.
 
+- **`spex lint` warns on multi-sentence items.** An item is one GEARS sentence whose `<behavior>` may attach structured content — an ordered list, table, fenced block, or chart ([META-42](../../specs/meta.md#meta-42)); prose carrying more than one sentence draws an `item/sentence` warning (Binding items keep their `binding/sentence` error), staged as a warning while existing trees reduce their backlog. META-21's bundled test rules split into [META-38..41](../../specs/meta.md#meta-38) and lint messages now cite the split items.
+
 ### Fixed
 
 - **Duplicate record numbers are caught instead of colliding silently.** Record ids form from the filename's leading number, so two differently named files could both become `IR-001`: `spex lint` now errors (`record/duplicate-id`) on a repeated number per record kind — `decisions/` for DRs, `intents/` together with legacy `iterations/` for IRs — and `spex scaffold --update` keeps an id-colliding legacy record in place, reporting the conflict against the id holder instead of migrating it into the collision ([META-43](../../specs/meta.md#meta-43), [SCAF-51](../../specs/packages/scaffold.md#scaf-51)).

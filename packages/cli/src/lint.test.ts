@@ -335,6 +335,32 @@ describe("lintSpecs", () => {
     assert.ok(rules(findings).includes("binding/trigger"));
   });
 
+  it("warns on a multi-sentence item; structure stays exempt (META-42)", () => {
+    const findings = findingsFor({
+      "specs/packages/auth.md":
+        "# AUTH: Auth\n\n## Intent\n\nAuth behavior.\n\n## External Behavior\n\n### AUTH-1\n\nWhen credentials are valid, the system shall log in. Sessions last a day.\n",
+    });
+    const warned = findings.filter((f) => f.rule === "item/sentence");
+    assert.equal(warned.length, 1, JSON.stringify(warned));
+    assert.equal(warned[0].severity, "warning");
+
+    // One sentence governing an attached algorithm and fence is clean,
+    // and e.g./inline code never end a sentence.
+    const structured = findingsFor({
+      "specs/packages/auth.md":
+        "# AUTH: Auth\n\n## Intent\n\nAuth behavior.\n\n## External Behavior\n\n### AUTH-1\n\nWhen credentials are valid, e.g. via `login.sh`, the system shall log in per the following steps:\n\n1. Verify the token.\n2. Open the session.\n\n```text\ntoken -> session\n```\n",
+    });
+    assert.ok(!rules(structured).includes("item/sentence"));
+
+    // A Binding item stays on the error rule, not the warning.
+    const binding = findingsFor({
+      "specs/compositions/platform.md":
+        "# PLAT: Platform\n\n## Intent\n\nX.\n\n## Binding\n\n### PLAT-1\n\nWhere logins are verified, the deployment shall use Example Auth. Audit trails stay local.\n\n## Tests\n\n### PLAT-2\n\nThe suite shall inspect it ([PLAT-1](#plat-1)).\n",
+    });
+    assert.ok(rules(binding).includes("binding/sentence"));
+    assert.ok(!rules(binding).includes("item/sentence"));
+  });
+
   it("errors on a second sentence in a Binding item (META-36)", () => {
     const twoSentences = findingsFor({
       "specs/compositions/platform.md":

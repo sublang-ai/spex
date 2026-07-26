@@ -799,7 +799,7 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
 }
 
 // ---------------------------------------------------------------
-// Item relationship rules (META-20, META-21, META-36)
+// Item relationship rules (META-20, META-36, META-39, META-40)
 // ---------------------------------------------------------------
 
 /**
@@ -864,7 +864,7 @@ function citedPackageFiles(item: ItemInfo): Set<string> {
 
 /**
  * Distinct specs/packages/ files whose items the body cites. A file
- * link without an item anchor counts toward no package (META-21).
+ * link without an item anchor counts toward no package (META-39).
  */
 function citedPackageItems(
   item: ItemInfo,
@@ -895,7 +895,7 @@ function itemsBySlug(items: ItemInfo[]): Map<string, Map<string, ItemInfo>> {
 function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
   const bySlug = itemsBySlug(items);
 
-  // Same-file Tests coverage of Binding/Scenario items (META-21).
+  // Same-file Tests coverage of Binding/Scenario items (META-40).
   const coveredByTests = new Set<ItemInfo>();
 
   for (const item of items) {
@@ -978,7 +978,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           item.heading.line,
           "error",
           "tests/uncited",
-          `Tests item ${item.id} cites no same-file Binding or Scenario item (META-21)`,
+          `Tests item ${item.id} cites no same-file Binding or Scenario item (META-39)`,
         );
       }
       for (const cited of bindingOrScenario) coveredByTests.add(cited);
@@ -993,7 +993,45 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           item.heading.line,
           "error",
           "tests/scenario-two-packages",
-          `Tests item ${item.id} exercises a scenario but cites items in fewer than two distinct package files (META-21)`,
+          `Tests item ${item.id} exercises a scenario but cites items in fewer than two distinct package files (META-39)`,
+        );
+      }
+    }
+
+    // One GEARS sentence per item (META-42): prose outside fenced
+    // blocks, lists, tables, blockquotes, and headings carries at
+    // most one sentence; attached structure is behavior content.
+    // Bindings are excluded here — META-36 makes theirs an error
+    // below. Terminators match the binding rule: ASCII before
+    // whitespace or line end, fullwidth anywhere, e.g./i.e. exempt.
+    if (item.section !== "Binding") {
+      let terminators = 0;
+      let extraLine = -1;
+      for (let line = item.bodyStart; line < item.bodyEnd; line += 1) {
+        if (item.file.fenced[line - 1]) continue;
+        const content = item.file.lines[line - 1];
+        if (content === undefined) continue;
+        const trimmed = content.trimStart();
+        if (trimmed === "" || /^(?:[-*+>|#]|\d+[.)]\s)/.test(trimmed)) {
+          continue;
+        }
+        const bare = trimmed.replace(/`[^`]*`/g, " ");
+        const spoken = bare.replace(/\b[ei]\.(?:g|e)\./gi, "eg");
+        const found = [...spoken.matchAll(/[.!?](?=\s|$)|[。！？]/g)].length;
+        if (found === 0) continue;
+        if (terminators < 2 && terminators + found >= 2 && extraLine === -1) {
+          extraLine = line;
+        }
+        terminators += found;
+      }
+      if (terminators > 1) {
+        report(
+          ctx,
+          item.file.relPath,
+          extraLine,
+          "warning",
+          "item/sentence",
+          `item ${item.id} carries more than one sentence; an item is one GEARS sentence (META-42)`,
         );
       }
     }
@@ -1067,7 +1105,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
         item.heading.line,
         "error",
         "tests/uncovered",
-        `${item.section} item ${item.id} is cited by no same-file Tests item (META-21)`,
+        `${item.section} item ${item.id} is cited by no same-file Tests item (META-40)`,
       );
     }
   }
@@ -1724,7 +1762,7 @@ function lintReferences(ctx: LintContext): void {
 // ---------------------------------------------------------------
 
 function lintRecords(ctx: LintContext): void {
-  // Record ids form from the filename's leading number (META-1), so
+  // Record ids form from the filename's leading number (META-43), so
   // two differently named files on the same number are one id —
   // decisions/ for DRs, intents/ with legacy iterations/ for IRs.
   const firstById = new Map<string, string>();
@@ -1747,7 +1785,7 @@ function lintRecords(ctx: LintContext): void {
           1,
           "error",
           "record/duplicate-id",
-          `record id ${id} is already defined by ${first} (META-1)`,
+          `record id ${id} is already defined by ${first} (META-43)`,
         );
       }
     }
