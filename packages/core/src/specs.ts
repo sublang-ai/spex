@@ -9,7 +9,7 @@
 
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Dirent } from "node:fs";
-import { isAbsolute, join, sep } from "node:path";
+import { isAbsolute, join, posix, sep } from "node:path";
 
 import type {
   SpecFileInfo,
@@ -383,14 +383,39 @@ function walkCollection(
 // ---------------------------------------------------------------------------
 
 // Intent records live in intents/; a tree not yet migrated keeps
-// them in the legacy iterations/ directory (DR-017).
-function recordsDir(
+// them in the legacy iterations/ directory, and a partially
+// migrated tree — a scaffold --update conflict, or an agent run
+// under an older toolchain — can hold both (DR-017). Read the two
+// together so no record is hidden: a legacy file whose basename
+// reappears under intents/ is shadowed with a notice, and the
+// coexistence itself is noticed for reconciliation.
+function parseIntentRecords(
   specsDir: string,
   baseReal: string,
-): "intents" | "iterations" {
-  return realInside(join(specsDir, "intents"), baseReal) !== undefined
-    ? "intents"
-    : "iterations";
+  notices: string[],
+): SpecRecordInfo[] {
+  const current = parseRecords(specsDir, "intents", baseReal, notices);
+  const legacy = parseRecords(specsDir, "iterations", baseReal, notices);
+  if (legacy.length === 0) return current;
+  if (current.length === 0) return legacy;
+  notices.push(
+    "legacy specs/iterations/ records coexist with specs/intents/; migrate with `spex scaffold --update`",
+  );
+  const currentNames = new Set(
+    current.map((record) => posix.basename(record.path)),
+  );
+  const kept = legacy.filter((record) => {
+    if (!currentNames.has(posix.basename(record.path))) return true;
+    notices.push(
+      `${record.path} is shadowed by the same-named file under intents/`,
+    );
+    return false;
+  });
+  return [...current, ...kept].sort((a, b) => {
+    const nameA = posix.basename(a.path);
+    const nameB = posix.basename(b.path);
+    return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
+  });
 }
 
 function parseRecords(
@@ -480,7 +505,7 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
       legacy: true,
       files: [],
       decisions: parseRecords(specsDir, "decisions", baseReal, discarded),
-      intents: parseRecords(specsDir, recordsDir(specsDir, baseReal), baseReal, discarded),
+      intents: parseIntentRecords(specsDir, baseReal, discarded),
       notices: [],
       readAt,
     };
@@ -513,7 +538,7 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
     legacy: false,
     files,
     decisions: parseRecords(specsDir, "decisions", baseReal, notices),
-    intents: parseRecords(specsDir, recordsDir(specsDir, baseReal), baseReal, notices),
+    intents: parseIntentRecords(specsDir, baseReal, notices),
     notices,
     readAt,
   };
