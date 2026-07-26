@@ -23,6 +23,22 @@
     "sha256-f9914497c46f9bfa05d12dfa9190c2d53d20cffd1af3eb3e44f0f0a4b20830f2",
     "sha256-4fac8c7fee1fec71297c50ee605f0417c3ae2b27e8aa37b03e409f08db976516",
     "sha256-71d24c93749439ca306302e341667963f71031c06d1dd62cca5ec5d6ab33e49c",
-    "sha256-cdf1eccbfbc1f77190b9401e4a8b20da38b3789cc4f27ef96ab4b3dbfff6691b"
+    "sha256-cdf1eccbfbc1f77190b9401e4a8b20da38b3789cc4f27ef96ab4b3dbfff6691b",
+    "sha256-6df63e92bcdbc6a9feb26fd07a01e45a9cb8c22cb7b29cf46cf31edbe04aa1e3",
+    "sha256-159a955adf974ee733c2ca7d740a9530c20d5ef1153c6788884ce70c5651ef14",
+    "sha256-fb100492ac46ae412f05c0ebd6d243d886a901fcd655bd647241dfd534d37224"
+  ],
+  "specs/items/dev/git.md": [
+    "sha256-1b194304866d05580de8b2d0caa3454aa772e876fb3dee1f6c5d637c9e9a42b2"
+  ],
+  "specs/items/dev/licensing.md": [
+    "sha256-ff6ce317bf51fb2f4a20dde8790a79f2a1237f6b5835c74e619f6e3d1647ab50"
+  ],
+  "specs/items/test/licensing.md": [
+    "sha256-075e5782e80c7068deb55c21bfc43a1214a85945ed535d95f6ceadbbc9fa187f"
+  ],
+  "specs/items/user/.gitkeep": [
+    "sha256-01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   ]
 }

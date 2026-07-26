@@ -85,46 +85,74 @@ describe("legacy file-history manifest", () => {
 describe("file-history manifest is append-only (SCAF-21)", () => {
   // SCAF-21 requires a new hash to be *appended*: replacing an entry
   // makes an earlier pristine scaffold read as user-modified, so
-  // --update keeps it instead of refreshing. Comparing only the
-  // worktree against HEAD is vacuous once a deletion is committed,
-  // so every committed version of the manifest in the available
-  // history must survive as an in-order subsequence of the working
-  // manifests — a path may migrate from the live manifest to the
-  // legacy one (a retired bundled path), but its hashes must not
-  // disappear. Shallow clones check the history they have.
-  it("preserves every hash committed in history, in order", () => {
-    let revs: string[];
+  // --update keeps it instead of refreshing. Every committed version
+  // of the manifest — followed across renames, resolved from the
+  // real repository toplevel, since this package's own root is not
+  // the git root — must survive in the working manifests: a retired
+  // bundled path may migrate to the legacy manifest, but no
+  // recognized hash may disappear. Without git, or in a shallow
+  // clone, the check covers what history is available.
+  it("preserves every hash committed in history", () => {
+    let gitRoot: string;
     try {
-      revs = execFileSync(
-        "git",
-        ["rev-list", "HEAD", "--", "scaffold/.file-history.json"],
-        { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
-      )
-        .trim()
-        .split("\n")
-        .filter(Boolean);
+      gitRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+        cwd: REPO_ROOT,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
     } catch {
-      return; // no git available
+      return; // not a git checkout (e.g. a packed install)
     }
+    let log: string;
+    try {
+      log = execFileSync(
+        "git",
+        [
+          "log",
+          "--follow",
+          "--name-only",
+          "--format=%H",
+          "--",
+          "scaffold/.file-history.json",
+        ],
+        { cwd: gitRoot, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+      );
+    } catch {
+      return;
+    }
+    const versions: Array<[string, string]> = [];
+    let rev: string | undefined;
+    for (const line of log.split("\n")) {
+      if (/^[0-9a-f]{40}$/.test(line)) rev = line;
+      else if (rev !== undefined && line.endsWith(".json")) {
+        versions.push([rev, line]);
+        rev = undefined;
+      }
+    }
+    assert.ok(versions.length > 0, "manifest history not found from the git root");
+    // Read the source manifests at the git root, not this package's
+    // staged copy: the staged bundle is a build-time snapshot, so
+    // comparing history against it can miss an edit made since the
+    // last staging.
     const working = JSON.parse(
-      readFileSync(join(REPO_ROOT, "scaffold", ".file-history.json"), "utf-8"),
+      readFileSync(join(gitRoot, "scaffold", ".file-history.json"), "utf-8"),
     ) as Record<string, string[]>;
     const legacy = JSON.parse(
       readFileSync(
-        join(REPO_ROOT, "scaffold", ".legacy-file-history.json"),
+        join(gitRoot, "scaffold", ".legacy-file-history.json"),
         "utf-8",
       ),
     ) as Record<string, string[]>;
     const errors = new Set<string>();
     const seenVersions = new Set<string>();
-    for (const rev of revs) {
+    for (const [commit, path] of versions) {
       let text: string;
       try {
-        text = execFileSync(
-          "git",
-          ["show", `${rev}:scaffold/.file-history.json`],
-          { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
-        );
+        text = execFileSync("git", ["show", `${commit}:${path}`], {
+          cwd: gitRoot,
+          encoding: "utf-8",
+          stdio: ["ignore", "pipe", "ignore"],
+        });
       } catch {
         continue; // shallow-history boundary
       }
@@ -132,21 +160,20 @@ describe("file-history manifest is append-only (SCAF-21)", () => {
       seenVersions.add(text);
       const committed = JSON.parse(text) as Record<string, string[]>;
       for (const [relPath, hashes] of Object.entries(committed)) {
-        const now = working[relPath] ?? legacy[relPath];
-        if (now === undefined) {
+        const now = new Set([
+          ...(working[relPath] ?? []),
+          ...(legacy[relPath] ?? []),
+        ]);
+        if (now.size === 0) {
           errors.add(`${relPath}: dropped from both manifests`);
           continue;
         }
-        let cursor = 0;
         for (const hash of hashes) {
-          const at = now.indexOf(hash, cursor);
-          if (at === -1) {
+          if (!now.has(hash)) {
             errors.add(
               `${relPath}: ${hash} is gone — a recognized version must be kept and new hashes appended`,
             );
-            break;
           }
-          cursor = at + 1;
         }
       }
     }
