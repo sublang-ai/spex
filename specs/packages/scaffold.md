@@ -274,6 +274,15 @@ Moved files shall be reported as
 `(migrated from specs/iterations/...)` indicator lines, with a
 moved seed folding into its seed refresh line.
 
+#### SCAF-52
+
+Where plain `scaffold` targets a tree whose `specs/` contains a
+legacy directory — `user/`, `dev/`, `test/`, `items/`,
+`interactions/`, or `iterations/` — the CLI shall write nothing,
+exit non-zero, and direct the user to `spex scaffold --update`:
+creating current seed targets beside legacy files would make every
+later `--update` conflict-keep the legacy content indefinitely.
+
 #### SCAF-42
 
 Where `--update` completes after migrating at least one package per

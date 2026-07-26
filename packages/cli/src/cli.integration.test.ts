@@ -682,6 +682,23 @@ describe("CLI integration", () => {
     }
   });
 
+  // SCAF-52: a legacy tree must migrate, not re-scaffold.
+  it("scaffold refuses a legacy tree and points at --update", () => {
+    const dir = makeLegacyRepo();
+    try {
+      const result = run(["scaffold", dir]);
+      assert.notEqual(result.exitCode, 0, result.stdout);
+      assert.match(result.stderr, /legacy layout/);
+      assert.match(result.stderr, /--update/);
+      // Nothing was written: the current seed target must not exist,
+      // or a later --update would conflict-keep the legacy file.
+      assert.ok(!existsSync(join(dir, "specs", "packages", "git.md")));
+      assert.ok(!existsSync(join(dir, "specs", "intents")));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   // SCAF-24 cell: seed, file absent.
   it("update: sample intent seed deleted → (created)", () => {
     const dir = makeTmp();

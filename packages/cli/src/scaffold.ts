@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { appendAgentSpecs } from "./append-agent-specs.js";
 import { readBundledMarkdown } from "./bundled-scaffold.js";
@@ -455,6 +455,29 @@ function updateScaffoldTemplates(): void {
   }
 }
 
+// SCAF-52: a legacy tree must migrate, not re-scaffold — creating
+// current seed targets beside legacy files would make every later
+// --update conflict-keep the legacy content indefinitely.
+const LEGACY_LAYOUT_DIRS = [
+  "user",
+  "dev",
+  "test",
+  "items",
+  "interactions",
+  "iterations",
+] as const;
+
+function assertNoLegacyLayout(basePath: string): void {
+  for (const dir of LEGACY_LAYOUT_DIRS) {
+    const abs = join(basePath, "specs", dir);
+    if (existsSync(abs) && statSync(abs).isDirectory()) {
+      throw new Error(
+        `specs/${dir}/ marks a legacy layout; run \`spex scaffold --update\` to migrate it before scaffolding`,
+      );
+    }
+  }
+}
+
 /**
  * Entry point for the scaffold subcommand.
  * @param args - Arguments after the scaffold subcommand
@@ -471,6 +494,7 @@ export function scaffold(args: string[] = []): void {
     const basePath = resolveBase(options.pathArg);
     const language = resolveCreateLanguage(basePath, options.language);
 
+    assertNoLegacyLayout(basePath);
     createSpecsStructure(basePath);
     copyTemplates(basePath, language);
     copyRootLicense(basePath);
