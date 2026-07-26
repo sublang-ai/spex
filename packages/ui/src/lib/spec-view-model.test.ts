@@ -75,6 +75,32 @@ describe("splitBindingClauses: clause sides around the standalone shall", () => 
     expect(split).toEqual({ clients: ["A-1"], provisions: ["B-2"] });
   });
 
+  test("a second sentence degrades even inside one paragraph", () => {
+    // A client citation in a trailing rider sentence must not be
+    // classified as a provision (META-36: one GEARS sentence).
+    expect(
+      splitBindingClauses(
+        [
+          "Where sign-in holds ([A-1](a.md#a-1)), it shall use the store ([B-2](b.md#b-2)).",
+          "Where audits run ([C-3](c.md#c-3)), logs stay local.",
+        ].join("\n"),
+      ),
+    ).toBeUndefined();
+    // The fullwidth terminator counts the same way.
+    expect(
+      splitBindingClauses(
+        "在部署内（[A-1](a.md#a-1)），系统 shall 使用存储（[B-2](b.md#b-2)）。审计另行处理。",
+      ),
+    ).toBeUndefined();
+    // Coordinated shalls in ONE sentence stay classified (PUB-1),
+    // and e.g. never ends a sentence.
+    expect(
+      splitBindingClauses(
+        "Where slots delegate ([A-1](a.md#a-1)), e.g. media, the deployment shall use the list ([B-2](b.md#b-2)) and shall embed the player ([B-3](b.md#b-3)).",
+      ),
+    ).toEqual({ clients: ["A-1"], provisions: ["B-2", "B-3"] });
+  });
+
   test("a shall inside a code fence never splits; the real one does", () => {
     const split = splitBindingClauses(
       [

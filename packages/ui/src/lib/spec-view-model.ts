@@ -349,9 +349,10 @@ export interface BindingClauses {
 /** Split a Binding item's citations by clause side per the
  * one-sentence binding grammar (DR-016): the split point is the
  * body's first standalone `shall` outside code fences, inline code,
- * and link hrefs. Undefined when the body has no such `shall` — the
- * caller degrades to a plain cites row. A citation cited on both
- * sides classifies by its first occurrence. */
+ * and link hrefs. Undefined when the body has no such `shall`, a
+ * second prose paragraph, or a second sentence — the caller
+ * degrades to a plain cites row. A citation cited on both sides
+ * classifies by its first occurrence. */
 export function splitBindingClauses(text: string): BindingClauses | undefined {
   const clients: string[] = [];
   const provisions: string[] = [];
@@ -360,6 +361,7 @@ export function splitBindingClauses(text: string): BindingClauses | undefined {
   let shallSeen = false;
   let paragraphs = 0;
   let inParagraph = false;
+  let sentences = 0;
   for (const line of text.split(/\r?\n/)) {
     if (FENCE.test(line)) {
       inFence = !inFence;
@@ -382,6 +384,12 @@ export function splitBindingClauses(text: string): BindingClauses | undefined {
       /\]\([^()\s]+\)/g,
       (span) => `]${" ".repeat(span.length - 1)}`,
     );
+    // Sentence accounting (META-36): ASCII terminators count only
+    // before whitespace or line end (so `.md`, versions, and link
+    // labels stay silent), the fullwidth 。！？ count anywhere, and
+    // e.g./i.e. never end a sentence.
+    const spoken = prose.replace(/\b[ei]\.(?:g|e)\./gi, "eg");
+    sentences += [...spoken.matchAll(/[.!?](?=\s|$)|[。！？]/g)].length;
     const shallAt = shallSeen ? -1 : prose.search(STANDALONE_SHALL);
     for (const match of bare.matchAll(INLINE_LINK)) {
       const id = citedId(match[1], match[2]);
@@ -393,12 +401,13 @@ export function splitBindingClauses(text: string): BindingClauses | undefined {
     }
     if (shallAt !== -1) shallSeen = true;
   }
-  // Out-of-grammar bodies degrade (DR-016): no shall, or a second
-  // prose paragraph. Multiple shalls in ONE sentence stay classified:
-  // META-36 allows several coordinated provision mappings (Academy's
-  // PUB-1 carries four), and the FIRST shall is still the Where/
-  // provision boundary that places every citation.
-  if (!shallSeen || paragraphs > 1) return undefined;
+  // Out-of-grammar bodies degrade (DR-016): no shall, a second
+  // prose paragraph, or a second sentence — a binding reads as one
+  // GEARS sentence (META-36). Multiple shalls in that ONE sentence
+  // stay classified: META-36 allows several coordinated provision
+  // mappings (Academy's PUB-1 carries four), and the FIRST shall is
+  // still the Where/provision boundary that places every citation.
+  if (!shallSeen || paragraphs > 1 || sentences > 1) return undefined;
   return { clients, provisions };
 }
 

@@ -124,6 +124,11 @@ keyword in its text shall be an error: a binding is static
 ([META-36](../meta.md#meta-36)).
 The zh trigger keywords of the bundled templates — `当` and `如果`
 at a clause start — shall be detected likewise.
+A Binding body carrying more than one sentence shall be an error:
+a binding reads as one GEARS sentence
+([META-36](../meta.md#meta-36)), where an ASCII terminator counts
+only before whitespace or line end, the fullwidth `。`/`！`/`？`
+count anywhere, and `e.g.`/`i.e.` never end a sentence.
 
 #### LINT-8
 
@@ -253,7 +258,8 @@ and Tests items, uncovered Binding and Scenario items, a Binding
 uncited by any same-file Scenario in a mixed file, cross-package
 Verification, the scenario two-package floor with an anchor-less
 file link not counting, and a triggered Binding in each language
-including a list-wrapped zh trigger ([LINT-7](#lint-7));
+including a list-wrapped zh trigger, and a two-sentence Binding
+([LINT-7](#lint-7));
 citations — broken link, broken anchor, legacy path, a package
 link into `specs/compositions/`, and intent-record references
 outside the map, linked and textual ([LINT-8](#lint-8)); reference

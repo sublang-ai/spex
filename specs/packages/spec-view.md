@@ -349,7 +349,8 @@ Where a fixture tree carries a package item citing a peer, a
 binding with client and provision citations around its `shall`, a
 scenario citing package items and a same-file binding, a
 composition test citing a same-file scenario plus package items,
-and a binding without a `shall`, the test suite shall assert the
+a binding without a `shall`, and a binding carrying a second
+sentence, the test suite shall assert the
 derived edge kinds and row labels, the grouped inbound backlinks,
 the file-header rollup counts, an in-view jump from each kind
 ([SPECV-19](#specv-19)), and the unlabeled degradation of the

@@ -998,6 +998,38 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
       }
     }
 
+    // A binding reads as one GEARS sentence (META-36): ASCII
+    // terminators count only before whitespace or line end, the
+    // fullwidth 。！？ count anywhere, and e.g./i.e. never end a
+    // sentence. Parsed inline text already excludes code spans and
+    // link hrefs.
+    if (inCompositions && item.section === "Binding") {
+      let terminators = 0;
+      let extraLine = -1;
+      for (const span of item.file.texts) {
+        if (span.line < item.bodyStart || span.line >= item.bodyEnd) continue;
+        for (const [offset, valueLine] of span.value.split("\n").entries()) {
+          const spoken = valueLine.replace(/\b[ei]\.(?:g|e)\./gi, "eg");
+          const found = [...spoken.matchAll(/[.!?](?=\s|$)|[。！？]/g)].length;
+          if (found === 0) continue;
+          if (terminators < 2 && terminators + found >= 2 && extraLine === -1) {
+            extraLine = span.line + offset;
+          }
+          terminators += found;
+        }
+      }
+      if (terminators > 1) {
+        report(
+          ctx,
+          item.file.relPath,
+          extraLine,
+          "error",
+          "binding/sentence",
+          `Binding item ${item.id} carries more than one sentence; a binding reads as one GEARS sentence (META-36)`,
+        );
+      }
+    }
+
     // A binding is static: no trigger or stateful clause (META-36).
     // Keywords are matched over parsed inline text, so list markers,
     // blockquotes, and emphasis cannot hide a trigger and inline

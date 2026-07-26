@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`spex lint` enforces the one-sentence binding grammar.** A `## Binding` item body carrying more than one sentence is now a `binding/sentence` error ([META-36](../../specs/meta.md#meta-36)): ASCII terminators count only before whitespace or line end, the fullwidth `。`/`！`/`？` count anywhere, and `e.g.`/`i.e.` never end a sentence, so coordinated multi-`shall` bindings stay clean while a trailing rider sentence — whose citations the clause classifier would misread — is caught at lint time.
+
+### Fixed
+
+- **Plain `spex scaffold` no longer traps legacy trees.** Scaffolding over a tree with a legacy `specs/` directory (`user/`, `dev/`, `test/`, `items/`, `interactions/`, or `iterations/`) used to create current seed targets beside the legacy files, making every later `--update` conflict-keep the legacy content indefinitely; create mode now writes nothing, exits non-zero, and directs the user to `spex scaffold --update` ([SCAF-52](../../specs/packages/scaffold.md#scaf-52)).
+
 ### Changed
 
 - **Iteration records become intent records ([DR-017](../../specs/decisions/017-intent-records.md)).** `spex scaffold` seeds `specs/intents/` instead of `specs/iterations/`, and the bundled templates describe intent records (IRs) in both languages, add META-37 (an intent realized in a single commit needs no record; records cite, never duplicate, commits and issues) and GIT-5 (commits realizing a recorded intent reference its bare `IR-<N>` id). `spex lint` guards the renamed layout — the citation rule is now `cite/intent`, links into legacy `specs/iterations/` still count, and an un-migrated `iterations/` directory is tolerated without unknown-entry warnings. `spex scaffold --update` migrates a legacy tree mechanically: record files move to `specs/intents/` (conflict-keeping, byte-preserving, before the pristine snapshot so a recognized legacy seed refreshes wholesale), citations rewrite once the move lands, and the map's Iterations heading and layout line rename in the active language. `spex lint` also warns when a legacy `specs/iterations/` directory coexists with `specs/intents/`, and keeps record naming and section rules on the legacy directory so a partially migrated tree stays checked.

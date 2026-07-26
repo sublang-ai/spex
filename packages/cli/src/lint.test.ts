@@ -335,6 +335,30 @@ describe("lintSpecs", () => {
     assert.ok(rules(findings).includes("binding/trigger"));
   });
 
+  it("errors on a second sentence in a Binding item (META-36)", () => {
+    const twoSentences = findingsFor({
+      "specs/compositions/platform.md":
+        "# PLAT: Platform\n\n## Intent\n\nX.\n\n## Binding\n\n### PLAT-1\n\nWhere logins are verified, the deployment shall use Example Auth. Audit trails stay local.\n\n## Tests\n\n### PLAT-2\n\nThe suite shall inspect it ([PLAT-1](#plat-1)).\n",
+    });
+    const sentence = twoSentences.filter((f) => f.rule === "binding/sentence");
+    assert.equal(sentence.length, 1, JSON.stringify(sentence));
+    assert.equal(sentence[0].severity, "error");
+
+    // Coordinated shalls in one sentence, e.g./i.e., inline code,
+    // and dotted names never end a sentence; the fullwidth 。 does.
+    const clean = findingsFor({
+      "specs/compositions/platform.md":
+        "# PLAT: Platform\n\n## Intent\n\nX.\n\n## Binding\n\n### PLAT-1\n\nWhere slots delegate, e.g. media in `spex.config.md`, the deployment shall use the v2.0.0 list and shall embed the player.\n\n## Tests\n\n### PLAT-2\n\nThe suite shall inspect it ([PLAT-1](#plat-1)).\n",
+    });
+    assert.ok(!rules(clean).includes("binding/sentence"));
+
+    const zh = findingsFor({
+      "specs/compositions/platform.md":
+        "# PLAT: Platform\n\n## Intent\n\nX.\n\n## Binding\n\n### PLAT-1\n\n在部署内，系统 shall 使用示例认证。审计另行处理。\n\n## Tests\n\n### PLAT-2\n\nThe suite shall inspect it ([PLAT-1](#plat-1)).\n",
+    });
+    assert.ok(rules(zh).includes("binding/sentence"));
+  });
+
   it("warns on composed composition file names", () => {
     const findings = findingsFor({
       "specs/packages/auth.md": CLEAN_PACKAGE,
