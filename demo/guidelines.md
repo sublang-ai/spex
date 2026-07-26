@@ -109,6 +109,17 @@ inspection, security testing, restart survival).
   shared component kit" — and the cure was deletion, not
   relocation: no observable outcome separates a kit button from
   a pixel-identical hand-rolled one.
+- **One governing pattern per item; structure carries the rest**
+  ([META-42](specs/meta.md#meta-42)).
+  [PUB-1](specs/compositions/course-publishing.md#pub-1) serves
+  four provision mappings as an ordered list under one `shall`;
+  [DELIV-3](specs/packages/ops/delivery.md#deliv-3) folds its
+  failure case into a rider of the one deploy action.
+  A second `When` or a second governing `shall` is a second
+  item — [SHELL-12](specs/packages/site/web-shell.md#shell-12)
+  was born when the error surface outgrew the loading state's
+  clause.
+
 - **Decisions are not where implementation details live**
   ([META-24](specs/meta.md#meta-24)).
   Three buckets: an observable outcome code generation must

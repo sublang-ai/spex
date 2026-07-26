@@ -51,23 +51,25 @@ publishes it
 ([CAT-6](../packages/catalog/course-catalog.md#cat-6)), the
 course page shall mark exactly the lessons with resolvable
 attachments as playable
-([CAT-2](../packages/catalog/course-catalog.md#cat-2)) — 
-publishing shall require no per-video step.
+([CAT-2](../packages/catalog/course-catalog.md#cat-2)) — with
+no per-video step required.
 
 ### PUB-3
 
 When the admin deletes a library asset still referenced by a
 lesson ([VID-10](../packages/catalog/video-library.md#vid-10)),
-the course and its syllabus shall remain intact, the lesson's
-course-page entry shall lose its playable marking
-([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
-lesson view shall fall back to its no-media presentation
-([CAT-20](../packages/catalog/course-catalog.md#cat-20)), and
-the course manager shall mark the attachment unavailable with
-replace and remove offered
-([CAT-24](../packages/catalog/course-catalog.md#cat-24)) — the
-library now reports the reference unresolvable
-([VID-14](../packages/catalog/video-library.md#vid-14)).
+the site shall degrade that lesson gracefully — the library now
+reporting the reference unresolvable
+([VID-14](../packages/catalog/video-library.md#vid-14)):
+
+1. the course and its syllabus remain intact;
+2. the lesson's course-page entry loses its playable marking
+   ([CAT-2](../packages/catalog/course-catalog.md#cat-2));
+3. the lesson view falls back to its no-media presentation
+   ([CAT-20](../packages/catalog/course-catalog.md#cat-20));
+4. the course manager marks the attachment unavailable with
+   replace and remove offered
+   ([CAT-24](../packages/catalog/course-catalog.md#cat-24)).
 
 ## Tests
 

@@ -45,10 +45,13 @@ header collapsing into a compact menu on small viewports.
 #### SHELL-5
 
 While a page's data is loading, the page shall show a loading
-state in place of the pending content rather than a blank page;
-when a request fails unexpectedly, the site shall show a plain
-error surface with a retry path and shall expose no stack trace
-or internal identifier.
+state in place of the pending content rather than a blank page.
+
+#### SHELL-12
+
+When a request fails unexpectedly, the site shall show a plain
+error surface with a retry path — exposing no stack trace or
+internal identifier.
 
 ## Internal Behavior
 
@@ -96,10 +99,11 @@ URL returns the not-found page with HTTP status 404
 Where fixture pages render at a 360 px viewport, the test suite
 shall assert no horizontal overflow and an operable compact menu
 ([SHELL-4](#shell-4)); where a fixture page's data is throttled,
-the suite shall assert a loading state precedes content; and
+the suite shall assert a loading state precedes content
+([SHELL-5](#shell-5)); and
 where a request is forced to fail, the suite shall assert the
 error surface offers a retry and the response carries no stack
-trace ([SHELL-5](#shell-5)).
+trace ([SHELL-12](#shell-12)).
 
 ### Chrome Isolation Coverage
 

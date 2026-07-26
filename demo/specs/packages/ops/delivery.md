@@ -67,8 +67,8 @@ listing every required variable name with no values.
 
 Where the database schema changes, the change shall ship as a
 versioned migration applied in order before the new revision
-serves traffic; when a migration fails, the deployment shall not
-switch traffic to the new revision.
+serves traffic — a failed migration never switching traffic to
+the new revision.
 
 #### DELIV-11
 
