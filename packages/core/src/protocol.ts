@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export type { TmuxPlayRecord };
 

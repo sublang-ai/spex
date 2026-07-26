@@ -418,6 +418,37 @@ describe("lintSpecs", () => {
     const records = findings.filter((f) => f.rule === "record/sections");
     assert.ok(records.length >= 4, JSON.stringify(records));
     assert.ok(records.every((f) => f.severity === "warning"));
+
+    // A conflict-kept record under legacy iterations/ stays checked.
+    const legacy = findingsFor({
+      "specs/iterations/002-c.md": "# IR-002: C\n\n## Goal\n\nShip.\n",
+    });
+    assert.ok(
+      legacy.some(
+        (f) =>
+          f.rule === "record/sections" &&
+          f.path === "specs/iterations/002-c.md",
+      ),
+      JSON.stringify(legacy),
+    );
+  });
+
+  it("warns when legacy iterations/ coexists with intents/", () => {
+    const both = findingsFor({
+      "specs/intents/001-a.md":
+        "# IR-001: A\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
+      "specs/iterations/002-b.md":
+        "# IR-002: B\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
+    });
+    const coexist = both.filter((f) => f.rule === "structure/legacy-records");
+    assert.equal(coexist.length, 1, JSON.stringify(coexist));
+    assert.equal(coexist[0].severity, "warning");
+
+    const onlyLegacy = findingsFor({
+      "specs/iterations/002-b.md":
+        "# IR-002: B\n\n## Goal\n\nShip.\n\n## Deliverables\n\n- [ ] X\n\n## Tasks\n\n1. X\n\n## Acceptance criteria\n\nDone.\n",
+    });
+    assert.ok(!rules(onlyLegacy).includes("structure/legacy-records"));
   });
 
   it("warns when a package or composition file is missing from the map", () => {

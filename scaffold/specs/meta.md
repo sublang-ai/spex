@@ -69,6 +69,7 @@ Fixed-width column wrapping within a sentence is allowed.
 
 An intent realized in a single commit needs no intent record; an intent shall be recorded when its realization spans commits or must be tracked before completion.
 An intent record shall carry only what is needed to understand the intent and its realization state, citing commits and issues rather than duplicating their content.
+The Deliverables checkboxes carry the realization state, realizing commits are found by their `IR-<N>` references rather than relisted, and an intent abandoned before realization shall be marked so in its record rather than deleted.
 
 ## Item syntax
 

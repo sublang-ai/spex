@@ -432,6 +432,29 @@ test("decisions and intents parse id, title, and path sorted by filename", () =>
   ]);
 });
 
+test("intent records merge a coexisting legacy iterations directory", () => {
+  const dir = fixture({
+    "specs/intents/001-first.md": "# IR-001: First intent\n",
+    "specs/intents/003-shadowing.md": "# IR-003: Current copy\n",
+    "specs/iterations/002-left-behind.md": "# IR-002: Conflict-kept\n",
+    "specs/iterations/003-shadowing.md": "# IR-003: Legacy copy\n",
+  });
+  const tree = parseSpecTree(dir);
+  assert.deepEqual(tree.intents, [
+    { id: "IR-001", title: "First intent", path: "intents/001-first.md" },
+    {
+      id: "IR-002",
+      title: "Conflict-kept",
+      path: "iterations/002-left-behind.md",
+    },
+    { id: "IR-003", title: "Current copy", path: "intents/003-shadowing.md" },
+  ]);
+  assert.deepEqual(tree.notices, [
+    "legacy specs/iterations/ records coexist with specs/intents/; migrate with `spex scaffold --update`",
+    "iterations/003-shadowing.md is shadowed by the same-named file under intents/",
+  ]);
+});
+
 // ---------------------------------------------------------------------------
 // Degradation
 // ---------------------------------------------------------------------------
