@@ -21,6 +21,30 @@ export interface AppNotification {
   sessionId: string;
 }
 
+/** A state reported by fsm telemetry: the playbook 2.0 shell sends
+ * rich objects ({stateId, value, …}); the fake harness and older
+ * playbooks send bare strings. Accept both. */
+function stateText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const shape = value as { stateId?: unknown; value?: unknown };
+    if (typeof shape.stateId === "string") return shape.stateId;
+    if (typeof shape.value === "string") return shape.value;
+  }
+  return undefined;
+}
+
+/** The pending Boss question: a bare string, or the shell's
+ * {player, question, …} record. */
+function questionText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const shape = value as { question?: unknown };
+    if (typeof shape.question === "string") return shape.question;
+  }
+  return undefined;
+}
+
 /** Resolve a configured sink (off|bell|desktop), or null for silence. */
 function sinkFor(
   prefs: Record<string, string>,
@@ -92,27 +116,6 @@ export function notificationFor(
         state?: unknown;
         pendingBossQuestion?: unknown;
       };
-      // The playbook 2.0 shell reports states as rich objects
-      // ({stateId, value, …}) and the pending question as a
-      // {player, question, …} record; the fake harness and older
-      // playbooks send bare strings. Accept both, like the renderer.
-      const stateText = (value: unknown): string | undefined => {
-        if (typeof value === "string") return value;
-        if (value && typeof value === "object") {
-          const shape = value as { stateId?: unknown; value?: unknown };
-          if (typeof shape.stateId === "string") return shape.stateId;
-          if (typeof shape.value === "string") return shape.value;
-        }
-        return undefined;
-      };
-      const questionText = (value: unknown): string | undefined => {
-        if (typeof value === "string") return value;
-        if (value && typeof value === "object") {
-          const shape = value as { question?: unknown };
-          if (typeof shape.question === "string") return shape.question;
-        }
-        return undefined;
-      };
       const to = stateText(payload?.to) ?? stateText(payload?.state);
       if (
         String(record.topic) === "playbook.fsm.state" &&
@@ -154,7 +157,7 @@ export class AttentionTracker {
     const record = envelope.record as unknown as {
       type: string;
       topic?: string;
-      payload?: { to?: string };
+      payload?: { to?: unknown; state?: unknown };
     };
     const state = this.pending.get(envelope.sessionId) ?? {
       question: false,
@@ -164,8 +167,11 @@ export class AttentionTracker {
       record.type === "captain_telemetry" &&
       record.topic === "playbook.fsm.state"
     ) {
-      state.question = record.payload?.to === "awaitBossReply";
-      if (record.payload?.to === "failed") state.failure = true;
+      // Same normalization as notificationFor: object or string states.
+      const to =
+        stateText(record.payload?.to) ?? stateText(record.payload?.state);
+      state.question = to === "awaitBossReply";
+      if (to === "failed") state.failure = true;
       this.pending.set(envelope.sessionId, state);
     } else if (record.type === "runtime_error") {
       state.failure = true;

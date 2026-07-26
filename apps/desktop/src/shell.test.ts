@@ -172,6 +172,54 @@ test("attention tracker counts parked sessions and clears on end", () => {
   assert.equal(tracker.clear("s1"), 0);
 });
 
+test("attention tracker folds object-shaped shell states", () => {
+  // The tracker shares notificationFor's normalizer: the production
+  // {stateId, value, …} records must badge exactly like the fake
+  // harness's bare strings (release-smoke manual gate).
+  const tracker = new AttentionTracker();
+  assert.equal(
+    tracker.apply(
+      envelope({
+        type: "captain_telemetry",
+        topic: "playbook.fsm.state",
+        payload: {
+          event: { type: "NEEDS_BOSS" },
+          to: {
+            value: "awaitBossReply",
+            activeStateIds: ["awaitBossReply"],
+            tags: ["playbook.parked"],
+            stateId: "awaitBossReply",
+          },
+        },
+      }),
+    ),
+    1,
+  );
+  assert.equal(
+    tracker.apply(
+      envelope({
+        type: "captain_telemetry",
+        topic: "playbook.fsm.state",
+        payload: { to: { stateId: "failed", value: "failed" } },
+      }),
+    ),
+    1,
+  );
+  // The failure latch survives leaving the question state...
+  assert.equal(
+    tracker.apply(
+      envelope({
+        type: "captain_telemetry",
+        topic: "playbook.fsm.state",
+        payload: { to: { stateId: "review", value: "review" } },
+      }),
+    ),
+    1,
+  );
+  // ...and clears when the next turn starts.
+  assert.equal(tracker.apply(envelope({ type: "turn_started", turnId: 3 })), 0);
+});
+
 test("attention tracker flags failures until the next turn starts", () => {
   const tracker = new AttentionTracker();
   assert.equal(tracker.apply(envelope({ type: "runtime_error", message: "boom" })), 1);
