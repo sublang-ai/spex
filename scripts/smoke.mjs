@@ -122,6 +122,7 @@ try {
     // even when the render or screenshot check fails, so a red smoke
     // does not leave better-sqlite3 built for Electron.
     run("desktop-abi", "npm", ["run", "rebuild:electron", "-w", "apps/desktop"]);
+    let restoreFailed = false;
     try {
       const shot = join(tmpdir(), `spex-smoke-${Date.now()}.png`);
       run("desktop-render", "npm", ["start", "-w", "apps/desktop"], {
@@ -138,10 +139,20 @@ try {
         { cwd: root, stdio: "inherit" },
       );
       if (restore.status !== 0) {
+        restoreFailed = true;
         process.stderr.write(
           "WARNING: ABI restore failed — run `npm run rebuild:node -w apps/desktop` before using system-Node tooling\n",
         );
       }
+    }
+    // A green render must not mask a failed restore: the tree would
+    // be left on the Electron ABI and every system-Node run after
+    // the smoke would fail at better-sqlite3 load.
+    if (restoreFailed) {
+      stage = "desktop-abi-restore";
+      throw new Error(
+        "ABI restore failed; run `npm run rebuild:node -w apps/desktop`",
+      );
     }
   } else {
     process.stdout.write(
