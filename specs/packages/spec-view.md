@@ -253,7 +253,7 @@ notices; differently named files sharing a leading number all
 list, with each duplicated record id a tree notice — records sorted
 by filename, each with an
 ID formed from the record kind and the filename's leading number
-(e.g. `DR-011`), a title taken from the file's first `#` heading
+([META-1](../meta.md#meta-1), e.g. `DR-011`), a title taken from the file's first `#` heading
 minus any leading `DR-nnn:`/`IR-nnn:` prefix, and a path relative
 to `specs/`.
 
