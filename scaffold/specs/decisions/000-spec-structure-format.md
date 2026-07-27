@@ -10,7 +10,7 @@ Accepted
 ## Context
 
 Specifications (specs) need a standardized format and structure to support iterative development and collaboration between AI and humans.
-Earlier revisions of this record split each spec package across up to three files (`user/`, `dev/`, `test/`), which forced a reader to open several files to understand one package.
+Splitting a package across several files forces a reader to open all of them to understand it, and invites drift between them.
 
 ## Decision
 
