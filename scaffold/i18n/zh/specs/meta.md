@@ -129,7 +129,16 @@ A spec item shall describe behavior as observable outcomes (e.g., file state, ex
 
 ### META-42
 
-Each behavior, binding, scenario, or test item shall be one GEARS pattern ([META-6](#meta-6)) — at most one trigger governing one shall clause, so a second `When` or a second governing `shall` makes a second item — whose `<behavior>` may attach structured content that clause governs, an ordered list carrying a journey's or algorithm's steps, a table carrying a mapping or case set, a fenced block carrying a format or grammar, or a text chart, introducing no requirement the clause does not state.
+Each item shall have one governing GEARS clause ([META-6](#meta-6)) naming one concrete domain contract — a request, decision, state transition, invariant, installed relationship, integrated journey, or verification run — whose structured attachments inherit that clause's normative force and elaborate that contract alone, including any format, grammar, or definition the clause names:
+
+| Item kind | Attachments may carry |
+| --- | --- |
+| Behavior | ordered steps, or the cases and outcomes of one operation, decision, or invariant |
+| Binding | the mappings of one installed relationship ([META-36](#meta-36)) |
+| Scenario | the stages of one journey or transition |
+| Test | the assertions of one verification objective — one setup and execution flow, or one explicit case matrix |
+
+A condition inside an attachment is a case label rather than a second trigger, so [META-6](#meta-6)'s one-trigger rule governs the clause and not its attachments; differing triggers or lifecycles are strong evidence of a second contract rather than proof of one; and an umbrella such as "handle correctly" or "support behavior" names no contract.
 
 ## Spec packages
 

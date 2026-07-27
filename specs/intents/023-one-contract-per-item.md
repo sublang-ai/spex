@@ -1,16 +1,17 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# IR-023: One-Sentence Items
+# IR-023: One Contract Per Item
 
 ## Goal
 
-Apply [DR-018](../decisions/018-one-sentence-items.md): split META-21 along its concerns, state the one-GEARS-pattern rule with its structured-behavior allowance, re-home META-1's record-identity sentence, and stage lint enforcement.
+Apply [DR-018](../decisions/018-one-contract-per-item.md): split META-21 along its concerns, state the one-contract rule with its per-kind attachments, re-home META-1's record-identity sentence, and keep lint advisory.
 
 ## Deliverables
 
 - [x] DR-018 recorded; META-21 split into META-38..41; META-42 and META-43 added; META-1 slimmed — across this tree, both scaffold locales, and `demo/`, with citations re-pointed per claim
 - [x] `spex lint` warns on multi-sentence items (`item/sentence`) while Binding items keep their error; messages cite the split items
+- [x] META-42 restated as the one-contract rule with its per-kind attachment table; the lint message, LINT-14, guidelines, and demo items follow it
 - [x] Scaffold templates and `demo/` lint with no problems; this tree's warning backlog is measured and reported
 
 ## Tasks
@@ -19,6 +20,7 @@ Apply [DR-018](../decisions/018-one-sentence-items.md): split META-21 along its 
 2. Apply the META surgery and citation re-pointing to the four meta files, records, and guides; fold the template's LIC-5
 3. Add the `item/sentence` lint warning with tests; re-point lint messages; document in LINT and the changelog
 4. Fold `demo/`'s twelve multi-sentence items to one sentence each
+5. Restate META-42 as the one-contract rule and bring the corpus, lint wording, and guidelines onto it
 
 ## Acceptance criteria
 
