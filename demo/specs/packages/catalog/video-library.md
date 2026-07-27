@@ -101,13 +101,16 @@ shall be denied regardless of the requester's session state.
 
 #### VID-8
 
-While a playback request carries a session verified per
-[AUTH-9](../identity/github-login.md#auth-9) and the embedding
-host authorizes it ([VID-15](#vid-15)), when the player starts
-playback, the server shall issue — through the deployment's
-grant mechanism — a short-lived access grant scoped to that one
-asset and bounded by the configured expiry, denying a playback
-request that carries no verified session.
+Where the embedding host authorizes the asset for the requester
+([VID-15](#vid-15)) and a session is verified server-side
+([AUTH-9](../identity/github-login.md#auth-9)), when the player
+starts playback, the server shall decide the request on its
+session:
+
+| Playback request | Outcome |
+| --- | --- |
+| carries a verified session | the deployment's grant mechanism issues a short-lived access grant scoped to that one asset and bounded by the configured expiry |
+| carries no verified session | the request is denied, with no grant issued |
 
 #### VID-17
 
@@ -127,7 +130,7 @@ is authorized for that requester — and shall issue an access
 grant only on an affirmative answer; a request the host does
 not authorize shall be denied, with no grant issued and no
 content served — stored-content requests staying governed by the
-grant alone ([VID-7](#vid-7), [VID-8](#vid-8)), the host not
+grant alone ([VID-7](#vid-7), [VID-17](#vid-17)), the host not
 re-asked at redemption.
 
 ### Deletion Boundary

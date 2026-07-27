@@ -138,3 +138,12 @@ integration with no manual step ([PLAT-4](#plat-4),
 serving production revision reports a commit that exists on the
 default branch of the GitHub repository
 ([DELIV-7](../packages/ops/delivery.md#deliv-7)).
+
+### PLAT-9
+
+Where production is served through the Vercel Git integration
+([PLAT-4](#plat-4)), the audit suite shall assert by deployment
+inspection that the serving revision reports the default-branch
+commit the integration built it from — not merely a commit that
+exists on that branch
+([DELIV-7](../packages/ops/delivery.md#deliv-7)).

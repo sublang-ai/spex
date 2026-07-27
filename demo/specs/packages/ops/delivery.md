@@ -117,10 +117,3 @@ The audit suite shall assert a repository scan finds no secret
 values and that the example environment file lists every
 required variable name with no values ([DELIV-5](#deliv-5)).
 
-### Provenance Coverage
-
-#### DELIV-13
-
-Where a production deployment is serving, the audit suite shall
-assert the serving revision reports a commit identifier that
-exists on the default branch ([DELIV-7](#deliv-7)).

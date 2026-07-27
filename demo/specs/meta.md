@@ -167,8 +167,9 @@ which a particular outcome shall not occur.
 
 ### META-42
 
-Each item shall have one governing GEARS clause
-([META-6](#meta-6)) naming one concrete domain contract — a
+Each behavior, binding, scenario, or test item shall have one
+governing GEARS clause ([META-6](#meta-6)) naming one concrete
+domain contract — a
 request, decision, state transition, invariant, installed
 relationship, integrated journey, or verification run — whose
 structured attachments inherit that clause's normative force and
@@ -177,9 +178,9 @@ definition the clause names:
 
 | Item kind | Attachments may carry |
 | --- | --- |
-| Behavior | ordered steps, or the cases and outcomes of one operation, decision, or invariant |
+| Behavior | ordered steps, or the cases and outcomes of one operation, decision, transition, or invariant |
 | Binding | the mappings of one installed relationship ([META-36](#meta-36)) |
-| Scenario | the stages of one journey or transition |
+| Scenario | the stages of one journey or transition, or the cases of one standing rule |
 | Test | the assertions of one verification objective — one setup and execution flow, or one explicit case matrix |
 
 A condition inside an attachment is a case label rather than a

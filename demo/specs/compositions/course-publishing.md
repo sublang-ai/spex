@@ -62,7 +62,9 @@ the site shall degrade that lesson gracefully — the library now
 reporting the reference unresolvable
 ([VID-14](../packages/catalog/video-library.md#vid-14)):
 
-1. the course and its syllabus remain intact;
+1. the course and its syllabus remain intact, the library
+   having read and modified no host data
+   ([VID-10](../packages/catalog/video-library.md#vid-10));
 2. the lesson's course-page entry loses its playable marking
    ([CAT-2](../packages/catalog/course-catalog.md#cat-2));
 3. the lesson view falls back to its no-media presentation
@@ -108,7 +110,9 @@ Where a published lesson references a library asset, when the
 admin deletes that asset from the library
 ([VID-18](../packages/catalog/video-library.md#vid-18)), the
 acceptance suite shall assert the course page still shows the
-full syllabus with that lesson's playable marking gone
+full syllabus — the library having modified no catalog data
+([VID-10](../packages/catalog/video-library.md#vid-10)) — with
+that lesson's playable marking gone
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the
 lesson view shows the no-media presentation
 ([CAT-20](../packages/catalog/course-catalog.md#cat-20)), and the
