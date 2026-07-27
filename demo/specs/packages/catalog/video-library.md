@@ -106,9 +106,8 @@ While a playback request carries a session verified per
 host authorizes it ([VID-15](#vid-15)), when the player starts
 playback, the server shall issue — through the deployment's
 grant mechanism — a short-lived access grant scoped to that one
-asset and bounded by the configured expiry; the server shall deny a playback request without a
-verified session and any content request bearing an expired or
-tampered grant.
+asset and bounded by the configured expiry, denying a playback
+request that carries no verified session.
 
 #### VID-17
 

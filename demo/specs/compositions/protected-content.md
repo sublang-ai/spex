@@ -99,17 +99,17 @@ and a fresh playback request then obtains a new grant while the
 course stays published ([GUARD-2](#guard-2),
 [VID-8](../packages/catalog/video-library.md#vid-8)); a
 member's playback request for an asset referenced only by an
-unpublished fixture course is denied with no grant issued,
+unpublished fixture course
+([CAT-6](../packages/catalog/course-catalog.md#cat-6)) is denied
+with no grant issued,
 while a grant the member obtained before the unpublish still
 plays until its expiry
 ([VID-17](../packages/catalog/video-library.md#vid-17)) and the
 admin's player on that
 unpublished lesson still plays ([GUARD-5](#guard-5)); after the
-only course referencing a fixture asset is deleted, member and
-admin playback requests for that asset are likewise denied with
+only course referencing a fixture asset is deleted
+([CAT-17](../packages/catalog/course-catalog.md#cat-17)), member
+and admin playback requests for that asset are likewise denied with
 no grant issued, while an asset also referenced by a second
 published fixture course keeps serving member playback after
-the first course unpublishes ([GUARD-5](#guard-5)); and every
-session cookie observed during the sweep is scoped to the
-site's origin and marked Secure
-([AUTH-8](../packages/identity/github-login.md#auth-8)).
+the first course unpublishes ([GUARD-5](#guard-5)).
