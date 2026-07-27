@@ -94,13 +94,17 @@ without a grant, with an expired grant, and with a tampered
 grant are denied for all three audiences ([GUARD-1](#guard-1),
 [VID-7](../packages/catalog/video-library.md#vid-7)); a
 member's playback request obtains a grant and plays; the grant
-is scoped to that one asset, stops working after its expiry,
-and a fresh playback request then obtains a new grant while the
-course stays published ([GUARD-2](#guard-2),
-[VID-8](../packages/catalog/video-library.md#vid-8)); a
-member's playback request for an asset referenced only by an
-unpublished fixture course is denied with no grant issued,
-while a grant the member obtained before the unpublish still
+is scoped to that one asset and a fresh playback request obtains
+a new grant while the course stays published
+([GUARD-2](#guard-2),
+[VID-8](../packages/catalog/video-library.md#vid-8)), the first
+grant having stopped working at its expiry
+([VID-17](../packages/catalog/video-library.md#vid-17)); a
+member's playback request for an asset whose only referencing
+course the suite unpublishes
+([CAT-6](../packages/catalog/course-catalog.md#cat-6)) is denied
+with no grant issued,
+while a grant the member obtained before that unpublish still
 plays until its expiry
 ([VID-17](../packages/catalog/video-library.md#vid-17)) and the
 admin's player on that

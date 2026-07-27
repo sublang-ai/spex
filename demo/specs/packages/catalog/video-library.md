@@ -102,7 +102,7 @@ shall be denied regardless of the requester's session state.
 #### VID-8
 
 Where the embedding host authorizes the asset for the requester
-([VID-15](#vid-15)) and a session is verified server-side
+([VID-15](#vid-15)) and sessions are verified server-side
 ([AUTH-9](../identity/github-login.md#auth-9)), when the player
 starts playback, the server shall decide the request on its
 session:
@@ -173,7 +173,8 @@ asset, with a retry starting from zero ([VID-3](#vid-3)).
 #### VID-12
 
 Where a fixture asset exists and the stub host authorizes it
-for the signed-in session's requests, the test suite shall
+for every request — so a denial can only be the session gate —
+the test suite shall
 assert: with that session, the embedded player obtains a grant
 and the media element reaches the playing state
 ([VID-5](#vid-5)); with
