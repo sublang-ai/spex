@@ -70,8 +70,10 @@ with previews bound to a non-production Supabase project.
 
 ### PLAT-5
 
-Where required checks gate merging
-([DELIV-1](../packages/ops/delivery.md#deliv-1)) and every
+Where required checks report on a pull request
+([DELIV-1](../packages/ops/delivery.md#deliv-1)) and gate its
+merge ([DELIV-12](../packages/ops/delivery.md#deliv-12)), and
+every
 production deployment traces to one default-branch commit
 ([DELIV-7](../packages/ops/delivery.md#deliv-7)), the
 repository shall live on GitHub, with the required checks run
@@ -121,9 +123,10 @@ the observed egress.
 
 Where a fixture pull request runs through the pipeline, the
 audit suite shall assert the required checks report from GitHub
-Actions and branch protection refuses the merge while one fails
+Actions ([DELIV-1](../packages/ops/delivery.md#deliv-1)) and
+branch protection refuses the merge while one fails
 ([PLAT-5](#plat-5),
-[DELIV-1](../packages/ops/delivery.md#deliv-1)), the pipeline's
+[DELIV-12](../packages/ops/delivery.md#deliv-12)), the pipeline's
 credentials resolve from the repository's GitHub Actions
 secrets with none in tracked content ([PLAT-8](#plat-8)), the
 preview publishes on Vercel against a non-production Supabase

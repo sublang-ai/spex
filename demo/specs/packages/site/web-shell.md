@@ -71,10 +71,13 @@ denies.
 
 Where a response varies by session or role, it shall be served
 private to its requester, never from a cache shared across
-requesters; where a page's content varies by underlying state,
-each response shall reflect the state current at request time —
-no shared cache shall serve a copy made stale by a later
-change.
+requesters.
+
+#### SHELL-13
+
+Where a page's content varies by underlying state, each response
+shall reflect the state current at request time — no shared
+cache serving a copy made stale by a later change.
 
 ## Verification
 
@@ -102,7 +105,8 @@ horizontal overflow and an operable compact menu
 ([SHELL-4](#shell-4)); with page data throttled, a loading state
 preceding content ([SHELL-5](#shell-5)); and with a request
 forced to fail, an error surface offering a retry and a response
-carrying no stack trace ([SHELL-12](#shell-12)).
+carrying no stack trace or internal identifier
+([SHELL-12](#shell-12)).
 
 ### Chrome Isolation Coverage
 
@@ -118,9 +122,10 @@ state matches the session without a client-side correction pass
 
 #### SHELL-11
 
-Where a fixture page's underlying state changes between two
-requests, the test suite shall assert the second response
-reflects the new state; and where two fixture sessions of
-different roles request the same page in turn, the suite shall
-assert each response is produced for its requester's session,
-not reused from the other's ([SHELL-10](#shell-10)).
+Where fixture pages exercise response reuse, the test suite
+shall assert each case:
+
+| Fixture | Asserted outcome |
+| --- | --- |
+| a page whose underlying state changes between two requests | the second response reflects the new state ([SHELL-13](#shell-13)) |
+| two sessions of different roles requesting the same page in turn | each response is produced for its requester's session, not reused from the other's ([SHELL-10](#shell-10)) |

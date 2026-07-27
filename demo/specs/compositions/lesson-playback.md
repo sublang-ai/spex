@@ -35,9 +35,9 @@ sign-in:
 While a signed-in session is active, when the member opens any
 published lesson carrying a resolvable media attachment, the
 player shall stream it
-([VID-5](../packages/catalog/video-library.md#vid-5)); no
-enrollment, purchase, or approval step shall exist between
-sign-in and playback, per
+([VID-5](../packages/catalog/video-library.md#vid-5)) — with no
+enrollment, purchase, or approval step between sign-in and
+playback, per
 [DR-000](../decisions/000-product-scope.md).
 
 ## Tests

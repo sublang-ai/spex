@@ -86,13 +86,13 @@ after migration leaves that revision serving correctly.
 
 #### DELIV-8
 
-Where a fixture pull request carries a failing check, the audit
-suite shall assert the required checks are reported on it
-([DELIV-1](#deliv-1)) and
-that merging it into the default branch is blocked
-([DELIV-12](#deliv-12)); where the fixture's build passes, the
-suite shall assert a preview deployment link appears on the
-pull request ([DELIV-2](#deliv-2)).
+Where fixture pull requests exercise the check pipeline, the
+audit suite shall assert each case:
+
+| Fixture | Asserted outcome |
+| --- | --- |
+| a pull request carrying a failing check | the required checks are reported on it ([DELIV-1](#deliv-1)), and merging it into the default branch is blocked ([DELIV-12](#deliv-12)) |
+| a pull request whose build passes | a preview deployment link appears on the pull request ([DELIV-2](#deliv-2)) |
 
 ### Deployment Coverage
 

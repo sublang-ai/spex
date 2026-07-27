@@ -109,18 +109,30 @@ inspection, security testing, restart survival).
   shared component kit" — and the cure was deletion, not
   relocation: no observable outcome separates a kit button from
   a pixel-identical hand-rolled one.
-- **One governing pattern per item; structure carries the rest**
-  ([META-42](specs/meta.md#meta-42)).
-  [PUB-1](specs/compositions/course-publishing.md#pub-1) serves
-  four provision mappings as an ordered list under one `shall`;
+- **One governing clause naming one contract; attachments
+  elaborate it** ([META-42](specs/meta.md#meta-42)).
+  [PUB-1](specs/compositions/course-publishing.md#pub-1) carries
+  four mappings of one supplier relationship;
+  [CAT-6](specs/packages/catalog/course-catalog.md#cat-6) carries
+  publish and unpublish as two rows of one publication-state
+  transition; and
   [DELIV-3](specs/packages/ops/delivery.md#deliv-3) folds its
-  failure case into a rider of the one deploy action.
-  A rider refines the one governed action; a clause that needs
-  its own trigger is another item, not a rider.
-  A second `When` or a second governing `shall` is a second
-  item — [SHELL-12](specs/packages/site/web-shell.md#shell-12)
-  was born when the error surface outgrew the loading state's
-  clause.
+  failure outcome into a rider of the one deployment attempt.
+  Cases inside an attachment are labels, not triggers, so
+  counting `When` decides nothing.
+  What decides is whether a part answers a *different contract*:
+  [SHELL-13](specs/packages/site/web-shell.md#shell-13) left
+  [SHELL-10](specs/packages/site/web-shell.md#shell-10) because
+  cache privacy and response freshness are independent standing
+  invariants, and
+  [VID-18](specs/packages/catalog/video-library.md#vid-18) left
+  [VID-4](specs/packages/catalog/video-library.md#vid-4) because
+  listing assets and ending one's life are separately initiated
+  operations.
+  If naming an item's purpose needs "and" — "asset listing and
+  deletion" — inspect it for a split, the same instinct that bars
+  composition filenames concatenating package names
+  ([META-31](specs/meta.md#meta-31)).
 
 - **Decisions are not where implementation details live**
   ([META-24](specs/meta.md#meta-24)).

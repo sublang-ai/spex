@@ -57,7 +57,7 @@ no per-video step required.
 ### PUB-3
 
 When the admin deletes a library asset still referenced by a
-lesson ([VID-10](../packages/catalog/video-library.md#vid-10)),
+lesson ([VID-18](../packages/catalog/video-library.md#vid-18)),
 the site shall degrade that lesson gracefully — the library now
 reporting the reference unresolvable
 ([VID-14](../packages/catalog/video-library.md#vid-14)):
@@ -106,7 +106,7 @@ deletion, the suite shall assert each stage:
 
 Where a published lesson references a library asset, when the
 admin deletes that asset from the library
-([VID-10](../packages/catalog/video-library.md#vid-10)), the
+([VID-18](../packages/catalog/video-library.md#vid-18)), the
 acceptance suite shall assert the course page still shows the
 full syllabus with that lesson's playable marking gone
 ([CAT-2](../packages/catalog/course-catalog.md#cat-2)), the

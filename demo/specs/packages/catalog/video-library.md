@@ -36,8 +36,9 @@ content is uploaded, naming the violated constraint.
 #### VID-3
 
 When an upload is interrupted — connection loss or leaving the
-page — the library shall list no partial asset, and a retry
-shall start the upload from the beginning.
+page — the library shall recover to a clean state: no partial
+asset is listed, and a retry starts the upload from the
+beginning.
 
 ### The Library
 
@@ -75,8 +76,8 @@ media content.
 
 When an upload completes, the library shall assign the asset an
 opaque identifier that is stable for the asset's lifetime and
-independent of its title and file name; uploading identical
-content twice shall create two distinct assets.
+independent of its title and file name — identical content
+uploaded twice yielding two distinct assets.
 
 ### Resolution
 
@@ -197,7 +198,7 @@ edits one asset's title, the list shows the new title with the
 asset's size and upload date after a reload ([VID-4](#vid-4)),
 and the records survive a service restart under test control
 ([VID-16](#vid-16)); and when one
-asset is deleted after confirmation, its
+asset is deleted after confirmation, it leaves the list and its
 content is no longer served while the other still plays
 ([VID-18](#vid-18)), a
 stub host's stored reference to the deleted asset remains unread
