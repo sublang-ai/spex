@@ -183,12 +183,13 @@ linked from `specs/map.md` shall be a warning.
 
 Where an item outside `## Binding` is linted, prose outside fenced
 blocks, lists, tables, blockquotes, and headings carrying more
-than one sentence shall be a warning: an item is one GEARS
-pattern with structured behavior attachments
+than one sentence shall be an advisory warning to review the
+item for a second governing clause
 ([META-42](../meta.md#meta-42)), counted with the [LINT-7](#lint-7)
-terminators. The warning is advisory — a sentence proxy for the
-pattern rule, leaving a multi-trigger single sentence to review —
-and stays a warning while existing trees reduce their backlog.
+terminators. Sentence count neither defines nor decides
+conformance: an item stating one contract's cases and outcomes
+may run to several sentences and still conform, while a second
+contract can hide inside one. The rule stays a warning.
 
 #### LINT-13
 

@@ -998,8 +998,10 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
       }
     }
 
-    // One GEARS pattern per item (META-42), sentence count as its
-    // advisory proxy: prose outside fenced
+    // One governing clause per item (META-42), sentence count as
+    // its advisory proxy — a conformant item may carry several
+    // sentences of one contract's cases, so this only prompts a
+    // read: prose outside fenced
     // blocks, lists, tables, blockquotes, and headings carries at
     // most one sentence; attached structure is behavior content.
     // Bindings are excluded here — META-36 makes theirs an error
@@ -1032,7 +1034,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           extraLine,
           "warning",
           "item/sentence",
-          `item ${item.id} carries more than one sentence; an item is one GEARS pattern (META-42)`,
+          `item ${item.id} carries more than one sentence; review it for a second governing clause (META-42)`,
         );
       }
     }
