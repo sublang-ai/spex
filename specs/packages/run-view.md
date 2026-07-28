@@ -547,8 +547,9 @@ When the captain editor popover is opened from the Captain home
 with a fixture captain block, the test suite shall assert it
 offers the runtime's adapters with their readiness, that changing
 the adapter or model issues a captain merge patch through the
-configuration edit path, and that the patch carries only the
-edited keys — all without a surface change
+configuration edit path, and that the patch carries the editor's
+surfaced fields and never a hand-written one — all without a
+surface change
 ([RUN-32](#run-32)).
 
 #### RUN-36

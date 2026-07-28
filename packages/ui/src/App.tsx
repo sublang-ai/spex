@@ -12,7 +12,7 @@ import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "./state/store.js";
 import { deriveAttention } from "./state/dashboard.js";
-import { saveProfileEssentials, setCaptain } from "./lib/config-ops.js";
+import { setCaptain } from "./lib/config-ops.js";
 import type { SessionView } from "./state/reducer.js";
 import { RunView } from "./components/RunView.js";
 import { CaptainHome } from "./components/CaptainHome.js";
@@ -285,8 +285,7 @@ function WorkspaceSurface({
       hasProject={Boolean(project)}
       projectName={project?.name}
       playbooks={summary?.playbooks ?? []}
-      captainRef={summary?.captain ?? ""}
-      profiles={summary?.profiles ?? []}
+      captain={summary?.captain}
       readiness={readiness}
       connected={connection === "open"}
       configStatus={configState?.status}
@@ -300,8 +299,7 @@ function WorkspaceSurface({
       onRecheckReadiness={refreshReadiness}
       onOpenPalette={onOpenPalette}
       onNavigate={(surface) => onNavigate(surface)}
-      onSelectCaptain={setCaptain}
-      onSaveProfile={saveProfileEssentials}
+      onSaveCaptain={setCaptain}
       pastSessions={past.map((session) => ({
         id: session.id,
         projectName:

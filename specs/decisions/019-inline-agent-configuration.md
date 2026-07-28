@@ -34,6 +34,7 @@ Accepted
   This deliberately diverges from the upstream starter's Codex reviewer (Spex has no launch gate to catch a cold second-vendor sign-in) and from its commented-out discuss (per [DR-015](015-reference-content.md)).
 - Every config edit writes inline blocks.
   Captain and per-role player edits are merge patches over the existing block — only the provided keys change, so hand-written fields (`instruction`, granular permissions) survive.
+  A patch key set to null unsets it, so a pinned model or effort can return to its adapter's default and a cleared field means what it shows.
   Registration flows (playbook add, compile) carry full blocks whose schema includes the optional hand-written fields.
 
 ### Protocol

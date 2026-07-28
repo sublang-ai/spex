@@ -178,8 +178,25 @@ export const agentBlockSchema = z.object({
 export type AgentBlockInput = z.infer<typeof agentBlockSchema>;
 
 /** A merge patch over an existing agent block: provided keys change,
- * absent keys survive (adapter may change; retired keys never pass). */
-export const agentPatchSchema = agentBlockSchema.partial();
+ * absent keys survive (adapter may change; retired keys never pass).
+ * An explicit null unsets that key, so a pinned model or effort can
+ * return to the adapter's default (DR-019). */
+export const agentPatchSchema = z.object({
+  adapter: z.string().min(1).optional(),
+  model: z.string().nullable().optional(),
+  effort: z.string().nullable().optional(),
+  instruction: z.string().nullable().optional(),
+  permissions: z
+    .object({
+      mode: z.string().nullable().optional(),
+      fileWrite: z.string().optional(),
+      shellExecute: z.string().optional(),
+      networkAccess: z.string().optional(),
+      writablePaths: z.array(z.string()).optional(),
+    })
+    .nullable()
+    .optional(),
+});
 
 export const configEditOpSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("captain.set"), patch: agentPatchSchema }),

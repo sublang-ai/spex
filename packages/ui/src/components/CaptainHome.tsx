@@ -8,13 +8,15 @@
 
 import { useRef, useState } from "react";
 import type {
+  AgentSummary,
   PlaybookSummary,
-  ProfileSummary,
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
+import type { AgentPatch } from "../lib/config-ops.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
-import { ProfilePopover } from "./ProfilePopover.js";
+import { AgentChip } from "./AgentChip.js";
+import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
@@ -30,8 +32,10 @@ export interface CaptainHomeProps {
   hasProject: boolean;
   projectName?: string;
   playbooks: PlaybookSummary[];
-  captainRef: string;
-  profiles: ProfileSummary[];
+  /** The Captain's inline agent block (DR-019); absent while the
+   * config is broken. */
+  captain?: AgentSummary;
+  /** Adapter-keyed, deduped readiness entries (DR-019). */
   readiness: ReadinessEntry[];
   connected: boolean;
   pastSessions?: PastSessionEntry[];
@@ -49,11 +53,8 @@ export interface CaptainHomeProps {
   /** Enter with no project opens the palette (DR-011). */
   onOpenPalette: () => void;
   onNavigate: (surface: "Settings" | "Playbooks") => void;
-  onSelectCaptain: (ref: string) => Promise<unknown>;
-  onSaveProfile: (
-    profile: ProfileSummary,
-    patch: { model?: string; effort?: string },
-  ) => Promise<unknown>;
+  /** Apply a merge patch to the Captain's block (captain.set). */
+  onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
   onOpenPast?: (sessionId: string) => void;
   onStart: (text: string) => Promise<void>;
   /** Storage for the quick-start dismissal (tests inject a stub). */
@@ -86,7 +87,7 @@ function CaptainBubble({
 }
 
 export function CaptainHome(props: CaptainHomeProps) {
-  const { playbooks, captainRef, profiles, readiness, connected } = props;
+  const { playbooks, captain, readiness, connected } = props;
   const storage = props.storage ?? window.localStorage;
 
   const [localText, setLocalText] = useState("");
@@ -107,10 +108,9 @@ export function CaptainHome(props: CaptainHomeProps) {
   const gearRef = useRef<HTMLButtonElement>(null);
   const [showAllPast, setShowAllPast] = useState(false);
 
-  const captainProfile = profiles.find((profile) => profile.id === captainRef);
-  const captainReadiness = readiness.find(
-    (entry) => entry.profileId === captainRef,
-  );
+  const captainReadiness = captain
+    ? readiness.find((entry) => entry.adapter === captain.adapter)
+    : undefined;
   const notReady = readiness.filter((entry) => entry.ready === false);
   const slashItems = slashMatches(text, playbooks);
   const slash = slashDismissed ? undefined : slashItems;
@@ -219,9 +219,9 @@ export function CaptainHome(props: CaptainHomeProps) {
             </p>
             <ul className="mt-1 flex flex-col gap-0.5 text-xs text-neutral-600 dark:text-neutral-300">
               {notReady.map((entry) => (
-                <li key={entry.profileId}>
+                <li key={entry.adapter}>
                   <span className="font-mono font-semibold">
-                    {entry.profileId}
+                    {entry.adapter}
                   </span>{" "}
                   — {entry.requirement}
                 </li>
@@ -360,43 +360,41 @@ export function CaptainHome(props: CaptainHomeProps) {
         <div className="flex items-center gap-2">
           <span className="relative ml-auto flex items-center gap-1 text-xs text-neutral-500">
             Captain:{" "}
-            <span className="font-mono">
-              {captainProfile
-                ? `${captainProfile.id}${captainProfile.model ? ` (${captainProfile.model})` : ""}`
-                : captainRef || "not set"}
-            </span>
-            {captainReadiness?.ready === false ? (
-              <span
-                className="text-red-500 dark:text-red-400"
-                title={captainReadiness.requirement}
-              >
-                ●
-              </span>
-            ) : null}
+            {captain ? (
+              <AgentChip
+                agent={captain}
+                readiness={captainReadiness}
+                label="Captain"
+              />
+            ) : (
+              <span className="font-mono">not set</span>
+            )}
             <button
               ref={gearRef}
               type="button"
               data-testid="captain-settings"
-              title="Switch or tweak the captain profile"
-              aria-label="Configure the Captain profile"
+              title="Tweak the Captain agent in place"
+              aria-label="Configure the Captain agent"
+              disabled={!captain}
               onClick={() => setCaptainPopover((open) => !open)}
-              className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
               <Icon name="gear" className="h-3.5 w-3.5" />
             </button>
-            {captainPopover ? (
-              <ProfilePopover
-                title="Captain profile"
+            {captainPopover && captain ? (
+              <AgentEditorPopover
+                title="Captain agent"
                 anchorRef={gearRef}
-                profiles={profiles}
+                initial={captain}
                 readiness={readiness}
-                currentRef={captainRef}
-                onSelect={props.onSelectCaptain}
-                onSaveProfile={props.onSaveProfile}
-                onOpenSettings={() => {
-                  setCaptainPopover(false);
-                  props.onNavigate("Settings");
-                }}
+                onSave={(patch) =>
+                  Promise.resolve(props.onSaveCaptain(patch)).then(
+                    (result) => {
+                      setCaptainPopover(false);
+                      return result;
+                    },
+                  )
+                }
                 onClose={() => setCaptainPopover(false)}
               />
             ) : null}

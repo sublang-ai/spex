@@ -28,7 +28,13 @@ export interface AgentBlock {
 
 /** Merge patch over an existing agent block (DR-019): provided keys
  * change, absent keys — including hand-written ones — survive. */
-export type AgentPatch = Partial<AgentBlock>;
+export type AgentPatch = {
+  adapter?: string;
+  model?: string | null;
+  effort?: string | null;
+  instruction?: string | null;
+  permissions?: AgentBlock["permissions"] | null;
+};
 
 export type ConfigEditOp =
   | { kind: "captain.set"; patch: AgentPatch }
@@ -79,11 +85,15 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
     }
     for (const [key, value] of Object.entries(patch)) {
       if (value === undefined) continue;
+      if (value === null) {
+        // An explicit null unsets the key, so a pinned model or
+        // effort can return to the adapter's default (DR-019).
+        doc.deleteIn([...basePath, key]);
+        continue;
+      }
       doc.setIn(
         [...basePath, key],
-        typeof value === "object" && value !== null
-          ? doc.createNode(value)
-          : value,
+        typeof value === "object" ? doc.createNode(value) : value,
       );
     }
     // Canonicalize on write (DR-014): setting effort retires the

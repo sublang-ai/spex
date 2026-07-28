@@ -4,20 +4,23 @@
 // Settings surface (SET-1..10): a validated editor over the shared
 // playbook config. Every save round-trips through the core, which
 // refuses launcher-invalid states and preserves file comments.
+// DR-019: agents are inline blocks — the Captain edits here, players
+// edit with their playbooks in the Library, and the Agents panel
+// shows per-adapter readiness.
 
 import { useEffect, useState } from "react";
 import {
   PROTOCOL_VERSION,
   type ConfigEditOpInput,
-  type ProfileSummary,
   type ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
+import { setCaptain } from "../lib/config-ops.js";
 import { NOTIFICATION_LABELS } from "../lib/labels.js";
+import { AgentChip } from "./AgentChip.js";
+import { AgentEditor } from "./AgentEditor.js";
 
-const ADAPTERS = ["claude", "codex", "gemini", "opencode"] as const;
-const EFFORTS = ["", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const NOTIFICATION_EVENTS = [
   "player_finished",
   "turn_finished",
@@ -45,163 +48,25 @@ function ReadinessBadge({ entry }: { entry?: ReadinessEntry }) {
     );
   }
   return (
-    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800">
+    <span
+      className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800"
+      title={
+        entry.requirement ??
+        "no automatic check for this adapter — verify sign-in yourself"
+      }
+    >
       unverified
     </span>
   );
 }
 
-function ProfileEditor({
-  initial,
-  onSaved,
-  onCancel,
-}: {
-  initial?: ProfileSummary;
-  onSaved: () => void;
-  onCancel?: () => void;
-}) {
-  const [id, setId] = useState(initial?.id ?? "");
-  const [adapter, setAdapter] = useState(initial?.adapter ?? "claude");
-  const [model, setModel] = useState(initial?.model ?? "");
-  const [effort, setEffort] = useState(initial?.effort ?? "");
-  const [mode, setMode] = useState(initial?.permissions?.mode ?? "auto");
-  const [writablePaths, setWritablePaths] = useState(
-    (initial?.permissions?.writablePaths ?? []).join(", "),
-  );
-  const [error, setError] = useState<string>();
-  const [busy, setBusy] = useState(false);
-
-  function save() {
-    setBusy(true);
-    setError(undefined);
-    const paths = writablePaths
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-    const op: ConfigEditOpInput = {
-      kind: "profile.save",
-      id: id.trim(),
-      profile: {
-        adapter,
-        ...(model.trim() ? { model: model.trim() } : {}),
-        ...(effort ? { effort: effort } : {}),
-        permissions: {
-          mode,
-          ...(paths.length > 0 ? { writablePaths: paths } : {}),
-        },
-      },
-    };
-    getClient()
-      .command("config.edit", { op })
-      .then(() => onSaved())
-      .catch((cause: Error) => setError(cause.message))
-      .finally(() => setBusy(false));
-  }
-
-  return (
-    <div
-      onKeyDown={(event) => {
-        if (event.key === "Escape") onCancel?.();
-      }}
-      className="flex flex-col gap-2 rounded-lg border border-brand-200 bg-brand-50/40 p-3 dark:border-brand-900 dark:bg-brand-950/30"
-    >
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Profile id</span>
-          <input
-            value={id}
-            disabled={initial !== undefined}
-            onChange={(event) => setId(event.target.value)}
-            placeholder="e.g. claude-opus"
-            className="rounded border border-neutral-300 bg-white px-2 py-1 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
-          />
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Adapter</span>
-          <select
-            value={adapter}
-            onChange={(event) =>
-              setAdapter(event.target.value as (typeof ADAPTERS)[number])
-            }
-            className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            {ADAPTERS.map((name) => (
-              <option key={name}>{name}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Model (optional)</span>
-          <input
-            value={model}
-            onChange={(event) => setModel(event.target.value)}
-            placeholder="e.g. claude-opus-4-8[1m]"
-            className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-          />
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Reasoning effort</span>
-          <select
-            value={effort}
-            onChange={(event) => setEffort(event.target.value)}
-            className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            {EFFORTS.map((name) => (
-              <option key={name} value={name}>
-                {name || "(default)"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Permission mode</span>
-          <select
-            value={mode}
-            onChange={(event) => setMode(event.target.value)}
-            className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            <option value="auto">auto (protected)</option>
-            <option value="bypass">bypass</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">
-            Writable paths (comma-separated)
-          </span>
-          <input
-            value={writablePaths}
-            onChange={(event) => setWritablePaths(event.target.value)}
-            placeholder="e.g. .git"
-            className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-          />
-        </label>
-      </div>
-      {error ? (
-        <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-          {error}
-        </div>
-      ) : null}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={busy || !id.trim()}
-          onClick={save}
-          className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
-        >
-          Save
-        </button>
-        {onCancel ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md px-3 py-1 text-sm text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
-          >
-            Cancel
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
+/** "captain" or "<playbook>.<role>" → human chip copy (DR-010 §2). */
+function positionLabel(position: string): string {
+  if (position === "captain") return "Captain";
+  const dot = position.indexOf(".");
+  return dot === -1
+    ? position
+    : `${position.slice(0, dot)} · ${position.slice(dot + 1)}`;
 }
 
 function ThemeInput({
@@ -234,9 +99,6 @@ export function SettingsSurface() {
   const configState = useAppStore((state) => state.configState);
   const readiness = useAppStore((state) => state.readiness);
   const refreshReadiness = useAppStore((state) => state.refreshReadiness);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
 
@@ -284,7 +146,9 @@ export function SettingsSurface() {
   }
 
   const summary = configState.summary;
-  const readinessById = new Map(readiness.map((entry) => [entry.profileId, entry]));
+  const readinessByAdapter = new Map(
+    readiness.map((entry) => [entry.adapter, entry]),
+  );
 
   function edit(op: ConfigEditOpInput) {
     setError(undefined);
@@ -314,9 +178,29 @@ export function SettingsSurface() {
         </div>
       ) : null}
 
-      <section className="flex flex-col gap-2">
+      <section data-testid="captain-section" className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-neutral-500">Captain</h2>
+        <div className="flex items-center gap-2 text-sm">
+          <AgentChip
+            agent={summary.captain}
+            readiness={readinessByAdapter.get(summary.captain.adapter)}
+            label="Captain"
+          />
+          <span className="text-xs text-neutral-500">
+            The agent that reads your messages and picks the playbook to run.
+          </span>
+        </div>
+        <AgentEditor
+          key={JSON.stringify(summary.captain)}
+          initial={summary.captain}
+          readiness={readiness}
+          onSave={(patch) => setCaptain(patch)}
+        />
+      </section>
+
+      <section data-testid="agents-section" className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-neutral-500">Profiles</h2>
+          <h2 className="text-sm font-semibold text-neutral-500">Agents</h2>
           <button
             type="button"
             title="Re-run adapter readiness checks (e.g. after signing in)"
@@ -325,110 +209,39 @@ export function SettingsSurface() {
           >
             Re-check readiness
           </button>
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="ml-auto rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
-          >
-            Add profile
-          </button>
         </div>
-        {adding ? (
-          <ProfileEditor
-            onSaved={() => setAdding(false)}
-            onCancel={() => setAdding(false)}
-          />
-        ) : null}
-        {summary.profiles.map((profile) =>
-          editing === profile.id ? (
-            <ProfileEditor
-              key={profile.id}
-              initial={profile}
-              onSaved={() => setEditing(null)}
-              onCancel={() => setEditing(null)}
-            />
-          ) : (
-            <div
-              key={profile.id}
-              className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900"
-            >
-              <span className="font-mono font-medium">{profile.id}</span>
-              <span className="text-xs text-neutral-500">
-                {profile.model ?? profile.adapter}
-                {profile.effort ? ` · ${profile.effort}` : ""}
+        {readiness.map((entry) => (
+          <div
+            key={entry.adapter}
+            data-testid={`agent-row-${entry.adapter}`}
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900"
+          >
+            <span className="font-mono font-medium">{entry.adapter}</span>
+            <ReadinessBadge entry={entry} />
+            {entry.ready === false && entry.requirement ? (
+              <span className="min-w-0 flex-1 text-[11px] text-neutral-400">
+                {entry.requirement}
               </span>
-              <ReadinessBadge entry={readinessById.get(profile.id)} />
-              {readinessById.get(profile.id)?.requirement ? (
-                <span className="min-w-0 flex-1 text-[11px] text-neutral-400">
-                  {readinessById.get(profile.id)?.requirement}
-                </span>
-              ) : null}
-              <span className="ml-auto flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditing(profile.id)}
-                  className="text-xs text-brand-600 hover:underline dark:text-brand-300"
+            ) : null}
+            <span className="ml-auto flex flex-wrap gap-1">
+              {entry.usedBy.map((position) => (
+                <span
+                  key={position}
+                  title={position}
+                  className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
                 >
-                  Edit
-                </button>
-                {confirmDelete === profile.id ? (
-                  <span className="flex items-center gap-1 text-xs">
-                    delete?
-                    <button
-                      type="button"
-                      className="text-red-600 hover:underline dark:text-red-400"
-                      onClick={() => {
-                        setConfirmDelete(null);
-                        edit({ kind: "profile.delete", id: profile.id });
-                      }}
-                    >
-                      yes
-                    </button>
-                    <button
-                      type="button"
-                      className="text-neutral-500 hover:underline"
-                      onClick={() => setConfirmDelete(null)}
-                    >
-                      no
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(profile.id)}
-                    className="text-xs text-neutral-400 hover:text-red-500"
-                  >
-                    Delete
-                  </button>
-                )}
-              </span>
-            </div>
-          ),
-        )}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-neutral-500">Captain</h2>
-        <div className="flex items-center gap-2 text-sm">
-          <select
-            value={summary.captain}
-            onChange={(event) =>
-              edit({ kind: "captain.set", ref: event.target.value })
-            }
-            className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            {summary.profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.id}
-              </option>
-            ))}
-            <option value="claude">claude (shorthand)</option>
-            <option value="codex">codex (shorthand)</option>
-          </select>
-          <span className="text-xs text-neutral-500">
-            The agent that reads your messages and picks the playbook to run.
-          </span>
-        </div>
+                  {positionLabel(position)}
+                </span>
+              ))}
+            </span>
+          </div>
+        ))}
+        {readiness.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700">
+            No adapters in use yet — assign agents to the Captain or a
+            playbook role and their readiness shows here.
+          </div>
+        ) : null}
       </section>
 
       <section className="flex flex-col gap-2">

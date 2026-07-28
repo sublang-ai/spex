@@ -299,3 +299,21 @@ test("applyConfigOp on an empty file creates the mapping", () => {
   });
   assert.match(text, /captain:\n\s+adapter: claude/);
 });
+
+test("an explicit null unsets a pinned key (DR-019)", () => {
+  const text = `captain:
+  adapter: claude
+  model: claude-opus-4-8
+  effort: high
+  instruction: keep answers short
+`;
+  const patched = applyConfigOp(text, {
+    kind: "captain.set",
+    patch: { adapter: "claude", model: null },
+  });
+  assert.doesNotMatch(patched, /model:/);
+  // Only the nulled key goes; everything else — including the
+  // hand-written instruction — survives.
+  assert.match(patched, /effort: high/);
+  assert.match(patched, /instruction: keep answers short/);
+});
