@@ -18,10 +18,31 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const BUDGET_MS = 8 * 60_000;
+// A real but trivial coding task: the judge must classify this as
+// work, or the Captain answers it itself and no player ever runs.
+// The Academy copy is a throwaway scratch repo, so the edit is safe.
 const PROMPT =
-  "/code Reply DONE as your whole answer; make no repository changes.";
+  "/code Append a single line reading `smoke ok` to the end of README.md. " +
+  "Change nothing else.";
 
 let stage = "setup";
+const seen = [];
+let lastError;
+
+/** Kill the app's whole process group; a bare child kill leaves
+ * Electron's helpers (and the app itself) running. */
+function stopApp(signal) {
+  if (!electron?.pid) return;
+  try {
+    process.kill(-electron.pid, signal);
+  } catch {
+    try {
+      electron.kill(signal);
+    } catch {
+      // Already gone.
+    }
+  }
+}
 const say = (line) => process.stdout.write(`desktop-smoke: ${line}\n`);
 const at = (name) => {
   stage = name;
@@ -60,19 +81,29 @@ try {
     run("npm", ["run", "rebuild:electron", "-w", "apps/desktop"]);
   }
 
+  at("build");
+  run("npm", ["run", "build", "-w", "apps/desktop"]);
+
   at("launch");
   scratch = mkdtempSync(join(tmpdir(), "spex-desktop-smoke-"));
   const handshakePath = join(scratch, "handshake.json");
-  electron = spawn("npm", ["start", "-w", "apps/desktop"], {
-    cwd: root,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      SPEX_SMOKE_HANDSHAKE: handshakePath,
-      SPEX_SMOKE_USERDATA: join(scratch, "userdata"),
-      XDG_CONFIG_HOME: join(scratch, "config"),
+  // Spawn Electron directly, detached: `npm start` wraps the real
+  // process, so killing the wrapper would orphan the app.
+  electron = spawn(
+    join(root, "node_modules", ".bin", "electron"),
+    ["."],
+    {
+      cwd: join(root, "apps", "desktop"),
+      stdio: "inherit",
+      detached: true,
+      env: {
+        ...process.env,
+        SPEX_SMOKE_HANDSHAKE: handshakePath,
+        SPEX_SMOKE_USERDATA: join(scratch, "userdata"),
+        XDG_CONFIG_HOME: join(scratch, "config"),
+      },
     },
-  });
+  );
   const exited = new Promise((resolve) => electron.once("exit", resolve));
 
   const { wsUrl } = JSON.parse(
@@ -96,20 +127,42 @@ try {
   socket.on("message", (data) => {
     const message = JSON.parse(String(data));
     if (message.type === "reply") replies.get(message.id)?.(message);
-    if (message.type === "record") records.push(message);
+    if (message.type === "record") {
+      records.push(message);
+      const type = String(message.record?.type ?? "?");
+      seen.push(type);
+      if (type === "runtime_error" || type === "turn_aborted") {
+        lastError = String(message.record?.message ?? message.record?.reason ?? type);
+      }
+    }
   });
   await new Promise((resolve, reject) => {
-    socket.once("open", resolve);
-    socket.once("error", reject);
+    const timer = setTimeout(
+      () => reject(new Error("socket never opened")),
+      30_000,
+    );
+    socket.once("open", () => {
+      clearTimeout(timer);
+      resolve(undefined);
+    });
+    socket.once("error", (cause) => {
+      clearTimeout(timer);
+      reject(cause);
+    });
   });
   const command = (type, fields = {}) =>
     new Promise((resolve, reject) => {
       const id = `d${(seq += 1)}`;
-      replies.set(id, (reply) =>
+      const timer = setTimeout(
+        () => reject(new Error(`${type}: no reply within 60s`)),
+        60_000,
+      );
+      replies.set(id, (reply) => {
+        clearTimeout(timer);
         reply.ok
           ? resolve(reply.result)
-          : reject(new Error(`${type}: ${reply.error.message}`)),
-      );
+          : reject(new Error(`${type}: ${reply.error.message}`));
+      });
       socket.send(JSON.stringify({ type, id, ...fields }));
     });
 
@@ -142,12 +195,23 @@ try {
   // evidence: its first streamed event. Real routing + first-token
   // latency sit inside the budget (DR-020).
   await waitFor(
-    () =>
-      records.find(
+    () => {
+      const dispatched = records.find(
         (m) =>
           m.record?.type === "player_prompt" &&
           String(m.record.playerId ?? "").startsWith("code-"),
-      ),
+      );
+      if (dispatched) return dispatched;
+      // The Captain finishing alone is a verdict, not a delay: the
+      // task never reached a player, so say so now.
+      if (records.some((m) => m.record?.type === "turn_finished")) {
+        throw new Error(
+          "the turn finished without dispatching a player — the Captain " +
+            "answered it directly (check the task reads as coding work)",
+        );
+      }
+      return undefined;
+    },
     BUDGET_MS,
     "the coder dispatch prompt",
   );
@@ -175,20 +239,32 @@ try {
 
   at("teardown");
   socket.close();
-  electron.kill("SIGTERM");
+  stopApp("SIGTERM");
   const code = await Promise.race([
     exited,
     new Promise((resolve) => setTimeout(() => resolve("timeout"), 15_000)),
   ]);
   if (code === "timeout") {
-    electron.kill("SIGKILL");
+    stopApp("SIGKILL");
     throw new Error("app did not exit on SIGTERM");
   }
 
   say("critical path complete");
 } catch (error) {
   process.stderr.write(`\ndesktop-smoke FAILED at ${stage}: ${error.message}\n`);
-  electron?.kill("SIGKILL");
+  // A blind timeout is useless: say what the session actually
+  // produced so the failure names itself.
+  if (seen.length > 0) {
+    const tally = new Map();
+    for (const type of seen) tally.set(type, (tally.get(type) ?? 0) + 1);
+    process.stderr.write(
+      `records observed: ${[...tally].map(([t, n]) => `${t}×${n}`).join(", ")}\n`,
+    );
+    if (lastError) process.stderr.write(`last error record: ${lastError}\n`);
+  } else {
+    process.stderr.write("no records observed on the session channel\n");
+  }
+  stopApp("SIGKILL");
   process.exitCode = 1;
 } finally {
   if (scratch) rmSync(scratch, { recursive: true, force: true });
