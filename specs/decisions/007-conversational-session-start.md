@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted (revised 2026-07-11 after the owner's review of the first build)
+Accepted (revised 2026-07-11 after the owner's review of the first build); the Captain identity's profile wording is amended by [DR-019](019-inline-agent-configuration.md) — the chip and its popover show and edit the Captain's inline agent block.
 
 ## Context
 

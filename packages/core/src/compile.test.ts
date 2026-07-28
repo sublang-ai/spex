@@ -22,7 +22,10 @@ import {
 } from "./compile.js";
 import type { RegistryEntryLike } from "./config.js";
 
-const STUB_SLC = `
+const STUB_SLC = stubSlcSource();
+
+function stubSlcSource(rolesLiteral = "['Helper']"): string {
+  return `
 const fs = require("node:fs");
 const path = require("node:path");
 const src = process.argv[3];
@@ -66,7 +69,7 @@ fs.writeFileSync(
   path.join(path.dirname(src), base + ".ts"),
   [
     "import createPlaybookRuntime from './" + base + ".playbook/" + base + ".playbook.ts';",
-    "const REQUIRED_ROLE_IDS = ['Helper'];",
+    "const REQUIRED_ROLE_IDS = ${rolesLiteral};",
     "const BY_LOWER = new Map(REQUIRED_ROLE_IDS.map((id) => [id.toLowerCase(), id]));",
     "function bindRoleIds(session) {",
     "  const ports = session && session.ports;",
@@ -106,15 +109,21 @@ fs.writeFileSync(
 );
 console.log("stub slc: compiled " + base);
 `;
+}
 
 /** Spawner that fakes a modern node for --version and otherwise
- * delegates to the real spawner (which runs the stub slc). */
-function testSpawner(nodeVersion = "v24.1.0"): LineSpawner {
+ * delegates to the real spawner (which runs the stub slc). Records
+ * each slc invocation's argv when given a sink. */
+function testSpawner(
+  nodeVersion = "v24.1.0",
+  slcCalls?: string[][],
+): LineSpawner {
   return async (command, args, cwd, onLine) => {
     if (args[0] === "--version") {
       onLine(nodeVersion);
       return 0;
     }
+    slcCalls?.push([command, ...args]);
     return defaultSpawner(command, args, cwd, onLine);
   };
 }
@@ -125,6 +134,7 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
   writeFileSync(stubPath, STUB_SLC);
 
   const progress: string[] = [];
+  const slcCalls: string[][] = [];
   const result = await compilePlaybook({
     playbookId: "demo",
     source: { text: "# Demo\n\nA one-player demo workflow.\n" },
@@ -133,9 +143,19 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
     intent: "demo workflow for tests",
     libraryDir: join(dir, "library"),
     env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
-    spawner: testSpawner(),
+    spawner: testSpawner("v24.1.0", slcCalls),
     onProgress: (line) => progress.push(line),
   });
+
+  // Bare invocation (DR-019): slc >= 0.2 links against the installed
+  // runtime contract by default, so the argv carries no --link.
+  assert.equal(slcCalls.length, 1);
+  assert.deepEqual(slcCalls[0], [
+    process.execPath,
+    stubPath,
+    "playbook",
+    join(dir, "library", "demo", "demo.md"),
+  ]);
 
   assert.equal(result.idleStateId, "ready");
   assert.equal(result.finalStateId, "done");
@@ -189,6 +209,28 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
   assert.throws(
     () => entry.validateOptions({ mystery: 1 }),
     /unknown option "mystery"/,
+  );
+});
+
+test("an entry with no derived roles is refused with recompile guidance", async () => {
+  // Entries compiled before slc 0.2 can declare zero roles when the
+  // gears rendered Players as a heading (fixed upstream in slc 0.2).
+  const dir = mkdtempSync(join(tmpdir(), "spex-compile-"));
+  const stubPath = join(dir, "stub-slc.cjs");
+  writeFileSync(stubPath, stubSlcSource("[]"));
+
+  await assert.rejects(
+    compilePlaybook({
+      playbookId: "demo",
+      source: { text: "# Demo\n\nA zero-role workflow.\n" },
+      roles: ["helper"],
+      command: "demo",
+      intent: "demo workflow for tests",
+      libraryDir: join(dir, "library"),
+      env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
+      spawner: testSpawner(),
+    }),
+    /declares no player roles; recompile with slc >= 0\.2/,
   );
 });
 

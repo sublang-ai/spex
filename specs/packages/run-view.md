@@ -160,8 +160,8 @@ Where no session tab is active, when the Workspace is shown, the
 run view shall present the Captain home: a chat thread opened by a
 Captain greeting that names the current project (or points at the
 project bar when none is chosen), a chat composer, and the
-captain's profile and model with a gear control opening the
-in-place profile popover, per
+captain's adapter and model with a gear control opening the
+in-place agent editor, per
 [DR-007](../decisions/007-conversational-session-start.md) and
 [DR-011](../decisions/011-project-workspace.md); project choice
 lives in the project bar and palette, not in the composer row.
@@ -198,12 +198,13 @@ them.
 
 #### RUN-32
 
-When the user opens the captain identity's editor control (or a
-profile reference's editor control elsewhere in the run view), the
-run view shall show an anchored popover in place — listing the
-profiles with model and readiness, switching the referenced profile
-on selection, and editing the selected profile's model and
-reasoning effort — writing changes through the shared
+When the user opens the captain identity's editor control (or
+another agent's editor control elsewhere in the run view), the
+run view shall show an anchored popover in place — offering the
+embedded runtime's adapters with their readiness, and editing the
+agent's model, its adapter's effort vocabulary, and permissions
+([DR-019](../decisions/019-inline-agent-configuration.md)) —
+writing changes as a merge patch through the shared
 configuration's validated edit path per
 [DR-009](../decisions/009-at-hand-interaction.md), without leaving
 the current surface.
@@ -342,8 +343,8 @@ render blank.
 The not-ready heads-up shall offer an in-place re-check (and the
 app shall re-check readiness when its window regains focus while
 anything is not ready), with copy that is honest about env vars
-requiring a restart. Readiness shall cover adapter-shorthand
-references, not just named profiles.
+requiring a restart. Readiness shall cover every adapter any
+configured agent names.
 
 #### RUN-50
 
@@ -543,11 +544,12 @@ the Captain thread ([RUN-30](#run-30)).
 #### RUN-35
 
 When the captain editor popover is opened from the Captain home
-with fixture profiles, the test suite shall assert it lists the
-profiles with models, that selecting another profile issues a
-captain change through the configuration edit path, and that
-editing the selected profile's model issues a profile save — all
-without a surface change ([RUN-32](#run-32)).
+with a fixture captain block, the test suite shall assert it
+offers the runtime's adapters with their readiness, that changing
+the adapter or model issues a captain merge patch through the
+configuration edit path, and that the patch carries only the
+edited keys — all without a surface change
+([RUN-32](#run-32)).
 
 #### RUN-36
 

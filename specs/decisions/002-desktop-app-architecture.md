@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the Settings surface's profile inventory is amended by [DR-019](019-inline-agent-configuration.md) — agents carry inline settings, so Settings owns the Captain's agent and adapter readiness while per-role agents live with their playbooks.
 
 ## Context
 

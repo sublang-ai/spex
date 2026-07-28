@@ -111,7 +111,7 @@ meta.md       The spec of specs
 
 | File | Summary |
 | --- | --- |
-| [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, role–profile mapping, slc compile pipeline, registry validation, comment-preserving config writes |
+| [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, per-role inline agents, slc compile pipeline, registry validation, comment-preserving config writes |
 
 ### PROJ
 
@@ -147,7 +147,7 @@ meta.md       The spec of specs
 
 | File | Summary |
 | --- | --- |
-| [settings.md](packages/settings.md) | Settings: profile editor with launcher-parity validation, captain selection, readiness, comment-preserving YAML round-trip |
+| [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
 
 ### SHELL
 

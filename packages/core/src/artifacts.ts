@@ -8,7 +8,6 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { resolveModulePath } from "./config.js";
 import { listFsmStates } from "./compile.js";
@@ -39,16 +38,20 @@ export function stripLeadingComments(markdown: string): string {
 }
 
 /**
- * Vendored source fallback (DR-015): the published playbook package
- * omits the built-in prose sources, so Spex ships copies as assets.
- * Returns the asset path when one exists for the id.
+ * Resolve a built-in playbook's source from the installed package
+ * (DR-019): playbook 3.1 ships reference/sdlc/<id>.md beside the
+ * compiled <id>.playbook directory, so the registry module's parent
+ * directory carries the prose source.
  */
-export function bundledSourcePath(id: string): string | undefined {
-  if (!/^[a-z][a-z0-9_-]*$/.test(id)) return undefined;
-  const path = fileURLToPath(
-    new URL(`../assets/playbook-sources/${id}.md`, import.meta.url),
-  );
-  return existsSync(path) ? path : undefined;
+export function packagedSourcePath(
+  id: string,
+  from: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const modulePath = resolveModulePath(from, env);
+  if (!modulePath || !existsSync(modulePath)) return undefined;
+  const candidate = join(dirname(modulePath), "..", `${id}.md`);
+  return existsSync(candidate) ? candidate : undefined;
 }
 
 /**
@@ -76,10 +79,10 @@ export async function resolveArtifacts(
   const dir = dirname(modulePath);
   const id = playbook.id;
 
-  const sourceCandidates = [join(dir, `${id}.md`), join(dir, "..", `${id}.md`)];
-  const bundled = bundledSourcePath(id);
-  if (bundled) sourceCandidates.push(bundled);
-  const sourcePath = firstExisting(sourceCandidates);
+  const sourcePath = firstExisting([
+    join(dir, `${id}.md`),
+    join(dir, "..", `${id}.md`),
+  ]);
   const gearsPath = firstExisting([
     join(dir, `${id}.playbook`, `${id}.gears.md`),
     join(dir, `${id}.gears.md`),

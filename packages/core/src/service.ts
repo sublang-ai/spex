@@ -16,7 +16,6 @@ import type { AddressInfo } from "node:net";
 import {
   checkAdapterReadiness,
   createModuleLoader,
-  isKnownAdapter,
   loadConfig,
   resolveConfigPath,
   seedConfig,
@@ -49,7 +48,7 @@ import {
 } from "./forge.js";
 import {
   editConfigFile,
-  profileReferences,
+  type AgentBlock,
   type ConfigEditOp,
 } from "./config-edit.js";
 import { resolveArtifacts } from "./artifacts.js";
@@ -251,7 +250,7 @@ export class CoreService {
       }
     }
     this.broadcast({ type: "config.state", state: this.configState });
-    this.broadcast({ type: "readiness.state", profiles: this.readiness() });
+    this.broadcast({ type: "readiness.state", entries: this.readiness() });
   }
 
   private watchConfigFile(): void {
@@ -270,49 +269,33 @@ export class CoreService {
   readiness(): ReadinessEntry[] {
     if (this.configState.status !== "valid") return [];
     const summary = this.configState.summary;
-    const entries: ReadinessEntry[] = summary.profiles.map((profile) => {
-      const readiness = checkAdapterReadiness(
-        profile.adapter,
-        this.env,
-        this.home,
-      );
-      return {
-        profileId: profile.id,
-        adapter: profile.adapter,
-        ready: readiness.ready,
-        ...(readiness.requirement
-          ? { requirement: readiness.requirement }
-          : {}),
-      };
-    });
-    // Adapter shorthands referenced directly (the captain ref or a
-    // playbook player ref, e.g. a fresh install's "claude") get their
-    // own entry, so a not-ready adapter warns before the first turn
-    // fails cold. Shorthand = a non-profile ref naming a known adapter,
-    // the same rule launcher-parity resolveAgent applies.
-    const profileIds = new Set(summary.profiles.map((profile) => profile.id));
-    const shorthands = new Set<AdapterName>();
-    const collect = (ref: string): void => {
-      if (!profileIds.has(ref) && isKnownAdapter(ref)) shorthands.add(ref);
+    // Adapter-keyed and deduplicated (DR-019): readiness is a
+    // property of the adapter's auth, not of any one agent block.
+    // Each entry names the positions using the adapter so guidance
+    // points somewhere concrete.
+    const positions = new Map<AdapterName, string[]>();
+    const note = (adapter: AdapterName, position: string): void => {
+      const list = positions.get(adapter);
+      if (list) list.push(position);
+      else positions.set(adapter, [position]);
     };
-    collect(summary.captain);
+    note(summary.captain.adapter, "captain");
     for (const playbook of summary.playbooks) {
-      for (const player of Object.values(playbook.players)) {
-        collect(player.ref);
+      for (const [role, player] of Object.entries(playbook.players)) {
+        note(player.agent.adapter, `${playbook.id}.${role}`);
       }
     }
-    for (const shorthand of shorthands) {
-      const readiness = checkAdapterReadiness(shorthand, this.env, this.home);
-      entries.push({
-        profileId: shorthand,
-        adapter: shorthand,
+    return [...positions.entries()].map(([adapter, usedBy]) => {
+      const readiness = checkAdapterReadiness(adapter, this.env, this.home);
+      return {
+        adapter,
         ready: readiness.ready,
         ...(readiness.requirement
           ? { requirement: readiness.requirement }
           : {}),
-      });
-    }
-    return entries;
+        usedBy,
+      };
+    });
   }
 
   // -- websocket ------------------------------------------------------------
@@ -562,18 +545,6 @@ export class CoreService {
           throw new CoreError("invalid_config", "config file is missing");
         }
         const op = command.op as ConfigEditOp;
-        if (op.kind === "profile.delete") {
-          const references = profileReferences(
-            readFileSync(this.configPath, "utf8"),
-            op.id,
-          );
-          if (references.length > 0) {
-            throw new CoreError(
-              "conflict",
-              `profile "${op.id}" is referenced by ${references.join(", ")}`,
-            );
-          }
-        }
         const result = await editConfigFile(
           this.configPath,
           op,
@@ -680,27 +651,27 @@ export class CoreService {
             throw new CoreError("invalid_request", message);
           }
           // The compiled entry's derived roles are authoritative
-          // (DR-014): re-key the request's role -> profile assignments
+          // (DR-014): re-key the request's role -> agent assignments
           // onto them case-insensitively; an unmatched role fails
           // before any config write, keeping the artifacts for a
           // re-registration without recompiling.
           const assignments = new Map(
-            Object.entries(command.players).map(([role, ref]) => [
+            Object.entries(command.players).map(([role, agent]) => [
               role.toLowerCase(),
-              ref,
+              agent,
             ]),
           );
-          const players: Record<string, string> = {};
+          const players: Record<string, AgentBlock> = {};
           const unmatched: string[] = [];
           for (const role of result.roles) {
-            const ref = assignments.get(role);
-            if (ref === undefined) unmatched.push(role);
-            else players[role] = ref;
+            const agent = assignments.get(role);
+            if (agent === undefined) unmatched.push(role);
+            else players[role] = agent as AgentBlock;
           }
           if (unmatched.length > 0) {
             throw new CoreError(
               "invalid_request",
-              `compiled, but the playbook's derived roles are [${result.roles.join(", ")}] and no profile was assigned for: ${unmatched.join(", ")}. Re-submit with players for the derived roles; the compiled artifacts are kept.`,
+              `compiled, but the playbook's derived roles are [${result.roles.join(", ")}] and no agent was assigned for: ${unmatched.join(", ")}. Re-submit with players for the derived roles; the compiled artifacts are kept.`,
             );
           }
           const edit = await editConfigFile(

@@ -14,6 +14,8 @@ import { join } from "node:path";
 import { WebSocket } from "ws";
 
 import { CoreService } from "./service.js";
+import { templatePath } from "./config.js";
+import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import type { LineSpawner } from "./compile.js";
@@ -33,21 +35,18 @@ import type {
 // ---------------------------------------------------------------------------
 
 const VALID_CONFIG = `
-profiles:
-  claude-fast:
-    adapter: claude
-    model: claude-test
-  codex-fast:
-    adapter: codex
-  gemini-extra:
-    adapter: gemini
-captain: claude-fast
+captain:
+  adapter: claude
+  model: claude-test
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
     players:
-      coder: claude-fast
-      reviewer: codex-fast
+      coder:
+        adapter: claude
+        model: claude-test
+      reviewer:
+        adapter: codex
     committer: coder
 `;
 
@@ -346,11 +345,6 @@ test("CORE-20: hidden records reach only debug subscribers", async () => {
 
 const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
   {
-    name: "profile id collides with adapter shorthand",
-    pattern: /profiles\.claude collides/,
-    config: VALID_CONFIG.replace("  claude-fast:", "  claude:\n    adapter: claude\n  claude-fast:"),
-  },
-  {
     name: "missing from",
     pattern: /playbooks\.code\.from must be a module specifier/,
     config: VALID_CONFIG.replace('    from: "@sublang/playbook/code/registry"\n', ""),
@@ -372,21 +366,34 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     name: "reserved captain role",
     pattern: /players\.captain binds local role "captain"/,
     config: VALID_CONFIG.replace(
-      "      coder: claude-fast",
-      "      captain: claude-fast\n      coder: claude-fast",
+      "      coder:\n",
+      "      captain:\n        adapter: claude\n      coder:\n",
     ),
   },
   {
     name: "unresolved required role",
     pattern: /required role "reviewer" has no players entry/,
-    config: VALID_CONFIG.replace("      reviewer: codex-fast\n", ""),
+    config: VALID_CONFIG.replace("      reviewer:\n        adapter: codex\n", ""),
   },
   {
     name: "zero visible roles",
     pattern: /resolves no visible local role/,
     config: VALID_CONFIG.replace(
-      /    players:\n      coder: claude-fast\n      reviewer: codex-fast\n/,
+      /    players:\n      coder:\n        adapter: claude\n        model: claude-test\n      reviewer:\n        adapter: codex\n/,
       "    players: {}\n",
+    ),
+  },
+  {
+    name: "unknown adapter",
+    pattern: /Unknown adapter "mystery" for playbooks\.code\.players\.reviewer/,
+    config: VALID_CONFIG.replace("        adapter: codex", "        adapter: mystery"),
+  },
+  {
+    name: "adapter-scoped invalid effort",
+    pattern: /effort "extreme" is not supported by the "codex" adapter/,
+    config: VALID_CONFIG.replace(
+      "      reviewer:\n        adapter: codex\n",
+      "      reviewer:\n        adapter: codex\n        effort: extreme\n",
     ),
   },
 ];
@@ -488,34 +495,87 @@ test("CORE-22: records, order, and usage survive a service restart", async () =>
 // CORE-23: readiness reporting
 // ---------------------------------------------------------------------------
 
-test("CORE-23: readiness marks profiles per adapter rules and names requirements", async () => {
-  const harness = await startHarness(VALID_CONFIG, {
+const READINESS_CONFIG = `
+captain:
+  adapter: gemini
+playbooks:
+  code:
+    from: "@sublang/playbook/code/registry"
+    players:
+      coder:
+        adapter: claude
+        model: claude-test
+      reviewer:
+        adapter: codex
+    committer: coder
+`;
+
+test("CORE-23: readiness is adapter-keyed with positions and requirements", async () => {
+  const harness = await startHarness(READINESS_CONFIG, {
     env: { ANTHROPIC_API_KEY: "test-key" },
   });
   const client = new Client(harness.service.port());
   await client.open();
 
   const readiness = await client.expectOk("readiness.get", {});
-  const byProfile = new Map(
-    readiness.map((entry: ReadinessEntry) => [entry.profileId, entry]),
+  assert.equal(readiness.length, 3, "one entry per adapter in use");
+  const byAdapter = new Map(
+    readiness.map((entry: ReadinessEntry) => [entry.adapter, entry]),
   );
-  assert.equal(byProfile.get("claude-fast")?.ready, true);
-  assert.equal(byProfile.get("codex-fast")?.ready, false);
-  assert.match(byProfile.get("codex-fast")?.requirement ?? "", /OPENAI_API_KEY/);
-  assert.equal(byProfile.get("gemini-extra")?.ready, null);
+  assert.equal(byAdapter.get("claude")?.ready, true);
+  assert.deepEqual(byAdapter.get("claude")?.usedBy, ["code.coder"]);
+  assert.equal(byAdapter.get("codex")?.ready, false);
+  assert.match(byAdapter.get("codex")?.requirement ?? "", /OPENAI_API_KEY/);
+  assert.deepEqual(byAdapter.get("codex")?.usedBy, ["code.reviewer"]);
+  // No preflight rule for gemini: unknown, verify yourself.
+  assert.equal(byAdapter.get("gemini")?.ready, null);
+  assert.deepEqual(byAdapter.get("gemini")?.usedBy, ["captain"]);
 
   client.close();
   await harness.service.stop();
 });
 
 // ---------------------------------------------------------------------------
-// CORE-28: readiness entries for adapter shorthands
+// CORE-28: readiness deduplication across positions
 // ---------------------------------------------------------------------------
 
+test("CORE-28: the single-vendor template dedupes to one claude entry", async () => {
+  const harness = await startHarness(readFileSync(templatePath(), "utf8"), {
+    env: { ANTHROPIC_API_KEY: "test-key" },
+  });
+  const client = new Client(harness.service.port());
+  await client.open();
+
+  const readiness = await client.expectOk("readiness.get", {});
+  assert.deepEqual(readiness, [
+    {
+      adapter: "claude",
+      ready: true,
+      usedBy: [
+        "captain",
+        "code.coder",
+        "code.reviewer",
+        "discuss.host",
+        "discuss.participant",
+      ],
+    },
+  ]);
+
+  // A config edit pushes readiness.state with the entries payload.
+  await client.expectOk("config.edit", {
+    op: { kind: "theme.set", theme: "dark" },
+  });
+  const pushed = await client.waitFor((m) => m.type === "readiness.state");
+  if (pushed.type === "readiness.state") {
+    assert.ok(Array.isArray(pushed.entries));
+    assert.equal(pushed.entries[0]?.adapter, "claude");
+  }
+
+  client.close();
+  await harness.service.stop();
+});
+
 const SHORTHAND_CONFIG = `
-profiles:
-  gemini-extra:
-    adapter: gemini
 captain: claude
 playbooks:
   code:
@@ -523,33 +583,40 @@ playbooks:
     players:
       coder: claude
       reviewer: codex
+    committer: coder
 `;
 
-test("CORE-28: adapter shorthands referenced by the config get readiness entries", async () => {
+test("CORE-28: scalar shorthands compose and share adapter entries", async () => {
   const harness = await startHarness(SHORTHAND_CONFIG, {
     env: { ANTHROPIC_API_KEY: "test-key" },
   });
   const client = new Client(harness.service.port());
   await client.open();
 
+  // A scalar reads as its adapter's defaults (bare-adapter block).
+  const state = await client.expectOk("config.get", {});
+  assert.equal(state.status, "valid");
+  if (state.status === "valid") {
+    assert.deepEqual(state.summary.captain, { adapter: "claude" });
+    assert.deepEqual(state.summary.playbooks[0].players.reviewer, {
+      agent: { adapter: "codex" },
+      display: "codex",
+    });
+  }
+
   const readiness = await client.expectOk("readiness.get", {});
-  // The captain ref and the coder ref are both "claude": one entry.
+  // The captain and the coder are both "claude": one deduped entry.
   const claude = readiness.filter(
-    (entry: ReadinessEntry) => entry.profileId === "claude",
+    (entry: ReadinessEntry) => entry.adapter === "claude",
   );
   assert.equal(claude.length, 1);
-  assert.equal(claude[0].adapter, "claude");
   assert.equal(claude[0].ready, true);
+  assert.deepEqual(claude[0].usedBy, ["captain", "code.coder"]);
   const codex = readiness.find(
-    (entry: ReadinessEntry) => entry.profileId === "codex",
+    (entry: ReadinessEntry) => entry.adapter === "codex",
   );
   assert.equal(codex?.ready, false);
   assert.match(codex?.requirement ?? "", /OPENAI_API_KEY/);
-  // Declared profiles still report alongside the shorthands.
-  const profile = readiness.find(
-    (entry: ReadinessEntry) => entry.profileId === "gemini-extra",
-  );
-  assert.equal(profile?.ready, null);
 
   client.close();
   await harness.service.stop();
@@ -585,7 +652,7 @@ const COMPILE_INPUT = {
   roles: ["helper"],
   command: "demo",
   intent: "demo workflow for tests",
-  players: { helper: "claude" },
+  players: { helper: { adapter: "claude" } },
 };
 
 test("CORE-27: a second compile.run for the same playbook rejects busy", async () => {

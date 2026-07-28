@@ -7,6 +7,7 @@
 // any browser (no Electron IPC for app features, SHELL-10).
 
 import { join } from "node:path";
+import { renameSync, writeFileSync } from "node:fs";
 import {
   app,
   BrowserWindow,
@@ -63,6 +64,23 @@ function installApplicationMenu(): void {
 }
 
 async function main(): Promise<void> {
+  // Live-smoke handshake (DR-020, SHELL): when set, the driver owns a
+  // scratch home — user data redirects there before anything opens
+  // it, and the core's socket address lands in the handshake file.
+  // Mutually exclusive with acceptance mode, which exits seconds
+  // after first paint and could never host a driven turn.
+  const smokeHandshake = process.env.SPEX_SMOKE_HANDSHAKE;
+  if (smokeHandshake && process.env.SPEX_ACCEPTANCE) {
+    process.stderr.write(
+      "SPEX_SMOKE_HANDSHAKE and SPEX_ACCEPTANCE are mutually exclusive\n",
+    );
+    app.exit(2);
+    return;
+  }
+  if (smokeHandshake && process.env.SPEX_SMOKE_USERDATA) {
+    app.setPath("userData", process.env.SPEX_SMOKE_USERDATA);
+  }
+
   await app.whenReady();
 
   installApplicationMenu();
@@ -88,6 +106,17 @@ async function main(): Promise<void> {
     dbPath: join(app.getPath("userData"), "spex.db"),
     port: 0,
   });
+
+  if (smokeHandshake) {
+    // Atomic-enough for the single local reader: write sidecar, then
+    // rename into place so the driver never sees a partial file.
+    const handshake = {
+      wsUrl: `ws://127.0.0.1:${service.port()}/?token=${service.token()}`,
+    };
+    const sidecar = `${smokeHandshake}.tmp`;
+    writeFileSync(sidecar, JSON.stringify(handshake));
+    renameSync(sidecar, smokeHandshake);
+  }
 
   const tracker = new AttentionTracker();
   service.events.onRecord = (envelope) => {

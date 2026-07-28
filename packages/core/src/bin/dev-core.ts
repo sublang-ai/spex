@@ -25,20 +25,19 @@ const portArg = args.find((arg) => arg.startsWith("--port="));
 const port = portArg ? Number(portArg.split("=")[1]) : 8137;
 
 const FAKE_CONFIG = `
-profiles:
-  claude-demo:
-    adapter: claude
-    model: claude-opus-4-8
-  codex-demo:
-    adapter: codex
-    model: gpt-5.5
-captain: claude-demo
+captain:
+  adapter: claude
+  model: claude-opus-4-8
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
     players:
-      coder: claude-demo
-      reviewer: codex-demo
+      coder:
+        adapter: claude
+        model: claude-opus-4-8
+      reviewer:
+        adapter: codex
+        model: gpt-5.5
     committer: coder
 `;
 

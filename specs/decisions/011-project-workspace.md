@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted; the spec view's data layout and group model are amended by [DR-015](015-reference-content.md) — packages-layout parsing with section-kind groups replaces the user/dev/test triple.
+Accepted; the spec view's data layout and group model are amended by [DR-015](015-reference-content.md) — packages-layout parsing with section-kind groups replaces the user/dev/test triple. The Settings surface's profile inventory is amended by [DR-019](019-inline-agent-configuration.md).
 
 ## Context
 

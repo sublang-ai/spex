@@ -28,7 +28,12 @@ const loader: LoadModule = async (specifier) => {
   throw new Error(`no module ${specifier}`);
 };
 
-test("catalog serves both built-ins with vendored sources", async () => {
+test("catalog serves both built-ins with sources from the installed package", async () => {
+  // The registry entries come through the (stubbed) loader, but the
+  // `from` specifiers are the real ones, so packagedSourcePath
+  // resolves each source from the installed @sublang/playbook
+  // (playbook 3.1 ships reference/sdlc/code.md and discuss.md; the
+  // vendored copies are gone — DR-019).
   const builtins = await loadBuiltinCatalog(new Set(["code"]), loader);
   assert.deepEqual(
     builtins.map((b) => [b.id, b.configured]),
@@ -37,11 +42,12 @@ test("catalog serves both built-ins with vendored sources", async () => {
       ["discuss", false],
     ],
   );
+  const code = builtins.find((b) => b.id === "code");
+  assert.ok((code?.source ?? "").startsWith("# Code"));
   const discuss = builtins.find((b) => b.id === "discuss");
   assert.deepEqual(discuss?.roles, ["host", "participant"]);
   assert.equal(discuss?.from, "@sublang/playbook/discuss/registry");
-  // Vendored sources ship as core assets, served without their
-  // maintainer-facing comment headers (DR-015).
+  // Served without their maintainer-facing comment headers (DR-015).
   assert.ok((discuss?.source ?? "").startsWith("# Discuss"));
   assert.doesNotMatch(discuss?.source ?? "", /<!--/);
 });

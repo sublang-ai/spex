@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the effort key and adapter set are amended by [DR-019](019-inline-agent-configuration.md) — effort vocabularies are adapter-scoped and the adapter set is the embedded runtime's.
 
 ## Context
 

@@ -101,7 +101,11 @@ When preparing a release tag, the developer/agent shall run the automated smoke 
 
 #### RELEASE-21
 
-When preparing a release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — desktop pass, real playbook run, and packaging pass — and a failing step shall block the tag until resolved.
+When preparing a release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the visuals and packaging pass automation cannot see — and a failing step shall block the tag until resolved.
+
+#### RELEASE-22
+
+When preparing an app release tag, the developer/agent shall run the live desktop smoke (`npm run smoke:desktop`) — the real desktop app walking config, example seeding, session, live playbook dispatch, and abort with signed-in agents ([DR-020](../decisions/020-desktop-live-smoke.md)) — and shall record its outcome with the tag; a provider-side failure may be retried or waived with the reason recorded, while an app-side failure shall block the tag.
 
 ## References
 

@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the profile-popover wording is amended by [DR-019](019-inline-agent-configuration.md) — the at-hand rule stands with the agent editor as its target.
 
 ## Context
 

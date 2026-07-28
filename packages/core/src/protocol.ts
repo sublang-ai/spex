@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export type { TmuxPlayRecord };
 
@@ -21,29 +21,33 @@ export const adapterNameSchema = z.enum([
   "claude",
   "codex",
   "gemini",
+  "kimi",
   "opencode",
 ]);
 export type AdapterName = z.infer<typeof adapterNameSchema>;
 
-export interface ProfileSummary {
-  id: string;
-  adapter: AdapterName;
-  model?: string;
-  effort?: string;
-  instruction?: string;
-  permissions?: {
-    mode?: string;
-    fileWrite?: string;
-    shellExecute?: string;
-    networkAccess?: string;
-    writablePaths?: string[];
-  };
+export interface AgentPermissionsSummary {
+  mode?: string;
+  fileWrite?: string;
+  shellExecute?: string;
+  networkAccess?: string;
+  writablePaths?: string[];
 }
 
-export interface PlaybookPlayerRef {
-  /** The reference exactly as written in the config (profile id or
-   * adapter shorthand); inline blocks fall back to the display. */
-  ref: string;
+/** One agent's inline settings (DR-019). Hand-written fields the UI
+ * does not surface (instruction, granular permissions) round-trip
+ * through merge-patch edits. */
+export interface AgentSummary {
+  adapter: AdapterName;
+  model?: string;
+  /** Adapter-scoped vocabulary; composition validates. */
+  effort?: string;
+  instruction?: string;
+  permissions?: AgentPermissionsSummary;
+}
+
+export interface PlaybookPlayerSummary {
+  agent: AgentSummary;
   /** Human-readable identity: pinned model, else adapter. */
   display: string;
 }
@@ -53,7 +57,7 @@ export interface PlaybookSummary {
   from: string;
   command: string;
   intent: string;
-  players: Record<string, PlaybookPlayerRef>;
+  players: Record<string, PlaybookPlayerSummary>;
 }
 
 export interface PlaybookArtifacts {
@@ -71,8 +75,7 @@ export interface PlaybookArtifacts {
 
 export interface ConfigSummary {
   path: string;
-  profiles: ProfileSummary[];
-  captain: string;
+  captain: AgentSummary;
   playbooks: PlaybookSummary[];
   notifications?: Record<string, string>;
   theme?: string;
@@ -104,12 +107,14 @@ export interface SessionInfo {
 }
 
 export interface ReadinessEntry {
-  profileId: string;
   adapter: AdapterName;
-  /** true = ready, false = not ready, null = no light check for this adapter. */
+  /** true = ready, false = not ready, null = no preflight rule for
+   * this adapter (verify sign-in yourself). */
   ready: boolean | null;
   /** Unmet requirement, present when ready is false. */
   requirement?: string;
+  /** Positions using this adapter: "captain" or `<playbook>.<role>`. */
+  usedBy: string[];
 }
 
 export interface StoredRecord {
@@ -152,36 +157,32 @@ export interface ForgeState {
 
 const id = z.string().min(1);
 
+/** One agent's inline settings as written to the config (DR-019).
+ * Full-block writes carry every field so nothing hand-written drops;
+ * merge patches change only the provided keys. */
+export const agentBlockSchema = z.object({
+  adapter: z.string().min(1),
+  model: z.string().optional(),
+  effort: z.string().optional(),
+  instruction: z.string().optional(),
+  permissions: z
+    .object({
+      mode: z.string().optional(),
+      fileWrite: z.string().optional(),
+      shellExecute: z.string().optional(),
+      networkAccess: z.string().optional(),
+      writablePaths: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
+export type AgentBlockInput = z.infer<typeof agentBlockSchema>;
+
+/** A merge patch over an existing agent block: provided keys change,
+ * absent keys survive (adapter may change; retired keys never pass). */
+export const agentPatchSchema = agentBlockSchema.partial();
+
 export const configEditOpSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("profile.save"),
-    id: z.string().min(1),
-    profile: z.object({
-      adapter: z.string().min(1),
-      model: z.string().optional(),
-      effort: z.string().optional(),
-      instruction: z.string().optional(),
-      permissions: z
-        .object({
-          mode: z.string().optional(),
-          fileWrite: z.string().optional(),
-          shellExecute: z.string().optional(),
-          networkAccess: z.string().optional(),
-          writablePaths: z.array(z.string()).optional(),
-        })
-        .optional(),
-    }),
-  }),
-  z.object({ kind: z.literal("profile.delete"), id: z.string().min(1) }),
-  z.object({
-    kind: z.literal("profile.patch"),
-    id: z.string().min(1),
-    patch: z.object({
-      model: z.string().optional(),
-      effort: z.string().optional(),
-    }),
-  }),
-  z.object({ kind: z.literal("captain.set"), ref: z.string().min(1) }),
+  z.object({ kind: z.literal("captain.set"), patch: agentPatchSchema }),
   z.object({
     kind: z.literal("notifications.set"),
     prefs: z.record(z.string(), z.string()),
@@ -191,7 +192,7 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
     kind: z.literal("playbook.player.set"),
     playbookId: z.string().min(1),
     role: z.string().min(1),
-    ref: z.string().min(1),
+    patch: agentPatchSchema,
   }),
   z.object({
     kind: z.literal("playbook.option.set"),
@@ -204,7 +205,7 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
     kind: z.literal("playbook.add"),
     playbookId: z.string().min(1),
     from: z.string().min(1),
-    players: z.record(z.string(), z.string()),
+    players: z.record(z.string(), agentBlockSchema),
     options: z.record(z.string(), z.unknown()).optional(),
   }),
 ]);
@@ -273,8 +274,8 @@ export const commandSchema = z.discriminatedUnion("type", [
     roles: z.array(z.string().min(1)).min(1),
     command: z.string().min(1),
     intent: z.string().min(1),
-    /** role -> profile id or adapter shorthand, written to the config. */
-    players: z.record(z.string(), z.string()),
+    /** role -> inline agent block, written to the config (DR-019). */
+    players: z.record(z.string(), agentBlockSchema),
   }),
   z.object({
     type: z.literal("compile.abort"),
@@ -429,7 +430,7 @@ export interface BuiltinPlaybookInfo {
   roles: string[];
   /** True when the active config already registers this id. */
   configured: boolean;
-  /** Playbook source markdown (vendored; DR-015). */
+  /** Playbook source markdown from the installed package (DR-019). */
   source?: string;
 }
 
@@ -477,7 +478,7 @@ export interface ConfigStateMessage {
 
 export interface ReadinessStateMessage {
   type: "readiness.state";
-  profiles: ReadinessEntry[];
+  entries: ReadinessEntry[];
 }
 
 export interface SessionStateMessage {

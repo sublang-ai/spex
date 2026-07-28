@@ -35,7 +35,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.154",
     "@openai/codex-sdk": "^0.139.0",
     "@sublang/cligent": "^0.16.0",
-    "@sublang/playbook": "^2.0.0",
+    "@sublang/playbook": "^3.1.0",
     "better-sqlite3": "^12.2.0",
     "esbuild": "^0.24.2",
     "ws": "^8.18.0",

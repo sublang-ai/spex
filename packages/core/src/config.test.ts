@@ -74,9 +74,24 @@ function baseConfig(): Record<string, unknown> {
   >;
 }
 
+function codeBlock(top: Record<string, unknown>): Record<string, unknown> {
+  return (top.playbooks as Record<string, Record<string, unknown>>).code;
+}
+
+function codePlayers(top: Record<string, unknown>): Record<string, unknown> {
+  return codeBlock(top).players as Record<string, unknown>;
+}
+
 test("bundled template composes with launcher-equivalent output", async () => {
   const composed = await composeConfig(baseConfig(), stubLoader);
-  assert.equal(composed.captainAgent.adapter, "claude");
+  // The seeded lineup is fully-inline single-vendor Claude (DR-019).
+  assert.deepEqual(composed.captainAgent, {
+    adapter: "claude",
+    model: "claude-opus-4-8",
+    effort: "high",
+    permissions: { mode: "auto" },
+  });
+  assert.equal(composed.captainOptions.captainAdapter, "claude");
   assert.deepEqual(
     composed.players.map((player) => player.id),
     ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
@@ -95,6 +110,18 @@ test("bundled template composes with launcher-equivalent output", async () => {
   assert.equal(composed.playbooks[0].command, "code");
 });
 
+test("a codex captain composes and stamps captainAdapter", async () => {
+  // The Captain shell picks provider-level vs prompt-level control-call
+  // restriction from this field (DR-019); a Codex captain without it
+  // fail-closes to an empty allowlist and fails every turn.
+  const top = baseConfig();
+  top.captain = { adapter: "codex", model: "gpt-5.5" };
+  const composed = await composeConfig(top, stubLoader);
+  assert.equal(composed.captainAgent.adapter, "codex");
+  assert.equal(composed.captainAgent.model, "gpt-5.5");
+  assert.equal(composed.captainOptions.captainAdapter, "codex");
+});
+
 async function expectError(
   top: Record<string, unknown>,
   pattern: RegExp,
@@ -106,10 +133,29 @@ async function expectError(
   });
 }
 
-test("profile id colliding with adapter shorthand is rejected", async () => {
+test("a top-level profiles map is retired and rejected", async () => {
   const top = baseConfig();
-  (top.profiles as Record<string, unknown>).claude = { adapter: "claude" };
-  await expectError(top, /^profiles\.claude collides with the "claude" adapter shorthand$/);
+  top.profiles = { "claude-opus": { adapter: "claude" } };
+  await expectError(
+    top,
+    /^profiles is retired \(playbook 3\.0\): agents carry their settings inline$/,
+  );
+});
+
+test("the retired profile key is rejected on captain and player blocks", async () => {
+  const top = baseConfig();
+  top.captain = { profile: "claude-opus" };
+  await expectError(
+    top,
+    /^captain\.profile is retired: agents carry their own adapter, model, effort, and permissions$/,
+  );
+
+  const withPlayer = baseConfig();
+  codePlayers(withPlayer).reviewer = { profile: "codex-gpt", model: "gpt-6" };
+  await expectError(
+    withPlayer,
+    /^playbooks\.code\.players\.reviewer\.profile is retired: agents carry their own adapter, model, effort, and permissions$/,
+  );
 });
 
 test("missing or empty playbooks are rejected", async () => {
@@ -125,13 +171,13 @@ test("captain must resolve an adapter", async () => {
   delete top.captain;
   await expectError(
     top,
-    /^captain must be a profile id, an adapter shorthand, or an agent block$/,
+    /^captain must be an adapter shorthand or an agent block$/,
   );
 });
 
 test("from must be a module specifier and import failures carry the cause", async () => {
   const top = baseConfig();
-  const code = (top.playbooks as Record<string, Record<string, unknown>>).code;
+  const code = codeBlock(top);
   delete code.from;
   await expectError(top, /^playbooks\.code\.from must be a module specifier$/);
   code.from = "@nope/missing";
@@ -164,8 +210,7 @@ test("reserved captain role is rejected in roles and players", async () => {
       default: registryEntry({ requiredRoleIds: ["captain"] }),
     }),
   );
-  const code = (top.playbooks as Record<string, Record<string, unknown>>).code;
-  (code.players as Record<string, unknown>).captain = "claude";
+  codePlayers(top).captain = "claude";
   await expectError(
     top,
     /^playbooks\.code\.players\.captain binds local role "captain", which is reserved/,
@@ -174,37 +219,109 @@ test("reserved captain role is rejected in roles and players", async () => {
 
 test("player coverage and resolution rules match the launcher", async () => {
   const top = baseConfig();
-  const code = (top.playbooks as Record<string, Record<string, unknown>>).code;
+  const code = codeBlock(top);
   code.players = {};
   await expectError(top, /^playbooks\.code resolves no visible local role$/);
-  code.players = { coder: "claude-opus-1m" };
+  code.players = { coder: { adapter: "claude" } };
   await expectError(
     top,
     /^playbooks\.code required role "reviewer" has no players entry$/,
   );
-  code.players = { coder: "claude-opus-1m", reviewer: 42 };
+  code.players = { coder: { adapter: "claude" }, reviewer: 42 };
   await expectError(
     top,
-    /^playbooks\.code\.players\.reviewer must be a profile id, an adapter shorthand, or an agent block$/,
-  );
-  code.players = { coder: "claude-opus-1m", reviewer: { profile: "nope" } };
-  await expectError(
-    top,
-    /^playbooks\.code\.players\.reviewer\.profile must name a profiles entry$/,
+    /^playbooks\.code\.players\.reviewer must be an adapter shorthand or an agent block$/,
   );
 });
 
-test("unknown agent fields and adapters are rejected", async () => {
+test("scalar shorthands still compose as bare-adapter blocks", async () => {
   const top = baseConfig();
-  const profiles = top.profiles as Record<string, Record<string, unknown>>;
-  profiles["claude-opus"].typo = true;
+  codePlayers(top).reviewer = "claude";
+  const composed = await composeConfig(top, stubLoader);
+  const reviewer = composed.players.find((p) => p.id === "code-reviewer");
+  assert.deepEqual(reviewer, { id: "code-reviewer", adapter: "claude" });
+});
+
+test("unknown agent fields and adapters are rejected; kimi is known", async () => {
+  const top = baseConfig();
+  (top.captain as Record<string, unknown>).typo = true;
   await expectError(top, /^Unknown config field captain\.typo$/);
-  delete profiles["claude-opus"].typo;
-  const code = (top.playbooks as Record<string, Record<string, unknown>>).code;
-  (code.players as Record<string, unknown>).reviewer = "mystery";
+  delete (top.captain as Record<string, unknown>).typo;
+
+  codePlayers(top).reviewer = "mystery";
+  // The valid set is cligent's own (DR-019) and now includes kimi.
   await expectError(
     top,
-    /^Unknown adapter "mystery" for playbooks\.code\.players\.reviewer\./,
+    /^Unknown adapter "mystery" for playbooks\.code\.players\.reviewer\. Valid adapters: claude, codex, gemini, kimi, opencode$/,
+  );
+
+  codePlayers(top).reviewer = { adapter: "kimi" };
+  const composed = await composeConfig(top, stubLoader);
+  const reviewer = composed.players.find((p) => p.id === "code-reviewer");
+  assert.equal(reviewer?.adapter, "kimi");
+});
+
+test("effort vocabularies are adapter-scoped", async () => {
+  // Kimi accepts only off/on.
+  const top = baseConfig();
+  codePlayers(top).reviewer = { adapter: "kimi", effort: "off" };
+  let composed = await composeConfig(top, stubLoader);
+  assert.equal(
+    composed.players.find((p) => p.id === "code-reviewer")?.effort,
+    "off",
+  );
+  codePlayers(top).reviewer = { adapter: "kimi", effort: "on" };
+  composed = await composeConfig(top, stubLoader);
+  assert.equal(
+    composed.players.find((p) => p.id === "code-reviewer")?.effort,
+    "on",
+  );
+  codePlayers(top).reviewer = { adapter: "kimi", effort: "minimal" };
+  await expectError(
+    top,
+    /^playbooks\.code\.players\.reviewer\.effort "minimal" is not supported by the "kimi" adapter \(valid: off, on\)$/,
+  );
+
+  // Claude adds ultracode; Codex adds ultra.
+  const claudeTop = baseConfig();
+  (claudeTop.captain as Record<string, unknown>).effort = "ultracode";
+  composed = await composeConfig(claudeTop, stubLoader);
+  assert.equal(composed.captainAgent.effort, "ultracode");
+
+  const codexTop = baseConfig();
+  codePlayers(codexTop).reviewer = { adapter: "codex", effort: "ultra" };
+  composed = await composeConfig(codexTop, stubLoader);
+  assert.equal(
+    composed.players.find((p) => p.id === "code-reviewer")?.effort,
+    "ultra",
+  );
+
+  // A value outside the adapter's vocabulary names the adapter and
+  // its valid set.
+  const bogusTop = baseConfig();
+  (bogusTop.captain as Record<string, unknown>).effort = "bogus";
+  await expectError(
+    bogusTop,
+    /^captain\.effort "bogus" is not supported by the "claude" adapter \(valid: minimal, low, medium, high, xhigh, max, ultracode\)$/,
+  );
+});
+
+test("legacy reasoningEffort composes as effort; both keys are invalid", async () => {
+  const top = baseConfig();
+  const coder = codePlayers(top).coder as Record<string, unknown>;
+  // The template writes canonical `effort`; swap in the legacy alias.
+  assert.equal(coder.effort, "xhigh");
+  delete coder.effort;
+  coder.reasoningEffort = "xhigh";
+  const composed = await composeConfig(top, stubLoader);
+  const player = composed.players.find((p) => p.id === "code-coder");
+  assert.equal(player?.effort, "xhigh");
+  assert.ok(!("reasoningEffort" in (player ?? {})));
+
+  coder.effort = "high";
+  await expectError(
+    top,
+    /must not set both effort and its legacy alias reasoningEffort/,
   );
 });
 
@@ -240,7 +357,7 @@ test("cwd acceptance probe marks entries that take a cwd option", async () => {
 
   // A config-set cwd wins: no injection even for accepting entries.
   const top = baseConfig();
-  (top.playbooks as Record<string, Record<string, unknown>>).code.cwd = "/x";
+  codeBlock(top).cwd = "/x";
   const preset = await composeConfig(top, cwdLoader);
   assert.equal(preset.playbooks[0]?.acceptsCwdOption, false);
   assert.equal(
@@ -249,51 +366,9 @@ test("cwd acceptance probe marks entries that take a cwd option", async () => {
   );
 });
 
-test("legacy reasoningEffort composes as effort; both keys are invalid", async () => {
-  const top = baseConfig();
-  const profiles = top.profiles as Record<string, Record<string, unknown>>;
-  // The template writes canonical `effort`; swap in the legacy alias.
-  assert.equal(profiles["claude-opus-1m"].effort, "xhigh");
-  delete profiles["claude-opus-1m"].effort;
-  profiles["claude-opus-1m"].reasoningEffort = "xhigh";
-  const composed = await composeConfig(top, stubLoader);
-  const coder = composed.players.find((p) => p.id === "code-coder");
-  assert.equal(coder?.effort, "xhigh");
-  assert.ok(!("reasoningEffort" in (coder ?? {})));
-
-  profiles["claude-opus-1m"].effort = "high";
-  await expectError(
-    top,
-    /must not set both effort and its legacy alias reasoningEffort/,
-  );
-
-  delete profiles["claude-opus-1m"].reasoningEffort;
-  profiles["claude-opus-1m"].effort = "extreme";
-  await expectError(top, /effort must be one of/);
-});
-
-test("inline agent blocks extend a profile and drop the profile key", async () => {
-  const top = baseConfig();
-  (top.profiles as Record<string, unknown>)["codex-gpt"] = {
-    adapter: "codex",
-    model: "gpt-5.5",
-  };
-  const code = (top.playbooks as Record<string, Record<string, unknown>>).code;
-  (code.players as Record<string, unknown>).reviewer = {
-    profile: "codex-gpt",
-    model: "gpt-6",
-  };
-  const composed = await composeConfig(top, stubLoader);
-  const reviewer = composed.players.find((p) => p.id === "code-reviewer");
-  assert.equal(reviewer?.adapter, "codex");
-  assert.equal(reviewer?.model, "gpt-6");
-  assert.ok(!("profile" in (reviewer ?? {})));
-});
-
 test("command overrides land in captain options and duplicates are rejected", async () => {
   const top = baseConfig();
-  const code = (top.playbooks as Record<string, Record<string, unknown>>).code;
-  code.command = "build";
+  codeBlock(top).command = "build";
   const composed = await composeConfig(top, stubLoader);
   assert.equal(composed.captainOptions.playbooks.code.command, "build");
   assert.equal(composed.playbooks[0].command, "build");
@@ -301,7 +376,10 @@ test("command overrides land in captain options and duplicates are rejected", as
   const dupes = baseConfig();
   (dupes.playbooks as Record<string, unknown>).other = {
     from: "@stub/other",
-    players: { coder: "claude-opus-1m", reviewer: "codex-gpt" },
+    players: {
+      coder: { adapter: "claude" },
+      reviewer: { adapter: "codex" },
+    },
   };
   const loader: LoadModule = async (specifier) =>
     specifier === "@stub/other"
@@ -345,4 +423,5 @@ test("adapter readiness mirrors the launcher rules", () => {
   mkdirSync(join(home, ".codex"));
   assert.equal(checkAdapterReadiness("codex", {}, home).ready, true);
   assert.equal(checkAdapterReadiness("gemini", {}, home).ready, null);
+  assert.equal(checkAdapterReadiness("kimi", {}, home).ready, null);
 });

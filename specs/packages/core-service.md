@@ -52,6 +52,13 @@ On every load and reload:
 - Live sessions composed under a previously valid config shall
   continue unaffected by a later invalid edit.
 
+Where the file is a profiles-era config, the load shall migrate it
+in place per the launcher's semantics
+([DR-019](../decisions/019-inline-agent-configuration.md)): named
+profiles inline into agent blocks, the `profiles` map is deleted,
+the pre-migration file is backed up beside the config with
+comments surviving, and a `profile` naming a missing entry is a
+config error that leaves the file untouched.
 Validation shall fail closed on the same defect classes as the
 playbook launcher ([CORE-16](#core-16)).
 
@@ -129,10 +136,14 @@ channel and shall not deliver it on any session subscription, per
 #### CORE-9
 
 When a client requests adapter readiness, the core service shall
-report, for each profile in the active config, a readiness status
+report one deduplicated entry per adapter the active config
+references, each entry naming the positions using that adapter
+(`captain`, `<playbook>.<role>`) and carrying a readiness status
 derived from the same adapter readiness rules as the playbook
 launcher ([DR-004](../decisions/004-config-and-persistence.md)),
-naming the unmet requirement for each profile that is not ready.
+naming the unmet requirement for each adapter that is not ready
+and reporting null readiness with verify-yourself guidance for an
+adapter with no preflight rule.
 When the active config changes, the core service shall broadcast
 refreshed readiness to connected clients.
 
@@ -215,10 +226,15 @@ data solely over the protocol.
 The core package shall compose player identities, the playbook
 registry, and runtime options from the shared config with the same
 player-id namespacing and fail-closed validation rules as the
-playbook launcher, as recorded in
-[DR-004](../decisions/004-config-and-persistence.md), so that any
-config the launcher accepts or rejects is accepted or rejected
-identically by the core package.
+playbook launcher — as recorded in
+[DR-004](../decisions/004-config-and-persistence.md) and amended
+by [DR-019](../decisions/019-inline-agent-configuration.md):
+inline agent blocks with scalar adapter ids normalizing to
+bare-adapter blocks, adapter ids bounded by the embedded runtime's
+known set, adapter-scoped effort vocabularies, and the composed
+captain options carrying the Captain's adapter alongside the
+playbook enablement — so that any config the launcher accepts or
+rejects is accepted or rejected identically by the core package.
 
 #### CORE-17
 
@@ -278,15 +294,15 @@ flight, the core package shall reject it with a `not_found` error.
 
 #### CORE-26
 
-In addition to the per-profile entries required by
-[CORE-9](#core-9), the core package shall
-emit a readiness entry for each adapter shorthand the active config
-references directly — the captain reference and every playbook
-player reference that names an adapter rather than a profiles
-entry, under the same reference-resolution rule as the launcher
-([CORE-16](#core-16)) — deduplicated across references, so that a
-config using only shorthands still surfaces unmet adapter
-requirements before the first turn fails.
+The readiness report of [CORE-9](#core-9) shall be keyed by
+adapter: the core package shall resolve every configured position
+— the captain and each playbook player, whether an inline agent
+block or a scalar adapter id, under the same resolution rule as
+the launcher ([CORE-16](#core-16)) — to its adapter and emit
+exactly one entry per distinct adapter listing those positions, so
+that no referenced adapter's unmet requirement is hidden by
+deduplication and a hand-written scalar still surfaces its
+adapter's requirements before the first turn fails.
 
 ## Verification
 
@@ -322,7 +338,8 @@ subscriber receives every hidden record ([CORE-14](#core-14)).
 #### CORE-21
 Where the config file carries a defect from each launcher
 fail-closed defect class recorded in
-[DR-004](../decisions/004-config-and-persistence.md)
+[DR-004](../decisions/004-config-and-persistence.md) as amended by
+[DR-019](../decisions/019-inline-agent-configuration.md)
 ([CORE-16](#core-16)), the test suite shall assert, per defect,
 that the core service reports a config error naming the offending
 entry and rejects a session creation request while that config is
@@ -341,12 +358,12 @@ live at shutdown is reported as no longer live.
 ### Readiness Coverage
 
 #### CORE-23
-Where the config defines both a profile whose adapter readiness
-requirements are satisfied and one whose requirements are not (via
-controlled environment variables and home-directory fixtures), the
-test suite shall assert that readiness reporting marks each profile
-accordingly and names the unmet requirement for the not-ready
-profile ([CORE-9](#core-9)).
+Where the config's agent blocks reference both an adapter whose
+readiness requirements are satisfied and one whose requirements
+are not (via controlled environment variables and home-directory
+fixtures), the test suite shall assert that readiness reporting
+marks each adapter's entry accordingly and names the unmet
+requirement for the not-ready adapter ([CORE-9](#core-9)).
 
 ### Compile Lifecycle Coverage
 
@@ -367,13 +384,13 @@ compile over the protocol and assert that:
 - after cancellation, a new `compile.run` for the same id is
   accepted.
 
-### Shorthand Readiness Coverage
+### Readiness Dedup Coverage
 
 #### CORE-28
-Where the config references adapters by shorthand — as the captain
-and as a playbook player — alongside a declared profile, the test
-suite shall assert that readiness reporting includes exactly one
-entry per referenced shorthand ([CORE-26](#core-26)), marked per
-the adapter readiness rules with the unmet requirement named for a
-not-ready shorthand, while the declared profile keeps its own
-entry.
+Where the config references one adapter from several positions —
+as the captain and as a playbook player, including a hand-written
+scalar adapter id — the test suite shall assert that readiness
+reporting includes exactly one entry for that adapter
+([CORE-26](#core-26)), naming each referencing position, marked
+per the adapter readiness rules with the unmet requirement named
+when the adapter is not ready ([CORE-9](#core-9)).
