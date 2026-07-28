@@ -23,7 +23,7 @@ The version in the released package's `package.json` (`packages/cli/package.json
 
 #### RELEASE-3
 
-All notable changes to the released package shall be documented in its `CHANGELOG.md` (`packages/cli/CHANGELOG.md`) following the Keep a Changelog [[2]] format.
+Each released deliverable shall document its notable changes in its own `CHANGELOG.md` — `packages/cli/CHANGELOG.md` for the `@sublang/spex` package and `apps/desktop/CHANGELOG.md` for the desktop app — following the Keep a Changelog [[2]] format, so a release carries only its own product's notes.
 
 #### RELEASE-4
 
@@ -65,7 +65,16 @@ When a release tag is pushed, the release workflow shall confirm the CI workflow
 
 #### RELEASE-19
 
-Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), tags matching `vMAJOR.MINOR.PATCH` shall release only the `@sublang/spex` package from `packages/cli`, and desktop app releases shall use the disjoint `app-v*` tag namespace.
+Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), tags matching `vMAJOR.MINOR.PATCH` shall release only the `@sublang/spex` package from `packages/cli`, and desktop app releases shall use the disjoint `desktop-v*` tag namespace, each channel running its own workflow, taking its notes from its own changelog ([RELEASE-3](#release-3)), and gating on the CI workflow's success for the tagged commit ([RELEASE-18](#release-18)).
+
+#### RELEASE-23
+
+The CI workflow shall check each deliverable in its own job — the
+`@sublang/spex` package, the desktop app, and this repository's own
+specs — so a failing run names the product that broke; the package's
+job shall install only its own workspace, which has no native
+dependency, and shall therefore cover platform and runtime
+combinations the app's native modules cannot.
 
 ### Package Hygiene
 

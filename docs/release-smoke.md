@@ -22,7 +22,7 @@ every exit path).
 Omit `--desktop` for a quick mid-development pass.
 No provider or sign-in is involved; a failure names its stage.
 
-## 1b. Live desktop smoke (signed-in — the app-release gate)
+## 1b. Live desktop smoke (signed-in — the desktop-release gate)
 
 ```bash
 npm run smoke:desktop

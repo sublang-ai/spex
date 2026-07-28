@@ -1,0 +1,100 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions: {}
+
+jobs:
+  # Same gate the CLI channel applies: a tag never ships from a commit
+  # whose checks are red or still running.
+  require-ci-green:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Require CI to be green for the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for CI (ci.yml) to succeed for commit $SHA"
+          for attempt in $(seq 1 60); do
+            line="$(gh api \
+              "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=1" \
+              --jq '(.workflow_runs[0].status // "missing") + " " + (.workflow_runs[0].conclusion // "none")')"
+            status="${line%% *}"
+            conclusion="${line##* }"
+            echo "attempt $attempt/60: status=$status conclusion=$conclusion"
+            if [ "$status" = "completed" ]; then
+              if [ "$conclusion" = "success" ]; then
+                echo "CI is green for $SHA."
+                exit 0
+              fi
+              echo "::error::CI for $SHA concluded '$conclusion'; refusing to release."
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "::error::Timed out waiting for CI to complete for $SHA; refusing to release."
+          exit 1
+
+  release:
+    needs: require-ci-green
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#desktop-v}"
+          PKG_VERSION="$(node -p 'require("./apps/desktop/package.json").version')"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag $TAG_VERSION does not match apps/desktop/package.json $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#desktop-v}"
+          # The app keeps its own changelog; the CLI's v* notes never
+          # ship with a desktop release.
+          node scripts/release-notes.mjs apps/desktop/CHANGELOG.md "$VERSION" /tmp/desktop-release-notes.md
+
+      # Electron binaries are needed here (unlike the v* CLI channel),
+      # so ELECTRON_SKIP_BINARY_DOWNLOAD is deliberately not set.
+      - run: npm ci
+      - name: Build core, ui, and the shell
+        run: |
+          npm run build -w packages/core
+          npm run build -w packages/ui
+          npm run build -w apps/desktop
+
+      - name: Tests
+        run: |
+          npm test -w packages/core
+          npm test -w packages/ui
+          npm test -w apps/desktop
+
+      - name: Package the desktop app (unsigned arm64 zip)
+        working-directory: apps/desktop
+        run: npx electron-builder --mac --arm64 zip
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: /tmp/desktop-release-notes.md
+          files: apps/desktop/release/*.zip

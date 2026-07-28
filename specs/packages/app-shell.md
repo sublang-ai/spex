@@ -61,7 +61,7 @@ While the machine has no network connectivity, the app shall launch, open projec
 
 #### SHELL-9
 
-When the user opens the About dialog, the app shall display the application name Spex and the installed build's version (the `MAJOR.MINOR.PATCH` of its `app-v*` release tag; see [SHELL-14](#shell-14)).
+When the user opens the About dialog, the app shall display the application name Spex and the installed build's version (the `MAJOR.MINOR.PATCH` of its `desktop-v*` release tag; see [SHELL-14](#shell-14)).
 
 #### SHELL-21
 
@@ -110,7 +110,7 @@ Where the app is packaged, the packaged app shall ship agent-SDK native binaries
 
 #### SHELL-14
 
-When a tag matching `app-v*` is pushed, the desktop release workflow shall build the macOS arm64 app with electron-builder [[3]] and attach the unsigned build artifacts to a GitHub release for that tag.
+When a tag matching `desktop-v*` is pushed, the desktop release workflow shall build the macOS arm64 app with electron-builder [[3]] and attach the unsigned build artifacts to a GitHub release for that tag.
 The desktop release workflow shall not publish to npm and shall not run for `v*` tags, keeping the app and CLI release channels disjoint ([DR-002](../decisions/002-desktop-app-architecture.md)).
 
 ### App Data

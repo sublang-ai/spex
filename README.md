@@ -68,7 +68,7 @@ deferred follow-up.)
 No packaged release yet — run it from source. Packaged builds
 (macOS Apple Silicon first) will land on
 [GitHub Releases](https://github.com/sublang-ai/spex/releases) under
-`app-v*` tags.
+`desktop-v*` tags.
 
 You need Node.js >= 20.6, and a signed-in
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
@@ -112,7 +112,7 @@ the same headless runtime drives both.
 | [`scaffold/`](scaffold) | Template bundle the CLI ships (staged into `packages/cli` at build) | with the CLI |
 | [`packages/core`](packages/core) | Headless core service: config, sessions, spec parsing, embedded playbook runtime, SQLite store, WebSocket protocol | with the app |
 | [`packages/ui`](packages/ui) | Web UI (React + Vite + Tailwind) speaking only the protocol | with the app |
-| [`apps/desktop`](apps/desktop) | Electron shell: core in-process, sandboxed renderer, notifications, dock badge | GitHub Releases (`app-v*` tags) |
+| [`apps/desktop`](apps/desktop) | Electron shell: core in-process, sandboxed renderer, notifications, dock badge | GitHub Releases (`desktop-v*` tags) |
 
 The architecture is recorded as decision records DR-002 onward;
 start at the [spec map](specs/map.md). The core/UI split is

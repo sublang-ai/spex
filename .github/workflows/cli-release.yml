@@ -1,4 +1,4 @@
-name: Release
+name: CLI Release
 
 on:
   push:
@@ -91,13 +91,7 @@ jobs:
         id: notes
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          # Extract section between ## [VERSION] and next ## [
-          sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" packages/cli/CHANGELOG.md > /tmp/release-notes.md
-          cat /tmp/release-notes.md
-          if [ ! -s /tmp/release-notes.md ]; then
-            echo "::error::No release notes found for version ${VERSION} in packages/cli/CHANGELOG.md"
-            exit 1
-          fi
+          node scripts/release-notes.mjs packages/cli/CHANGELOG.md "$VERSION" /tmp/release-notes.md
 
       - name: Publish to npm
         run: npm publish -w packages/cli --provenance --access public

@@ -9,23 +9,18 @@ on:
 permissions:
   contents: read
 
-env:
-  # CI builds every workspace but never launches Electron.
-  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-
+# The repo ships two deliverables from one history (DR-002): the
+# `@sublang/spex` CLI and the desktop app. Their checks are separate
+# jobs so a red run names the product that broke, and each installs
+# only what it needs.
 jobs:
-  test:
+  cli:
+    name: cli (${{ matrix.os }}, node ${{ matrix.node-version }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [20, 22]
-        exclude:
-          # better-sqlite3 ships no win32 prebuild for the Node 20 ABI
-          # and the source build trips node-gyp's VS detection there;
-          # Node 20 coverage stays on ubuntu/macos.
-          - os: windows-latest
-            node-version: 20
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -40,8 +35,68 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - run: npm ci
-      - run: npm run build
-
+      # Workspace-scoped install: the CLI has no native dependency, so
+      # this skips better-sqlite3 and Electron entirely — which is also
+      # why this job covers windows/node 20, a cell the app cannot.
+      - run: npm ci --workspace packages/cli --include-workspace-root
+      - run: npm run build -w packages/cli
       - name: Tests
-        run: npm test
+        run: npm test -w packages/cli
+
+  desktop:
+    name: desktop (${{ matrix.os }}, node ${{ matrix.node-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20, 22]
+        exclude:
+          # better-sqlite3 ships no win32 prebuild for the Node 20 ABI
+          # and the source build trips node-gyp's VS detection there;
+          # Node 20 coverage stays on ubuntu/macos.
+          - os: windows-latest
+            node-version: 20
+    runs-on: ${{ matrix.os }}
+    env:
+      # The app's checks build every layer but never launch Electron.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+      - name: Build core, ui, and the shell
+        run: |
+          npm run build -w packages/core
+          npm run build -w packages/ui
+          npm run build -w apps/desktop
+      - name: Tests
+        run: |
+          npm test -w packages/core
+          npm test -w packages/ui
+          npm test -w apps/desktop
+      - name: Core integration tests
+        run: npm run test:integration -w packages/core
+
+  specs:
+    name: specs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The linter is the CLI itself, so this needs only that scope.
+      - run: npm ci --workspace packages/cli --include-workspace-root
+      - run: npm run build -w packages/cli
+      - name: Lint the repository's own specs
+        run: node packages/cli/dist/cli.js lint

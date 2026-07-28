@@ -75,14 +75,14 @@ Spex
 - The CLI keeps its npm identity, bin, files whitelist, tests, and `CHANGELOG.md` (which moves with it to `packages/cli/`).
 - `v*` tags keep releasing the CLI exactly as today; the release workflow is updated to build, validate, version-check, and publish from `packages/cli`.
   The CI-green gate ([RELEASE-18](../packages/release.md#release-18)) is unchanged and now covers all workspaces.
-- Desktop app releases use a distinct tag namespace (`app-v*`) added in a later iteration, so CLI and app release cadences stay independent.
+- Desktop app releases use a distinct tag namespace (`desktop-v*`) added in a later iteration, so CLI and app release cadences stay independent.
 
 ## Consequences
 
 - The UI is portable by construction; the cloud web app is a deployment task, not a rewrite.
 - Everything the panes show comes from one observer stream, so tmux-play and Spex render the same truth — tmux-play remains a faithful verification twin.
 - Electron adds ~120 MB download weight; accepted for v1 in exchange for zero-glue reuse of the Node ecosystem (cligent, playbook, agent SDKs).
-- Two release channels live in one npm-workspaces [[2]] repo; tag namespaces (`v*` vs `app-v*`) and workspace-scoped workflows must stay disjoint.
+- Two release channels live in one npm-workspaces [[2]] repo; tag namespaces (`v*` vs `desktop-v*`) and workspace-scoped workflows must stay disjoint.
 - The scaffold CLI move to `packages/cli` touches the release workflow; the npm tarball must be verified equivalent before the first post-move release.
 - Native binaries spawned by agent SDKs constrain Electron packaging (asar unpacking); handled in the shell layer.
 
