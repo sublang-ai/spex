@@ -1,57 +1,58 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Library surface (PBLIB): configured playbooks with role→profile
-// mapping and the pipeline view (Source → Gears → State machine),
-// plus the compile flow driving slc through the core with streamed,
-// persistent progress.
+// Library surface (PBLIB): configured playbooks with per-role inline
+// agents (DR-019) and the pipeline view (Source → Gears → State
+// machine), plus the compile flow driving slc through the core with
+// streamed, persistent progress.
 
 import { useEffect, useRef, useState } from "react";
 import type {
+  AgentBlockInput,
+  AgentSummary,
   BuiltinPlaybookInfo,
   CommandResults,
   ConfigEditOpInput,
   PlaybookArtifacts,
+  ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
-import { saveProfileEssentials, setPlaybookPlayer } from "../lib/config-ops.js";
+import { patchPlayer, type AgentPatch } from "../lib/config-ops.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
-import { ProfilePopover } from "./ProfilePopover.js";
+import { AgentChip } from "./AgentChip.js";
+import { AgentEditorPopover } from "./AgentEditor.js";
 
 type Toolchain = CommandResults["compile.check"];
 
-function MappingSelect({
-  value,
-  profiles,
-  onChange,
-  testId,
-}: {
-  value: string;
-  profiles: string[];
-  onChange: (ref: string) => void;
-  testId?: string;
-}) {
-  return (
-    <select
-      value={value}
-      {...(testId ? { "data-testid": testId } : {})}
-      onChange={(event) => onChange(event.target.value)}
-      className="rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
-    >
-      {profiles.map((profile) => (
-        <option key={profile} value={profile}>
-          {profile}
-        </option>
-      ))}
-      {!profiles.includes(value) ? <option value={value}>{value}</option> : null}
-      <option value="claude">claude (shorthand)</option>
-      <option value="codex">codex (shorthand)</option>
-    </select>
-  );
+/** Fixed neutral default for a new role assignment (DR-019); the
+ * "Same as Captain" action in the editor copies the Captain's
+ * adapter, model, effort, and permissions instead. */
+export const NEUTRAL_BLOCK: AgentBlockInput = {
+  adapter: "claude",
+  model: "claude-opus-4-8",
+  effort: "high",
+  permissions: { mode: "auto" },
+};
+
+/** Apply an editor patch to a local (not yet registered) block with
+ * the same semantics the core uses: provided keys change, absent
+ * keys survive, an explicit null unsets, permissions replace
+ * wholesale. */
+function applyLocalPatch(
+  base: AgentBlockInput,
+  patch: AgentPatch,
+): AgentBlockInput {
+  const next: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (value === null) delete next[key];
+    else next[key] = value;
+  }
+  return next as AgentBlockInput;
 }
 
 const STAGES = [
@@ -156,18 +157,28 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
 }
 
 /** An unconfigured built-in from the catalog (DR-015): browsable
- * source plus an add flow mapping roles to profiles. */
+ * source plus an add flow assigning an inline agent block per role
+ * (DR-019), seeded from the fixed neutral default. */
 function BuiltinCard({
   info,
-  profiles,
+  captain,
+  readiness,
 }: {
   info: BuiltinPlaybookInfo;
-  profiles: string[];
+  captain?: AgentSummary;
+  readiness: ReadinessEntry[];
 }) {
   const [showSource, setShowSource] = useState(false);
-  const [playerRefs, setPlayerRefs] = useState<Record<string, string>>({});
+  const [players, setPlayers] = useState<Record<string, AgentBlockInput>>({});
+  const [openRole, setOpenRole] = useState<string>();
+  // Anchor for the open popover: without it the gear's own mousedown
+  // reads as an outside click, so the trigger could never close it.
+  const roleGearRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const readinessByAdapter = new Map<string, ReadinessEntry>(
+    readiness.map((entry) => [entry.adapter as string, entry]),
+  );
 
   function add(): void {
     setBusy(true);
@@ -179,10 +190,7 @@ function BuiltinCard({
           playbookId: info.id,
           from: info.from,
           players: Object.fromEntries(
-            info.roles.map((role) => [
-              role,
-              playerRefs[role] ?? profiles[0] ?? "claude",
-            ]),
+            info.roles.map((role) => [role, players[role] ?? NEUTRAL_BLOCK]),
           ),
         },
       })
@@ -217,18 +225,55 @@ function BuiltinCard({
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
-        {info.roles.map((role) => (
-          <label key={role} className="flex items-center gap-1">
-            <span className="font-mono">{role}:</span>
-            <MappingSelect
-              value={playerRefs[role] ?? profiles[0] ?? "claude"}
-              profiles={profiles}
-              onChange={(ref) =>
-                setPlayerRefs((current) => ({ ...current, [role]: ref }))
-              }
-            />
-          </label>
-        ))}
+        {info.roles.map((role) => {
+          const block = players[role] ?? NEUTRAL_BLOCK;
+          return (
+            <span key={role} className="relative flex items-center gap-1">
+              <span className="font-mono">{role}:</span>
+              <AgentChip
+                agent={block}
+                readiness={readinessByAdapter.get(block.adapter)}
+                label={role}
+              />
+              <button
+                type="button"
+                ref={openRole === role ? roleGearRef : undefined}
+                data-testid={`builtin-player-${role}`}
+                title={`Tweak the ${role} agent in place`}
+                aria-label={`Configure ${role}`}
+                onClick={() =>
+                  setOpenRole((current) =>
+                    current === role ? undefined : role,
+                  )
+                }
+                className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              >
+                <Icon name="gear" />
+              </button>
+              {openRole === role ? (
+                <AgentEditorPopover
+                  title={`${role} agent`}
+                  direction="down"
+                  initial={block}
+                  readiness={readiness}
+                  captain={captain}
+                  anchorRef={roleGearRef}
+                  onSave={(patch) => {
+                    setPlayers((current) => ({
+                      ...current,
+                      [role]: applyLocalPatch(
+                        current[role] ?? NEUTRAL_BLOCK,
+                        patch,
+                      ),
+                    }));
+                    setOpenRole(undefined);
+                  }}
+                  onClose={() => setOpenRole(undefined)}
+                />
+              ) : null}
+            </span>
+          );
+        })}
         <button
           type="button"
           data-testid={`builtin-add-${info.id}`}
@@ -381,8 +426,13 @@ export function LibrarySurface({
   const [rolesText, setRolesText] = useState("");
   const [sourceText, setSourceText] = useState("");
   const [sourcePath, setSourcePath] = useState("");
-  const [playerRefs, setPlayerRefs] = useState<Record<string, string>>({});
+  const [playerBlocks, setPlayerBlocks] = useState<
+    Record<string, AgentBlockInput>
+  >({});
+  const [compileRolePopover, setCompileRolePopover] = useState<string>();
   const compileFormRef = useRef<HTMLElement>(null);
+  const playerGearRef = useRef<HTMLButtonElement>(null);
+  const compileGearRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (connection === "open") {
@@ -416,7 +466,9 @@ export function LibrarySurface({
     );
   }
   const summary = configState.summary;
-  const profileIds = summary.profiles.map((profile) => profile.id);
+  const readinessByAdapter = new Map<string, ReadinessEntry>(
+    readiness.map((entry) => [entry.adapter as string, entry]),
+  );
   const roles = rolesText
     .split(",")
     .map((role) => role.trim())
@@ -453,7 +505,7 @@ export function LibrarySurface({
       command: command.trim() || playbookId.trim(),
       intent: intent.trim(),
       players: Object.fromEntries(
-        roles.map((role) => [role, playerRefs[role] ?? profileIds[0] ?? "claude"]),
+        roles.map((role) => [role, playerBlocks[role] ?? NEUTRAL_BLOCK]),
       ),
     })
       .then(() => {
@@ -479,13 +531,13 @@ export function LibrarySurface({
     setRolesText(SLC_DEMO.roles);
     setSourceText(SLC_DEMO.stages.normalized);
     setSourcePath("");
-    // Pre-map the demo roles onto a concrete profile so the mapping
-    // selects show a deliberate choice, not an implicit fallback.
-    setPlayerRefs((current) => {
+    // Seed the demo roles with the fixed neutral block (DR-019) so
+    // the chips show a deliberate choice, not an implicit fallback.
+    setPlayerBlocks((current) => {
       const next = { ...current };
       for (const role of SLC_DEMO.roles.split(",")) {
         const id = role.trim();
-        if (id && !next[id]) next[id] = profileIds[0] ?? "claude";
+        if (id && !next[id]) next[id] = NEUTRAL_BLOCK;
       }
       return next;
     });
@@ -567,21 +619,21 @@ export function LibrarySurface({
               {Object.entries(playbook.players).map(([role, player]) => (
                 <span key={role} className="relative flex items-center gap-1">
                   <span className="font-mono">{role}:</span>
-                  <MappingSelect
-                    value={player.ref}
-                    profiles={profileIds}
-                    onChange={(next) =>
-                      edit({
-                        kind: "playbook.player.set",
-                        playbookId: playbook.id,
-                        role,
-                        ref: next,
-                      })
-                    }
+                  <AgentChip
+                    agent={player.agent}
+                    readiness={readinessByAdapter.get(player.agent.adapter)}
+                    label={role}
                   />
                   <button
                     type="button"
-                    title={`Switch or tweak the ${role} profile in place`}
+                    ref={
+                      rolePopover?.playbookId === playbook.id &&
+                      rolePopover.role === role
+                        ? playerGearRef
+                        : undefined
+                    }
+                    data-testid={`player-gear-${playbook.id}-${role}`}
+                    title={`Tweak the ${role} agent in place`}
                     aria-label={`Configure ${role}`}
                     onClick={() =>
                       setRolePopover((current) =>
@@ -597,16 +649,21 @@ export function LibrarySurface({
                   </button>
                   {rolePopover?.playbookId === playbook.id &&
                   rolePopover.role === role ? (
-                    <ProfilePopover
-                      title={`${role} profile`}
+                    <AgentEditorPopover
+                      title={`${role} agent`}
                       direction="down"
-                      profiles={summary.profiles}
+                      initial={player.agent}
                       readiness={readiness}
-                      currentRef={player.ref}
-                      onSelect={(next) =>
-                        setPlaybookPlayer(playbook.id, role, next)
+                      captain={summary.captain}
+                      anchorRef={playerGearRef}
+                      onSave={(patch) =>
+                        patchPlayer(playbook.id, role, patch).then(
+                          (result) => {
+                            setRolePopover(undefined);
+                            return result;
+                          },
+                        )
                       }
-                      onSaveProfile={saveProfileEssentials}
                       onClose={() => setRolePopover(undefined)}
                     />
                   ) : null}
@@ -643,7 +700,12 @@ export function LibrarySurface({
             Available built-ins
           </h2>
           {availableBuiltins.map((entry) => (
-            <BuiltinCard key={entry.id} info={entry} profiles={profileIds} />
+            <BuiltinCard
+              key={entry.id}
+              info={entry}
+              captain={summary.captain}
+              readiness={readiness}
+            />
           ))}
         </section>
       ) : null}
@@ -717,19 +779,61 @@ export function LibrarySurface({
           </label>
           {roles.length > 0 ? (
             <div className="col-span-2 flex flex-wrap gap-3 text-xs">
-              {roles.map((role) => (
-                <label key={role} className="flex items-center gap-1">
-                  <span className="font-mono">{role}:</span>
-                  <MappingSelect
-                    value={playerRefs[role] ?? profileIds[0] ?? "claude"}
-                    profiles={profileIds}
-                    testId={`compile-player-${role}`}
-                    onChange={(ref) =>
-                      setPlayerRefs((current) => ({ ...current, [role]: ref }))
-                    }
-                  />
-                </label>
-              ))}
+              {roles.map((role) => {
+                const block = playerBlocks[role] ?? NEUTRAL_BLOCK;
+                return (
+                  <span
+                    key={role}
+                    className="relative flex items-center gap-1"
+                  >
+                    <span className="font-mono">{role}:</span>
+                    <AgentChip
+                      agent={block}
+                      readiness={readinessByAdapter.get(block.adapter)}
+                      label={role}
+                    />
+                    <button
+                      type="button"
+                      ref={
+                        compileRolePopover === role ? compileGearRef : undefined
+                      }
+                      data-testid={`compile-player-${role}`}
+                      title={`Choose the ${role} agent`}
+                      aria-label={`Configure ${role}`}
+                      onClick={() =>
+                        setCompileRolePopover((current) =>
+                          current === role ? undefined : role,
+                        )
+                      }
+                      className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                    >
+                      <Icon name="gear" />
+                    </button>
+                    {compileRolePopover === role ? (
+                      <AgentEditorPopover
+                        title={`${role} agent`}
+                        direction="down"
+                        initial={block}
+                        readiness={readiness}
+                        captain={summary.captain}
+                        anchorRef={compileGearRef}
+                        saveLabel="Use"
+                        onSave={(patch) => {
+                          setPlayerBlocks((current) => ({
+                            ...current,
+                            [role]: {
+                              ...(current[role] ?? NEUTRAL_BLOCK),
+                              ...patch,
+                            } as AgentBlockInput,
+                          }));
+                          setCompileRolePopover(undefined);
+                        }}
+                        onClose={() => setCompileRolePopover(undefined)}
+                      />
+                    ) : null}
+                  </span>
+                );
+              })}
             </div>
           ) : null}
           <label className="col-span-2 flex flex-col gap-0.5">

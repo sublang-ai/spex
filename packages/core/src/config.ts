@@ -13,8 +13,15 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { isEffortSupported, supportedEffortValues } from "@sublang/cligent";
+import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
+import { migrateConfigFileIfRetired } from "./config-migrate.js";
 
-import type { AdapterName, ConfigSummary } from "./protocol.js";
+import type {
+  AdapterName,
+  AgentSummary,
+  ConfigSummary,
+} from "./protocol.js";
 
 export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
 
@@ -22,8 +29,11 @@ export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
  * (DR-014); composition refuses file-path registries without it. */
 export const REGISTRY_CONTRACT = 2;
 
-const ADAPTER_SHORTHANDS = ["claude", "codex"];
-const KNOWN_ADAPTERS = ["claude", "codex", "gemini", "opencode"] as const;
+// The adapter set is the embedded runtime's own (DR-019): an id
+// outside it cannot start a session, so composition rejects it with
+// the runtime's wording. Scalars are adapter shorthands normalizing
+// to bare-adapter blocks; Spex itself writes only inline blocks.
+const KNOWN_ADAPTERS = KNOWN_PLAYER_ADAPTERS;
 const PLAYBOOK_LAUNCHER_KEYS = ["from", "command", "players"];
 const RESERVED_CAPTAIN_ROLE_ID = "captain";
 
@@ -44,22 +54,7 @@ const PERMISSION_FIELDS = new Set([
   "networkAccess",
   "writablePaths",
 ]);
-const EFFORT_NAMES = new Set([
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-]);
 
-export type EffortName =
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh"
-  | "max";
 
 export interface PermissionPolicyLike {
   mode?: "auto" | "bypass";
@@ -74,7 +69,8 @@ export interface ResolvedAgent {
   model?: string;
   instruction?: string;
   permissions?: PermissionPolicyLike;
-  effort?: EffortName;
+  /** Adapter-scoped vocabulary; validated during composition. */
+  effort?: string;
 }
 
 export interface ComposedPlayer extends ResolvedAgent {
@@ -102,6 +98,9 @@ export interface ComposedConfig {
       string,
       { from: string; command?: string; options: Record<string, unknown> }
     >;
+    /** The Captain's adapter, so the shell picks provider-level vs
+     * prompt-level control-call tool restriction (DR-019). */
+    captainAdapter: string;
   };
   /** Flat roster of namespaced `<id>-<role>` players, in config order. */
   players: ComposedPlayer[];
@@ -264,20 +263,14 @@ function validateAgentBlock(
       `${path} must not set both effort and its legacy alias reasoningEffort`,
     );
   }
-  for (const key of ["effort", "reasoningEffort"] as const) {
-    if (block[key] !== undefined && !EFFORT_NAMES.has(String(block[key]))) {
-      throw new Error(
-        `${path}.${key} must be one of minimal, low, medium, high, xhigh, max`,
-      );
-    }
-  }
+  // Effort values are validated adapter-scoped in toResolvedAgent,
+  // once the adapter is known (DR-019).
 }
 
 /**
  * True when a config reference string acts as an adapter shorthand
- * (launcher parity: resolveAgent treats any string that names no
- * profiles entry as `{ adapter: value }`, accepted only for known
- * adapters). Callers must first rule out profile ids.
+ * (launcher parity: a scalar agent value is an adapter shorthand,
+ * accepted only for the embedded runtime's adapters).
  */
 export function isKnownAdapter(value: string): value is AdapterName {
   return (KNOWN_ADAPTERS as readonly string[]).includes(value);
@@ -285,26 +278,25 @@ export function isKnownAdapter(value: string): value is AdapterName {
 
 export function resolveAgent(
   value: unknown,
-  profiles: Record<string, unknown>,
   path: string,
 ): Record<string, unknown> {
   if (typeof value === "string") {
-    const profile = profiles[value];
-    if (isPlainObject(profile)) return { ...profile };
+    // A scalar is an adapter shorthand, normalizing to a bare-adapter
+    // block (the launcher reads it the same way).
     return { adapter: value };
   }
   if (isPlainObject(value)) {
-    const { profile: profileRef, ...rest } = value;
-    if (profileRef === undefined) return { ...rest };
-    const base =
-      typeof profileRef === "string" ? profiles[profileRef] : undefined;
-    if (!isPlainObject(base)) {
-      throw new Error(`${path}.profile must name a profiles entry`);
+    if ("profile" in value) {
+      // Retired with the profiles model (playbook 3.0); the load path
+      // migrates old files, so a survivor here is a hand-typed edit.
+      throw new Error(
+        `${path}.profile is retired: agents carry their own adapter, model, effort, and permissions`,
+      );
     }
-    return { ...base, ...rest };
+    return { ...value };
   }
   throw new Error(
-    `${path} must be a profile id, an adapter shorthand, or an agent block`,
+    `${path} must be an adapter shorthand or an agent block`,
   );
 }
 
@@ -324,6 +316,20 @@ function toResolvedAgent(
   }
   const { reasoningEffort, ...rest } = block;
   if (reasoningEffort !== undefined) rest.effort = reasoningEffort;
+  if (rest.effort !== undefined) {
+    // Adapter-scoped vocabularies (DR-019): Claude adds ultracode,
+    // Codex adds ultra, Kimi accepts only off/on. cligent owns the
+    // sets; a value it refuses would otherwise fail mid-turn.
+    const effort = String(rest.effort);
+    if (!isEffortSupported(adapter as never, effort as never)) {
+      const values = (supportedEffortValues(adapter as never) ?? []).join(
+        ", ",
+      );
+      throw new Error(
+        `${path}.effort "${effort}" is not supported by the "${adapter}" adapter (valid: ${values})`,
+      );
+    }
+  }
   return rest as unknown as ResolvedAgent;
 }
 
@@ -377,13 +383,12 @@ export async function composeConfig(
     throw new Error("config must be a YAML mapping");
   }
 
-  const profiles = isPlainObject(top.profiles) ? top.profiles : {};
-  for (const id of Object.keys(profiles)) {
-    if (ADAPTER_SHORTHANDS.includes(id)) {
-      throw new Error(
-        `profiles.${id} collides with the "${id}" adapter shorthand`,
-      );
-    }
+  if (top.profiles !== undefined) {
+    // The load path migrates profiles-era files (DR-019); a map
+    // arriving here came through an edit or a raw compose.
+    throw new Error(
+      "profiles is retired (playbook 3.0): agents carry their settings inline",
+    );
   }
 
   if (!isPlainObject(top.playbooks)) {
@@ -394,7 +399,7 @@ export async function composeConfig(
     throw new Error("playbooks must enable at least one playbook");
   }
 
-  const captainBlock = resolveAgent(top.captain, profiles, "captain");
+  const captainBlock = resolveAgent(top.captain, "captain");
   if (
     typeof captainBlock.adapter !== "string" ||
     captainBlock.adapter.length === 0
@@ -403,7 +408,13 @@ export async function composeConfig(
   }
   const captainAgent = toResolvedAgent(captainBlock, "captain");
 
-  const captainOptions: ComposedConfig["captainOptions"] = { playbooks: {} };
+  // The Captain shell restricts control-call tools per the captain's
+  // adapter (playbook 3.0, DR-019): without this field it fail-closes
+  // to an empty allowlist, which the Codex adapter rejects outright.
+  const captainOptions: ComposedConfig["captainOptions"] = {
+    playbooks: {},
+    captainAdapter: captainAgent.adapter,
+  };
   const players: ComposedPlayer[] = [];
   const playbooks: ComposedPlaybook[] = [];
   const seenIds = new Set<string>();
@@ -446,7 +457,7 @@ export async function composeConfig(
         REGISTRY_CONTRACT
     ) {
       throw new Error(
-        `playbooks.${id}.from "${from}" was compiled before the playbook 2.0 toolchain; recompile "${id}" in the Playbooks surface to re-enable it`,
+        `playbooks.${id}.from "${from}" was generated by an older Spex toolchain; recompile "${id}" in the Playbooks surface to re-enable it`,
       );
     }
     if (entry.id !== id) {
@@ -500,7 +511,7 @@ export async function composeConfig(
     const generatedIds: string[] = [];
     for (const role of roles) {
       const path = `playbooks.${id}.players.${role}`;
-      const resolved = resolveAgent(playerBlocks[role], profiles, path);
+      const resolved = resolveAgent(playerBlocks[role], path);
       if (
         typeof resolved.adapter !== "string" ||
         resolved.adapter.length === 0
@@ -580,6 +591,21 @@ export async function loadConfig(
   path: string,
   loadModule?: LoadModule,
 ): Promise<LoadedConfig> {
+  // A profiles-era file migrates in place first (DR-019, launcher
+  // parity): the shared config composes whichever host loads it, and
+  // whichever migrates first wins — the other's pass no-ops. The
+  // watcher reload triggered by our own write re-reads the already-
+  // migrated file harmlessly. The unresolvable-`profile` case throws
+  // with edit-by-hand guidance and leaves the file untouched, which
+  // surfaces as an invalid config.
+  const migration = migrateConfigFileIfRetired(path);
+  if (migration.migrated) {
+    process.stderr.write(
+      `spex: migrated ${path} to inline agent settings ` +
+        `(the top-level "profiles" map was removed in playbook 3.0.0); ` +
+        `the original is at ${migration.backupPath}\n`,
+    );
+  }
   const text = readFileSync(path, "utf8");
   const raw: unknown = parseYaml(text);
   const composed = await composeConfig(raw, loadModule);
@@ -588,64 +614,35 @@ export async function loadConfig(
 
 export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
   const top = isPlainObject(loaded.raw) ? loaded.raw : {};
-  const profiles = isPlainObject(top.profiles) ? top.profiles : {};
+  const agentSummary = (agent: ResolvedAgent): AgentSummary => ({
+    adapter: agent.adapter,
+    ...(agent.model !== undefined ? { model: agent.model } : {}),
+    ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
+    ...(agent.instruction !== undefined
+      ? { instruction: agent.instruction }
+      : {}),
+    ...(agent.permissions !== undefined
+      ? { permissions: agent.permissions as AgentSummary["permissions"] }
+      : {}),
+  });
   return {
     path: loaded.path,
-    profiles: Object.entries(profiles).flatMap(([id, value]) =>
-      isPlainObject(value) && typeof value.adapter === "string"
-        ? [
-            {
-              id,
-              adapter: value.adapter as AdapterName,
-              ...(typeof value.model === "string"
-                ? { model: value.model }
-                : {}),
-              ...(typeof value.effort === "string"
-                ? { effort: value.effort }
-                : typeof value.reasoningEffort === "string"
-                  ? { effort: value.reasoningEffort }
-                  : {}),
-              ...(isPlainObject(value.permissions)
-                ? {
-                    permissions: value.permissions as {
-                      mode?: string;
-                      writablePaths?: string[];
-                    },
-                  }
-                : {}),
-            },
-          ]
-        : [],
-    ),
-    captain:
-      typeof top.captain === "string"
-        ? top.captain
-        : loaded.composed.captainAgent.adapter,
-    playbooks: loaded.composed.playbooks.map((playbook) => {
-      const rawPlayers = isPlainObject(top.playbooks)
-        ? (top.playbooks as Record<string, unknown>)[playbook.id]
-        : undefined;
-      const rawRefs =
-        isPlainObject(rawPlayers) && isPlainObject(rawPlayers.players)
-          ? (rawPlayers.players as Record<string, unknown>)
-          : {};
-      return {
-        id: playbook.id,
-        from: playbook.from,
-        command: playbook.command,
-        intent: playbook.intent,
-        players: Object.fromEntries(
-          Object.entries(playbook.players).map(([role, agent]) => {
-            const display = agent.model ?? agent.adapter;
-            const raw = rawRefs[role];
-            return [
-              role,
-              { ref: typeof raw === "string" ? raw : display, display },
-            ];
-          }),
-        ),
-      };
-    }),
+    captain: agentSummary(loaded.composed.captainAgent),
+    playbooks: loaded.composed.playbooks.map((playbook) => ({
+      id: playbook.id,
+      from: playbook.from,
+      command: playbook.command,
+      intent: playbook.intent,
+      players: Object.fromEntries(
+        Object.entries(playbook.players).map(([role, agent]) => [
+          role,
+          {
+            agent: agentSummary(agent),
+            display: agent.model ?? agent.adapter,
+          },
+        ]),
+      ),
+    })),
     ...(isPlainObject(top.notifications)
       ? { notifications: top.notifications as Record<string, string> }
       : {}),

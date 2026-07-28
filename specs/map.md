@@ -41,6 +41,8 @@ meta.md       The spec of specs
 | DR-016 | [016-relationship-presentation.md](decisions/016-relationship-presentation.md) | Classified spec-relationship presentation: uses, binding clients/provisions, composes, verifies — derived from clause citations |
 | DR-017 | [017-intent-records.md](decisions/017-intent-records.md) | Iterations become intents: intent records (IRs) with flexible, duplication-free recording (META-37), bare `IR-<N>` commit references (GIT-5), unchanged META-18, and mechanical migration |
 | DR-018 | [018-one-contract-per-item.md](decisions/018-one-contract-per-item.md) | One contract per item (META-42): one governing GEARS clause naming a domain contract, with per-kind attachments; META-21 split along its concerns (META-38..41); record identity re-homed to META-43; advisory lint |
+| DR-019 | [019-inline-agent-configuration.md](decisions/019-inline-agent-configuration.md) | Inline agent configuration: profile-less blocks, runtime-bounded adapters, adapter-scoped efforts, captain-adapter parity, no shorthand surface |
+| DR-020 | [020-desktop-live-smoke.md](decisions/020-desktop-live-smoke.md) | Desktop live smoke: env-guarded handshake, real-run driver, split hermetic/live release gates |
 
 ## Intents
 
@@ -70,6 +72,8 @@ meta.md       The spec of specs
 | IR-021 | [021-release-readiness.md](intents/021-release-readiness.md) | DR-016 applied + smoke suite + source re-vendor + mainline merge |
 | IR-022 | [022-intent-records.md](intents/022-intent-records.md) | DR-017 applied: intents rename across framework, scaffold, tooling, and this tree |
 | IR-023 | [023-one-contract-per-item.md](intents/023-one-contract-per-item.md) | DR-018 applied: META surgery, advisory item/sentence lint, template and demo conformance |
+| IR-024 | [024-inline-agents.md](intents/024-inline-agents.md) | DR-019 applied: playbook 3.1 / slc 0.2 inline-agent adaptation |
+| IR-025 | [025-desktop-live-smoke.md](intents/025-desktop-live-smoke.md) | DR-020 applied: live desktop smoke driver and gate split |
 
 ## Packages
 
@@ -107,7 +111,7 @@ meta.md       The spec of specs
 
 | File | Summary |
 | --- | --- |
-| [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, role–profile mapping, slc compile pipeline, registry validation, comment-preserving config writes |
+| [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, per-role inline agents, slc compile pipeline, registry validation, comment-preserving config writes |
 
 ### PROJ
 
@@ -143,7 +147,7 @@ meta.md       The spec of specs
 
 | File | Summary |
 | --- | --- |
-| [settings.md](packages/settings.md) | Settings: profile editor with launcher-parity validation, captain selection, readiness, comment-preserving YAML round-trip |
+| [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
 
 ### SHELL
 

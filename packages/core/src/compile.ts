@@ -10,7 +10,6 @@
 
 import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -168,14 +167,6 @@ export interface CompileResult {
   idleStateId: string;
   finalStateId: string;
   parkStateIds: string[];
-}
-
-function resolveRuntimeContract(): string {
-  const require = createRequire(import.meta.url);
-  // The exports map exposes ./runtime (src/runtime.js); the authored
-  // .ts contract ships beside it and is what slc's --link wants.
-  const runtimeJs = require.resolve("@sublang/playbook/runtime");
-  return join(dirname(runtimeJs), "runtime.ts");
 }
 
 interface MachineLike {
@@ -349,9 +340,11 @@ export async function compilePlaybook(
     if (!toolchain.slc.ok) throw new Error(toolchain.slc.guidance);
     const [slcCommand, ...slcArgs] = toolchain.slc.command;
     progress(`running: ${toolchain.slc.command.join(" ")} playbook ${id}.md`);
+    // Bare invocation (DR-019): slc >= 0.2 links against the installed
+    // @sublang/playbook runtime contract by default.
     const code = await spawner(
       slcCommand,
-      [...slcArgs, "playbook", sourcePath, "--link", resolveRuntimeContract()],
+      [...slcArgs, "playbook", sourcePath],
       dir,
       progress,
       signal,
@@ -425,6 +418,13 @@ export async function compilePlaybook(
   }
   entry.validateOptions(undefined);
   const roles = [...entry.requiredRoleIds];
+  if (roles.length === 0) {
+    // Entries compiled before slc 0.2 can carry no roles when the
+    // gears rendered Players as a heading (fixed upstream).
+    throw new Error(
+      "the compiled entry declares no player roles; recompile with slc >= 0.2 (its gears Players parsing fix)",
+    );
+  }
   const seen = new Set<string>();
   for (const role of roles) {
     if (!/^[a-z][a-z0-9_-]*$/.test(role)) {

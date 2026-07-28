@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the vendored built-in sources are amended by [DR-019](019-inline-agent-configuration.md) — playbook 3.1 ships them, so sources resolve from the installed package.
 
 ## Context
 

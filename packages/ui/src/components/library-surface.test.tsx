@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// DR-015 Library coverage: unconfigured built-ins render from the
-// catalog with browsable sources and a playbook.add flow, and the
-// slc demo example card stages the pipeline and prefills the
-// compile form with the normalized text.
+// DR-015/DR-019 Library coverage: configured roles carry inline agent
+// blocks edited in place as merge patches (PBLIB-4), unconfigured
+// built-ins render from the catalog with browsable sources and an add
+// flow that maps every role to a full agent block (PBLIB-34), and the
+// slc demo example card stages the pipeline and prefills the compile
+// form with the normalized text and the neutral block (PBLIB-35).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -31,12 +33,14 @@ vi.mock("../state/store.js", async (importOriginal) => {
   };
 });
 
-import { LibrarySurface } from "./LibrarySurface.js";
+import { LibrarySurface, NEUTRAL_BLOCK } from "./LibrarySurface.js";
+import { agentChipText } from "./AgentChip.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import type {
   BuiltinPlaybookInfo,
   ConfigState,
+  ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
 const CONFIG_STATE: ConfigState = {
@@ -44,11 +48,13 @@ const CONFIG_STATE: ConfigState = {
   seeded: false,
   summary: {
     path: "/tmp/config.yaml",
-    captain: "claude-opus",
-    profiles: [
-      { id: "claude-opus", adapter: "claude", model: "claude-opus-4-8" },
-      { id: "codex-mini", adapter: "codex", model: "gpt-5.5-codex" },
-    ],
+    // The Captain is an inline agent block, not a profile ref (DR-019).
+    captain: {
+      adapter: "claude",
+      model: "claude-opus-4-8",
+      effort: "high",
+      permissions: { mode: "auto" },
+    },
     playbooks: [
       {
         id: "code",
@@ -56,12 +62,30 @@ const CONFIG_STATE: ConfigState = {
         command: "code",
         intent: "software development workflow",
         players: {
-          coder: { ref: "claude-opus", display: "claude-opus-4-8" },
+          coder: {
+            agent: {
+              adapter: "claude",
+              model: "claude-opus-4-8",
+              effort: "high",
+              instruction: "Keep the diff small.",
+            },
+            display: "claude-opus-4-8",
+          },
         },
       },
     ],
   },
 };
+
+const READINESS: ReadinessEntry[] = [
+  { adapter: "claude", ready: true, usedBy: ["captain", "code.coder"] },
+  {
+    adapter: "codex",
+    ready: false,
+    requirement: "set OPENAI_API_KEY or run `codex login`",
+    usedBy: [],
+  },
+];
 
 const BUILTINS: BuiltinPlaybookInfo[] = [
   {
@@ -88,7 +112,7 @@ function renderLibrary() {
   useAppStore.setState({
     connection: "open",
     configState: CONFIG_STATE,
-    readiness: [],
+    readiness: READINESS,
     compileProgress: {},
     activeCompile: undefined,
     builtins: BUILTINS,
@@ -117,6 +141,72 @@ beforeEach(() => {
   });
 });
 
+describe("PBLIB-4: configured roles carry editable inline agents", () => {
+  test("each role shows its agent chip with the adapter's readiness", () => {
+    renderLibrary();
+    const chip = screen.getByLabelText(
+      "coder: claude · claude-opus-4-8 @ high (ready)",
+    );
+    expect(chip.textContent).toContain("claude · claude-opus-4-8 @ high");
+    expect(screen.getByTestId("player-gear-code-coder")).toBeTruthy();
+  });
+
+  test("the gear edits the role's block in place as a merge patch", async () => {
+    renderLibrary();
+    fireEvent.click(screen.getByTestId("player-gear-code-coder"));
+    const popover = screen.getByTestId("agent-popover");
+    expect(popover.getAttribute("aria-label")).toBe("coder agent");
+
+    fireEvent.change(within(popover).getByTestId("agent-effort"), {
+      target: { value: "ultracode" },
+    });
+    fireEvent.click(within(popover).getByTestId("agent-save"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: {
+          kind: "playbook.player.set",
+          playbookId: "code",
+          role: "coder",
+          // Surfaced keys only: the hand-written instruction survives
+          // by never appearing in the patch (DR-019).
+          patch: {
+            adapter: "claude",
+            model: "claude-opus-4-8",
+            effort: "ultracode",
+          },
+        },
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.queryByTestId("agent-popover")).toBeNull(),
+    );
+  });
+
+  test("a refused player edit surfaces inline and keeps the editor open", async () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "config.edit") throw new Error("coder would be unresolved");
+      if (type === "compile.check") {
+        return {
+          node: { ok: true, version: "v23.6.0", command: "node" },
+          slc: { ok: true, command: ["npx", "@sublang/slc"] },
+        };
+      }
+      return null;
+    });
+    renderLibrary();
+    fireEvent.click(screen.getByTestId("player-gear-code-coder"));
+    fireEvent.change(screen.getByTestId("agent-effort"), {
+      target: { value: "max" },
+    });
+    fireEvent.click(screen.getByTestId("agent-save"));
+    await vi.waitFor(() =>
+      expect(
+        screen.getByTestId("agent-popover").textContent,
+      ).toContain("coder would be unresolved"),
+    );
+  });
+});
+
 describe("DR-015: built-ins section from the catalog", () => {
   test("only unconfigured entries render as available built-ins", () => {
     renderLibrary();
@@ -125,6 +215,10 @@ describe("DR-015: built-ins section from the catalog", () => {
     expect(card.textContent).toContain("/discuss");
     expect(card.textContent).toContain("structured design discussion");
     expect(card.textContent).toContain("host:");
+    // An unassigned role starts on the fixed neutral block (DR-019).
+    expect(within(card).getByTestId("agent-chip").textContent).toContain(
+      agentChipText(NEUTRAL_BLOCK),
+    );
     // The configured /code built-in stays in the configured list only.
     expect(within(section).queryByTestId("builtin-code")).toBeNull();
   });
@@ -138,12 +232,47 @@ describe("DR-015: built-ins section from the catalog", () => {
     expect(screen.queryByText("structured")).toBeNull();
   });
 
-  test("the add flow applies playbook.add with the mapped players", async () => {
+  test("the add flow applies playbook.add with a block per role", async () => {
     renderLibrary();
     const card = screen.getByTestId("builtin-discuss");
-    fireEvent.change(within(card).getByRole("combobox"), {
-      target: { value: "codex-mini" },
+    fireEvent.click(within(card).getByTestId("builtin-player-host"));
+    const popover = within(card).getByTestId("agent-popover");
+    fireEvent.click(within(popover).getByTestId("agent-adapter-codex"));
+    fireEvent.change(within(popover).getByTestId("agent-model"), {
+      target: { value: "gpt-5.5-codex" },
     });
+    fireEvent.change(within(popover).getByTestId("agent-effort"), {
+      target: { value: "ultra" },
+    });
+    fireEvent.click(within(popover).getByTestId("agent-save"));
+    expect(within(card).getByTestId("agent-chip").textContent).toContain(
+      "codex · gpt-5.5-codex @ ultra",
+    );
+
+    fireEvent.click(screen.getByTestId("builtin-add-discuss"));
+    await vi.waitFor(() =>
+      // Every role maps to a whole agent block, keyed by role — never
+      // a profile reference (DR-019).
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: {
+          kind: "playbook.add",
+          playbookId: "discuss",
+          from: "@sublang/playbook/discuss/registry",
+          players: {
+            host: {
+              adapter: "codex",
+              model: "gpt-5.5-codex",
+              effort: "ultra",
+              permissions: { mode: "auto" },
+            },
+          },
+        },
+      }),
+    );
+  });
+
+  test("an untouched role is added on the neutral block", async () => {
+    renderLibrary();
     fireEvent.click(screen.getByTestId("builtin-add-discuss"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
@@ -151,7 +280,7 @@ describe("DR-015: built-ins section from the catalog", () => {
           kind: "playbook.add",
           playbookId: "discuss",
           from: "@sublang/playbook/discuss/registry",
-          players: { host: "codex-mini" },
+          players: { host: NEUTRAL_BLOCK },
         },
       }),
     );
@@ -236,16 +365,35 @@ describe("DR-015: the slc demo example card", () => {
     // A stale source path would override the text: prefill clears it.
     expect(path.value).toBe("");
 
-    // The demo roles are pre-mapped onto the first profile so the
-    // mapping selects show a deliberate choice (DR-015).
-    const coderSelect = screen.getByTestId(
-      "compile-player-Coder",
-    ) as HTMLSelectElement;
-    const reviewerSelect = screen.getByTestId(
-      "compile-player-Reviewer",
-    ) as HTMLSelectElement;
-    expect(coderSelect.value).toBe("claude-opus");
-    expect(reviewerSelect.value).toBe("claude-opus");
+    // The demo roles are pre-mapped onto the fixed neutral block
+    // (DR-019) so the chips show a deliberate choice, not a blank.
+    for (const role of ["Coder", "Reviewer"]) {
+      const row = screen.getByTestId(`compile-player-${role}`).parentElement!;
+      expect(within(row).getByTestId("agent-chip").textContent).toContain(
+        agentChipText(NEUTRAL_BLOCK),
+      );
+    }
+  });
+
+  test("a compile role's agent is chosen in place before compiling", () => {
+    renderLibrary();
+    fireEvent.click(screen.getByTestId("example-prefill"));
+    fireEvent.click(screen.getByTestId("compile-player-Reviewer"));
+    const popover = screen.getByTestId("agent-popover");
+    // The compile form knows the Captain, so copying from it is offered.
+    expect(within(popover).getByTestId("agent-same-as-captain")).toBeTruthy();
+    fireEvent.click(within(popover).getByTestId("agent-adapter-gemini"));
+    fireEvent.click(within(popover).getByTestId("agent-save"));
+
+    const row = screen.getByTestId("compile-player-Reviewer").parentElement!;
+    expect(within(row).getByTestId("agent-chip").textContent).toContain(
+      "gemini · claude-opus-4-8 @ high",
+    );
+    // The untouched role keeps the neutral block.
+    const coderRow = screen.getByTestId("compile-player-Coder").parentElement!;
+    expect(within(coderRow).getByTestId("agent-chip").textContent).toContain(
+      agentChipText(NEUTRAL_BLOCK),
+    );
   });
 });
 

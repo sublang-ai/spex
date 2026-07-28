@@ -9,6 +9,7 @@
 
 import { create } from "zustand";
 import type {
+  AgentBlockInput,
   BuiltinPlaybookInfo,
   ConfigState,
   ForgeState,
@@ -119,7 +120,8 @@ export interface AppState {
     roles: string[];
     command: string;
     intent: string;
-    players: Record<string, string>;
+    /** Full inline agent blocks per role (DR-019). */
+    players: Record<string, AgentBlockInput>;
   }): Promise<void>;
 }
 
@@ -270,7 +272,7 @@ export const useAppStore = create<AppState>((set, get) => {
         }
         break;
       case "readiness.state":
-        set({ readiness: message.profiles });
+        set({ readiness: message.entries });
         break;
       case "compile.progress": {
         const progress = get().compileProgress;

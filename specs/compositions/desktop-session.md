@@ -40,7 +40,7 @@ shell, and the composer's awaiting state in the run view.
 
 ### DESK-3
 
-Where a packaged build is installed with a profile backed by a fake
+Where a packaged build is installed with an agent backed by a fake
 adapter and the shared config enables the awaiting-reply
 notification kind, when the acceptance suite launches the app,
 starts a session, and completes a Boss turn, the suite shall assert

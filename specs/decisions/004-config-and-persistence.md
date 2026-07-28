@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the config schema's `profiles` map is retired upstream and amended by [DR-019](019-inline-agent-configuration.md) — every agent carries its settings inline, and profiles-era files migrate in place at load.
 
 ## Context
 

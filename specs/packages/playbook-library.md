@@ -9,7 +9,7 @@ This spec covers the Spex Library surface — presented to the
 user as **Playbooks** — across its user-visible behavior, the
 implementation behind it, and the integration coverage that
 verifies it: browsing and enabling configured playbooks, mapping
-playbook roles to player profiles, and compiling new playbooks,
+playbook roles to player agents, and compiling new playbooks,
 backed by compile execution, registry generation, and
 shared-config writes.
 
@@ -33,7 +33,7 @@ When the Library surface is opened, the Library shall list every
 playbook configured in the shared config's `playbooks` map
 ([DR-004](../decisions/004-config-and-persistence.md)), showing
 for each entry its id, command, intent, required roles, per-role
-player-profile mapping, and enabled state.
+per-role agent settings, and enabled state.
 
 #### PBLIB-2
 
@@ -53,21 +53,21 @@ shared config file (state encoding per
 [DR-004](../decisions/004-config-and-persistence.md)), shall
 modify no other entry, and shall reflect the new state in the
 list. Disabling shall not remove the playbook's entry or its
-role-profile mapping from the shared config.
+role-agent mapping from the shared config.
 
 ### Role Mapping
 
 #### PBLIB-4
 
-Where the shared config defines a `profiles` map
-([DR-004](../decisions/004-config-and-persistence.md)), when the
-user edits a playbook's per-role player mapping, the Library
-shall offer each configured profile id and each supported adapter
-shorthand as mapping choices, shall reject a mapping that leaves
-a required role unresolved or that references an undefined
-profile — naming the affected role — and shall write only
-accepted mappings to the playbook's `players` map in the shared
-config.
+When the user edits a playbook's per-role player, the Library
+shall edit that role's inline agent block in place
+([DR-019](../decisions/019-inline-agent-configuration.md)) —
+offering the embedded runtime's adapters with their readiness, a
+model, the selected adapter's effort vocabulary, and permissions
+— shall write the edit as a merge patch that changes only the
+edited keys, and shall reject an edit that leaves a required role
+unresolved or that the shared-config write path refuses, naming
+the affected role.
 
 ### Compile Flow
 
@@ -95,7 +95,7 @@ policy, prefilled where derivable from the playbook source and
 compiled output. When the form is submitted and passes registry
 validation ([PBLIB-15](#pblib-15)), the
 Library shall register the playbook by writing its entry —
-including the role-profile mapping per [PBLIB-4](#pblib-4) —
+including the per-role agent blocks per [PBLIB-4](#pblib-4) —
 into the shared config's `playbooks` map. A rejected submission
 shall name the violated rule and shall cause no config write.
 
@@ -168,7 +168,7 @@ known built-in playbook absent from the shared config
 ([DR-015](../decisions/015-reference-content.md)) with its
 command, intent, required roles, and browsable source markdown,
 and shall offer an add flow that maps the built-in's roles to
-profiles and registers it through the shared-config write path
+agent blocks and registers it through the shared-config write path
 ([PBLIB-16](#pblib-16)); browsing a built-in's source shall
 require no config change.
 
@@ -180,7 +180,7 @@ slc demo workflow as a read-only example
 grammar — source, normalized text, gears, and state machine —
 and shall offer a prefill action that fills the compile form with
 the example's normalized text and judgment fields — mapping the
-example's roles onto a configured profile — without starting a
+example's roles onto the default agent block — without starting a
 compile.
 Sources and gears served for display shall drop their leading
 maintainer comment headers.
@@ -293,7 +293,7 @@ including: the `playbooks` key equals the manifest id; the
 manifest at `from` imports successfully; no duplicate id or
 command among configured playbooks; no reserved captain role
 among role names; every required role resolved; at least one
-visible role; no profile-id-vs-adapter-shorthand collision — and
+visible role; every agent resolving a supported adapter — and
 shall reject a violating registration naming the violated rule,
 leaving the shared config file unmodified.
 
@@ -302,7 +302,7 @@ leaving the shared config file unmodified.
 #### PBLIB-32
 
 When a registration writes the `playbooks.<id>` entry after a
-compile, the compile flow shall re-key the submitted role-profile
+compile, the compile flow shall re-key the submitted role-agent
 assignments onto the derived role ids
 ([PBLIB-14](#pblib-14)) by case-insensitive name match; when a
 derived role matches no assignment, the compile flow shall fail

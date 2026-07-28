@@ -12,37 +12,47 @@ import { parseDocument, YAMLMap } from "yaml";
 
 import { composeConfig, type LoadModule } from "./config.js";
 
+export interface AgentBlock {
+  adapter: string;
+  model?: string;
+  effort?: string;
+  instruction?: string;
+  permissions?: {
+    mode?: string;
+    fileWrite?: string;
+    shellExecute?: string;
+    networkAccess?: string;
+    writablePaths?: string[];
+  };
+}
+
+/** Merge patch over an existing agent block (DR-019): provided keys
+ * change, absent keys — including hand-written ones — survive. */
+export type AgentPatch = {
+  adapter?: string;
+  model?: string | null;
+  effort?: string | null;
+  instruction?: string | null;
+  permissions?: AgentBlock["permissions"] | null;
+};
+
 export type ConfigEditOp =
-  | {
-      kind: "profile.save";
-      id: string;
-      profile: {
-        adapter: string;
-        model?: string;
-        effort?: string;
-        permissions?: {
-          mode?: string;
-          writablePaths?: string[];
-        };
-      };
-    }
-  | { kind: "profile.delete"; id: string }
-  | {
-      kind: "profile.patch";
-      id: string;
-      patch: { model?: string; effort?: string };
-    }
-  | { kind: "captain.set"; ref: string }
+  | { kind: "captain.set"; patch: AgentPatch }
   | { kind: "notifications.set"; prefs: Record<string, string> }
   | { kind: "theme.set"; theme: string | null }
-  | { kind: "playbook.player.set"; playbookId: string; role: string; ref: string }
+  | {
+      kind: "playbook.player.set";
+      playbookId: string;
+      role: string;
+      patch: AgentPatch;
+    }
   | { kind: "playbook.option.set"; playbookId: string; key: string; value: unknown }
   | { kind: "playbook.delete"; playbookId: string }
   | {
       kind: "playbook.add";
       playbookId: string;
       from: string;
-      players: Record<string, string>;
+      players: Record<string, AgentBlock>;
       options?: Record<string, unknown>;
     };
 
@@ -60,29 +70,44 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
     doc.contents = doc.createNode({}) as unknown as typeof doc.contents;
   }
 
+  const patchAgent = (
+    basePath: (string | number)[],
+    patch: Record<string, unknown>,
+  ): void => {
+    // A scalar shorthand becomes a block on first edit (DR-019): seed
+    // the block with its adapter, then merge the patch — provided
+    // keys change, hand-written ones survive.
+    const current = doc.getIn(basePath);
+    if (typeof current === "string") {
+      doc.setIn(basePath, doc.createNode({ adapter: current }));
+    } else if (current === undefined) {
+      doc.setIn(basePath, doc.createNode({}));
+    }
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) continue;
+      if (value === null) {
+        // An explicit null unsets the key, so a pinned model or
+        // effort can return to the adapter's default (DR-019).
+        doc.deleteIn([...basePath, key]);
+        continue;
+      }
+      doc.setIn(
+        [...basePath, key],
+        typeof value === "object" ? doc.createNode(value) : value,
+      );
+    }
+    // Canonicalize on write (DR-014): setting effort retires the
+    // legacy alias so the block never carries both keys.
+    if (patch.effort !== undefined) {
+      doc.deleteIn([...basePath, "reasoningEffort"]);
+    }
+    // The retired profiles indirection never survives an edit (DR-019).
+    doc.deleteIn([...basePath, "profile"]);
+  };
+
   switch (op.kind) {
-    case "profile.save": {
-      doc.setIn(["profiles", op.id], doc.createNode(prune(op.profile)));
-      break;
-    }
-    case "profile.delete": {
-      doc.deleteIn(["profiles", op.id]);
-      break;
-    }
-    case "profile.patch": {
-      // Merge, never replace: unlisted fields and comments survive.
-      for (const [key, value] of Object.entries(op.patch)) {
-        if (value !== undefined) doc.setIn(["profiles", op.id, key], value);
-      }
-      // Canonicalize on write (DR-014): setting effort retires the
-      // legacy alias so the block never carries both keys.
-      if (op.patch.effort !== undefined) {
-        doc.deleteIn(["profiles", op.id, "reasoningEffort"]);
-      }
-      break;
-    }
     case "captain.set": {
-      doc.setIn(["captain"], op.ref);
+      patchAgent(["captain"], op.patch as Record<string, unknown>);
       break;
     }
     case "notifications.set": {
@@ -95,7 +120,10 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
       break;
     }
     case "playbook.player.set": {
-      doc.setIn(["playbooks", op.playbookId, "players", op.role], op.ref);
+      patchAgent(
+        ["playbooks", op.playbookId, "players", op.role],
+        op.patch as Record<string, unknown>,
+      );
       break;
     }
     case "playbook.option.set": {
@@ -114,9 +142,15 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
       break;
     }
     case "playbook.add": {
+      const players = Object.fromEntries(
+        Object.entries(op.players).map(([role, block]) => [
+          role,
+          prune(block as unknown as Record<string, unknown>),
+        ]),
+      );
       const node = doc.createNode({
         from: op.from,
-        players: op.players,
+        players,
         ...(op.options ?? {}),
       }) as YAMLMap;
       doc.setIn(["playbooks", op.playbookId], node);
@@ -154,21 +188,4 @@ export async function editConfigFile(
   }
   writeFileSync(path, candidate);
   return { ok: true };
-}
-
-/** Guard for profile deletion: refuse while the profile is referenced. */
-export function profileReferences(text: string, profileId: string): string[] {
-  const doc = parseDocument(text);
-  const top = doc.toJS() as {
-    captain?: unknown;
-    playbooks?: Record<string, { players?: Record<string, unknown> }>;
-  } | null;
-  const references: string[] = [];
-  if (top?.captain === profileId) references.push("captain");
-  for (const [playbookId, block] of Object.entries(top?.playbooks ?? {})) {
-    for (const [role, ref] of Object.entries(block?.players ?? {})) {
-      if (ref === profileId) references.push(`playbooks.${playbookId}.players.${role}`);
-    }
-  }
-  return references;
 }
