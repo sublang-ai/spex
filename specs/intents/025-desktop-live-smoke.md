@@ -9,9 +9,9 @@ Automate the release-critical desktop path per [DR-020](../decisions/020-desktop
 
 ## Deliverables
 
-- [ ] Desktop smoke handshake: env-guarded user-data redirect + socket handshake file; mutual exclusion with acceptance mode; SHELL item and test.
-- [ ] `scripts/desktop-smoke.mjs` driving the critical path with agent-evidence gating (dispatch prompt, then first live output), bounded budget, abort, clean teardown, and ABI flip/restore on all exit paths; `npm run smoke:desktop`.
-- [ ] `npm run smoke -- --desktop` keeps the hermetic render pass; the live gate is separate; RELEASE items record the split with a retry-or-waive rule; `docs/release-smoke.md` updated with the reduced manual residue.
+- [x] Desktop smoke handshake: env-guarded user-data redirect + socket handshake file; mutual exclusion with acceptance mode; SHELL item and test.
+- [x] `scripts/desktop-smoke.mjs` driving the critical path with agent-evidence gating (dispatch prompt, then first live output), bounded budget, abort, clean teardown, and ABI flip/restore on all exit paths; `npm run smoke:desktop`.
+- [x] `npm run smoke -- --desktop` keeps the hermetic render pass; the live gate is separate; RELEASE items record the split with a retry-or-waive rule; `docs/release-smoke.md` updated with the reduced manual residue.
 
 ## Tasks
 

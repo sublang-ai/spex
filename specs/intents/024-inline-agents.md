@@ -9,13 +9,13 @@ Adopt playbook 3.1.0 and slc 0.2.0 per [DR-019](../decisions/019-inline-agent-co
 
 ## Deliverables
 
-- [ ] `packages/core` on `@sublang/playbook` ^3.1.0; captain options carry the captain's adapter; profiles-era configs migrate at load per the launcher semantics with backup and hard-error case.
-- [ ] Validation: inline blocks + scalar normalization, runtime-bounded adapter set (kimi included), adapter-scoped efforts from the embedded runtime's vocabulary; profile keys rejected in edits.
-- [ ] Protocol v4: agent summaries and block-taking ops replace the profile surface; adapter-keyed readiness entries with positions; merge-patch captain/player edits preserving hand-written fields.
-- [ ] Template rewritten to explicit single-vendor inline blocks (commented second-vendor example); dev-core fake config follows.
-- [ ] Shared AgentEditor/AgentChip; Settings Captain editor + adapter readiness panel; Library role rows, compile form, and builtin add-flow on the editor with neutral defaults and "same as Captain"; Captain-home popover carries the full editor; no shorthand concept anywhere in the UI.
-- [ ] Vendored playbook sources deleted; sources resolve from the installed package; compile drops the explicit link target and refuses empty derived roles with slc 0.2 guidance.
-- [ ] Stale copy fixed (playbook 2.0 wording, player-ref comments); spec amendments across SET/CORE/PBLIB/RUN/SHELL plus DR-002/004/007/009/011/014/15 pointers, desktop-session composition, and map rows.
+- [x] `packages/core` on `@sublang/playbook` ^3.1.0; captain options carry the captain's adapter; profiles-era configs migrate at load per the launcher semantics with backup and hard-error case.
+- [x] Validation: inline blocks + scalar normalization, runtime-bounded adapter set (kimi included), adapter-scoped efforts from the embedded runtime's vocabulary; profile keys rejected in edits.
+- [x] Protocol v4: agent summaries and block-taking ops replace the profile surface; adapter-keyed readiness entries with positions; merge-patch captain/player edits preserving hand-written fields.
+- [x] Template rewritten to explicit single-vendor inline blocks (commented second-vendor example); dev-core fake config follows.
+- [x] Shared AgentEditor/AgentChip; Settings Captain editor + adapter readiness panel; Library role rows, compile form, and builtin add-flow on the editor with neutral defaults and "same as Captain"; Captain-home popover carries the full editor; no shorthand concept anywhere in the UI.
+- [x] Vendored playbook sources deleted; sources resolve from the installed package; compile drops the explicit link target and refuses empty derived roles with slc 0.2 guidance.
+- [x] Stale copy fixed (playbook 2.0 wording, player-ref comments); spec amendments across SET/CORE/PBLIB/RUN/SHELL plus DR-002/004/007/009/011/014/15 pointers, desktop-session composition, and map rows.
 
 ## Tasks
 
