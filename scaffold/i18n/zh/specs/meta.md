@@ -17,8 +17,8 @@ The `specs/` directory shall contain the following subdirectories and files:
 | --------- | ------- | ------ |
 | `decisions/` | decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
 | `intents/` | intent records (IRs) | \<NNN\>-\<kebab-case\>.md |
-| `packages/` | spec packages ([META-9](#meta-9)) | [\<path\>/]\<kebab-case\>.md |
-| `compositions/` | composition files ([META-31](#meta-31)) | [\<path\>/]\<kebab-case\>.md |
+| `packages/` | spec packages | \<kebab-case\>.md |
+| `compositions/` | composition files | \<kebab-case\>.md |
 | `map.md` | spec index for navigation | - |
 | `meta.md` | the spec of specs | - |
 
@@ -26,10 +26,10 @@ The `specs/` directory shall contain the following subdirectories and files:
 
 A record's ID shall join its kind prefix to its filename's leading number: `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/`.
 The leading number shall be unique within each record kind.
-<!-- spex-i18n-source: META-3 sha256-512066ba4de4451666ad56ef74adb75f4ec372b3f60c4e3951c1e129764aa00c -->
+<!-- spex-i18n-source: META-3 sha256-2baa7f0e5629cad7b6c8e6a24441c4be7dd3f3a2fe8e5320eb9edd75514c2b2f -->
 ### META-3
 
-每个条目文件应包含一个说明其目的的 `## 意图` 章节。
+条目文件应包含规约条目和一个说明其目的的 `## 意图` 章节。
 
 ### META-21
 
@@ -152,8 +152,7 @@ An umbrella phrase — "handle correctly", "support behavior" — names no contr
 
 ### META-9
 
-A spec package shall be one item file ([META-3](#meta-3)) under `packages/`.
-Subdirectories of `packages/` group files for navigation only ([META-32](#meta-32)).
+A spec package under `packages/` shall be one item file in a subdirectory.
 
 ### META-10
 
@@ -191,13 +190,13 @@ An ID that has appeared in no release may be renumbered, reassigned, or overwrit
 ### META-13
 
 A spec package shall define a closed set of subjects and their behaviors for a single intent.
-The shall clause ([META-6](#meta-6)) of a package item shall involve only subjects and behaviors of its own package.
-A party the package requires but does not select (e.g., "the deployment's media provider") shall be named abstractly; such a name is a slot, and only a binding item ([META-36](#meta-36)) binds it.
+A package item's shall clause shall state its own package's behavior; where delivering that behavior requires a counterparty, the clause may name the counterparty it invokes but shall not state that counterparty's behavior as its own guarantee.
+A counterparty the package requires but does not select (e.g., "the deployment's media provider") shall be named abstractly; such a name is a slot, and only a binding item ([META-36](#meta-36)) binds it.
 
 ### META-14
 
-A precondition or trigger clause ([META-6](#meta-6)) of a package item may cite another package's External Behavior where the reliance is a fixed semantic dependency of the citing package's contract; no clause of a package item shall cite another package's Internal Behavior.
-Where the counterparty is selectable, the item shall name a slot ([META-13](#meta-13)) instead.
+A package item may cite another package's External Behavior from any clause ([META-6](#meta-6)) where the reliance is a fixed dependency of its contract — the cited package has to be present for the citing behavior to hold; no clause of a package item shall cite another package's Internal Behavior.
+Whether the counterparty is cited by name or named as a slot ([META-13](#meta-13)) turns on whether the package selects it, not on which clause carries it.
 
 ### META-15
 
@@ -270,6 +269,10 @@ A citation of an item shall be a relative link with an anchor (e.g., `[META-1](m
 ### META-17
 
 DRs and items may cite each other.
+
+### META-44
+
+A DR shall reference a spec item only to support a statement the DR itself makes, never to supply content the DR leaves unstated; the reference is a citation like any other ([META-16](#meta-16)).
 
 ### META-18
 
