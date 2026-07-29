@@ -79,6 +79,7 @@ Localized for `zh` in the first cut:
 
 - Localized overlay files are recorded in `scaffold/.file-history.json` under their overlay paths (for example, `i18n/zh/specs/map.md`). This extends SCAF-21 from `scaffold/specs/` to `i18n/<lang>/` while preserving its per-path rule for base and overlay entries: the final hash equals that file's current bundled content.
 - `--update` pristine detection ([SCAF-22](../packages/scaffold.md#scaf-22)) becomes language-aware: a target is pristine when it matches a recognized version under its English base path or active-language overlay path.
+- The manifest records one hash per *released* version plus one working entry for the current bundled content, rewritten in place between releases ([SCAF-21](../packages/scaffold.md#scaf-21)). Pristine detection asks whether a target file is an untouched copy of something we shipped, and only a released version can be in a target tree, so a hash for an intermediate commit can never match: appending per commit grew the manifest without adding reachable states — `specs/meta.md` reached 48 entries against 3 released contents — and buried the released hashes that do the work.
 
 ## Consequences
 

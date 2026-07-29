@@ -463,11 +463,19 @@ The manifest shall satisfy the following invariants:
   `scaffold/i18n/<lang>/specs/`, so that any caller can detect
   whether a target file matches a recognized bundled version.
 - Each entry's hash array shall list, in chronological order, the
-  canonical SHA-256 of every recognized bundled version of that
-  file's content. The final entry shall equal the current bundled
-  file content's canonical SHA-256.
-- When bundled content changes, the new canonical SHA-256 shall be
-  appended as the final entry before the change is committed.
+  canonical SHA-256 of every released version of that file's
+  content, followed by one working entry for the current bundled
+  content. The final entry shall equal the current bundled file
+  content's canonical SHA-256.
+- When bundled content changes between releases, the working entry
+  shall be rewritten in place rather than appended, so the array
+  grows by one entry per release and not one per commit: only a
+  released version can be the content of a target file, so only a
+  released hash can make a target pristine ([SCAF-22](#scaf-22)).
+- When a release is cut, the working entry becomes that release's
+  frozen entry, and a new working entry is added by the next
+  bundled change. A frozen entry shall never be removed or
+  reordered.
 
 The manifest schema shall be a flat JSON object mapping POSIX
 relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:

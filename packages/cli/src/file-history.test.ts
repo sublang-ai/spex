@@ -82,145 +82,108 @@ describe("legacy file-history manifest", () => {
   });
 });
 
-describe("file-history manifest is append-only (SCAF-21)", () => {
-  // SCAF-21 requires a new hash to be *appended*: replacing an entry
-  // makes an earlier pristine scaffold read as user-modified, so
-  // --update keeps it instead of refreshing. Every committed version
-  // of the manifest — followed across renames, resolved from the
-  // real repository toplevel, since this package's own root is not
-  // the git root — must survive in the working manifests: a retired
-  // bundled path may migrate to the legacy manifest, but no
-  // recognized hash may disappear. Without git, or in a shallow
-  // clone, the check covers what history is available.
-  it("preserves every hash committed in history", () => {
+describe("file-history manifest records releases (SCAF-21)", () => {
+  // SCAF-21 records one hash per RELEASED version of a bundled file,
+  // plus one working entry for the current content that is rewritten
+  // in place between releases. Only a released version can be the
+  // content of a target file, so only a released hash can make a
+  // target pristine (SCAF-22) — an intermediate commit's hash is
+  // unreachable and must not accumulate. Truth therefore comes from
+  // the release tags, not from commit history: every version a tag
+  // shipped must still be present, in tag order. Without git, or in
+  // a shallow clone missing tags, the check covers what is available.
+  it("keeps every released version, in order, and nothing unreleased", () => {
     let gitRoot: string;
+    let tags: string[];
     try {
       gitRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
         cwd: REPO_ROOT,
         encoding: "utf-8",
         stdio: ["ignore", "pipe", "ignore"],
       }).trim();
+      tags = execFileSync("git", ["tag", "--sort=v:refname"], {
+        cwd: gitRoot,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+        .trim()
+        .split("\n")
+        .filter(Boolean);
     } catch {
-      return; // not a git checkout (e.g. a packed install)
+      return; // not a git checkout
     }
-    let log: string;
-    try {
-      log = execFileSync(
-        "git",
-        [
-          "log",
-          "--follow",
-          "--name-only",
-          "--format=%H",
-          "--",
-          "scaffold/.file-history.json",
-        ],
-        { cwd: gitRoot, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
-      );
-    } catch {
-      return;
-    }
-    const versions: Array<[string, string]> = [];
-    let rev: string | undefined;
-    for (const line of log.split("\n")) {
-      if (/^[0-9a-f]{40}$/.test(line)) rev = line;
-      else if (rev !== undefined && line.endsWith(".json")) {
-        versions.push([rev, line]);
-        rev = undefined;
-      }
-    }
-    assert.ok(versions.length > 0, "manifest history not found from the git root");
-    // Read the source manifests at the git root, not this package's
-    // staged copy: the staged bundle is a build-time snapshot, so
-    // comparing history against it can miss an edit made since the
-    // last staging.
-    const working = JSON.parse(
+    if (tags.length === 0) return; // no releases to check against
+
+    const manifest = JSON.parse(
       readFileSync(join(gitRoot, "scaffold", ".file-history.json"), "utf-8"),
     ) as Record<string, string[]>;
-    const legacy = JSON.parse(
-      readFileSync(
-        join(gitRoot, "scaffold", ".legacy-file-history.json"),
-        "utf-8",
-      ),
-    ) as Record<string, string[]>;
-    const errors = new Set<string>();
-    const seenVersions = new Set<string>();
-    const committedVersions: Array<Record<string, string[]>> = [];
-    for (const [commit, path] of versions) {
-      let text: string;
+
+    const errors: string[] = [];
+    for (const [relPath, hashes] of Object.entries(manifest)) {
+      // The contents this path shipped, in tag order, deduped.
+      // A bundled file keeps its identity across layout renames
+      // (specs/dev -> specs/packages, iterations -> intents), so the
+      // released contents are gathered over every path it ever had.
+      const basename = relPath.slice(relPath.lastIndexOf("/") + 1);
+      const candidates = new Set([
+        `scaffold/${relPath}`,
+        `packages/cli/scaffold/${relPath}`,
+      ]);
       try {
-        text = execFileSync("git", ["show", `${commit}:${path}`], {
-          cwd: gitRoot,
-          encoding: "utf-8",
-          stdio: ["ignore", "pipe", "ignore"],
-        });
+        const log = execFileSync(
+          "git",
+          ["log", "--follow", "--name-only", "--format=", "--", `scaffold/${relPath}`],
+          { cwd: gitRoot, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+        );
+        for (const line of log.split("\n")) {
+          const path = line.trim();
+          if (path.endsWith(`/${basename}`)) candidates.add(path);
+        }
       } catch {
-        continue; // shallow-history boundary
+        // no history for this path; the defaults above still apply
       }
-      if (seenVersions.has(text)) continue;
-      seenVersions.add(text);
-      committedVersions.push(JSON.parse(text) as Record<string, string[]>);
-    }
-    // Membership is absolute: every hash any committed manifest
-    // listed must survive in the working manifests.
-    for (const committed of committedVersions) {
-      for (const [relPath, hashes] of Object.entries(committed)) {
-        const now = new Set([
-          ...(working[relPath] ?? []),
-          ...(legacy[relPath] ?? []),
-        ]);
-        if (now.size === 0) {
-          errors.add(`${relPath}: dropped from both manifests`);
-          continue;
-        }
-        for (const hash of hashes) {
-          if (!now.has(hash)) {
-            errors.add(
-              `${relPath}: ${hash} is gone — a recognized version must be kept and new hashes appended`,
-            );
+
+      const released: string[] = [];
+      for (const tag of tags) {
+        let blob: Buffer | undefined;
+        for (const candidate of [...candidates].sort()) {
+          try {
+            blob = execFileSync("git", ["show", `${tag}:${candidate}`], {
+              cwd: gitRoot,
+              stdio: ["ignore", "pipe", "ignore"],
+            });
+            break;
+          } catch {
+            // path absent at this tag; try the pre-monorepo location
           }
         }
+        if (blob === undefined) continue;
+        const hash = canonicalContentHash(blob);
+        if (!released.includes(hash)) released.push(hash);
       }
-    }
-    // Precedence comes from earlier commits only: the FIRST commit
-    // to co-list a pair fixes its direction permanently, so a
-    // committed reorder cannot supply its own exemption — the
-    // reverse pair it introduces never overrides the earlier one.
-    const direction = new Map<string, Map<string, "lo-hi" | "hi-lo">>();
-    for (const committed of [...committedVersions].reverse()) {
-      for (const [relPath, hashes] of Object.entries(committed)) {
-        let pairs = direction.get(relPath);
-        if (!pairs) direction.set(relPath, (pairs = new Map()));
-        for (let i = 0; i < hashes.length; i += 1) {
-          for (let j = i + 1; j < hashes.length; j += 1) {
-            const a = hashes[i];
-            const b = hashes[j];
-            const key = a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`;
-            if (!pairs.has(key)) {
-              pairs.set(key, a < b ? "lo-hi" : "hi-lo");
-            }
-          }
-        }
-      }
-    }
-    for (const [relPath, pairs] of direction) {
-      const now = working[relPath] ?? legacy[relPath];
-      if (now === undefined) continue; // membership already flagged
-      const position = new Map(now.map((hash, index) => [hash, index]));
-      for (const [key, dir] of pairs) {
-        const [lo, hi] = key.split("\u0000");
-        const first = dir === "lo-hi" ? lo : hi;
-        const second = dir === "lo-hi" ? hi : lo;
-        const ia = position.get(first);
-        const ib = position.get(second);
-        if (ia !== undefined && ib !== undefined && ia >= ib) {
-          errors.add(
-            `${relPath}: ${first} must stay before ${second} — the first committed order governs`,
+
+      let cursor = 0;
+      for (const hash of released) {
+        const at = hashes.indexOf(hash, cursor);
+        if (at === -1) {
+          errors.push(
+            `${relPath}: ${hash} shipped in a release but is missing or out of order`,
           );
+          break;
         }
+        cursor = at + 1;
+      }
+
+      // Beyond the released set, only the single working entry is
+      // allowed: anything more is per-commit accumulation.
+      const extra = hashes.filter((hash) => !released.includes(hash));
+      if (extra.length > 1) {
+        errors.push(
+          `${relPath}: ${extra.length} unreleased entries; rewrite the working entry in place instead of appending`,
+        );
       }
     }
-    assert.deepEqual([...errors], [], [...errors].join("\n"));
+    assert.deepEqual(errors, [], errors.join("\n"));
   });
 });
 
