@@ -17,8 +17,8 @@ Realize [DR-021](../decisions/021-skill-based-migration.md) and align the CLI wi
 - [x] `skills/spec-structure-migration/` skill: process instructions, meta ID mapping, conformance checker, install-and-run guide
 - [x] `docs/spec-migration.md` walking a user through the migration end to end
 - [x] CLI seeds the packages-only tree (template manifest and created directories)
-- [ ] `spex lint` implements the new law's rules
-- [ ] Scripted structural-migration modules retired; `--update` and legacy detection point at the skill
+- [x] `spex lint` implements the new law's rules
+- [x] Scripted structural-migration modules retired; `--update` and legacy detection point at the skill
 - [ ] CLI test suite green against the rewritten scaffold
 
 ## Tasks
