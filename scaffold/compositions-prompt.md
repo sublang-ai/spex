@@ -1,13 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-Fill in @specs/compositions/ — the home of cross-package behavior (see @specs/meta.md META-31):
+Capture cross-package behavior as composition packages under @specs/packages/:
 
-- Read the ## Verification section of every file in @specs/packages/. Move each test item that exercises multiple spec packages into a file under @specs/compositions/, named after the behavior or scenario it exercises (kebab-case; never a concatenation of package names).
-- Each composition file needs an H1 with its own ALLCAPS short form and the sections of META-34: ## Intent, then ## Binding and/or ## Scenario, then ## Tests; test items cite, inline at each assertion, the same-file items they execute plus the package items they check (e.g. `[AUTH-3](../packages/auth.md#auth-3)`). Cite only what a phrase directly exercises or checks — no background or transitive links, and no metadata lines.
-- Capture cross-package behaviors that are currently implicit: scan the Where/While/When clauses of package items for references to other packages' subjects, and specify the emerging scenarios as composition items with their own integration or acceptance test items.
-- Where a package names an abstract subject or open slot (e.g. "the deployment's media provider"), add a binding item wiring it to another package's items, a concrete service, or what the installation itself supplies — a rule or value (META-35, META-36); an installation-owned surface (a home page, a header slot) is likewise a bindable client, and a seam invisible at the installed system's boundary is a supply binding, tested by inspecting the deployment rather than by a user journey.
-- A binding item is static — no trigger clause: its preconditions cite the client items (or name the deployment surface), and its shall clause cites the supplier's External Behavior, names the selected service, or states what the installation itself supplies — a rule over cited External inputs or a concrete value (META-36).
-- Do not specify unit tests; composition tests are integration and acceptance tests — a scenario test spans two or more packages, while a binding inspection may touch one package and its service.
-- List new composition files in the ## Compositions section of @specs/map.md with one-line summaries.
+- Read the ## Verification section of every file in @specs/packages/. Move each test item that exercises multiple spec packages into a package named after the emergent behavior (kebab-case; never a concatenation of package names), with the standard package sections (meta-30): ## Intent, ## External Behavior, optional ## Internal Behavior, ## Verification.
+- State the emergent behaviors as spec items whose phrases cite the peer packages' External Behavior inline (e.g. `[[auth-3](auth.md#auth-3)]`) — each citation at the exact phrase that relies on the cited behavior, never as background or transitive links.
+- Capture cross-package reliance that is currently implicit: scan the Where/While/When clauses of package items for references to other packages' subjects, and make each reliance an explicit citation of the peer's External Behavior.
+- Test items cite, inline at each assertion, the behavior items they verify, and prefer executing the real behavior of cited packages over supplying substitutes (meta-36).
+- Do not specify unit tests (meta-21); composition tests are integration and system tests spanning the composed packages.
+- List new package files in the ## Packages table of @specs/map.md with one-line summaries.
 - Finish by running `spex lint` and resolving remaining errors.

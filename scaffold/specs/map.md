@@ -12,7 +12,7 @@ Code can be inconsistent with specs during development.
 Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing a DR, IR, or item.
 
 - DRs and IRs: see [Organization](meta.md#organization), [Record format](meta.md#record-format), and [Citation](meta.md#citation).
-- Items: see [Organization](meta.md#organization), [Item syntax](meta.md#item-syntax), [Spec packages](meta.md#spec-packages), and [Citation](meta.md#citation).
+- Items: see [Organization](meta.md#organization), [Item syntax](meta.md#item-syntax), [Spec packages](meta.md#spec-packages), [Testing](meta.md#testing), and [Citation](meta.md#citation).
 
 ## Layout
 
@@ -20,7 +20,6 @@ Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing
 decisions/    Decision records (DRs)
 intents/      Intent records (IRs)
 packages/     Spec packages (one file per package)
-compositions/ Cross-package compositions: scenarios, bindings, tests
 map.md        This index
 meta.md       The spec of specs
 ```
@@ -39,18 +38,7 @@ meta.md       The spec of specs
 
 ## Packages
 
-### GIT
-
 | File | Summary |
 | --- | --- |
 | [git.md](packages/git.md) | Commit message format and AI co-authorship trailers |
-
-### LIC
-
-| File | Summary |
-| --- | --- |
 | [licensing.md](packages/licensing.md) | SPDX header requirements and verification checks |
-
-## Compositions
-
-None yet. Add files under `compositions/` as packages start working together.

@@ -3,22 +3,26 @@
 
 # IR-000: SPDX Headers
 
-## Goal
+## Status
 
-Apply [LIC-1](../packages/licensing.md#lic-1), [LIC-2](../packages/licensing.md#lic-2), [LIC-5](../packages/licensing.md#lic-5) to in-scope files and pin the project's header format.
+Pending
+
+## Intent
+
+Apply [[licensing-1](../packages/licensing.md#licensing-1)], [[licensing-2](../packages/licensing.md#licensing-2)], [[licensing-5](../packages/licensing.md#licensing-5)] to in-scope files and pin the project's header format.
 
 ## Deliverables
 
 - [ ] Add SPDX headers to in-scope files missing them
-- [ ] Add `LIC-9` to the External Behavior of [`packages/licensing.md`](../packages/licensing.md) with the project's actual header format, license, and copyright
+- [ ] Add `licensing-9` to the External Behavior of [`packages/licensing.md`](../packages/licensing.md) with the project's actual header format, license, and copyright
 
 ## Tasks
 
-1. Resolve scope: detect a project-root license file per [LIC-7](../packages/licensing.md#lic-7); enumerate in-scope files per [LIC-6](../packages/licensing.md#lic-6).
+1. Resolve scope: detect a project-root license file per [[licensing-7](../packages/licensing.md#licensing-7)]; enumerate in-scope files per [[licensing-6](../packages/licensing.md#licensing-6)].
 
 2. Insert SPDX lines in each file's first comment block (after any shebang), using the file's native comment syntax.
 
-3. Add `LIC-9` to the `## External Behavior` section of [`packages/licensing.md`](../packages/licensing.md), showing the concrete header per comment style. Example for a single Apache-2.0 `LICENSE`:
+3. Add `licensing-9` to the `## External Behavior` section of [`packages/licensing.md`](../packages/licensing.md), showing the concrete header per comment style. Example for a single Apache-2.0 `LICENSE`:
 
    ```markdown
    <!-- SPDX-License-Identifier: Apache-2.0 -->
@@ -30,6 +34,6 @@ Apply [LIC-1](../packages/licensing.md#lic-1), [LIC-2](../packages/licensing.md#
    // SPDX-FileCopyrightText: <year> <holder>
    ```
 
-## Acceptance criteria
+## Verification
 
-- [LIC-3](../packages/licensing.md#lic-3), [LIC-4](../packages/licensing.md#lic-4) pass on all in-scope files.
+- [[licensing-3](../packages/licensing.md#licensing-3)], [[licensing-4](../packages/licensing.md#licensing-4)] pass on all in-scope files.
