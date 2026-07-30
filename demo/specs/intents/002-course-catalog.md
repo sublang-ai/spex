@@ -3,19 +3,22 @@
 
 # IR-002: Course Catalog
 
-## Goal
+## Status
+
+In progress
+
+## Intent
 
 Admins shape and publish courses; everyone browses them.
-Lands the CAT package and the admin-bootstrap composition on the
-skeleton the first iteration built.
+Lands the course-catalog package and the admin-bootstrap composition on the skeleton the first iteration built.
 
 ## Deliverables
 
-- [ ] Course, section, and lesson storage with explicit ordering and slugs (CAT)
-- [ ] Public course list, course pages, and lesson views (CAT)
-- [ ] Admin course manager: create, structure, publish (CAT)
-- [ ] Draft isolation at the data-access layer (CAT)
-- [ ] Admin-bootstrap acceptance green (BOOT)
+- [ ] Course, section, and lesson storage with explicit ordering and slugs (course-catalog)
+- [ ] Public course list, course pages, and lesson views (course-catalog)
+- [ ] Admin course manager: create, structure, publish (course-catalog)
+- [ ] Draft isolation at the data-access layer (course-catalog)
+- [ ] Admin-bootstrap acceptance green (admin-bootstrap)
 
 ## Tasks
 
@@ -25,9 +28,9 @@ skeleton the first iteration built.
 4. Implement the course manager: creation as empty-state primary action, course details, syllabus editing, confirmations on section removal and course deletion.
 5. Implement publish and unpublish, wired to list visibility and not-found masking.
 6. Enforce draft isolation in the data-access layer for non-admin reads.
-7. Stand up the CAT verification suite and the BOOT acceptance tests.
+7. Stand up the course-catalog verification suite and the admin-bootstrap acceptance tests.
 
-## Acceptance criteria
+## Verification
 
-- CAT-13 through CAT-16 pass.
-- BOOT-3 and BOOT-4 pass against a fresh preview deployment.
+- course-catalog-13 through course-catalog-16 pass.
+- admin-bootstrap-3 and admin-bootstrap-4 pass against a fresh preview deployment.

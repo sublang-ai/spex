@@ -9,42 +9,23 @@ Accepted
 
 ## Context
 
-An admin must exist before any admin UI can, and the site is
-publicly reachable from its first deployment.
+An admin must exist before any admin UI can, and the site is publicly reachable from its first deployment.
 Options considered:
 
-- First user to sign in becomes admin — rejected: a public
-  deployment can be hijacked between deploy and first sign-in.
-- Seeded database row — rejected: a manual step outside the
-  spec'd deployment path
-  ([DELIV-3](../packages/ops/delivery.md#deliv-3)).
-- Configured GitHub username — rejected: usernames are mutable
-  and reusable, so a rename lets a squatter inherit the
-  designation at their next sign-in.
+- First user to sign in becomes admin — rejected: a public deployment can be hijacked between deploy and first sign-in.
+- Seeded database row — rejected: a manual step outside the spec'd deployment path [[delivery-3](../packages/ops/delivery.md#delivery-3)].
+- Configured GitHub username — rejected: usernames are mutable and reusable, so a rename lets a squatter inherit the designation at their next sign-in.
 - Configured stable GitHub account ID — chosen.
 
 ## Decision
 
-- The deployment configuration names exactly one GitHub account,
-  by its stable account ID, as the initial admin.
-- The stored role is recomputed from that configuration at every
-  sign-in, matching the account's stable ID
-  ([ROLE-1](../packages/identity/access-control.md#role-1),
-  [ROLE-3](../packages/identity/access-control.md#role-3)).
-- No role management UI exists
-  ([DR-000](000-product-scope.md)).
+- The deployment configuration names exactly one GitHub account, by its stable account ID, as the initial admin.
+- The stored role is recomputed from that configuration at every sign-in, matching the account's stable ID [[access-control-1](../packages/identity/access-control.md#access-control-1)] [[access-control-3](../packages/identity/access-control.md#access-control-3)].
+- No role management UI exists ([DR-000](000-product-scope.md)).
 
 ## Consequences
 
-- Day zero needs one sign-in and nothing else
-  ([BOOT](../compositions/admin-bootstrap.md)).
-- Rotating the admin is a configuration change; it takes effect
-  at each affected account's next sign-in.
-- Between a rotation and the demoted account's next sign-in,
-  both accounts may act as admin; the window closes at that
-  account's next sign-in anywhere — the re-recorded role governs
-  all its sessions at once — or when its sessions end, whichever
-  comes first.
-- A compromised configuration store equals a compromised admin;
-  the configuration is a secret-grade value
-  ([DELIV-5](../packages/ops/delivery.md#deliv-5)).
+- Day zero needs one sign-in and nothing else (the admin-bootstrap package).
+- Rotating the admin is a configuration change; it takes effect at each affected account's next sign-in.
+- Between a rotation and the demoted account's next sign-in, both accounts may act as admin; the window closes at that account's next sign-in anywhere — the re-recorded role governs all its sessions at once — or when its sessions end, whichever comes first.
+- A compromised configuration store equals a compromised admin; the configuration is a secret-grade value [[delivery-5](../packages/ops/delivery.md#delivery-5)].

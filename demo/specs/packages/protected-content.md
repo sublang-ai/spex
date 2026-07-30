@@ -1,0 +1,60 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
+
+# protected-content: Protected Content
+
+## Intent
+
+This package covers the site's whole gating surface in one place: which audience reaches which content, and the rule that the answer holds on every path — page, data request, and stored media alike.
+Each package guards its own door; this package pins the map they add up to.
+
+## External Behavior
+
+### protected-content-1
+
+The site shall present each surface to each audience per the following map, identically on direct URL entry, in-app navigation, and data requests:
+
+| Surface | Signed out | Member | Admin |
+| --- | --- | --- | --- |
+| Course list; published course and lesson pages [[course-catalog-1](catalog/course-catalog.md#course-catalog-1)] [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)] [[course-catalog-20](catalog/course-catalog.md#course-catalog-20)] | shown | shown | shown |
+| Playback on published lessons with a resolvable attachment [[video-library-5](catalog/video-library.md#video-library-5)] [[video-library-6](catalog/video-library.md#video-library-6)] | sign-in-required state | plays | plays |
+| Unpublished course and lesson pages [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)] [[course-catalog-21](catalog/course-catalog.md#course-catalog-21)] | not-found | not-found | shown |
+| Course manager and video library [[access-control-2](identity/access-control.md#access-control-2)] [[course-catalog-4](catalog/course-catalog.md#course-catalog-4)] [[video-library-1](catalog/video-library.md#video-library-1)] | sent to sign-in | not-authorized | shown |
+| New playback grants for assets referenced only by unpublished courses [[protected-content-5](#protected-content-5)] | denied | denied | granted — plays on the unpublished lesson page |
+| New playback grants for assets no lesson references [[protected-content-5](#protected-content-5)] | denied | denied | denied |
+| Stored media content without a valid grant | denied | denied | denied |
+
+### protected-content-2
+
+Where a surface in the map is gated, the gate shall hold with no reliance on hidden links — each of the following layers holding independently:
+
+- server-side session checks [[github-login-9](identity/github-login.md#github-login-9)] and role checks;
+- data-layer draft exclusion;
+- role-clean served markup;
+- grant-only media access.
+
+## Internal Behavior
+
+### protected-content-5
+
+Where playback grants issue only for requests the embedding host authorizes, the site — the video library's embedding host — shall answer authorization by content eligibility:
+
+- a requester with an admin session [[access-control-7](identity/access-control.md#access-control-7)] is eligible exactly for assets a lesson of an existing course references;
+- every other requester is eligible exactly for assets a lesson of a currently published course references [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)] [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)] — so new non-admin grants for an asset stop as soon as no currently published course references it, unpublishing or deleting the last referencing course stopping further grants at once;
+- eligibility feeds the library's own gates and replaces none of them: session verification and grant checks stay the library's.
+
+## Verification
+
+### protected-content-3
+
+Where a seeded deployment holds published and unpublished fixture courses, when the acceptance suite sweeps the map's page and data routes as a signed-out visitor, as a member, and as the admin — by direct URL and by in-app navigation — the suite shall assert every response matches the map's cell for that audience [[protected-content-1](#protected-content-1)] [[protected-content-2](#protected-content-2)] [[access-control-2](identity/access-control.md#access-control-2)], including the unpublished pages shown to the admin marked as unpublished [[course-catalog-21](catalog/course-catalog.md#course-catalog-21)], and that no non-admin response body carries unpublished content or admin markup [[course-catalog-12](catalog/course-catalog.md#course-catalog-12)] [[web-shell-6](site/web-shell.md#web-shell-6)].
+
+### protected-content-4
+
+Where a fixture asset is attached to a published lesson, the acceptance suite shall assert:
+
+- direct stored-content requests without a grant, with an expired grant, and with a tampered grant are denied for all three audiences [[protected-content-1](#protected-content-1)] [[video-library-7](catalog/video-library.md#video-library-7)];
+- a member's playback request obtains a grant and plays;
+- the grant is scoped to that one asset, and a fresh playback request obtains a new grant while the course stays published [[protected-content-2](#protected-content-2)] [[video-library-8](catalog/video-library.md#video-library-8)], the first grant having stopped working at its expiry [[video-library-17](catalog/video-library.md#video-library-17)];
+- a member's playback request for an asset whose only referencing course the suite unpublishes [[course-catalog-6](catalog/course-catalog.md#course-catalog-6)] is denied with no grant issued, while a grant the member obtained before that unpublish still plays until its expiry [[video-library-17](catalog/video-library.md#video-library-17)] and the admin's player on that unpublished lesson still plays [[protected-content-5](#protected-content-5)];
+- after the only course referencing a fixture asset is deleted [[course-catalog-17](catalog/course-catalog.md#course-catalog-17)], member and admin playback requests for that asset are likewise denied with no grant issued, while an asset also referenced by a second published fixture course keeps serving member playback after the first course unpublishes [[course-catalog-6](catalog/course-catalog.md#course-catalog-6)] [[protected-content-5](#protected-content-5)].

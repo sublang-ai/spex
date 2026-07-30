@@ -3,18 +3,20 @@
 
 # IR-001: Walking Skeleton
 
-## Goal
+## Status
 
-Prove the riskiest seams end to end before any product feature:
-repository checks, deployment, GitHub sign-in, and the admin
-guard, so every later iteration lands on a working pipeline.
+In progress
+
+## Intent
+
+Prove the riskiest seams end to end before any product feature: repository checks, deployment, GitHub sign-in, and the admin guard, so every later iteration lands on a working pipeline.
 
 ## Deliverables
 
-- [ ] Repository with required checks gating merge (DELIV)
-- [ ] Preview and production deployments serving the shell (DELIV, SHELL)
-- [ ] GitHub sign-in with sessions and the account menu (AUTH)
-- [ ] Configured-admin role grant and a guarded placeholder admin surface (ROLE)
+- [ ] Repository with required checks gating merge (delivery)
+- [ ] Preview and production deployments serving the shell (delivery, web-shell)
+- [ ] GitHub sign-in with sessions and the account menu (github-login)
+- [ ] Configured-admin role grant and a guarded placeholder admin surface (access-control)
 
 ## Tasks
 
@@ -24,13 +26,10 @@ guard, so every later iteration lands on a working pipeline.
 4. Integrate the identity provider with GitHub as this installation's only enabled method; sessions and sign-out.
 5. Implement identity records and role derivation from the configured admin account ID.
 6. Guard a placeholder admin surface and add the role-aware Admin entry.
-7. Stand up the verification suites for AUTH, ROLE, SHELL, and DELIV.
+7. Stand up the verification suites for github-login, access-control, web-shell, and delivery.
 
-## Acceptance criteria
+## Verification
 
-- AUTH-10 through AUTH-13, ROLE-5, ROLE-6, SHELL-7 through
-  SHELL-9, and DELIV-8 through DELIV-10 pass.
-- PLAT-7 passes: checks, previews, and production trace to the
-  bound delivery services.
-- A fresh preview deployment reaches a signed-in admin session
-  with no manual step beyond configuration.
+- github-login-10 through github-login-13, access-control-5, access-control-6, web-shell-7 through web-shell-9, and delivery-8 through delivery-10 pass.
+- platform-services-7 passes: checks, previews, and production trace to the bound delivery services.
+- A fresh preview deployment reaches a signed-in admin session with no manual step beyond configuration.
