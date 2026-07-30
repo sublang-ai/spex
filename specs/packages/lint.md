@@ -36,7 +36,7 @@ When linting completes, the CLI shall print one line per finding in the form `<p
 
 Where the specs tree is linted, structural rules shall report:
 
-- an error for each legacy directory (`specs/user/`, `specs/dev/`, `specs/test/`, `specs/items/`, `specs/interactions/`, `specs/compositions/`), pointing at `spex scaffold --update`;
+- an error for each legacy directory (`specs/user/`, `specs/dev/`, `specs/test/`, `specs/items/`, `specs/interactions/`, `specs/compositions/`), pointing at the `spec-structure-migration` skill — structural migration is agent-skill work, not CLI code ([DR-021](../decisions/021-skill-based-migration.md));
 - an error when `specs/meta.md` or `specs/map.md` is missing;
 - a warning for any other unexpected top-level entry under `specs/` [[meta-1](../meta.md#meta-1)];
 - a warning when a legacy `specs/iterations/` directory coexists with `specs/intents/` ([DR-017](../decisions/017-intent-records.md));
@@ -116,7 +116,7 @@ Where citation discipline is linted, the linter shall report:
 
 #### lint-10
 
-Where `lintSpecs(basePath)` is called, it shall parse every markdown file under `specs/` once with the same GFM-capable parser the migration uses, derive heading anchors with GitHub slug semantics, and return the finding list — printing and exit codes belong to the CLI layer.
+Where `lintSpecs(basePath)` is called, it shall parse every markdown file under `specs/` once with a GFM-capable parser, derive heading anchors with GitHub slug semantics, and return the finding list — printing and exit codes belong to the CLI layer.
 
 - Structure lives on root-level headings only: the H1, the `##` sections, and item headings count when they are direct children of the document, so a heading nested in a blockquote or list is content that neither satisfies nor disturbs structure — while anchors still cover every heading per GitHub semantics.
 - An item's body spans from its heading to the next root-level heading of the same or shallower depth.
@@ -131,7 +131,7 @@ Where `lintSpecs(basePath)` is called, it shall parse every markdown file under 
 
 Where the linter is exercised, the test suite shall cover at least one fixture per rule family, asserting rule IDs and severities:
 
-- structure and naming, including a legacy `specs/compositions/` directory and duplicate record numbers ([[lint-4](#lint-4)]);
+- structure and naming, including a legacy `specs/compositions/` directory whose finding points at the `spec-structure-migration` skill, and duplicate record numbers ([[lint-4](#lint-4)]);
 - package sections with localized zh names, an H1 whose identifier is not the basename, and the missing-Verification warning ([[lint-5](#lint-5)]);
 - item IDs — an uppercase heading, a mismatched prefix, a duplicate ID, a duplicate basename — and misplaced items ([[lint-6](#lint-6)]);
 - relationship metadata, an uncited Verification item, and a behavior citation into a peer's Internal Behavior ([[lint-7](#lint-7)]);

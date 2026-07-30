@@ -13,7 +13,7 @@ Implement DR-012: one-file spec packages under `specs/packages/`, cross-package 
 
 ## Deliverables
 
-- [x] CLI: package-layout migration (mdast-based merge, citation rewrite, map restructure, legacy file-history manifest, agent-file refresh on update, interactions prompt) per [[scaffold-39](../packages/scaffold.md#scaffold-39)]..[[scaffold-47](../packages/scaffold.md#scaffold-47)]
+- [x] CLI: package-layout migration (mdast-based merge, citation rewrite, map restructure, legacy file-history manifest, agent-file refresh on update, interactions prompt) per scaffold-39..[[scaffold-47](../packages/scaffold.md#scaffold-47)]
 - [x] CLI: `spex lint` per the lint package
 - [x] Templates: meta.md ([[meta-1](../meta.md#meta-1)], [[meta-9](../meta.md#meta-9)], [[meta-10](../meta.md#meta-10)], [[meta-20](../meta.md#meta-20)], [[meta-21](../meta.md#meta-21)] revised, [[meta-30](../meta.md#meta-30)] added), DR-000, map.md, packages/git.md, packages/licensing.md, interactions/.gitkeep, agent-specs.txt, both prompts, zh overlays, manifests
 - [x] Tests: merge/rewrite/restructure/lint units, migration state matrix, chained items→flat→packages, zh, packaging, repo-specs lint gate

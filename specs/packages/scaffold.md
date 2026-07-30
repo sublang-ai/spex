@@ -47,21 +47,18 @@ Where the `scaffold` subcommand is invoked without `--update`, the CLI shall emi
 
 Where the `scaffold` subcommand is invoked with `--update` and no `<path>` argument from within a git repository, while the `specs/` working tree is clean, the CLI shall:
 
-1. Migrate files from the legacy `specs/items/user/`, `specs/items/dev/`, and `specs/items/test/` layout to the corresponding flat `specs/user/`, `specs/dev/`, and `specs/test/` paths without overwriting existing flat paths.
-2. Migrate the legacy flat `specs/user/`, `specs/dev/`, and `specs/test/` layout into `specs/packages/` per [[scaffold-39](#scaffold-39)], fold the legacy `specs/interactions/` and `specs/compositions/` directories into `specs/packages/` per [[scaffold-50](#scaffold-50)] and [[scaffold-53](#scaffold-53)], rewrite legacy citations per [[scaffold-40](#scaffold-40)], and restructure a customized `specs/map.md` per [[scaffold-41](#scaffold-41)].
-3. Write every **framework file** from the bundled template, creating framework files that are missing in older specs trees:
+1. Write every **framework file** from the bundled template, creating framework files that are missing in older specs trees:
    - when the framework file being replaced holds content that matches no recognized bundled version — a genuine user modification rather than an older pristine version — the CLI still replaces it, reports it with an `(overwritten — user-modified)` indicator, and warns clearly before completing, naming the file and pointing the user to where the change can be reviewed and reconciled;
    - unmodified and older-pristine framework files are replaced without this warning or indicator.
-4. For every **seed file**, refresh it with the bundled template when the user has not customized it — that is, when the working-tree content matches a previously distributed bundled version of that file, or when the seed is absent:
+2. For every **seed file**, refresh it with the bundled template when the user has not customized it — that is, when the working-tree content matches a previously distributed bundled version of that file, or when the seed is absent:
    - customized seeds are left unmodified and reported as `(kept — user-modified)`;
    - absent seeds are reported as `(created)`;
    - users who do not want a refreshed or newly created seed remove it after `--update`.
-5. Refresh the managed agent-instruction section of existing `CLAUDE.md`/`AGENTS.md` files per [[scaffold-5](#scaffold-5)] without creating absent ones.
-6. Leave any file outside the framework, seed, migration, and citation-rewrite sets unmodified.
-7. Print per-file indicators, a clear completion message that points to `spex lint`, a copy-paste-ready LLM merge prompt, and — under the conditions of [[scaffold-42](#scaffold-42)] — a compositions prompt after it:
-   - per-file indicators are the only path-level summary printed to stdout for the run, with exactly one indicator line per path, and no path summary follows the prompts;
-   - the stderr diagnostics of step 3 and [[scaffold-39](#scaffold-39)] are not stdout path-level summaries and are exempt from this rule;
-   - migration of seed-path targets is reported inline with seed state in one combined indicator line; other migrations, conflicts, and citation rewrites are reported before framework and seed indicators.
+3. Refresh the managed agent-instruction section of existing `CLAUDE.md`/`AGENTS.md` files per [[scaffold-5](#scaffold-5)] without creating absent ones.
+4. Leave any file outside the framework and seed sets unmodified.
+5. Print per-file indicators, a clear completion message that points to `spex lint`, a copy-paste-ready LLM merge prompt, and — on a tree carrying a legacy generation — the migration guidance of [[scaffold-26](#scaffold-26)]:
+   - per-file indicators are the only path-level summary printed to stdout for the run, with exactly one indicator line per path, and no path summary follows the merge prompt or the guidance;
+   - the stderr diagnostics of step 1 are not stdout path-level summaries and are exempt from this rule.
 
 #### scaffold-12
 
@@ -81,86 +78,22 @@ Where files bundled under `scaffold/specs/` are concerned, each file shall be cl
   - `specs/packages/licensing.md`
 - When a new file is added under `scaffold/specs/`, it is assigned to exactly one of these classes.
 - The seeded tree carries the layout of [[meta-1](../meta.md#meta-1)] — `decisions/`, `intents/`, `packages/`, `map.md`, `meta.md` — with no `compositions/` directory, and the seeded packages carry the sections of [[meta-30](../meta.md#meta-30)] and lowercase `<pack>-<N>` item IDs [[meta-11](../meta.md#meta-11)].
-- Bundled support assets outside `scaffold/specs/` (for example, `scaffold/update-merge-prompt.md`, `scaffold/compositions-prompt.md`, the file-history manifests, and `scaffold/LICENSE`) are not framework or seed files.
+- Bundled support assets outside `scaffold/specs/` (for example, `scaffold/update-merge-prompt.md`, the file-history manifests, and `scaffold/LICENSE`) are not framework or seed files.
 - The bundled root `scaffold/LICENSE` is emitted to the target root by [[scaffold-36](#scaffold-36)] on initial scaffold rather than refreshed by `--update`, and it is not localized.
 - Localized overlay files under `scaffold/i18n/<lang>/` inherit the class of the target path they replace.
 
-#### scaffold-39
+#### scaffold-26
 
-Where the `scaffold` subcommand is invoked with `--update` while any of `specs/user/`, `specs/dev/`, or `specs/test/` exists, the CLI shall migrate that legacy layout into `specs/packages/`:
+Where `--update` targets a tree whose `specs/` carries a legacy generation — a legacy directory (`user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, `iterations/`) or an old-generation marker — the CLI shall complete the template refresh ([[scaffold-11](#scaffold-11)]) and print migration guidance after the completion message:
 
-- Item files sharing a relative path under the legacy group directories form one package; each package is written to `specs/packages/<path>.md` and its source files are deleted only after the target is written.
-- When every present source matches a recognized legacy bundled version, the target is the current bundled package seed and the combined indicator of [[scaffold-11](#scaffold-11)] names the sources (e.g. `migrated from specs/dev/licensing.md, specs/test/licensing.md`).
-- Otherwise the sources are merged per [[scaffold-44](#scaffold-44)] and reported as `(migrated from <sources>)`.
-- When the target already exists, every source is kept unmodified and reported as `(kept — target exists at <target>)`; a source that arrived via the same run's item-layout migration reports both steps in that one line (`migrated from <items path>; kept — …`).
-- Non-markdown files under the legacy directories move to the same relative path under `specs/packages/`, except a `.gitkeep` matching a recognized bundled version, which is deleted.
-- Emptied legacy directories are removed.
-- When merging creates duplicate heading anchors inside one target file, the CLI prints a stderr note naming each file and anchor.
-
-#### scaffold-40
-
-Where `--update` runs, the CLI shall rewrite legacy citations in markdown files under `specs/` to the migrated paths and the enclosed item-citation form [[meta-16](../meta.md#meta-16)]:
-
-- Relative link, image, and reference-definition URLs that resolve into `specs/user/`, `specs/dev/`, `specs/test/`, or the legacy `specs/items/` layout are remapped to the corresponding `specs/packages/` path with anchors preserved; links that resolve to the containing file collapse to their `#anchor`.
-- URLs that resolve into `specs/interactions/`, `specs/compositions/`, or `specs/iterations/` are remapped per [[scaffold-50](#scaffold-50)], [[scaffold-53](#scaffold-53)], and [[scaffold-51](#scaffold-51)].
-- An item citation — a relative or same-file link whose fragment is an item anchor and whose text names that item up to case — is rewritten, where not already enclosed, to the enclosed form `[[<pack>-<N>](<path>#<pack>-<N>)]` with its text lowercased to the fragment.
-- A URL is remapped only when the legacy target no longer exists and the migrated target exists, so citations to conflict-kept files stay intact and an interrupted run self-repairs on rerun.
-- Files whose pre-run content matched a recognized bundled version are skipped (they are replaced wholesale by [[scaffold-11](#scaffold-11)] steps 3–4).
-- Rewritten files outside the framework, seed, and migration-target sets are reported as `(citations rewritten)`.
-
-#### scaffold-41
-
-Where `--update` migrated at least one package per [[scaffold-39](#scaffold-39)], while `specs/map.md` exists and its pre-run content matched no recognized bundled version, the CLI shall restructure the map in place for the packages layout and report it as `(restructured for the packages layout)`:
-
-- In the first fenced layout block containing lines starting with `user/`, `dev/`, or `test/`, those lines are replaced by an active-language `packages/` line — the layout of [[meta-1](../meta.md#meta-1)] holds no `compositions/` entry.
-- Each table whose first-column body cells are all `user`, `dev`, or `test` is reshaped to a single row without the group column, keeping the remaining header cells, pointing the file cell at the `specs/packages/` path, and joining distinct summaries with `; ` in user, dev, test order.
-- No Compositions section is appended or created: a composition is an ordinary package under `specs/packages/` ([DR-000](../decisions/000-spec-structure-format.md)).
-- All other map content is preserved.
-- Every transform is scoped through the parsed sections: the layout rewrite applies only to the code block under the Layout heading, group tables reshape only under the Packages heading, and the legacy-section heading renames of [[scaffold-50](#scaffold-50)], [[scaffold-53](#scaffold-53)], and [[scaffold-51](#scaffold-51)] edit heading nodes — where a section heading means a root-level `##` node, so a fenced example, a blockquoted or list-nested heading, or a lookalike elsewhere is never rewritten and never suppresses a transform.
-
-#### scaffold-50
-
-Where `--update` runs while `specs/interactions/` exists, the CLI shall fold that legacy directory into `specs/packages/`:
-
-- Each entry moves to the same path under `specs/packages/`; an entry whose target already exists is kept in place and reported as a conflict.
-- Every relative citation across `specs/` that resolved into `specs/interactions/` is rewritten to the `specs/packages/` path by the citation rewrite ([[scaffold-45](#scaffold-45)]).
-- Each moved file's `Verifies:` metadata blocks are rewritten as inline `Verifies …` sentences ([[scaffold-44](#scaffold-44)]).
-- A `## Interactions` map heading, and an `interactions/` line inside the code block under the map's Layout heading, are renamed to the active-language Packages forms — a lookalike block elsewhere in the map is never rewritten.
-- A pristine bundled `interactions/.gitkeep` is dropped via the legacy manifest ([[scaffold-47](#scaffold-47)]), and the emptied directory is removed.
-- Moved files are reported as `(migrated from specs/interactions/...)` indicator lines.
-- The CLI does not reshape a moved file into the package section grammar of [[meta-30](../meta.md#meta-30)]; lint findings remaining inside moved files are reconciliation work owned by the printed compositions prompt ([[scaffold-42](#scaffold-42)]).
-
-#### scaffold-53
-
-Where `--update` runs while `specs/compositions/` exists, the CLI shall fold that legacy directory into `specs/packages/`:
-
-- Each entry moves to the same path under `specs/packages/`; an entry whose target already exists is kept in place and reported as a conflict.
-- Every relative citation across `specs/` that resolved into `specs/compositions/` is rewritten to the `specs/packages/` path by the citation rewrite ([[scaffold-45](#scaffold-45)]).
-- Each moved file's `Verifies:` metadata blocks are rewritten as inline `Verifies …` sentences ([[scaffold-44](#scaffold-44)]).
-- A `## Compositions` map heading, and a `compositions/` line inside the code block under the map's Layout heading, are renamed to the active-language Packages forms — a lookalike block elsewhere in the map is never rewritten.
-- A pristine bundled `compositions/.gitkeep` is dropped via the legacy manifest ([[scaffold-47](#scaffold-47)]), and the emptied directory is removed.
-- Moved files are reported as `(migrated from specs/compositions/...)` indicator lines.
-- The CLI does not reshape a moved file into the package section grammar of [[meta-30](../meta.md#meta-30)]; lint findings remaining inside moved files are reconciliation work owned by the printed compositions prompt ([[scaffold-42](#scaffold-42)]).
-
-#### scaffold-51
-
-Where `--update` runs while `specs/iterations/` exists, the CLI shall move each of its entries to the same path under `specs/intents/` ([DR-017](../decisions/017-intent-records.md)), keeping any entry whose target already exists in place and reporting it as a conflict, and remove the emptied directory.
-
-- The move changes no bytes and precedes the pristine snapshot, so a recognized legacy seed is refreshed wholesale at its migrated path rather than dirtied by the citation rewrite.
-- Relative citations across `specs/` that resolved into `specs/iterations/` are rewritten to the `specs/intents/` path by the citation rewrite ([[scaffold-45](#scaffold-45)]).
-- A `## Iterations` (or `## 迭代`) map heading and an `iterations/` line inside the code block under the map's Layout heading are renamed to the active-language Intents forms — a lookalike block elsewhere in the map is never rewritten.
-- A legacy file whose leading number is already held by a differently named `intents/` file is likewise kept in place and reported as a conflict against that ID holder, since the number is the record ID [[meta-39](../meta.md#meta-39)].
-- Moved files are reported as `(migrated from specs/iterations/...)` indicator lines, with a moved seed folding into its seed refresh line.
+- structural migration of a legacy generation is agent-skill work, not CLI code ([DR-021](../decisions/021-skill-based-migration.md)): the run moves, merges, rewrites, and deletes no legacy content;
+- the guidance directs the user to the bundled `spec-structure-migration` skill (at `skills/spec-structure-migration/` in the spex repo) and its guide `docs/spec-migration.md`;
+- the guidance names `spex lint` as the mechanical gate the migrated tree must pass;
+- an old-generation marker is target content the bundled histories recognize as a retired generation — a `specs/meta.md` matching a pre-packages bundled version in its chronological history ([[scaffold-21](#scaffold-21)]), or content matching a retired bundled seed in the legacy manifest ([[scaffold-47](#scaffold-47)]).
 
 #### scaffold-52
 
-Where plain `scaffold` targets a tree whose `specs/` contains a legacy directory — `user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, or `iterations/` — the CLI shall write nothing, exit non-zero, and direct the user to `spex scaffold --update`: creating current seed targets beside legacy files would make every later `--update` conflict-keep the legacy content indefinitely.
-
-#### scaffold-42
-
-Where `--update` completes after migrating at least one package per [[scaffold-39](#scaffold-39)] or at least one file per [[scaffold-50](#scaffold-50)] or [[scaffold-53](#scaffold-53)], the CLI shall print — after the merge prompt — a copy-paste-ready agent prompt for reconciling the migrated content into composition packages: packages under `specs/packages/` stating the behavior that emerges only when several packages work together, with the tests that span packages ([DR-000](../decisions/000-spec-structure-format.md)).
-
-- Otherwise no compositions prompt is printed.
+Where plain `scaffold` targets a tree whose `specs/` contains a legacy directory — `user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, or `iterations/` — the CLI shall write nothing, exit non-zero, and direct the user to `spex scaffold --update` and its migration guidance ([[scaffold-26](#scaffold-26)]): creating current seed targets beside legacy files would entangle two spec generations before the migration skill has run.
 
 ### Language Selection
 
@@ -280,76 +213,20 @@ Where `isPristine(basePath, relPath, language)` is called, it shall classify the
 1. it returns `"missing"` when no file exists at `<basePath>/<relPath>`;
 2. otherwise, it computes the canonical SHA-256 hash of the file's content and returns `"pristine"` when the hash is a member of the history for either the English base path or the caller-provided active-language overlay path ([[scaffold-21](#scaffold-21)]), or `"modified"` otherwise.
 
-#### scaffold-23
-
-Where `refreshPristineSeeds()` is called with a base path and active language, it shall, for each seed path returned by `getSeedSpecFiles()`, consult `isPristine` ([[scaffold-22](#scaffold-22)]) and refresh or report the seed:
-
-- on `"pristine"`, when the target's canonical SHA-256 differs from the active-language bundled template's, it overwrites the target and reports the path with an `(updated)` indicator; when they match, it leaves the target unwritten and reports the path with an `(unchanged)` indicator;
-- on `"modified"`, it leaves the target file unmodified and reports the path with a `(kept — user-modified)` indicator;
-- on `"missing"`, it creates target parent directories as needed, writes the active-language bundled template, and reports the path with a `(created)` indicator — users who do not want a seed remove it after `--update`;
-- when it receives migration context for a seed path, it combines the migration source(s) and seed refresh status into one indicator for that path, reporting only the migration source(s) if the migrated seed is already at the current bundled content;
-- when it receives an indicator override for a user-modified seed (e.g. the restructured map of [[scaffold-41](#scaffold-41)] or a kept seed whose citations were rewritten by [[scaffold-40](#scaffold-40)]), the override text replaces `kept — user-modified` in that path's indicator.
-
-#### scaffold-26
-
-Where `migrateLegacyItemLayout()` is called with a base path, it shall move every file under `specs/items/user/`, `specs/items/dev/`, and `specs/items/test/` to the corresponding `specs/user/`, `specs/dev/`, and `specs/test/` path, preserving relative subpaths and file content:
-
-- it creates target parent directories as needed;
-- when the target path already exists, it leaves the legacy file unmodified and returns a conflict result identifying both paths without overwriting either file;
-- when it moves a file, it returns a migration result identifying both the legacy and target paths;
-- after successful moves, it removes empty legacy item directories;
-- it does not alter files outside the legacy item directories, and it does not write to stdout — the caller owns per-file reporting;
-- this migration remains part of `--update` permanently, so late upgraders from legacy layouts keep a supported path;
-- it composes with the package-layout migration ([[scaffold-43](#scaffold-43)]) in a single run: files moved from `specs/items/` continue into `specs/packages/`, and indicators name the original `specs/items/` paths.
-
-### Package Migration
-
-#### scaffold-43
-
-Where `migratePackageLayout()` is called with a base path, active language, and the provenance map of this run's `migrateLegacyItemLayout()` results, it shall implement [[scaffold-39](#scaffold-39)]:
-
-- markdown files under `specs/user/`, `specs/dev/`, and `specs/test/` are grouped by their group-relative path, and each group becomes one target under `specs/packages/`;
-- a target is written before its sources are deleted, so an interrupted run loses no bytes and a rerun picks up the remainder;
-- legacy-pristine classification uses `isLegacyPristine()` ([[scaffold-47](#scaffold-47)]), and the all-pristine fast path writes the active-language bundled seed;
-- returned results carry the target path, a status (`seeded`, `merged`, `moved`, or `conflict`), and the pre-run source paths with provenance composed, so indicators name the paths the user actually had, with conflict results naming the on-disk source paths;
-- duplicate base heading anchors in merged output are returned for the caller's stderr note; the `-N` suffixes that renderers add to repeats are not treated as distinct anchors, and item IDs ending in `-N` are not misdetected as duplicates;
-- it does not write to stdout — the caller owns per-file reporting.
-
-#### scaffold-44
-
-Where `mergePackageSources()` merges a package's legacy sources, it shall produce one markdown file with:
-
-- the distinct leading HTML comment blocks (SPDX headers) of the sources;
-- an H1 `# <pack>: <Title>` whose `<pack>` is the target file's basename [[meta-10](../meta.md#meta-10)], and whose `<Title>` keeps identical source titles, else the first source title stripped of group-role qualifiers, else the humanized file name;
-- one `## Intent` holding each source's intent body with exact duplicates removed;
-- the user, dev, and test source bodies under `## External Behavior`, `## Internal Behavior`, and `## Verification` respectively [[meta-30](../meta.md#meta-30)], with every heading demoted one level (setext headings rewritten as ATX; depth capped at six) and empty sections omitted;
-- one trailing `## References` merging the sources' numeric reference definitions: renumbered sequentially, identical URL-plus-title definitions deduplicated, unused definitions kept, and every `[N]`-style marker in the moved content renumbered to match.
-
-Notes:
-
-- Body content moves byte-faithfully except for the heading, reference-number, and line-ending changes above — CRLF and CR line endings are normalized to LF — and `Verifies:` metadata blocks: each block, including wrapped continuation lines holding only citations and separators, collapses to one inline `Verifies …` sentence with no trailing separator.
-- The rewrite preserves the declared relationships but does not place citations at the assertions they verify [[meta-20](../meta.md#meta-20)]; weaving them inline is reconciliation work for the merge prompt of [[scaffold-11](#scaffold-11)] step 7, and lint marks each unwoven sentence until then.
-- Localized Intent and References section names from the bundled templates are recognized.
-
-#### scaffold-45
-
-Where `rewriteAllSpecCitations()` is called with a base path and the set of pre-run pristine framework/seed paths, it shall apply [[scaffold-40](#scaffold-40)] to every markdown file under `specs/` outside that set, returning the rewritten paths:
-
-- only link, image, and reference-definition URLs and the enclosing brackets of item citations change; all other bytes are preserved;
-- an edit is skipped when the raw link cannot be located verbatim inside the node's source span.
-
-#### scaffold-46
-
-Where `restructureMap()` is called with a map's text and the active language, it shall implement the transform of [[scaffold-41](#scaffold-41)] and return the new text, or null when nothing changed.
-
-- Group tables are detected by their first-column cell values, not by localized header names, and the replacement `packages/` layout line comes from the active language.
-
 #### scaffold-47
 
 Where `getLegacyFileHistory(relPath)` is called, it shall load the bundled `scaffold/.legacy-file-history.json` manifest and return the recorded canonical hash history for that path, or an empty array when the path is absent or the manifest is missing.
 
 - The legacy manifest holds exactly the previously bundled paths that no longer ship — the old `specs/user/`, `specs/dev/`, and `specs/test/` seeds and the retired `.gitkeep` placeholders of `specs/interactions/` and `specs/compositions/` — with their full hash histories, and it stays disjoint from the live manifest of [[scaffold-21](#scaffold-21)].
 - Where `isLegacyPristine(basePath, relPath)` is called, it classifies the file at that path as `missing`, `pristine`, or `modified` against the legacy manifest using the canonical content hash of [[scaffold-21](#scaffold-21)].
+
+#### scaffold-23
+
+Where `refreshPristineSeeds()` is called with a base path and active language, it shall, for each seed path returned by `getSeedSpecFiles()`, consult `isPristine` ([[scaffold-22](#scaffold-22)]) and refresh or report the seed:
+
+- on `"pristine"`, when the target's canonical SHA-256 differs from the active-language bundled template's, it overwrites the target and reports the path with an `(updated)` indicator; when they match, it leaves the target unwritten and reports the path with an `(unchanged)` indicator;
+- on `"modified"`, it leaves the target file unmodified and reports the path with a `(kept — user-modified)` indicator;
+- on `"missing"`, it creates target parent directories as needed, writes the active-language bundled template, and reports the path with a `(created)` indicator — users who do not want a seed remove it after `--update`.
 
 ### Update Orchestration
 
@@ -369,16 +246,10 @@ Where `updateScaffoldTemplates()` is called on a clean `specs/` working tree, mi
 
 Where `updateScaffoldTemplates()` is called, it shall resolve the current git repository root, enforce update preconditions ([[scaffold-15](#scaffold-15)], [[scaffold-16](#scaffold-16)]), allow missing framework files ([[scaffold-17](#scaffold-17)]), and then run the update pipeline in order:
 
-1. move `specs/iterations/` records to `specs/intents/` ([[scaffold-51](#scaffold-51)]) — a byte-preserving move that precedes the pristine snapshot;
-2. snapshot the pristine state of every framework and seed path before any byte edits, so [[scaffold-40](#scaffold-40)] and [[scaffold-41](#scaffold-41)] never dirty a file that later steps replace wholesale;
-3. migrate the legacy item layout ([[scaffold-26](#scaffold-26)]) and the package layout ([[scaffold-43](#scaffold-43)]);
-4. fold `specs/interactions/` and `specs/compositions/` into `specs/packages/` ([[scaffold-50](#scaffold-50)], [[scaffold-53](#scaffold-53)]);
-5. rewrite legacy citations ([[scaffold-45](#scaffold-45)]);
-6. restructure a user-modified map ([[scaffold-46](#scaffold-46)]) and rename the map's iterations entries ([[scaffold-51](#scaffold-51)]);
-7. overwrite framework files ([[scaffold-14](#scaffold-14)]);
-8. refresh pristine seeds with the combined migration sources and indicator overrides ([[scaffold-23](#scaffold-23)]);
-9. refresh existing agent files ([[scaffold-10](#scaffold-10)]);
-10. read the bundled prompts from `scaffold/update-merge-prompt.md` and `scaffold/compositions-prompt.md`, and print the per-file indicators, clear completion message, and prompts specified by [[scaffold-11](#scaffold-11)] and [[scaffold-42](#scaffold-42)].
+1. overwrite framework files ([[scaffold-14](#scaffold-14)]);
+2. refresh pristine seeds ([[scaffold-23](#scaffold-23)]);
+3. refresh existing agent files ([[scaffold-10](#scaffold-10)]);
+4. read the bundled merge prompt from `scaffold/update-merge-prompt.md`, and print the per-file indicators, clear completion message, merge prompt, and legacy-generation migration guidance specified by [[scaffold-11](#scaffold-11)] and [[scaffold-26](#scaffold-26)].
 
 Notes:
 
@@ -441,34 +312,11 @@ Where `--update` is exercised over any cell of the [[scaffold-24](#scaffold-24)]
 
 #### scaffold-27
 
-Where `--update` is exercised on a repository using the legacy `specs/items/user/`, `specs/items/dev/`, or `specs/items/test/` layout, the test suite shall assert that legacy item files chain through both migrations ([[scaffold-26](#scaffold-26)], [[scaffold-43](#scaffold-43)]) into `specs/packages/` in one run, that the indicators name the original `specs/items/` paths, and that the emptied `specs/items/` and group directories are removed.
+Where `--update` is exercised on a repository whose `specs/` contains a legacy directory, the test suite shall run the real CLI and assert the legacy-generation contract ([[scaffold-26](#scaffold-26)]):
 
-- It covers both a recognized bundled legacy seed (asserting the target equals the current bundled package seed) and a custom item file (asserting its content survives the merge transform).
-
-### Migration Coverage
-
-#### scaffold-48
-
-Where `--update` is exercised on a repository using the flat legacy `specs/user/`, `specs/dev/`, `specs/test/` layout ([[scaffold-39](#scaffold-39)]), the test suite shall run the real CLI and cover at least:
-
-- all-pristine legacy seeds: the targets' bytes equal the current bundled package seeds ([[scaffold-43](#scaffold-43)]), one combined indicator names every source, and the legacy directories (including a pristine `.gitkeep`) are gone;
-- a customized legacy seed: the target holds the merge transform of the user's content ([[scaffold-44](#scaffold-44)]) and the indicator combines the migration sources with `kept — user-modified`;
-- a custom multi-file package: the merged target carries the Intent/External Behavior/Internal Behavior/Verification sections in order with demoted headings, and its `Verifies:` citations collapse to same-file anchors ([[scaffold-44](#scaffold-44)]);
-- a conflicting target: every legacy source is kept byte-identical and reported, and the existing target is untouched ([[scaffold-43](#scaffold-43)]);
-- indicator ordering: migration, conflict, and citation-rewrite lines precede framework and seed indicator lines ([[scaffold-11](#scaffold-11)] step 7);
-- a second run after migration: no `migrated from` indicator and no byte changes;
-- a zh tree: overlays refresh from the active language and the migrated tree lints clean.
-
-#### scaffold-49
-
-Where `--update` migrates packages, the test suite shall assert end to end that:
-
-- citations in decision records and other spec files are rewritten to the `specs/packages/` paths and the enclosed item-citation form ([[scaffold-40](#scaffold-40)], [[scaffold-45](#scaffold-45)]) and reported as `(citations rewritten)`;
-- a customized legacy-shape map is restructured in place — layout block lines replaced, group tables reshaped to one `File | Summary` row with `; `-joined summaries, no Compositions section appended — and reported as `(restructured for the packages layout)` ([[scaffold-41](#scaffold-41)], [[scaffold-46](#scaffold-46)]);
-- a tree with `specs/interactions/` files has them moved to `specs/packages/` with citations, the map heading, and an `interactions/` layout-block line rewritten, a wrapped `Verifies:` block collapsing to one inline sentence, and the remaining lint errors confined to the moved files, whose inbound citations stay navigable through the rewrite ([[scaffold-50](#scaffold-50)]);
-- a tree with `specs/compositions/` files has them folded into `specs/packages/` with citations, the map heading, and a `compositions/` layout-block line rewritten, and a pristine `compositions/.gitkeep` dropped ([[scaffold-53](#scaffold-53)]);
-- the compositions prompt is printed after a migrating run ([[scaffold-42](#scaffold-42)]); a package-layout migration of pristine seeds leaves a tree `spex lint` passes with zero errors, and in custom content the converted `Verifies …` sentences are the only errors it reports;
-- the packaged npm artifact ships both file-history manifests, both prompts ([[scaffold-42](#scaffold-42)]), and the bundled `specs/packages/` seeds.
+- the run exits zero and completes the template refresh;
+- the migration guidance prints after the completion message, naming the `spec-structure-migration` skill, the `docs/spec-migration.md` guide, and `spex lint` as the mechanical gate;
+- every file under the legacy directories stays byte-identical and in place.
 
 #### scaffold-35
 
