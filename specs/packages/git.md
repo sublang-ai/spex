@@ -32,3 +32,15 @@ Example: `Co-authored-by: GPT-5.2-Codex (coder) <cligent@sublang.ai>`
 ### git-5
 
 Where a commit realizes a recorded intent, the commit message shall reference the intent record by its bare ID in the `IR-<N>` form, in the subject or body.
+
+## Verification
+
+### git-6
+
+When a prepared commit is audited, the audit shall assert the commit follows this package's conventions:
+
+- the commit records the configured `user.name` and `user.email` [[git-1](#git-1)];
+- the subject line follows the `<type>(<scope>)<!>: <subject>` format [[git-2](#git-2)];
+- any body explains what and why, wrapped at 72 chars [[git-3](#git-3)];
+- an AI-assisted commit carries the `Co-authored-by` attribution trailer [[git-4](#git-4)];
+- a commit realizing a recorded intent references the intent record's ID [[git-5](#git-5)].

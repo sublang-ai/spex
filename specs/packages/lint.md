@@ -52,8 +52,8 @@ Where a file under `specs/packages/` is linted, the linter shall report each bre
 - an error for an unexpected or duplicate `##` section, or sections out of the order Intent, External Behavior, Internal Behavior, Verification, References;
 - a warning for a missing `## Verification` — verification is required unless irrelevant [[meta-38](../meta.md#meta-38)].
 
-The localized section names of the bundled templates are accepted.
-`specs/meta.md` and `specs/map.md` are exempt from these package-file rules.
+- The localized section names of the bundled templates are accepted.
+- `specs/meta.md` and `specs/map.md` are exempt from these package-file rules.
 
 #### lint-6
 

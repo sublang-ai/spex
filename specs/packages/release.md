@@ -124,6 +124,14 @@ When preparing an app release tag, the developer/agent shall run the live deskto
 - a provider-side failure may be retried or waived with the reason recorded;
 - an app-side failure blocks the tag.
 
+## Verification
+
+### Release Checks
+
+#### release-23
+
+When a release candidate tarball is inspected via `npm pack --dry-run`, the inspection shall find no test files and no source files that are not required at runtime in the file list, asserting the runtime-files hygiene of the `files` field [[release-12](#release-12)] and the workflow's package validation [[release-13](#release-13)].
+
 ## References
 
 [1]: https://semver.org/spec/v2.0.0.html "Semantic Versioning 2.0.0"
