@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress
+Done
 
 ## Intent
 
@@ -13,12 +13,12 @@ Align every spec tree — `specs/`, `demo/specs/`, and the scaffold's non-normat
 
 ## Deliverables
 
-- [ ] `specs/meta.md` and `specs/decisions/000-spec-structure-format.md` carry the scaffold rewrite
-- [ ] Scaffold packages, map, the seeded sample intent record, and prompt assets conform; `compositions/` is gone
-- [ ] `specs/packages/` uses basename IDs and enclosed citations, with the three composition files folded in
-- [ ] `specs/` DRs and IRs follow the new record formats; `map.md` reflects the new layout
-- [ ] `demo/` specs, records, map, and guides migrated the same way
-- [ ] zh overlay resynced to the rewritten `meta.md` with refreshed source pins
+- [x] `specs/meta.md` and `specs/decisions/000-spec-structure-format.md` carry the scaffold rewrite
+- [x] Scaffold packages, map, the seeded sample intent record, and prompt assets conform; `compositions/` is gone
+- [x] `specs/packages/` uses basename IDs and enclosed citations, with the three composition files folded in
+- [x] `specs/` DRs and IRs follow the new record formats; `map.md` reflects the new layout
+- [x] `demo/` specs, records, map, and guides migrated the same way
+- [x] zh overlay resynced to the rewritten `meta.md` with refreshed source pins
 
 ## Tasks
 
