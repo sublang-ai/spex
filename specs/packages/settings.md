@@ -1,341 +1,174 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# SET: Settings
+# settings: Settings
 
 ## Intent
 
-This spec covers the Settings workspace surface of the Spex desktop
-app — its externally visible behavior, the implementation
-requirements behind it, and the integration coverage that verifies
-both.
-The Settings surface is an editor over the shared playbook config
-file at `${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml`,
-which stays the source of truth shared with the playbook CLI.
-The inline agent block (adapter, optional model, optional reasoning
-effort, permissions), the adapter names known to the embedded
-runtime (`claude`, `codex`, `gemini`, `kimi`, `opencode`), the
-config's top-level entries (`captain`, `layout`, `notifications`,
-`theme`), and the fail-closed validation rules are those of the
-playbook launcher that shares this file.
-Behind the surface, the implementation requires one validation
-module shared with core config loading, comment-preserving YAML
-writing, launcher-equivalent readiness checks, and the protocol
-boundary between the Settings UI and the core service.
-Integration coverage is exercised through the core service's
-WebSocket protocol against real shared config files in fixture
-config directories, so that Settings behavior and the launcher's
-config contract are verified together.
+This spec covers the Settings workspace surface of the Spex desktop app — its externally visible behavior, the implementation requirements behind it, and the integration coverage that verifies both.
+The Settings surface is an editor over the shared playbook config file at `${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml`, which stays the source of truth shared with the playbook CLI.
+The inline agent block (adapter, optional model, optional reasoning effort, permissions), the adapter names known to the embedded runtime (`claude`, `codex`, `gemini`, `kimi`, `opencode`), the config's top-level entries (`captain`, `layout`, `notifications`, `theme`), and the fail-closed validation rules are those of the playbook launcher that shares this file.
+Behind the surface, the implementation requires one validation module shared with core config loading, comment-preserving YAML writing, launcher-equivalent readiness checks, and the protocol boundary between the Settings UI and the core service.
+Integration coverage is exercised through the core service's WebSocket protocol against real shared config files in fixture config directories, so that Settings behavior and the launcher's config contract are verified together.
 
 ## External Behavior
 
 ### Captain
 
-#### SET-1
+#### settings-1
 
-Where the Settings surface is open, the Settings surface shall
-present the Captain's agent editor over the shared config's
-top-level `captain` entry, with the fields of an inline agent
-block: adapter (one of the embedded runtime's known adapters, each
-carrying its readiness indicator), optional model, optional
-reasoning effort offered only from the selected adapter's effort
-vocabulary, and permissions (mode `auto` or `bypass`, optional
-writable paths).
-When a captain edit is saved, the change shall appear in the
-shared config file's `captain` entry as a merge patch that alters
-only the fields the editor surfaced, preserving hand-written
-fields such as `instruction` and granular permissions (see
-[SET-21](#set-21)).
+Where the Settings surface is open, the Settings surface shall present the Captain's agent editor over the shared config's top-level `captain` entry, with the fields of an inline agent block: adapter (one of the embedded runtime's known adapters, each carrying its readiness indicator), optional model, optional reasoning effort offered only from the selected adapter's effort vocabulary, and permissions (mode `auto` or `bypass`, optional writable paths).
 
-#### SET-2
+- When a captain edit is saved, the change appears in the shared config file's `captain` entry as a merge patch that alters only the fields the editor surfaced, preserving hand-written fields such as `instruction` and granular permissions (see [[settings-21](#settings-21)]).
 
-While a pending Settings edit violates a shared-config validation
-rule — the same fail-closed rule set the playbook launcher applies
-([DR-004](../decisions/004-config-and-persistence.md), amended by
-[DR-019](../decisions/019-inline-agent-configuration.md)) — the
-Settings surface shall mark the offending field inline with a
-message naming the violated rule, covering at least:
+#### settings-2
 
-- an edit reintroducing the retired `profiles` map or a `profile`
-  key, rejected as a retired key;
-- a reasoning effort outside the selected adapter's vocabulary,
-  rejected with a message naming that adapter's valid efforts;
-- an adapter id outside the embedded runtime's known set, rejected
-  with a message naming the runtime's set.
+While a pending Settings edit violates a shared-config validation rule — the same fail-closed rule set the playbook launcher applies ([DR-004](../decisions/004-config-and-persistence.md), amended by [DR-019](../decisions/019-inline-agent-configuration.md)) — the Settings surface shall mark the offending field inline with a message naming the violated rule, covering at least:
 
-When the edit no longer violates the rule, the Settings surface
-shall clear the marker.
+- an edit reintroducing the retired `profiles` map or a `profile` key, rejected as a retired key;
+- a reasoning effort outside the selected adapter's vocabulary, rejected with a message naming that adapter's valid efforts;
+- an adapter id outside the embedded runtime's known set, rejected with a message naming the runtime's set.
 
-#### SET-3
+When the edit no longer violates the rule, the Settings surface clears the marker.
 
-While any pending edit in the Settings surface violates a
-shared-config validation rule
-([DR-004](../decisions/004-config-and-persistence.md), amended by
-[DR-019](../decisions/019-inline-agent-configuration.md)), when the
-user attempts to save, the Settings surface shall not write the
-shared config file and shall state which violations block the save.
-The Settings surface shall never write an on-disk config that the
-shared validation rules reject, however small the saved merge
-patch.
+#### settings-3
 
-#### SET-4
+While any pending edit in the Settings surface violates a shared-config validation rule ([DR-004](../decisions/004-config-and-persistence.md), amended by [DR-019](../decisions/019-inline-agent-configuration.md)), when the user attempts to save, the Settings surface shall not write the shared config file and shall state which violations block the save.
 
-Where the Settings surface is open, the Settings surface shall
-display the captain configuration from the shared config's
-top-level `captain` entry in the Captain's agent editor
-([SET-1](#set-1)), rendering a hand-written scalar adapter id as
-that adapter's default agent block with no shorthand label.
-When a captain edit is saved, the entry shall appear in the shared
-config file as an inline agent block, a scalar entry becoming a
-block on that first save.
+- The Settings surface never writes an on-disk config that the shared validation rules reject, however small the saved merge patch.
+
+#### settings-4
+
+Where the Settings surface is open, the Settings surface shall display the captain configuration from the shared config's top-level `captain` entry in the Captain's agent editor [[settings-1](#settings-1)], rendering a hand-written scalar adapter id as that adapter's default agent block with no shorthand label.
+
+- When a captain edit is saved, the entry appears in the shared config file as an inline agent block, a scalar entry becoming a block on that first save.
 
 ### Adapter Readiness
 
-#### SET-5
+#### settings-5
 
-Where the Settings surface is open, the Settings surface shall
-show a per-adapter readiness panel holding one deduplicated entry
-per adapter the shared config references, each entry naming the
-positions using that adapter (`captain`, `<playbook>.<role>`) and
-reflecting the launcher-equivalent readiness checks of
-[DR-004](../decisions/004-config-and-persistence.md): ready, not
-ready, or unknown for an adapter with no preflight rule.
-When an adapter is not ready, its entry shall include concrete fix
-instructions naming the environment variable to set or the
-adapter's login step (for example, set `ANTHROPIC_API_KEY` or log
-in with the `claude` CLI), and an adapter with no preflight rule
-shall carry verify-yourself guidance instead.
+Where the Settings surface is open, the Settings surface shall show a per-adapter readiness panel holding one deduplicated entry per adapter the shared config references, each entry naming the positions using that adapter (`captain`, `<playbook>.<role>`) and reflecting the launcher-equivalent readiness checks of [DR-004](../decisions/004-config-and-persistence.md): ready, not ready, or unknown for an adapter with no preflight rule.
+
+- When an adapter is not ready, its entry includes concrete fix instructions naming the environment variable to set or the adapter's login step (for example, set `ANTHROPIC_API_KEY` or log in with the `claude` CLI), and an adapter with no preflight rule carries verify-yourself guidance instead.
 
 ### Preferences
 
-#### SET-6
+#### settings-6
 
-Where the Settings surface is open, the Settings surface shall
-provide editors for the shared config's `layout` (pane column
-weights), `notifications`, and `theme` maps.
-When a preference change is saved, the change shall appear under
-the corresponding top-level map in the shared config file.
+Where the Settings surface is open, the Settings surface shall provide editors for the shared config's `layout` (pane column weights), `notifications`, and `theme` maps.
+
+- When a preference change is saved, the change appears under the corresponding top-level map in the shared config file.
 
 ### Config File Semantics
 
-#### SET-7
+#### settings-7
 
-When a Settings edit is saved, the Settings surface shall write the
-shared config file as a targeted edit that preserves comments, key
-order, and keys the Settings surface does not recognize, so the
-file stays hand-editable for playbook CLI use
-([DR-004](../decisions/004-config-and-persistence.md); see
-[SET-13](#set-13)).
+When a Settings edit is saved, the Settings surface shall write the shared config file as a targeted edit that preserves comments, key order, and keys the Settings surface does not recognize, so the file stays hand-editable for playbook CLI use ([DR-004](../decisions/004-config-and-persistence.md); see [[settings-13](#settings-13)]).
 
-#### SET-8
+#### settings-8
 
-While the Settings surface is open, when the shared config file
-changes on disk from outside the app, the Settings surface shall
-refresh the displayed values to the new file content and show a
-notice that the config changed externally.
-When the external change conflicts with unsaved edits in the
-Settings surface, the notice shall say so; resolution is
-last-writer-wins per
-[DR-004](../decisions/004-config-and-persistence.md).
+While the Settings surface is open, when the shared config file changes on disk from outside the app, the Settings surface shall refresh the displayed values to the new file content and show a notice that the config changed externally.
 
-#### SET-9
+- When the external change conflicts with unsaved edits in the Settings surface, the notice says so; resolution is last-writer-wins per [DR-004](../decisions/004-config-and-persistence.md).
 
-Where the app starts on a machine with no shared config file, while
-the core service has seeded the starter config
-([DR-004](../decisions/004-config-and-persistence.md)), the
-Settings surface shall display the starter's values as the current
-settings before any user save, and the displayed values shall equal
-the seeded file's content.
+#### settings-9
+
+Where the app starts on a machine with no shared config file, while the core service has seeded the starter config ([DR-004](../decisions/004-config-and-persistence.md)), the Settings surface shall display the starter's values as the current settings before any user save, and the displayed values shall equal the seeded file's content.
 
 ### Guidance
 
-#### SET-10
+#### settings-10
 
-Where the Settings surface presents an editable setting, the
-Settings surface shall accompany the setting with a short inline
-description of its effect; no setting shall appear as a bare,
-unexplained control.
+Where the Settings surface presents an editable setting, the Settings surface shall accompany the setting with a short inline description of its effect; no setting shall appear as a bare, unexplained control.
 
-#### SET-22
+#### settings-22
 
-While the notifications editor lists notification events, each
-event shall be labeled with a human-readable phrase from the app's
-notification label map rather than the wire event id
-([DR-010](../decisions/010-interface-craft.md) §2); the wire id
-shall remain available in the row's tooltip.
+While the notifications editor lists notification events, each event shall be labeled with a human-readable phrase from the app's notification label map rather than the wire event id ([DR-010](../decisions/010-interface-craft.md) §2); the wire id shall remain available in the row's tooltip.
 
-#### SET-23
+#### settings-23
 
-While an adapter's readiness entry reports not ready, the
-accompanying fix requirement ([SET-5](#set-5)) shall render in
-full, wrapping onto further lines as needed rather than
-truncating.
+While an adapter's readiness entry reports not ready, the accompanying fix requirement [[settings-5](#settings-5)] shall render in full, wrapping onto further lines as needed rather than truncating.
 
-#### SET-24
+#### settings-24
 
-While the shared config file is missing or invalid, the Settings
-surface shall show the config file's path together with a
-secondary control that copies the path to the clipboard and
-briefly confirms the copy in place, so the user can open the file
-in an editor.
+While the shared config file is missing or invalid, the Settings surface shall show the config file's path together with a secondary control that copies the path to the clipboard and briefly confirms the copy in place, so the user can open the file in an editor.
 
 ## Internal Behavior
 
 ### Validation
 
-#### SET-11
+#### settings-11
 
-Where the core service validates the shared config — at load for
-session composition and on a Settings save command — the core
-service shall use a single validation module applying one
-launcher-parity rule set
-([DR-019](../decisions/019-inline-agent-configuration.md)) with
-stable rule identifiers in both paths: inline agent blocks with
-scalar adapter ids normalizing to bare-adapter blocks, adapter ids
-bounded by the embedded runtime's known set, and reasoning efforts
-bounded by each adapter's vocabulary.
-A config rejected at load time shall be rejected on save with the
-same rule identifier, and vice versa; the retired `profiles` map
-and `profile` key are the one asymmetry — migrated in place at
-load, rejected in a save ([SET-2](#set-2)).
+Where the core service validates the shared config — at load for session composition and on a Settings save command — the core service shall use a single validation module applying one launcher-parity rule set ([DR-019](../decisions/019-inline-agent-configuration.md)) with stable rule identifiers in both paths: inline agent blocks with scalar adapter ids normalizing to bare-adapter blocks, adapter ids bounded by the embedded runtime's known set, and reasoning efforts bounded by each adapter's vocabulary.
 
-#### SET-12
+- A config rejected at load time is rejected on save with the same rule identifier, and vice versa; the retired `profiles` map and `profile` key are the one asymmetry — migrated in place at load, rejected in a save [[settings-2](#settings-2)].
 
-When a Settings save command carries a merge patch whose resulting
-config fails validation (see [SET-11](#set-11)), the core service
-shall reject the command without writing the shared config file and
-shall return each violation with its rule identifier and field
-location over the WebSocket protocol.
+#### settings-12
+
+When a Settings save command carries a merge patch whose resulting config fails validation (see [[settings-11](#settings-11)]), the core service shall reject the command without writing the shared config file and shall return each violation with its rule identifier and field location over the WebSocket protocol.
 
 ### Config Writing
 
-#### SET-13
+#### settings-13
 
-When the core service applies an accepted Settings save to the
-shared config file, the core service shall perform a targeted YAML
-edit: comments, key order, and keys not touched by the edit shall
-be preserved, and file content outside the edited nodes shall
-remain byte-identical.
-Reformatting shall be confined to the edited nodes.
+When the core service applies an accepted Settings save to the shared config file, the core service shall perform a targeted YAML edit: comments, key order, and keys not touched by the edit shall be preserved, and file content outside the edited nodes shall remain byte-identical.
+
+- Reformatting is confined to the edited nodes.
 
 ### Readiness
 
-#### SET-14
+#### settings-14
 
-Where the core service evaluates adapter readiness, the core
-service shall report readiness keyed by adapter — one deduplicated
-entry per adapter the active config references, each carrying the
-positions using it (`captain`, `<playbook>.<role>`) — applying
-per-adapter rules identical to the playbook launcher's
-([DR-004](../decisions/004-config-and-persistence.md)): `claude`
-is ready when `ANTHROPIC_API_KEY` is set or `~/.claude` exists;
-`codex` is ready when `OPENAI_API_KEY` is set or `~/.codex`
-exists; an adapter with no preflight rule shall be reported with
-null readiness and verify-yourself guidance rather than not ready.
-Environment lookups shall use the captured login-shell environment
-([DR-004](../decisions/004-config-and-persistence.md)), not the
-bare app process environment.
+Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — one deduplicated entry per adapter the active config references, each carrying the positions using it (`captain`, `<playbook>.<role>`) — applying per-adapter rules identical to the playbook launcher's ([DR-004](../decisions/004-config-and-persistence.md)): `claude` is ready when `ANTHROPIC_API_KEY` is set or `~/.claude` exists; `codex` is ready when `OPENAI_API_KEY` is set or `~/.codex` exists; an adapter with no preflight rule shall be reported with null readiness and verify-yourself guidance rather than not ready.
+
+- Environment lookups use the captured login-shell environment ([DR-004](../decisions/004-config-and-persistence.md)), not the bare app process environment.
 
 ### External Changes
 
-#### SET-15
+#### settings-15
 
-While the core service watches the shared config file, when the
-file changes on disk from a write the core service did not perform,
-the core service shall reload and revalidate the file and push the
-updated config state together with an external-change notice over
-the WebSocket protocol.
-Writes performed by the core service shall not trigger the
-external-change notice.
+While the core service watches the shared config file, when the file changes on disk from a write the core service did not perform, the core service shall reload and revalidate the file and push the updated config state together with an external-change notice over the WebSocket protocol.
+
+- Writes performed by the core service do not trigger the external-change notice.
 
 ### UI Boundary
 
-#### SET-16
+#### settings-16
 
-Where the Settings UI renders or edits configuration, the Settings
-UI shall obtain config state, validation results, and readiness
-results exclusively as WebSocket protocol messages and shall submit
-edits exclusively as protocol commands
-([DR-002](../decisions/002-desktop-app-architecture.md)); it shall
-not read or write the filesystem or the process environment.
+Where the Settings UI renders or edits configuration, the Settings UI shall obtain config state, validation results, and readiness results exclusively as WebSocket protocol messages and shall submit edits exclusively as protocol commands ([DR-002](../decisions/002-desktop-app-architecture.md)); it shall not read or write the filesystem or the process environment.
 
-#### SET-21
+#### settings-21
 
-When an in-place editor saves an agent-block tweak — the captain's
-or a player's — the core package shall apply it as a merge patch
-that alters only the provided keys, leaving every other field,
-hand-written keys such as `instruction`, and comments of the
-block's config node intact, per
-[DR-009](../decisions/009-at-hand-interaction.md) and
-[DR-019](../decisions/019-inline-agent-configuration.md).
+When an in-place editor saves an agent-block tweak — the captain's or a player's — the core package shall apply it as a merge patch that alters only the provided keys, leaving every other field, hand-written keys such as `instruction`, and comments of the block's config node intact, per [DR-009](../decisions/009-at-hand-interaction.md) and [DR-019](../decisions/019-inline-agent-configuration.md).
 
 ## Verification
 
 ### Round-Trip Coverage
 
-#### SET-17
-Where captain agent-block edits ([SET-1](#set-1)) are exercised
-through the core service's Settings command surface
-([SET-7](#set-7)), given a shared config file whose `captain`
-block carries comments, a hand-written `instruction`, and keys
-unknown to Settings, the test suite shall assert that after each
-merge-patch save the file contains the requested change, every
-comment, hand-written field, and unknown key survives
-([SET-21](#set-21)), and file content outside the edited nodes is
-byte-identical to the pre-run content ([SET-13](#set-13)).
+#### settings-17
+
+Where captain agent-block edits [[settings-1](#settings-1)] are exercised through the core service's Settings command surface [[settings-7](#settings-7)], given a shared config file whose `captain` block carries comments, a hand-written `instruction`, and keys unknown to Settings, the test suite shall assert that after each merge-patch save the file contains the requested change, every comment, hand-written field, and unknown key survives [[settings-21](#settings-21)], and file content outside the edited nodes is byte-identical to the pre-run content [[settings-13](#settings-13)].
 
 ### Validation Coverage
 
-#### SET-18
-Where validation is exercised, given fixture edits the playbook
-launcher rejects — at minimum one reintroducing a retired
-`profile` key, one whose effort falls outside the selected
-adapter's vocabulary, and one naming an adapter outside the
-embedded runtime's set ([SET-2](#set-2)) — the test suite shall
-assert for each fixture that the save command is rejected with a
-violation carrying a rule identifier and field location
-([SET-12](#set-12)), that the shared config file's bytes are
-unchanged ([SET-3](#set-3)), and that for the effort and adapter
-fixtures loading a config with the same defect reports the same
-rule identifier as the rejected save ([SET-11](#set-11)).
+#### settings-18
+
+Where validation is exercised, given fixture edits the playbook launcher rejects — at minimum one reintroducing a retired `profile` key, one whose effort falls outside the selected adapter's vocabulary, and one naming an adapter outside the embedded runtime's set [[settings-2](#settings-2)] — the test suite shall assert for each fixture that the save command is rejected with a violation carrying a rule identifier and field location [[settings-12](#settings-12)], that the shared config file's bytes are unchanged [[settings-3](#settings-3)], and that for the effort and adapter fixtures loading a config with the same defect reports the same rule identifier as the rejected save [[settings-11](#settings-11)].
 
 ### Readiness Coverage
 
-#### SET-19
-Where adapter readiness is exercised, given fixture environments
-and home directories covering each launcher rule (credential
-environment variable set, credential directory present, both
-absent) and a config referencing one adapter from several
-positions, the test suite shall assert that the readiness results
-delivered over the protocol match the expected state per adapter
-as one deduplicated entry naming its positions
-([SET-14](#set-14)), that an adapter with no preflight rule
-reports null readiness with verify-yourself guidance
-([SET-14](#set-14)), and that each not-ready result includes fix
-instructions naming the environment variable or login step
-([SET-5](#set-5)).
+#### settings-19
+
+Where adapter readiness is exercised, given fixture environments and home directories covering each launcher rule (credential environment variable set, credential directory present, both absent) and a config referencing one adapter from several positions, the test suite shall assert that the readiness results delivered over the protocol match the expected state per adapter as one deduplicated entry naming its positions [[settings-14](#settings-14)], that an adapter with no preflight rule reports null readiness with verify-yourself guidance [[settings-14](#settings-14)], and that each not-ready result includes fix instructions naming the environment variable or login step [[settings-5](#settings-5)].
 
 ### External Edit Coverage
 
-#### SET-20
-Where external edit reflection is exercised, given a connected
-client holding Settings state, when the shared config file is
-modified on disk by a writer other than the core service, the test
-suite shall assert that the client receives the updated config
-state ([SET-8](#set-8)) and an external-change notice
-([SET-15](#set-15)), and that a subsequent save performed through
-the core service produces no external-change notice
-([SET-15](#set-15)).
+#### settings-20
+
+Where external edit reflection is exercised, given a connected client holding Settings state, when the shared config file is modified on disk by a writer other than the core service, the test suite shall assert that the client receives the updated config state [[settings-8](#settings-8)] and an external-change notice [[settings-15](#settings-15)], and that a subsequent save performed through the core service produces no external-change notice [[settings-15](#settings-15)].
 
 ### Presentation Coverage
 
-#### SET-25
+#### settings-25
 
-Where the Settings surface renders against fixture state, the test
-suite shall assert that each notification row shows its
-human-readable label with the wire event id in the row's tooltip
-([SET-22](#set-22)), that a not-ready adapter's long fix
-requirement renders without truncation ([SET-23](#set-23)), and
-that with an invalid config the copy control places the config
-file path on the clipboard and shows a transient copied
-confirmation ([SET-24](#set-24)).
+Where the Settings surface renders against fixture state, the test suite shall assert that each notification row shows its human-readable label with the wire event id in the row's tooltip [[settings-22](#settings-22)], that a not-ready adapter's long fix requirement renders without truncation [[settings-23](#settings-23)], and that with an invalid config the copy control places the config file path on the clipboard and shows a transient copied confirmation [[settings-24](#settings-24)].

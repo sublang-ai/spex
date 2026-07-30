@@ -1,111 +1,128 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# RELEASE: Release Workflow
+# release: Release Workflow
 
 ## Intent
 
 This spec defines release workflow rules for the project.
 
-## Internal Behavior
+## External Behavior
 
 ### Versioning
 
-#### RELEASE-1
+#### release-1
 
 The project shall follow Semantic Versioning [[1]]: `MAJOR.MINOR.PATCH` where MAJOR indicates breaking changes, MINOR indicates new features, and PATCH indicates bug fixes.
 
-#### RELEASE-2
+#### release-2
 
-The version in the released package's `package.json` (`packages/cli/package.json`) shall match the git tag (without the `v` prefix). The release workflow shall verify this match before publishing.
+The version in the released package's `package.json` (`packages/cli/package.json`) shall match the git tag (without the `v` prefix).
+
+- The release workflow verifies this match before publishing [[release-8](#release-8)].
 
 ### Changelog
 
-#### RELEASE-3
+#### release-3
 
 All notable changes to the released package shall be documented in its `CHANGELOG.md` (`packages/cli/CHANGELOG.md`) following the Keep a Changelog [[2]] format.
 
-#### RELEASE-4
+#### release-4
 
 When preparing a release, the developer/agent shall review all commits since the last release and ensure all notable changes are documented in the `[Unreleased]` section of `CHANGELOG.md`.
 
-#### RELEASE-5
+#### release-5
 
 When creating a release tag, the developer/agent shall move items from `[Unreleased]` to a new version section in `CHANGELOG.md` with the release date, and update the comparison links at the bottom of the file.
 
-#### RELEASE-6
+#### release-6
 
 Changelog entries shall be grouped under these headings (in order): `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 
 ### Release Process
 
-#### RELEASE-7
+#### release-7
 
 Releases shall be triggered by pushing a git tag matching the pattern `vMAJOR.MINOR.PATCH` (e.g., `v1.0.0`).
 
-#### RELEASE-8
+#### release-8
 
 When a release tag is pushed, the release workflow shall verify the tag version matches `package.json` version, build and validate the package, and extract release notes from `CHANGELOG.md`.
 
-#### RELEASE-9
+#### release-9
 
-When the release workflow publishes to npm, it shall use the `--provenance` flag for supply chain security, generating a signed attestation linking the package to its source repository and build. Authentication shall use npm OIDC trusted publishing — static npm tokens shall not be used.
+When the release workflow publishes to npm, it shall use the `--provenance` flag for supply chain security and authenticate via npm OIDC trusted publishing:
 
-#### RELEASE-10
+- provenance generates a signed attestation linking the package to its source repository and build;
+- static npm tokens are not used.
+
+#### release-10
 
 When the release workflow publishes a scoped package, it shall use `--access public` to ensure public availability.
 
-#### RELEASE-11
+#### release-11
 
 When the release workflow completes publishing, it shall create a GitHub release with the extracted changelog notes.
 
-#### RELEASE-18
+#### release-18
 
-When a release tag is pushed, the release workflow shall confirm the CI workflow concluded `success` for the tagged commit before publishing to npm or creating a GitHub release, waiting up to a bounded timeout for the CI workflow to complete. When the CI workflow concludes with any result other than `success`, or the timeout elapses without a successful conclusion, the release workflow shall fail without publishing to npm or creating a GitHub release.
+When a release tag is pushed, the release workflow shall confirm the CI workflow concluded `success` for the tagged commit before publishing to npm or creating a GitHub release, waiting up to a bounded timeout for the CI workflow to complete:
 
-#### RELEASE-19
+- the CI workflow concludes `success` — publishing proceeds;
+- the CI workflow concludes with any other result, or the timeout elapses without a successful conclusion — the release workflow fails without publishing to npm or creating a GitHub release.
 
-Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), tags matching `vMAJOR.MINOR.PATCH` shall release only the `@sublang/spex` package from `packages/cli`, and desktop app releases shall use the disjoint `app-v*` tag namespace.
+#### release-19
+
+Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), release tags shall use disjoint namespaces per channel:
+
+- tags matching `vMAJOR.MINOR.PATCH` release only the `@sublang/spex` package from `packages/cli`;
+- desktop app releases use the `app-v*` tag namespace.
 
 ### Package Hygiene
 
-#### RELEASE-12
+#### release-12
 
-The `package.json` `files` field shall exclude test files and build artifacts not required at runtime from the published tarball. The `prepublishOnly` script shall build and run tests before publishing.
+The released package's `package.json` shall keep the published tarball to runtime files and gate publishing on a green build:
 
-#### RELEASE-13
+- the `files` field excludes test files and build artifacts not required at runtime from the published tarball;
+- the `prepublishOnly` script builds and runs tests before publishing.
+
+#### release-13
 
 Where the release workflow validates the package, it shall verify that the tarball contains no test files and no source files that are not required at runtime.
 
-#### RELEASE-14
+#### release-14
 
-The published package shall include a `README.md` that documents what the tool does, how to install it, and how to use it. The README shall be kept up to date with the current feature set before each release.
+The published package shall include a `README.md` that documents what the tool does, how to install it, and how to use it, kept up to date with the current feature set before each release.
 
 ### Pre-release Checklist
 
-#### RELEASE-15
+#### release-15
 
 When preparing a release tag, the developer/agent shall verify that all tests pass and all changes are committed and pushed to `main`.
 
-#### RELEASE-16
+#### release-16
 
 When preparing a release tag, the developer/agent shall verify that `CHANGELOG.md` is updated with the new version and date, and `package.json` version is bumped.
 
-#### RELEASE-17
+#### release-17
 
 When preparing a release tag, the developer/agent shall verify that the tarball contains only production files (e.g., via `npm pack --dry-run`).
 
-#### RELEASE-20
+#### release-20
 
-When preparing a release tag, the developer/agent shall run the automated smoke suite (`npm run smoke`, with the desktop stage for app releases) and it shall pass every stage: build, spec lint, unit and integration tests, and a core round-trip that seeds the bundled template, serves the built-in catalog and artifacts, and seeds and parses the example project.
+When preparing a release tag, the developer/agent shall run the automated smoke suite (`npm run smoke`, with the desktop stage for app releases) and see it pass every stage: build, spec lint, unit and integration tests, and a core round-trip that seeds the bundled template, serves the built-in catalog and artifacts, and seeds and parses the example project.
 
-#### RELEASE-21
+#### release-21
 
-When preparing a release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the visuals and packaging pass automation cannot see — and a failing step shall block the tag until resolved.
+When preparing a release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the visuals and packaging pass automation cannot see — with a failing step blocking the tag until resolved.
 
-#### RELEASE-22
+#### release-22
 
-When preparing an app release tag, the developer/agent shall run the live desktop smoke (`npm run smoke:desktop`) — the real desktop app walking config, example seeding, session, live playbook dispatch, and abort with signed-in agents ([DR-020](../decisions/020-desktop-live-smoke.md)) — and shall record its outcome with the tag; a provider-side failure may be retried or waived with the reason recorded, while an app-side failure shall block the tag.
+When preparing an app release tag, the developer/agent shall run the live desktop smoke (`npm run smoke:desktop`) — the real desktop app walking config, example seeding, session, live playbook dispatch, and abort with signed-in agents ([DR-020](../decisions/020-desktop-live-smoke.md)) — and record its outcome with the tag:
+
+- a provider-side failure may be retried or waived with the reason recorded;
+- an app-side failure blocks the tag.
 
 ## References
 

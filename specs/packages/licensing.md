@@ -1,13 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# LIC: Licensing Headers
+# licensing: Licensing Headers
 
 ## Intent
 
 This spec covers SPDX header requirements for files included in the project, together with the acceptance tests that verify copyright and license headers.
 
-## Internal Behavior
+## External Behavior
 
 ### Scope
 
@@ -31,17 +31,18 @@ Recognized patterns at project root:
 
 ### Headers
 
-#### LIC-1
+#### licensing-1
 
 Where the file has comment syntax and is not excluded by [Exclusions](#exclusions), while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-FileCopyrightText` in its first comment block after any shebang.
 
-#### LIC-2
+#### licensing-2
 
 Where the file has comment syntax, is not excluded by [Exclusions](#exclusions), and one or more project-root license files match [License File Detection](#license-file-detection), while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-License-Identifier` in its first comment block after any shebang.
 
 ### Format
 
-This project carries a single `LICENSE` file (Apache-2.0). All applicable files use:
+This project carries a single `LICENSE` file (Apache-2.0).
+All applicable files use:
 
 ```markdown
 <!-- SPDX-License-Identifier: Apache-2.0 -->
@@ -59,8 +60,10 @@ For source code files with `//` comment syntax:
 
 ### Header Checks
 
-#### LIC-3
-Where the file has comment syntax and is not [excluded](#exclusions), while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-FileCopyrightText` ([LIC-1](#lic-1)).
+#### licensing-3
 
-#### LIC-4
-Where the file has comment syntax, is not [excluded](#exclusions), and a [license file](#license-file-detection) exists at project root, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier` ([LIC-2](#lic-2)).
+Where the file has comment syntax and is not [excluded](#exclusions), while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-FileCopyrightText` [[licensing-1](#licensing-1)].
+
+#### licensing-4
+
+Where the file has comment syntax, is not [excluded](#exclusions), and a [license file](#license-file-detection) exists at project root, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier` [[licensing-2](#licensing-2)].
