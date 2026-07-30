@@ -11,18 +11,18 @@ This spec covers SPDX header requirements for files included in the project, tog
 
 ### Scope
 
-#### Exclusions
+#### licensing-5
 
-The following files are out of scope:
+When a project file is classified for licensing headers, the licensing scope shall exclude exactly these categories:
 
 - No comment syntax: e.g., JSON, binaries
 - Config: e.g., `.gitignore`, `.editorconfig`, `**/settings.json`, `AGENTS.md`, `.github/workflows/ci.yml`, lock files
 - Generated/vendor: e.g., `dist/`, `node_modules/`, vendor directories
 - License/legal documents
 
-#### License File Detection
+#### licensing-6
 
-Recognized patterns at project root:
+When the project root is inspected for its license, the license-file detector shall recognize these patterns:
 
 - `LICENSE`, `LICENSE.txt`, `LICENSE.md`, `COPYING`
 - `LICENSE-CONTENT`, `LICENSE-APACHE`, etc. (named variants)
@@ -33,28 +33,25 @@ Recognized patterns at project root:
 
 #### licensing-1
 
-Where the file has comment syntax and is not excluded by [Exclusions](#exclusions), while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-FileCopyrightText` in its first comment block after any shebang.
+Where the file has comment syntax and is not excluded by the licensing scope [[licensing-5](#licensing-5)], while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-FileCopyrightText` in its first comment block after any shebang.
 
 #### licensing-2
 
-Where the file has comment syntax, is not excluded by [Exclusions](#exclusions), and one or more project-root license files match [License File Detection](#license-file-detection), while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-License-Identifier` in its first comment block after any shebang.
+Where the file has comment syntax, is not excluded by the licensing scope [[licensing-5](#licensing-5)], and one or more project-root license files match the license-file detector patterns [[licensing-6](#licensing-6)], while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-License-Identifier` in its first comment block after any shebang.
 
-### Format
+- This project carries a single `LICENSE` file (Apache-2.0), so all applicable files use:
 
-This project carries a single `LICENSE` file (Apache-2.0).
-All applicable files use:
+  ```markdown
+  <!-- SPDX-License-Identifier: Apache-2.0 -->
+  <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
+  ```
 
-```markdown
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-```
+- For source code files with `//` comment syntax:
 
-For source code files with `//` comment syntax:
-
-```typescript
-// SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
-```
+  ```typescript
+  // SPDX-License-Identifier: Apache-2.0
+  // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+  ```
 
 ## Verification
 
@@ -62,8 +59,8 @@ For source code files with `//` comment syntax:
 
 #### licensing-3
 
-Where the file has comment syntax and is not [excluded](#exclusions), while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-FileCopyrightText` [[licensing-1](#licensing-1)].
+Where the file has comment syntax and is not excluded by the licensing scope [[licensing-5](#licensing-5)], while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-FileCopyrightText` [[licensing-1](#licensing-1)].
 
 #### licensing-4
 
-Where the file has comment syntax, is not [excluded](#exclusions), and a [license file](#license-file-detection) exists at project root, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier` [[licensing-2](#licensing-2)].
+Where the file has comment syntax, is not excluded by the licensing scope [[licensing-5](#licensing-5)], and a license file matching the detector patterns [[licensing-6](#licensing-6)] exists at project root, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier` [[licensing-2](#licensing-2)].

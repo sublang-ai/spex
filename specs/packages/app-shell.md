@@ -134,11 +134,16 @@ The desktop package shall expose the native bridge of [DR-008](../decisions/008-
 
 #### app-shell-22
 
-The renderer shall enforce a content security policy that denies remote script, connection, and image loading (data: images excepted), and transcript markdown shall not fetch remote images, so untrusted agent output cannot beacon out of the app.
+The renderer shall enforce a content security policy that denies remote script, connection, and image loading (data: images excepted).
+
+- Transcript markdown does not fetch remote images, so untrusted agent output cannot beacon out of the app.
 
 #### app-shell-24
 
-Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-desktop-live-smoke.md)), when the desktop app starts, the desktop package shall redirect its user-data directory to the smoke-provided location before opening any store, start the core as usual, and write the core's socket address to the named file only after the core is listening; where the acceptance variable is also set, the app shall refuse to launch naming the conflict, and where neither variable is set the behavior shall be unchanged.
+Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-desktop-live-smoke.md)), when the desktop app starts, the desktop package shall redirect its user-data directory to the smoke-provided location before opening any store, start the core as usual, and write the core's socket address to the named file only after the core is listening.
+
+- Where the acceptance variable is also set, the app refuses to launch naming the conflict.
+- Where neither variable is set, the behavior is unchanged.
 
 ## Verification
 

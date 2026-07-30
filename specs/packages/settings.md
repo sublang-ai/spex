@@ -23,13 +23,11 @@ Where the Settings surface is open, the Settings surface shall present the Capta
 
 #### settings-2
 
-While a pending Settings edit violates a shared-config validation rule — the same fail-closed rule set the playbook launcher applies ([DR-004](../decisions/004-config-and-persistence.md), amended by [DR-019](../decisions/019-inline-agent-configuration.md)) — the Settings surface shall mark the offending field inline with a message naming the violated rule, covering at least:
+While a pending Settings edit violates a shared-config validation rule — the same fail-closed rule set the playbook launcher applies ([DR-004](../decisions/004-config-and-persistence.md), amended by [DR-019](../decisions/019-inline-agent-configuration.md)) — the Settings surface shall mark the offending field inline with a message naming the violated rule, clearing the marker once the edit no longer violates the rule, covering at least:
 
 - an edit reintroducing the retired `profiles` map or a `profile` key, rejected as a retired key;
 - a reasoning effort outside the selected adapter's vocabulary, rejected with a message naming that adapter's valid efforts;
 - an adapter id outside the embedded runtime's known set, rejected with a message naming the runtime's set.
-
-When the edit no longer violates the rule, the Settings surface clears the marker.
 
 #### settings-3
 

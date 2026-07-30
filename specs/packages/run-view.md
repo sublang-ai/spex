@@ -186,7 +186,9 @@ When the abort control is activated, it shall acknowledge instantly — disabled
 
 The Captain thread shall render visible time separators before the first message, after gaps of more than ten minutes, and on day boundaries, with exact timestamps staying available on hover.
 
-- The session state chip shows a human-readable label (amber while waiting on the Boss, red for failure) with the raw state id in its tooltip, never as the primary copy ([DR-010](../decisions/010-interface-craft.md) §2).
+#### run-view-59
+
+The session state chip shall show a human-readable label (amber while waiting on the Boss, red for failure) with the raw state id in its tooltip, never as the primary copy ([DR-010](../decisions/010-interface-craft.md) §2).
 
 #### run-view-46
 
@@ -385,7 +387,7 @@ While a fixture turn is active, the test suite shall assert the Captain thread s
 
 #### run-view-54
 
-The test suite shall assert time separators appear before the first line, after >10-minute gaps, and on day changes [[run-view-41](#run-view-41)]; that known states map to human labels with unknown ids humanized; that the project palette is driven end-to-end by keyboard (opens focused, arrows highlight, Enter picks, Escape closes with the composer draft intact) and its rows carry running and needs-you state [[run-view-42](#run-view-42)]; and that Escape hides the slash menu without touching the draft [[run-view-43](#run-view-43)].
+The test suite shall assert time separators appear before the first line, after >10-minute gaps, and on day changes [[run-view-41](#run-view-41)]; that known states map to human labels with unknown ids humanized [[run-view-59](#run-view-59)]; that the project palette is driven end-to-end by keyboard (opens focused, arrows highlight, Enter picks, Escape closes with the composer draft intact) [[run-view-42](#run-view-42)] and its rows carry running and needs-you state [[projects-23](projects.md#projects-23)]; and that Escape hides the slash menu without touching the draft [[run-view-43](#run-view-43)].
 
 #### run-view-55
 

@@ -145,4 +145,4 @@ Where the linter is exercised, the test suite shall cover at least one fixture p
 
 #### lint-12
 
-Where the real CLI is exercised, the test suite shall assert that a failing tree exits non-zero with `<path>:<line>` findings and a summary [[lint-3](#lint-3)], that a clean freshly scaffolded tree exits zero with the no-problems line [[lint-1](#lint-1)], and that a missing specs tree exits non-zero [[lint-2](#lint-2)].
+Where the real CLI is exercised, the test suite shall assert that a failing tree exits non-zero with `<path>:<line>` findings and a summary [[lint-3](#lint-3)], that a clean freshly scaffolded tree, resolved without a path argument [[lint-1](#lint-1)], exits zero with the no-problems line [[lint-3](#lint-3)], and that a missing specs tree exits non-zero [[lint-2](#lint-2)].

@@ -186,10 +186,14 @@ Where fixture player `done` events carry usage payloads across two sessions and 
 
 Where a stubbed forge adapter returns fixture open issues and pull requests for a bound project, when the Dashboard is displayed, the test suite shall assert that the next-work lists render the fixture entries with titles and numbers [[dashboard-6](#dashboard-6)], that a manual refresh invokes the stub again, and that a stub failure on refresh leaves the previously served lists in place with the failure and data age surfaced [[dashboard-14](#dashboard-14)].
 
-### Empty-State and Label Coverage
+### Empty-State Coverage
 
 #### dashboard-22
 
 Where Dashboard state is derived with no registered project, the test suite shall assert that the Dashboard renders its sections with their empty-state guidance [[dashboard-8](#dashboard-8)] rather than a welcome takeover [[dashboard-21](#dashboard-21)], and that the next-work empty state offers an activatable navigation control to the Projects surface [[dashboard-8](#dashboard-8)].
 
-- Where a live session's view carries an engagement state id, the test suite further asserts that the running-sessions row renders the human-readable state label with the raw state id available in the tooltip [[dashboard-5](#dashboard-5)].
+### Label Coverage
+
+#### dashboard-23
+
+Where a live session's view carries an engagement state id, the test suite shall assert that the running-sessions row renders the human-readable state label with the raw state id available in the tooltip [[dashboard-5](#dashboard-5)].
