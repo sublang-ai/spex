@@ -10,7 +10,6 @@ const USAGE = `Usage: spex <command> [options]
 Commands:
   scaffold [--lang <code>] [<path>]   Create specs directory structure
   scaffold --update                  Refresh scaffold-provided specs templates
-                                     and migrate legacy layouts
   lint [<path>]                      Check the specs tree structure, item IDs,
                                      and citations`;
 

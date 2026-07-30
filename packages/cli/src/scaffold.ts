@@ -2,44 +2,43 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { appendAgentSpecs } from "./append-agent-specs.js";
-import { readBundledMarkdown } from "./bundled-scaffold.js";
+import { getScaffoldDir, readBundledMarkdown } from "./bundled-scaffold.js";
 import {
   copyRootLicense,
   copyTemplates,
   formatSupportedLanguages,
-  getFrameworkSpecFiles,
-  getSeedSpecFiles,
+  isLegacyPristine,
   isPristine,
   isSupportedLanguage,
-  listFiles,
-  migrateIterationsLayout,
-  migrateLegacyItemLayout,
   overwriteFrameworkSpecFiles,
   refreshPristineSeeds,
   type ScaffoldLanguage,
 } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
-import {
-  migrateInteractionsLayout,
-  migratePackageLayout,
-  rewriteAllSpecCitations,
-  type PackageMigrationOutcome,
-} from "./migrate-package-layout.js";
 import { resolveBase } from "./resolve-base.js";
-import {
-  renameInteractionsHeading,
-  renameIterationsEntries,
-  restructureMap,
-} from "./restructure-map.js";
 
 type ScaffoldOptions =
   | { mode: "create"; pathArg?: string; language?: ScaffoldLanguage }
   | { mode: "update" };
 
 const AUTHORING_LANGUAGE_RE = /^Authoring language:\s*([A-Za-z0-9-]+)\s*$/m;
+
+// SCAF-26 / SCAF-52: directories that mark a legacy spec generation.
+// Structural migration of a legacy generation is agent-skill work, not
+// CLI code (DR-021), so the CLI only detects these and points at the
+// spec-structure-migration skill.
+const LEGACY_GENERATION_DIRS = [
+  "user",
+  "dev",
+  "test",
+  "items",
+  "interactions",
+  "compositions",
+  "iterations",
+] as const;
 
 function parseLanguage(code: string): ScaffoldLanguage {
   if (isSupportedLanguage(code)) return code;
@@ -171,252 +170,94 @@ function warnReplacedFrameworkFiles(replaced: string[]): void {
   );
 }
 
-function warnAnchorCollisions(
-  collisions: PackageMigrationOutcome["anchorCollisions"],
-): void {
-  if (collisions.length === 0) return;
-  console.warn("");
-  console.warn(
-    "NOTE: merging created duplicate section anchors; rename one of each pair",
-  );
-  console.warn("so citations stay unambiguous:");
-  for (const { targetRelPath, slugs } of collisions) {
-    console.warn(`  - ${targetRelPath}: #${slugs.join(", #")}`);
-  }
+function hasLegacyGenerationDir(basePath: string): boolean {
+  return LEGACY_GENERATION_DIRS.some((dir) => {
+    const abs = join(basePath, "specs", dir);
+    return existsSync(abs) && statSync(abs).isDirectory();
+  });
 }
 
-/** Pristine framework/seed paths, sampled before any byte edits. */
-function snapshotPristinePaths(
+// SCAF-26: a specs/meta.md matching a pre-packages bundled version in
+// its chronological history is an old-generation marker. Every
+// pre-packages bundled meta.md carried uppercase META-* item IDs, so a
+// recognized bundled version with an uppercase item heading predates
+// the packages generation.
+function isOldGenerationMeta(
   basePath: string,
   language: ScaffoldLanguage,
-): Set<string> {
-  const pristine = new Set<string>();
-  for (const relPath of [...getFrameworkSpecFiles(), ...getSeedSpecFiles()]) {
-    if (isPristine(basePath, relPath, language) === "pristine") {
-      pristine.add(relPath);
-    }
-  }
-  return pristine;
+): boolean {
+  const relPath = "specs/meta.md";
+  if (isPristine(basePath, relPath, language) !== "pristine") return false;
+  const content = readFileSync(join(basePath, relPath), "utf-8");
+  return /^#{1,6} META-\d+/m.test(content);
 }
 
-function hasMarkdownFiles(dir: string): boolean {
-  if (!existsSync(dir)) return false;
-  return listFiles(dir).some((file) => file.endsWith(".md"));
+// SCAF-26 / SCAF-47: target content matching a retired bundled seed in
+// the legacy manifest is an old-generation marker.
+function matchesRetiredBundledSeed(basePath: string): boolean {
+  const manifestPath = join(getScaffoldDir(), ".legacy-file-history.json");
+  if (!existsSync(manifestPath)) return false;
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Record<
+    string,
+    string[]
+  >;
+  return Object.keys(manifest).some(
+    (relPath) => isLegacyPristine(basePath, relPath) === "pristine",
+  );
 }
 
+/** SCAF-26 legacy-generation detection, sampled before the refresh. */
+function detectLegacyGeneration(
+  basePath: string,
+  language: ScaffoldLanguage,
+): boolean {
+  return (
+    hasLegacyGenerationDir(basePath) ||
+    isOldGenerationMeta(basePath, language) ||
+    matchesRetiredBundledSeed(basePath)
+  );
+}
+
+// SCAF-26: the guidance names the migration skill, its guide, and the
+// lint gate. No path-level summary lines here — the per-file indicators
+// above are the run's only path summary (SCAF-11).
+function printMigrationGuidance(): void {
+  console.log("");
+  console.log(
+    "This specs tree carries a legacy spec generation. The template refresh",
+  );
+  console.log(
+    "above left all legacy content untouched: structural migration is",
+  );
+  console.log("agent-skill work, not CLI code.");
+  console.log(
+    "To migrate, run the spec-structure-migration skill bundled with spex",
+  );
+  console.log(
+    "(skills/spec-structure-migration/ in the spex repo); its guide is",
+  );
+  console.log("docs/spec-migration.md.");
+  console.log(
+    "The migrated tree must pass `spex lint` — the mechanical gate.",
+  );
+}
+
+// SCAF-18: the four-step --update pipeline — framework overwrite, seed
+// refresh, agent-file refresh, then the completion output.
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
   const language = readActiveLanguage(basePath);
 
-  // Move intent records to their current directory before sampling
-  // pristine paths: a move changes no bytes, and sampling after it
-  // lets a pristine legacy seed be recognized at its migrated path
-  // (SCAF-51), skipped by the citation rewrite, and then refreshed
-  // wholesale like any pristine seed.
-  const iterationsResults = migrateIterationsLayout(basePath);
-  const iterationsMoved = iterationsResults.some(
-    (result) => result.status === "migrated",
-  );
-
-  // Classify framework/seed files before any byte edits: recognized
-  // bundled versions get replaced wholesale below, so the citation
-  // rewrite and map restructure must leave them alone.
-  const pristineSnapshot = snapshotPristinePaths(basePath, language);
-
-  const legacyResults = migrateLegacyItemLayout(basePath);
-  const provenance = new Map<string, string>();
-  for (const result of legacyResults) {
-    if (result.status === "migrated") {
-      provenance.set(result.targetRelPath, result.legacyRelPath);
-    }
-  }
-
-  const packageOutcome = migratePackageLayout(basePath, {
-    language,
-    provenance,
-  });
-
-  const interactionsResults = migrateInteractionsLayout(basePath);
-  const interactionsMoved = interactionsResults.some(
-    (result) => result.status === "moved",
-  );
-
-  const rewritten = rewriteAllSpecCitations(basePath, pristineSnapshot);
-
-  let mapRestructured = false;
-  let mapHeadingRenamed = false;
-  const mapPath = join(basePath, "specs", "map.md");
-  const mapEditable =
-    !pristineSnapshot.has("specs/map.md") && existsSync(mapPath);
-  if (packageOutcome.migratedPackages && mapEditable) {
-    const restructured = restructureMap(
-      readFileSync(mapPath, "utf-8"),
-      language,
-    );
-    if (restructured !== null) {
-      writeFileSync(mapPath, restructured);
-      mapRestructured = true;
-    }
-  }
-  if (interactionsMoved && mapEditable && !mapRestructured) {
-    const renamed = renameInteractionsHeading(
-      readFileSync(mapPath, "utf-8"),
-      language,
-    );
-    if (renamed !== null) {
-      writeFileSync(mapPath, renamed);
-      mapHeadingRenamed = true;
-    }
-  }
-  let mapIterationsRenamed = false;
-  if (iterationsMoved && mapEditable) {
-    const renamed = renameIterationsEntries(
-      readFileSync(mapPath, "utf-8"),
-      language,
-    );
-    if (renamed !== null) {
-      writeFileSync(mapPath, renamed);
-      mapIterationsRenamed = true;
-    }
-  }
-
-  // Reporting: one indicator line per path (SCAF-11). The items→flat
-  // step reports only paths the package migration did not consume;
-  // package targets on seed paths fold into the seed refresh line.
-  const seedPaths = new Set<string>(getSeedSpecFiles());
-  const frameworkPaths = new Set<string>(getFrameworkSpecFiles());
-  const migratedSeedSources = new Map<string, string>();
-  const reportedPaths = new Set<string>();
-
-  // One indicator line per path (SCAF-11): a file that migrated from
-  // specs/items/ and then hit a package-migration conflict reports
-  // both steps on its single conflict line.
-  const conflictSources = new Set<string>();
-  for (const result of packageOutcome.results) {
-    if (result.status !== "conflict") continue;
-    for (const source of result.sourceRelPaths) conflictSources.add(source);
-  }
-
-  for (const result of legacyResults) {
-    if (result.status === "conflict") {
-      console.log(
-        `  ${result.legacyRelPath} (kept — target exists at ${result.targetRelPath})`,
-      );
-    } else if (
-      existsSync(join(basePath, result.targetRelPath)) &&
-      !conflictSources.has(result.targetRelPath)
-    ) {
-      // Still at the flat path: the package migration left it there.
-      console.log(
-        `  ${result.targetRelPath} (migrated from ${result.legacyRelPath})`,
-      );
-    }
-  }
-
-  for (const result of packageOutcome.results) {
-    const sources = result.sourceRelPaths.join(", ");
-    if (result.status === "conflict") {
-      for (const source of result.sourceRelPaths) {
-        const origin = provenance.get(source);
-        const steps =
-          origin === undefined ? "" : `migrated from ${origin}; `;
-        console.log(
-          `  ${source} (${steps}kept — target exists at ${result.targetRelPath})`,
-        );
-      }
-      continue;
-    }
-    if (seedPaths.has(result.targetRelPath)) {
-      migratedSeedSources.set(result.targetRelPath, sources);
-      continue;
-    }
-    console.log(`  ${result.targetRelPath} (migrated from ${sources})`);
-    reportedPaths.add(result.targetRelPath);
-  }
-
-  for (const result of interactionsResults) {
-    if (result.status === "conflict") {
-      console.log(
-        `  ${result.sourceRelPath} (kept — target exists at ${result.targetRelPath})`,
-      );
-      continue;
-    }
-    console.log(
-      `  ${result.targetRelPath} (migrated from ${result.sourceRelPath})`,
-    );
-    reportedPaths.add(result.targetRelPath);
-  }
-
-  for (const result of iterationsResults) {
-    if (result.status === "conflict") {
-      console.log(
-        `  ${result.legacyRelPath} (kept — target exists at ${result.targetRelPath})`,
-      );
-      continue;
-    }
-    if (seedPaths.has(result.targetRelPath)) {
-      migratedSeedSources.set(result.targetRelPath, result.legacyRelPath);
-      continue;
-    }
-    console.log(
-      `  ${result.targetRelPath} (migrated from ${result.legacyRelPath})`,
-    );
-    reportedPaths.add(result.targetRelPath);
-  }
-
-  for (const relPath of rewritten) {
-    if (
-      seedPaths.has(relPath) ||
-      frameworkPaths.has(relPath) ||
-      reportedPaths.has(relPath)
-    ) {
-      continue;
-    }
-    console.log(`  ${relPath} (citations rewritten)`);
-  }
+  // Sample legacy-generation markers before the framework overwrite
+  // replaces specs/meta.md (SCAF-26).
+  const legacyGeneration = detectLegacyGeneration(basePath, language);
 
   const replacedFramework = overwriteFrameworkSpecFiles(basePath, language);
-
-  const indicatorOverrides = new Map<string, string>();
-  if (mapRestructured) {
-    indicatorOverrides.set(
-      "specs/map.md",
-      "restructured for the packages layout",
-    );
-  } else if (mapHeadingRenamed) {
-    indicatorOverrides.set(
-      "specs/map.md",
-      "kept — user-modified; interactions entries renamed",
-    );
-  }
-  if (mapIterationsRenamed) {
-    const prior = indicatorOverrides.get("specs/map.md");
-    indicatorOverrides.set(
-      "specs/map.md",
-      prior === undefined
-        ? "kept — user-modified; iterations entries renamed"
-        : `${prior}; iterations entries renamed`,
-    );
-  }
-  for (const relPath of rewritten) {
-    if (seedPaths.has(relPath) && !indicatorOverrides.has(relPath)) {
-      indicatorOverrides.set(
-        relPath,
-        "kept — user-modified; citations rewritten",
-      );
-    }
-  }
-  refreshPristineSeeds(basePath, {
-    language,
-    migratedFrom: migratedSeedSources,
-    indicatorOverrides,
-  });
-
+  refreshPristineSeeds(basePath, { language });
   appendAgentSpecs(basePath, { createMissing: false });
 
   warnReplacedFrameworkFiles(replacedFramework);
-  warnAnchorCollisions(packageOutcome.anchorCollisions);
 
   console.log("");
   console.log("spex scaffold --update completed.");
@@ -432,47 +273,18 @@ function updateScaffoldTemplates(): void {
   console.log(readBundledMarkdown("update-merge-prompt.md"));
   console.log("```");
 
-  const compositionsEmpty = !hasMarkdownFiles(
-    join(basePath, "specs", "compositions"),
-  );
-  const packagesPresent = hasMarkdownFiles(
-    join(basePath, "specs", "packages"),
-  );
-  if (
-    packageOutcome.migratedPackages ||
-    interactionsMoved ||
-    (compositionsEmpty && packagesPresent)
-  ) {
-    console.log("");
-    console.log(
-      "specs/compositions/ is where cross-package behavior lives. Share this",
-    );
-    console.log("prompt with your AI agent to fill it in:");
-    console.log("");
-    console.log("```");
-    console.log(readBundledMarkdown("compositions-prompt.md"));
-    console.log("```");
-  }
+  if (legacyGeneration) printMigrationGuidance();
 }
 
-// SCAF-52: a legacy tree must migrate, not re-scaffold — creating
-// current seed targets beside legacy files would make every later
-// --update conflict-keep the legacy content indefinitely.
-const LEGACY_LAYOUT_DIRS = [
-  "user",
-  "dev",
-  "test",
-  "items",
-  "interactions",
-  "iterations",
-] as const;
-
+// SCAF-52: a legacy tree gets guidance, not a re-scaffold — creating
+// current seed targets beside legacy files would entangle two spec
+// generations before the migration skill has run.
 function assertNoLegacyLayout(basePath: string): void {
-  for (const dir of LEGACY_LAYOUT_DIRS) {
+  for (const dir of LEGACY_GENERATION_DIRS) {
     const abs = join(basePath, "specs", dir);
     if (existsSync(abs) && statSync(abs).isDirectory()) {
       throw new Error(
-        `specs/${dir}/ marks a legacy layout; run \`spex scaffold --update\` to migrate it before scaffolding`,
+        `specs/${dir}/ marks a legacy spec generation; run \`spex scaffold --update\` to refresh templates and get migration guidance before scaffolding`,
       );
     }
   }
