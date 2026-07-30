@@ -75,7 +75,7 @@ An IR shall be disposable: it contains nothing a DR or a spec item should cover,
 <!-- spex-i18n-source: meta-7 sha256-19317e57aa3b772b0baaa6fc119532ee806d70acb1c0b700403eb3d9e9ed7419 -->
 ### meta-7
 
-当测试用例可以用 Given-When-Then（GWT）表达时，其规约条目应按以下方式将 GWT 映射到 GEARS [[1]]：
+给定测试用例可以用 Given-When-Then（GWT）表达，其规约条目应按以下方式将 GWT 映射到 GEARS [[1]]：
 
 | GWT | 子句 |
 | --- | ------ |

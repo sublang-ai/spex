@@ -14,7 +14,7 @@ Align every spec tree — `specs/`, `demo/specs/`, and the scaffold's non-normat
 ## Deliverables
 
 - [ ] `specs/meta.md` and `specs/decisions/000-spec-structure-format.md` carry the scaffold rewrite
-- [ ] Scaffold packages, map, IR-000, and prompt assets conform; `compositions/` is gone
+- [ ] Scaffold packages, map, the seeded sample intent record, and prompt assets conform; `compositions/` is gone
 - [ ] `specs/packages/` uses basename IDs and enclosed citations, with the three composition files folded in
 - [ ] `specs/` DRs and IRs follow the new record formats; `map.md` reflects the new layout
 - [ ] `demo/` specs, records, map, and guides migrated the same way
@@ -23,7 +23,7 @@ Align every spec tree — `specs/`, `demo/specs/`, and the scaffold's non-normat
 ## Tasks
 
 1. Record this intent and sync `specs/meta.md` plus DR-000 from the scaffold.
-2. Align scaffold packages, map, IR-000, and prompt assets.
+2. Align scaffold packages, map, the seeded sample intent record, and prompt assets.
 3. Migrate `specs/packages/` files and fold the three composition files in.
 4. Restructure `specs/` DRs and IRs; rewrite `specs/map.md`.
 5. Migrate the `demo/` tree.

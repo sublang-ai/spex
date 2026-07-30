@@ -19,7 +19,7 @@ Implement `packages/ui` — the Spex web UI — with the project session run vie
 - [x] Run view: Captain pane, player transcripts, Boss composer, awaitBossReply banner, abort, pane visibility
 - [x] App shell with navigation and session tabs
 - [x] Dev harness: core service bootable with fake adapters for UI development
-- [x] Reducer/component tests against record fixtures (run-view-19..23)
+- [x] Reducer/component tests against record fixtures (run-view-20..24)
 
 ## Tasks
 
@@ -40,6 +40,6 @@ Implement `packages/ui` — the Spex web UI — with the project session run vie
 ## Verification
 
 - `npm run build` and `npm test` green from the repo root including the UI workspace.
-- Replaying the bundled record fixture renders the expected pane structure with no hidden records (run-view-19/20).
-- awaitBossReply fixtures activate the banner and the next submission is visibly routed as the reply (run-view-21).
+- Replaying the bundled record fixture renders the expected pane structure with no hidden records (run-view-20/21).
+- awaitBossReply fixtures activate the banner and the next submission is visibly routed as the reply (run-view-22).
 - The UI package contains no Node-only imports.

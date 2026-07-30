@@ -29,7 +29,7 @@ The Settings surface's profile inventory is amended by [DR-019](019-inline-agent
 
 ### Project palette (the switcher)
 
-- The project bar names the current project; activating it — or Cmd/Ctrl+P, or Enter in a composer with no project chosen — opens a centered command-palette popover: filter-as-you-type list of projects, "Open folder…" (native picker when present), add-by-path, and "Create a project…". Register→silent-git-init fallback [[run-view-27](../packages/run-view.md#run-view-27)] moves to one store action the palette owns.
+- The project bar names the current project; activating it — or Cmd/Ctrl+P, or Enter in a composer with no project chosen — opens a centered command-palette popover: filter-as-you-type list of projects, "Open folder…" (native picker when present), add-by-path, and "Create a project…". Register→silent-git-init fallback moves to one store action the palette owns [[projects-1](../packages/projects.md#projects-1)].
 - Palette rows carry each project's live state: running-session count (emerald dot) and attention (amber/red dot + count), so quiet runs in other projects stay one keystroke away. The bar chip carries a dot in the most severe color of non-current projects' attention.
 - Keyboard contract: the palette owns focus while open; arrows/Enter pick, Escape closes; when opened from a composer, focus returns to that composer with the draft intact and never auto-sends. Cmd/Ctrl+P is preventDefault'ed in browsers.
 
