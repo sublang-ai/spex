@@ -3,7 +3,11 @@
 
 # IR-019: Released Toolchain Upgrade
 
-## Goal
+## Status
+
+Done
+
+## Intent
 
 Adopt `@sublang/playbook` 2.0.0, `@sublang/cligent` 0.16.0, and the published `@sublang/slc` 0.1.0 per [DR-014](../decisions/014-released-toolchain.md): canonical `effort` key with a read-only legacy alias, registry generation as a normalization wrapper over slc's emitted entry, role reconciliation, stale-bundle invalidation, and session `cwd` injection.
 
@@ -16,7 +20,7 @@ Adopt `@sublang/playbook` 2.0.0, `@sublang/cligent` 0.16.0, and the published `@
 - [x] Config composition rejects marker-less file-path registries with recompile guidance.
 - [x] Session creation injects the project path as each accepting playbook's `cwd` option.
 - [x] Record-sequence expectations updated for the playbook 2.0 Captain failure contract.
-- [x] PBLIB package spec amended (registry generation, roles, invalidation); map row added.
+- [x] playbook-library package spec amended (registry generation, roles, invalidation); map row added.
 
 ## Tasks
 
@@ -28,9 +32,9 @@ Adopt `@sublang/playbook` 2.0.0, `@sublang/cligent` 0.16.0, and the published `@
 6. Enforce the contract marker for file-path registries in config composition with recompile guidance.
 7. Inject the session `cwd` option at session creation behind a `validateOptions` acceptance probe.
 8. Update scripted-captain and integration record expectations for the 2.0 failure contract; green core, ui, cli, and desktop suites.
-9. Amend the PBLIB spec items and `map.md`.
+9. Amend the playbook-library spec items and `map.md`.
 
-## Acceptance criteria
+## Verification
 
 - `npm run build` and `npm test` pass at the repo root on system Node.
 - A config block using `reasoningEffort` composes with the value surfaced as `effort`; a block with both keys is invalid with a naming error.

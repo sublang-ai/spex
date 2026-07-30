@@ -3,7 +3,11 @@
 
 # IR-000: SPDX Headers
 
-## Goal
+## Status
+
+Done
+
+## Intent
 
 Add SPDX headers (license and copyright info) to applicable files.
 
@@ -49,7 +53,7 @@ Add SPDX headers (license and copyright info) to applicable files.
    > <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
    > ```
 
-## Acceptance criteria
+## Verification
 
-- All source files have SPDX-FileCopyrightText header ([LIC-3](../packages/licensing.md#lic-3))
-- Files have SPDX-License-Identifier if a license file exists ([LIC-4](../packages/licensing.md#lic-4))
+- All source files have SPDX-FileCopyrightText header [[licensing-3](../packages/licensing.md#licensing-3)]
+- Files have SPDX-License-Identifier if a license file exists [[licensing-4](../packages/licensing.md#licensing-4)]

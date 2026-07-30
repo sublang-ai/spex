@@ -3,7 +3,11 @@
 
 # IR-020: Reference Content and Spec View Adaptation
 
-## Goal
+## Status
+
+Done
+
+## Intent
 
 Ship the reference content and the packages-layout spec view per [DR-015](../decisions/015-reference-content.md): built-in playbook sources and catalog, the slc demo example card, the Academy seed project, and `specs.get`/spec-view adaptation to the [DR-012](../decisions/012-spec-package-files.md) layout.
 
@@ -17,7 +21,7 @@ Ship the reference content and the packages-layout spec view per [DR-015](../dec
 - [x] `specs.get` parses the packages layout (H1 short forms, section-kind groups, inline citations, collection dirs, legacy detection flag); protocol version 2.
 - [x] Spec view renders packages and compositions with the external/internal/test toggles and the legacy migration notice.
 - [x] dev-core fake mode seeds the Academy corpus; core and UI fixtures move to the packages layout.
-- [x] SPECV package spec amended; new items for the catalog, example card, and seeding; map rows added.
+- [x] spec-view package spec amended; new items for the catalog, example card, and seeding; map rows added.
 
 ## Tasks
 
@@ -30,9 +34,9 @@ Ship the reference content and the packages-layout spec view per [DR-015](../dec
 7. Rewrite the `specs.get` parser for the packages layout with the legacy flag; bump the protocol version.
 8. Adapt the spec-view model and component to section-kind groups, composition nodes, and the migration notice.
 9. Swap dev-core's seeded tree to the staged Academy corpus and migrate core/UI test fixtures.
-10. Amend the SPECV spec and `map.md`; green all suites.
+10. Amend the spec-view spec and `map.md`; green all suites.
 
-## Acceptance criteria
+## Verification
 
 - `npm run build` and `npm test` pass at the repo root.
 - With a fresh config, the Library lists `/code` and `/discuss` with source, gears, and FSM stages populated.

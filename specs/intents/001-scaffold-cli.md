@@ -3,64 +3,46 @@
 
 # IR-001: Scaffold CLI
 
-## Goal
+## Status
 
-Implement the `scaffold` subcommand as a TypeScript CLI per the
-SCAF spec package.
+Done
+
+## Intent
+
+Implement the `scaffold` subcommand as a TypeScript CLI per the scaffold spec package.
 
 ## Deliverables
 
 - [x] Node.js project setup (package.json, tsconfig.json, .gitignore updates)
 - [x] CLI entry point with `scaffold` subcommand routing
-- [x] `createSpecsStructure()` per [SCAF-7](../packages/scaffold.md#scaf-7)
-- [x] `copyTemplates()` per [SCAF-8](../packages/scaffold.md#scaf-8), [SCAF-9](../packages/scaffold.md#scaf-9)
-- [x] `appendAgentSpecs()` per [SCAF-10](../packages/scaffold.md#scaf-10)
-- [x] Target resolution per [SCAF-1](../packages/scaffold.md#scaf-1), [SCAF-2](../packages/scaffold.md#scaf-2), [SCAF-3](../packages/scaffold.md#scaf-3)
-- [x] Idempotency per [SCAF-4](../packages/scaffold.md#scaf-4)
-- [x] Agent instructions per [SCAF-5](../packages/scaffold.md#scaf-5)
-- [x] Error handling per [SCAF-6](../packages/scaffold.md#scaf-6)
-- [x] Update-mode indicator reporting refinements:
-  absent seeds report `(created)`, post-prompt path summaries are
-  omitted, and same-run legacy seed migrations report migration plus
-  refresh status in one line
+- [x] `createSpecsStructure()` per [[scaffold-7](../packages/scaffold.md#scaffold-7)]
+- [x] `copyTemplates()` per [[scaffold-8](../packages/scaffold.md#scaffold-8)], [[scaffold-9](../packages/scaffold.md#scaffold-9)]
+- [x] `appendAgentSpecs()` per [[scaffold-10](../packages/scaffold.md#scaffold-10)]
+- [x] Target resolution per [[scaffold-1](../packages/scaffold.md#scaffold-1)], [[scaffold-2](../packages/scaffold.md#scaffold-2)], [[scaffold-3](../packages/scaffold.md#scaffold-3)]
+- [x] Idempotency per [[scaffold-4](../packages/scaffold.md#scaffold-4)]
+- [x] Agent instructions per [[scaffold-5](../packages/scaffold.md#scaffold-5)]
+- [x] Error handling per [[scaffold-6](../packages/scaffold.md#scaffold-6)]
+- [x] Update-mode indicator reporting refinements: absent seeds report `(created)`, post-prompt path summaries are omitted, and same-run legacy seed migrations report migration plus refresh status in one line
 
 ## Tasks
 
-1. **Project bootstrap** — Create `package.json` (name: `spex`,
-   bin: `spex`, scripts including `build`), `tsconfig.json` targeting
-   ES2022/NodeNext, update `.gitignore` for `dist/` and
-   `node_modules/`
+1. **Project bootstrap** — Create `package.json` (name: `spex`, bin: `spex`, scripts including `build`), `tsconfig.json` targeting ES2022/NodeNext, update `.gitignore` for `dist/` and `node_modules/`
 
-2. **CLI entry point** — `src/cli.ts` with argument parsing;
-   `scaffold [<path>]` subcommand dispatching to the scaffold module
+2. **CLI entry point** — `src/cli.ts` with argument parsing; `scaffold [<path>]` subcommand dispatching to the scaffold module
 
-3. **Target resolution** — Resolve base path: explicit `<path>` →
-   git repo root → cwd ([SCAF-1](../packages/scaffold.md#scaf-1),
-   [SCAF-2](../packages/scaffold.md#scaf-2),
-   [SCAF-3](../packages/scaffold.md#scaf-3))
+3. **Target resolution** — Resolve base path: explicit `<path>` → git repo root → cwd [[scaffold-1](../packages/scaffold.md#scaffold-1)], [[scaffold-2](../packages/scaffold.md#scaffold-2)], [[scaffold-3](../packages/scaffold.md#scaffold-3)]
 
-4. **createSpecsStructure()** — Create `specs/` and subdirectories
-   ([SCAF-7](../packages/scaffold.md#scaf-7)), skip existing with
-   `(already exists)` ([SCAF-4](../packages/scaffold.md#scaf-4))
+4. **createSpecsStructure()** — Create `specs/` and subdirectories [[scaffold-7](../packages/scaffold.md#scaffold-7)], skip existing with `(already exists)` [[scaffold-4](../packages/scaffold.md#scaffold-4)]
 
-5. **getScaffoldDir() + copyTemplates()** — Resolve bundled
-   `scaffold/` path from `dist/` ([SCAF-9](../packages/scaffold.md#scaf-9)),
-   recursively copy template files without overwriting
-   ([SCAF-8](../packages/scaffold.md#scaf-8))
+5. **getScaffoldDir() + copyTemplates()** — Resolve bundled `scaffold/` path from `dist/` [[scaffold-9](../packages/scaffold.md#scaffold-9)], recursively copy template files without overwriting [[scaffold-8](../packages/scaffold.md#scaffold-8)]
 
-6. **appendAgentSpecs()** — Read `scaffold/agent-specs.txt`,
-   create/update `CLAUDE.md` and `AGENTS.md` with section
-   replacement logic ([SCAF-10](../packages/scaffold.md#scaf-10),
-   [SCAF-5](../packages/scaffold.md#scaf-5))
+6. **appendAgentSpecs()** — Read `scaffold/agent-specs.txt`, create/update `CLAUDE.md` and `AGENTS.md` with section replacement logic [[scaffold-10](../packages/scaffold.md#scaffold-10)], [[scaffold-5](../packages/scaffold.md#scaffold-5)]
 
-7. **Error handling** — Non-zero exit on unrecoverable errors with
-   stderr messages ([SCAF-6](../packages/scaffold.md#scaf-6))
+7. **Error handling** — Non-zero exit on unrecoverable errors with stderr messages [[scaffold-6](../packages/scaffold.md#scaffold-6)]
 
-8. **Build & smoke test** — `npm run build` succeeds; manual
-   `mkdir -p /tmp/test-target && npx spex scaffold /tmp/test-target`
-   produces expected output
+8. **Build & smoke test** — `npm run build` succeeds; manual `mkdir -p /tmp/test-target && npx spex scaffold /tmp/test-target` produces expected output
 
-## Acceptance criteria
+## Verification
 
 - `spex scaffold <path>` creates full specs structure in target
 - Bundled template files (e.g., `specs/map.md`) appear at destination

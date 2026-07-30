@@ -3,13 +3,17 @@
 
 # IR-022: Intent Records
 
-## Goal
+## Status
+
+Done
+
+## Intent
 
 Apply [DR-017](../decisions/017-intent-records.md): rename iteration records to intent records across the framework definition, scaffold templates, tooling, and this repository's own trees.
 
 ## Deliverables
 
-- [x] DR-017 recorded; META-37 and GIT-5 added (META-1/META-5 rename lands with the tree migration)
+- [x] DR-017 recorded; [[meta-43](../meta.md#meta-43)] and [[git-5](../packages/git.md#git-5)] added ([[meta-1](../meta.md#meta-1)]/[[meta-5](../meta.md#meta-5)] rename lands with the tree migration)
 - [x] Scaffold templates (en and zh) seed `specs/intents/` and describe intent records
 - [x] `spex scaffold --update` migrates `specs/iterations/` to `specs/intents/`: files, citations, and map entries
 - [x] `spex lint` guards the intents layout with legacy tolerance
@@ -18,12 +22,12 @@ Apply [DR-017](../decisions/017-intent-records.md): rename iteration records to 
 
 ## Tasks
 
-1. Record DR-017 and this IR; add META-37 and GIT-5; index in `map.md`
+1. Record DR-017 and this IR; add [[meta-43](../meta.md#meta-43)] and [[git-5](../packages/git.md#git-5)]; index in `map.md`
 2. Rename scaffold templates and seeding, extend lint, and add the `--update` migration step (CLI)
 3. Rename the records protocol field and spec-view copy (core and UI)
 4. Migrate this tree and `demo/`, updating framework wording and citations
 
-## Acceptance criteria
+## Verification
 
 - Workspace tests pass and `spex lint` is clean on this tree and `demo/` after migration
 - A packages-layout tree with `specs/iterations/` ends a `spex scaffold --update` run with `specs/intents/`, rewritten citations, and renamed map entries

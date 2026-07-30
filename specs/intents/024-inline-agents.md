@@ -3,7 +3,11 @@
 
 # IR-024: Inline Agents Adaptation
 
-## Goal
+## Status
+
+Done
+
+## Intent
 
 Adopt playbook 3.1.0 and slc 0.2.0 per [DR-019](../decisions/019-inline-agent-configuration.md): profile-less inline agent configuration end to end — core migration and composition, protocol v4, the shared agent editor UX, the single-vendor block template, retired vendored sources, and the slc 0.2 compile path.
 
@@ -15,7 +19,7 @@ Adopt playbook 3.1.0 and slc 0.2.0 per [DR-019](../decisions/019-inline-agent-co
 - [x] Template rewritten to explicit single-vendor inline blocks (commented second-vendor example); dev-core fake config follows.
 - [x] Shared AgentEditor/AgentChip; Settings Captain editor + adapter readiness panel; Library role rows, compile form, and builtin add-flow on the editor with neutral defaults and "same as Captain"; Captain-home popover carries the full editor; no shorthand concept anywhere in the UI.
 - [x] Vendored playbook sources deleted; sources resolve from the installed package; compile drops the explicit link target and refuses empty derived roles with slc 0.2 guidance.
-- [x] Stale copy fixed (playbook 2.0 wording, player-ref comments); spec amendments across SET/CORE/PBLIB/RUN/SHELL plus DR-002/004/007/009/011/014/15 pointers, desktop-session composition, and map rows.
+- [x] Stale copy fixed (playbook 2.0 wording, player-ref comments); spec amendments across settings/core-service/playbook-library/run-view/app-shell plus DR-002/004/007/009/011/014/15 pointers, desktop-session composition, and map rows.
 
 ## Tasks
 
@@ -29,7 +33,7 @@ Adopt playbook 3.1.0 and slc 0.2.0 per [DR-019](../decisions/019-inline-agent-co
 8. Build the shared AgentEditor/AgentChip and sweep Settings, Captain home, Library, compile, and add flows; rewrite the affected UI suites re-establishing their coverage intents.
 9. Amend the spec packages and decision pointers; update map rows; lint clean.
 
-## Acceptance criteria
+## Verification
 
 - Root build, tests, and `spex lint` pass.
 - A profiles-era config file composes after one load, with a backup written beside it and comments intact; a `profile` naming a missing entry fails composition with the file untouched.
