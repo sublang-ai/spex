@@ -20,7 +20,6 @@ const EXPECTED_DIRS = [
   "specs/decisions",
   "specs/intents",
   "specs/packages",
-  "specs/compositions",
 ];
 
 describe("createSpecsStructure", () => {
@@ -36,8 +35,14 @@ describe("createSpecsStructure", () => {
       for (const d of EXPECTED_DIRS) {
         assert.ok(existsSync(join(dir, d)), `missing: ${d}`);
       }
-      // The legacy group directories are gone from fresh scaffolds.
-      for (const legacy of ["specs/user", "specs/dev", "specs/test"]) {
+      // The legacy directories are gone from fresh scaffolds (SCAF-7).
+      const legacyDirs = [
+        "specs/user",
+        "specs/dev",
+        "specs/test",
+        "specs/compositions",
+      ];
+      for (const legacy of legacyDirs) {
         assert.ok(!existsSync(join(dir, legacy)), `unexpected: ${legacy}`);
       }
     } finally {

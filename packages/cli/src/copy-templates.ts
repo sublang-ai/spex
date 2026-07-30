@@ -29,7 +29,6 @@ const SEED_FILES = [
   "specs/intents/000-spdx-headers.md",
   "specs/packages/git.md",
   "specs/packages/licensing.md",
-  "specs/compositions/.gitkeep",
 ] as const;
 
 const LEGACY_ITEM_DIRS = [
@@ -415,16 +414,6 @@ export function refreshPristineSeeds(
   const language = options.language ?? "en";
   for (const relPath of SEED_FILES) {
     const state = isPristine(basePath, relPath, language);
-    // A .gitkeep only holds its directory open: never resurrect one
-    // after the user filled the directory and removed it.
-    if (
-      state === "missing" &&
-      relPath.endsWith("/.gitkeep") &&
-      existsSync(join(basePath, dirname(relPath))) &&
-      readdirSync(join(basePath, dirname(relPath))).length > 0
-    ) {
-      continue;
-    }
     if (state === "modified") {
       const indicator = formatSeedIndicator(
         relPath,

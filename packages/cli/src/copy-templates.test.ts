@@ -69,10 +69,14 @@ describe("copyTemplates", () => {
         existsSync(join(dir, "specs", "packages", "git.md")),
         "specs/packages/git.md should be copied",
       );
-      // Tracked dotfiles must not be skipped (SCAF-8)
       assert.ok(
-        existsSync(join(dir, "specs", "compositions", ".gitkeep")),
-        "specs/compositions/.gitkeep should be copied",
+        existsSync(join(dir, "specs", "intents", "000-spdx-headers.md")),
+        "specs/intents/000-spdx-headers.md should be copied",
+      );
+      // The seeded tree carries no compositions/ directory (SCAF-19)
+      assert.ok(
+        !existsSync(join(dir, "specs", "compositions")),
+        "specs/compositions/ should not be created",
       );
 
       // Verify content matches the source
