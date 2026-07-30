@@ -11,8 +11,7 @@ Accepted; the Settings surface's profile inventory is amended by [DR-019](019-in
 
 - cligent's `tmux-play` host proved the playbook runtime end to end, but the tmux UI is limited: keystroke interaction, static pane text, no persistence, no dashboard.
 - The product owner decided (2026-07-10) to build a downloadable desktop app for running playbooks, in this repo, keeping `tmux-play` as a verification fallback of the playbook logic.
-- All orchestration already exists as headless Node libraries:
-  `@sublang/cligent` exports a headless runtime (`createTmuxPlayRuntime`) whose `RecordObserver` stream carries every UI-relevant event, and `@sublang/playbook` exports the Playbook Captain shell with type-only coupling to the host.
+- All orchestration already exists as headless Node libraries: `@sublang/cligent` exports a headless runtime (`createTmuxPlayRuntime`) whose `RecordObserver` stream carries every UI-relevant event, and `@sublang/playbook` exports the Playbook Captain shell with type-only coupling to the host.
 - The app must port to a cloud web app with least effort.
 - This repo currently is the `@sublang/spex` scaffold CLI, published from the repo root on `v*` tags with a CI-green gate, tag/version match, and changelog extraction.
 - The `Spex` brand already fronts the tmux-play surface (its status-line heading); the product owner chose the desktop app as the brand's flagship: the app is Spex.
@@ -74,7 +73,7 @@ Spex
 - The root `package.json` becomes a private workspace root; `specs/` stays at the repo root and covers all packages.
 - The CLI keeps its npm identity, bin, files whitelist, tests, and `CHANGELOG.md` (which moves with it to `packages/cli/`).
 - `v*` tags keep releasing the CLI exactly as today; the release workflow is updated to build, validate, version-check, and publish from `packages/cli`.
-  The CI-green gate ([RELEASE-18](../packages/release.md#release-18)) is unchanged and now covers all workspaces.
+  The CI-green gate ([[release-18](../packages/release.md#release-18)]) is unchanged and now covers all workspaces.
 - Desktop app releases use a distinct tag namespace (`app-v*`) added in a later iteration, so CLI and app release cadences stay independent.
 
 ## Consequences

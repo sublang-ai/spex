@@ -25,4 +25,4 @@ Accepted
 
 - A release candidate is exercised end to end on the real app with real agents before shipping, at the cost of a local, signed-in, non-hermetic run — bounded to minutes by the abort.
 - The handshake is a test seam in the shell; it changes nothing when the variable is absent, and the mutual exclusion keeps the acceptance path deterministic.
-- SHELL gains the handshake behavior; RELEASE records the split gates; the release checklist keeps the manual residue automation cannot see (notification and badge visuals, packaged-app launch, themes).
+- The app-shell package gains the handshake behavior; the release package records the split gates; the release checklist keeps the manual residue automation cannot see (notification and badge visuals, packaged-app launch, themes).

@@ -10,8 +10,7 @@ Accepted; registry generation amended by [DR-014](014-released-toolchain.md) —
 ## Context
 
 - Spex's Library surface ([DR-002](002-desktop-app-architecture.md)) lets users compile new playbooks from prose or skill markdown.
-- `@sublang/slc` is the published playbook compiler:
-  `slc playbook <src.md> --link <runtime-contract.ts>` emits a `<name>.playbook/` directory containing `<name>.gears.md`, `<name>.fsm.ts` (XState v5), and `<name>.playbook.ts`, plus verification tests.
+- `@sublang/slc` is the published playbook compiler: `slc playbook <src.md> --link <runtime-contract.ts>` emits a `<name>.playbook/` directory containing `<name>.gears.md`, `<name>.fsm.ts` (XState v5), and `<name>.playbook.ts`, plus verification tests.
 - slc dynamic-imports its `.ts` artifacts through Node's built-in type stripping, which requires system Node >= 23.6 [[1]]; the Node bundled into Electron does not provide it.
 - Compilation itself is agent-driven: slc drives a credentialed coding agent configured in its own config, so compiles need network access and agent credentials.
 - The embedded Playbook Captain shell ([DR-003](003-runtime-reuse.md)) loads playbooks through registry entries and validates them fail-closed. Its load contract is `id`, `command`, `intent`, `requiredRoleIds`, `validateOptions`, `createRuntime`, plus an optional `summaryPolicy`; it derives idle/park/final behavior from runtime state tags (`playbook.parked`, quiescence), not per-entry state ids. slc does not emit this manifest.

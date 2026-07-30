@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Superseded by [DR-000](000-spec-structure-format.md) — the new DR-000 collapses relationship kinds into one citation mechanism, reversing this DR's classified presentation model.
 
 ## Context
 
@@ -37,7 +37,7 @@ Accepted
 
 ## Consequences
 
-- The presentation makes the META relationship semantics visible without new spec syntax or protocol change; classification is a client-side derivation over the served tree.
+- The presentation makes the meta package's relationship semantics visible without new spec syntax or protocol change; classification is a client-side derivation over the served tree.
 - The clause-side split leans on the binding grammar; malformed bindings degrade gracefully and lint remains the enforcement point.
-- SPECV's item and citation behaviors are amended to the classified model.
+- The spec-view package's item and citation behaviors are amended to the classified model.
 - The Academy seed becomes the teaching surface: opening any composition shows bindings resolving clients to providers and scenarios composing package behavior.

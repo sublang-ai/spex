@@ -9,8 +9,7 @@ Accepted; the config schema's `profiles` map is retired upstream and amended by 
 
 ## Context
 
-- The playbook CLI owns a shared config file at `${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml` [[1]] with top-level maps:
-  `profiles` (adapter, optional model, reasoning effort, permissions), `captain`, `playbooks.<id>` (`from`, optional `command`, `players.<role>`, plus a per-playbook option slice), and optional `layout`, `notifications`, `theme` [[3]].
+- The playbook CLI owns a shared config file at `${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml` [[1]] with top-level maps: `profiles` (adapter, optional model, reasoning effort, permissions), `captain`, `playbooks.<id>` (`from`, optional `command`, `players.<role>`, plus a per-playbook option slice), and optional `layout`, `notifications`, `theme` [[3]].
 - The playbook launcher validates that file fail-closed (missing `from`, import failure, key/manifest id mismatch, duplicate id or command, reserved captain role, unresolved required role, zero visible roles, profile-id vs adapter-shorthand collision) and composes it into runtime options with namespaced `<id>-<role>` player ids (`^[a-z][a-z0-9_-]*$`) [[3]].
 - Spex embeds the same runtime and captain shell ([DR-003](003-runtime-reuse.md)) and keeps tmux-play as a verification twin ([DR-002](002-desktop-app-architecture.md)), so both hosts must accept the same config.
 - Users hand-edit the config file for CLI use, including its comments; a Settings UI that rewrote the file wholesale would destroy them.

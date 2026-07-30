@@ -63,4 +63,4 @@ Accepted
 - Codex captains work through the prompt-level restriction; the composed captain options are the carrier, and a test pins it.
 - Existing user configs keep composing through the load-time migration; the launcher and Spex can migrate interchangeably, whichever runs first.
 - The single-vendor seed remains a first-hour protection; second-vendor setups keep working through the editor and readiness guidance.
-- SET, CORE, PBLIB, RUN, and SHELL items and the affected decision records are amended; the settings editor's coverage intent (comment preservation, fail-closed edits) is re-established over the new operations.
+- The settings, core-service, playbook-library, run-view, and app-shell package items and the affected decision records are amended; the settings editor's coverage intent (comment preservation, fail-closed edits) is re-established over the new operations.

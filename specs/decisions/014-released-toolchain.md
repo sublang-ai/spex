@@ -9,8 +9,7 @@ Accepted; the effort key and adapter set are amended by [DR-019](019-inline-agen
 
 ## Context
 
-- The toolchain Spex embeds and invokes has shipped:
-  `@sublang/slc` 0.1.0 is on npm, `@sublang/playbook` is at 2.0.0, and `@sublang/cligent` is at 0.16.0.
+- The toolchain Spex embeds and invokes has shipped: `@sublang/slc` 0.1.0 is on npm, `@sublang/playbook` is at 2.0.0, and `@sublang/cligent` is at 0.16.0.
   Spex still pins `@sublang/playbook` ^0.9.0 and `@sublang/cligent` ^0.13.0.
 - slc 0.1.0 emits thin artifacts: `<id>.playbook/<id>.playbook.ts` delegates to `@sublang/playbook/xstate-runtime`'s shared engine, and a registry-entry module `<id>.ts` is emitted beside the artifact directory — the manifest gap [DR-005](005-compilation-integration.md) worked around no longer exists.
 - The playbook 2.0.0 registry contract dropped the optional state-id fields; the runtime contract moved to six ports, session-identity `init`, structured run results, and a Captain failure that resolves as a `failed` outcome instead of rejecting.
