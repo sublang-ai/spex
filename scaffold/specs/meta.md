@@ -19,7 +19,7 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `decisions/` | decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
 | `intents/` | intent records (IRs) | \<NNN\>-\<kebab-case\>.md |
 | `packages/` | spec packages | \<kebab-case\>.md |
-| `map.md` | spec index for navigation | - |
+| `map.md` | spec index — start here for context search | - |
 | `meta.md` | the spec of specs | - |
 
 ### meta-23
@@ -28,7 +28,7 @@ A spec in any form shall contain the minimal information, concisely expressed, t
 
 ### meta-25
 
-A spec file follows semantic breaks at sentence level, with lists, tables, or diagrams exempt.
+A spec file shall keep one sentence per line — with lists, tables, and diagrams exempt.
 
 ## Record format
 
@@ -40,23 +40,23 @@ Each DR shall follow the ADR format [[2]], with sections Status, Context, Decisi
 
 Each IR shall contain sections Status, Intent, Deliverables (with checkboxes), Tasks (numbered, each sized to one commit), and Verification.
 
+### meta-39
+
+A record's ID shall join its kind prefix to its filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — with the leading number unique within each record kind.
+
 ### meta-24
 
-A DR shall record design decisions and constraints, not implementation details, sufficient to generate or audit spec items from it.
+A DR shall record design decisions and constraints, not implementation details, sufficient to provide context for or to audit the corresponding spec items.
 
-### meta-37
+### meta-43
 
-An intent whose implementation spans commits, or must be tracked before completion, shall have an IR.
-
-### meta-
-
-When an intent involves an issue, the IR shall cite an link to the issue.
+An IR shall be disposable: it contains nothing a DR or a spec item should cover, and its deletion loses no design or behavior record.
 
 ## Item syntax
 
 ### meta-6
 
-Each spec item shall use the GEARS pattern [[1]]:
+Each spec item shall use the GEARS pattern [[1]], with its clauses and punctuation following natural English conventions:
 
 ```text
 [Where <static precondition(s)>] [While <stateful precondition(s)>] [When <trigger>] <subject> shall <behavior(s)>.
@@ -65,15 +65,13 @@ Each spec item shall use the GEARS pattern [[1]]:
 | Clause | Purpose | Example |
 | ------ | ------- | ------- |
 | Where | Static preconditions (features, config) | Where debug mode is enabled |
-| While | Stateful preconditions (runtime state) | While the connection is active |
-| When | Trigger event (at most one) | When the user clicks submit |
-| shall | Required behaviors | The form shall validate inputs |
-
-Clauses and punctuation shall follow natural English conventions.
+| While | Stateful preconditions (runtime states) | While the connection is active |
+| When | Trigger event — at most one | When the user clicks submit |
+| shall | Required behaviors | The form shall validate inputs and highlight each violation |
 
 ### meta-7
 
-Where test cases are expressed by Given-When-Then (GWT), their spec items shall map GWT to GEARS [[1]]:
+Where test cases can be expressed by Given-When-Then (GWT), their spec items shall map GWT to GEARS [[1]]:
 
 | GWT | Clause |
 | --- | ------ |
@@ -83,134 +81,107 @@ Where test cases are expressed by Given-When-Then (GWT), their spec items shall 
 
 ### meta-8
 
-Each item shall be self-contained:
+Each spec item shall be self-contained: every reliance on another item is an explicit citation [[meta-16](#meta-16)].
 
-- It shall have no implicit dependency on any section outside its own subsections.
-- A reliance on another item or a shared section shall be an explicit citation; general behavior binds to another package only by citation [[meta-14](#meta-14)].
+### meta-29
 
-### meta-26
+Each spec item shall be exactly one GEARS statement [[meta-6](#meta-6)], elaborated only by its attachments — such as a note, a list, a table, a (renderable) diagram, or an example.
 
-A spec item shall state behavior as observable outcomes — file state, exit code, printed output, return value, network call — under named conditions, including any condition under which an outcome shall not occur.
-
-### meta-42
-
-Each behavior or test item shall have one governing GEARS clause [[meta-6](#meta-6)] naming one domain contract: a request, a decision, a state transition, an invariant, a journey, or a verification run.
-The item's attachments — its lists, tables, and code blocks — inherit the clause's normative force and shall elaborate that contract alone, including any format, grammar, or definition the clause names:
-
-| Item kind | Attachments may carry |
+| Item kind | Example attachment |
 | --- | --- |
-| Behavior | ordered steps; the cases and outcomes of one operation, decision, transition, or invariant; the stages of one journey; or the cases of one standing rule |
-| Test | the assertions of one verification objective: one setup and execution flow, or one explicit case matrix |
+| Behavior | ordered steps or the cases and outcomes of one operation or decision |
+| Test | the assertions of one execution flow or one explicit case matrix |
 
-A condition inside an attachment is a case label, not a trigger; the one-trigger rule of [meta-6](#meta-6) governs the clause alone.
-Differing triggers or lifecycles are evidence of two contracts.
-An umbrella phrase — "handle correctly", "support behavior" — names no contract.
+- A condition inside an attachment is a case label.
+- Differing stateful preconditions or triggers are evidence of additional spec items.
 
 ## Spec packages
-
-### meta-3
-
-An item file shall hold spec items and an `## Intent` section stating the intent its items share.
-
-### meta-9
-
-A spec package shall be one item file under `packages/` or its subdirectory.
-
-### meta-10
-
-A spec package shall have a basename \<kebab-case\>.md, unique across `specs/packages/`.
-
-### meta-28
-
-Each package file shall contain only the following `##` sections, in this order:
-
-| Section | Presence | Content |
-| ------- | -------- | ------- |
-| `## Intent` | required | the package's purpose [[meta-3](#meta-3)] |
-| `## External Behavior` | optional | outcomes and guarantees the package's users may rely on |
-| `## Internal Behavior` | optional | implementation hidden from the package's users |
-| `## Verification` | optional | test items verifying the package's own items [[meta-38](#meta-38)] |
-| `## References` | optional | external sources [[meta-19](#meta-19)] |
-
-At least one of `## External Behavior` and `## Internal Behavior` shall be present.
-A package's user is any human or system component using its contract; External and Internal are relative to each package.
-Topic subsections (`###`) and item headings (`###` or `####`) live inside the behavior and Verification sections.
-Localized scaffolds translate these section headings; the bundled templates define the active names.
-
-### meta-11
-
-Each item shall have an ID unique within `specs/`, in \<pack\>-\<N...\> format (e.g., auth-11, package-management-3), as a markdown heading for anchor linking.
-\<pack\> is the basename of the containing file, `.md` dropped [[meta-10](#meta-10)].
-The ID has one lowercase form, so heading text, anchor, and citation text are the identical string.
-
-### meta-12
-
-An ID that has appeared in a release is reserved, together with the concern it names: it shall not be renumbered, reused, or reassigned, and its wording may change only while that concern is preserved.
-An ID that has appeared in no release may be renumbered, reassigned, or overwritten; a new item takes the next free ID.
 
 ### meta-13
 
 A spec package shall define a closed set of subjects and their behaviors for a shared intent.
-An item's shall clause states its own package's behavior: it may involve another party, but behavior that party guarantees is never the item's own; what the package does with a party's supply is its own behavior.
-A dependency no item names — a library, a framework — has its selection recorded in a DR.
+
+### meta-9
+
+A spec package shall be one item file under `specs/packages/` or its subdirectory.
+
+### meta-30
+
+Each package file shall contain only the following sections, in this order:
+
+| Section | Presence | Content |
+| ------- | -------- | ------- |
+| `Intent` | required | the shared intent of the package's items |
+| `External Behavior` | required | outcomes and guarantees the package's users may rely on |
+| `Internal Behavior` | optional | implementation hidden from the package's users |
+| `Verification` | required unless irrelevant [[meta-38](#meta-38)] | only test items verifying the package's own items |
+| `References` | optional | external sources [[meta-19](#meta-19)] |
+
+- A package's user is any human or system component using its contract; External and Internal are relative to the package.
+- Topic subsections and item headings live inside the Behavior and Verification sections.
+
+### meta-10
+
+A spec package shall use a unique lowercase kebab-case basename \<pack\>.md, with \<pack\> serving as its package identifier.
+
+### meta-11
+
+Each spec item shall use \<pack\>-\<N\> as its lowercase heading, anchor, and citation text:
+
+- \<pack\> is its containing package's identifier [[meta-10](#meta-10)];
+- \<N\> is a positive integer unique within that package;
+- a new item takes the lowest positive \<N\> neither assigned nor reserved by a public release [[meta-12](#meta-12)].
+
+### meta-12
+
+A publicly released item ID shall remain permanently bound to the concern its item names:
+
+- the ID is never renumbered or reassigned;
+- the item's content may evolve only with that concern preserved;
+- an unreleased ID can be reassigned.
 
 ### meta-14
 
-A citation is the only relationship between packages: any phrase of a behavior may bind to a specific External Behavior of another package by citing it [[meta-16](#meta-16)], showing the bare item ID — e.g., `[[auth-3](auth.md#auth-3)]`.
-The citation makes general behavior specific; an uncited phrase stays general, which is no error.
-A behavior item shall cite another package's External Behavior only, never its Internal Behavior.
-One phrase may cite several packages; its wording says how they combine.
-A party with no spec package — an external service — is bound by adding a package that states the External Behavior relied on.
+A citation shall be the only relationship between packages: any phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-16](#meta-16)].
+
+- An uncited phrase stays general as it is sufficient for code generation and audit.
+- One phrase may cite several packages if it composes their behaviors.
 
 ### meta-15
 
-A spec package shall stand alone: readable in full, its intended behavior understood, without following any link — citations make its behavior specific but never carry its meaning.
-Its `## Intent` section shall be self-contained prose with no citations.
-A package shall claim no exclusivity over the containing system; a system-wide rule is the stated behavior of a package whose intent is that rule.
+A spec package shall stand alone: readable in full without following any link — a citation never carries its meaning.
 
-### meta-32
+### meta-34
 
-A subdirectory under `packages/` is a navigation collection only: no spec, tool, or reader shall infer relationships, layering, or ownership from directory placement.
-A file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths and shall change no item ID or anchor.
+A subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
 
 ## Testing
 
 ### meta-21
 
-Spec test items shall specify integration and system tests only.
-Unit tests belong to the implementation; no spec item shall specify one.
+Spec test items shall specify integration and system tests only: unit tests belong to the implementation, and no spec item specifies one.
+
+### meta-36
+
+A test shall prefer executing the real behavior of a cited package [[meta-14](#meta-14)] to supplying a substitute for it.
 
 ### meta-38
 
-A package's `## Verification` section shall hold only test items that verify the package's own items.
-A test shall itself supply any party's behavior its verified items leave unbound, and may execute a party a citation binds [[meta-14](#meta-14)]; its wording shall say, for each party, whether the test supplies or executes it.
-
-### meta-40
-
-Every citation binding a behavior to another package shall be exercised by at least one test item [[meta-20](#meta-20)].
-
-### meta-41
-
-A test's grade shall follow visibility: behavior observable at the system's boundary shall be tested there, as an acceptance test; behavior observable only inside may be verified by inspection.
+Each stated behavior shall be verified unless verification is irrelevant to it, white-box or black-box: External and Internal govern use, not verification.
 
 ## Citation
 
-### meta-43
-
-A record's ID shall join its kind prefix to its filename's leading number: `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/`.
-The leading number shall be unique within each record kind.
-
 ### meta-16
 
-A citation of an item shall be a relative link with an anchor enclosed in square brackets (e.g., `[[meta-1](meta.md#meta-1)]`), written inline at the phrase that relies on it.
+A citation of an item shall be a relative link with an anchor, enclosed in square brackets (e.g., `[[meta-1](meta.md#meta-1)]`), written inline at the phrase that relies on it.
 
 ### meta-17
 
 DRs and items may cite each other.
 
-### meta-44
+### meta-40
 
-A DR shall reference a spec item only to support a statement the DR itself makes, never to supply content the DR leaves unstated; the reference is a citation like any other [[meta-16](#meta-16)].
+A DR shall reference a spec item only to support a statement the DR itself makes; the reference is a citation like any other [[meta-16](#meta-16)].
 
 ### meta-18
 
@@ -218,15 +189,15 @@ No spec except `map.md` shall cite an IR; naming an IR in prose is a citation.
 
 ### meta-19
 
-An external reference shall cite an authoritative source (e.g., official docs) by a numbered marker (e.g., `[[1]]`) linked to a specific URL in the `## References` section; that section shall hold no uncited entry.
+An external reference shall cite an authoritative source (e.g., official docs) by a numbered marker (e.g., `[[1]]`) linked to a specific URL in the `References` section, which holds no uncited entry.
 
 ### meta-20
 
-A test item shall cite every behavior item it verifies, inline at the assertion that verifies it.
-A citation binds its adjacent phrase: it shall cite exactly the behavior that phrase relies on, exercises, or checks — never ambient, transitive, or merely invoked behavior.
-A test item may cite Internal Behavior its claim materially needs; the citation reclassifies nothing.
-No item shall carry a relationship-metadata line — `Verifies:`, `Binds:`, `Clients:`, or any other line declaring a relationship; the citations in an item's clauses are the single source of its relationships.
-A machine-readable declaration an item defines as its own content — like the language marker of [meta-27](#meta-27) — is not relationship metadata.
+A test item shall cite every behavior item it verifies, inline at the assertion that verifies it, and may cite Internal Behavior its statement materially needs — the citation reclassifying nothing.
+
+### meta-41
+
+A citation shall bind its adjacent phrase: it cites exactly the behavior that phrase relies on, exercises, or checks — never ambient, transitive, or merely invoked behavior.
 
 ## Authoring language
 
@@ -234,8 +205,7 @@ A machine-readable declaration an item defines as its own content — like the l
 
 Authoring language: en
 
-Where a specs tree declares an authoring language, the specs shall be authored in that language.
-The declaration line in this item is the machine-readable scaffold language marker; it shall use the exact format `Authoring language: <code>`, where `<code>` contains only ASCII letters, digits, and hyphens.
+Where a specs tree declares an authoring language — by this item's machine-readable marker line, in the exact format `Authoring language: <code>` with `<code>` of only ASCII letters, digits, and hyphens — the specs shall be authored in that language.
 
 ## References
 

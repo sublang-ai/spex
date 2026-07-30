@@ -56,10 +56,10 @@ For example, a spec package for generating short URLs may be `specs/packages/sig
 
 Each package file carries the same sections in the following order ([META-28](../meta.md#meta-28)):
 
-- `## External Behavior` for outcomes and guarantees the package's users rely on.
+- `External Behavior` for outcomes and guarantees the package's users rely on.
 A package's user may be a human or a system component.
-- `## Internal Behavior` for implementation hidden from the package's users.
-- `## Verification` for test items that check the package's own claims.
+- `Internal Behavior` for implementation hidden from the package's users.
+- `Verification` for test items that check the package's own claims.
 
 A behavior phrase can bind to another package's External Behavior by citing it ([META-14](../meta.md#meta-14)).
 But a spec package remains meaningfully self-contained.
