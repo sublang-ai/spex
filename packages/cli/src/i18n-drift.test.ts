@@ -12,15 +12,13 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAFFOLD_ROOT = join(REPO_ROOT, "scaffold");
 const I18N_ROOT = join(SCAFFOLD_ROOT, "i18n");
 const TRANSLATED_META_ITEMS = new Set([
-  "META-3",
-  "META-4",
-  "META-5",
-  "META-6",
-  "META-7",
-  "META-19",
-  "META-27",
-  "META-28",
-  "META-34",
+  "meta-4",
+  "meta-5",
+  "meta-6",
+  "meta-7",
+  "meta-19",
+  "meta-27",
+  "meta-30",
 ]);
 
 function listOverlayLanguages(): string[] {
@@ -43,7 +41,7 @@ function extractMetaItems(text: string): Map<string, string> {
   }
 
   for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
-    const heading = line.match(/^### (META-\d+)$/);
+    const heading = line.match(/^### (meta-\d+)$/);
     if (heading !== null) {
       flush();
       id = heading[1];
@@ -67,7 +65,7 @@ function extractMetaItems(text: string): Map<string, string> {
 function extractSourcePins(text: string): Map<string, string> {
   const pins = new Map<string, string>();
   const pinPattern =
-    /^<!-- spex-i18n-source: (META-\d+) (sha256-[a-f0-9]{64}) -->$/gm;
+    /^<!-- spex-i18n-source: (meta-\d+) (sha256-[a-f0-9]{64}) -->$/gm;
   for (const match of text.matchAll(pinPattern)) {
     pins.set(match[1], match[2]);
   }
