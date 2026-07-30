@@ -12,7 +12,7 @@
 在编写、修改或审阅 DR、IR 或条目前，先了解 [`meta.md`](meta.md) 中的规则。
 
 - DR 和 IR：见 [Organization](meta.md#organization)、[Record format](meta.md#record-format) 和 [Citation](meta.md#citation)。
-- 条目：见 [Organization](meta.md#organization)、[Item syntax](meta.md#item-syntax)、[Spec packages](meta.md#spec-packages) 和 [Citation](meta.md#citation)。
+- 条目：见 [Organization](meta.md#organization)、[Item syntax](meta.md#item-syntax)、[Spec packages](meta.md#spec-packages)、[Testing](meta.md#testing) 和 [Citation](meta.md#citation)。
 
 ## 目录结构
 
@@ -20,7 +20,6 @@
 decisions/    决策记录（DRs）
 intents/      意图记录（IRs）
 packages/     规约包（每包一个文件）
-compositions/ 跨包组合：场景、绑定与测试
 map.md        本索引
 meta.md       规约的规约
 ```
@@ -33,24 +32,13 @@ meta.md       规约的规约
 
 ## 意图
 
-| ID | 文件 | 目标 |
+| ID | 文件 | 意图 |
 | --- | --- | --- |
 | IR-000 | [000-spdx-headers.md](intents/000-spdx-headers.md) | 为适用文件添加 SPDX 头 |
 
 ## 包
 
-### GIT
-
 | 文件 | 摘要 |
 | --- | --- |
 | [git.md](packages/git.md) | 提交信息格式和 AI 共同作者 trailers |
-
-### LIC
-
-| 文件 | 摘要 |
-| --- | --- |
 | [licensing.md](packages/licensing.md) | SPDX 头要求与验证检查 |
-
-## 组合
-
-暂无。当多个包开始协作时，在 `compositions/` 下添加文件。

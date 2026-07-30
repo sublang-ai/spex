@@ -32,7 +32,7 @@ meta.md       The spec of specs
 
 ## Intents
 
-| ID | File | Goal |
+| ID | File | Intent |
 | --- | --- | --- |
 | IR-000 | [000-spdx-headers.md](intents/000-spdx-headers.md) | Add SPDX headers to applicable files |
 
