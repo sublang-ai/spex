@@ -27,7 +27,7 @@ Close the v1 build: verify the real Playbook Captain shell through the Spex pipe
 
 - Live `slc playbook` compile with a credentialed agent (needs network + credentials; pipeline is stub-verified end to end).
 - Live CODE playbook turn with real agents, and tmux-play parity runs on identical inputs ([DR-003](../decisions/003-runtime-reuse.md) verification strategy).
-- Packaged .app end-to-end test and `app-v*` release automation ([[app-shell-15](../packages/app-shell.md#app-shell-15)] territory; dev boot is smoke-verified).
+- Packaged .app end-to-end test and `app-v*` release automation ([[app-shell-16](../packages/app-shell.md#app-shell-16)], [[app-shell-14](../packages/app-shell.md#app-shell-14)] territory; dev boot is smoke-verified).
 - Native directory picker via an approved shell channel (path entry works everywhere today).
 - Layout-weight editing in Settings (config `layout` passes through untouched).
 - Windows/Linux packaging and code signing.

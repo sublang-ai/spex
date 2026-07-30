@@ -17,7 +17,11 @@ Materialize [DR-009](../decisions/009-at-hand-interaction.md) across the critica
 - [x] Sessions nav badge from the Dashboard's attention derivation ([[run-view-34](../packages/run-view.md#run-view-34)])
 - [x] Slash-menu "compile a new playbook" entry ([[run-view-34](../packages/run-view.md#run-view-34)])
 - [x] Past sessions on the Captain home; read-only transcripts with an ended notice and a start-new affordance ([[run-view-33](../packages/run-view.md#run-view-33)])
-- [x] Tests per [[run-view-35/36](../packages/run-view.md#run-view-35)]; live verification of the popover save round-trip to the shared config, the badge on a parked session, and the read-only past transcript
+- [x] Tests per [[run-view-35](../packages/run-view.md#run-view-35)]/[[run-view-36](../packages/run-view.md#run-view-36)]; live verification of the popover save round-trip to the shared config, the badge on a parked session, and the read-only past transcript
+
+## Tasks
+
+1. Realized across the commits referencing `IR-013`.
 
 ## Verification
 

@@ -12,7 +12,7 @@ The flow spans the shell (process topology and packaging), the core service (ses
 
 ### desktop-session-1
 
-Where the packaged desktop app is installed with a valid shared config, when the Boss starts a session for a registered project and completes a turn, every non-hidden record the embedded runtime emits shall reach the run view through the same WebSocket protocol a browser client would use [[app-shell-10](app-shell.md#app-shell-10)] [[core-service-7](core-service.md#core-service-7)], the view shall present the session from that received stream alone [[run-view-14](run-view.md#run-view-14)], and no record marked hidden shall appear in the view [[core-service-8](core-service.md#core-service-8)] [[run-view-13](run-view.md#run-view-13)].
+Where the packaged desktop app is installed with a valid shared config, when the Boss starts a session for a registered project and completes a turn, every non-hidden record the embedded runtime emits shall reach the run view through the same WebSocket protocol a browser client would use [[app-shell-10](app-shell.md#app-shell-10)] [[core-service-7](core-service.md#core-service-7)], the view shall present the session from that received stream alone, and no record marked hidden shall appear in the view [[core-service-8](core-service.md#core-service-8)].
 
 ### desktop-session-2
 
@@ -26,4 +26,4 @@ Where a packaged build is installed with an agent backed by a fake adapter and t
 
 ### desktop-session-4
 
-Where a fixture session emits records marked hidden, when the acceptance suite drives the packaged app through that session, the suite shall assert that hidden records appear nowhere in the run view [[desktop-session-1](#desktop-session-1)]: the core's visibility boundary [[core-service-8](core-service.md#core-service-8)] and the view's protocol-only rendering [[run-view-13](run-view.md#run-view-13)] combine to keep judge and router traffic invisible.
+Where a fixture session emits records marked hidden, when the acceptance suite drives the packaged app through that session, the suite shall assert that hidden records appear nowhere in the run view [[desktop-session-1](#desktop-session-1)]: the core's visibility boundary [[core-service-8](core-service.md#core-service-8)] and the view's protocol-only rendering combine to keep judge and router traffic invisible.

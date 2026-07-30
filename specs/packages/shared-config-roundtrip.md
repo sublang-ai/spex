@@ -12,7 +12,7 @@ Settings edits it, the core service loads and revalidates it, the Library regist
 
 ### shared-config-roundtrip-1
 
-Where any Spex surface writes the shared config — a Settings save [[settings-11](settings.md#settings-11)] or a Library registration [[playbook-library-15](playbook-library.md#playbook-library-15)] — when the write lands, the core service shall observe the change and revalidate it [[core-service-2](core-service.md#core-service-2)] with the same fail-closed rule set that gated the write, so a config that one package accepted is never rejected by another.
+Where any Spex surface writes the shared config — a Settings save or a Library registration — when the write lands, the core service shall observe the change and revalidate it [[core-service-2](core-service.md#core-service-2)] with the same fail-closed rule set that gated the write, so a config that one package accepted is never rejected by another.
 
 ### shared-config-roundtrip-2
 
@@ -26,8 +26,8 @@ Where any Spex surface submits a shared-config change that violates the shared f
 
 ### shared-config-roundtrip-3
 
-Where a commented fixture config is edited through the Settings protocol commands [[settings-11](settings.md#settings-11)], then extended by a stub-compiled playbook registration [[playbook-library-15](playbook-library.md#playbook-library-15)], the integration suite shall assert that the core service reloads each intermediate config without a validation failure [[shared-config-roundtrip-1](#shared-config-roundtrip-1)] [[core-service-2](core-service.md#core-service-2)], and that the fixture's comments survive the Settings save [[settings-13](settings.md#settings-13)] and the registration write [[playbook-library-16](playbook-library.md#playbook-library-16)] alike [[shared-config-roundtrip-2](#shared-config-roundtrip-2)] — one rule set, observed at every seam.
+Where a commented fixture config is edited through the Settings protocol commands, then extended by a stub-compiled playbook registration, the integration suite shall assert that the core service reloads each intermediate config without a validation failure [[shared-config-roundtrip-1](#shared-config-roundtrip-1)] [[core-service-2](core-service.md#core-service-2)], and that the fixture's comments survive the Settings save [[settings-13](settings.md#settings-13)] and the registration write [[playbook-library-16](playbook-library.md#playbook-library-16)] alike [[shared-config-roundtrip-2](#shared-config-roundtrip-2)] — one rule set, observed at every seam.
 
 ### shared-config-roundtrip-4
 
-Where a client submits a config edit that violates a shared-config rule [[shared-config-roundtrip-5](#shared-config-roundtrip-5)], the integration suite shall assert the Settings surface marks the field inline [[settings-2](settings.md#settings-2)] while the core service leaves the file unwritten and returns the violations over the protocol [[settings-12](settings.md#settings-12)]; and where a playbook registration violates the same rule, the suite shall assert the registration is rejected naming it, with the config bytes unchanged [[playbook-library-15](playbook-library.md#playbook-library-15)] [[shared-config-roundtrip-5](#shared-config-roundtrip-5)] — the same fail-closed rule set answers at every surface.
+Where a client submits a config edit that violates a shared-config rule [[shared-config-roundtrip-5](#shared-config-roundtrip-5)], the integration suite shall assert the Settings surface marks the field inline [[settings-2](settings.md#settings-2)] while the core service leaves the file unwritten and returns the violations over the protocol [[settings-12](settings.md#settings-12)]; and where a playbook registration violates the same rule, the suite shall assert the registration is rejected naming it, with the config bytes unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)] — the same fail-closed rule set answers at every surface.

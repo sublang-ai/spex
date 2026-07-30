@@ -78,8 +78,6 @@ When the user activates an external link anywhere in the app, the shell shall op
 
 Where the app is built for distribution, the packaged app shall carry the Spex product logo ([DR-013](../decisions/013-sublang-brand.md)) as its application icon, so the dock, app switcher, and installer show the brand mark.
 
-## Internal Behavior
-
 ### Process Topology
 
 #### app-shell-10
@@ -87,6 +85,10 @@ Where the app is built for distribution, the packaged app shall carry the Spex p
 The shell shall run the core service in the Electron main process or an Electron utility process, load the built UI in a renderer window, and connect the renderer to the core over the core's WebSocket protocol exactly as a browser client connects.
 
 - The shell carries no application features — commands, state, records, config — over Electron IPC; Electron-specific channels are limited to the shell's own OS integrations (native dialogs, notifications, badge, quit handling), so the UI bundle runs unmodified in a browser against the same core.
+
+## Internal Behavior
+
+### Renderer Isolation
 
 #### app-shell-11
 

@@ -35,7 +35,7 @@ Implement `packages/ui` — the Spex web UI — with the project session run vie
 
 6. **Dev harness** — `packages/core` dev-server entry with `--fake` scripted mode for UI development and screenshots.
 
-7. **Fixture tests** — reducer and component tests per [[run-view-19](../packages/run-view.md#run-view-19)]..[[run-view-23](../packages/run-view.md#run-view-23)].
+7. **Fixture tests** — reducer and component tests per [[run-view-20](../packages/run-view.md#run-view-20)]..[[run-view-24](../packages/run-view.md#run-view-24)].
 
 ## Verification
 

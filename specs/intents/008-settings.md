@@ -20,10 +20,10 @@ Implement the Settings surface per the settings spec package: a validated editor
 
 ## Tasks
 
-1. **Config edit module** — yaml Document operations ([[settings-12](../packages/settings.md#settings-12)]); every op composes the candidate config with launcher-parity validation before writing ([[settings-3](../packages/settings.md#settings-3)], [[settings-11](../packages/settings.md#settings-11)]).
+1. **Config edit module** — yaml Document operations ([[settings-13](../packages/settings.md#settings-13)]); every op composes the candidate config with launcher-parity validation before writing ([[settings-3](../packages/settings.md#settings-3)], [[settings-11](../packages/settings.md#settings-11)]).
 2. **Protocol + handlers** — config.profile.save/delete, config.captain.set, config.notifications.set, config.theme.set; broadcast refreshed state after writes.
-3. **Settings UI** — profiles with readiness badges and fix instructions, captain selector, notification matrix, theme ([[settings-1..10](../packages/settings.md#settings-1)]).
-4. **Tests** — round-trip preserving comments, launcher-invalid rejection with the same error class, delete protection ([[settings-17..20](../packages/settings.md#settings-17)]).
+3. **Settings UI** — profiles with readiness badges and fix instructions, captain selector, notification matrix, theme ([[settings-1](../packages/settings.md#settings-1)]..[[settings-10](../packages/settings.md#settings-10)]).
+4. **Tests** — round-trip preserving comments, launcher-invalid rejection with the same error class, delete protection ([[settings-17](../packages/settings.md#settings-17)]..[[settings-20](../packages/settings.md#settings-20)]).
 
 ## Verification
 

@@ -9,7 +9,7 @@ Accepted
 
 ## Context
 
-- [[app-shell-5](../packages/app-shell.md#app-shell-5)] mandates native file/directory pickers, but the app-shell dev items keep every app feature on the WebSocket protocol with no Electron IPC — and a sandboxed web page cannot open a native directory dialog or learn an absolute path from a browser picker.
+- [[app-shell-6](../packages/app-shell.md#app-shell-6)] mandates native file/directory pickers, but the app-shell dev items keep every app feature on the WebSocket protocol with no Electron IPC — and a sandboxed web page cannot open a native directory dialog or learn an absolute path from a browser picker.
 - v1 shipped manual path entry as the only way to add a project, which the product owner rejected as a critical UX gap.
 
 ## Decision

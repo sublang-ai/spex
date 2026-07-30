@@ -22,6 +22,10 @@ Apply DR-010's eight principles across the app: close the 51 adversarially-verif
 - [x] Microcopy: "Playbooks" nav; Projects add/create labels; humanized notification labels; pluralization; explained registry path and scaffold checkbox; de-jargoned empty states with real links; Dashboard welcome takeover removed
 - [x] Specs: DR-010 recorded; affected user/dev/test spec items amended (run-view, app-shell, settings, playbook-library, projects, dashboard, core-service) with tests pinning question bubbles, drafts, compile busy/abort, readiness shorthands, tab confirms, and label maps
 
+## Tasks
+
+1. Realized across the commits referencing `IR-015`.
+
 ## Verification
 
 - Root build/test green with new regression tests for each deliverable cluster.

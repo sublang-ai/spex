@@ -25,9 +25,9 @@ Implement `apps/desktop` — the Spex Electron shell — per the app-shell spec 
 
 1. **Package scaffolding** — `apps/desktop` with Electron + builder devDeps, tsc build for the main process, UI dist staging script [[app-shell-10](../packages/app-shell.md#app-shell-10)].
 
-2. **Main process** — env capture [[app-shell-12](../packages/app-shell.md#app-shell-12)], core boot with userData store path, sandboxed window loading the UI with the core URL, single instance [[app-shell-1](../packages/app-shell.md#app-shell-1)], quit safety [[app-shell-6](../packages/app-shell.md#app-shell-6)].
+2. **Main process** — env capture [[app-shell-12](../packages/app-shell.md#app-shell-12)], core boot with userData store path, sandboxed window loading the UI with the core URL, single instance [[app-shell-2](../packages/app-shell.md#app-shell-2)], quit safety [[app-shell-7](../packages/app-shell.md#app-shell-7)].
 
-3. **Notifications and badge** — record-driven notifications per config preferences and attention badge [[app-shell-2](../packages/app-shell.md#app-shell-2)]..[[app-shell-4](../packages/app-shell.md#app-shell-4)]; core exposes a local event hook for the embedding shell.
+3. **Notifications and badge** — record-driven notifications per config preferences and attention badge [[app-shell-3](../packages/app-shell.md#app-shell-3)]..[[app-shell-5](../packages/app-shell.md#app-shell-5)]; core exposes a local event hook for the embedding shell.
 
 4. **Packaging** — electron-builder macOS arm64 unsigned target, asar-unpacked agent SDK binaries [[app-shell-13](../packages/app-shell.md#app-shell-13)]; CI env skips Electron binary download.
 

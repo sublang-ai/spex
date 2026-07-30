@@ -12,7 +12,7 @@ The value — one consistent view of what needs doing — emerges only when the 
 
 ### forge-work-lists-1
 
-Where a project is bound to a GitHub repository and its forge data is served through the project's forge adapter [[projects-14](projects.md#projects-14)], when its issues and pull requests are displayed anywhere in the app — the project's Repo tab [[projects-6](projects.md#projects-6)] or the Dashboard's next-work lists [[dashboard-6](dashboard.md#dashboard-6)] — both surfaces shall apply one selection and representation, presenting identical items whenever they render the same adapter fetch.
+Where a project is bound to a GitHub repository and its forge data is served through the project's forge adapter, when its issues and pull requests are displayed anywhere in the app — the project's Repo tab [[projects-6](projects.md#projects-6)] or the Dashboard's next-work lists [[dashboard-6](dashboard.md#dashboard-6)] — both surfaces shall apply one selection and representation, presenting identical items whenever they render the same adapter fetch.
 
 ## Verification
 

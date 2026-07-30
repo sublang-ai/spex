@@ -23,10 +23,10 @@ Implement the Library surface per the playbook-library spec package: browsing an
 
 ## Tasks
 
-1. **Compile module** — toolchain checks ([[playbook-library-11](../packages/playbook-library.md#playbook-library-11)]), slc run with progress, esbuild packaging, FSM introspection, registry generation and validation ([[playbook-library-12..15](../packages/playbook-library.md#playbook-library-12)]).
+1. **Compile module** — toolchain checks ([[playbook-library-11](../packages/playbook-library.md#playbook-library-11)]), slc run with progress, esbuild packaging, FSM introspection, registry generation and validation ([[playbook-library-12](../packages/playbook-library.md#playbook-library-12)]..[[playbook-library-15](../packages/playbook-library.md#playbook-library-15)]).
 2. **Protocol + handlers** — compile.check and compile.run commands, compile.progress broadcasts; registration via the existing playbook.add config op.
-3. **Library UI** — list/mapping per [[playbook-library-1..4](../packages/playbook-library.md#playbook-library-1)], compile flow per [[playbook-library-5..10](../packages/playbook-library.md#playbook-library-5)].
-4. **Tests** — stub-slc pipeline to a runnable registry, missing toolchain guidance, invalid registry rejection ([[playbook-library-17..21](../packages/playbook-library.md#playbook-library-17)]).
+3. **Library UI** — list/mapping per [[playbook-library-1](../packages/playbook-library.md#playbook-library-1)]..[[playbook-library-4](../packages/playbook-library.md#playbook-library-4)], compile flow per [[playbook-library-5](../packages/playbook-library.md#playbook-library-5)]..[[playbook-library-10](../packages/playbook-library.md#playbook-library-10)].
+4. **Tests** — stub-slc pipeline to a runnable registry, missing toolchain guidance, invalid registry rejection ([[playbook-library-17](../packages/playbook-library.md#playbook-library-17)]..[[playbook-library-21](../packages/playbook-library.md#playbook-library-21)]).
 
 ## Verification
 

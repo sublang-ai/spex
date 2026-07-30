@@ -22,6 +22,10 @@ Close the blockers and majors from the adversarial public-readiness review (four
 - [x] First-hour polish: single-vendor seeded default, Spex application menu and About, version visible in Settings, initial connect without the reconnect banner, session-ending feedback, jargon sweep, past-sessions expander, popover anchoring fixes
 - [x] Release path: app-v* workflow producing a zip artifact and a README install section with Gatekeeper guidance (signing deferred: needs the owner's Apple Developer ID)
 
+## Tasks
+
+1. Realized across the commits referencing `IR-014`.
+
 ## Verification
 
 - Root build/test green; new regression tests cover the question shape, the patch op round-trip, backfill buffering, and attention clearing.

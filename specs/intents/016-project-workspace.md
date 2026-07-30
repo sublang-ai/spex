@@ -20,6 +20,10 @@ Implement DR-011: the project-first four-surface taxonomy, the project palette, 
 - [x] Dev harness: fake dev-core seeds a demo `specs/` tree (nested directory, mixed group coverage) so the view demos live
 - [x] Specs: DR-011 recorded; spec-view package (user/dev/test); run-view and projects amendments; map.md rows
 
+## Tasks
+
+1. Realized across the commits referencing `IR-016`.
+
 ## Verification
 
 - Root build/test green with the fixture-tree parser tests and spec-view component tests.
