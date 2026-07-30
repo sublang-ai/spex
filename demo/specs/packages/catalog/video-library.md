@@ -50,6 +50,12 @@ Where a host surface embeds the player for an asset, while no signed-in session 
 
 When an upload completes, the library shall assign the asset an opaque identifier that is stable for the asset's lifetime and independent of its title and file name — identical content uploaded twice yielding two distinct assets.
 
+### Deletion Boundary
+
+#### video-library-10
+
+When an asset is deleted, the library shall remove both its record and its stored content, and shall not read or modify any data a host surface keeps about the asset — what hosts stored is theirs to reconcile.
+
 ### Resolution
 
 #### video-library-14
@@ -85,12 +91,6 @@ Where a playback request targets an asset, the server shall obtain from the embe
 
 - a request the host does not authorize is denied, with no grant issued and no content served;
 - stored-content requests stay governed by the grant alone [[video-library-7](#video-library-7)] [[video-library-17](#video-library-17)], the host not re-asked at redemption.
-
-### Deletion Boundary
-
-#### video-library-10
-
-When an asset is deleted, the library shall remove both its record and its stored content, and shall not read or modify any data a host surface keeps about the asset — what hosts stored is theirs to reconcile.
 
 ### Asset Records
 

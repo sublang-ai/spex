@@ -17,11 +17,11 @@ Where sessions are established by GitHub sign-in [[github-login-2](identity/gith
 
 ### platform-services-2
 
-Where the identity store maintains user records [[github-login-7](identity/github-login.md#github-login-7)], [[github-login-15](identity/github-login.md#github-login-15)], the role store records each account's role [[access-control-3](identity/access-control.md#access-control-3)], the catalog store keeps content in explicit order [[course-catalog-11](catalog/course-catalog.md#course-catalog-11)], and asset records live in the library's asset store [[video-library-16](catalog/video-library.md#video-library-16)], the installed platform shall keep those stores in the environment's Supabase Postgres project — the installation supplies the storage only; each package's invariants over that storage remain its own.
+Where the identity store maintains user records [[github-login-7](identity/github-login.md#github-login-7)], [[github-login-15](identity/github-login.md#github-login-15)], the role store records each account's role, the catalog store keeps content in explicit order, and asset records live in the library's asset store, the installed platform shall keep those stores in the environment's Supabase Postgres project — the installation supplies the storage only; each package's invariants over that storage remain its own.
 
 ### platform-services-3
 
-Where the content store holds asset content privately [[video-library-7](catalog/video-library.md#video-library-7)] and the library's short-lived access grants rely on an installed grant mechanism [[video-library-8](catalog/video-library.md#video-library-8)], the installed platform shall back the content store with a private Supabase Storage bucket and realize each grant as a signed URL whose expiry is the grant's configured expiry.
+Where the content store holds asset content privately and the library's short-lived access grants rely on an installed grant mechanism, the installed platform shall back the content store with a private Supabase Storage bucket and realize each grant as a signed URL whose expiry is the grant's configured expiry.
 
 ### platform-services-4
 
@@ -35,7 +35,7 @@ Where required checks report on a pull request [[delivery-1](ops/delivery.md#del
 
 ### platform-services-8
 
-Where behavior follows deployment configuration — the initial-admin account ID [[access-control-1](identity/access-control.md#access-control-1)], the session lifetime [[github-login-6](identity/github-login.md#github-login-6)], the upload size cap [[video-library-1](catalog/video-library.md#video-library-1)], the grant expiry [[video-library-8](catalog/video-library.md#video-library-8)], and the secrets and variables of the platform's environment configuration [[delivery-5](ops/delivery.md#delivery-5)] — the installed platform shall hold those values in the Vercel project's per-environment variables, secrets marked as such, and the pipeline's credentials in the repository's GitHub Actions secrets.
+Where behavior follows deployment configuration — the initial-admin account ID [[access-control-1](identity/access-control.md#access-control-1)], the session lifetime [[github-login-6](identity/github-login.md#github-login-6)], the upload size cap [[video-library-1](catalog/video-library.md#video-library-1)], the grant expiry, and the secrets and variables of the platform's environment configuration [[delivery-5](ops/delivery.md#delivery-5)] — the installed platform shall hold those values in the Vercel project's per-environment variables, secrets marked as such, and the pipeline's credentials in the repository's GitHub Actions secrets.
 
 ## Verification
 
@@ -45,7 +45,7 @@ Where the audit suite inspects a deployed environment's configuration and networ
 
 1. session issuance and verification go through Supabase Auth, with GitHub OAuth the only enabled method and the sign-in page offering no other [[platform-services-1](#platform-services-1)];
 2. user records, roles, catalog content, and video asset records live in that environment's Supabase Postgres project [[platform-services-2](#platform-services-2)];
-3. asset content is served only from the private bucket [[video-library-7](catalog/video-library.md#video-library-7)] through signed URLs that stop working at expiry [[platform-services-3](#platform-services-3)];
+3. asset content is served only from the private bucket through signed URLs that stop working at expiry [[platform-services-3](#platform-services-3)];
 4. every configured value — the initial-admin ID, session lifetime, upload cap, and grant expiry — resolves from the environment's Vercel configuration with secrets absent from the repository [[platform-services-8](#platform-services-8)];
 5. no other identity, database, or storage service appears in the configuration or the observed egress.
 
