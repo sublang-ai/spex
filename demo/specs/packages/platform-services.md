@@ -25,7 +25,7 @@ Where the content store holds asset content privately and the library's short-li
 
 ### platform-services-4
 
-Where the pipeline publishes previews and production deployments [[delivery-2](ops/delivery.md#delivery-2)], [[delivery-3](ops/delivery.md#delivery-3)] and previews run against non-production backing services [[delivery-4](ops/delivery.md#delivery-4)], the installed platform shall host the site on Vercel through its Git integration, with previews backed by a non-production Supabase project.
+Where the pipeline publishes previews and production deployments [[delivery-2](ops/delivery.md#delivery-2)], [[delivery-3](ops/delivery.md#delivery-3)] and previews run against non-production backing services [[delivery-4](ops/delivery.md#delivery-4)], the installed platform shall host the site on Vercel through its Git integration, with previews backed by a non-production Supabase project and the serving revision reporting the commit the integration built it from [[delivery-7](ops/delivery.md#delivery-7)].
 
 ### platform-services-5
 
@@ -47,7 +47,7 @@ Where the audit suite inspects a deployed environment's configuration and networ
 2. user records, roles, catalog content, and video asset records live in that environment's Supabase Postgres project [[platform-services-2](#platform-services-2)];
 3. asset content is served only from the private bucket through signed URLs that stop working at expiry [[platform-services-3](#platform-services-3)];
 4. every configured value — the initial-admin ID, session lifetime, upload cap, and grant expiry — resolves from the environment's Vercel configuration with secrets absent from the repository [[platform-services-8](#platform-services-8)];
-5. no other identity, database, or storage service appears in the configuration or the observed egress.
+5. no other identity, database, or storage service appears in the configuration or the observed egress [[platform-services-1](#platform-services-1)] [[platform-services-2](#platform-services-2)] [[platform-services-3](#platform-services-3)].
 
 ### platform-services-7
 
@@ -60,4 +60,4 @@ Where a fixture pull request runs through the pipeline, the audit suite shall as
 
 ### platform-services-9
 
-Where production is served through the Vercel Git integration [[platform-services-4](#platform-services-4)], the audit suite shall assert by deployment inspection that the serving revision reports the default-branch commit the integration built it from — not merely a commit that exists on that branch [[delivery-7](ops/delivery.md#delivery-7)].
+Where production is served through the Vercel Git integration, the audit suite shall assert by deployment inspection that the serving revision reports the default-branch commit the integration built it from [[platform-services-4](#platform-services-4)] — not merely a commit that exists on that branch [[delivery-7](ops/delivery.md#delivery-7)].

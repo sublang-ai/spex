@@ -32,5 +32,5 @@ Where fixture sessions exist for an admin, a member, and a signed-out visitor on
 - the home page presents the course list [[site-navigation-2](#site-navigation-2)] [[course-catalog-1](catalog/course-catalog.md#course-catalog-1)];
 - the header's site name reads "Academy" [[site-navigation-1](#site-navigation-1)];
 - the header's "Courses" entry leads to the course list [[site-navigation-1](#site-navigation-1)] [[web-shell-1](site/web-shell.md#web-shell-1)];
-- the session control renders the account menu matching each session state [[github-login-4](identity/github-login.md#github-login-4)];
-- for the admin session only, the "Admin" entry leads to the admin area with the course manager and the video library both reachable [[web-shell-2](site/web-shell.md#web-shell-2)] [[course-catalog-4](catalog/course-catalog.md#course-catalog-4)] [[video-library-4](catalog/video-library.md#video-library-4)].
+- the session control renders the account menu matching each session state [[site-navigation-1](#site-navigation-1)] [[github-login-4](identity/github-login.md#github-login-4)];
+- for the admin session only, the "Admin" entry leads to the admin area with the course manager and the video library both reachable [[site-navigation-1](#site-navigation-1)] [[web-shell-2](site/web-shell.md#web-shell-2)] [[course-catalog-4](catalog/course-catalog.md#course-catalog-4)] [[video-library-4](catalog/video-library.md#video-library-4)].

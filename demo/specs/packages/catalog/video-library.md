@@ -62,6 +62,15 @@ When an asset is deleted, the library shall remove both its record and its store
 
 Where a host surface holds a stored asset identifier, when the host queries the library for that identifier, the library shall report whether it resolves to a listed asset — unresolvable once the asset is deleted.
 
+### Host Authorization
+
+#### video-library-15
+
+Where a playback request targets an asset, the server shall obtain from the embedding host its answer — whether that asset is authorized for that requester — and issue an access grant only on an affirmative answer:
+
+- a request the host does not authorize is denied, with no grant issued and no content served;
+- stored-content requests stay governed by the grant alone [[video-library-7](#video-library-7)] [[video-library-17](#video-library-17)], the host not re-asked at redemption.
+
 ## Internal Behavior
 
 ### Storage
@@ -83,20 +92,13 @@ Where the embedding host authorizes the asset for the requester [[video-library-
 
 An issued grant shall stay redeemable until its expiry regardless of later session or authorization changes — authorization is evaluated at issuance, expiry is the only revocation of the grant itself, and deleting the asset removes the content it reaches [[video-library-18](#video-library-18)].
 
-### Host Authorization
-
-#### video-library-15
-
-Where a playback request targets an asset, the server shall obtain from the embedding host its answer — whether that asset is authorized for that requester — and issue an access grant only on an affirmative answer:
-
-- a request the host does not authorize is denied, with no grant issued and no content served;
-- stored-content requests stay governed by the grant alone [[video-library-7](#video-library-7)] [[video-library-17](#video-library-17)], the host not re-asked at redemption.
-
 ### Asset Records
 
 #### video-library-16
 
-Where asset records are kept — the identifier, title, size, and upload date behind the library listing [[video-library-4](#video-library-4)] — they shall live in the library's asset store, surviving restarts and redeployments, and a deleted asset's record shall leave the store with it [[video-library-10](#video-library-10)].
+Where asset records are kept — the identifier, title, size, and upload date behind the library listing [[video-library-4](#video-library-4)] — they shall live in the library's asset store, surviving restarts and redeployments.
+
+- A deleted asset's record leaves the store with it [[video-library-10](#video-library-10)].
 
 ## Verification
 

@@ -88,7 +88,7 @@ Where a stub OAuth provider stands in for GitHub and honors the authorization-re
 - the page offers the GitHub action [[github-login-1](#github-login-1)];
 - the browser is sent to the stub's authorization URL and returns signed in [[github-login-2](#github-login-2)];
 - after the stub grants, the account menu shows the stub account's username and avatar on the page sign-in started from [[github-login-4](#github-login-4)];
-- when the recorded origin is not same-site, the return lands on the home page instead;
+- when the recorded origin is not same-site, the return lands on the home page instead [[github-login-2](#github-login-2)];
 - an unsolicited callback, one bound to another browser's attempt, an expired one, and a replay of a consumed one each establish no session and show the not-completed notice [[github-login-14](#github-login-14)].
 
 #### github-login-11
@@ -108,4 +108,4 @@ While a stub-account session is active, the test suite shall assert:
 
 #### github-login-13
 
-When the same stub account signs in twice with a changed username and avatar between the sign-ins, the test suite shall assert exactly one user record exists for the account's stable ID, carrying the latest username and avatar [[github-login-15](#github-login-15)].
+When the same stub account signs in twice with a changed username and avatar between the sign-ins, the test suite shall assert exactly one user record exists for the account's stable ID, carrying the latest username and avatar [[github-login-7](#github-login-7)] [[github-login-15](#github-login-15)].

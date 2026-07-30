@@ -23,7 +23,7 @@ Academy is a minimal online course website:
 ## Reading order
 
 Start at [specs/map.md](specs/map.md).
-Every spec is a package, self-contained in one file.
+Every behavior spec is a package, self-contained in one file.
 Read the domain packages first, then the composition packages — ordinary packages whose behavior emerges only when the others work together: admin-bootstrap, course-publishing, lesson-playback, platform-services, protected-content, and site-navigation say how the rest add up to the product.
 The organization rules this tree demonstrates are stated in [guidelines.md](guidelines.md).
 

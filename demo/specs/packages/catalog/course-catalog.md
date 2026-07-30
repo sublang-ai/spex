@@ -159,6 +159,7 @@ Where a stub media provider returns fixed references, the test suite shall asser
 
 - attach, replace, and remove store, swap, and clear the lesson's single reference without the catalog reading the referenced asset ([[course-catalog-8](#course-catalog-8)]);
 - when the stub stops resolving a stored reference, the manager keeps it, marks the attachment unavailable, and still offers replace and remove ([[course-catalog-24](#course-catalog-24)]);
+- opening a lesson shows the lesson title with its course and section context, the media area for a stub-resolvable attachment, and the no-media presentation for an unresolvable one ([[course-catalog-20](#course-catalog-20)]);
 - a course's slug survives a title change and collides into a suffixed form ([[course-catalog-9](#course-catalog-9)]);
 - deleting a course — after a confirmation naming its section and lesson counts ([[course-catalog-17](#course-catalog-17)]) — removes the course from the list, its sections, lessons, and references, while the stub provider's assets remain untouched ([[course-catalog-10](#course-catalog-10)]);
 - when the admin confirms removal of a section whose lesson carries a stored reference, the reference goes with the lesson while the stub provider's assets remain untouched ([[course-catalog-23](#course-catalog-23)]).

@@ -30,6 +30,6 @@ Prove the riskiest seams end to end before any product feature: repository check
 
 ## Verification
 
-- github-login-10 through github-login-13, access-control-5, access-control-6, web-shell-7 through web-shell-9, and delivery-8 through delivery-10 pass.
-- platform-services-7 passes: checks, previews, and production trace to the bound delivery services.
+- [[github-login-10](../packages/identity/github-login.md#github-login-10)] through [[github-login-13](../packages/identity/github-login.md#github-login-13)], [[access-control-5](../packages/identity/access-control.md#access-control-5)], [[access-control-6](../packages/identity/access-control.md#access-control-6)], [[web-shell-7](../packages/site/web-shell.md#web-shell-7)] through [[web-shell-9](../packages/site/web-shell.md#web-shell-9)], and [[delivery-8](../packages/ops/delivery.md#delivery-8)] through [[delivery-10](../packages/ops/delivery.md#delivery-10)] pass.
+- [[platform-services-7](../packages/platform-services.md#platform-services-7)] passes: checks, previews, and production trace to the supplied platform services.
 - A fresh preview deployment reaches a signed-in admin session with no manual step beyond configuration.

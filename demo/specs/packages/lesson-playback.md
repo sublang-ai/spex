@@ -27,7 +27,7 @@ While a signed-in session is active, when the member opens any published lesson 
 
 Where a deployment is seeded with a published fixture course whose lesson carries a fixture asset, and a stub GitHub provider is configured, when the acceptance suite walks the journey from landing to playback, the suite shall assert each leg:
 
-1. walking from the home page's course list [[course-catalog-1](catalog/course-catalog.md#course-catalog-1)] into the course and the lesson shows the lesson title with its course and section context [[course-catalog-20](catalog/course-catalog.md#course-catalog-20)] and the player in its sign-in-required state [[video-library-6](catalog/video-library.md#video-library-6)];
+1. walking from the home page's course list [[site-navigation-2](site-navigation.md#site-navigation-2)] [[course-catalog-1](catalog/course-catalog.md#course-catalog-1)] into the course and the lesson shows the lesson title with its course and section context [[course-catalog-20](catalog/course-catalog.md#course-catalog-20)] and the player in its sign-in-required state [[video-library-6](catalog/video-library.md#video-library-6)];
 2. signing in from that lesson [[github-login-2](identity/github-login.md#github-login-2)] returns the site to the same lesson [[lesson-playback-1](#lesson-playback-1)], and the media element reaches the playing state through a fresh access grant [[lesson-playback-2](#lesson-playback-2)], [[video-library-5](catalog/video-library.md#video-library-5)].
 
 ### lesson-playback-4

@@ -83,6 +83,7 @@ Where a preview environment rehearses deployment, the audit suite shall assert e
 - a revision with a deliberately failing migration leaves the serving revision unchanged [[delivery-6](#delivery-6)];
 - a revision whose migration succeeds but whose activation then fails leaves the previous revision serving correctly against the migrated schema [[delivery-3](#delivery-3)], [[delivery-11](#delivery-11)];
 - a passing revision serves after its migrations apply [[delivery-3](#delivery-3)];
+- the deployed revision reports the exact commit that produced it [[delivery-7](#delivery-7)];
 - the preview's backing-service endpoints are disjoint from production's [[delivery-4](#delivery-4)].
 
 ### Hygiene Coverage

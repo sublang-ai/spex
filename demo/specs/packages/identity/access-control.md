@@ -63,7 +63,7 @@ Where the configuration names a stub account as the initial admin, the test suit
 
 - when that account and a second stub account sign in, the configured account holds the admin role and the other holds member [[access-control-1](#access-control-1)];
 - when the configured ID changes to the second account and both sign in again, the roles have swapped, and a still-active earlier session of the first account acts as member from its next request — the recomputed role governs every session of the account [[access-control-7](#access-control-7)] [[access-control-3](#access-control-3)];
-- when a third account adopts the first account's former username and signs in, it holds member;
+- when a third account adopts the first account's former username and signs in, it holds member [[access-control-1](#access-control-1)];
 - the package exposes no operation that changes, grants, or transfers a role at runtime [[access-control-8](#access-control-8)].
 
 ### Guard Coverage
@@ -72,7 +72,7 @@ Where the configuration names a stub account as the initial admin, the test suit
 
 Where a fixture surface is designated admin-only, the test suite shall assert:
 
-- a signed-out request is sent to sign-in and returns to the target after stub sign-in;
+- a signed-out request is sent to sign-in and returns to the target after stub sign-in [[access-control-2](#access-control-2)];
 - a member-session request receives a not-authorized response whose body carries none of the fixture surface's content [[access-control-2](#access-control-2)];
 - an admin-session request succeeds;
 - a member-session request carrying a forged client-side admin claim is still denied [[access-control-4](#access-control-4)].

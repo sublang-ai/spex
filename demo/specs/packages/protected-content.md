@@ -37,7 +37,7 @@ Where a surface in the map is gated, the gate shall hold with no reliance on hid
 
 ### protected-content-5
 
-Where playback grants issue only for requests the embedding host authorizes, the site — the video library's embedding host — shall answer authorization by content eligibility:
+Where playback grants issue only for requests the embedding host authorizes [[video-library-15](catalog/video-library.md#video-library-15)], the site — the video library's embedding host — shall answer authorization by content eligibility:
 
 - a requester with an admin session [[access-control-7](identity/access-control.md#access-control-7)] is eligible exactly for assets a lesson of an existing course references;
 - every other requester is eligible exactly for assets a lesson of a currently published course references [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)] [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)] — so new non-admin grants for an asset stop as soon as no currently published course references it, unpublishing or deleting the last referencing course stopping further grants at once;
@@ -54,7 +54,7 @@ Where a seeded deployment holds published and unpublished fixture courses, when 
 Where a fixture asset is attached to a published lesson, the acceptance suite shall assert:
 
 - direct stored-content requests without a grant, with an expired grant, and with a tampered grant are denied for all three audiences [[protected-content-1](#protected-content-1)] [[video-library-7](catalog/video-library.md#video-library-7)];
-- a member's playback request obtains a grant and plays;
+- a member's playback request obtains a grant and plays [[protected-content-1](#protected-content-1)] [[video-library-8](catalog/video-library.md#video-library-8)];
 - the grant is scoped to that one asset, and a fresh playback request obtains a new grant while the course stays published [[protected-content-2](#protected-content-2)] [[video-library-8](catalog/video-library.md#video-library-8)], the first grant having stopped working at its expiry [[video-library-17](catalog/video-library.md#video-library-17)];
 - a member's playback request for an asset whose only referencing course the suite unpublishes [[course-catalog-6](catalog/course-catalog.md#course-catalog-6)] is denied with no grant issued, while a grant the member obtained before that unpublish still plays until its expiry [[video-library-17](catalog/video-library.md#video-library-17)] and the admin's player on that unpublished lesson still plays [[protected-content-5](#protected-content-5)];
 - after the only course referencing a fixture asset is deleted [[course-catalog-17](catalog/course-catalog.md#course-catalog-17)], member and admin playback requests for that asset are likewise denied with no grant issued, while an asset also referenced by a second published fixture course keeps serving member playback after the first course unpublishes [[course-catalog-6](catalog/course-catalog.md#course-catalog-6)] [[protected-content-5](#protected-content-5)].
