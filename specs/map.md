@@ -84,6 +84,7 @@ meta.md       The spec of specs
 | IR-026 | [026-spec-structure-alignment.md](intents/026-spec-structure-alignment.md) | DR-000 rewrite applied: packages-only layout, basename IDs, enclosed citations across every tree |
 | IR-027 | [027-toolchain-and-migration-skill.md](intents/027-toolchain-and-migration-skill.md) | DR-021 applied: migration skill, guide, seeding/lint alignment, migration modules retired |
 | IR-028 | [028-cli-release-acceptance.md](intents/028-cli-release-acceptance.md) | 1.0 CLI release gated on end-user smoke, live agent migration acceptance, regenerated READMEs |
+| IR-029 | [029-spec-view-alignment.md](intents/029-spec-view-alignment.md) | Desktop parser and spec view aligned with the 1.0 law: legacy compositions, citation-only rows |
 
 ## Packages
 
