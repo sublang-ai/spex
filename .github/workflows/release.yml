@@ -53,7 +53,12 @@ jobs:
       id-token: write
 
     steps:
+      # Full history + tags: the file-history audit (SCAF-21) checks
+      # the manifest against every released tag; a shallow tag
+      # checkout would make historical entries look unreleased.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
