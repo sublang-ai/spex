@@ -26,14 +26,15 @@ Playbooks are workflows around your specs; the specs are the point.
 ## Specs
 
 The convention Spex scaffolds is shared across the SubLang repos:
-decision records, intent records, spec packages (one file per
-package with External Behavior / Internal Behavior / Verification
-sections), and cross-package composition specs — bindings,
-scenarios, and the tests that span packages.
+decision records, intent records, and spec packages (one file per
+package with Intent / External Behavior / Internal Behavior /
+Verification sections); behavior that spans packages is itself a
+package citing the peers' External Behavior — there is no
+compositions directory.
 
 ```sh
 npx @sublang/spex scaffold            # seed specs/ in the current repo
-npx @sublang/spex scaffold --update   # refresh templates, migrate legacy layouts
+npx @sublang/spex scaffold --update   # refresh spex-owned templates
 npx @sublang/spex lint                # check structure, IDs, and citations
 ```
 
@@ -42,13 +43,16 @@ in-place edit it makes is to an existing `CLAUDE.md`/`AGENTS.md`,
 whose managed specs section is added or refreshed.
 `--update` edits more, mechanically
 — it requires a clean `specs/` tree so every change stays reviewable
-in git: it merges the legacy `user/`/`dev/`/`test/` layout into
-`specs/packages/`, moves `specs/interactions/` into
-`specs/compositions/`, rewrites citations to the moved paths with a
-real Markdown parser, and refreshes the spex-owned framework files
-and uncustomized starters — warning before it replaces locally
-modified framework content, so the previous version stays
-recoverable in git.
+in git: it refreshes the spex-owned framework files (`meta.md` and
+the spec-format decision record) and uncustomized starters — warning
+before it replaces locally modified framework content, so the
+previous version stays recoverable in git.
+On a tree from a previous spec generation it touches no legacy
+content: structural migration is judgment work an AI agent does
+following the bundled
+[spec-structure-migration skill](skills/spec-structure-migration/README.md)
+(guide: [docs/spec-migration.md](docs/spec-migration.md)), with
+`spex lint` as the mechanical gate the migrated tree must pass.
 `--lang zh` selects the bundled Chinese templates.
 
 ## Desktop app
@@ -59,9 +63,9 @@ runs playbooks against it. You are the *Boss*: you talk to a
 *Captain* that routes work to *player* coding agents, and every
 session streams live: transcripts, tool use, cost, and the
 questions that need your answer.
-(The built-in spec view still reads the pre-0.4.0 three-folder
-layout; rendering trees scaffolded by the current CLI is a
-deferred follow-up.)
+(The built-in spec view reads the current packages layout —
+compositions-era trees still render — while a pre-0.4.0
+three-folder tree shows migration guidance instead.)
 
 ### Install
 

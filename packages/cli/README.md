@@ -32,26 +32,19 @@ spex scaffold
 
 This creates:
 
-- **`specs/`** — directories and starter templates for writing behavioral
-  specs, decision records, and iteration plans:
-  - `specs/packages/` holds one file per spec package, with its
-    user-visible behavior (`## External Behavior`), its hidden
-    contract — consumed requirements and private invariants
-    (`## Internal Behavior`) — and the tests of its own claims
-    (`## Verification`) — one read covers one package.
-  - `specs/compositions/` holds how the installed system is composed:
-    binding items (static installed relationships), scenario items
-    (integrated behavior over the composed system), and the
-    integration and acceptance tests that span packages.
-- **`CLAUDE.md` / `AGENTS.md`** — instructions that tell AI agents (Claude,
-  Codex, etc.) to read and follow the specs before writing code
+- **`specs/`** — the spec tree and its law:
+  - `specs/packages/` holds one file per spec package: a self-contained `## Intent`, the behavior its users may rely on (`## External Behavior`), implementation hidden from them (`## Internal Behavior`), and the tests of its own claims (`## Verification`) — one read covers one package.
+    Behavior that emerges from several packages working together is itself a spec package citing the peers' External Behavior — there is no compositions directory.
+  - `specs/decisions/` and `specs/intents/` hold decision records (DRs) and intent records (IRs); `specs/map.md` indexes the tree and `specs/meta.md` is the spec of specs.
+  - Two starter packages (`git.md`, `licensing.md`) and a sample intent record seed the tree.
+- **`LICENSE`** — the verbatim Apache-2.0 text at the target root, written only when no `LICENSE` exists there.
+- **`CLAUDE.md` / `AGENTS.md`** — instructions that tell AI agents (Claude, Codex, etc.) to read and follow the specs before writing code.
 
-See `specs/decisions/000-spec-structure-format.md` for the spec format and naming conventions.
+See `specs/decisions/000-spec-structure-format.md` and `specs/meta.md` for the spec format and naming conventions.
 
-Idempotency: rerunning `scaffold` is safe — it only adds missing
-files. The one in-place edit it makes is to an existing
-`CLAUDE.md`/`AGENTS.md`, whose managed specs section is added or
-refreshed. (`--update` edits more, mechanically; see below.)
+Idempotency: rerunning `scaffold` is safe — it only adds missing files.
+The one in-place edit it makes is to an existing `CLAUDE.md`/`AGENTS.md`, whose managed `## Specs (Source of Truth)` section is added or refreshed.
+(`--update` edits more, mechanically; see below.)
 
 ### Linting
 
@@ -61,13 +54,10 @@ Check the specs tree at any time:
 spex lint
 ```
 
-The linter validates the layout, package and composition file sections,
-item ID uniqueness and prefixes, inline-citation coverage (every test
-item cites what it verifies, every binding and scenario is covered),
-citations (files and anchors), reference markers, and the `map.md`
-index. Relationship-metadata lines like `Verifies:` are errors — the
-citations in an item's clauses are the single source of its
-relationships. Errors exit non-zero; warnings do not.
+The linter validates the layout, package file sections and their order, item IDs — lowercase `<pack>-<N>` matching the file's basename, unique across the tree — citations (enclosed inline links like `[[pack-3](pack.md#pack-3)]` whose files and anchors exist), Verification items citing the behaviors they check, reference markers, record sections, and the `map.md` index.
+Relationship-metadata lines like `Verifies:` are errors — the citations woven into an item's statement are the single source of its relationships.
+Directories of previous spec generations (`specs/compositions/`, `specs/user/`, …) are errors pointing at the migration skill (see [Upgrading](#upgrading-from-a-previous-generation)).
+Errors exit non-zero; warnings do not.
 
 **Try it:** review the sample intent record `specs/intents/000-spdx-headers.md`, update the copyright text, then prompt your AI coding agent:
 
@@ -93,33 +83,38 @@ When a new release ships updated templates, refresh them with:
 spex scaffold --update
 ```
 
-- Trees on the legacy `specs/user`/`specs/dev`/`specs/test` layout are
-  migrated automatically: each package's files are merged into one
-  `specs/packages/<name>.md` (sections in place, heading levels adjusted,
-  reference markers renumbered, `Verifies:` lines collapsed to inline
-  sentences), citations across `specs/` are rewritten to the new paths,
-  and a customized `map.md` is restructured in place.
-- A legacy `specs/interactions/` directory migrates to
-  `specs/compositions/`: files move (conflicts are kept in place),
-  citations and the map heading are rewritten, and the printed
-  compositions prompt covers the reshaping the tool cannot infer.
-- Spex-authoritative files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally, including when they are absent. If you had modified one of these, `--update` warns and names it so you can reapply your changes from git history.
-- Starter files (`map.md`, the sample iteration, boilerplate items) are refreshed when you have not customized them, and written from the bundled template when they are absent. Customized starter files are kept as-is. Remove a starter file *after* `--update` if you do not want it.
-- Files you authored are edited only mechanically: legacy layouts are
-  merged and moved, and citations to moved paths are rewritten across
-  `specs/`. Nothing else about your content is changed, and the
-  clean-tree precondition keeps every edit reviewable in git.
-- The managed specs section of an existing `CLAUDE.md`/`AGENTS.md` is
-  refreshed; absent agent files are not created.
+It runs from within a git repository and requires a clean `specs/` working tree, so every edit stays reviewable.
 
-Review the changes with `git diff -- specs CLAUDE.md AGENTS.md` and
-run `spex lint`.
-The command prints clear next steps plus copy-paste-ready prompts for
-your AI agent: an update-merge prompt to reconcile citations and local
-extensions, and — after a migration or while `specs/compositions/` is
-still empty — a second prompt to fill `specs/compositions/` with the
-bindings, scenarios, and tests that the mechanical migration cannot
-infer.
+- Spex-authoritative *framework* files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally, including when they are absent. If you had modified one of these, `--update` warns and names it so you can reapply your changes from git history.
+- Starter *seed* files (`map.md`, the sample intent record, the starter packages) are refreshed when you have not customized them, and written from the bundled template when they are absent. Customized starter files are kept as-is. Remove a starter file *after* `--update` if you do not want it.
+- The managed specs section of an existing `CLAUDE.md`/`AGENTS.md` is refreshed; absent agent files are not created.
+- Files you authored are never edited.
+
+Review the changes with `git diff -- specs CLAUDE.md AGENTS.md` and run `spex lint`.
+The command prints a per-file indicator for every framework and seed path, plus a copy-paste-ready prompt for your AI agent to reconcile citations and local extensions with the refreshed law.
+
+## Upgrading from a previous generation
+
+Spex 1.0 rewrote the spec convention — the law in `specs/meta.md` and the spec-format decision record.
+A tree scaffolded by any spex 0.x release carries a previous generation of that law; a future rewrite would be a 2.0.
+What changed:
+
+| | Previous generations (spex 0.x) | Current generation (spex 1.0) |
+| --- | --- | --- |
+| Layout | `specs/user`/`dev`/`test`, later `packages/` + `compositions/` | `packages/` only — composition is a package pattern |
+| Cross-package behavior | binding and scenario items in composition files | ordinary packages citing peers' External Behavior |
+| Item IDs | ALLCAPS short form (`AUTH-3`) | lowercase file basename (`github-login-3`) |
+| Item citations | `[AUTH-3](auth.md#auth-3)` | enclosed: `[[github-login-3](github-login.md#github-login-3)]` |
+| Intent records | Goal, Deliverables, Tasks, Acceptance criteria | Status, Intent, Deliverables, Tasks, Verification |
+
+The CLI detects but does not restructure a legacy tree:
+
+- `spex scaffold --update` still refreshes the spex-owned law files, leaves all legacy content untouched, and prints migration guidance when it recognizes a legacy generation.
+- Plain `spex scaffold` refuses a tree with a legacy directory — it writes nothing and points at `--update` — so two generations never entangle.
+- `spex lint` reports legacy directories as errors pointing the same way.
+
+The structural migration itself — items reclassify, compositions fold into packages, intents get rewritten — is judgment work done by an AI agent following the bundled **spec-structure-migration** skill, not by a script (the scripted migration of earlier releases is retired).
+Follow the walkthrough in [docs/spec-migration.md](docs/spec-migration.md), install the skill per [its README](skills/spec-structure-migration/README.md), and let the agent loop until its checker and `spex lint` — the mechanical gate — pass clean.
 
 ## Workflow
 
@@ -128,7 +123,7 @@ We believe spec-driven development is a flexible combination of a few primitives
 
 1. **Make Decisions** — Discuss requirements, architecture, and design with AI agents. Let AI generate and review decision records in `specs/decisions/`.
 2. **Record Intents** — Break down work into tasks with AI agents. Let AI generate and review intent records in `specs/intents/`.
-3. **Agents Execute** — Let AI agents complete the tasks autonomously. They generate code and update `specs/packages/` and `specs/compositions/`.
+3. **Agents Execute** — Let AI agents complete the tasks autonomously. They generate code and update `specs/packages/`.
 
 Then loop back to the next decision or intent.
 
