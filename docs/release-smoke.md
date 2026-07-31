@@ -46,7 +46,7 @@ Launch: `npm run rebuild:electron -w apps/desktop && npm start -w apps/desktop`.
 | --- | --- |
 | First launch, fresh config (`XDG_CONFIG_HOME` unset or pointing at a home without `playbook/playbook.config.yaml`) | Captain home greets; quick start lists `/code` and `/discuss`; readiness names any signed-out agents |
 | Palette (⌘P) → "Try the Academy example" | Project seeds, registers, and becomes current; repeat click reopens it without error |
-| Specs tab over Academy | Packages and Compositions branches render; filters and search work; a binding item shows serves/provides rows, a scenario composes, a test executes/verifies; jumps land and flash |
+| Specs tab over Academy | The Packages branch renders its collection directories (the migrated corpus has no compositions, so no Compositions branch appears); filters and search work; a behavior item citing a peer package shows a uses row, a Verification item shows verifies rows, and cited items carry used by/verified by backlinks; jumps land and flash |
 | Playbooks surface | `/code` and `/discuss` pipelines show source, gears, and state machine; example card stages all four artifacts; prefill fills the compile form (roles pre-mapped) |
 | (The live run is automated by `npm run smoke:desktop`; spot-check the dock badge and notification banners during it) | Badge counts parked/failed sessions; banners appear per prefs |
 | Dashboard | The run's usage appears; attention queue lists any parked/aborted turn |
