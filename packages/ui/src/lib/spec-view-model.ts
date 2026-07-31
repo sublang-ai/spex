@@ -658,21 +658,29 @@ export function collapsedHints(
 // Inline-link resolution (citations live in item bodies per META-20)
 // ---------------------------------------------------------------------------
 
-const ITEM_ID_PATTERN = /^[A-Z][A-Z0-9]*-\d+$/;
+// Old-generation ALLCAPS ids and current-generation lowercase kebab
+// ids (meta-11) both jump; a served tree indexes one or the other.
+const OLD_ITEM_ID = /^[A-Z][A-Z0-9]*-\d+$/;
+const NEW_ITEM_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*-\d+$/;
+const ITEM_ID_PATTERN = /^(?:[A-Z][A-Z0-9]*|[a-z0-9]+(?:-[a-z0-9]+)*)-\d+$/;
 
-/** The item ID an inline markdown link targets: the link text when it
- * is a bare item ID, else the href's `#anchor` uppercased when it
- * looks like an item anchor. Undefined for every other link. */
-export function linkItemTarget(
-  text: string,
-  href: string,
-): string | undefined {
+/** The item IDs an inline markdown link may target: the link text
+ * when it is a bare item ID, else the href's `#anchor` read as a
+ * current-generation id and as an old-generation anchor (whose
+ * heading uppercased). An anchor like `auth-3` is ambiguous between
+ * generations, so both spellings are returned and the caller picks
+ * the one the tree actually indexes. Empty for every other link. */
+export function linkItemTargets(text: string, href: string): string[] {
   const trimmed = text.trim();
-  if (ITEM_ID_PATTERN.test(trimmed)) return trimmed;
+  if (ITEM_ID_PATTERN.test(trimmed)) return [trimmed];
   const hash = href.indexOf("#");
-  if (hash === -1) return undefined;
-  const anchor = href.slice(hash + 1).toUpperCase();
-  return ITEM_ID_PATTERN.test(anchor) ? anchor : undefined;
+  if (hash === -1) return [];
+  const anchor = href.slice(hash + 1);
+  const candidates: string[] = [];
+  if (NEW_ITEM_ID.test(anchor)) candidates.push(anchor);
+  const upper = anchor.toUpperCase();
+  if (OLD_ITEM_ID.test(upper)) candidates.push(upper);
+  return candidates;
 }
 
 /** The DR/IR record an inline link's relative href points at.

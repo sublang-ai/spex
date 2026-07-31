@@ -34,7 +34,7 @@ import {
   fileCounts,
   fileKey,
   initialSpecViewState,
-  linkItemTarget,
+  linkItemTargets,
   normalizeSpecViewState,
   recordForHref,
   relationPhrase,
@@ -347,7 +347,8 @@ export function SpecView(props: SpecViewProps) {
     const href = anchor.getAttribute("href") ?? "";
     if (/^https?:\/\//.test(href)) return;
     event.preventDefault();
-    const target = linkItemTarget(anchor.textContent ?? "", href);
+    const candidates = linkItemTargets(anchor.textContent ?? "", href);
+    const target = candidates.find((c) => itemIndex.has(c)) ?? candidates[0];
     if (target && itemIndex.has(target)) {
       jumpTo(`${itemId}:${target}`, target);
       return;

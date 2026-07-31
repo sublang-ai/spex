@@ -14,6 +14,7 @@ import {
   buildRelationModel,
   classifyCites,
   collapsedHints,
+  linkItemTargets,
   recordForHref,
   relationPhrase,
   splitBindingClauses,
@@ -598,5 +599,33 @@ describe("review round: grammar conformance and localized specs", () => {
       index,
     );
     expect(test_.rows).toEqual([{ kind: "verifies", targets: ["CAT-1"] }]);
+  });
+});
+
+describe("linkItemTargets", () => {
+  test("bare-ID link text wins in either generation", () => {
+    expect(linkItemTargets("AUTH-3", "auth.md#auth-3")).toEqual(["AUTH-3"]);
+    expect(
+      linkItemTargets("github-login-3", "github-login.md#github-login-3"),
+    ).toEqual(["github-login-3"]);
+  });
+
+  test("a single-word anchor offers both generation spellings", () => {
+    expect(linkItemTargets("the sign-in rule", "auth.md#auth-3")).toEqual([
+      "auth-3",
+      "AUTH-3",
+    ]);
+  });
+
+  test("a kebab anchor is current-generation only", () => {
+    expect(
+      linkItemTargets("the sign-in rule", "identity/github-login.md#github-login-3"),
+    ).toEqual(["github-login-3"]);
+  });
+
+  test("non-citation links are inert", () => {
+    expect(linkItemTargets("docs", "https://example.com")).toEqual([]);
+    expect(linkItemTargets("readme", "README.md")).toEqual([]);
+    expect(linkItemTargets("section", "auth.md#sign-in")).toEqual([]);
   });
 });
