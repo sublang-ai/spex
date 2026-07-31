@@ -23,7 +23,7 @@ Options considered:
 
 - Tasks and reminders persist in one JSON file, rewritten
   atomically on every acknowledged mutation
-  ([LIST-3](../packages/todo-list.md#list-3)).
+  ([LIST-5](../packages/todo-list.md#list-5)).
 - Revisit once the digest ships and real usage sizes the data.
 
 ## Consequences

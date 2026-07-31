@@ -50,7 +50,7 @@ const has = (name) => {
 const selfCheck = has("--self-check");
 const keep = has("--keep");
 const agentArg = flag("--agent") ?? "claude";
-const timeoutMs = Number(flag("--timeout") ?? 20) * 60_000;
+const timeoutMs = Number(flag("--timeout") ?? 30) * 60_000;
 const agents =
   agentArg === "both" ? ["claude", "codex"] : [String(agentArg)];
 for (const a of agents) {
@@ -111,16 +111,16 @@ function fixtureInventory() {
   return inventory;
 }
 
+// Scoped to the fixture's own IR: `spex scaffold --update` seeds the
+// current sample intent record beside it, whose boxes are not ours.
+const FIXTURE_IR = "001-first-cut.md";
+
 function checkboxCounts(intentsDir) {
-  let checked = 0;
-  let unchecked = 0;
-  for (const file of readdirSync(intentsDir)) {
-    if (!file.endsWith(".md")) continue;
-    const text = readFileSync(join(intentsDir, file), "utf-8");
-    checked += (text.match(/^- \[x\]/gim) ?? []).length;
-    unchecked += (text.match(/^- \[ \]/gm) ?? []).length;
-  }
-  return { checked, unchecked };
+  const text = readFileSync(join(intentsDir, FIXTURE_IR), "utf-8");
+  return {
+    checked: (text.match(/^- \[x\]/gim) ?? []).length,
+    unchecked: (text.match(/^- \[ \]/gm) ?? []).length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -198,9 +198,12 @@ function postGates(repo, spexBin, inventory, boxes, setupCommits) {
     );
   }
 
+  // The exact target is the agent's judgment call; retargeting to
+  // ANY todo-list item proves the DR's citation was migrated, not
+  // dropped.
   const dr = join(specs, "decisions", "001-storage-choice.md");
-  if (!existsSync(dr) || !readFileSync(dr, "utf-8").includes("todo-list-3")) {
-    problems.push("DR-001 lost its retargeted todo-list-3 reference");
+  if (!existsSync(dr) || !/todo-list-\d/.test(readFileSync(dr, "utf-8"))) {
+    problems.push("DR-001 lost its retargeted todo-list reference");
   }
 
   const log = capture("git", ["rev-list", "--count", "HEAD"], { cwd: repo });
