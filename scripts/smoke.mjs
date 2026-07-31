@@ -96,27 +96,19 @@ async function coreRoundTrip() {
     example: true,
   });
   const tree = await command("specs.get", { projectId: project.id });
-  // The migrated Academy corpus (IR-027) is packages-only: 12 package
-  // files, zero compositions, every file parsing clean.
-  const packages = tree.files.filter((f) => f.kind === "package").length;
-  const compositions = tree.files.filter((f) => f.kind === "composition").length;
+  // The migrated Academy corpus (IR-027): every file a package —
+  // 12 of them, none flagged legacy, every one parsing clean.
   const broken = tree.files.filter((f) => f.error !== undefined).length;
-  if (
-    !tree.present ||
-    tree.legacy ||
-    packages !== 12 ||
-    compositions !== 0 ||
-    broken !== 0
-  ) {
+  if (!tree.present || tree.legacy || tree.files.length !== 12 || broken !== 0) {
     throw new Error(
-      `Academy tree unexpected: present=${tree.present} legacy=${tree.legacy} packages=${packages} compositions=${compositions} broken=${broken}`,
+      `Academy tree unexpected: present=${tree.present} legacy=${tree.legacy} files=${tree.files.length} broken=${broken}`,
     );
   }
   socket.close();
   await service.stop();
   rmSync(home, { recursive: true, force: true });
   process.stdout.write(
-    `core round-trip ok: template valid, catalog + artifacts served, Academy seeded (${packages} packages, no compositions, all parsed clean)\n`,
+    `core round-trip ok: template valid, catalog + artifacts served, Academy seeded (${tree.files.length} packages, all parsed clean)\n`,
   );
 }
 

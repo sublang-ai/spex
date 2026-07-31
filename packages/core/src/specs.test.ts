@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// SPECV coverage: fixture spec trees in the DR-012 packages layout
-// driving parseSpecTree, path confinement for specs.read, an
-// end-to-end parse of the staged Academy corpus, and one protocol
-// round-trip through the service.
+// SPECV coverage: fixture spec trees in the packages-only layout
+// (DR-012, DR-021) driving parseSpecTree, path confinement for
+// specs.read, an end-to-end parse of the staged Academy corpus, and
+// one protocol round-trip through the service.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -73,7 +73,7 @@ test("no specs/ directory reports present: false", () => {
 test("package file parses sections, items, and citations", () => {
   const dir = fixture({
     "specs/packages/identity/auth.md": [
-      "# AUTH: GitHub Login",
+      "# auth: GitHub Login",
       "",
       "## Intent",
       "",
@@ -84,28 +84,28 @@ test("package file parses sections, items, and citations", () => {
       "",
       "## External Behavior",
       "",
-      "### AUTH-2",
+      "### auth-2",
       "",
       "Written first. Second sentence dropped from the digest.",
       "",
-      "### AUTH-1",
+      "### auth-1",
       "",
-      "Written second, citing [AUTH-2](#auth-2) twice —",
-      "[AUTH-2](#auth-2) — plus [META-1](../../meta.md#meta-1) and a",
+      "Written second, citing [auth-2](#auth-2) twice —",
+      "[auth-2](#auth-2) — plus [meta-1](../../meta.md#meta-1) and a",
       "record link [DR-000](../../decisions/000-x.md) with no anchor.",
       "",
       "## Internal Behavior",
       "",
-      "### AUTH-3",
+      "### auth-3",
       "",
       "Internal invariant.",
       "",
       "## Verification",
       "",
-      "### AUTH-4",
+      "### auth-4",
       "",
       "Where a stub exists, the suite shall assert sign-in",
-      "([AUTH-1](#auth-1), [AUTH-2](#auth-2)).",
+      "([auth-1](#auth-1), [auth-2](#auth-2)).",
       "",
     ].join("\n"),
   });
@@ -115,178 +115,165 @@ test("package file parses sections, items, and citations", () => {
   assert.equal(tree.files.length, 1);
 
   const auth = file(tree, "identity/auth");
-  assert.equal(auth.kind, "package");
   assert.equal(auth.path, "specs/packages/identity/auth.md");
+  // The collection subdirectory is navigation only (meta-34); the
+  // basename alone is the package identifier (meta-10).
   assert.equal(auth.dir, "identity");
   assert.equal(auth.basename, "auth");
-  assert.equal(auth.shortForm, "AUTH");
   assert.equal(auth.title, "GitHub Login");
   assert.equal(auth.intent, "Sign-in intent across two lines.");
   assert.deepEqual(auth.notices, []);
+  // The retired collection fields never reappear on the wire.
+  assert.ok(!("kind" in auth));
+  assert.ok(!("shortForm" in auth));
 
-  // Document order, never ID order (META-12).
+  // Document order, never ID order (meta-12).
   assert.deepEqual(
     auth.items.map((entry) => entry.id),
-    ["AUTH-2", "AUTH-1", "AUTH-3", "AUTH-4"],
+    ["auth-2", "auth-1", "auth-3", "auth-4"],
   );
   assert.deepEqual(
     auth.items.map((entry) => entry.group),
     ["external", "external", "internal", "test"],
   );
-  assert.equal(item(auth, "AUTH-2").section, "External Behavior");
-  assert.equal(item(auth, "AUTH-3").section, "Internal Behavior");
-  assert.equal(item(auth, "AUTH-4").section, "Verification");
-  assert.equal(item(auth, "AUTH-2").topic, undefined);
-  assert.equal(item(auth, "AUTH-2").firstLine, "Written first.");
+  assert.equal(item(auth, "auth-2").section, "External Behavior");
+  assert.equal(item(auth, "auth-3").section, "Internal Behavior");
+  assert.equal(item(auth, "auth-4").section, "Verification");
+  assert.equal(item(auth, "auth-2").topic, undefined);
+  assert.equal(item(auth, "auth-2").firstLine, "Written first.");
   // Cites: ordered, unique, cross-file allowed, no-anchor links skipped.
-  assert.deepEqual(item(auth, "AUTH-1").cites, ["AUTH-2", "META-1"]);
-  assert.deepEqual(item(auth, "AUTH-4").cites, ["AUTH-1", "AUTH-2"]);
-  assert.deepEqual(item(auth, "AUTH-2").cites, []);
-});
-
-test("composition file maps Binding/Scenario/Tests and captures topics", () => {
-  const dir = fixture({
-    "specs/compositions/playback.md": [
-      "# PLAY: Lesson Playback",
-      "",
-      "## Intent",
-      "",
-      "The flagship journey.",
-      "",
-      "## Binding",
-      "",
-      "### Providers",
-      "",
-      "#### PLAY-1",
-      "",
-      "Where the player needs media, the deployment shall serve it",
-      "via [VID-5](../packages/catalog/video.md#vid-5).",
-      "",
-      "## Scenario",
-      "",
-      "### Journeys",
-      "",
-      "#### PLAY-2",
-      "",
-      "When a visitor opens a lesson, the site shall play it",
-      "([PLAY-1](#play-1)).",
-      "",
-      "## Tests",
-      "",
-      "### PLAY-3",
-      "",
-      "Where a fixture course exists, the suite shall assert playback",
-      "([PLAY-2](#play-2), [VID-5](../packages/catalog/video.md#vid-5)).",
-      "",
-    ].join("\n"),
-  });
-  const play = file(parseSpecTree(dir), "playback");
-  assert.equal(play.kind, "composition");
-  assert.equal(play.path, "specs/compositions/playback.md");
-  assert.equal(play.dir, "");
-  assert.equal(play.basename, "playback");
-  assert.equal(play.shortForm, "PLAY");
-  assert.deepEqual(play.notices, []);
-
-  const binding = item(play, "PLAY-1");
-  assert.equal(binding.group, "internal");
-  assert.equal(binding.section, "Binding");
-  assert.equal(binding.topic, "Providers");
-  assert.deepEqual(binding.cites, ["VID-5"]);
-
-  const scenario = item(play, "PLAY-2");
-  assert.equal(scenario.group, "external");
-  assert.equal(scenario.section, "Scenario");
-  assert.equal(scenario.topic, "Journeys");
-  assert.deepEqual(scenario.cites, ["PLAY-1"]);
-
-  const check = item(play, "PLAY-3");
-  assert.equal(check.group, "test");
-  assert.equal(check.section, "Tests");
-  assert.equal(check.topic, undefined);
-  assert.deepEqual(check.cites, ["PLAY-2", "VID-5"]);
+  assert.deepEqual(item(auth, "auth-1").cites, ["auth-2", "meta-1"]);
+  assert.deepEqual(item(auth, "auth-4").cites, ["auth-1", "auth-2"]);
+  assert.deepEqual(item(auth, "auth-2").cites, []);
 });
 
 test("a ### item between a topic and a #### item clears the topic", () => {
   const dir = fixture({
     "specs/packages/mix.md": [
-      "# MIX: Mixed Levels",
+      "# mix: Mixed Levels",
       "",
       "## External Behavior",
       "",
       "### Topic A",
       "",
-      "#### MIX-1",
+      "#### mix-1",
       "",
       "Topical.",
       "",
-      "### MIX-2",
+      "### mix-2",
       "",
       "Flat item.",
       "",
-      "#### MIX-3",
+      "#### mix-3",
       "",
       "The nearest ### above is an item, so no topic.",
       "",
     ].join("\n"),
   });
   const mix = file(parseSpecTree(dir), "mix");
-  assert.equal(item(mix, "MIX-1").topic, "Topic A");
-  assert.equal(item(mix, "MIX-2").topic, undefined);
-  assert.equal(item(mix, "MIX-3").topic, undefined);
+  assert.equal(item(mix, "mix-1").topic, "Topic A");
+  assert.equal(item(mix, "mix-2").topic, undefined);
+  assert.equal(item(mix, "mix-3").topic, undefined);
 });
 
 // ---------------------------------------------------------------------------
-// Short form
+// Package identifier (basename; spec-view-11)
 // ---------------------------------------------------------------------------
 
-test("H1 without the short-form pattern falls back to the majority prefix", () => {
+test("H1 and item-ID prefixes disagreeing with the basename are noticed", () => {
+  const dir = fixture({
+    "specs/packages/github-login.md": [
+      "# AUTH: GitHub Login",
+      "",
+      "## External Behavior",
+      "",
+      "### AUTH-1",
+      "",
+      "A.",
+      "",
+      "### AUTH-2",
+      "",
+      "The same stray prefix notices once, not per item.",
+      "",
+      "### login-3",
+      "",
+      "A second stray prefix notices separately.",
+      "",
+    ].join("\n"),
+  });
+  const login = file(parseSpecTree(dir), "github-login");
+  // The basename wins as the package identifier (meta-10); every
+  // disagreement is named (spec-view-11).
+  assert.equal(login.basename, "github-login");
+  assert.equal(login.title, "GitHub Login");
+  assert.equal(login.items.length, 3);
+  assert.deepEqual(login.notices, [
+    'H1 identifier "AUTH" disagrees with basename "github-login"',
+    'item-ID prefix "AUTH" disagrees with basename "github-login"',
+    'item-ID prefix "login" disagrees with basename "github-login"',
+  ]);
+});
+
+test("an old-generation ALLCAPS file still parses, degraded to notices", () => {
+  const dir = fixture({
+    "specs/packages/auth.md": [
+      "# AUTH: GitHub Login",
+      "",
+      "## External Behavior",
+      "",
+      "### AUTH-1",
+      "",
+      "Old ids keep parsing as items.",
+      "",
+      "## Verification",
+      "",
+      "### AUTH-2",
+      "",
+      "The suite shall assert sign-in ([AUTH-1](#auth-1)).",
+      "",
+    ].join("\n"),
+  });
+  const auth = file(parseSpecTree(dir), "auth");
+  assert.equal(auth.title, "GitHub Login");
+  assert.deepEqual(
+    auth.items.map((entry) => [entry.id, entry.group]),
+    [
+      ["AUTH-1", "external"],
+      ["AUTH-2", "test"],
+    ],
+  );
+  assert.deepEqual(item(auth, "AUTH-2").cites, ["AUTH-1"]);
+  assert.deepEqual(auth.notices, [
+    'H1 identifier "AUTH" disagrees with basename "auth"',
+    'item-ID prefix "AUTH" disagrees with basename "auth"',
+  ]);
+});
+
+test("H1 without the identifier pattern is a plain title, not a disagreement", () => {
   const dir = fixture({
     "specs/packages/run-view.md": [
       "# Run View Notes",
       "",
       "## External Behavior",
       "",
-      "### RUN-1",
+      "### run-view-1",
       "",
       "A.",
-      "",
-      "### RUN-2",
-      "",
-      "B.",
-      "",
-      "### RNU-3",
-      "",
-      "Typo prefix.",
       "",
     ].join("\n"),
   });
   const run = file(parseSpecTree(dir), "run-view");
-  assert.equal(run.shortForm, "RUN");
   assert.equal(run.title, "Run View Notes");
-  assert.deepEqual(run.notices, ["mixed item prefixes: RUN, RNU"]);
+  assert.deepEqual(run.notices, []);
 });
 
-test("H1 short form disagreeing with the majority prefix adds a notice", () => {
-  const dir = fixture({
-    "specs/packages/settings.md":
-      "# CFG: Settings\n\n## External Behavior\n\n### SET-1\n\nA.\n\n### SET-2\n\nB.\n",
-  });
-  const settings = file(parseSpecTree(dir), "settings");
-  assert.equal(settings.shortForm, "CFG");
-  assert.equal(settings.title, "Settings");
-  assert.deepEqual(settings.notices, [
-    "short form CFG disagrees with the majority item prefix SET",
-  ]);
-});
-
-test("itemless file without a short-form H1 has no short form", () => {
+test("an itemless file keeps its title with no notices", () => {
   const dir = fixture({
     "specs/packages/empty.md": "# Notes only\n\n## Intent\n\nNo items yet.\n",
   });
   const empty = file(parseSpecTree(dir), "empty");
-  assert.equal(empty.shortForm, undefined);
   assert.equal(empty.title, "Notes only");
+  assert.equal(empty.intent, "No items yet.");
   assert.deepEqual(empty.notices, []);
 });
 
@@ -297,21 +284,21 @@ test("itemless file without a short-form H1 has no short form", () => {
 test("items under unexpected sections get a notice and default group", () => {
   const dir = fixture({
     "specs/packages/odd.md": [
-      "# ODD: Odd Sections",
+      "# odd: Odd Sections",
       "",
       "## Flow",
       "",
-      "### ODD-1",
+      "### odd-1",
       "",
       "Under an unknown section.",
       "",
-      "### ODD-2",
+      "### odd-2",
       "",
       "Same section, one notice.",
       "",
       "## References",
       "",
-      "### ODD-3",
+      "### odd-3",
       "",
       "References holds no items.",
       "",
@@ -320,10 +307,10 @@ test("items under unexpected sections get a notice and default group", () => {
   const odd = file(parseSpecTree(dir), "odd");
   assert.deepEqual(
     odd.items.map((entry) => entry.id),
-    ["ODD-1", "ODD-2", "ODD-3"],
+    ["odd-1", "odd-2", "odd-3"],
   );
   for (const entry of odd.items) assert.equal(entry.group, "external");
-  assert.equal(item(odd, "ODD-1").section, "Flow");
+  assert.equal(item(odd, "odd-1").section, "Flow");
   assert.deepEqual(odd.notices, [
     'items under unexpected section "Flow"',
     'items under unexpected section "References"',
@@ -333,38 +320,39 @@ test("items under unexpected sections get a notice and default group", () => {
 test("fenced ### lines start no item and fenced links never cite", () => {
   const dir = fixture({
     "specs/packages/fen.md": [
-      "# FEN: Fences",
+      "# fen: Fences",
       "",
       "## External Behavior",
       "",
-      "### FEN-1",
+      "### fen-1",
       "",
       "Body with a fence:",
       "",
       "```text",
-      "### NOT-2",
-      "see [FEN-9](#fen-9)",
+      "### not-2",
+      "see [fen-9](#fen-9)",
       "```",
       "",
-      "Tail line citing [FEN-3](#fen-3).",
+      "Tail line citing [fen-3](#fen-3).",
       "",
     ].join("\n"),
   });
   const fen = file(parseSpecTree(dir), "fen");
   assert.equal(fen.items.length, 1);
-  assert.match(fen.items[0].text, /### NOT-2/);
+  assert.match(fen.items[0].text, /### not-2/);
   assert.match(fen.items[0].text, /Tail line/);
-  assert.deepEqual(fen.items[0].cites, ["FEN-3"]);
+  assert.deepEqual(fen.items[0].cites, ["fen-3"]);
+  assert.deepEqual(fen.notices, []);
 });
 
 test("first sentence digest falls back to the whole first line", () => {
   const dir = fixture({
     "specs/packages/dig.md": [
-      "# DIG: Digests",
+      "# dig: Digests",
       "",
       "## External Behavior",
       "",
-      "### DIG-1",
+      "### dig-1",
       "",
       "No sentence end on this line",
       "so the digest is the whole line.",
@@ -382,7 +370,7 @@ test("first sentence digest falls back to the whole first line", () => {
 test("a user/dev/test directory flags the tree legacy with empty files", () => {
   const dir = fixture({
     "specs/user/auth.md": "# AUTH\n\n### AUTH-1\n\nOld layout.\n",
-    "specs/packages/new.md": "# NEW: New\n\n## External Behavior\n\n### NEW-1\n\nA.\n",
+    "specs/packages/new.md": "# new: New\n\n## External Behavior\n\n### new-1\n\nA.\n",
     "specs/decisions/001-arch.md": "# DR-001: Architecture\n",
   });
   const tree = parseSpecTree(dir);
@@ -396,14 +384,35 @@ test("a user/dev/test directory flags the tree legacy with empty files", () => {
   ]);
 });
 
+test("a compositions/ directory flags the tree legacy with empty files", () => {
+  const dir = fixture({
+    "specs/compositions/playback.md":
+      "# playback: Playback\n\n## Binding\n\n### playback-1\n\nRetired collection.\n",
+    "specs/packages/new.md": "# new: New\n\n## External Behavior\n\n### new-1\n\nA.\n",
+    "specs/decisions/001-arch.md": "# DR-001: Architecture\n",
+  });
+  const tree = parseSpecTree(dir);
+  assert.equal(tree.present, true);
+  assert.equal(tree.legacy, true);
+  // Nothing parses from any collection — the packages file included.
+  assert.deepEqual(tree.files, []);
+  assert.deepEqual(tree.notices, []);
+  assert.deepEqual(tree.decisions, [
+    { id: "DR-001", title: "Architecture", path: "decisions/001-arch.md" },
+  ]);
+});
+
 test("a top-level file named like a legacy dir is unknown, not legacy", () => {
   const dir = fixture({
     "specs/user": "a stray file, not a directory\n",
-    "specs/packages/x.md": "# X: X\n\n## External Behavior\n\n### X-1\n\nA.\n",
+    "specs/compositions": "a stray file, not a directory\n",
+    "specs/packages/x.md": "# x: X\n\n## External Behavior\n\n### x-1\n\nA.\n",
   });
   const tree = parseSpecTree(dir);
   assert.equal(tree.legacy, false);
-  assert.deepEqual(tree.notices, ["unknown entries under specs/: user"]);
+  assert.deepEqual(tree.notices, [
+    "unknown entries under specs/: compositions, user",
+  ]);
   assert.equal(tree.files.length, 1);
 });
 
@@ -486,7 +495,7 @@ test("intent records merge a coexisting legacy iterations directory", () => {
 test("unknown top-level entries produce one tree notice", () => {
   const dir = fixture({
     "specs/packages/auth.md":
-      "# AUTH: A\n\n## External Behavior\n\n### AUTH-1\n\nOne.\n",
+      "# auth: A\n\n## External Behavior\n\n### auth-1\n\nOne.\n",
     "specs/rogue.txt": "not a spec\n",
     "specs/extra.md": "# stray\n",
     "specs/scratch/x.md": "# stray dir\n",
@@ -504,16 +513,16 @@ test("unknown top-level entries produce one tree notice", () => {
 posixTest("an unreadable file degrades to a per-file error", () => {
   const dir = fixture({
     "specs/packages/auth.md":
-      "# AUTH: A\n\n## External Behavior\n\n### AUTH-1\n\nFine.\n",
+      "# auth: A\n\n## External Behavior\n\n### auth-1\n\nFine.\n",
     "specs/packages/broken.md":
-      "# BRK: B\n\n## External Behavior\n\n### BRK-1\n\nUnreadable.\n",
+      "# broken: B\n\n## External Behavior\n\n### broken-1\n\nUnreadable.\n",
   });
   chmodSync(join(dir, "specs", "packages", "broken.md"), 0o000);
   const tree = parseSpecTree(dir);
   const broken = file(tree, "broken");
   assert.match(broken.error ?? "", /cannot read file/);
   assert.deepEqual(broken.items, []);
-  assert.equal(broken.kind, "package");
+  assert.equal(broken.basename, "broken");
   // The bad file never poisons its neighbors.
   assert.equal(file(tree, "auth").items.length, 1);
   chmodSync(join(dir, "specs", "packages", "broken.md"), 0o644);
@@ -523,11 +532,11 @@ posixTest("a symlink escaping the project is skipped with a notice", () => {
   const outside = mkdtempSync(join(tmpdir(), "spex-outside-"));
   writeFileSync(
     join(outside, "secret.md"),
-    "# SECRET: S\n\n## External Behavior\n\n### SEC-1\n\nHidden.\n",
+    "# secret: S\n\n## External Behavior\n\n### secret-1\n\nHidden.\n",
   );
   const dir = fixture({
     "specs/packages/auth.md":
-      "# AUTH: A\n\n## External Behavior\n\n### AUTH-1\n\nOne.\n",
+      "# auth: A\n\n## External Behavior\n\n### auth-1\n\nOne.\n",
   });
   symlinkSync(
     join(outside, "secret.md"),
@@ -554,20 +563,17 @@ test("the staged Academy corpus parses end-to-end", () => {
   assert.equal(tree.legacy, false);
   assert.deepEqual(tree.notices, []);
 
-  // The packages-only generation (DR-021): no compositions remain.
+  // The packages-only generation (DR-021): 12 package files, each
+  // identified by its basename with an agreeing H1, no notices —
+  // and the retired kind/shortForm fields gone from the wire.
   assert.equal(tree.files.length, 12);
-  assert.deepEqual(
-    tree.files.filter((entry) => entry.kind !== "package"),
-    [],
-  );
   for (const entry of tree.files) {
     assert.equal(entry.error, undefined, entry.path);
     assert.deepEqual(entry.notices, [], entry.path);
     assert.ok(entry.intent, `intent on ${entry.path}`);
     assert.ok(entry.items.length > 0, `items on ${entry.path}`);
-    // The short form is the H1's package identifier, which is the
-    // lowercase kebab-case basename (meta-10).
-    assert.equal(entry.shortForm, entry.basename, entry.path);
+    assert.ok(!("kind" in entry), entry.path);
+    assert.ok(!("shortForm" in entry), entry.path);
   }
 
   // Spot-check a nested package: lowercase <pack>-<N> ids, topics
@@ -575,7 +581,7 @@ test("the staged Academy corpus parses end-to-end", () => {
   const auth = file(tree, "identity/github-login");
   assert.equal(auth.path, "specs/packages/identity/github-login.md");
   assert.equal(auth.dir, "identity");
-  assert.equal(auth.shortForm, "github-login");
+  assert.equal(auth.basename, "github-login");
   assert.equal(auth.title, "GitHub Login");
   assert.equal(auth.items.length, 15);
   const authCheck = item(auth, "github-login-10");
@@ -592,9 +598,8 @@ test("the staged Academy corpus parses end-to-end", () => {
   // A former composition parses as a package whose items cite the
   // peer behaviors they compose (meta-14).
   const play = file(tree, "lesson-playback");
-  assert.equal(play.kind, "package");
   assert.equal(play.dir, "");
-  assert.equal(play.shortForm, "lesson-playback");
+  assert.equal(play.basename, "lesson-playback");
   const journey = item(play, "lesson-playback-1");
   assert.equal(journey.group, "external");
   assert.equal(journey.section, "External Behavior");
@@ -621,7 +626,7 @@ test("the staged Academy corpus parses end-to-end", () => {
 // ---------------------------------------------------------------------------
 
 test("resolveSpecPath confines reads to specs/", () => {
-  const dir = fixture({ "specs/packages/auth.md": "# AUTH: A\n" });
+  const dir = fixture({ "specs/packages/auth.md": "# auth: A\n" });
   const ok = resolveSpecPath(dir, "packages/auth.md");
   assert.equal(ok.ok, true);
 
@@ -643,7 +648,7 @@ test("resolveSpecPath confines reads to specs/", () => {
 posixTest("resolveSpecPath rejects a symlink escaping the project", () => {
   const outside = mkdtempSync(join(tmpdir(), "spex-outside-"));
   writeFileSync(join(outside, "secret.md"), "top secret\n");
-  const dir = fixture({ "specs/packages/auth.md": "# AUTH: A\n" });
+  const dir = fixture({ "specs/packages/auth.md": "# auth: A\n" });
   symlinkSync(join(outside, "secret.md"), join(dir, "specs", "evil.md"));
   const escaped = resolveSpecPath(dir, "evil.md");
   assert.equal(escaped.ok, false);
@@ -658,7 +663,7 @@ test("specs.get and specs.read serve over the protocol", async () => {
   const home = mkdtempSync(join(tmpdir(), "spex-specs-home-"));
   const project = fixture({
     "specs/packages/auth.md":
-      "# AUTH: A\n\n## External Behavior\n\n### AUTH-1\n\nOne sentence.\n",
+      "# auth: A\n\n## External Behavior\n\n### auth-1\n\nOne sentence.\n",
   });
   execFileSync("git", ["init", "-q", project]);
   const service = await CoreService.start({
@@ -723,11 +728,11 @@ test("specs.get and specs.read serve over the protocol", async () => {
     assert.equal(state.present, true);
     assert.equal(state.legacy, false);
     assert.equal(state.files[0]?.key, "auth");
-    assert.equal(state.files[0]?.kind, "package");
+    assert.equal(state.files[0]?.basename, "auth");
 
     const read = await call("specs.read", { projectId, path: "packages/auth.md" });
     assert.equal(read.ok, true);
-    assert.match((read.result as { markdown: string }).markdown, /AUTH-1/);
+    assert.match((read.result as { markdown: string }).markdown, /auth-1/);
 
     const escape = await call("specs.read", { projectId, path: "../secret.md" });
     assert.equal(escape.ok, false);
@@ -745,11 +750,10 @@ test("specs.get and specs.read serve over the protocol", async () => {
 test("localized zh sections map to groups and intent parses", () => {
   const root = mkdtempSync(join(tmpdir(), "spex-specs-zh-"));
   mkdirSync(join(root, "specs", "packages"), { recursive: true });
-  mkdirSync(join(root, "specs", "compositions"), { recursive: true });
   writeFileSync(
     join(root, "specs", "packages", "auth.md"),
     [
-      "# AUTH: 登录",
+      "# auth: 登录",
       "",
       "## 意图",
       "",
@@ -757,73 +761,35 @@ test("localized zh sections map to groups and intent parses", () => {
       "",
       "## 外部行为",
       "",
-      "### AUTH-1",
+      "### auth-1",
       "",
       "当用户提交凭证时，站点应开启会话。",
       "",
       "## 内部行为",
       "",
-      "### AUTH-2",
+      "### auth-2",
       "",
       "会话状态应仅通过加密通道传输。",
       "",
       "## 验证",
       "",
-      "### AUTH-3",
+      "### auth-3",
       "",
-      "测试套件应验证 [AUTH-1](#auth-1)。",
-      "",
-    ].join("\n"),
-  );
-  writeFileSync(
-    join(root, "specs", "compositions", "nav.md"),
-    [
-      "# NAV: 导航",
-      "",
-      "## 意图",
-      "",
-      "本组合覆盖站点导航。",
-      "",
-      "## 绑定",
-      "",
-      "### NAV-1",
-      "",
-      "在门户需要目录时，部署应提供列表。",
-      "",
-      "## 场景",
-      "",
-      "### NAV-2",
-      "",
-      "当访客打开首页时，组合系统应展示目录。",
-      "",
-      "## 测试",
-      "",
-      "### NAV-3",
-      "",
-      "测试套件应验证 [NAV-2](#nav-2)。",
+      "测试套件应验证 [auth-1](#auth-1)。",
       "",
     ].join("\n"),
   );
   const tree = parseSpecTree(root);
   const auth = tree.files.find((f) => f.key === "auth");
+  assert.equal(auth?.title, "登录");
   assert.equal(auth?.intent, "本包覆盖登录行为。");
   assert.deepEqual(
     auth?.items.map((i) => [i.id, i.group]),
     [
-      ["AUTH-1", "external"],
-      ["AUTH-2", "internal"],
-      ["AUTH-3", "test"],
-    ],
-  );
-  const nav = tree.files.find((f) => f.key === "nav");
-  assert.deepEqual(
-    nav?.items.map((i) => [i.id, i.group]),
-    [
-      ["NAV-1", "internal"],
-      ["NAV-2", "external"],
-      ["NAV-3", "test"],
+      ["auth-1", "external"],
+      ["auth-2", "internal"],
+      ["auth-3", "test"],
     ],
   );
   assert.deepEqual(auth?.notices, []);
-  assert.deepEqual(nav?.notices, []);
 });

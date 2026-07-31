@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The spec-view data plane (SPECV; DR-011, DR-015): parse a project's
-// specs/ tree — the DR-012 packages layout — into the protocol's
-// SpecTreeState in one pass, and confine specs.read fetches to the
-// specs/ directory. Sync fs is deliberate — spec trees are small and
-// reads happen on request (no watcher).
+// specs/ tree — the packages collection of meta-1 — into the
+// protocol's SpecTreeState in one pass, and confine specs.read
+// fetches to the specs/ directory. Sync fs is deliberate — spec
+// trees are small and reads happen on request (no watcher).
 
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Dirent } from "node:fs";
@@ -18,23 +18,12 @@ import type {
   SpecTreeState,
 } from "./protocol.js";
 
-type SpecFileKind = SpecFileInfo["kind"];
-
-/** Collection directory -> file kind (DR-012 layout). */
-const COLLECTIONS: readonly {
-  dir: "packages" | "compositions";
-  kind: SpecFileKind;
-}[] = [
-  { dir: "packages", kind: "package" },
-  { dir: "compositions", kind: "composition" },
-];
-
-/** Pre-DR-012 group directories: any of them marks a legacy tree. */
-const LEGACY_DIRS = ["user", "dev", "test"] as const;
+/** Directories marking a legacy tree: the pre-DR-012 user/dev/test
+ * groups and the retired compositions collection (DR-021). */
+const LEGACY_DIRS = ["user", "dev", "test", "compositions"] as const;
 
 const KNOWN_TOP_LEVEL = new Set([
   "packages",
-  "compositions",
   "decisions",
   "intents",
   // Tolerated while a tree migrates to intent records (DR-017).
@@ -44,43 +33,33 @@ const KNOWN_TOP_LEVEL = new Set([
 ]);
 
 /** `### <pack>-<N>` / `#### <pack>-<N>` item heading (meta-11) —
- * lowercase kebab-case, with the pre-DR-021 ALLCAPS form kept for
- * old-generation trees. */
+ * lowercase kebab-case, with the pre-DR-021 ALLCAPS form kept so
+ * old-generation trees still parse, degraded to notices. */
 const ITEM_HEADING =
   /^(#{3,4})\s+((?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)-\d+)\s*$/;
 /** A bare item ID, as used in citation link text (meta-16, meta-20). */
 const ITEM_ID = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)-\d+$/;
 /** A link fragment that targets an item heading's anchor. */
 const ITEM_ANCHOR = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*-\d+$/;
-/** `# <pack>: <Title>` H1 (meta-10); ALLCAPS short forms kept for
- * old-generation trees. */
-const H1_SHORT_FORM = /^((?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)):\s*(.+)$/;
+/** `# <pack>: <Title>` H1 (meta-10); the ALLCAPS short form kept so
+ * old-generation trees still parse, degraded to notices. */
+const H1_IDENTIFIER = /^((?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)):\s*(.+)$/;
 const FENCE = /^\s*(?:```|~~~)/;
 /** Innermost inline link, so the enclosed citation form
  * `[[<id>](<path>#<id>)]` (meta-16) captures the bare id. */
 const INLINE_LINK = /\[([^[\]]+)\]\(([^()\s]+)\)/g;
 
-/** Known `##` sections -> filter group (DR-015; META-28, META-34).
- * Localized scaffolds translate the section headings (META-28); the
- * zh names mirror the scaffold/linter vocabulary. */
-const SECTION_GROUPS: Record<SpecFileKind, ReadonlyMap<string, SpecGroup>> = {
-  package: new Map([
-    ["External Behavior", "external"],
-    ["外部行为", "external"],
-    ["Internal Behavior", "internal"],
-    ["内部行为", "internal"],
-    ["Verification", "test"],
-    ["验证", "test"],
-  ]),
-  composition: new Map([
-    ["Binding", "internal"],
-    ["绑定", "internal"],
-    ["Scenario", "external"],
-    ["场景", "external"],
-    ["Tests", "test"],
-    ["测试", "test"],
-  ]),
-};
+/** Known `##` sections -> filter group (DR-015; meta-30).
+ * Localized scaffolds translate the section headings; the zh names
+ * mirror the scaffold/linter vocabulary. */
+const SECTION_GROUPS: ReadonlyMap<string, SpecGroup> = new Map([
+  ["External Behavior", "external"],
+  ["外部行为", "external"],
+  ["Internal Behavior", "internal"],
+  ["内部行为", "internal"],
+  ["Verification", "test"],
+  ["验证", "test"],
+]);
 
 // ---------------------------------------------------------------------------
 // Per-file parsing (pure text -> SpecFileInfo)
@@ -99,13 +78,12 @@ function stripAnchor(heading: string): string {
   return heading.replace(/\s*\{#[^}]*\}\s*$/, "").trim();
 }
 
-/** Empty file shell carrying identity fields derived from kind + key. */
-function fileShell(kind: SpecFileKind, key: string): SpecFileInfo {
-  const collection = COLLECTIONS.find((entry) => entry.kind === kind)?.dir;
+/** Empty file shell carrying identity fields derived from the key;
+ * the basename is the package identifier (meta-10). */
+function fileShell(key: string): SpecFileInfo {
   const slash = key.lastIndexOf("/");
   return {
-    path: `specs/${collection}/${key}.md`,
-    kind,
+    path: `specs/packages/${key}.md`,
     key,
     dir: slash === -1 ? "" : key.slice(0, slash),
     basename: slash === -1 ? key : key.slice(slash + 1),
@@ -150,13 +128,8 @@ function firstSentence(body: string[]): string {
 }
 
 /** Parse one spec file's markdown text (exported for tests). */
-export function parseSpecFileText(
-  text: string,
-  kind: SpecFileKind,
-  key: string,
-): SpecFileInfo {
-  const file = fileShell(kind, key);
-  const sectionGroups = SECTION_GROUPS[kind];
+export function parseSpecFileText(text: string, key: string): SpecFileInfo {
+  const file = fileShell(key);
   const unexpectedSections = new Set<string>();
 
   let h1: string | undefined;
@@ -173,7 +146,7 @@ export function parseSpecFileText(
     const body = [...open.body];
     while (body.length > 0 && body[0].trim() === "") body.shift();
     while (body.length > 0 && body[body.length - 1].trim() === "") body.pop();
-    let group = open.section === undefined ? undefined : sectionGroups.get(open.section);
+    let group = open.section === undefined ? undefined : SECTION_GROUPS.get(open.section);
     if (group === undefined) {
       // Best-guess group for items outside the known behavior and
       // verification sections; the file notice flags the surprise.
@@ -273,35 +246,28 @@ export function parseSpecFileText(
 
   if (intent !== undefined) file.intent = intent;
 
-  // Majority item-ID prefix, ties broken by first appearance.
-  const prefixes = new Map<string, { count: number; order: number }>();
-  for (const item of file.items) {
-    const prefix = item.id.replace(/-\d+$/, "");
-    const entry = prefixes.get(prefix);
-    if (entry) entry.count += 1;
-    else prefixes.set(prefix, { count: 1, order: prefixes.size });
-  }
-  const ranked = [...prefixes.entries()].sort(
-    (a, b) => b[1].count - a[1].count || a[1].order - b[1].order,
-  );
-  const majority = ranked[0]?.[0];
-
-  const headed = h1 === undefined ? null : H1_SHORT_FORM.exec(h1);
+  // The basename is the package identifier (meta-10); an H1
+  // identifier or item-ID prefix disagreeing with it is noticed —
+  // once per distinct prefix — never adopted (spec-view-11). An H1
+  // without the `<pack>: <Title>` pattern is a plain title.
+  const headed = h1 === undefined ? null : H1_IDENTIFIER.exec(h1);
   if (headed) {
-    file.shortForm = headed[1];
     file.title = headed[2].trim();
-    if (majority !== undefined && majority !== headed[1]) {
+    if (headed[1] !== file.basename) {
       file.notices.push(
-        `short form ${headed[1]} disagrees with the majority item prefix ${majority}`,
+        `H1 identifier "${headed[1]}" disagrees with basename "${file.basename}"`,
       );
     }
-  } else {
-    if (h1 !== undefined) file.title = h1;
-    if (majority !== undefined) file.shortForm = majority;
+  } else if (h1 !== undefined) {
+    file.title = h1;
   }
-  if (ranked.length > 1) {
+  const noticedPrefixes = new Set<string>();
+  for (const item of file.items) {
+    const prefix = item.id.replace(/-\d+$/, "");
+    if (prefix === file.basename || noticedPrefixes.has(prefix)) continue;
+    noticedPrefixes.add(prefix);
     file.notices.push(
-      `mixed item prefixes: ${ranked.map(([prefix]) => prefix).join(", ")}`,
+      `item-ID prefix "${prefix}" disagrees with basename "${file.basename}"`,
     );
   }
 
@@ -309,23 +275,19 @@ export function parseSpecFileText(
 }
 
 /** Read + parse one spec file; never throws (SPECV degradation). */
-export function parseSpecFile(
-  absPath: string,
-  kind: SpecFileKind,
-  key: string,
-): SpecFileInfo {
+export function parseSpecFile(absPath: string, key: string): SpecFileInfo {
   let text: string;
   try {
     text = readFileSync(absPath, "utf8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ...fileShell(kind, key), error: `cannot read file: ${message}` };
+    return { ...fileShell(key), error: `cannot read file: ${message}` };
   }
   try {
-    return parseSpecFileText(text, kind, key);
+    return parseSpecFileText(text, key);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ...fileShell(kind, key), error: `parse failed: ${message}` };
+    return { ...fileShell(key), error: `parse failed: ${message}` };
   }
 }
 
@@ -363,7 +325,6 @@ interface WalkedFile {
 
 function walkCollection(
   collectionDir: string,
-  collection: "packages" | "compositions",
   baseReal: string,
   notices: string[],
 ): WalkedFile[] {
@@ -374,7 +335,7 @@ function walkCollection(
       const relPath = rel === "" ? entry.name : `${rel}/${entry.name}`;
       if (entry.isSymbolicLink() && realInside(abs, baseReal) === undefined) {
         notices.push(
-          `skipped symlink escaping the project: specs/${collection}/${relPath}`,
+          `skipped symlink escaping the project: specs/packages/${relPath}`,
         );
         continue;
       }
@@ -528,8 +489,10 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
   }
   if (realInside(specsDir, baseReal) === undefined) return absent;
 
-  // Legacy layout (pre-DR-012 user/dev/test groups): report the flag
-  // so the UI can render migration guidance; records still parse.
+  // Legacy layout — the pre-DR-012 user/dev/test groups or the
+  // retired compositions collection (DR-021): report the flag so the
+  // UI can render migration guidance with nothing parsed from any
+  // collection; records still parse.
   const legacy = LEGACY_DIRS.some((name) => {
     try {
       return statSync(join(specsDir, name)).isDirectory();
@@ -564,16 +527,11 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
     notices.push(`unknown entries under specs/: ${unknown.join(", ")}`);
   }
 
-  // Walk both collections; collection subdirectories are navigation
-  // only (META-32), so files stay flat, keyed by relative path.
-  const files: SpecFileInfo[] = [];
-  for (const { dir, kind } of COLLECTIONS) {
-    const walked = walkCollection(join(specsDir, dir), dir, baseReal, notices)
-      .sort((a, b) => (a.keyRel < b.keyRel ? -1 : a.keyRel > b.keyRel ? 1 : 0));
-    for (const entry of walked) {
-      files.push(parseSpecFile(entry.abs, kind, entry.keyRel));
-    }
-  }
+  // Walk the packages collection; subdirectories are navigation only
+  // (meta-34), so files stay flat, keyed by collection-relative path.
+  const files = walkCollection(join(specsDir, "packages"), baseReal, notices)
+    .sort((a, b) => (a.keyRel < b.keyRel ? -1 : a.keyRel > b.keyRel ? 1 : 0))
+    .map((entry) => parseSpecFile(entry.abs, entry.keyRel));
 
   return {
     present: true,

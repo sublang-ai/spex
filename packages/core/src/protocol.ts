@@ -366,11 +366,10 @@ export interface CommandResults {
 export type SpecGroup = "external" | "internal" | "test";
 
 export interface SpecItemInfo {
-  /** Item ID, e.g. "RUN-9". */
+  /** Item ID, e.g. "run-view-9". */
   id: string;
-  /** Section-kind group (DR-015): external = External Behavior +
-   * Scenario, internal = Internal Behavior + Binding, test =
-   * Verification + Tests. */
+  /** Section-kind group (DR-015): External Behavior external,
+   * Internal Behavior internal, Verification test. */
   group: SpecGroup;
   /** Containing `##` section heading, verbatim. */
   section: string;
@@ -387,23 +386,21 @@ export interface SpecItemInfo {
 export interface SpecFileInfo {
   /** Path relative to the project root. */
   path: string;
-  /** Collection the file lives in (DR-012 layout). */
-  kind: "package" | "composition";
   /** Collection-relative path minus .md, e.g. "identity/github-login". */
   key: string;
   /** Collection subdirectory ("" at collection root) — navigation only. */
   dir: string;
+  /** The package identifier: the file's basename (meta-10). */
   basename: string;
-  /** Short form from the `# <SHORT>: <Title>` heading, falling back
-   * to the majority item prefix. */
-  shortForm?: string;
-  /** Title from the H1 heading, after the short form. */
+  /** Title from the `# <pack>: <Title>` heading, after the
+   * identifier — or the whole H1 when it lacks that pattern. */
   title?: string;
   /** First paragraph of the file's `## Intent` section. */
   intent?: string;
   /** Items in document order — never sorted by ID. */
   items: SpecItemInfo[];
-  /** Consistency notices (prefix disagreements, section surprises). */
+  /** Consistency notices: an H1 identifier or item-ID prefix
+   * disagreeing with the basename, section surprises. */
   notices: string[];
   /** Parse-failure notice; items may be partial when set. */
   error?: string;
@@ -420,9 +417,12 @@ export interface SpecRecordInfo {
 export interface SpecTreeState {
   /** False when the project has no specs/ directory. */
   present: boolean;
-  /** True when the tree uses the pre-DR-012 user/dev/test layout;
-   * files stay empty and the view shows migration guidance. */
+  /** True when specs/ holds a legacy directory — user/, dev/,
+   * test/, or compositions/; files stay empty and the view shows
+   * migration guidance. */
   legacy: boolean;
+  /** The packages/ collection's files, keyed by collection-relative
+   * path. */
   files: SpecFileInfo[];
   decisions: SpecRecordInfo[];
   /** Intent records, read from intents/ or a legacy iterations/. */
