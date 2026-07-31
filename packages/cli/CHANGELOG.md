@@ -10,134 +10,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-31
+
+Version 0.4.0 was prepared but never published; its changes are folded
+into this release. npm users upgrade straight from 0.3.0.
+
 ### Added
 
-- **`spex lint` enforces the one-sentence binding grammar.** A `## Binding` item body carrying more than one sentence is now a `binding/sentence` error ([META-36](../../specs/meta.md#meta-36)): ASCII terminators count only before whitespace or line end, the fullwidth `。`/`！`/`？` count anywhere, and `e.g.`/`i.e.` never end a sentence, so coordinated multi-`shall` bindings stay clean while a trailing rider sentence — whose citations the clause classifier would misread — is caught at lint time.
+- **The 1.0 spec generation.** `spex scaffold` seeds the spec law this
+  release stabilizes: a packages-only `specs/` tree (`decisions/`,
+  `intents/`, `packages/`, `map.md`, `meta.md`) where every spec
+  package is one file with `Intent`, `External Behavior`,
+  `Internal Behavior`, and `Verification` sections; behavior that
+  emerges from several packages working together is itself a package
+  citing the peers' External Behavior — there is no compositions
+  directory. Item IDs are the lowercase file basename
+  (`github-login-3`), citations are enclosed inline links
+  (`[[github-login-3](github-login.md#github-login-3)]`) written at
+  the phrase that relies on the cited behavior, and each item is one
+  GEARS statement elaborated only by attachments. Starter packages
+  (`git.md`, `licensing.md`) and a sample intent record seed the tree.
+- **`spex lint`, rewritten for that law.** It validates the layout,
+  package sections and their order, basename item IDs unique across
+  the tree, enclosed citations whose files and anchors exist,
+  Verification items citing the behaviors they check, record
+  sections, reference markers, and the `map.md` index.
+  Relationship-metadata lines like `Verifies:` are errors; directories
+  of previous generations are errors pointing at the migration skill.
+  Errors exit non-zero.
+- **Agent-driven migration for 0.x trees.** The bundled
+  `spec-structure-migration` skill (with a meta-ID mapping and a
+  mechanical conformance checker) plus the `docs/spec-migration.md`
+  walkthrough migrate a tree from any 0.x generation; `spex lint` is
+  the mechanical gate the migrated tree must pass.
+- **Intent records.** `specs/intents/` replaces `specs/iterations/`:
+  an IR carries `Status`, `Intent`, `Deliverables`, `Tasks`, and
+  `Verification`, plans an intent's implementation, and is cited only
+  by `map.md`; commits realizing a recorded intent reference its bare
+  `IR-<N>` id.
+- **Root `LICENSE` seeding.** `spex scaffold` writes the verbatim
+  Apache-2.0 text at the target root when no `LICENSE` exists there;
+  an existing file is never touched.
 
-- **One contract per item, with an advisory sentence prompt.** [META-42](../../specs/meta.md#meta-42) states that each item has one governing GEARS clause naming one concrete domain contract — a request, decision, state transition, invariant, installed relationship, integrated journey, or verification run — whose structured attachments elaborate that contract alone, per item kind: steps or the cases and outcomes of one operation, decision, transition, or invariant; the mappings of one installed relationship; the stages of one journey or the cases of one standing rule; or the assertions of one verification objective (one setup and flow, or one case matrix). A condition inside an attachment is a case label, not a second trigger. `spex lint` reports a multi-sentence item as an `item/sentence` warning that prompts a read for a second governing clause (Binding items keep their `binding/sentence` error); sentence count neither defines nor decides conformance, since one contract's cases may run to several sentences while a second contract can hide inside one. META-21's bundled test rules split into [META-38..41](../../specs/meta.md#meta-38) and lint messages cite the split items.
+### Changed
+
+- **`spex scaffold --update` refreshes; it no longer restructures.**
+  It refreshes the spex-owned framework files (`specs/meta.md` and the
+  spec-format decision record) unconditionally — warning when it
+  replaces locally modified content — refreshes pristine seed files,
+  and updates the managed section of an existing
+  `CLAUDE.md`/`AGENTS.md`. On a tree carrying a legacy generation it
+  leaves every legacy file untouched and prints migration guidance
+  naming the skill and the guide. Plain `spex scaffold` refuses a tree
+  with a legacy directory so two generations never entangle.
+- The bundled `zh` overlays (`meta.md`, `map.md`) carry the 1.0 law;
+  files without a localized template still fall back to English.
+- The CLI parses Markdown with unified/remark-parse/remark-gfm and
+  github-slugger; it is no longer dependency-free.
+- The release workflow requires the CI workflow to conclude
+  successfully for the tagged commit before publishing to npm or
+  creating the GitHub release.
+
+### Removed
+
+- **The scripted structural migrations.** The 0.x mechanical
+  restructures — merging `specs/user`/`dev`/`test` into packages,
+  flattening `specs/items/`, moving `specs/interactions/` — are
+  retired; generation migration is judgment work done by an agent
+  following the bundled skill.
+- **The compositions directory.** The interim composed model
+  (`specs/compositions/` with binding and scenario items) never
+  shipped to npm and does not exist in the 1.0 law; composition is a
+  package pattern.
 
 ### Fixed
 
-- **Duplicate record numbers are caught instead of colliding silently.** Record ids form from the filename's leading number, so two differently named files could both become `IR-001`: `spex lint` now errors (`record/duplicate-id`) on a repeated number per record kind — `decisions/` for DRs, `intents/` together with legacy `iterations/` for IRs — and `spex scaffold --update` keeps an id-colliding legacy record in place, reporting the conflict against the id holder instead of migrating it into the collision ([META-43](../../specs/meta.md#meta-43), [SCAF-51](../../specs/packages/scaffold.md#scaf-51)).
-
-- **Plain `spex scaffold` no longer traps legacy trees.** Scaffolding over a tree with a legacy `specs/` directory (`user/`, `dev/`, `test/`, `items/`, `interactions/`, or `iterations/`) used to create current seed targets beside the legacy files, making every later `--update` conflict-keep the legacy content indefinitely; create mode now writes nothing, exits non-zero, and directs the user to `spex scaffold --update` ([SCAF-52](../../specs/packages/scaffold.md#scaf-52)).
-
-### Changed
-
-- **Iteration records become intent records ([DR-017](../../specs/decisions/017-intent-records.md)).** `spex scaffold` seeds `specs/intents/` instead of `specs/iterations/`, and the bundled templates describe intent records (IRs) in both languages, add META-37 (an intent realized in a single commit needs no record; records cite, never duplicate, commits and issues) and GIT-5 (commits realizing a recorded intent reference its bare `IR-<N>` id). `spex lint` guards the renamed layout — the citation rule is now `cite/intent`, links into legacy `specs/iterations/` still count, and an un-migrated `iterations/` directory is tolerated without unknown-entry warnings. `spex scaffold --update` migrates a legacy tree mechanically: record files move to `specs/intents/` (conflict-keeping, byte-preserving, before the pristine snapshot so a recognized legacy seed refreshes wholesale), citations rewrite once the move lands, and the map's Iterations heading and layout line rename in the active language. `spex lint` also warns when a legacy `specs/iterations/` directory coexists with `specs/intents/`, and keeps record naming and section rules on the legacy directory so a partially migrated tree stays checked.
-
-## [0.4.0] - 2026-07-23
-
-### Added
-
-- `spex lint` checks the specs tree: layout, package and composition
-  file sections, item ID uniqueness and prefixes, inline-citation
-  coverage (package Verification items cite the same-file items they
-  check; composition Tests items cite the same-file Binding or
-  Scenario items they execute; every Binding and Scenario item is
-  covered; scenario tests cite items in two distinct packages — a
-  file link without an item anchor counts toward none; in a mixed
-  file, every Binding item is cited by a same-file Scenario item),
-  the static-binding rule (no `When`/`While` clause in a
-  `## Binding` item), citations (files and anchors), reference
-  markers, record sections, and the `map.md` index. Item bodies
-  span nested subheadings, and structure lives on root-level
-  headings only — a package wrapped in a blockquote satisfies
-  nothing, and a quoted lookalike heading disturbs nothing, while
-  anchors still cover every heading. Relationship-metadata lines
-  (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`,
-  `Scope:`, `Requires:`, `Uses:`) are errors: the citations in an
-  item's clauses are the single source of its relationships
-  (META-20). So are a detached `Verifies …` sentence left by
-  mechanical migration (META-20), a citation inside a package
-  `## Intent` (META-15), a package citation of a peer item outside
-  its `## External Behavior` (META-14, META-28), a peer citation
-  outside a precondition or trigger clause — decided by the clause
-  keywords of either bundled language (META-13) — a package link
-  into `specs/compositions/` (META-33), an iteration reference
-  outside `specs/map.md`, linked or textual, with an iteration
-  record exempt only for its own ID (META-18), and a scenario test
-  citing items in fewer than two packages (META-21). A peer
-  citation must resolve to an item anchor of the peer file, and
-  clause membership is checked on both sides over the parsed
-  inline text — inline code and link labels excluded — so a
-  subject-position citation after a real precondition still fails
-  and markup cannot fake a keyword or separator; the citation must
-  share a separator-free span with its clause keyword, so an
-  appositive comma after a shall-clause subject, or a trailing
-  `where` clause behind a shall, cannot pose as a precondition —
-  sentence ends require closing punctuation before whitespace, so
-  a dot inside a version number reopens nothing; a separator
-  counts as inside a citation group only between two citations,
-  so a directly linked shall-subject fails; and a peer citation
-  in section prose outside every item body is an error, since
-  item clauses are the single relationship source (META-13,
-  META-14, META-20). Reference-style links are errors in item files,
-  exempting only the literal wrapped `[[N]]` marker form — a bare
-  `[N]`, collapsed `[N][]`, or full reference is an error even
-  with a numeric label, and a numbered definition must sit under
-  `## References` pointing at an external URL, so the marker
-  mechanism cannot smuggle an item citation — citations are
-  inline (META-16, META-19).
-  Binding-trigger detection covers the Chinese clause keywords over
-  the parsed inline text, so lists, quotes, and emphasis cannot
-  hide a trigger; all keyword detection follows the parsed code
-  spans — GFM-correct for fences of any delimiter length and
-  indented code. Errors exit non-zero; warnings do not.
-- `spex scaffold --update` migrates the legacy `specs/user`/`dev`/`test`
-  layout to the new structure: each package's item files are merged
-  into a single `specs/packages/<name>.md` (`## External Behavior`,
-  `## Internal Behavior`, `## Verification` sections; heading levels
-  demoted; reference markers renumbered; `Verifies:` lines rewritten
-  as inline sentences), citations across `specs/` are rewritten to
-  the new paths, a customized `map.md` is restructured in place —
-  every map transform scoped through root-level H2 Layout,
-  Packages, and Interactions sections, so fenced, blockquoted,
-  listed, and nested lookalike headings are never mistaken for
-  the real ones — and a prompt for filling `specs/compositions/`
-  is printed for your AI agent.
-- `spex scaffold --update` migrates `specs/interactions/` to
-  `specs/compositions/` (SCAF-50): files move with conflict-keeping,
-  each `Verifies:` block — including wrapped continuation lines —
-  collapses to one inline sentence, citations, a `## Interactions`
-  map heading, and an `interactions/` layout-block line are
-  rewritten, and the retired `.gitkeep` is dropped via the legacy
-  manifest. Moved files are not reshaped into the META-34 grammar;
-  the remaining lint errors are reconciliation work for the
-  printed compositions prompt.
-- Composition section headings have Chinese names: the bundled zh
-  `meta.md` translates META-28 and META-34, defining
-  意图/外部行为/内部行为/验证/参考资料 for packages and
-  绑定/场景/测试 for compositions, and `spex lint` accepts them
-  alongside the English names.
-
-### Changed
-
-- The spec model is the composed model (DR-000, META-1–36):
-  `specs/packages/` holds standalone package contracts and
-  `specs/compositions/` holds binding items — static installed
-  relationships — plus scenario items and the tests that span
-  packages, per the META-34 grammar (`Intent`, `Binding?`,
-  `Scenario?`, `Tests`, `References?`). Fresh scaffolds create the
-  new layout; bundled seeds moved to `specs/packages/git.md` and
-  `specs/packages/licensing.md`, and the bundled meta, decision
-  record, prompts, and agent instructions carry the converged
-  conventions (bindability, binding form, release-boundary item
-  IDs, inline citations).
-- `spex scaffold --update` now also refreshes the managed specs
-  section of an existing `CLAUDE.md`/`AGENTS.md` (absent files are not
-  created).
-- The CLI now depends on unified/remark-parse/remark-gfm and
-  github-slugger to parse Markdown reliably during migration and
-  linting; it is no longer dependency-free.
-- The release workflow now gates publishing on CI: it waits for and
-  requires the CI workflow (`ci.yml`) to conclude successfully for the
-  tagged commit before publishing to npm or creating the GitHub
-  release, and fails without publishing otherwise (RELEASE-18).
-- This repository's own `specs/` tree is migrated to the composed
-  model and lint-gated by the CLI test suite; the desktop app's
-  spec view still parses the legacy layout and remains deferred
-  (IR-017).
+- Duplicate record numbers are caught instead of colliding silently:
+  `spex lint` errors on a repeated number per record kind, and
+  `spex scaffold --update` keeps an id-colliding legacy record in
+  place, reporting the conflict instead of migrating into it.
 
 ## [0.3.0] - 2026-06-25
 
@@ -271,8 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/sublang-ai/spex/compare/v0.3.0...v0.4.0
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sublang-ai/spex/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/sublang-ai/spex/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/sublang-ai/spex/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/sublang-ai/spex/compare/v0.2.1...v0.2.2
