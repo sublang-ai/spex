@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress
+Done
 
 ## Intent
 
@@ -18,7 +18,7 @@ Gate the 1.0 CLI release on what its users actually experience: an automated end
 - [x] `packages/cli/README.md` and the root `README.md` regenerated for the current generation, with an upgrading section anchored to release versions (0.x generations, 1.0 law)
 - [x] Legacy-generation guidance in the CLI, the migration guide, and the skill README anchored to spex 0.x
 - [x] Retired `merge-package` module removed from the CLI source
-- [ ] Migration smoke observed green with a real agent before the tag
+- [x] Migration smoke observed green with a real agent before the tag (2026-07-31: Claude Code and Codex both passed every gate; one codex retry after an uncommitted-but-clean first tree)
 
 ## Tasks
 
