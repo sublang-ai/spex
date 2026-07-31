@@ -554,46 +554,57 @@ test("the staged Academy corpus parses end-to-end", () => {
   assert.equal(tree.legacy, false);
   assert.deepEqual(tree.notices, []);
 
-  const packages = tree.files.filter((entry) => entry.kind === "package");
-  const compositions = tree.files.filter(
-    (entry) => entry.kind === "composition",
+  // The packages-only generation (DR-021): no compositions remain.
+  assert.equal(tree.files.length, 12);
+  assert.deepEqual(
+    tree.files.filter((entry) => entry.kind !== "package"),
+    [],
   );
-  assert.equal(packages.length, 6);
-  assert.equal(compositions.length, 6);
   for (const entry of tree.files) {
     assert.equal(entry.error, undefined, entry.path);
-    assert.ok(entry.shortForm, `short form on ${entry.path}`);
+    assert.deepEqual(entry.notices, [], entry.path);
     assert.ok(entry.intent, `intent on ${entry.path}`);
+    assert.ok(entry.items.length > 0, `items on ${entry.path}`);
+    // The short form is the H1's package identifier, which is the
+    // lowercase kebab-case basename (meta-10).
+    assert.equal(entry.shortForm, entry.basename, entry.path);
   }
 
-  // Spot-check a package: topics on #### items, cites from links.
+  // Spot-check a nested package: lowercase <pack>-<N> ids, topics
+  // on #### items, cites from enclosed citations (meta-11, meta-16).
   const auth = file(tree, "identity/github-login");
-  assert.equal(auth.shortForm, "AUTH");
+  assert.equal(auth.path, "specs/packages/identity/github-login.md");
+  assert.equal(auth.dir, "identity");
+  assert.equal(auth.shortForm, "github-login");
   assert.equal(auth.title, "GitHub Login");
-  const authCheck = item(auth, "AUTH-10");
+  assert.equal(auth.items.length, 15);
+  const authCheck = item(auth, "github-login-10");
   assert.equal(authCheck.group, "test");
   assert.equal(authCheck.section, "Verification");
   assert.equal(authCheck.topic, "Sign-In Coverage");
-  assert.deepEqual(authCheck.cites, ["AUTH-1", "AUTH-2", "AUTH-4", "AUTH-14"]);
-
-  // At least one composition item carries citations.
-  const play = file(tree, "lesson-playback");
-  assert.equal(play.kind, "composition");
-  const journey = item(play, "PLAY-1");
-  assert.equal(journey.group, "external");
-  assert.equal(journey.section, "Scenario");
-  assert.deepEqual(journey.cites, [
-    "CAT-2",
-    "CAT-20",
-    "VID-6",
-    "AUTH-2",
-    "VID-5",
+  assert.deepEqual(authCheck.cites, [
+    "github-login-1",
+    "github-login-2",
+    "github-login-4",
+    "github-login-14",
   ]);
-  assert.ok(
-    compositions.some((entry) =>
-      entry.items.some((candidate) => candidate.cites.length > 0),
-    ),
-  );
+
+  // A former composition parses as a package whose items cite the
+  // peer behaviors they compose (meta-14).
+  const play = file(tree, "lesson-playback");
+  assert.equal(play.kind, "package");
+  assert.equal(play.dir, "");
+  assert.equal(play.shortForm, "lesson-playback");
+  const journey = item(play, "lesson-playback-1");
+  assert.equal(journey.group, "external");
+  assert.equal(journey.section, "External Behavior");
+  assert.deepEqual(journey.cites, [
+    "course-catalog-2",
+    "course-catalog-20",
+    "video-library-6",
+    "github-login-2",
+    "video-library-5",
+  ]);
 
   assert.deepEqual(
     tree.decisions.map((record) => record.id),

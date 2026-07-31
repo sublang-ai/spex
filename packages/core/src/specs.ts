@@ -43,16 +43,22 @@ const KNOWN_TOP_LEVEL = new Set([
   "meta.md",
 ]);
 
-/** `### PACK-N` / `#### PACK-N` item heading (META-11). */
-const ITEM_HEADING = /^(#{3,4})\s+([A-Z][A-Z0-9]*-\d+)\s*$/;
-/** A bare item ID, as used in citation link text (META-16, META-20). */
-const ITEM_ID = /^[A-Z][A-Z0-9]*-\d+$/;
+/** `### <pack>-<N>` / `#### <pack>-<N>` item heading (meta-11) —
+ * lowercase kebab-case, with the pre-DR-021 ALLCAPS form kept for
+ * old-generation trees. */
+const ITEM_HEADING =
+  /^(#{3,4})\s+((?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)-\d+)\s*$/;
+/** A bare item ID, as used in citation link text (meta-16, meta-20). */
+const ITEM_ID = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)-\d+$/;
 /** A link fragment that targets an item heading's anchor. */
-const ITEM_ANCHOR = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
-/** `# <SHORT>: <Title>` H1 (META-10). */
-const H1_SHORT_FORM = /^([A-Z][A-Z0-9]*):\s*(.+)$/;
+const ITEM_ANCHOR = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*-\d+$/;
+/** `# <pack>: <Title>` H1 (meta-10); ALLCAPS short forms kept for
+ * old-generation trees. */
+const H1_SHORT_FORM = /^((?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)):\s*(.+)$/;
 const FENCE = /^\s*(?:```|~~~)/;
-const INLINE_LINK = /\[([^\]]+)\]\(([^()\s]+)\)/g;
+/** Innermost inline link, so the enclosed citation form
+ * `[[<id>](<path>#<id>)]` (meta-16) captures the bare id. */
+const INLINE_LINK = /\[([^[\]]+)\]\(([^()\s]+)\)/g;
 
 /** Known `##` sections -> filter group (DR-015; META-28, META-34).
  * Localized scaffolds translate the section headings (META-28); the
