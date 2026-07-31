@@ -17,7 +17,7 @@ Work tree by tree; a tree is `specs/` or any directory laid out like it (`decisi
 - The law is the tree's `meta.md` and `decisions/000-spec-structure-format.md` (DR-000) **in their current-generation form** — read both fully before touching anything. If the tree's `meta.md` is still old-generation, refresh it first (`spex scaffold --update`, or sync from the current scaffold) so the law you follow is the law you migrate to.
 - Never edit `meta.md` or DR-000 beyond that refresh without explicit human approval.
 - Work on a branch with a clean working tree; commit in reviewable steps. Every change lands as an ordinary diff for the tree's owners to review.
-- If the project has published releases, item IDs that appeared in a release are permanently bound to their concerns (meta-12). The generation change renames every ID's *spelling*; confirm with a human that this rename is approved before rewriting a released tree.
+- If the project has published releases, item IDs that appeared in a release are permanently bound to their concerns (meta-18). The generation change renames every ID's *spelling*; confirm with a human that this rename is approved before rewriting a released tree.
 - Do not invent or drop behavior. Every stated behavior in the old tree must survive, restated under the new law; anything you cannot place, flag for the humans instead of deleting.
 
 ## The target law, in brief
@@ -26,8 +26,8 @@ Work tree by tree; a tree is `specs/` or any directory laid out like it (`decisi
 2. A spec package is one file under `packages/` (subdirectories are navigation-only). Sections in order: `Intent`, `External Behavior`, `Internal Behavior` (optional), `Verification` (required unless irrelevant), `References` (optional).
 3. The package identifier is the file basename (lowercase kebab-case, unique per tree). An item ID is `<pack>-<N>`, lowercase — the heading, the anchor, and the citation text.
 4. Each item is exactly one GEARS statement (`[Where …] [While …] [When …] <subject> shall <behavior(s)>.`) elaborated only by attachments (notes, lists, tables, diagrams, examples).
-5. Citations are the only relationship between packages: an item citation is an enclosed inline link, `[[pack-3](pack.md#pack-3)]`, written at the exact phrase that relies on the cited behavior. A behavior item may cite only a peer's **External Behavior**; a test item may also cite Internal Behavior its assertion materially needs. Record links (`[DR-000](…)`) stay plain.
-6. DR sections: Status, Context, Decision, Consequences, References. IR sections: Status, Intent, Deliverables (checkboxes), Tasks (numbered), Verification. Nothing cites an IR except `map.md`.
+5. Citations are the only relationship between packages: a citation of a spec item is an enclosed inline link, `[[pack-3](pack.md#pack-3)]`, written inline at the phrase that relies on it. Any general phrase of a behavior binds to a specific peer **External Behavior** by citing it; a test item cites every behavior item it verifies, inline at the assertion. Record links (`[DR-000](…)`) stay plain.
+6. DR sections: Status, Context, Decision, Consequences, References. IR sections: Status, Intent, Deliverables (checkboxes), Tasks (numbered), Verification. No DR or spec item cites an IR or names it in prose — `map.md` and the intent records themselves sit outside that prohibition.
 7. One sentence per line, file-wide (lists, tables, diagrams exempt). Unwrap hard-wrapped sentences.
 8. Spec tests are integration/system tests that prefer executing the real behavior of cited packages over substitutes.
 

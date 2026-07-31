@@ -11,8 +11,8 @@
 
 在编写、修改或审阅 DR、IR 或条目前，先了解 [`meta.md`](meta.md) 中的规则。
 
-- DR 和 IR：见 [Organization](meta.md#organization)、[Record format](meta.md#record-format) 和 [Citation](meta.md#citation)。
-- 条目：见 [Organization](meta.md#organization)、[Item syntax](meta.md#item-syntax)、[Spec packages](meta.md#spec-packages)、[Testing](meta.md#testing) 和 [Citation](meta.md#citation)。
+- DR 和 IR：见 [Overall](meta.md#overall)、[Record format](meta.md#record-format) 和 [Citation](meta.md#citation)。
+- 条目：见 [Overall](meta.md#overall)、[Item syntax](meta.md#item-syntax)、[Spec packages](meta.md#spec-packages)、[Testing](meta.md#testing) 和 [Citation](meta.md#citation)。
 
 ## 目录结构
 

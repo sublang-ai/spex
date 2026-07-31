@@ -116,8 +116,8 @@ test("package file parses sections, items, and citations", () => {
 
   const auth = file(tree, "identity/auth");
   assert.equal(auth.path, "specs/packages/identity/auth.md");
-  // The collection subdirectory is navigation only (meta-34); the
-  // basename alone is the package identifier (meta-10).
+  // The collection subdirectory is navigation only (meta-21); the
+  // basename alone is the package identifier (meta-16).
   assert.equal(auth.dir, "identity");
   assert.equal(auth.basename, "auth");
   assert.equal(auth.title, "GitHub Login");
@@ -127,7 +127,7 @@ test("package file parses sections, items, and citations", () => {
   assert.ok(!("kind" in auth));
   assert.ok(!("shortForm" in auth));
 
-  // Document order, never ID order (meta-12).
+  // Document order, never ID order (meta-18).
   assert.deepEqual(
     auth.items.map((entry) => entry.id),
     ["auth-2", "auth-1", "auth-3", "auth-4"],
@@ -242,7 +242,7 @@ test("H1 and item-ID prefixes disagreeing with the basename are noticed", () => 
     ].join("\n"),
   });
   const login = file(parseSpecTree(dir), "github-login");
-  // The basename wins as the package identifier (meta-10); every
+  // The basename wins as the package identifier (meta-16); every
   // disagreement is named (spec-view-11).
   assert.equal(login.basename, "github-login");
   assert.equal(login.title, "GitHub Login");
@@ -617,7 +617,7 @@ test("the staged Academy corpus parses end-to-end", () => {
   }
 
   // Spot-check a nested package: lowercase <pack>-<N> ids, topics
-  // on #### items, cites from enclosed citations (meta-11, meta-16).
+  // on #### items, cites from enclosed citations (meta-17, meta-25).
   const auth = file(tree, "identity/github-login");
   assert.equal(auth.path, "specs/packages/identity/github-login.md");
   assert.equal(auth.dir, "identity");
@@ -636,7 +636,7 @@ test("the staged Academy corpus parses end-to-end", () => {
   ]);
 
   // A former composition parses as a package whose items cite the
-  // peer behaviors they compose (meta-14).
+  // peer behaviors they compose (meta-19).
   const play = file(tree, "lesson-playback");
   assert.equal(play.dir, "");
   assert.equal(play.basename, "lesson-playback");

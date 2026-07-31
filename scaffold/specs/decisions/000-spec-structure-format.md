@@ -32,7 +32,7 @@ Decisions and intents are stored as records.
   - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]].
   - Intent records (IRs) plan an intent's implementation and track its progress [[meta-5](../meta.md#meta-5)].
 - **Items** must follow the GEARS pattern [[2]] to specify behaviors.
-Each item file is a spec package, stating the intent its items share [[meta-30](../meta.md#meta-30)].
+Each item file is a spec package, stating the intent its items share [[meta-15](../meta.md#meta-15)].
 
 ### Organization
 
@@ -54,14 +54,14 @@ It is the unit of spec authoring, reuse, extension, and composition.
 A spec package is one file under `packages/` or its subdirectory.
 For example, a spec package for generating short URLs may be `specs/packages/signing/gen-url.md`, where `signing/` is a local collection of related packages for development convenience.
 
-Each package file carries the same sections in the following order [[meta-30](../meta.md#meta-30)]:
+Each package file carries the same sections in the following order [[meta-15](../meta.md#meta-15)]:
 
 - `External Behavior` for outcomes and guarantees the package's users rely on.
 A package's user may be a human or a system component.
 - `Internal Behavior` for implementation hidden from the package's users.
 - `Verification` for test items that check the package's own claims.
 
-A behavior phrase can bind to another package's External Behavior by citing it [[meta-14](../meta.md#meta-14)].
+A behavior phrase can bind to another package's External Behavior by citing it [[meta-19](../meta.md#meta-19)].
 But a spec package remains meaningfully self-contained.
 It reads in full without following any link.
 
@@ -77,7 +77,7 @@ Three patterns cover most cases:
 ### Citations
 
 DRs and items are persistent and may cite each other.
-A DR references a spec item only to support what the DR itself states, never to carry content it leaves unsaid [[meta-40](../meta.md#meta-40)].
+A DR references a spec item only to support what the DR itself states, never to carry content it leaves unsaid.
 
 IRs may cite, but must not be cited by, DRs or items.
 `map.md` may cite all spec files and is kept in sync as files change.

@@ -34,4 +34,4 @@ Align every spec tree — `specs/`, `demo/specs/`, and the scaffold's non-normat
 
 - No link under `specs/`, `demo/specs/`, or `scaffold/specs/` resolves to a missing file or anchor.
 - No ALLCAPS item ID and no `compositions/` path remains outside historical commit references.
-- Every package file carries the sections of [[meta-30](../meta.md#meta-30)] in order; every record carries the sections of [[meta-4](../meta.md#meta-4)] or [[meta-5](../meta.md#meta-5)].
+- Every package file carries the sections of [[meta-15](../meta.md#meta-15)] in order; every record carries the sections of [[meta-4](../meta.md#meta-4)] or [[meta-5](../meta.md#meta-5)].

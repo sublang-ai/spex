@@ -8,7 +8,7 @@
 
 This spec defines the structure and organization of specifications (specs), per [DR-000](decisions/000-spec-structure-format.md).
 
-## Organization
+## Overall
 
 ### meta-1
 
@@ -40,7 +40,7 @@ Each DR shall follow the ADR format [[2]], with sections Status, Context, Decisi
 
 Each IR shall contain sections Status, Intent, Deliverables (with checkboxes), Tasks (numbered, each sized to one commit), and Verification.
 
-### meta-39
+### meta-22
 
 A record's ID shall join its kind prefix to its filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — with the leading number unique within each record kind.
 
@@ -48,7 +48,7 @@ A record's ID shall join its kind prefix to its filename's leading number — `D
 
 A DR shall record design decisions and constraints, not implementation details, sufficient to provide context for or to audit the corresponding spec items.
 
-### meta-43
+### meta-28
 
 An IR shall be disposable: it contains nothing a DR or a spec item should cover, and its deletion loses no design or behavior record.
 
@@ -114,7 +114,7 @@ Each package file shall contain only the following sections, in this order:
 | `Intent` | required | the shared intent of the package's items |
 | `External Behavior` | required | outcomes and guarantees the package's users may rely on |
 | `Internal Behavior` | optional | implementation hidden from the package's users |
-| `Verification` | required unless irrelevant [[meta-38](#meta-38)] | only test items verifying the package's own items |
+| `Verification` | required unless irrelevant [[meta-33](#meta-33)] | only test items verifying the package's own items |
 | `References` | optional | external sources [[meta-19](#meta-19)] |
 
 - A package's user is any human or system component using its contract; External and Internal are relative to the package.
@@ -142,7 +142,7 @@ A publicly released item ID shall remain permanently bound to the concern its it
 
 ### meta-14
 
-A citation shall be the only relationship between packages: any phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-16](#meta-16)].
+A citation shall be the only relationship between packages: any general phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-16](#meta-16)].
 
 - An uncited phrase stays general as it is sufficient for code generation and audit.
 - One phrase may cite several packages if it composes their behaviors.
@@ -151,7 +151,7 @@ A citation shall be the only relationship between packages: any phrase of a beha
 
 A spec package shall stand alone: readable in full without following any link — a citation never carries its meaning.
 
-### meta-34
+### meta-31
 
 A subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
 
@@ -161,11 +161,11 @@ A subdirectory under `specs/packages/` shall be an organizational collection onl
 
 Spec test items shall specify integration and system tests only: unit tests belong to the implementation, and no spec item specifies one.
 
-### meta-36
+### meta-32
 
 A test shall prefer executing the real behavior of a cited package [[meta-14](#meta-14)] to supplying a substitute for it.
 
-### meta-38
+### meta-33
 
 Each stated behavior shall be verified unless verification is irrelevant to it, white-box or black-box: External and Internal govern use, not verification.
 
@@ -173,19 +173,11 @@ Each stated behavior shall be verified unless verification is irrelevant to it, 
 
 ### meta-16
 
-A citation of an item shall be a relative link with an anchor, enclosed in square brackets (e.g., `[[meta-1](meta.md#meta-1)]`), written inline at the phrase that relies on it.
-
-### meta-17
-
-DRs and items may cite each other.
-
-### meta-40
-
-A DR shall reference a spec item only to support a statement the DR itself makes; the reference is a citation like any other [[meta-16](#meta-16)].
+A citation of a spec item shall be a relative link with an anchor, enclosed in square brackets (e.g., `[[meta-1](meta.md#meta-1)]`), written inline at the phrase that relies on it.
 
 ### meta-18
 
-No spec except `map.md` shall cite an IR; naming an IR in prose is a citation.
+No DR or spec item shall cite an IR or name it in prose.
 
 ### meta-19
 
@@ -193,11 +185,7 @@ An external reference shall cite an authoritative source (e.g., official docs) b
 
 ### meta-20
 
-A test item shall cite every behavior item it verifies, inline at the assertion that verifies it, and may cite Internal Behavior its statement materially needs — the citation reclassifying nothing.
-
-### meta-41
-
-A citation shall bind its adjacent phrase: it cites exactly the behavior that phrase relies on, exercises, or checks — never ambient, transitive, or merely invoked behavior.
+A test item shall cite every behavior item it verifies, inline at the assertion that verifies the behavior.
 
 ## Authoring language
 

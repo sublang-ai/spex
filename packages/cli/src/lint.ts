@@ -33,7 +33,7 @@ export type LintFinding = {
 
 // Localized section names accepted alongside the English ones,
 // matching the section names the bundled zh meta.md defines for
-// package files (meta-30).
+// package files (meta-15).
 const SECTION_ALIASES: Record<string, string[]> = {
   Intent: ["Intent", "意图"],
   "External Behavior": ["External Behavior", "外部行为"],
@@ -52,7 +52,7 @@ const PACKAGE_SECTION_ORDER = [
 
 // Required record sections per meta-4 / meta-5, with the zh names
 // of the bundled templates. A DR's References section is listed by
-// meta-4 but holds no uncited entry (meta-19), so a DR without
+// meta-4 but holds no uncited entry (meta-27), so a DR without
 // external sources legitimately omits it — it is not required here.
 const DR_SECTIONS: Record<string, string[]> = {
   Status: ["Status", "状态"],
@@ -72,19 +72,19 @@ const IR_SECTIONS: Record<string, string[]> = {
 const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RECORD_NAME_RE = /^\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 // Package H1: `# <pack>: <Title>` with <pack> the lowercase
-// kebab-case basename (meta-10).
+// kebab-case basename (meta-16).
 const H1_RE = /^([a-z0-9]+(?:-[a-z0-9]+)*):\s+\S.*$/;
-// Item headings: lowercase <pack>-<N> (meta-11). The loose form
+// Item headings: lowercase <pack>-<N> (meta-17). The loose form
 // also catches case violations so they lint as items, not topics.
 const ITEM_RE = /^([a-z0-9]+(?:-[a-z0-9]+)*)-([1-9][0-9]*)$/;
 const ITEM_LOOSE_RE = /^([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)-([1-9][0-9]*)$/;
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-// Relationship-metadata lines prohibited by meta-14: citations in
+// Relationship-metadata lines prohibited by meta-19: citations in
 // an item's statement are the single relationship source.
 const METADATA_LINE_RE =
   /^(Verifies|Binds|Composes|Clients|Suppliers|Scope|Requires|Uses):(\s|$)/;
 // A relationship-only sentence left by mechanical migration:
-// "Verifies" plus citations and separators. meta-41 wants each
+// "Verifies" plus citations and separators. meta-25 wants each
 // citation woven into the assertion it supports.
 const HAS_CITATION_RE = /\[[^\]]*\]\([^)]*\)/;
 const CITATION_SCAN_RE = /\[[^\]]*\]\([^)]*\)/g;
@@ -132,7 +132,7 @@ type LinkInfo = {
   text: string;
   /**
    * The link is wrapped in an outer bracket pair — the enclosed
-   * citation form `[[<id>](<path>#<id>)]` of meta-16.
+   * citation form `[[<id>](<path>#<id>)]` of meta-25.
    */
   enclosed: boolean;
 };
@@ -233,7 +233,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
       };
       const line = node.position?.start.line ?? 1;
       referenceUses.push({ line });
-      // Only the literal [[N]] marker form of meta-19 is exempt: a
+      // Only the literal [[N]] marker form of meta-27 is exempt: a
       // numeric shortcut reference wrapped in the outer brackets.
       // A bare [1], a collapsed [1][], and any full reference are
       // disguised citations even with numeric labels (lint-8).
@@ -318,6 +318,17 @@ const SECTION_BY_NAME = aliasSet(SECTION_ALIASES);
 
 function isUnder(relPath: string, dir: string): boolean {
   return relPath.startsWith(`specs/${dir}/`);
+}
+
+// The meta-26 prohibition binds DRs and spec items — decisions/,
+// packages/, and meta.md. Intent records themselves and map.md sit
+// outside it, so an IR (or the map) referencing an IR is legal.
+function boundByIrProhibition(relPath: string): boolean {
+  return (
+    isUnder(relPath, "decisions") ||
+    isUnder(relPath, "packages") ||
+    relPath === "specs/meta.md"
+  );
 }
 
 function basenameOf(relPath: string): string {
@@ -446,7 +457,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
       1,
       "error",
       "package/heading",
-      "package file needs a `# <pack>: <Title>` heading (meta-30)",
+      "package file needs a `# <pack>: <Title>` heading (meta-15)",
     );
   } else {
     const match = file.h1.plain.trim().match(H1_RE);
@@ -457,7 +468,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
         file.h1.line,
         "error",
         "package/heading",
-        "H1 should be `# <pack>: <Title>` with <pack> the lowercase kebab-case basename (meta-10)",
+        "H1 should be `# <pack>: <Title>` with <pack> the lowercase kebab-case basename (meta-16)",
       );
     } else if (match[1] !== basename) {
       report(
@@ -466,7 +477,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
         file.h1.line,
         "error",
         "package/heading",
-        `H1 identifier "${match[1]}" does not match the file's basename "${basename}" (meta-10)`,
+        `H1 identifier "${match[1]}" does not match the file's basename "${basename}" (meta-16)`,
       );
     }
   }
@@ -484,7 +495,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
         heading.line,
         "error",
         "package/sections",
-        `unexpected section "## ${heading.plain}"; package files use ${PACKAGE_SECTION_ORDER.join(", ")} (meta-30)`,
+        `unexpected section "## ${heading.plain}"; package files use ${PACKAGE_SECTION_ORDER.join(", ")} (meta-15)`,
       );
       continue;
     }
@@ -495,7 +506,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
         heading.line,
         "error",
         "package/sections",
-        `duplicate section "## ${heading.plain}" (meta-30)`,
+        `duplicate section "## ${heading.plain}" (meta-15)`,
       );
       continue;
     }
@@ -510,7 +521,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
         heading.line,
         "error",
         "package/sections",
-        `section "## ${heading.plain}" is out of order (expected ${PACKAGE_SECTION_ORDER.join(", ")}) (meta-30)`,
+        `section "## ${heading.plain}" is out of order (expected ${PACKAGE_SECTION_ORDER.join(", ")}) (meta-15)`,
       );
     }
     present.push(canonical);
@@ -524,7 +535,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
         1,
         "error",
         "package/sections",
-        `missing required "## ${requiredSection}" section (meta-30)`,
+        `missing required "## ${requiredSection}" section (meta-15)`,
       );
     }
   }
@@ -535,7 +546,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
       1,
       "warning",
       "package/verification",
-      'missing "## Verification" section; verification is required unless irrelevant (meta-38)',
+      'missing "## Verification" section; verification is required unless irrelevant (meta-24)',
     );
   }
 }
@@ -618,7 +629,7 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
         item.heading.line,
         "error",
         "id/form",
-        `item heading ${item.id} is not of the lowercase <pack>-<N> form (meta-11)`,
+        `item heading ${item.id} is not of the lowercase <pack>-<N> form (meta-17)`,
       );
     }
     const basename = basenameOf(item.file.relPath);
@@ -629,7 +640,7 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
         item.heading.line,
         "error",
         "id/prefix",
-        `item ${item.id} does not match the file's basename "${basename}" (meta-11)`,
+        `item ${item.id} does not match the file's basename "${basename}" (meta-17)`,
       );
     }
     if (
@@ -642,7 +653,7 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
         item.heading.line,
         "warning",
         "id/misplaced",
-        `item ${item.id} sits inside the ${item.section} section; items belong in the Behavior and Verification sections (meta-30)`,
+        `item ${item.id} sits inside the ${item.section} section; items belong in the Behavior and Verification sections (meta-15)`,
       );
     }
   }
@@ -655,12 +666,12 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
         item.heading.line,
         "error",
         "id/duplicate",
-        `item ID ${item.id} is defined ${list.length} times across specs/ (meta-11)`,
+        `item ID ${item.id} is defined ${list.length} times across specs/ (meta-17)`,
       );
     }
   }
 
-  // A package's identity is its basename (meta-10); one basename
+  // A package's identity is its basename (meta-16); one basename
   // used by two files collides even across subdirectories.
   const byBasename = new Map<string, SpecFile[]>();
   for (const file of ctx.files.values()) {
@@ -681,7 +692,7 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
         "id/basename",
         `package basename "${basename}" is used by ${list
           .map((other) => other.relPath)
-          .join(", ")} (meta-10)`,
+          .join(", ")} (meta-16)`,
       );
     }
   }
@@ -745,10 +756,10 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
     if (!isUnder(item.file.relPath, "packages")) continue;
 
     // Relationship-metadata lines are prohibited (lint-7): inline
-    // citations are the single relationship source (meta-14). A
+    // citations are the single relationship source (meta-19). A
     // relationship-only "Verifies …" sentence is an error too
     // (lint-13): weave each citation into the assertion it
-    // supports (meta-41).
+    // supports (meta-25).
     for (let line = item.bodyStart; line < item.bodyEnd; line += 1) {
       if (item.file.fenced[line - 1]) continue;
       const content = item.file.lines[line - 1];
@@ -761,7 +772,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           line,
           "error",
           "item/metadata-line",
-          `item ${item.id} carries a relationship-metadata line; inline citations are the single source of relationships (meta-14)`,
+          `item ${item.id} carries a relationship-metadata line; inline citations are the single source of relationships (meta-19)`,
         );
         continue;
       }
@@ -776,13 +787,13 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           line,
           "error",
           "cite/detached",
-          `item ${item.id} carries a detached "Verifies …" sentence; weave each citation into the assertion it supports (meta-41)`,
+          `item ${item.id} carries a detached "Verifies …" sentence; weave each citation into the assertion it supports (meta-25)`,
         );
       }
     }
 
     // A Verification item cites every behavior it verifies inline
-    // (meta-20): at least one same-file behavior item anchor.
+    // (meta-28): at least one same-file behavior item anchor.
     if (item.section === "Verification") {
       let citesBehavior = false;
       for (const link of bodyLinks(item)) {
@@ -806,15 +817,16 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
           item.heading.line,
           "error",
           "verify/uncited",
-          `Verification item ${item.id} cites no same-file behavior item; cite each behavior it verifies inline at the assertion (meta-20)`,
+          `Verification item ${item.id} cites no same-file behavior item; cite each behavior it verifies inline at the assertion (meta-28)`,
         );
       }
     }
 
     // Peer citations resolve against the peer's sections: a
     // behavior item may rely on External Behavior alone (lint-7,
-    // meta-14), while a Verification item may also reach Internal
-    // Behavior its assertion materially needs (lint-13, meta-20).
+    // meta-19); a Verification item cites behavior items (meta-28),
+    // and the law is silent on it reaching a peer's Internal
+    // Behavior, so lint tolerates that reach (lint-13).
     const isBehavior =
       item.section !== null && BEHAVIOR_SECTIONS.has(item.section);
     const isVerification = item.section === "Verification";
@@ -838,7 +850,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
               link.line,
               "error",
               "cite/internal",
-              `item ${item.id} cites ${cited.id} in ${target.relPath}'s ${cited.section ?? "front matter"}; a peer behavior is relied on through External Behavior alone (meta-14)`,
+              `item ${item.id} cites ${cited.id} in ${target.relPath}'s ${cited.section ?? "front matter"}; a peer behavior is relied on through External Behavior alone (meta-19)`,
             );
           }
         } else if (target.fragment !== "") {
@@ -855,7 +867,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
               link.line,
               "error",
               "cite/internal",
-              `Verification item ${item.id} cites ${target.relPath}#${target.fragment} outside the peer's External and Internal Behavior items (meta-20)`,
+              `Verification item ${item.id} cites ${target.relPath}#${target.fragment} outside the peer's External and Internal Behavior items (meta-28)`,
             );
           }
         }
@@ -863,7 +875,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
     }
   }
 
-  // One governing statement per item (meta-29), sentence count as
+  // One governing statement per item (meta-12), sentence count as
   // its advisory proxy (lint-14) — a conformant item may carry
   // several sentences of one contract's cases, so this only
   // prompts a read: prose outside fenced blocks, lists, tables,
@@ -897,7 +909,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
         extraLine,
         "warning",
         "item/sentence",
-        `item ${item.id} carries more than one sentence; review it for a second governing statement (meta-29)`,
+        `item ${item.id} carries more than one sentence; review it for a second governing statement (meta-12)`,
       );
     }
   }
@@ -907,7 +919,7 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
   for (const file of ctx.files.values()) {
     if (!isUnder(file.relPath, "packages")) continue;
 
-    // A package Intent is self-contained prose (meta-15): no
+    // A package Intent is self-contained prose (meta-20): no
     // citation links, no reference markers (lint-13).
     const h2s = file.headings.filter(
       (heading) => heading.depth === 2 && heading.root,
@@ -930,7 +942,7 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
             link.line,
             "error",
             "intent/cited",
-            "the Intent section carries a citation; a package reads standalone (meta-15)",
+            "the Intent section carries a citation; a package reads standalone (meta-20)",
           );
         }
       }
@@ -942,13 +954,13 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
             use.line,
             "error",
             "intent/cited",
-            "the Intent section carries a reference marker; a package reads standalone (meta-15)",
+            "the Intent section carries a reference marker; a package reads standalone (meta-20)",
           );
         }
       }
     }
 
-    // Item statements are the single relationship source (meta-14):
+    // Item statements are the single relationship source (meta-19):
     // a peer-package link from section prose outside every item
     // body declares no dependency (lint-13). Intent links are
     // skipped here — they carry intent/cited already.
@@ -974,13 +986,13 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
         link.line,
         "error",
         "cite/prose",
-        "section prose cites a peer package; item statements are the single relationship source (meta-14)",
+        "section prose cites a peer package; item statements are the single relationship source (meta-19)",
       );
     }
 
     // Reference-style links dodge the citation rules, so package
-    // files use inline citations only (meta-16); literal [[N]]
-    // markers stay reserved for ## References (meta-19, lint-8).
+    // files use inline citations only (meta-25); literal [[N]]
+    // markers stay reserved for ## References (meta-27, lint-8).
     for (const reference of file.referenceLinks) {
       report(
         ctx,
@@ -988,7 +1000,7 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
         reference.line,
         "error",
         "cite/reference-style",
-        "reference-style links are not citations; use an inline link (meta-16)",
+        "reference-style links are not citations; use an inline link (meta-25)",
       );
     }
   }
@@ -1001,31 +1013,22 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
 function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
   const bySlug = itemsBySlug(items);
   for (const file of ctx.files.values()) {
-    // Textual IR references are citations too (meta-18): naming an
-    // IR is citing it. An intent record is exempt only for its own
-    // ID. Matched over parsed inline text, so inline code and code
-    // blocks cannot trip it (lint-10).
-    if (file.relPath !== "specs/map.md") {
-      const ownRecord =
-        isUnder(file.relPath, "intents") || isUnder(file.relPath, "iterations")
-          ? Number.parseInt(posix.basename(file.relPath), 10)
-          : null;
+    // Naming an IR in prose is citing it, and no DR or spec item
+    // does either (meta-26) — so the check binds decisions/,
+    // packages/, and meta.md alone; intent records and map.md sit
+    // outside the prohibition. Matched over parsed inline text, so
+    // inline code and code blocks cannot trip it (lint-10).
+    if (boundByIrProhibition(file.relPath)) {
       for (const span of file.texts) {
         for (const [offset, value] of span.value.split("\n").entries()) {
-          for (const match of value.matchAll(/\bIR-(\d+)\b/g)) {
-            if (
-              ownRecord !== null &&
-              Number.parseInt(match[1], 10) === ownRecord
-            ) {
-              continue;
-            }
+          for (const match of value.matchAll(/\bIR-\d+\b/g)) {
             report(
               ctx,
               file.relPath,
               span.line + offset,
               "error",
               "cite/intent",
-              "intent records are cited only from specs/map.md — naming an IR is citing it (meta-18)",
+              `no DR or spec item names an IR in prose (meta-26): ${match[0]}`,
             );
           }
         }
@@ -1089,7 +1092,7 @@ function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
       if (
         (resolved.startsWith("specs/intents/") ||
           resolved.startsWith("specs/iterations/")) &&
-        file.relPath !== "specs/map.md"
+        boundByIrProhibition(file.relPath)
       ) {
         report(
           ctx,
@@ -1097,7 +1100,7 @@ function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
           link.line,
           "error",
           "cite/intent",
-          `intent records are cited only from specs/map.md (meta-18)`,
+          `no DR or spec item cites an IR (meta-26)`,
         );
       }
 
@@ -1135,7 +1138,7 @@ function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
 /**
  * An item citation is an enclosed inline link whose link text is
  * the target item ID — `[[<pack>-<N>](<path>#<pack>-<N>)]`
- * (meta-16, meta-11, lint-8).
+ * (meta-25, meta-17, lint-8).
  */
 function lintItemCitationForm(
   ctx: LintContext,
@@ -1155,7 +1158,7 @@ function lintItemCitationForm(
       link.line,
       "error",
       "cite/item-link",
-      `citation of ${target.id} is not an enclosed inline link; write it as [[${target.id}](<path>#${target.heading.slug})] (meta-16)`,
+      `citation of ${target.id} is not an enclosed inline link; write it as [[${target.id}](<path>#${target.heading.slug})] (meta-25)`,
     );
   }
   if (link.text !== target.id) {
@@ -1165,19 +1168,19 @@ function lintItemCitationForm(
       link.line,
       "error",
       "cite/item-link",
-      `citation text "${link.text}" is not the target item ID ${target.id} (meta-11)`,
+      `citation text "${link.text}" is not the target item ID ${target.id} (meta-17)`,
     );
   }
 }
 
 // ---------------------------------------------------------------
-// Reference-marker rules (lint-9, meta-19)
+// Reference-marker rules (lint-9, meta-27)
 // ---------------------------------------------------------------
 
 function lintReferences(ctx: LintContext): void {
   for (const file of ctx.files.values()) {
     // The ## References ranges: numbered definitions live there and
-    // nowhere else, pointing outward (meta-19).
+    // nowhere else, pointing outward (meta-27).
     const h2s = file.headings.filter(
       (heading) => heading.depth === 2 && heading.root,
     );
@@ -1216,7 +1219,7 @@ function lintReferences(ctx: LintContext): void {
               line,
               "error",
               "refs/definition",
-              `numbered definition [${definition.identifier}] sits outside ## References (meta-19)`,
+              `numbered definition [${definition.identifier}] sits outside ## References (meta-27)`,
             );
           }
           if (
@@ -1229,7 +1232,7 @@ function lintReferences(ctx: LintContext): void {
               line,
               "error",
               "refs/definition",
-              `numbered definition [${definition.identifier}] targets "${definition.url}"; reference markers point at external URLs — item citations are inline links (meta-19, meta-16)`,
+              `numbered definition [${definition.identifier}] targets "${definition.url}"; reference markers point at external URLs — item citations are inline links (meta-27, meta-25)`,
             );
           }
         }
@@ -1254,7 +1257,7 @@ function lintReferences(ctx: LintContext): void {
             node.position?.start.line ?? 1,
             "error",
             "refs/undefined",
-            `reference marker [[${match[1]}]] has no definition in ## References (meta-19)`,
+            `reference marker [[${match[1]}]] has no definition in ## References (meta-27)`,
           );
         }
       }
@@ -1268,7 +1271,7 @@ function lintReferences(ctx: LintContext): void {
           definitionLines.get(identifier) ?? 1,
           "warning",
           "refs/unused",
-          `reference [${identifier}] is defined but never cited (meta-19)`,
+          `reference [${identifier}] is defined but never cited (meta-27)`,
         );
       }
     }
@@ -1280,7 +1283,7 @@ function lintReferences(ctx: LintContext): void {
 // ---------------------------------------------------------------
 
 function lintRecords(ctx: LintContext): void {
-  // A record's ID is its filename's leading number (meta-39), so
+  // A record's ID is its filename's leading number (meta-6), so
   // two differently named files on the same number are one ID —
   // decisions/ for DRs, intents/ with legacy iterations/ for IRs.
   const firstById = new Map<string, string>();
@@ -1303,7 +1306,7 @@ function lintRecords(ctx: LintContext): void {
           1,
           "error",
           "record/duplicate-id",
-          `record ID ${id} is already defined by ${first} (meta-39)`,
+          `record ID ${id} is already defined by ${first} (meta-6)`,
         );
       }
     }

@@ -7,7 +7,7 @@ Review Git diffs under @specs/ and perform a spec update merge:
 - Preserve every item ID and normative concern that appeared in a prior release; provisional IDs may be compacted before publication.
 - Classify behavior relative to each package: outcomes and guarantees the package's users may rely on belong in `## External Behavior`; implementation hidden from them belongs in `## Internal Behavior`.
 - Scope this merge to reconciling the template diff: do not restructure a legacy tree (a `user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, or `iterations/` directory) into @specs/packages/ yourself — structural migration of a legacy generation belongs to the `spec-structure-migration` skill (`skills/spec-structure-migration/` in the spex repo; guide: `docs/spec-migration.md`).
-- Convert every item citation to the enclosed ID-text form, e.g. `[[pack-3](pack.md#pack-3)]`, placed at the exact phrase that relies on, exercises, or checks the cited behavior.
+- Convert every item citation to the enclosed ID-text form, e.g. `[[pack-3](pack.md#pack-3)]`, written inline at the exact phrase that relies on the cited behavior.
 - Remove relationship-metadata lines (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`, `Scope:`) and detached `Verifies ...` sentences: weave each citation into the assertion it verifies, then delete the line.
 - Keep each package's `## Intent` a self-contained prose statement without citations, and check each file's title still fits.
 - Update @specs/map.md where the merge left its layout, tables, or summaries stale.

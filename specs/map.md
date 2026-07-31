@@ -11,8 +11,8 @@ Code can be inconsistent with specs during development.
 
 Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing a DR, IR, or item.
 
-- DRs and IRs: see [Organization](meta.md#organization), [Record format](meta.md#record-format), and [Citation](meta.md#citation).
-- Items: see [Organization](meta.md#organization), [Item syntax](meta.md#item-syntax), [Spec packages](meta.md#spec-packages), [Testing](meta.md#testing), and [Citation](meta.md#citation).
+- DRs and IRs: see [Overall](meta.md#overall), [Record format](meta.md#record-format), and [Citation](meta.md#citation).
+- Items: see [Overall](meta.md#overall), [Item syntax](meta.md#item-syntax), [Spec packages](meta.md#spec-packages), [Testing](meta.md#testing), and [Citation](meta.md#citation).
 
 ## Layout
 
@@ -86,6 +86,7 @@ meta.md       The spec of specs
 | IR-028 | [028-cli-release-acceptance.md](intents/028-cli-release-acceptance.md) | 1.0 CLI release gated on end-user smoke, live agent migration acceptance, regenerated READMEs |
 | IR-029 | [029-spec-view-alignment.md](intents/029-spec-view-alignment.md) | Desktop parser and spec view aligned with the 1.0 law: legacy compositions, citation-only rows |
 | IR-030 | [030-spec-view-reading-craft.md](intents/030-spec-view-reading-craft.md) | Three-lens reading-craft round: plain-prose digests, cross-file rollups, jump return, reachable meta.md |
+| IR-031 | [031-meta-law-1-0.md](intents/031-meta-law-1-0.md) | Owner-tightened meta law renumbered to document order (meta-1..29) and propagated repo-wide |
 
 ## Packages
 

@@ -14,8 +14,11 @@ packages/, map.md, meta.md). For each tree this reports:
   3. ALLCAPS item-ID residue outside code (record IDs DR-/IR- exempt)
   4. package files with unexpected sections or sections out of order
   5. DR/IR files missing required sections
-  6. behavior items citing a peer package's non-External item (meta-14)
-  7. citations of intent records outside map.md (meta-18)
+  6. behavior items citing a peer package's non-External item (meta-19);
+     Verification items are outside this check — the law is silent on a
+     test reaching peer Internal Behavior, so it is tolerated
+  7. IR references in DR or spec-item files — decisions/, packages/,
+     meta.md (meta-26); intent records and map.md are exempt
   8. leftover compositions/ directories
 
 Exit 0 when clean, 1 when any problem is found. The checker is a guardrail,
@@ -65,7 +68,9 @@ def strip_code(text):
 
 ITEM_ANCHOR = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*-\d+$")
 LINK = re.compile(r"\[([^\[\]]*)\]\(([^)\s]+)\)")
-ALLCAPS = re.compile(r"\b([A-Z][A-Z0-9]{1,})-(\d+)\b")
+# The (?!\.\d) guard keeps version-numbered names (GPT-5.6) from
+# reading as item-id residue.
+ALLCAPS = re.compile(r"\b([A-Z][A-Z0-9]{1,})-(\d+)(?!\.\d)\b")
 ALLCAPS_EXEMPT = {"DR", "IR", "SHA", "SA", "LICENSE", "UTF", "ISO", "RFC", "CC", "BY"}
 
 SECTION = re.compile(r"^## (.+)$")
@@ -124,16 +129,17 @@ def check_tree(root):
         rel = os.path.relpath(path, root)
         lines = strip_code(text)
         is_pkg = rel.startswith("packages" + os.sep) or rel == "meta.md"
-        is_map = os.path.basename(path) == "map.md"
-        is_ir = rel.startswith("intents" + os.sep)
+        # meta-26 binds DRs and spec items alone; intent records and
+        # map.md sit outside the prohibition.
+        names_no_ir = is_pkg or rel.startswith("decisions" + os.sep)
         cur_sec = None
         for i, ln in enumerate(lines, 1):
             msec = SECTION.match(ln)
             if msec:
                 cur_sec = msec.group(1).strip()
-            if not is_map and not is_ir:
+            if names_no_ir:
                 for m in re.finditer(r"\bIR-\d+\b", ln):
-                    report(root, path, i, f"IR citation outside map.md (meta-18): {m.group(0)}")
+                    report(root, path, i, f"IR reference in a DR or spec item (meta-26): {m.group(0)}")
             for m in LINK.finditer(ln):
                 txt, target = m.group(1), m.group(2)
                 if re.match(r"^[a-z]+:|^//", target):
@@ -167,7 +173,7 @@ def check_tree(root):
                             if cur_sec in BEHAVIOR and tsec and tsec not in EXTERNAL:
                                 report(root, path, i,
                                        f"behavior item cites peer non-External ({tsec}): "
-                                       f"{m.group(0)} (meta-14)")
+                                       f"{m.group(0)} (meta-19)")
             for m in ALLCAPS.finditer(ln):
                 if m.group(1) not in ALLCAPS_EXEMPT:
                     report(root, path, i, f"ALLCAPS item-id residue: {m.group(0)}")

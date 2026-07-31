@@ -77,7 +77,7 @@ Where files bundled under `scaffold/specs/` are concerned, each file shall be cl
   - `specs/packages/git.md`
   - `specs/packages/licensing.md`
 - When a new file is added under `scaffold/specs/`, it is assigned to exactly one of these classes.
-- The seeded tree carries the layout of [[meta-1](../meta.md#meta-1)] — `decisions/`, `intents/`, `packages/`, `map.md`, `meta.md` — with no `compositions/` directory, and the seeded packages carry the sections of [[meta-30](../meta.md#meta-30)] and lowercase `<pack>-<N>` item IDs [[meta-11](../meta.md#meta-11)].
+- The seeded tree carries the layout of [[meta-1](../meta.md#meta-1)] — `decisions/`, `intents/`, `packages/`, `map.md`, `meta.md` — with no `compositions/` directory, and the seeded packages carry the sections of [[meta-15](../meta.md#meta-15)] and lowercase `<pack>-<N>` item IDs [[meta-17](../meta.md#meta-17)].
 - Bundled support assets outside `scaffold/specs/` (for example, `scaffold/update-merge-prompt.md`, the file-history manifests, and `scaffold/LICENSE`) are not framework or seed files.
 - The bundled root `scaffold/LICENSE` is emitted to the target root by [[scaffold-36](#scaffold-36)] on initial scaffold rather than refreshed by `--update`, and it is not localized.
 - Localized overlay files under `scaffold/i18n/<lang>/` inherit the class of the target path they replace.

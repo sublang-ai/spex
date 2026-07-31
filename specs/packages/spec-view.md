@@ -27,7 +27,7 @@ When the spec view is opened for a project whose `specs/` tree has been read, th
 While a file node is displayed, the spec view shall present the package's header and expanded contents:
 
 - the header shows the package-identifier chip, the file's intent — truncated to one line only while the node is collapsed — and per-group item counts in the fixed group colors — external sky, internal fuchsia, test teal ([DR-015](../decisions/015-reference-content.md)) — where every count carries its group word and an aria-label, a zero count renders muted rather than absent, and color is never the only channel ([DR-010](../decisions/010-interface-craft.md) §7, §8);
-- expanded, the node shows the file's intent in full followed by its items in document order, with the file's `##` section values preserved as sub-headings wherever the section changes between consecutive items — never sorted by ID [[meta-12](../meta.md#meta-12)] — along with any file consistency notices;
+- expanded, the node shows the file's intent in full followed by its items in document order, with the file's `##` section values preserved as sub-headings wherever the section changes between consecutive items — never sorted by ID [[meta-18](../meta.md#meta-18)] — along with any file consistency notices;
 - expanded, the node offers a per-file control that expands or collapses every item body at once.
 
 ### Items
@@ -44,7 +44,7 @@ While an item row is displayed, the spec view shall render the row by its expans
 
 #### spec-view-19
 
-While an expanded item carries citations or is cited, the spec view shall present the item's relationships as plain inbound and outbound item citations — the citation being the only relationship between packages [[meta-14](../meta.md#meta-14)] — with no derived classes and no relationship metadata in the protocol:
+While an expanded item carries citations or is cited, the spec view shall present the item's relationships as plain inbound and outbound item citations — the citation being the only relationship between packages [[meta-19](../meta.md#meta-19)] — with no derived classes and no relationship metadata in the protocol:
 
 - outbound rows list the item's citations in document order, each entry named by the cited item ID;
 - inbound citations render as grouped backlink rows on the cited target, each entry named by the citing item ID;
@@ -126,17 +126,17 @@ Where the project's `specs/` tree uses a legacy layout — a `user/`, `dev/`, `t
 
 When `specs.get` names a known project, the core package shall parse the project's `specs/` tree within that request — no file watcher, no cache — and reply with the parsed tree carrying its wall-clock read time, so the view can show data freshness:
 
-- files are listed for the `packages/` collection [[meta-1](../meta.md#meta-1)], keyed by collection-relative path minus the extension, with collection subdirectories carried as navigation-only structure [[meta-34](../meta.md#meta-34)];
+- files are listed for the `packages/` collection [[meta-1](../meta.md#meta-1)], keyed by collection-relative path minus the extension, with collection subdirectories carried as navigation-only structure [[meta-21](../meta.md#meta-21)];
 - each file's items keep document order, never sorted by ID;
 - a tree containing a `user/`, `dev/`, `test/`, or `compositions/` directory is flagged legacy with no files parsed ([DR-015](../decisions/015-reference-content.md));
 - a project with no `specs/` directory yields a reply stating absence with empty lists rather than a failure.
 
 #### spec-view-11
 
-The core package shall take a file's package identifier from its basename [[meta-10](../meta.md#meta-10)], carrying a notice on the file naming each disagreement with it:
+The core package shall take a file's package identifier from its basename [[meta-16](../meta.md#meta-16)], carrying a notice on the file naming each disagreement with it:
 
 - a `# <pack>: <Title>` heading whose `<pack>` differs from the basename is a disagreement;
-- an item-ID prefix differing from the basename [[meta-11](../meta.md#meta-11)] is a disagreement.
+- an item-ID prefix differing from the basename [[meta-17](../meta.md#meta-17)] is a disagreement.
 
 #### spec-view-12
 
@@ -145,12 +145,12 @@ For each parsed item, the core package shall report the fields the view presents
 - the item's ID and its section-kind group — External Behavior external, Internal Behavior internal, Verification test — keeping the fixed three-group model ([DR-015](../decisions/015-reference-content.md));
 - its containing `##` section heading, and its nearest `###` topic heading for `####` items;
 - its full markdown body, and a one-line plain-prose digest of the body's first paragraph — enclosed citations dropped whole, plain links reduced to their text, inline-code backtick markers stripped with the content kept, and the punctuation gaps closed — cut at the first sentence end or line break;
-- its citations, extracted in order and without duplicates from the enclosed inline item citations [[meta-16](../meta.md#meta-16)] of the body;
-- for an item under a section outside the package grammar [[meta-30](../meta.md#meta-30)], the external group and a file notice naming the unexpected section.
+- its citations, extracted in order and without duplicates from the enclosed inline item citations [[meta-25](../meta.md#meta-25)] of the body;
+- for an item under a section outside the package grammar [[meta-15](../meta.md#meta-15)], the external group and a file notice naming the unexpected section.
 
 #### spec-view-13
 
-The core package shall return the first paragraph under `## Intent` [[meta-30](../meta.md#meta-30)] for every file that has one, on that file, together with the H1 title, so the view renders a file's summary without a second fetch.
+The core package shall return the first paragraph under `## Intent` [[meta-15](../meta.md#meta-15)] for every file that has one, on that file, together with the H1 title, so the view renders a file's summary without a second fetch.
 
 ### Records Parsing
 
@@ -160,7 +160,7 @@ The core package shall list `specs/decisions/*.md` as decision records and the u
 
 - a legacy file whose basename reappears under `intents/` is omitted, and both the shadowing and the directory coexistence are reported as tree notices;
 - differently named files sharing a leading number all list, with each duplicated record ID a tree notice;
-- each record carries an ID formed from the record kind and the filename's leading number [[meta-39](../meta.md#meta-39)] (e.g. `DR-011`), a title taken from the file's first `#` heading minus any leading `DR-nnn:`/`IR-nnn:` prefix, and a path relative to `specs/`.
+- each record carries an ID formed from the record kind and the filename's leading number [[meta-6](../meta.md#meta-6)] (e.g. `DR-011`), a title taken from the file's first `#` heading minus any leading `DR-nnn:`/`IR-nnn:` prefix, and a path relative to `specs/`.
 
 ### Degradation
 

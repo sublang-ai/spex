@@ -14,11 +14,11 @@ const I18N_ROOT = join(SCAFFOLD_ROOT, "i18n");
 const TRANSLATED_META_ITEMS = new Set([
   "meta-4",
   "meta-5",
-  "meta-6",
-  "meta-7",
-  "meta-19",
+  "meta-9",
+  "meta-10",
+  "meta-15",
   "meta-27",
-  "meta-30",
+  "meta-29",
 ]);
 
 function listOverlayLanguages(): string[] {

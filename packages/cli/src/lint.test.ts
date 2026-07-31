@@ -20,7 +20,7 @@ const META = `# meta: Spec Definition
 
 The spec of specs.
 
-## Organization
+## Overall
 
 ### meta-1
 
@@ -212,7 +212,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-4: duplicate record numbers, DRs and IRs each one kind.
-  it("errors on duplicate record numbers (meta-39)", () => {
+  it("errors on duplicate record numbers (meta-6)", () => {
     const findings = findingsFor({
       "specs/decisions/001-a.md": DR("001", "A"),
       "specs/decisions/001-b.md": DR("001", "B"),
@@ -226,7 +226,7 @@ describe("lintSpecs", () => {
     assert.ok(duplicates.some((f) => f.path === "specs/iterations/002-b.md"));
   });
 
-  // lint-5: package layout of meta-30.
+  // lint-5: package layout of meta-15.
   it("enforces package sections: presence, order, duplicates, unknown", () => {
     const missing = findingsFor({
       "specs/packages/a.md": "# a: A\n\n## Intent\n\nX.\n",
@@ -252,7 +252,7 @@ describe("lintSpecs", () => {
     assert.ok(rules(duplicate).includes("package/sections"));
   });
 
-  it("warns on a missing Verification section (meta-38)", () => {
+  it("warns on a missing Verification section (meta-24)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n",
@@ -302,7 +302,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-6: item-ID form, prefix, duplicates, and placement.
-  it("errors on an uppercase item heading (meta-11)", () => {
+  it("errors on an uppercase item heading (meta-17)", () => {
     const findings = findingsFor({
       "specs/packages/auth.md": CLEAN_AUTH.replace("### auth-1", "### AUTH-1"),
     });
@@ -353,7 +353,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-7: relationship metadata is prohibited.
-  it("errors on relationship-metadata lines (meta-14)", () => {
+  it("errors on relationship-metadata lines (meta-19)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\nVerifies: [a-1](#a-1)\n\nChecks it [[a-1](#a-1)].\n",
@@ -368,7 +368,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-7: a Verification item cites a same-file behavior item.
-  it("errors on an uncited Verification item (meta-20)", () => {
+  it("errors on an uncited Verification item (meta-28)", () => {
     const uncited = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nNo citation at all.\n",
@@ -430,7 +430,7 @@ describe("lintSpecs", () => {
 
   // lint-8: item citations are enclosed inline links whose text is
   // the target item ID.
-  it("errors on unenclosed or mislabeled item citations (meta-16)", () => {
+  it("errors on unenclosed or mislabeled item citations (meta-25)", () => {
     const unenclosed = findingsFor({
       "specs/packages/auth.md": CLEAN_AUTH.replace(
         "[[auth-1](#auth-1)]",
@@ -461,13 +461,15 @@ describe("lintSpecs", () => {
     // A non-item anchor is no item citation: any label works.
     const sectionLink = findingsFor({
       "specs/packages/a.md":
-        "# a: A\n\n## External Behavior\n\n### a-1\n\nX shall Y per [the layout](../meta.md#organization).\n\n## Intent\n\nX.\n",
+        "# a: A\n\n## External Behavior\n\n### a-1\n\nX shall Y per [the layout](../meta.md#overall).\n\n## Intent\n\nX.\n",
     });
     assert.ok(!rules(sectionLink).includes("cite/item-link"));
   });
 
-  // lint-8: intent records are cited from the map alone.
-  it("errors on IR references outside the map, linked and textual", () => {
+  // lint-8: no DR or spec item cites an IR or names it in prose
+  // (meta-26); intent records and the map sit outside the
+  // prohibition.
+  it("errors on IR references in DRs and spec items, never in IRs", () => {
     const linked = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y (see [the plan](../intents/001-b.md)).\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n",
@@ -487,15 +489,27 @@ describe("lintSpecs", () => {
     assert.ok(named, "expected a textual cite/intent finding");
     assert.equal(named.severity, "error");
 
-    // An intent record is exempt only for its own ID.
+    // A package file naming an IR in prose errors the same way.
+    const packageProse = findingsFor({
+      "specs/packages/a.md":
+        "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y as IR-015 planned.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n",
+    });
+    const inPackage = packageProse.find((f) => f.rule === "cite/intent");
+    assert.ok(inPackage, "expected a package cite/intent finding");
+    assert.equal(inPackage.severity, "error");
+
+    // An intent record naming a peer IR is outside the meta-26
+    // prohibition and lints clean.
     const crossRecord = findingsFor({
       "specs/intents/002-b.md": IR("002", "B").replace(
         "Ship.",
         "Build on the IR-001 groundwork.",
       ),
     });
-    const cross = crossRecord.filter((f) => f.rule === "cite/intent");
-    assert.equal(cross.length, 1, JSON.stringify(cross));
+    assert.ok(
+      !rules(crossRecord).includes("cite/intent"),
+      JSON.stringify(crossRecord),
+    );
 
     // The map cites intent records freely.
     const mapOnly = findingsFor({
@@ -560,7 +574,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-9: reference markers and their definitions.
-  it("checks reference markers per meta-19", () => {
+  it("checks reference markers per meta-27", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         '# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y per [[1]] and [[9]].\n\n## References\n\n[1]: https://one.example "One"\n[2]: https://two.example "Two"\n',
@@ -627,7 +641,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-13: citation discipline.
-  it("errors on citations and markers in a package Intent (meta-15)", () => {
+  it("errors on citations and markers in a package Intent (meta-20)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         '# a: A\n\n## Intent\n\nBuilt per [DR-001](../decisions/001-a.md) and [[1]].\n\n## External Behavior\n\n### a-1\n\nX shall Y per [[1]].\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n\n## References\n\n[1]: https://one.example "One"\n',
@@ -657,7 +671,7 @@ describe("lintSpecs", () => {
     assert.ok(!rules(nonPeer).includes("cite/prose"));
   });
 
-  it("errors on a detached Verifies sentence (meta-41)", () => {
+  it("errors on a detached Verifies sentence (meta-25)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nVerifies [a-1](#a-1).\n\nThe suite shall assert Y [[a-1](#a-1)].\n",
@@ -669,9 +683,10 @@ describe("lintSpecs", () => {
     assert.ok(!rules(findings).includes("verify/uncited"));
   });
 
-  // lint-13: a Verification item may reach a peer's Internal
-  // Behavior — and nothing else outside the peer's behavior items.
-  it("lets Verification cite peer Internal Behavior, nothing further", () => {
+  // lint-13: the law is silent on a Verification item reaching a
+  // peer's Internal Behavior, so lint tolerates the reach — and
+  // errors on anything outside the peer's behavior items.
+  it("tolerates Verification citing peer Internal Behavior, nothing further", () => {
     const internal = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)] flushes the log [[audit-2](audit.md#audit-2)].\n",
