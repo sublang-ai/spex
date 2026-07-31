@@ -111,7 +111,7 @@ When preparing a release tag, the developer/agent shall verify that the tarball 
 
 #### release-20
 
-When preparing a release tag, the developer/agent shall run the automated smoke suite (`npm run smoke`, with the desktop stage for app releases) and see it pass every stage: build, spec lint, unit and integration tests, and a core round-trip that seeds the bundled template, serves the built-in catalog and artifacts, and seeds and parses the example project.
+When preparing a release tag, the developer/agent shall run the automated smoke suite (`npm run smoke`, with the desktop stage for app releases) and see it pass every stage: build, spec lint, unit and integration tests, a core round-trip that seeds the bundled template, serves the built-in catalog and artifacts, and seeds and parses the example project, and an end-user CLI pass that packs the release tarball, installs it into an isolated prefix, and walks the published README's fresh-user and upgrading-user journeys through the installed `spex` bin.
 
 #### release-21
 
@@ -123,6 +123,14 @@ When preparing an app release tag, the developer/agent shall run the live deskto
 
 - a provider-side failure may be retried or waived with the reason recorded;
 - an app-side failure blocks the tag.
+
+#### release-24
+
+When preparing a CLI release tag, the developer/agent shall run the live migration smoke (`npm run smoke:migration`) — a real coding agent migrating the bundled previous-generation fixture to the current spec generation with the packed CLI and the spec-structure-migration skill ([DR-021](../decisions/021-skill-based-migration.md)) — and record its outcome with the tag:
+
+- the run gates on the skill checker clean, `spex lint` clean, every fixture item surviving under its new id, intent-record checkbox states preserved, and no `compositions/` directory remaining;
+- a provider-side failure may be retried or waived with the reason recorded;
+- a failure of the CLI, the skill, or the gates blocks the tag.
 
 ## Verification
 
