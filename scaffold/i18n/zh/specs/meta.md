@@ -22,11 +22,11 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `map.md` | spec index — start here for context search | - |
 | `meta.md` | the spec of specs | - |
 
-### meta-2
+### meta-23
 
 A spec in any form shall contain the minimal information, concisely expressed, to act on it or audit it, preferring bullets, tables, or (renderable) diagrams to prose.
 
-### meta-3
+### meta-25
 
 A spec file shall keep one sentence per line — with lists, tables, and diagrams exempt.
 
@@ -42,22 +42,22 @@ A spec file shall keep one sentence per line — with lists, tables, and diagram
 
 每个意图记录（IR）应包含以下章节：状态、意图、交付项（带复选框）、任务（编号且每项为一次提交大小）和验证。
 
-### meta-6
+### meta-22
 
 A record's ID shall join its kind prefix to its filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — with the leading number unique within each record kind.
 
-### meta-7
+### meta-24
 
 A DR shall record design decisions and constraints, not implementation details, sufficient to provide context for or to audit the corresponding spec items.
 
-### meta-8
+### meta-28
 
 An IR shall be disposable: it contains nothing a DR or a spec item should cover, and its deletion loses no design or behavior record.
 
 ## Item syntax
 
-<!-- spex-i18n-source: meta-9 sha256-986fd04d3fa25a84404a0518b711429637c296b1aaaff374f1695618344a8368 -->
-### meta-9
+<!-- spex-i18n-source: meta-6 sha256-c6c53324be46702a10d6ca65a71842222518a1a2e32b8ccd334e361b70fbab75 -->
+### meta-6
 
 每个规约条目应使用 GEARS 模式 [[1]]，其子句和标点遵循自然的中文习惯：
 
@@ -72,8 +72,8 @@ An IR shall be disposable: it contains nothing a DR or a spec item should cover,
 | 当/When | 触发事件——最多一个 | 当用户点击提交 |
 | 应/shall | 所要求的行为 | 表单应校验输入并标示每处违规 |
 
-<!-- spex-i18n-source: meta-10 sha256-685b4ef71b563b421f581846d8574d8f553b6b5cbdc261b8e8100739509e4352 -->
-### meta-10
+<!-- spex-i18n-source: meta-7 sha256-19317e57aa3b772b0baaa6fc119532ee806d70acb1c0b700403eb3d9e9ed7419 -->
+### meta-7
 
 给定测试用例可以用 Given-When-Then（GWT）表达，其规约条目应按以下方式将 GWT 映射到 GEARS [[1]]：
 
@@ -83,13 +83,13 @@ An IR shall be disposable: it contains nothing a DR or a spec item should cover,
 | When | 当/When |
 | Then | 应/shall |
 
-### meta-11
+### meta-8
 
-Each spec item shall be self-contained: every reliance on another item is an explicit citation [[meta-25](#meta-25)].
+Each spec item shall be self-contained: every reliance on another item is an explicit citation [[meta-16](#meta-16)].
 
-### meta-12
+### meta-29
 
-Each spec item shall be exactly one GEARS statement [[meta-9](#meta-9)], elaborated only by its attachments — such as a note, a list, a table, a (renderable) diagram, or an example.
+Each spec item shall be exactly one GEARS statement [[meta-6](#meta-6)], elaborated only by its attachments — such as a note, a list, a table, a (renderable) diagram, or an example.
 
 | Item kind | Example attachment |
 | --- | --- |
@@ -105,12 +105,12 @@ Each spec item shall be exactly one GEARS statement [[meta-9](#meta-9)], elabora
 
 A spec package shall define a closed set of subjects and their behaviors for a shared intent.
 
-### meta-14
+### meta-9
 
 A spec package shall be one item file under `specs/packages/` or its subdirectory.
 
-<!-- spex-i18n-source: meta-15 sha256-45ac40c1069696c87e7d6a0dd02f0ec46da2c37a94515b38b46fa188bcf0c7c1 -->
-### meta-15
+<!-- spex-i18n-source: meta-30 sha256-7a8f0909efcbffc412450f64f749f822d0412490e067a2310300f434a9162693 -->
+### meta-30
 
 每个包文件应只包含下列章节，并按此顺序排列：
 
@@ -119,25 +119,25 @@ A spec package shall be one item file under `specs/packages/` or its subdirector
 | `意图` | 必需 | 包内条目共享的意图 |
 | `外部行为` | 必需 | 包的使用者可以依赖的结果与保证 |
 | `内部行为` | 可选 | 对包的使用者隐藏的实现 |
-| `验证` | 除非无关，否则必需 [[meta-24](#meta-24)] | 仅限验证本包条目的测试条目 |
-| `参考资料` | 可选 | 外部来源 [[meta-27](#meta-27)] |
+| `验证` | 除非无关，否则必需 [[meta-33](#meta-33)] | 仅限验证本包条目的测试条目 |
+| `参考资料` | 可选 | 外部来源 [[meta-19](#meta-19)] |
 
 - 包的使用者是使用其契约的任何人或系统组件；外部与内部相对于包而言。
 - 主题小节与条目标题位于行为章节和验证章节内部。
 
-### meta-16
+### meta-10
 
 A spec package shall use a unique lowercase kebab-case basename \<pack\>.md, with \<pack\> serving as its package identifier.
 
-### meta-17
+### meta-11
 
 Each spec item shall use \<pack\>-\<N\> as its lowercase heading, anchor, and citation text:
 
-- \<pack\> is its containing package's identifier [[meta-16](#meta-16)];
+- \<pack\> is its containing package's identifier [[meta-10](#meta-10)];
 - \<N\> is a positive integer unique within that package;
-- a new item takes the lowest positive \<N\> neither assigned nor reserved by a public release [[meta-18](#meta-18)].
+- a new item takes the lowest positive \<N\> neither assigned nor reserved by a public release [[meta-12](#meta-12)].
 
-### meta-18
+### meta-12
 
 A publicly released item ID shall remain permanently bound to the concern its item names:
 
@@ -145,58 +145,58 @@ A publicly released item ID shall remain permanently bound to the concern its it
 - the item's content may evolve only with that concern preserved;
 - an unreleased ID can be reassigned.
 
-### meta-19
+### meta-14
 
-A citation shall be the only relationship between packages: any general phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-25](#meta-25)].
+A citation shall be the only relationship between packages: any general phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-16](#meta-16)].
 
 - An uncited phrase stays general as it is sufficient for code generation and audit.
 - One phrase may cite several packages if it composes their behaviors.
 
-### meta-20
+### meta-15
 
 A spec package shall stand alone: readable in full without following any link — a citation never carries its meaning.
 
-### meta-21
+### meta-31
 
-A subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-16](#meta-16)]; moving a file between collections changes relative citation paths but no item ID or anchor.
+A subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
 
 ## Testing
 
-### meta-22
+### meta-21
 
 Spec test items shall specify integration and system tests only: unit tests belong to the implementation, and no spec item specifies one.
 
-### meta-23
+### meta-32
 
-A test shall prefer executing the real behavior of a cited package [[meta-19](#meta-19)] to supplying a substitute for it.
+A test shall prefer executing the real behavior of a cited package [[meta-14](#meta-14)] to supplying a substitute for it.
 
-### meta-24
+### meta-33
 
 Each stated behavior shall be verified unless verification is irrelevant to it, white-box or black-box: External and Internal govern use, not verification.
 
 ## Citation
 
-### meta-25
+### meta-16
 
 A citation of a spec item shall be a relative link with an anchor, enclosed in square brackets (e.g., `[[meta-1](meta.md#meta-1)]`), written inline at the phrase that relies on it.
 
-### meta-26
+### meta-18
 
 No DR or spec item shall cite an IR or name it in prose.
 
-<!-- spex-i18n-source: meta-27 sha256-03d86b24ab6969eadd66ff2e311ac9139f14bdb7a63776dc83571bf29775eea4 -->
-### meta-27
+<!-- spex-i18n-source: meta-19 sha256-e6137c80fab048cd6d69bf5a9b202b27cc14d97f67f51bcf8a5e915514039aa2 -->
+### meta-19
 
 外部引用应通过带编号的标记（例如 `[[1]]`）引用权威来源（例如官方文档），标记指向 `参考资料` 章节中的具体 URL，且该章节不应包含未被引用的条目。
 
-### meta-28
+### meta-20
 
 A test item shall cite every behavior item it verifies, inline at the assertion that verifies the behavior.
 
 ## Authoring language
 
-<!-- spex-i18n-source: meta-29 sha256-a5515d7cc02f7b0c0ea6ac035f8e5e641d8764fca62560efa6af86972c9c5966 -->
-### meta-29
+<!-- spex-i18n-source: meta-27 sha256-31c8c10f1bcf6836b757e4b7cbe21be3854843c9cef548759a36e4c460fda5c1 -->
+### meta-27
 
 Authoring language: zh
 
