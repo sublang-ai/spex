@@ -32,24 +32,24 @@ const KNOWN_TOP_LEVEL = new Set([
   "meta.md",
 ]);
 
-/** `### <pack>-<N>` / `#### <pack>-<N>` item heading (meta-17) —
+/** `### <pack>-<N>` / `#### <pack>-<N>` item heading (meta-11) —
  * lowercase kebab-case, with the pre-DR-021 ALLCAPS form kept so
  * old-generation trees still parse, degraded to notices. */
 const ITEM_HEADING =
   /^(#{3,4})\s+((?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)-\d+)\s*$/;
-/** A bare item ID, as used in citation link text (meta-25, meta-28). */
+/** A bare item ID, as used in citation link text (meta-16, meta-20). */
 const ITEM_ID = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)-\d+$/;
 /** A link fragment that targets an item heading's anchor. */
 const ITEM_ANCHOR = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*-\d+$/;
-/** `# <pack>: <Title>` H1 (meta-16); the ALLCAPS short form kept so
+/** `# <pack>: <Title>` H1 (meta-10); the ALLCAPS short form kept so
  * old-generation trees still parse, degraded to notices. */
 const H1_IDENTIFIER = /^((?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)):\s*(.+)$/;
 const FENCE = /^\s*(?:```|~~~)/;
 /** Innermost inline link, so the enclosed citation form
- * `[[<id>](<path>#<id>)]` (meta-25) captures the bare id. */
+ * `[[<id>](<path>#<id>)]` (meta-16) captures the bare id. */
 const INLINE_LINK = /\[([^[\]]+)\]\(([^()\s]+)\)/g;
 
-/** Known `##` sections -> filter group (DR-015; meta-15).
+/** Known `##` sections -> filter group (DR-015; meta-30).
  * Localized scaffolds translate the section headings; the zh names
  * mirror the scaffold/linter vocabulary. */
 const SECTION_GROUPS: ReadonlyMap<string, SpecGroup> = new Map([
@@ -79,7 +79,7 @@ function stripAnchor(heading: string): string {
 }
 
 /** Empty file shell carrying identity fields derived from the key;
- * the basename is the package identifier (meta-16). */
+ * the basename is the package identifier (meta-10). */
 function fileShell(key: string): SpecFileInfo {
   const slash = key.lastIndexOf("/");
   return {
@@ -121,7 +121,7 @@ function extractCites(body: string[]): string[] {
 
 /** First sentence of the body, or the whole first non-empty line when
  * no sentence end is found before the line break. Raw markdown kept. */
-/** Enclosed citation `[[id](target)]` (meta-25), dropped whole from
+/** Enclosed citation `[[id](target)]` (meta-16), dropped whole from
  * digests — the citation is navigation, not prose, and a truncated
  * `[[…` leaks markup into the one-line row. */
 const DIGEST_CITE = /\[\[[^[\]]+\]\([^()\s]+\)\]/g;
@@ -264,7 +264,7 @@ export function parseSpecFileText(text: string, key: string): SpecFileInfo {
 
   if (intent !== undefined) file.intent = intent;
 
-  // The basename is the package identifier (meta-16); an H1
+  // The basename is the package identifier (meta-10); an H1
   // identifier or item-ID prefix disagreeing with it is noticed —
   // once per distinct prefix — never adopted (spec-view-11). An H1
   // without the `<pack>: <Title>` pattern is a plain title.
@@ -546,7 +546,7 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
   }
 
   // Walk the packages collection; subdirectories are navigation only
-  // (meta-21), so files stay flat, keyed by collection-relative path.
+  // (meta-31), so files stay flat, keyed by collection-relative path.
   const files = walkCollection(join(specsDir, "packages"), baseReal, notices)
     .sort((a, b) => (a.keyRel < b.keyRel ? -1 : a.keyRel > b.keyRel ? 1 : 0))
     .map((entry) => parseSpecFile(entry.abs, entry.keyRel));

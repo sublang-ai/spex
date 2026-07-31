@@ -33,7 +33,7 @@ Migrating a tree is judgment work — items reclassify between External and Inte
 
 4. **Let it loop until mechanically clean.**
    The agent alternates migrating with two gates until both pass clean:
-   - `python3 .claude/skills/spec-structure-migration/scripts/check_specs.py specs` — links, anchors, citation form, ID case, sections, meta-19 targeting;
+   - `python3 .claude/skills/spec-structure-migration/scripts/check_specs.py specs` — links, anchors, citation form, ID case, sections, meta-14 targeting;
    - `spex lint` — the CLI's rule set for the current generation.
 
 5. **Review the diff.**
@@ -49,5 +49,5 @@ Migrating a tree is judgment work — items reclassify between External and Inte
 
 ## If the repo has published releases
 
-Item IDs that appeared in a release are permanently bound to their concerns (`meta-18`).
+Item IDs that appeared in a release are permanently bound to their concerns (`meta-12`).
 The generation change renames every ID's spelling while preserving numbers and concerns; approve that rename explicitly before the agent rewrites a released tree, and keep the old→new map from the agent's hand-over summary with the release notes.

@@ -17,7 +17,7 @@ Work tree by tree; a tree is `specs/` or any directory laid out like it (`decisi
 - The law is the tree's `meta.md` and `decisions/000-spec-structure-format.md` (DR-000) **in their current-generation form** — read both fully before touching anything. If the tree's `meta.md` is still old-generation, refresh it first (`spex scaffold --update`, or sync from the current scaffold) so the law you follow is the law you migrate to.
 - Never edit `meta.md` or DR-000 beyond that refresh without explicit human approval.
 - Work on a branch with a clean working tree; commit in reviewable steps. Every change lands as an ordinary diff for the tree's owners to review.
-- If the project has published releases, item IDs that appeared in a release are permanently bound to their concerns (meta-18). The generation change renames every ID's *spelling*; confirm with a human that this rename is approved before rewriting a released tree.
+- If the project has published releases, item IDs that appeared in a release are permanently bound to their concerns (meta-12). The generation change renames every ID's *spelling*; confirm with a human that this rename is approved before rewriting a released tree.
 - Do not invent or drop behavior. Every stated behavior in the old tree must survive, restated under the new law; anything you cannot place, flag for the humans instead of deleting.
 
 ## The target law, in brief

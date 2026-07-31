@@ -286,7 +286,7 @@ export function citationSummary(
 // ---------------------------------------------------------------------------
 
 // Old-generation ALLCAPS ids and current-generation lowercase kebab
-// ids (meta-17) both jump; a served tree indexes one or the other.
+// ids (meta-11) both jump; a served tree indexes one or the other.
 const OLD_ITEM_ID = /^[A-Z][A-Z0-9]*-\d+$/;
 const NEW_ITEM_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*-\d+$/;
 const ITEM_ID_PATTERN = /^(?:[A-Z][A-Z0-9]*|[a-z0-9]+(?:-[a-z0-9]+)*)-\d+$/;

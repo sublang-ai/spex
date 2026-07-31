@@ -390,7 +390,7 @@ export interface SpecFileInfo {
   key: string;
   /** Collection subdirectory ("" at collection root) — navigation only. */
   dir: string;
-  /** The package identifier: the file's basename (meta-16). */
+  /** The package identifier: the file's basename (meta-10). */
   basename: string;
   /** Title from the `# <pack>: <Title>` heading, after the
    * identifier — or the whole H1 when it lacks that pattern. */

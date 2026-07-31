@@ -212,7 +212,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-4: duplicate record numbers, DRs and IRs each one kind.
-  it("errors on duplicate record numbers (meta-6)", () => {
+  it("errors on duplicate record numbers (meta-22)", () => {
     const findings = findingsFor({
       "specs/decisions/001-a.md": DR("001", "A"),
       "specs/decisions/001-b.md": DR("001", "B"),
@@ -226,7 +226,7 @@ describe("lintSpecs", () => {
     assert.ok(duplicates.some((f) => f.path === "specs/iterations/002-b.md"));
   });
 
-  // lint-5: package layout of meta-15.
+  // lint-5: package layout of meta-30.
   it("enforces package sections: presence, order, duplicates, unknown", () => {
     const missing = findingsFor({
       "specs/packages/a.md": "# a: A\n\n## Intent\n\nX.\n",
@@ -252,7 +252,7 @@ describe("lintSpecs", () => {
     assert.ok(rules(duplicate).includes("package/sections"));
   });
 
-  it("warns on a missing Verification section (meta-24)", () => {
+  it("warns on a missing Verification section (meta-33)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n",
@@ -302,7 +302,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-6: item-ID form, prefix, duplicates, and placement.
-  it("errors on an uppercase item heading (meta-17)", () => {
+  it("errors on an uppercase item heading (meta-11)", () => {
     const findings = findingsFor({
       "specs/packages/auth.md": CLEAN_AUTH.replace("### auth-1", "### AUTH-1"),
     });
@@ -353,7 +353,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-7: relationship metadata is prohibited.
-  it("errors on relationship-metadata lines (meta-19)", () => {
+  it("errors on relationship-metadata lines (meta-14)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\nVerifies: [a-1](#a-1)\n\nChecks it [[a-1](#a-1)].\n",
@@ -368,7 +368,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-7: a Verification item cites a same-file behavior item.
-  it("errors on an uncited Verification item (meta-28)", () => {
+  it("errors on an uncited Verification item (meta-20)", () => {
     const uncited = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nNo citation at all.\n",
@@ -430,7 +430,7 @@ describe("lintSpecs", () => {
 
   // lint-8: item citations are enclosed inline links whose text is
   // the target item ID.
-  it("errors on unenclosed or mislabeled item citations (meta-25)", () => {
+  it("errors on unenclosed or mislabeled item citations (meta-16)", () => {
     const unenclosed = findingsFor({
       "specs/packages/auth.md": CLEAN_AUTH.replace(
         "[[auth-1](#auth-1)]",
@@ -467,7 +467,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-8: no DR or spec item cites an IR or names it in prose
-  // (meta-26); intent records and the map sit outside the
+  // (meta-18); intent records and the map sit outside the
   // prohibition.
   it("errors on IR references in DRs and spec items, never in IRs", () => {
     const linked = findingsFor({
@@ -498,7 +498,7 @@ describe("lintSpecs", () => {
     assert.ok(inPackage, "expected a package cite/intent finding");
     assert.equal(inPackage.severity, "error");
 
-    // An intent record naming a peer IR is outside the meta-26
+    // An intent record naming a peer IR is outside the meta-18
     // prohibition and lints clean.
     const crossRecord = findingsFor({
       "specs/intents/002-b.md": IR("002", "B").replace(
@@ -574,7 +574,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-9: reference markers and their definitions.
-  it("checks reference markers per meta-27", () => {
+  it("checks reference markers per meta-19", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         '# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y per [[1]] and [[9]].\n\n## References\n\n[1]: https://one.example "One"\n[2]: https://two.example "Two"\n',
@@ -641,7 +641,7 @@ describe("lintSpecs", () => {
   });
 
   // lint-13: citation discipline.
-  it("errors on citations and markers in a package Intent (meta-20)", () => {
+  it("errors on citations and markers in a package Intent (meta-15)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         '# a: A\n\n## Intent\n\nBuilt per [DR-001](../decisions/001-a.md) and [[1]].\n\n## External Behavior\n\n### a-1\n\nX shall Y per [[1]].\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n\n## References\n\n[1]: https://one.example "One"\n',
@@ -671,7 +671,7 @@ describe("lintSpecs", () => {
     assert.ok(!rules(nonPeer).includes("cite/prose"));
   });
 
-  it("errors on a detached Verifies sentence (meta-25)", () => {
+  it("errors on a detached Verifies sentence (meta-16)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nVerifies [a-1](#a-1).\n\nThe suite shall assert Y [[a-1](#a-1)].\n",
