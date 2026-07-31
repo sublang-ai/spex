@@ -21,7 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 
-import { parseSpecTree, resolveSpecPath } from "./specs.js";
+import { parseSpecFileText, parseSpecTree, resolveSpecPath } from "./specs.js";
 import { CoreService } from "./service.js";
 import type { SpecFileInfo, SpecItemInfo, SpecTreeState } from "./protocol.js";
 
@@ -145,6 +145,26 @@ test("package file parses sections, items, and citations", () => {
   assert.deepEqual(item(auth, "auth-1").cites, ["auth-2", "meta-1"]);
   assert.deepEqual(item(auth, "auth-4").cites, ["auth-1", "auth-2"]);
   assert.deepEqual(item(auth, "auth-2").cites, []);
+});
+
+test("digests drop enclosed citations and unwrap plain links", () => {
+  const file = parseSpecFileText(
+    [
+      "# guard: Guard",
+      "",
+      "## External Behavior",
+      "",
+      "### guard-1",
+      "",
+      "Where the manager is designated admin-only [[role-3](../identity/role.md#role-3)], the manager shall hide [drafts](../catalog/course.md) from visitors.",
+      "",
+    ].join("\n"),
+    "guard",
+  );
+  assert.equal(
+    file.items[0].firstLine,
+    "Where the manager is designated admin-only, the manager shall hide drafts from visitors.",
+  );
 });
 
 test("a ### item between a topic and a #### item clears the topic", () => {

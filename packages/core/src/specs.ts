@@ -121,8 +121,20 @@ function extractCites(body: string[]): string[] {
 
 /** First sentence of the body, or the whole first non-empty line when
  * no sentence end is found before the line break. Raw markdown kept. */
+/** Enclosed citation `[[id](target)]` (meta-16), dropped whole from
+ * digests — the citation is navigation, not prose, and a truncated
+ * `[[…` leaks markup into the one-line row. */
+const DIGEST_CITE = /\[\[[^[\]]+\]\([^()\s]+\)\]/g;
+/** Plain inline link, kept as its text in digests. */
+const DIGEST_LINK = /\[([^[\]]+)\]\([^()\s]+\)/g;
+
 function firstSentence(body: string[]): string {
-  const firstText = body.find((line) => line.trim() !== "")?.trim() ?? "";
+  const firstText = (body.find((line) => line.trim() !== "") ?? "")
+    .replace(DIGEST_CITE, "")
+    .replace(DIGEST_LINK, "$1")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
   const sentence = /^(.*?[.!?])(?=\s|$)/.exec(firstText);
   return sentence ? sentence[1] : firstText;
 }
