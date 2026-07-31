@@ -1,6 +1,6 @@
 ---
 name: spec-structure-migration
-description: Migrate a Spex specs tree from a previous spec-structure generation (compositions directories, ALLCAPS short-form item IDs, single-bracket citations, Goal/Acceptance intent records) to the current generation defined by DR-000 and meta.md (packages-only layout, basename item IDs, enclosed citations, Status/Intent/Deliverables/Tasks/Verification records). Use when a repo's specs/ tree predates the current spec law — e.g. it has a specs/compositions/ directory, item headings like AUTH-3, or citations like [AUTH-3](auth.md#auth-3).
+description: Migrate a Spex specs tree from a previous spec-structure generation (spex 0.x — user/dev/test or compositions directories, ALLCAPS short-form item IDs, single-bracket citations, Goal/Acceptance intent records) to the current generation defined by DR-000 and meta.md (packages-only layout, basename item IDs, enclosed citations, Status/Intent/Deliverables/Tasks/Verification records). Use when a repo's specs/ tree predates the current spec law — e.g. it has a specs/compositions/ or specs/user/ directory, item headings like AUTH-3, or citations like [AUTH-3](auth.md#auth-3).
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
@@ -50,6 +50,13 @@ For each file already under `packages/`:
 - Enforce the section set and order; a package with only Internal Behavior moves its user-relied guarantees to External Behavior (External is required).
 - Restructure items violating one-statement-per-item: keep the governing GEARS statement, push extra sentences into attachment case lists. Split into a new item ID only when the sentences are genuinely distinct contracts — and then fix every inbound citation tree-wide.
 - Unwrap sentences; keep SPDX headers byte-identical.
+
+### Phase 1b — the oldest layout (spex ≤ 0.3): merge `user/`/`dev/`/`test/` into packages
+
+A tree may predate even the compositions generation: item files grouped under `specs/user/`, `specs/dev/`, and `specs/test/` (sometimes `specs/items/` or `specs/interactions/`), with `specs/iterations/` for records.
+Treat each package's files across those directories as the sources of one `packages/<basename>.md`: `user/` items are candidate External Behavior, `dev/` items candidate Internal Behavior, `test/` items Verification, then apply every Phase 1 rule to the merged file (IDs, citations, sections, one statement per item).
+`interactions/` files fold like compositions (Phase 2); `iterations/` records migrate like intents (Phase 3).
+The directory a rule lived in is a hint, not the law — classify each item by who relies on it, exactly as Phase 1 demands.
 
 ### Phase 2 — fold compositions into packages
 

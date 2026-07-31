@@ -19,6 +19,7 @@ The skill pairs those instructions with two deterministic aids:
 A tree scaffolded by any spex 0.x release is; the current generation ships with spex 1.0.
 Any of these means yes:
 
+- a `specs/user/`, `specs/dev/`, or `specs/test/` directory (the oldest layout, spex ≤ 0.3);
 - a `specs/compositions/` directory;
 - item headings like `### AUTH-3` (ALLCAPS short forms);
 - citations like `[AUTH-3](auth.md#auth-3)` (single brackets, no enclosure);
