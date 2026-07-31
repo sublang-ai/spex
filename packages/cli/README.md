@@ -113,8 +113,8 @@ The CLI detects but does not restructure a legacy tree:
 - Plain `spex scaffold` refuses a tree with a legacy directory — it writes nothing and points at `--update` — so two generations never entangle.
 - `spex lint` reports legacy directories as errors pointing the same way.
 
-The structural migration itself — items reclassify, compositions fold into packages, intents get rewritten — is judgment work done by an AI agent following the bundled **spec-structure-migration** skill, not by a script (the scripted migration of earlier releases is retired).
-Follow the walkthrough in [docs/spec-migration.md](docs/spec-migration.md), install the skill per [its README](skills/spec-structure-migration/README.md), and let the agent loop until its checker and `spex lint` — the mechanical gate — pass clean.
+The structural migration itself — items reclassify, compositions fold into packages, intents get rewritten — is judgment work done by an AI agent following the **spec-structure-migration** skill shipped in the spex repo, not by a script (the scripted migration of earlier releases is retired).
+Follow the walkthrough in [docs/spec-migration.md](https://github.com/sublang-ai/spex/blob/main/docs/spec-migration.md), install the skill per [its README](https://github.com/sublang-ai/spex/blob/main/skills/spec-structure-migration/README.md), and let the agent loop until its checker and `spex lint` — the mechanical gate — pass clean.
 
 ## Workflow
 

@@ -29,7 +29,7 @@
     "scaffold/"
   ],
   "scripts": {
-    "build": "tsc && node scripts/stage-scaffold.mjs",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc && node scripts/stage-scaffold.mjs",
     "prepublishOnly": "npm run build && npm test",
     "test": "node scripts/stage-scaffold.mjs && node scripts/run-tests.cjs",
     "test:integration": "node scripts/stage-scaffold.mjs && node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
