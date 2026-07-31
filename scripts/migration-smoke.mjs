@@ -309,7 +309,8 @@ const KICKOFF =
   "and `spex lint` until both are clean. This is a synthetic sample repo " +
   "with no published releases: the item-ID renames are pre-approved, so " +
   "do not stop to ask for confirmation; note judgment calls in your " +
-  "final summary instead.";
+  "final summary instead. Finish by committing every remaining change — " +
+  "a clean working tree with the migration in git history is part of done.";
 
 // Only what the migration needs: file edits (acceptEdits) plus the
 // specific commands the skill loops on. Everything runs inside the
