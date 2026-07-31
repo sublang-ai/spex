@@ -3,11 +3,12 @@
 
 // Per-project spec view (SPECV; DR-011 as amended by DR-015): a
 // read-only, left-rooted collapsible outline of the project's specs/
-// tree — Packages and Compositions branches → collection directories →
-// file nodes → items in document order under their section headings —
-// with group filters, filter-as-you-type search, citation jumps, and a
-// records reader. Pure props: the host wires specs.get / specs.read
-// and persists the lifted SpecViewState per project.
+// packages collection — collection directories → file nodes → items in
+// document order under their section headings — with group filters,
+// filter-as-you-type search, plain citation rows and backlinks
+// (SPECV-19), citation jumps, and a records reader. Pure props: the
+// host wires specs.get / specs.read and persists the lifted
+// SpecViewState per project.
 
 import {
   useCallback,
@@ -27,27 +28,21 @@ import type {
 
 import {
   ancestorKeys,
-  buildBranches,
+  buildCitationModel,
+  buildDirTree,
   buildItemIndex,
-  buildRelationModel,
-  collapsedHints,
+  citationSummary,
   fileCounts,
-  fileKey,
   initialSpecViewState,
   linkItemTargets,
   normalizeSpecViewState,
   recordForHref,
-  relationPhrase,
   relativeReadTime,
   searchDigest,
   treeCounts,
   visibleFileItems,
   GROUP_ORDER,
-  RELATION_LABEL,
-  type ClassifiedCites,
-  type InboundGroup,
-  type RelationKind,
-  type RelationModel,
+  type CitationModel,
   type SpecDirNode,
   type SpecGroup,
   type SpecViewState,
@@ -175,13 +170,10 @@ export function SpecView(props: SpecViewProps) {
   const [flashId, setFlashId] = useTransient(1200);
   const [now, setNow] = useState(() => Date.now());
 
-  const branches = useMemo(() => buildBranches(tree.files), [tree]);
+  const outlineRoot = useMemo(() => buildDirTree(tree.files), [tree]);
   const itemIndex = useMemo(() => buildItemIndex(tree.files), [tree]);
-  // Classified relationship edges, both directions (DR-016).
-  const relations = useMemo(
-    () => buildRelationModel(tree.files, itemIndex),
-    [tree, itemIndex],
-  );
+  // Backlinks and per-file citation rollups (SPECV-19).
+  const citations = useMemo(() => buildCitationModel(tree.files), [tree]);
   const totals = useMemo(() => treeCounts(tree.files), [tree]);
   const records = useMemo(
     () => [...tree.decisions, ...tree.intents],
@@ -299,7 +291,7 @@ export function SpecView(props: SpecViewProps) {
       setRevealed((current) => new Set(current).add(targetId));
     }
     setCollapsedDirs((current) => {
-      const keys = ancestorKeys(loc.kind, loc.dir);
+      const keys = ancestorKeys(loc.dir);
       if (!keys.some((key) => current.has(key))) return current;
       const next = new Set(current);
       for (const key of keys) next.delete(key);
@@ -353,14 +345,9 @@ export function SpecView(props: SpecViewProps) {
       jumpTo(`${itemId}:${target}`, target);
       return;
     }
-    // fileKey is `<kind>:<key>`; the citing file's specs-relative
-    // path anchors the href resolution.
-    const location = itemIndex.get(itemId);
-    const colon = location?.fileKey.indexOf(":") ?? -1;
-    const sourcePath =
-      location === undefined || colon === -1
-        ? ""
-        : `${location.fileKey.slice(0, colon)}/${location.fileKey.slice(colon + 1)}`;
+    // The citing file's specs/-relative path anchors the href
+    // resolution.
+    const sourcePath = itemIndex.get(itemId)?.sourcePath ?? "";
     const record = recordForHref(sourcePath, href, records);
     if (record) {
       openRecord(record);
@@ -370,7 +357,7 @@ export function SpecView(props: SpecViewProps) {
     // record gets the SPECV-6 "not found" note; jumpTo owns that
     // path. Record links are tried first because their label ("DR-011")
     // is citation-shaped too. The body: prefix keeps the note off
-    // the identically keyed relationship rows.
+    // the identically keyed citation rows.
     if (target) {
       jumpTo(`body:${itemId}:${target}`, target);
       return;
@@ -473,8 +460,8 @@ export function SpecView(props: SpecViewProps) {
         </h1>
         <p>
           This project has no <span className="font-mono">specs/</span>{" "}
-          directory yet — it holds the spec packages, compositions, and
-          decision records this view navigates.
+          directory yet — it holds the spec packages and the decision and
+          intent records this view navigates.
         </p>
         <p>Scaffold one in the project directory:</p>
         {copyCommand("npx @sublang/spex")}
@@ -503,8 +490,9 @@ export function SpecView(props: SpecViewProps) {
     );
   }
 
-  // The pre-DR-012 user/dev/test layout renders migration guidance
-  // instead of a tree (DR-015).
+  // A legacy layout — user/dev/test group directories or a
+  // compositions/ collection — renders migration guidance instead of
+  // a tree (SPECV-18).
   if (tree.legacy) {
     return (
       <div
@@ -512,14 +500,16 @@ export function SpecView(props: SpecViewProps) {
         data-testid="specs-legacy"
       >
         <h1 className="text-lg font-semibold text-neutral-700 dark:text-neutral-200">
-          This project uses the legacy specs layout
+          This project uses a legacy specs layout
         </h1>
         <p>
-          Its <span className="font-mono">specs/</span> tree still holds the
-          old <span className="font-mono">user/</span>,{" "}
+          Its <span className="font-mono">specs/</span> tree still holds
+          directories from an earlier layout — the{" "}
+          <span className="font-mono">user/</span>,{" "}
           <span className="font-mono">dev/</span>, and{" "}
-          <span className="font-mono">test/</span> group directories. Update
-          it to the packages layout to browse it here:
+          <span className="font-mono">test/</span> groups or a{" "}
+          <span className="font-mono">compositions/</span> collection.
+          Update it to the current packages layout to browse it here:
         </p>
         {copyCommand("npx @sublang/spex scaffold --update")}
       </div>
@@ -531,7 +521,7 @@ export function SpecView(props: SpecViewProps) {
   // -------------------------------------------------------------------------
 
   const renderFile = (file: SpecFileInfo): ReactNode => {
-    const key = fileKey(file);
+    const key = file.key;
     const expanded = isFileExpanded(key);
     const counts = fileCounts(file);
     const items = visibleFileItems(file, viewState, revealed);
@@ -539,11 +529,12 @@ export function SpecView(props: SpecViewProps) {
     const allIds = file.items.map((item) => item.id);
     const allExpanded =
       allIds.length > 0 && allIds.every((id) => expandedItems.has(id));
-    // Per-kind relationship rollup: the file's coupling before any
-    // item opens (DR-016) — words only, zero kinds omitted.
-    const rollup = (relations.rollups.get(key) ?? [])
-      .map((entry) => `${relationPhrase(entry.kind, entry.direction)} ${entry.count}`)
-      .join(" · ");
+    // Citation rollup: the file's inbound and outbound item citations
+    // before any item opens (SPECV-19); citation-free files carry none.
+    const fileCites = citations.rollups.get(key);
+    const rollup = fileCites
+      ? citationSummary(fileCites.out, fileCites.in)
+      : undefined;
 
     return (
       <li key={key} data-testid={`file-${key}`}>
@@ -565,12 +556,8 @@ export function SpecView(props: SpecViewProps) {
                 expanded ? "" : "-rotate-90"
               }`}
             />
-            {file.shortForm ? (
-              <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                {file.shortForm}
-              </span>
-            ) : null}
-            <span className="shrink-0 text-sm font-medium">
+            {/* The package identifier is the basename (META-10). */}
+            <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
               {file.basename}
             </span>
             {file.intent ? (
@@ -603,7 +590,7 @@ export function SpecView(props: SpecViewProps) {
             {rollup ? (
               <div
                 data-testid={`rollup-${key}`}
-                aria-label={`Relationships: ${rollup}`}
+                aria-label={`Citations: ${rollup}`}
                 className="text-[11px] text-neutral-400"
               >
                 {rollup}
@@ -639,7 +626,7 @@ export function SpecView(props: SpecViewProps) {
               expandedItems={expandedItems}
               filters={viewState.filters}
               revealed={revealed}
-              relations={relations}
+              citations={citations}
               copiedId={copiedId}
               flashId={flashId}
               notFoundKey={notFoundKey}
@@ -710,8 +697,7 @@ export function SpecView(props: SpecViewProps) {
         <h1 className="text-lg font-semibold">Specs</h1>
         <span className="text-xs text-neutral-400">
           {totals.packages} package{totals.packages === 1 ? "" : "s"} ·{" "}
-          {totals.compositions} composition
-          {totals.compositions === 1 ? "" : "s"} · {totals.items} items
+          {totals.items} items
         </span>
         <span className="ml-auto flex items-center gap-1.5">
           <button
@@ -791,7 +777,7 @@ export function SpecView(props: SpecViewProps) {
       ) : null}
 
       <ul className="flex flex-col">
-        {branches.map((branch) => renderDir(branch.root, branch.label))}
+        {tree.files.length > 0 ? renderDir(outlineRoot, outlineRoot.name) : null}
       </ul>
       {tree.files.length === 0 ? (
         <div className="text-sm text-neutral-400">
@@ -875,7 +861,7 @@ function FileItems({
   expandedItems,
   filters,
   revealed,
-  relations,
+  citations,
   copiedId,
   flashId,
   notFoundKey,
@@ -888,7 +874,7 @@ function FileItems({
   expandedItems: ReadonlySet<string>;
   filters: SpecViewState["filters"];
   revealed: ReadonlySet<string>;
-  relations: RelationModel;
+  citations: CitationModel;
   copiedId?: string;
   flashId?: string;
   notFoundKey?: string;
@@ -933,8 +919,7 @@ function FileItems({
         item={item}
         expanded={expandedItems.has(item.id)}
         despiteFilter={!filters[item.group] && revealed.has(item.id)}
-        outgoing={relations.outgoing.get(item.id)}
-        inbound={relations.inbound.get(item.id) ?? []}
+        inbound={citations.inbound.get(item.id) ?? []}
         copied={copiedId === item.id}
         flashed={flashId === item.id}
         notFoundKey={notFoundKey}
@@ -952,7 +937,6 @@ function ItemRow({
   item,
   expanded,
   despiteFilter,
-  outgoing,
   inbound,
   copied,
   flashed,
@@ -965,8 +949,8 @@ function ItemRow({
   item: SpecItemInfo;
   expanded: boolean;
   despiteFilter: boolean;
-  outgoing?: ClassifiedCites;
-  inbound: InboundGroup[];
+  /** Citing item IDs in encounter order (SPECV-19 backlinks). */
+  inbound: string[];
   copied: boolean;
   flashed: boolean;
   notFoundKey?: string;
@@ -976,15 +960,12 @@ function ItemRow({
   onBodyLinkClick: (itemId: string, event: ReactMouseEvent) => void;
 }) {
   const group = item.group;
-  // Outgoing rows carry the classified relationship kinds (DR-016);
-  // inbound backlink groups render collapsed by count and expand to
-  // jump links. Which inbound groups are open is cosmetic and local.
-  const rows = outgoing?.rows ?? [];
-  const [openInbound, setOpenInbound] = useState<ReadonlySet<RelationKind>>(
-    new Set(),
-  );
-  // Collapsed rows keep at most two kind-aware hints.
-  const hints = collapsedHints(outgoing, inbound);
+  // The outbound row lists the item's citations in document order;
+  // the backlink group renders collapsed by count and expands to jump
+  // links (SPECV-19). Whether it is open is cosmetic and local.
+  const [inboundOpen, setInboundOpen] = useState(false);
+  // Collapsed rows keep a muted citation-count hint (SPECV-3).
+  const hint = citationSummary(item.cites.length, inbound.length);
 
   const citation = (target: string) => {
     const linkKey = `${item.id}:${target}`;
@@ -1037,17 +1018,9 @@ function ItemRow({
           <span className="truncate" title={item.firstLine}>
             {item.firstLine}
           </span>
-          {hints.length > 0 ? (
+          {hint ? (
             <span className="shrink-0 text-[11px] text-neutral-400">
-              {hints.map((hint, index) => (
-                <span key={`${hint.kind}-${hint.direction}`}>
-                  {index > 0 ? " · " : ""}
-                  <span aria-hidden="true">
-                    {RELATION_LABEL[hint.kind].glyph}{" "}
-                  </span>
-                  {relationPhrase(hint.kind, hint.direction)} {hint.count}
-                </span>
-              ))}
+              {hint}
             </span>
           ) : null}
         </button>
@@ -1073,52 +1046,29 @@ function ItemRow({
               <span className="text-[11px] text-neutral-400">not found</span>
             </div>
           ) : null}
-          {rows.map((row) => (
+          {item.cites.length > 0 ? (
             <div
-              key={row.kind}
-              data-testid={`row-${item.id}-${row.kind}`}
+              data-testid={`cites-${item.id}`}
               className="flex flex-wrap items-center gap-1.5 text-xs"
             >
-              <span className="text-neutral-400">
-                <span aria-hidden="true">
-                  {RELATION_LABEL[row.kind].glyph}{" "}
-                </span>
-                {relationPhrase(row.kind, "out")}
-              </span>
-              {row.targets.map(citation)}
+              <span className="text-neutral-400">cites</span>
+              {item.cites.map(citation)}
             </div>
-          ))}
-          {inbound.map((backlinks) => {
-            const open = openInbound.has(backlinks.kind);
-            return (
-              <div
-                key={backlinks.kind}
-                className="flex flex-wrap items-center gap-1.5 text-xs"
+          ) : null}
+          {inbound.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <button
+                type="button"
+                data-testid={`inbound-${item.id}`}
+                aria-expanded={inboundOpen}
+                onClick={() => setInboundOpen((open) => !open)}
+                className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
               >
-                <button
-                  type="button"
-                  data-testid={`inbound-${item.id}-${backlinks.kind}`}
-                  aria-expanded={open}
-                  onClick={() =>
-                    setOpenInbound((current) => {
-                      const next = new Set(current);
-                      if (open) next.delete(backlinks.kind);
-                      else next.add(backlinks.kind);
-                      return next;
-                    })
-                  }
-                  className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
-                >
-                  <span aria-hidden="true">
-                    {RELATION_LABEL[backlinks.kind].glyph}{" "}
-                  </span>
-                  {relationPhrase(backlinks.kind, "in")}{" "}
-                  {backlinks.sources.length}
-                </button>
-                {open ? backlinks.sources.map(citation) : null}
-              </div>
-            );
-          })}
+                cited by {inbound.length}
+              </button>
+              {inboundOpen ? inbound.map(citation) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </li>
