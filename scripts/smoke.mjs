@@ -126,6 +126,10 @@ try {
   run("unit", "npm", ["test"]);
   run("integration", "npm", ["run", "test:integration", "-w", "packages/core"]);
   await coreRoundTrip();
+  // The end-user pass: pack the real tarball, install it into an
+  // isolated prefix, and walk the README journeys (fresh scaffold,
+  // lint, --lang, --update, legacy detection) via the spex bin.
+  run("cli-user", "node", ["scripts/cli-smoke.mjs"]);
   if (desktop) {
     // The ABI flip must never outlive the run: node-gyp cleans the
     // Node build before compiling for Electron, so even a failed
