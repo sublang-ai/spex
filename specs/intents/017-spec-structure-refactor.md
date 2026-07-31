@@ -15,7 +15,7 @@ Implement DR-012: one-file spec packages under `specs/packages/`, cross-package 
 
 - [x] CLI: package-layout migration (mdast-based merge, citation rewrite, map restructure, legacy file-history manifest, agent-file refresh on update, interactions prompt) per scaffold-39..[[scaffold-47](../packages/scaffold.md#scaffold-47)]
 - [x] CLI: `spex lint` per the lint package
-- [x] Templates: meta.md ([[meta-1](../meta.md#meta-1)], [[meta-14](../meta.md#meta-14)], [[meta-16](../meta.md#meta-16)], [[meta-28](../meta.md#meta-28)], [[meta-22](../meta.md#meta-22)] revised, [[meta-15](../meta.md#meta-15)] added), DR-000, map.md, packages/git.md, packages/licensing.md, interactions/.gitkeep, agent-specs.txt, both prompts, zh overlays, manifests
+- [x] Templates: meta.md ([[meta-1](../meta.md#meta-1)], [[meta-9](../meta.md#meta-9)], [[meta-10](../meta.md#meta-10)], [[meta-20](../meta.md#meta-20)], [[meta-21](../meta.md#meta-21)] revised, [[meta-30](../meta.md#meta-30)] added), DR-000, map.md, packages/git.md, packages/licensing.md, interactions/.gitkeep, agent-specs.txt, both prompts, zh overlays, manifests
 - [x] Tests: merge/rewrite/restructure/lint units, migration state matrix, chained items→flat→packages, zh, packaging, repo-specs lint gate
 - [x] Repo migration: `spex scaffold --update` run over this repo; intents reconciled; scaffold rewritten for the new behavior; lint package added; interactions seeded (desktop-session, shared-config-roundtrip, forge-work-lists); DR-012; map.md
 - [x] Deferred here: adapt the desktop app to the new layout — `specs.get` parser in `packages/core`, protocol group triple, spec-view package (tree, filters, counts), DR-011 amendments. Landed with the later reference-content round, which realized the packages-layout spec view.

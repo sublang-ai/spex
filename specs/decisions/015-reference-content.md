@@ -48,7 +48,7 @@ Accepted; the vendored built-in sources are amended by [DR-019](019-inline-agent
 - `specs.get` parses the [DR-012](012-spec-package-files.md) layout: `packages/**` and `compositions/**` (collection directories are navigation only), `decisions/`, `intents/`, `map.md`, `meta.md`.
 - A file's short form comes from its `# <SHORT>: <Title>` heading, falling back to the majority item prefix.
 - The three filter groups become section kinds, keeping the [DR-011](011-project-workspace.md) three-toggle model and hues: external (sky: External Behavior and Scenario items), internal (fuchsia: Internal Behavior and Binding items), test (teal: Verification and Tests items).
-- Citations are read from inline links only; `Verifies:` metadata lines are gone per [[meta-28](../meta.md#meta-28)].
+- Citations are read from inline links only; `Verifies:` metadata lines are gone per [[meta-20](../meta.md#meta-20)].
 - The legacy layout is detected and reported as an explicit tree state; the view renders a migration notice naming `npx @sublang/spex scaffold --update` instead of a package tree.
 - The protocol version bumps with the tree-shape change; core and UI move together.
 

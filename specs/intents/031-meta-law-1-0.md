@@ -10,11 +10,11 @@ Done
 ## Intent
 
 The owner tightened the spec law before its first release: clearer citation vocabulary, an IR-reference rule scoped to DRs and spec items, the test-to-Internal citation allowance withdrawn to silence, and three items folded away.
-With no lowercase `meta-<N>` ever published to npm, every surviving item renumbers to its document position — `meta-1` through `meta-29` — and the whole repository follows the law.
+Numbers published in any 0.x npm release stay pinned regardless of the ALLCAPS-to-lowercase spelling change — released `META-<N>` reserves `meta-<N>` — so twenty-two items keep their numbers, the seven post-0.3.0 items renumber into the free slots (22, 28–33) in document order, and 2, 3, 17, and 26 remain reserved gaps.
 
 ## Deliverables
 
-- [x] `scaffold/specs/meta.md` and `specs/meta.md` carry the reviewed, renumbered law (29 items, document order)
+- [x] `scaffold/specs/meta.md` and `specs/meta.md` carry the reviewed law: released numbers pinned, unreleased items renumbered in document order (29 items)
 - [x] The zh overlay mirrors the edits with recomputed source pins; the scaffold file-history working entries rewritten in place
 - [x] Every meta citation retargeted across scaffold, repo specs, demo, docs, and the migration skill; citations of the three deleted items dropped with prose kept truthful
 - [x] `spex lint` and the skill checker rescope the IR-reference rule to DR and spec-item files, with intent records naming IRs now clean

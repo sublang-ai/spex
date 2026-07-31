@@ -13,7 +13,7 @@ Apply [DR-017](../decisions/017-intent-records.md): rename iteration records to 
 
 ## Deliverables
 
-- [x] DR-017 recorded; [[meta-8](../meta.md#meta-8)] and [[git-5](../packages/git.md#git-5)] added ([[meta-1](../meta.md#meta-1)]/[[meta-5](../meta.md#meta-5)] rename lands with the tree migration)
+- [x] DR-017 recorded; [[meta-28](../meta.md#meta-28)] and [[git-5](../packages/git.md#git-5)] added ([[meta-1](../meta.md#meta-1)]/[[meta-5](../meta.md#meta-5)] rename lands with the tree migration)
 - [x] Scaffold templates (en and zh) seed `specs/intents/` and describe intent records
 - [x] `spex scaffold --update` migrates `specs/iterations/` to `specs/intents/`: files, citations, and map entries
 - [x] `spex lint` guards the intents layout with legacy tolerance
@@ -22,7 +22,7 @@ Apply [DR-017](../decisions/017-intent-records.md): rename iteration records to 
 
 ## Tasks
 
-1. Record DR-017 and this IR; add [[meta-8](../meta.md#meta-8)] and [[git-5](../packages/git.md#git-5)]; index in `map.md`
+1. Record DR-017 and this IR; add [[meta-28](../meta.md#meta-28)] and [[git-5](../packages/git.md#git-5)]; index in `map.md`
 2. Rename scaffold templates and seeding, extend lint, and add the `--update` migration step (CLI)
 3. Rename the records protocol field and spec-view copy (core and UI)
 4. Migrate this tree and `demo/`, updating framework wording and citations

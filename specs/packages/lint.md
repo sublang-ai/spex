@@ -41,16 +41,16 @@ Where the specs tree is linted, structural rules shall report:
 - a warning for any other unexpected top-level entry under `specs/` [[meta-1](../meta.md#meta-1)];
 - a warning when a legacy `specs/iterations/` directory coexists with `specs/intents/` ([DR-017](../decisions/017-intent-records.md));
 - an error for a `packages/` file or directory segment that is not kebab-case, and for a `decisions/`, `intents/`, or legacy `iterations/` file not named `<NNN>-<kebab-case>.md` [[meta-1](../meta.md#meta-1)];
-- an error when two record files of one kind carry the same leading number — `decisions/` for DRs, `intents/` together with legacy `iterations/` for IRs — since the leading number is the record ID [[meta-6](../meta.md#meta-6)].
+- an error when two record files of one kind carry the same leading number — `decisions/` for DRs, `intents/` together with legacy `iterations/` for IRs — since the leading number is the record ID [[meta-22](../meta.md#meta-22)].
 
 #### lint-5
 
-Where a file under `specs/packages/` is linted, the linter shall report each breach of the package layout of [[meta-15](../meta.md#meta-15)]:
+Where a file under `specs/packages/` is linted, the linter shall report each breach of the package layout of [[meta-30](../meta.md#meta-30)]:
 
-- an error for a missing or malformed `# <pack>: <Title>` heading, or an H1 whose `<pack>` is not the file's basename [[meta-16](../meta.md#meta-16)];
+- an error for a missing or malformed `# <pack>: <Title>` heading, or an H1 whose `<pack>` is not the file's basename [[meta-10](../meta.md#meta-10)];
 - an error for a missing `## Intent` or `## External Behavior`;
 - an error for an unexpected or duplicate `##` section, or sections out of the order Intent, External Behavior, Internal Behavior, Verification, References;
-- a warning for a missing `## Verification` — verification is required unless irrelevant [[meta-24](../meta.md#meta-24)].
+- a warning for a missing `## Verification` — verification is required unless irrelevant [[meta-33](../meta.md#meta-33)].
 
 - The localized section names of the bundled templates are accepted.
 - `specs/meta.md` and `specs/map.md` are exempt from these package-file rules.
@@ -59,27 +59,27 @@ Where a file under `specs/packages/` is linted, the linter shall report each bre
 
 Where item-ID headings are linted across `specs/packages/` and `specs/meta.md`, the linter shall report:
 
-- an error for an item heading not of the lowercase `<pack>-<N>` form [[meta-17](../meta.md#meta-17)];
-- an error for an item whose prefix differs from its file's basename [[meta-17](../meta.md#meta-17)];
-- an error for an item ID defined more than once across `specs/`, and for a package basename used by more than one file [[meta-16](../meta.md#meta-16)];
-- a warning for an item sitting inside an `Intent` or `References` section of a package file [[meta-15](../meta.md#meta-15)].
+- an error for an item heading not of the lowercase `<pack>-<N>` form [[meta-11](../meta.md#meta-11)];
+- an error for an item whose prefix differs from its file's basename [[meta-11](../meta.md#meta-11)];
+- an error for an item ID defined more than once across `specs/`, and for a package basename used by more than one file [[meta-10](../meta.md#meta-10)];
+- a warning for an item sitting inside an `Intent` or `References` section of a package file [[meta-30](../meta.md#meta-30)].
 
 #### lint-7
 
-Where item relationships are linted, the citations in an item's statement shall be the single relationship source [[meta-19](../meta.md#meta-19)]:
+Where item relationships are linted, the citations in an item's statement shall be the single relationship source [[meta-14](../meta.md#meta-14)]:
 
 - a relationship-metadata line (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`, `Scope:`, `Requires:`, or `Uses:` at the start of a line inside an item) shall be an error;
-- a `## Verification` item citing no same-file behavior item anchor shall be an error [[meta-28](../meta.md#meta-28)];
-- a behavior item citation resolving to a peer package item outside that peer's `## External Behavior` section shall be an error [[meta-19](../meta.md#meta-19)].
+- a `## Verification` item citing no same-file behavior item anchor shall be an error [[meta-20](../meta.md#meta-20)];
+- a behavior item citation resolving to a peer package item outside that peer's `## External Behavior` section shall be an error [[meta-14](../meta.md#meta-14)].
 
 #### lint-8
 
 Where citations are linted, the linter shall report:
 
 - an error for a relative link whose target file does not exist, a link into the legacy layout (including `specs/compositions/`), and a fragment that matches no heading anchor of the target file (GitHub anchor semantics);
-- an error for a link into `specs/intents/` — or the legacy `specs/iterations/` — from a DR file or a spec-item file (`specs/decisions/`, `specs/packages/`, `specs/meta.md`) [[meta-26](../meta.md#meta-26)]; a textual `IR-<n>` reference in such a file is likewise an error — naming an IR is citing it — while every other file, including intent records and the map, sits outside the prohibition;
-- an error for an item citation not written as an enclosed inline link — the relative link wrapped in an outer bracket pair, e.g. `[[<pack>-<N>](<path>#<pack>-<N>)]` — or whose link text is not the target item ID [[meta-25](../meta.md#meta-25)] [[meta-17](../meta.md#meta-17)];
-- an error for a reference-style link in a `packages/` file unless it is a literal `[[N]]` reference marker — a numeric shortcut reference wrapped in the outer brackets [[meta-27](../meta.md#meta-27)]; a bare `[N]`, a collapsed `[N][]`, and a full-form reference are errors even with numeric labels, since item citations are inline links [[meta-25](../meta.md#meta-25)];
+- an error for a link into `specs/intents/` — or the legacy `specs/iterations/` — from a DR file or a spec-item file (`specs/decisions/`, `specs/packages/`, `specs/meta.md`) [[meta-18](../meta.md#meta-18)]; a textual `IR-<n>` reference in such a file is likewise an error — naming an IR is citing it — while every other file, including intent records and the map, sits outside the prohibition;
+- an error for an item citation not written as an enclosed inline link — the relative link wrapped in an outer bracket pair, e.g. `[[<pack>-<N>](<path>#<pack>-<N>)]` — or whose link text is not the target item ID [[meta-16](../meta.md#meta-16)] [[meta-11](../meta.md#meta-11)];
+- an error for a reference-style link in a `packages/` file unless it is a literal `[[N]]` reference marker — a numeric shortcut reference wrapped in the outer brackets [[meta-19](../meta.md#meta-19)]; a bare `[N]`, a collapsed `[N][]`, and a full-form reference are errors even with numeric labels, since item citations are inline links [[meta-16](../meta.md#meta-16)];
 - a warning for duplicate heading anchors within one file — item IDs ending in `-<N>` are not misdetected as duplicates of their base heading.
 
 Scheme, protocol-relative, and absolute URLs are not checked.
@@ -88,14 +88,14 @@ Scheme, protocol-relative, and absolute URLs are not checked.
 
 Where reference markers, records, and the map are linted, the linter shall report:
 
-- an error for a `[[N]]` marker without a matching numbered definition, and a warning for a numbered definition that is never cited [[meta-27](../meta.md#meta-27)];
-- an error for a numbered definition sitting outside `## References` or targeting a spec file — the marker mechanism cannot smuggle an item citation [[meta-27](../meta.md#meta-27)];
+- an error for a `[[N]]` marker without a matching numbered definition, and a warning for a numbered definition that is never cited [[meta-19](../meta.md#meta-19)];
+- an error for a numbered definition sitting outside `## References` or targeting a spec file — the marker mechanism cannot smuggle an item citation [[meta-19](../meta.md#meta-19)];
 - a warning for a DR missing a section of [[meta-4](../meta.md#meta-4)] or an IR missing a section of [[meta-5](../meta.md#meta-5)];
 - a warning for a `packages/` file not linked from `specs/map.md`.
 
 #### lint-14
 
-Where an item is linted, prose outside fenced blocks, lists, tables, blockquotes, and headings carrying more than one sentence shall be an advisory warning to review the item for a second governing statement [[meta-12](../meta.md#meta-12)].
+Where an item is linted, prose outside fenced blocks, lists, tables, blockquotes, and headings carrying more than one sentence shall be an advisory warning to review the item for a second governing statement [[meta-29](../meta.md#meta-29)].
 
 - An ASCII terminator counts only before whitespace or line end, the fullwidth `。`/`！`/`？` count anywhere, and `e.g.`/`i.e.` never end a sentence.
 - Sentence count neither defines nor decides conformance: an item stating one contract's cases and outcomes may run to several sentences and still conform, while a second contract can hide inside one.
@@ -106,9 +106,9 @@ Where an item is linted, prose outside fenced blocks, lists, tables, blockquotes
 Where citation discipline is linted, the linter shall report:
 
 - an error for an item body line that is a detached relationship sentence — `Verifies` followed by citations and separators only — pointing at weaving each citation into the assertion it supports, so a mechanically migrated tree cannot pass the gate unreconciled;
-- an error for a citation link or reference marker inside a package file's `## Intent` section — a package reads standalone [[meta-20](../meta.md#meta-20)];
+- an error for a citation link or reference marker inside a package file's `## Intent` section — a package reads standalone [[meta-15](../meta.md#meta-15)];
 - an error for a `## Verification` item citation resolving to a peer package anchor outside that peer's `## External Behavior` and `## Internal Behavior` items — a test citation lands on a behavior item, while behavior items are held to External Behavior alone [[lint-7](#lint-7)];
-- an error for a link in a package file resolving to a peer package file from section prose outside every item body — item statements are the single relationship source [[meta-19](../meta.md#meta-19)], so free prose declares no dependency.
+- an error for a link in a package file resolving to a peer package file from section prose outside every item body — item statements are the single relationship source [[meta-14](../meta.md#meta-14)], so free prose declares no dependency.
 
 ## Internal Behavior
 
