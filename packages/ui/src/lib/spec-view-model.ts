@@ -212,23 +212,37 @@ export function buildItemIndex(
   return index;
 }
 
+/** Group of an indexed item, for citation-entry rendering; undefined
+ * for a dead target so the caller renders the entry unclassified. */
+export function groupOf(
+  index: Map<string, ItemLocation>,
+  id: string,
+): SpecGroup | undefined {
+  return index.get(id)?.group;
+}
+
 export interface CitationModel {
-  /** Cited item ID → citing item IDs in encounter order; the citing
-   * side is already de-duplicated per item by the parse. */
+  /** Cited item ID → citing item IDs in encounter order — complete,
+   * intra-file citers included; the citing side is already
+   * de-duplicated per item by the parse. */
   inbound: Map<string, string[]>;
-  /** File key → outbound/inbound citation totals over the file's
-   * items — dead outbound targets count (the citation exists), while
-   * inbound sums only over items the file actually has. Files with
-   * neither direction are absent. */
+  /** File key → cross-file citation totals: only citations whose
+   * source and target items live in different files count, so
+   * intra-file wiring never inflates a file row. A dead outbound
+   * target still counts out (the citation exists); inbound accrues
+   * only to items the file actually has. Files with neither
+   * direction are absent. */
   rollups: Map<string, { out: number; in: number }>;
 }
 
-/** Index every citation in the tree: backlinks on the cited target
- * and per-file rollups (SPECV-19). */
+/** Index every citation in the tree: complete backlinks on the cited
+ * target, cross-file-only totals on the per-file rollups (SPECV-19). */
 export function buildCitationModel(files: SpecFileInfo[]): CitationModel {
+  const fileOf = new Map<string, string>();
   const inbound = new Map<string, string[]>();
   for (const file of files) {
     for (const item of file.items) {
+      fileOf.set(item.id, file.key);
       for (const target of item.cites) {
         const list = inbound.get(target);
         if (list) list.push(item.id);
@@ -241,8 +255,13 @@ export function buildCitationModel(files: SpecFileInfo[]): CitationModel {
     let out = 0;
     let inn = 0;
     for (const item of file.items) {
-      out += item.cites.length;
-      inn += inbound.get(item.id)?.length ?? 0;
+      for (const target of item.cites) {
+        // A dead target has no file, so the mismatch counts it out.
+        if (fileOf.get(target) !== file.key) out += 1;
+      }
+      for (const citer of inbound.get(item.id) ?? []) {
+        if (fileOf.get(citer) !== file.key) inn += 1;
+      }
     }
     if (out > 0 || inn > 0) rollups.set(file.key, { out, in: inn });
   }

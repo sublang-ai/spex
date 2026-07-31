@@ -588,6 +588,7 @@ function WorkspaceSurface({
         startView
       ) : tab === "specs" ? (
         <SpecView
+          key={project.id}
           tree={specTrees[project.id]}
           loading={!specTrees[project.id] && !specErrors[project.id]}
           error={specErrors[project.id]}

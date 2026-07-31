@@ -26,8 +26,8 @@ When the spec view is opened for a project whose `specs/` tree has been read, th
 
 While a file node is displayed, the spec view shall present the package's header and expanded contents:
 
-- the header shows the package-identifier chip, the file's intent one-liner, and per-group item counts in the fixed group colors — external sky, internal fuchsia, test teal ([DR-015](../decisions/015-reference-content.md)) — where every count carries its group word and an aria-label, a zero count renders muted rather than absent, and color is never the only channel ([DR-010](../decisions/010-interface-craft.md) §7, §8);
-- expanded, the node shows the file's intent line followed by its items in document order, with the file's `##` section values preserved as sub-headings wherever the section changes between consecutive items — never sorted by ID [[meta-12](../meta.md#meta-12)] — along with any file consistency notices;
+- the header shows the package-identifier chip, the file's intent — truncated to one line only while the node is collapsed — and per-group item counts in the fixed group colors — external sky, internal fuchsia, test teal ([DR-015](../decisions/015-reference-content.md)) — where every count carries its group word and an aria-label, a zero count renders muted rather than absent, and color is never the only channel ([DR-010](../decisions/010-interface-craft.md) §7, §8);
+- expanded, the node shows the file's intent in full followed by its items in document order, with the file's `##` section values preserved as sub-headings wherever the section changes between consecutive items — never sorted by ID [[meta-12](../meta.md#meta-12)] — along with any file consistency notices;
 - expanded, the node offers a per-file control that expands or collapses every item body at once.
 
 ### Items
@@ -48,7 +48,7 @@ While an expanded item carries citations or is cited, the spec view shall presen
 
 - outbound rows list the item's citations in document order, each entry named by the cited item ID;
 - inbound citations render as grouped backlink rows on the cited target, each entry named by the citing item ID;
-- an expanded file node's header carries a rollup counting the file's inbound and outbound item citations;
+- every file node, collapsed included, carries a rollup counting the file's inbound and outbound cross-file item citations — those whose source and target items live in different files, with an outbound citation of an ID absent from the tree counting as cross-file — while item rows and backlink groups keep every citation regardless of file;
 - a record link in an item body stays a plain link, handled per [[spec-view-6](#spec-view-6)].
 
 ### Filters
@@ -76,16 +76,17 @@ While the spec view's filter box contains text, the spec view shall narrow the o
 
 When a local link inside the view is activated, the spec view shall resolve it against the citing file's `specs/`-relative path and act by target ([DR-011](../decisions/011-project-workspace.md)):
 
-- an item citation or a backlink expands the target item's ancestors, reveals the target even when its group filter is toggled off — marking it "shown despite filter" — and scrolls to and briefly highlights it, without leaving the view;
+- an item citation or a backlink expands the target item's ancestors, reveals the target even when its group filter is toggled off or an active search excludes it — marking it as shown despite the filter or search — and scrolls to and briefly highlights it, without leaving the view;
+- after an in-view jump, the view offers a one-step return to the citing item, its keyboard reach and announcement already legislated ([DR-010](../decisions/010-interface-craft.md) §6, §7);
 - a cited ID that does not exist in the tree shows a transient "not found" note beside the activated link and does not navigate;
-- a link resolving to a decision or intent record's exact path opens that record in the records reader [[spec-view-7](#spec-view-7)];
+- a link resolving to a decision or intent record's exact path, or to the tree's own `meta.md`, opens that record in the records reader [[spec-view-7](#spec-view-7)];
 - any other local link stays inert.
 
 ### Records
 
 #### spec-view-7
 
-When the records footer line ("N decisions · M intents") is activated, the spec view shall open an at-hand list of the tree's decision and intent records by ID and title ([DR-009](../decisions/009-at-hand-interaction.md)), closable with Escape:
+When the records footer line ("N decisions · M intents · meta") is activated, the spec view shall open an at-hand list of the tree's decision and intent records and its `meta.md`, each by ID and title ([DR-009](../decisions/009-at-hand-interaction.md)), closable with Escape:
 
 - when a record is picked, the view replaces itself with that record's rendered markdown behind a Back control;
 - the record fetch shows in progress, and any fetch failure shows with a retry.
@@ -143,7 +144,7 @@ For each parsed item, the core package shall report the fields the view presents
 
 - the item's ID and its section-kind group — External Behavior external, Internal Behavior internal, Verification test — keeping the fixed three-group model ([DR-015](../decisions/015-reference-content.md));
 - its containing `##` section heading, and its nearest `###` topic heading for `####` items;
-- its full markdown body, and a one-line digest cut at the first sentence end or line break of the body's first paragraph, keeping raw markdown;
+- its full markdown body, and a one-line plain-prose digest of the body's first paragraph — enclosed citations dropped whole, plain links reduced to their text, inline-code backtick markers stripped with the content kept, and the punctuation gaps closed — cut at the first sentence end or line break;
 - its citations, extracted in order and without duplicates from the enclosed inline item citations [[meta-16](../meta.md#meta-16)] of the body;
 - for an item under a section outside the package grammar [[meta-30](../meta.md#meta-30)], the external group and a file notice naming the unexpected section.
 
@@ -197,7 +198,7 @@ Where a fixture file's `# <pack>: <Title>` heading and its item-ID prefixes disa
 
 #### spec-view-32
 
-Where fixture items sit under the package sections, under topic headings, and carry enclosed item citations and fenced code blocks, the test suite shall assert the item fields of [[spec-view-12](#spec-view-12)]: section-kind group mapping, topic attribution for `####` items, digest truncation at the first sentence end, ordered de-duplicated citation extraction, and that fenced `###` lines start no item and fenced links never cite.
+Where fixture items sit under the package sections, under topic headings, and carry enclosed item citations and fenced code blocks, the test suite shall assert the item fields of [[spec-view-12](#spec-view-12)]: section-kind group mapping, topic attribution for `####` items, digest truncation at the first sentence end, the digest reduced to plain prose — an enclosed citation dropped whole, a plain link reduced to its text, inline-code markers stripped, and the punctuation gaps closed — ordered de-duplicated citation extraction, and that fenced `###` lines start no item and fenced links never cite.
 
 #### spec-view-33
 
@@ -223,7 +224,12 @@ Where a fixture tree contains an unreadable file and unknown entries directly un
 
 #### spec-view-37
 
-Where a fixture tree carries a package item citing a peer's item and a test item citing the behavior items it verifies, the test suite shall assert the citation presentation of [[spec-view-19](#spec-view-19)]: outbound rows naming each cited item in document order, grouped inbound backlinks on each cited target, the file-header counts of inbound and outbound citations, and an in-view jump from an outbound row and from a backlink.
+Where a fixture tree carries a package item citing a peer's item, an intra-file citation, a citation of an absent ID, and a test item citing the behavior items it verifies, the test suite shall assert the citation presentation of [[spec-view-19](#spec-view-19)]:
+
+- outbound rows name each cited item in document order, and grouped inbound backlinks sit on each cited target, the intra-file entries included;
+- every file node, collapsed included, carries the rollup counting cross-file citations only, with the absent-ID citation counted as outbound;
+- an in-view jump lands from an outbound row and from a backlink, and afterwards the one-step return restores the citing item [[spec-view-6](#spec-view-6)];
+- a jump target excluded by an active search is revealed and marked [[spec-view-6](#spec-view-6)].
 
 ### Confinement Coverage
 

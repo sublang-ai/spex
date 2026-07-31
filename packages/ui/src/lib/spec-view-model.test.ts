@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Model-level coverage for the plain citation model (SPECV-19;
-// META-14: the citation is the only relationship): the inverted
-// backlink index, per-file rollups, the shared count wording, the
-// outline shaping, and inline-link resolution. No DOM.
+// META-14: the citation is the only relationship): the complete
+// inverted backlink index, cross-file-only per-file rollups, the
+// shared count wording, the outline shaping, and inline-link
+// resolution. No DOM.
 
 import { describe, expect, test } from "vitest";
 import type { SpecFileInfo, SpecItemInfo } from "@sublang/spex-core/protocol";
@@ -15,6 +16,7 @@ import {
   buildDirTree,
   buildItemIndex,
   citationSummary,
+  groupOf,
   linkItemTargets,
   recordForHref,
 } from "./spec-view-model.js";
@@ -149,6 +151,8 @@ describe("buildCitationModel: backlinks and rollups (SPECV-19)", () => {
   const model = buildCitationModel(files);
 
   test("backlinks group on the cited target in encounter order", () => {
+    // Complete both ways: the intra-file citer AUTH-9 stays listed
+    // even though rollups skip it.
     expect(model.inbound.get("AUTH-1")).toEqual([
       "AUTH-9",
       "CAT-1",
@@ -158,12 +162,35 @@ describe("buildCitationModel: backlinks and rollups (SPECV-19)", () => {
     expect(model.inbound.get("GUARD-1")).toBeUndefined();
   });
 
-  test("rollups total a file's outbound and inbound item citations", () => {
-    expect(model.rollups.get("identity/auth")).toEqual({ out: 1, in: 3 });
-    // The dead outbound target counts; a dead inbound target has no
-    // item to carry it.
+  test("rollups count only citations that cross files", () => {
+    // AUTH-9 → AUTH-1 is intra-file, so identity/auth cites nothing
+    // outward; its cross-file citers are CAT-1 and GUARD-1.
+    expect(model.rollups.get("identity/auth")).toEqual({ out: 0, in: 2 });
+    // The dead outbound target GONE-1 counts (the citation exists);
+    // a dead inbound target has no item to carry it.
     expect(model.rollups.get("catalog/courses")).toEqual({ out: 2, in: 1 });
     expect(model.rollups.get("guard")).toEqual({ out: 2, in: 0 });
+  });
+
+  test("purely internal test→behavior wiring leaves the rollup absent", () => {
+    const internal = buildCitationModel([
+      file({
+        key: "solo",
+        items: [
+          item({ id: "SOLO-1" }),
+          item({
+            id: "SOLO-9",
+            group: "test",
+            section: "Verification",
+            cites: ["SOLO-1"],
+          }),
+        ],
+      }),
+      file({ key: "bystander", items: [item({ id: "BY-1" })] }),
+    ]);
+    expect(internal.rollups.size).toBe(0);
+    // The backlink index still records the intra-file citer.
+    expect(internal.inbound.get("SOLO-1")).toEqual(["SOLO-9"]);
   });
 
   test("a citation-free file carries no rollup", () => {
@@ -186,6 +213,17 @@ describe("buildItemIndex: jump locations", () => {
       dir: "identity",
       group: "external",
     });
+  });
+
+  test("groupOf reads the indexed group; dead targets stay undefined", () => {
+    const index = buildItemIndex([
+      file({
+        key: "identity/auth",
+        items: [item({ id: "AUTH-9", group: "test", section: "Verification" })],
+      }),
+    ]);
+    expect(groupOf(index, "AUTH-9")).toBe("test");
+    expect(groupOf(index, "GONE-1")).toBeUndefined();
   });
 });
 

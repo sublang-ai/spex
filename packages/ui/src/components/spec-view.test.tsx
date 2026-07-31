@@ -4,9 +4,11 @@
 // SPECV component coverage over the packages-collection model: the
 // spec view rendered from a fixture SpecTreeState — directory/file
 // outline, document order with section and topic labels, group
-// filters, search, plain citation rows and grouped backlinks
-// (SPECV-19), citation jumps, file rollups, inline-link resolution,
-// records reader, and the empty/legacy states.
+// filters, search with transient chevron overrides, plain citation
+// rows and grouped backlinks (SPECV-19), cross-file rollups on every
+// file row, citation jumps with the one-step return chip and focus
+// landing, the meta.md route, the polite live region, records reader
+// focus flow, and the empty/legacy states.
 
 import { useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -32,8 +34,9 @@ import type { SpecTreeState } from "@sublang/spex-core/protocol";
 // exercises the SPECV-19 citation presentation: a package item citing
 // a peer's item, same-file citations, a test item citing the behavior
 // items it verifies (one target dead), a root-level file citing into
-// subdirectory files — plus one parse-degraded file carrying a
-// basename-disagreement notice (SPECV-11).
+// subdirectory files, an item-body link into meta.md — plus one
+// parse-degraded file carrying a basename-disagreement notice
+// (SPECV-11).
 const TREE: SpecTreeState = {
   present: true,
   legacy: false,
@@ -168,7 +171,8 @@ const TREE: SpecTreeState = {
           group: "internal",
           section: "Internal Behavior",
           firstLine: "Eligibility also covers the media path.",
-          text: "Eligibility also covers the media path ([AUTH-8](identity/auth.md#auth-8)).",
+          // A non-enclosed meta.md link: readable, never a citation.
+          text: "Eligibility also covers the media path ([AUTH-8](identity/auth.md#auth-8)); terms are defined in [meta-14](../meta.md#meta-14).",
           cites: ["AUTH-8"],
         },
         {
@@ -252,6 +256,11 @@ function before(a: Element, b: Element): boolean {
   return Boolean(a.compareDocumentPosition(b) & 4); // DOCUMENT_POSITION_FOLLOWING
 }
 
+const searchInput = () =>
+  screen.getByPlaceholderText("Filter items — ID or text…");
+
+const liveText = () => screen.getByTestId("specv-live").textContent;
+
 describe("SPECV-1/2: outline shape and file nodes", () => {
   test("the collection root nests directories and files; counts and intents render", () => {
     render(<Harness />);
@@ -286,6 +295,19 @@ describe("SPECV-1/2: outline shape and file nodes", () => {
     expect(
       within(guard).getByText("The whole gating surface in one place."),
     ).toBeTruthy();
+  });
+
+  test("expanding shows the full intent as a prose block; collapsed keeps the truncated line", () => {
+    render(<Harness />);
+    expect(screen.queryByTestId(`intent-${AUTH}`)).toBeNull();
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    const intent = screen.getByTestId(`intent-${AUTH}`);
+    expect(intent.textContent).toBe("How users sign in.");
+    // The header's truncated copy yields to the full block: one copy.
+    expect(screen.getAllByText("How users sign in.").length).toBe(1);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    expect(screen.queryByTestId(`intent-${AUTH}`)).toBeNull();
+    expect(within(screen.getByTestId(`file-${AUTH}`)).getByText("How users sign in.")).toBeTruthy();
   });
 });
 
@@ -356,7 +378,7 @@ describe("SPECV-3: item rows", () => {
     expect(screen.getByText("credentials").tagName).toBe("STRONG");
   });
 
-  test("collapsed rows carry a muted citation-count hint", () => {
+  test("collapsed rows carry a complete muted citation-count hint", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
@@ -365,7 +387,8 @@ describe("SPECV-3: item rows", () => {
     expect(screen.getByTestId("item-toggle-CAT-1").textContent).toContain(
       "cites 1 · cited by 2",
     );
-    // Inbound only: AUTH-1 ← AUTH-2, AUTH-10, GUARD-1.
+    // Inbound only, intra-file citers included (unlike the file
+    // rollup): AUTH-1 ← AUTH-2, AUTH-10, GUARD-1.
     expect(screen.getByTestId("item-toggle-AUTH-1").textContent).toContain(
       "cited by 3",
     );
@@ -379,7 +402,7 @@ describe("SPECV-3: item rows", () => {
     );
   });
 
-  test("clicking the ID chip copies the ID and ticks", async () => {
+  test("clicking the ID chip copies the ID, ticks, and narrates", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
@@ -391,6 +414,20 @@ describe("SPECV-3: item rows", () => {
     fireEvent.click(chip);
     expect(writeText).toHaveBeenCalledWith("AUTH-2");
     await waitFor(() => expect(chip.textContent).toContain("✓"));
+    expect(liveText()).toBe("Copied AUTH-2");
+  });
+
+  test("a failed copy is visible beside the chip and narrated (DR-010 §5)", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByRole("button", { name: "Copy AUTH-2" }));
+    await waitFor(() => expect(liveText()).toBe("Copy failed for AUTH-2"));
+    expect(screen.getByText("copy failed")).toBeTruthy();
   });
 });
 
@@ -420,14 +457,32 @@ describe("SPECV-4: group filters", () => {
     expect(screen.getByText("no items in active groups")).toBeTruthy();
     expect(screen.getByTestId(`file-${CAT}`)).toBeTruthy();
   });
+
+  test("turning a filter back on retires that group's jump reveals", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId("filter-external"));
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-10"));
+    fireEvent.click(screen.getByTestId("link-AUTH-10-AUTH-1"));
+    expect(screen.getByTestId("item-AUTH-1")).toBeTruthy();
+    // Filter back on: everything visible, badge gone.
+    fireEvent.click(screen.getByTestId("filter-external"));
+    expect(
+      within(screen.getByTestId("item-AUTH-1")).queryByText(
+        "shown despite filter",
+      ),
+    ).toBeNull();
+    // Off again: the old reveal died with the filter cycle.
+    fireEvent.click(screen.getByTestId("filter-external"));
+    expect(screen.queryByTestId("item-AUTH-1")).toBeNull();
+  });
 });
 
 describe("SPECV-5: search", () => {
   test("narrows to matches, auto-expands, and restores on clear", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
-    const input = screen.getByPlaceholderText("Filter items — ID or text…");
-    fireEvent.change(input, { target: { value: "cat-1" } });
+    fireEvent.change(searchInput(), { target: { value: "cat-1" } });
     // Case-insensitive match on ID and text (GUARD-5 and GUARD-3 cite
     // CAT-1 in their bodies); matching files auto-expand.
     expect(screen.getByTestId("match-count").textContent).toBe("3 matches");
@@ -435,20 +490,41 @@ describe("SPECV-5: search", () => {
     expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
     expect(screen.queryByTestId("item-AUTH-2")).toBeNull();
     // Clearing restores the prior expansion state.
-    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.change(searchInput(), { target: { value: "" } });
     expect(screen.queryByTestId("item-CAT-1")).toBeNull();
     expect(screen.getByTestId("item-AUTH-2")).toBeTruthy();
   });
 
   test("text matches count across files and respect filters", () => {
     render(<Harness />);
-    const input = screen.getByPlaceholderText("Filter items — ID or text…");
-    fireEvent.change(input, { target: { value: "shall" } });
+    fireEvent.change(searchInput(), { target: { value: "shall" } });
     // Every item but GUARD-6 says "shall".
     expect(screen.getByTestId("match-count").textContent).toBe("9 matches");
     // Filtered-off groups leave the count.
     fireEvent.click(screen.getByTestId("filter-test"));
     expect(screen.getByTestId("match-count").textContent).toBe("7 matches");
+  });
+
+  test("chevrons override computed expansion transiently; persisted expansion untouched", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.change(searchInput(), { target: { value: "cat-1" } });
+    expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
+    // A chevron collapses the matching file without touching state.
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    expect(screen.queryByTestId("item-GUARD-5")).toBeNull();
+    expect(screen.getByTestId("match-count").textContent).toBe("3 matches");
+    // And re-opens it.
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    // Clearing restores pre-search expansion: auth open, guard closed.
+    fireEvent.change(searchInput(), { target: { value: "" } });
+    expect(screen.getByTestId("item-AUTH-2")).toBeTruthy();
+    expect(screen.queryByTestId("item-GUARD-5")).toBeNull();
+    // Overrides died with the search: a new search recomputes.
+    fireEvent.change(searchInput(), { target: { value: "cat-1" } });
+    expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
   });
 });
 
@@ -522,6 +598,8 @@ describe("SPECV-19/37: citation rows and backlinks", () => {
     expect(
       screen.getByTestId("item-toggle-AUTH-1").getAttribute("aria-expanded"),
     ).toBe("true");
+    // The landing narrates the reveal (DR-010 §7).
+    expect(liveText()).toBe("Jumped to AUTH-1 — shown despite filter");
   });
 
   test("a dead citation says not found and never navigates", () => {
@@ -531,6 +609,7 @@ describe("SPECV-19/37: citation rows and backlinks", () => {
     fireEvent.click(screen.getByTestId("link-AUTH-10-AUTH-99"));
     expect(screen.getByText("not found")).toBeTruthy();
     expect(screen.queryByTestId("item-AUTH-99")).toBeNull();
+    expect(liveText()).toBe("AUTH-99 not found");
   });
 
   test("an inline dead citation says not found and never navigates", () => {
@@ -578,28 +657,274 @@ describe("SPECV-19/37: citation rows and backlinks", () => {
   });
 });
 
-describe("SPECV-2/19: file citation rollups", () => {
-  test("an expanded file header counts inbound and outbound citations", () => {
+describe("citation entries: target-group color, tooltip, hit target", () => {
+  test("entries color by the target's group with a digest tooltip", () => {
     render(<Harness />);
-    // Collapsed files carry no rollup line.
-    expect(screen.queryByTestId(`rollup-${AUTH}`)).toBeNull();
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-3"));
+    const g1 = screen.getByTestId("link-GUARD-3-GUARD-1");
+    // GUARD-1 is external: sky, with the digest previewed.
+    expect(g1.className).toContain("text-sky-600");
+    expect(g1.getAttribute("title")).toBe(
+      "GUARD-1 — The site shall present each surface per the map.",
+    );
+    // GUARD-5 is internal: fuchsia.
+    expect(
+      screen.getByTestId("link-GUARD-3-GUARD-5").className,
+    ).toContain("text-fuchsia-600");
+    // Hit target grows by padding, density kept by negative margin
+    // (DR-010 §7).
+    expect(g1.className).toContain("py-1");
+    expect(g1.className).toContain("-my-1");
+  });
+
+  test("a dead target keeps the neutral link style with no tooltip", () => {
+    render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
-    // auth out: AUTH-2 (1) + AUTH-10 (2, dead target included);
-    // in: AUTH-1 ← AUTH-2/AUTH-10/GUARD-1, AUTH-2 ← CAT-1,
-    // AUTH-8 ← GUARD-5/GUARD-6.
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-10"));
+    const dead = screen.getByTestId("link-AUTH-10-AUTH-99");
+    expect(dead.className).toContain("text-brand-600");
+    expect(dead.getAttribute("title")).toBeNull();
+  });
+
+  test("backlink entries color by the citing item's group", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
+    fireEvent.click(screen.getByTestId("inbound-AUTH-8"));
+    expect(
+      screen.getByTestId("link-AUTH-8-GUARD-5").className,
+    ).toContain("text-fuchsia-600");
+  });
+});
+
+describe("SPECV-2/19: cross-file rollups on every file row", () => {
+  test("collapsed rows carry the rollup; intra-file citations never count", () => {
+    render(<Harness />);
+    // All rows are collapsed — the rollups render regardless.
+    // auth out: only AUTH-10 → AUTH-99 (dead counts; both AUTH-1 cites
+    // are intra-file). in: CAT-1 → AUTH-2, GUARD-1 → AUTH-1,
+    // GUARD-5/GUARD-6 → AUTH-8.
     const auth = screen.getByTestId(`rollup-${AUTH}`);
-    expect(auth.textContent).toBe("cites 3 · cited by 6");
+    expect(auth.textContent).toBe("cites 1 · cited by 4");
     expect(auth.getAttribute("aria-label")).toBe(
       `Citations: ${auth.textContent}`,
     );
-    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
     expect(screen.getByTestId(`rollup-${CAT}`).textContent).toBe(
       "cites 1 · cited by 2",
     );
-    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
-    expect(screen.getByTestId(`rollup-${GUARD}`).textContent).toBe(
-      "cites 8 · cited by 3",
+    // guard's inbound is all intra-file: outbound side only.
+    expect(screen.getByTestId(`rollup-${GUARD}`).textContent).toBe("cites 5");
+    // Expansion keeps the rollup on the row.
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    expect(screen.getByTestId(`rollup-${AUTH}`).textContent).toBe(
+      "cites 1 · cited by 4",
     );
+  });
+});
+
+describe("SPECV-6: jump return chip", () => {
+  test("jumps push origins; the chip pops one level and lands back", () => {
+    render(<Harness />);
+    expect(screen.queryByTestId("jump-back")).toBeNull();
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    fireEvent.click(screen.getByTestId("item-toggle-CAT-1"));
+    fireEvent.click(screen.getByTestId("link-CAT-1-AUTH-2"));
+    // The chip carries a real accessible name.
+    const chip = screen.getByRole("button", { name: "back to CAT-1" });
+    expect(chip).toBe(screen.getByTestId("jump-back"));
+    // A second hop stacks: AUTH-2 → AUTH-1.
+    fireEvent.click(screen.getByTestId("link-AUTH-2-AUTH-1"));
+    expect(screen.getByTestId("jump-back").textContent).toBe(
+      "back to AUTH-2",
+    );
+    // Pop lands back on AUTH-2 and uncovers the older origin.
+    fireEvent.click(screen.getByTestId("jump-back"));
+    expect(document.activeElement).toBe(screen.getByTestId("item-AUTH-2"));
+    expect(screen.getByTestId("jump-back").textContent).toBe("back to CAT-1");
+    fireEvent.click(screen.getByTestId("jump-back"));
+    expect(document.activeElement).toBe(screen.getByTestId("item-CAT-1"));
+    // The stack is empty: the chip leaves.
+    expect(screen.queryByTestId("jump-back")).toBeNull();
+  });
+
+  test("a dead citation pushes no origin", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-10"));
+    fireEvent.click(screen.getByTestId("link-AUTH-10-AUTH-99"));
+    expect(screen.queryByTestId("jump-back")).toBeNull();
+  });
+});
+
+describe("SPECV-6: search-time reveal", () => {
+  test("a jump target hidden by the search reveals with the badge", () => {
+    render(<Harness />);
+    fireEvent.change(searchInput(), { target: { value: "cat-1" } });
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-5"));
+    fireEvent.click(screen.getByTestId("link-GUARD-5-AUTH-8"));
+    // AUTH-8 does not match "cat-1": revealed, marked, file opened.
+    const target = screen.getByTestId("item-AUTH-8");
+    expect(within(target).getByText("shown despite filter")).toBeTruthy();
+    expect(liveText()).toBe("Jumped to AUTH-8 — shown despite filter");
+    // The reveal is not a match: the count is untouched.
+    expect(screen.getByTestId("match-count").textContent).toBe("3 matches");
+    // Clearing the search clears the badge — the item is plainly
+    // visible once its file (never persisted as expanded mid-search)
+    // is opened again.
+    fireEvent.change(searchInput(), { target: { value: "" } });
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    expect(
+      within(screen.getByTestId("item-AUTH-8")).queryByText(
+        "shown despite filter",
+      ),
+    ).toBeNull();
+  });
+
+  test("a jump into a chevron-collapsed file reopens it", () => {
+    render(<Harness />);
+    fireEvent.change(searchInput(), { target: { value: "auth-8" } });
+    // auth and guard both match; collapse guard by chevron.
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    expect(screen.queryByTestId("item-GUARD-5")).toBeNull();
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
+    fireEvent.click(screen.getByTestId("inbound-AUTH-8"));
+    fireEvent.click(screen.getByTestId("link-AUTH-8-GUARD-5"));
+    expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
+  });
+});
+
+describe("DR-010 §6: focus follows", () => {
+  test("a jump focuses the landed item row", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    fireEvent.click(screen.getByTestId("item-toggle-CAT-1"));
+    fireEvent.click(screen.getByTestId("link-CAT-1-AUTH-2"));
+    const row = screen.getByTestId("item-AUTH-2");
+    expect(row.getAttribute("tabindex")).toBe("-1");
+    expect(document.activeElement).toBe(row);
+  });
+
+  test("the reader takes focus on Back and returns it to the popover's toggle", async () => {
+    const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nBody.");
+    render(<Harness onReadRecord={onReadRecord} />);
+    fireEvent.click(screen.getByTestId("records-toggle"));
+    // The popover's first entry takes focus on open.
+    const popover = screen.getByTestId("records-popover");
+    const first = within(popover).getAllByRole("button")[0];
+    expect(document.activeElement).toBe(first);
+    fireEvent.click(first);
+    await screen.findByText("Body.");
+    const back = screen.getByText("← Back");
+    expect(document.activeElement).toBe(back);
+    fireEvent.click(back);
+    // Closing hands focus back to the records toggle.
+    expect(document.activeElement).toBe(screen.getByTestId("records-toggle"));
+  });
+
+  test("a body-link record open returns focus to the citing item row", async () => {
+    const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nDecided.");
+    render(<Harness onReadRecord={onReadRecord} />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
+    fireEvent.click(screen.getByRole("link", { name: "DR-011" }));
+    await screen.findByText("Decided.");
+    fireEvent.click(screen.getByText("← Back"));
+    expect(document.activeElement).toBe(screen.getByTestId("item-AUTH-8"));
+  });
+
+  test("outside pointerdown dismisses the popover and restores the toggle", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId("records-toggle"));
+    expect(screen.getByTestId("records-popover")).toBeTruthy();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByTestId("records-popover")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("records-toggle"));
+  });
+
+  test("Escape closes the records popover and restores the toggle", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId("records-toggle"));
+    expect(screen.getByTestId("records-popover")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("records-popover")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("records-toggle"));
+  });
+});
+
+describe("DR-010 §7: accessible names and affordances", () => {
+  test("section and topic labels are exposed; toggles carry names", () => {
+    render(<Harness />);
+    expect(screen.getByRole("button", { name: "Toggle Packages" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Toggle identity/" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Toggle auth" })).toBeTruthy();
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    // Section/topic labels are no longer aria-hidden.
+    expect(
+      screen
+        .getByText("External Behavior")
+        .closest("li")
+        ?.getAttribute("aria-hidden"),
+    ).toBeNull();
+    expect(
+      screen.getByText("Sign-In").closest("li")?.getAttribute("aria-hidden"),
+    ).toBeNull();
+    // Item toggles name the item.
+    expect(
+      screen.getByTestId("item-toggle-AUTH-2").getAttribute("aria-label"),
+    ).toBe("AUTH-2: The form shall validate credentials.");
+    // The expand-all control names its file.
+    expect(
+      screen.getByRole("button", { name: "Expand all items in auth" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByTestId(`expand-all-${AUTH}`));
+    expect(
+      screen.getByRole("button", { name: "Collapse all items in auth" }),
+    ).toBeTruthy();
+  });
+
+  test("the copy chip advertises itself as a control", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    const chip = screen.getByRole("button", { name: "Copy AUTH-2" });
+    expect(chip.className).toContain("cursor-pointer");
+    expect(chip.className).toContain("hover:ring-1");
+  });
+});
+
+describe("SPECV-6/7: meta.md routing", () => {
+  test("the footer offers meta directly; the popover stays records-only", async () => {
+    const onReadRecord = vi.fn().mockResolvedValue("# meta\n\nGlossary.");
+    render(<Harness onReadRecord={onReadRecord} />);
+    fireEvent.click(screen.getByTestId("records-toggle"));
+    expect(
+      within(screen.getByTestId("records-popover")).queryByText("meta"),
+    ).toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    const meta = screen.getByTestId("records-meta");
+    expect(meta.textContent).toBe("meta");
+    fireEvent.click(meta);
+    expect(onReadRecord).toHaveBeenCalledWith("meta.md");
+    await screen.findByText("Glossary.");
+    expect(
+      within(screen.getByTestId("record-reader")).getByText("meta.md"),
+    ).toBeTruthy();
+    // Back lands on the meta control (DR-010 §6).
+    fireEvent.click(screen.getByText("← Back"));
+    expect(document.activeElement).toBe(screen.getByTestId("records-meta"));
+  });
+
+  test("an item-body link resolving to meta.md opens the reader", async () => {
+    const onReadRecord = vi.fn().mockResolvedValue("# meta\n\nTerms.");
+    render(<Harness onReadRecord={onReadRecord} />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-6"));
+    fireEvent.click(screen.getByRole("link", { name: "meta-14" }));
+    expect(onReadRecord).toHaveBeenCalledWith("meta.md");
+    await screen.findByText("Terms.");
+    expect(screen.getByTestId("record-reader")).toBeTruthy();
   });
 });
 
@@ -617,19 +942,13 @@ describe("SPECV-7: records footer and reader", () => {
     expect(onReadRecord).toHaveBeenCalledWith(
       "decisions/011-project-workspace.md",
     );
+    // The open narrates through the live region.
+    expect(liveText()).toBe("Opened DR-011");
     await screen.findByText("Hello from the record.");
     expect(screen.getByText("DR-011")).toBeTruthy();
     // Back returns to the tree.
     fireEvent.click(screen.getByText("← Back"));
     expect(screen.getByTestId(`file-${AUTH}`)).toBeTruthy();
-  });
-
-  test("Escape closes the records popover", () => {
-    render(<Harness />);
-    fireEvent.click(screen.getByTestId("records-toggle"));
-    expect(screen.getByTestId("records-popover")).toBeTruthy();
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByTestId("records-popover")).toBeNull();
   });
 });
 

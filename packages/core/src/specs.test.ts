@@ -167,6 +167,26 @@ test("digests drop enclosed citations and unwrap plain links", () => {
   );
 });
 
+test("digests strip inline-code backticks but keep the code content", () => {
+  const file = parseSpecFileText(
+    [
+      "# guard: Guard",
+      "",
+      "## External Behavior",
+      "",
+      "### guard-1",
+      "",
+      "The `specs/` directory shall list ``a ` b`` under [`root`](../meta.md) only.",
+      "",
+    ].join("\n"),
+    "guard",
+  );
+  assert.equal(
+    file.items[0].firstLine,
+    "The specs/ directory shall list a ` b under root only.",
+  );
+});
+
 test("a ### item between a topic and a #### item clears the topic", () => {
   const dir = fixture({
     "specs/packages/mix.md": [

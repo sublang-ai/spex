@@ -127,11 +127,17 @@ function extractCites(body: string[]): string[] {
 const DIGEST_CITE = /\[\[[^[\]]+\]\([^()\s]+\)\]/g;
 /** Plain inline link, kept as its text in digests. */
 const DIGEST_LINK = /\[([^[\]]+)\]\([^()\s]+\)/g;
+/** Inline code span, kept as its content in digests — the backreference
+ * pairs equal-length fences, so a literal backtick inside a
+ * double-backtick span survives; the bare-backtick alternative drops
+ * only unmatched markers ("$2" is empty when it fires). */
+const DIGEST_CODE = /(`+)(.+?)\1|`+/g;
 
 function firstSentence(body: string[]): string {
   const firstText = (body.find((line) => line.trim() !== "") ?? "")
     .replace(DIGEST_CITE, "")
     .replace(DIGEST_LINK, "$1")
+    .replace(DIGEST_CODE, "$2")
     .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/\s{2,}/g, " ")
     .trim();
