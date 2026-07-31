@@ -24,7 +24,7 @@ map.md        This index
 meta.md       The spec of specs
 ```
 
-Subdirectories under `packages/` are navigation collections with no semantics [[meta-21](meta.md#meta-21)].
+Subdirectories under `packages/` are navigation collections with no semantics [[meta-31](meta.md#meta-31)].
 
 ## Decisions
 

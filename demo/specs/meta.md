@@ -22,11 +22,11 @@ The `specs/` directory shall contain the following subdirectories and files:
 | `map.md` | spec index — start here for context search | - |
 | `meta.md` | the spec of specs | - |
 
-### meta-2
+### meta-23
 
 A spec in any form shall contain the minimal information, concisely expressed, to act on it or audit it, preferring bullets, tables, or (renderable) diagrams to prose.
 
-### meta-3
+### meta-25
 
 A spec file shall keep one sentence per line — with lists, tables, and diagrams exempt.
 
@@ -40,21 +40,21 @@ Each DR shall follow the ADR format [[2]], with sections Status, Context, Decisi
 
 Each IR shall contain sections Status, Intent, Deliverables (with checkboxes), Tasks (numbered, each sized to one commit), and Verification.
 
-### meta-6
+### meta-22
 
 A record's ID shall join its kind prefix to its filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — with the leading number unique within each record kind.
 
-### meta-7
+### meta-24
 
 A DR shall record design decisions and constraints, not implementation details, sufficient to provide context for or to audit the corresponding spec items.
 
-### meta-8
+### meta-28
 
 An IR shall be disposable: it contains nothing a DR or a spec item should cover, and its deletion loses no design or behavior record.
 
 ## Item syntax
 
-### meta-9
+### meta-6
 
 Each spec item shall use the GEARS pattern [[1]], with its clauses and punctuation following natural English conventions:
 
@@ -69,7 +69,7 @@ Each spec item shall use the GEARS pattern [[1]], with its clauses and punctuati
 | When | Trigger event — at most one | When the user clicks submit |
 | shall | Required behaviors | The form shall validate inputs and highlight each violation |
 
-### meta-10
+### meta-7
 
 Where test cases can be expressed by Given-When-Then (GWT), their spec items shall map GWT to GEARS [[1]]:
 
@@ -79,13 +79,13 @@ Where test cases can be expressed by Given-When-Then (GWT), their spec items sha
 | When | When |
 | Then | shall |
 
-### meta-11
+### meta-8
 
-Each spec item shall be self-contained: every reliance on another item is an explicit citation [[meta-25](#meta-25)].
+Each spec item shall be self-contained: every reliance on another item is an explicit citation [[meta-16](#meta-16)].
 
-### meta-12
+### meta-29
 
-Each spec item shall be exactly one GEARS statement [[meta-9](#meta-9)], elaborated only by its attachments — such as a note, a list, a table, a (renderable) diagram, or an example.
+Each spec item shall be exactly one GEARS statement [[meta-6](#meta-6)], elaborated only by its attachments — such as a note, a list, a table, a (renderable) diagram, or an example.
 
 | Item kind | Example attachment |
 | --- | --- |
@@ -101,11 +101,11 @@ Each spec item shall be exactly one GEARS statement [[meta-9](#meta-9)], elabora
 
 A spec package shall define a closed set of subjects and their behaviors for a shared intent.
 
-### meta-14
+### meta-9
 
 A spec package shall be one item file under `specs/packages/` or its subdirectory.
 
-### meta-15
+### meta-30
 
 Each package file shall contain only the following sections, in this order:
 
@@ -114,25 +114,25 @@ Each package file shall contain only the following sections, in this order:
 | `Intent` | required | the shared intent of the package's items |
 | `External Behavior` | required | outcomes and guarantees the package's users may rely on |
 | `Internal Behavior` | optional | implementation hidden from the package's users |
-| `Verification` | required unless irrelevant [[meta-24](#meta-24)] | only test items verifying the package's own items |
-| `References` | optional | external sources [[meta-27](#meta-27)] |
+| `Verification` | required unless irrelevant [[meta-33](#meta-33)] | only test items verifying the package's own items |
+| `References` | optional | external sources [[meta-19](#meta-19)] |
 
 - A package's user is any human or system component using its contract; External and Internal are relative to the package.
 - Topic subsections and item headings live inside the Behavior and Verification sections.
 
-### meta-16
+### meta-10
 
 A spec package shall use a unique lowercase kebab-case basename \<pack\>.md, with \<pack\> serving as its package identifier.
 
-### meta-17
+### meta-11
 
 Each spec item shall use \<pack\>-\<N\> as its lowercase heading, anchor, and citation text:
 
-- \<pack\> is its containing package's identifier [[meta-16](#meta-16)];
+- \<pack\> is its containing package's identifier [[meta-10](#meta-10)];
 - \<N\> is a positive integer unique within that package;
-- a new item takes the lowest positive \<N\> neither assigned nor reserved by a public release [[meta-18](#meta-18)].
+- a new item takes the lowest positive \<N\> neither assigned nor reserved by a public release [[meta-12](#meta-12)].
 
-### meta-18
+### meta-12
 
 A publicly released item ID shall remain permanently bound to the concern its item names:
 
@@ -140,56 +140,56 @@ A publicly released item ID shall remain permanently bound to the concern its it
 - the item's content may evolve only with that concern preserved;
 - an unreleased ID can be reassigned.
 
-### meta-19
+### meta-14
 
-A citation shall be the only relationship between packages: any general phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-25](#meta-25)].
+A citation shall be the only relationship between packages: any general phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-16](#meta-16)].
 
 - An uncited phrase stays general as it is sufficient for code generation and audit.
 - One phrase may cite several packages if it composes their behaviors.
 
-### meta-20
+### meta-15
 
 A spec package shall stand alone: readable in full without following any link — a citation never carries its meaning.
 
-### meta-21
+### meta-31
 
-A subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-16](#meta-16)]; moving a file between collections changes relative citation paths but no item ID or anchor.
+A subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
 
 ## Testing
 
-### meta-22
+### meta-21
 
 Spec test items shall specify integration and system tests only: unit tests belong to the implementation, and no spec item specifies one.
 
-### meta-23
+### meta-32
 
-A test shall prefer executing the real behavior of a cited package [[meta-19](#meta-19)] to supplying a substitute for it.
+A test shall prefer executing the real behavior of a cited package [[meta-14](#meta-14)] to supplying a substitute for it.
 
-### meta-24
+### meta-33
 
 Each stated behavior shall be verified unless verification is irrelevant to it, white-box or black-box: External and Internal govern use, not verification.
 
 ## Citation
 
-### meta-25
+### meta-16
 
 A citation of a spec item shall be a relative link with an anchor, enclosed in square brackets (e.g., `[[meta-1](meta.md#meta-1)]`), written inline at the phrase that relies on it.
 
-### meta-26
+### meta-18
 
 No DR or spec item shall cite an IR or name it in prose.
 
-### meta-27
+### meta-19
 
 An external reference shall cite an authoritative source (e.g., official docs) by a numbered marker (e.g., `[[1]]`) linked to a specific URL in the `References` section, which holds no uncited entry.
 
-### meta-28
+### meta-20
 
 A test item shall cite every behavior item it verifies, inline at the assertion that verifies the behavior.
 
 ## Authoring language
 
-### meta-29
+### meta-27
 
 Authoring language: en
 
