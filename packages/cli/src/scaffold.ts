@@ -224,7 +224,7 @@ function detectLegacyGeneration(
 function printMigrationGuidance(): void {
   console.log("");
   console.log(
-    "This specs tree carries a legacy spec generation. The template refresh",
+    "This specs tree carries a legacy spec generation (spex 0.x). The template refresh",
   );
   console.log(
     "above left all legacy content untouched: structural migration is",
@@ -284,7 +284,7 @@ function assertNoLegacyLayout(basePath: string): void {
     const abs = join(basePath, "specs", dir);
     if (existsSync(abs) && statSync(abs).isDirectory()) {
       throw new Error(
-        `specs/${dir}/ marks a legacy spec generation; run \`spex scaffold --update\` to refresh templates and get migration guidance before scaffolding`,
+        `specs/${dir}/ marks a legacy spec generation (spex 0.x); run \`spex scaffold --update\` to refresh templates and get migration guidance before scaffolding`,
       );
     }
   }
