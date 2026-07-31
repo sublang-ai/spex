@@ -36,8 +36,8 @@ The demo's [specs/meta.md](specs/meta.md) carries the same items; its Intent dif
 
 | Question | Look at |
 | --- | --- |
-| Package boundary; self-containment | [course-catalog.md](specs/packages/catalog/course-catalog.md) vs [video-library.md](specs/packages/catalog/video-library.md): course-catalog-8/course-catalog-10 mirror video-library-9/video-library-10 across the boundary |
-| External vs internal behavior | course-catalog-3 vs course-catalog-12; web-shell-2 vs web-shell-6 |
-| Reuse | `github-login.md`, `access-control.md`, `video-library.md`, and `web-shell.md` carry no product nouns; access-control-2 is cited from course-catalog-4, video-library-1, and the admin-bootstrap and protected-content packages; the shell's header entries are supplied in `site-navigation.md` |
+| Package boundary; self-containment | [course-catalog.md](specs/packages/catalog/course-catalog.md) vs [video-library.md](specs/packages/catalog/video-library.md): course-catalog-15/course-catalog-18 mirror video-library-8/video-library-9 across the boundary |
+| External vs internal behavior | course-catalog-4 vs course-catalog-20; web-shell-2 vs web-shell-7 |
+| Reuse | `github-login.md`, `access-control.md`, `video-library.md`, and `web-shell.md` carry no product nouns; access-control-4 is cited from course-catalog-6, video-library-1, and the admin-bootstrap and protected-content packages; the shell's header entries are supplied in `site-navigation.md` |
 | Acceptance from composition packages | [lesson-playback.md](specs/packages/lesson-playback.md), [protected-content.md](specs/packages/protected-content.md) |
-| Composition vs supply | [course-publishing.md](specs/packages/course-publishing.md) vs [platform-services.md](specs/packages/platform-services.md): the seam course-publishing-1 wires is user-walked emergent behavior (course-publishing-4 crosses it in person); platform-services-3's supply is inspection-only (platform-services-6) |
+| Composition vs supply | [course-publishing.md](specs/packages/course-publishing.md) vs [platform-services.md](specs/packages/platform-services.md): the seam course-publishing-3 wires is user-walked emergent behavior (course-publishing-4 crosses it in person); platform-services-3's supply is inspection-only (platform-services-7) |

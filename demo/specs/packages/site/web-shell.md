@@ -18,7 +18,7 @@ Every page shall carry the shared header — the site name linking to the home p
 
 #### web-shell-2
 
-While an admin-role session is active [[access-control-7](../identity/access-control.md#access-control-7)], and only then, the header shall include the deployment's admin entry — a member session or no session sees no admin entry.
+While an admin-role session is active [[access-control-2](../identity/access-control.md#access-control-2)], and only then, the header shall include the deployment's admin entry — a member session or no session sees no admin entry.
 
 #### web-shell-3
 
@@ -34,7 +34,7 @@ Where the viewport is 360 px wide or wider, every page shall be readable and ope
 
 While a page's data is loading, the page shall show a loading state in place of the pending content rather than a blank page.
 
-#### web-shell-12
+#### web-shell-6
 
 When a request fails unexpectedly, the site shall show a plain error surface with a retry path — exposing no stack trace or internal identifier.
 
@@ -42,17 +42,17 @@ When a request fails unexpectedly, the site shall show a plain error surface wit
 
 ### Server-Resolved Chrome
 
-#### web-shell-6
+#### web-shell-7
 
 Where a page's chrome varies by session or role — the session control and the admin entry — the variance shall be resolved server-side before first paint, so no page flashes another role's chrome and no served markup carries entries the requester's role denies.
 
 ### Response Freshness
 
-#### web-shell-10
+#### web-shell-8
 
 Where a response varies by session or role, it shall be served private to its requester, never from a cache shared across requesters.
 
-#### web-shell-13
+#### web-shell-9
 
 Where a page's content varies by underlying state, each response shall reflect the state current at request time — no shared cache serving a copy made stale by a later change.
 
@@ -60,7 +60,7 @@ Where a page's content varies by underlying state, each response shall reflect t
 
 ### Frame Coverage
 
-#### web-shell-7
+#### web-shell-10
 
 Where fixture sessions exist for an admin, a member, and a signed-out visitor, and fixture surfaces supply the deployment's header entries, the test suite shall assert each:
 
@@ -70,27 +70,27 @@ Where fixture sessions exist for an admin, a member, and a signed-out visitor, a
 
 ### Fit and Feedback Coverage
 
-#### web-shell-8
+#### web-shell-11
 
 Where fixture pages exercise the fit and feedback states, the test suite shall assert each:
 
 - at a 360 px viewport, no horizontal overflow and an operable compact menu [[web-shell-4](#web-shell-4)];
 - with page data throttled, a loading state preceding content [[web-shell-5](#web-shell-5)];
-- with a request forced to fail, an error surface offering a retry and a response carrying no stack trace or internal identifier [[web-shell-12](#web-shell-12)].
+- with a request forced to fail, an error surface offering a retry and a response carrying no stack trace or internal identifier [[web-shell-6](#web-shell-6)].
 
 ### Chrome Isolation Coverage
 
-#### web-shell-9
+#### web-shell-12
 
-Where member and signed-out fixture sessions request every fixture page, the test suite shall assert the served markup contains no admin entry, and that the session control's served state matches the session without a client-side correction pass [[web-shell-6](#web-shell-6)].
+Where member and signed-out fixture sessions request every fixture page, the test suite shall assert the served markup contains no admin entry, and that the session control's served state matches the session without a client-side correction pass [[web-shell-7](#web-shell-7)].
 
 ### Freshness Coverage
 
-#### web-shell-11
+#### web-shell-13
 
 Where fixture pages exercise response reuse, the test suite shall assert each case:
 
 | Fixture | Asserted outcome |
 | --- | --- |
-| a page whose underlying state changes between two requests | the second response reflects the new state [[web-shell-13](#web-shell-13)] |
-| two sessions of different roles requesting the same page in turn | each response is produced for its requester's session, not reused from the other's [[web-shell-10](#web-shell-10)] |
+| a page whose underlying state changes between two requests | the second response reflects the new state [[web-shell-9](#web-shell-9)] |
+| two sessions of different roles requesting the same page in turn | each response is produced for its requester's session, not reused from the other's [[web-shell-8](#web-shell-8)] |

@@ -32,5 +32,5 @@ Lands the course-catalog package and the admin-bootstrap composition on the skel
 
 ## Verification
 
-- [[course-catalog-13](../packages/catalog/course-catalog.md#course-catalog-13)] through [[course-catalog-16](../packages/catalog/course-catalog.md#course-catalog-16)] pass.
+- [[course-catalog-21](../packages/catalog/course-catalog.md#course-catalog-21)] through [[course-catalog-24](../packages/catalog/course-catalog.md#course-catalog-24)] pass.
 - [[admin-bootstrap-3](../packages/admin-bootstrap.md#admin-bootstrap-3)] and [[admin-bootstrap-4](../packages/admin-bootstrap.md#admin-bootstrap-4)] pass against a fresh preview deployment.

@@ -10,29 +10,29 @@ This package makes the two one product: every media delegation the catalog leave
 
 ## External Behavior
 
+### course-publishing-1
+
+While an unpublished course carries sections and lessons with library assets attached [[course-publishing-3](#course-publishing-3)], when the admin publishes it [[course-catalog-10](catalog/course-catalog.md#course-catalog-10)], the course page shall mark exactly the lessons with resolvable attachments as playable [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)] — with no per-video step required.
+
 ### course-publishing-2
 
-While an unpublished course carries sections and lessons with library assets attached [[course-publishing-1](#course-publishing-1)], when the admin publishes it [[course-catalog-6](catalog/course-catalog.md#course-catalog-6)], the course page shall mark exactly the lessons with resolvable attachments as playable [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)] — with no per-video step required.
+When the admin deletes a library asset still referenced by a lesson [[video-library-5](catalog/video-library.md#video-library-5)], the site shall degrade that lesson gracefully — the library now reporting the reference unresolvable [[video-library-10](catalog/video-library.md#video-library-10)]:
 
-### course-publishing-3
-
-When the admin deletes a library asset still referenced by a lesson [[video-library-18](catalog/video-library.md#video-library-18)], the site shall degrade that lesson gracefully — the library now reporting the reference unresolvable [[video-library-14](catalog/video-library.md#video-library-14)]:
-
-1. the course and its syllabus remain intact, the library having read and modified no host data [[video-library-10](catalog/video-library.md#video-library-10)];
+1. the course and its syllabus remain intact, the library having read and modified no host data [[video-library-9](catalog/video-library.md#video-library-9)];
 2. the lesson's course-page entry loses its playable marking [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)];
-3. the lesson view falls back to its no-media presentation [[course-catalog-20](catalog/course-catalog.md#course-catalog-20)];
-4. the course manager marks the attachment unavailable with replace and remove offered [[course-catalog-24](catalog/course-catalog.md#course-catalog-24)].
+3. the lesson view falls back to its no-media presentation [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)];
+4. the course manager marks the attachment unavailable with replace and remove offered [[course-catalog-16](catalog/course-catalog.md#course-catalog-16)].
 
 ## Internal Behavior
 
-### course-publishing-1
+### course-publishing-3
 
-Where the catalog delegates to an installed media provider its lessons' asset selection [[course-catalog-8](catalog/course-catalog.md#course-catalog-8)], its lesson view's media area [[course-catalog-20](catalog/course-catalog.md#course-catalog-20)], the attachment resolution behind the course page's playable marking [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)], and the unavailable marking of an unresolvable stored reference [[course-catalog-24](catalog/course-catalog.md#course-catalog-24)], the site shall serve every one of those delegations through the video library:
+Where the catalog delegates to an installed media provider its lessons' asset selection [[course-catalog-15](catalog/course-catalog.md#course-catalog-15)], its lesson view's media area [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)], the attachment resolution behind the course page's playable marking [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)], and the unavailable marking of an unresolvable stored reference [[course-catalog-16](catalog/course-catalog.md#course-catalog-16)], the site shall serve every one of those delegations through the video library:
 
 1. asset selection presents the library's asset list [[video-library-4](catalog/video-library.md#video-library-4)] as the picker;
-2. the stored reference is the chosen asset's stable identifier [[video-library-9](catalog/video-library.md#video-library-9)];
-3. the catalog's resolution queries are answered by the library [[video-library-14](catalog/video-library.md#video-library-14)];
-4. for a stored reference the library resolves, the media area embeds the library's player [[video-library-5](catalog/video-library.md#video-library-5)], [[video-library-6](catalog/video-library.md#video-library-6)].
+2. the stored reference is the chosen asset's stable identifier [[video-library-8](catalog/video-library.md#video-library-8)];
+3. the catalog's resolution queries are answered by the library [[video-library-10](catalog/video-library.md#video-library-10)];
+4. for a stored reference the library resolves, the media area embeds the library's player [[video-library-6](catalog/video-library.md#video-library-6)], [[video-library-7](catalog/video-library.md#video-library-7)].
 
 ## Verification
 
@@ -40,10 +40,10 @@ Where the catalog delegates to an installed media provider its lessons' asset se
 
 Where the acceptance suite signs in as the admin on a seeded deployment, when it drives a course from creation through deletion, the suite shall assert each stage:
 
-1. creating a course, adding a section and a lesson [[course-catalog-5](catalog/course-catalog.md#course-catalog-5)], uploading a fixture video [[video-library-1](catalog/video-library.md#video-library-1)], attaching it through the picker [[course-publishing-1](#course-publishing-1)], and publishing shows the public course page's syllabus with that lesson — and only that lesson — marked playable [[course-publishing-2](#course-publishing-2)], the lesson view's media area embedding the library's player through the installed video library [[course-publishing-1](#course-publishing-1)], and the lesson's stored reference equal to the uploaded asset's identifier [[course-catalog-8](catalog/course-catalog.md#course-catalog-8)];
-2. adding a second lesson attaching the same asset shows both lessons playable with equal stored references and no second upload [[video-library-9](catalog/video-library.md#video-library-9)];
-3. deleting the course after the confirmation naming its section and lesson counts [[course-catalog-17](catalog/course-catalog.md#course-catalog-17)] leaves the course's routes not-found while the uploaded asset remains listed in the library, its content untouched [[course-catalog-10](catalog/course-catalog.md#course-catalog-10)], [[video-library-4](catalog/video-library.md#video-library-4)].
+1. creating a course, adding a section and a lesson [[course-catalog-8](catalog/course-catalog.md#course-catalog-8)], uploading a fixture video [[video-library-1](catalog/video-library.md#video-library-1)], attaching it through the picker [[course-publishing-3](#course-publishing-3)], and publishing shows the public course page's syllabus with that lesson — and only that lesson — marked playable [[course-publishing-1](#course-publishing-1)], the lesson view's media area embedding the library's player through the installed video library [[course-publishing-3](#course-publishing-3)], and the lesson's stored reference equal to the uploaded asset's identifier [[course-catalog-15](catalog/course-catalog.md#course-catalog-15)];
+2. adding a second lesson attaching the same asset shows both lessons playable with equal stored references and no second upload [[video-library-8](catalog/video-library.md#video-library-8)];
+3. deleting the course after the confirmation naming its section and lesson counts [[course-catalog-12](catalog/course-catalog.md#course-catalog-12)] leaves the course's routes not-found while the uploaded asset remains listed in the library, its content untouched [[course-catalog-18](catalog/course-catalog.md#course-catalog-18)], [[video-library-4](catalog/video-library.md#video-library-4)].
 
 ### course-publishing-5
 
-Where a published lesson references a library asset, when the admin deletes that asset from the library [[video-library-18](catalog/video-library.md#video-library-18)], the acceptance suite shall assert the course page still shows the full syllabus — the library having modified no catalog data [[video-library-10](catalog/video-library.md#video-library-10)] — with that lesson's playable marking gone [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)], the lesson view shows the no-media presentation [[course-catalog-20](catalog/course-catalog.md#course-catalog-20)], and the course manager marks the attachment unavailable [[course-catalog-24](catalog/course-catalog.md#course-catalog-24)] — the library reporting it unresolvable [[video-library-14](catalog/video-library.md#video-library-14)], [[course-publishing-3](#course-publishing-3)].
+Where a published lesson references a library asset, when the admin deletes that asset from the library [[video-library-5](catalog/video-library.md#video-library-5)], the acceptance suite shall assert the course page still shows the full syllabus — the library having modified no catalog data [[video-library-9](catalog/video-library.md#video-library-9)] — with that lesson's playable marking gone [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)], the lesson view shows the no-media presentation [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)], and the course manager marks the attachment unavailable [[course-catalog-16](catalog/course-catalog.md#course-catalog-16)] — the library reporting it unresolvable [[video-library-10](catalog/video-library.md#video-library-10)], [[course-publishing-2](#course-publishing-2)].

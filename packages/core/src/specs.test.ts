@@ -624,15 +624,15 @@ test("the staged Academy corpus parses end-to-end", () => {
   assert.equal(auth.basename, "github-login");
   assert.equal(auth.title, "GitHub Login");
   assert.equal(auth.items.length, 15);
-  const authCheck = item(auth, "github-login-10");
+  const authCheck = item(auth, "github-login-12");
   assert.equal(authCheck.group, "test");
   assert.equal(authCheck.section, "Verification");
   assert.equal(authCheck.topic, "Sign-In Coverage");
   assert.deepEqual(authCheck.cites, [
     "github-login-1",
     "github-login-2",
-    "github-login-4",
-    "github-login-14",
+    "github-login-5",
+    "github-login-3",
   ]);
 
   // A former composition parses as a package whose items cite the
@@ -645,10 +645,10 @@ test("the staged Academy corpus parses end-to-end", () => {
   assert.equal(journey.section, "External Behavior");
   assert.deepEqual(journey.cites, [
     "course-catalog-2",
-    "course-catalog-20",
-    "video-library-6",
+    "course-catalog-3",
+    "video-library-7",
     "github-login-2",
-    "video-library-5",
+    "video-library-6",
   ]);
 
   assert.deepEqual(

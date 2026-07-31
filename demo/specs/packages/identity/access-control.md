@@ -19,17 +19,17 @@ Where the deployment configuration names a GitHub account by its stable account 
 
 - Usernames are mutable and never designate the initial admin.
 
-#### access-control-7
+#### access-control-2
 
 A request shall act under its account's currently held role — held per account, not per session — so a role recorded at a later sign-in governs every session of the account.
 
-#### access-control-8
+#### access-control-3
 
 The package shall expose no operation that changes, grants, or transfers a role at runtime; changing the configured designation is the only path.
 
 ### The Guard
 
-#### access-control-2
+#### access-control-4
 
 Where a surface or request path is designated admin-only, when a request without an admin-role session targets it, the access guard shall deny it:
 
@@ -40,13 +40,13 @@ Where a surface or request path is designated admin-only, when a request without
 
 ### Role Storage
 
-#### access-control-3
+#### access-control-5
 
-Where the identity store maintains a user record for the account [[github-login-7](github-login.md#github-login-7)], when the account completes sign-in, the role store shall record the account's role, keyed by the account's stable ID, from the current configuration — admin on a match, member otherwise — so a configuration change takes effect at each account's next sign-in, with no separate migration step.
+Where the identity store maintains a user record for the account [[github-login-8](github-login.md#github-login-8)], when the account completes sign-in, the role store shall record the account's role, keyed by the account's stable ID, from the current configuration — admin on a match, member otherwise — so a configuration change takes effect at each account's next sign-in, with no separate migration step.
 
 ### Check Discipline
 
-#### access-control-4
+#### access-control-6
 
 Where a role check gates a surface or request path, the check shall run server-side against the stored role:
 
@@ -57,22 +57,22 @@ Where a role check gates a surface or request path, the check shall run server-s
 
 ### Grant Coverage
 
-#### access-control-5
+#### access-control-7
 
 Where the configuration names a stub account as the initial admin, the test suite shall assert, over one sign-in sequence of stub accounts:
 
 - when that account and a second stub account sign in, the configured account holds the admin role and the other holds member [[access-control-1](#access-control-1)];
-- when the configured ID changes to the second account and both sign in again, the roles have swapped, and a still-active earlier session of the first account acts as member from its next request — the recomputed role governs every session of the account [[access-control-7](#access-control-7)] [[access-control-3](#access-control-3)];
+- when the configured ID changes to the second account and both sign in again, the roles have swapped, and a still-active earlier session of the first account acts as member from its next request — the recomputed role governs every session of the account [[access-control-2](#access-control-2)] [[access-control-5](#access-control-5)];
 - when a third account adopts the first account's former username and signs in, it holds member [[access-control-1](#access-control-1)];
-- the package exposes no operation that changes, grants, or transfers a role at runtime [[access-control-8](#access-control-8)].
+- the package exposes no operation that changes, grants, or transfers a role at runtime [[access-control-3](#access-control-3)].
 
 ### Guard Coverage
 
-#### access-control-6
+#### access-control-8
 
 Where a fixture surface is designated admin-only, the test suite shall assert:
 
-- a signed-out request is sent to sign-in and returns to the target after stub sign-in [[access-control-2](#access-control-2)];
-- a member-session request receives a not-authorized response whose body carries none of the fixture surface's content [[access-control-2](#access-control-2)];
+- a signed-out request is sent to sign-in and returns to the target after stub sign-in [[access-control-4](#access-control-4)];
+- a member-session request receives a not-authorized response whose body carries none of the fixture surface's content [[access-control-4](#access-control-4)];
 - an admin-session request succeeds;
-- a member-session request carrying a forged client-side admin claim is still denied [[access-control-4](#access-control-4)].
+- a member-session request carrying a forged client-side admin claim is still denied [[access-control-6](#access-control-6)].

@@ -10,7 +10,7 @@ Accepted
 ## Context
 
 One small deployable, built and maintained by one developer with AI assistance.
-Gated content must never depend on client-side hiding [[web-shell-6](../packages/site/web-shell.md#web-shell-6)] [[course-catalog-12](../packages/catalog/course-catalog.md#course-catalog-12)], which favors a server-rendered stack.
+Gated content must never depend on client-side hiding [[web-shell-7](../packages/site/web-shell.md#web-shell-7)] [[course-catalog-20](../packages/catalog/course-catalog.md#course-catalog-20)], which favors a server-rendered stack.
 
 ## Decision
 
@@ -21,6 +21,6 @@ Gated content must never depend on client-side hiding [[web-shell-6](../packages
 
 ## Consequences
 
-- Session- and role-dependent markup resolves on the server, grounding [[web-shell-6](../packages/site/web-shell.md#web-shell-6)] and [[course-catalog-12](../packages/catalog/course-catalog.md#course-catalog-12)].
+- Session- and role-dependent markup resolves on the server, grounding [[web-shell-7](../packages/site/web-shell.md#web-shell-7)] and [[course-catalog-20](../packages/catalog/course-catalog.md#course-catalog-20)].
 - One build artifact deploys everywhere (the delivery package).
 - The component kit lives in the repository: design changes are commits, not dependency upgrades.
