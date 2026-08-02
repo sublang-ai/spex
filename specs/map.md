@@ -11,9 +11,6 @@ Code can be inconsistent with specs during development.
 
 Know the rules in [`meta.md`](meta.md) before authoring, modifying, or reviewing a DR, IR, or item.
 
-- DRs and IRs: see [Overall](meta.md#overall), [Record format](meta.md#record-format), and [Citation](meta.md#citation).
-- Items: see [Overall](meta.md#overall), [Item syntax](meta.md#item-syntax), [Spec packages](meta.md#spec-packages), [Testing](meta.md#testing), and [Citation](meta.md#citation).
-
 ## Layout
 
 ```text

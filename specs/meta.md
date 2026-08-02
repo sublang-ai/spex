@@ -6,7 +6,7 @@
 
 ## Intent
 
-This spec defines the structure and organization of specifications (specs), per [DR-000](decisions/000-spec-structure-format.md).
+This file defines the structure and organization of specifications (specs), per [DR-000](decisions/000-spec-structure-format.md).
 
 ## Overall
 
@@ -24,7 +24,9 @@ The `specs/` directory shall contain the following subdirectories and files:
 
 ### meta-23
 
-A spec in any form shall contain the minimal information, concisely expressed, to act on it or audit it, preferring bullets, tables, or (renderable) diagrams to prose.
+A spec in any form shall contain the minimal information, concisely expressed, to act on it or audit it, preferring bullets, tables, or (renderable) diagrams to prose:
+
+- For example, `map.md` limits its indexes to those an AI agent needs to find the right files.
 
 ### meta-25
 
@@ -71,7 +73,7 @@ Each spec item shall use the GEARS pattern [[1]], with its clauses and punctuati
 
 ### meta-7
 
-Where test cases can be expressed by Given-When-Then (GWT), their spec items shall map GWT to GEARS [[1]]:
+Where test cases can be expressed by Given-When-Then (GWT), their spec items shall map GWT to the GEARS clauses [[meta-6](#meta-6)]:
 
 | GWT | Clause |
 | --- | ------ |
@@ -92,7 +94,7 @@ Each spec item shall state one requirement in one GEARS statement [[meta-6](#met
 | Behavior | ordered steps or the cases and outcomes of one operation or decision |
 | Test | the assertions of one execution flow or one explicit case matrix |
 
-- An attachment may take a form such as a note, list, table, renderable diagram, or example.
+- An attachment may take a form such as a note, list, table, (renderable) diagram, or example.
 - A condition inside an attachment is a case label.
 - Differing stateful preconditions or triggers are evidence of additional spec items.
 
@@ -188,7 +190,7 @@ No DR or spec item shall cite an IR or name it in prose.
 
 ### meta-19
 
-An external reference shall cite an authoritative source (e.g., official docs) by a numbered marker (e.g., `[[1]]`) linked to a specific URL in the `References` section, which holds no uncited entry.
+An external reference shall cite an authoritative source (e.g., official docs) by a numbered marker (e.g., `[[1]]`) linked to a specific URL in the file's references section, which holds no uncited entry.
 
 ### meta-20
 
@@ -198,7 +200,7 @@ A test item shall identify every behavior it verifies by an inline citation at t
 
 ### meta-27
 
-Where a specs tree declares an authoring language — by this item's machine-readable marker line, in the exact format `Authoring language: <code>` with `<code>` of only ASCII letters, digits, and hyphens — the specs shall be authored in that language:
+Where a specs tree declares an authoring language — by this item's machine-readable marker line, in the exact format `Authoring language: <code>` with `<code>` of only ASCII letters, digits, and hyphens — spec content added for that project shall be authored in that language:
 
 Authoring language: en
 

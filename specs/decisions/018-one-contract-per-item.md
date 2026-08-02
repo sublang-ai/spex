@@ -18,7 +18,7 @@ Accepted
 
 ## Decision
 
-- **One requirement per item** [[meta-29](../meta.md#meta-29)]: each spec item has one governing GEARS statement, with every attachment introduced by its final colon and elaborating that requirement alone — ordered steps or the cases and outcomes of one operation or decision for Behavior, and the assertions of one execution flow or one explicit case matrix for a Test; an attachment may take a form such as a note, list, table, renderable diagram, or example.
+- **One requirement per item** [[meta-29](../meta.md#meta-29)]: each spec item has one governing GEARS statement, with every attachment introduced by its final colon and elaborating that requirement alone — ordered steps or the cases and outcomes of one operation or decision for Behavior, and the assertions of one execution flow or one explicit case matrix for a Test; an attachment may take a form such as a note, list, table, (renderable) diagram, or example.
   A condition inside an attachment is a case label, not a second trigger, so [[meta-6](../meta.md#meta-6)]'s one-trigger rule governs the statement and not its attachments; differing stateful preconditions or triggers are evidence of additional requirements; and an umbrella such as "handle correctly" names no requirement.
   Displaced commentary moves into the clause as a rider, into the attachment, or into a DR — never into shared section prose, which [[meta-8](../meta.md#meta-8)] forbids items to lean on.
 - **The rule sets a ceiling on cohesion, never a floor**: an item finer than the rule requires already conforms, so nothing is re-merged and no exception is needed for items already split — [[meta-12](../meta.md#meta-12)] reserves their ids and their citations stand.

@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
+<!-- spex-i18n-source: map.md sha256-6d93bd3c2c2fc35e0806229f45c751429ae4ef7ae86ff9e9089b76b0edbf7461 -->
 
 # 规约地图
 
@@ -10,9 +11,6 @@
 ## 编写和审阅规约
 
 在编写、修改或审阅 DR、IR 或条目前，先了解 [`meta.md`](meta.md) 中的规则。
-
-- DR 和 IR：见 [Overall](meta.md#overall)、[Record format](meta.md#record-format) 和 [Citation](meta.md#citation)。
-- 条目：见 [Overall](meta.md#overall)、[Item syntax](meta.md#item-syntax)、[Spec packages](meta.md#spec-packages)、[Testing](meta.md#testing) 和 [Citation](meta.md#citation)。
 
 ## 目录结构
 
@@ -36,7 +34,7 @@ meta.md       规约的规约
 | --- | --- | --- |
 | [IR-000](intents/000-spdx-headers.md) | 000-spdx-headers.md | 为适用文件添加 SPDX 头 |
 
-## 包
+## 规约包
 
 | 文件 | 摘要 |
 | --- | --- |

@@ -10,8 +10,8 @@ Accepted
 ## Context
 
 - `spex scaffold` emits English-only specs templates.
-- Teams authoring in another language need generated specs in that language without forking the tool.
-- Generated specs should read in the target language while the bundled translation surface stays minimal.
+- Teams authoring in another language need its writable syntax without forking the tool.
+- Generated specs should expose enough target-language syntax to author valid specs while instructions remain canonical English.
 - English remains canonical; most bundled content stays English.
 - The first non-English target is Chinese (`zh`).
 
@@ -36,44 +36,45 @@ Accepted
 
 ### Localization scope
 
-- A bundled file is localized only if it carries a surface form reproduced in generated specs — a heading, section title, or clause keyword — or is a living authoring surface that users and agents read and extend in the project's language, such as the spec index.
-- Language-neutral mechanics (item IDs, citation links, package rules, path naming) stay English.
-- A kept-English item must cite a localized surface form by item ID instead of hard-coding it (for example, the intent section required by [[meta-30](../meta.md#meta-30)]); this keeps byte-identical parity valid across overlays.
+- Localization is limited to surface forms project authors must emit and the frequently read spec index.
+- Outside the spec index, instructions and language-neutral mechanics stay English.
+- Every localized item body or non-item file that differs from English is source-pinned; file titles are the only unpinned difference.
 - No word-level glossary ships.
 
 Localized for `zh` in the first cut:
 
 | Target | Surface form | Why localize |
 | --- | --- | --- |
-| [[meta-30](../meta.md#meta-30)] | `## Intent` heading | appears in every item file |
-| [[meta-4](../meta.md#meta-4)] | DR section titles | headings in every decision record |
-| [[meta-5](../meta.md#meta-5)] | IR section titles | headings in every iteration record |
+| [[meta-4](../meta.md#meta-4)] | DR section-name literals | headings project authors must emit |
+| [[meta-5](../meta.md#meta-5)] | IR section-name literals | headings project authors must emit |
 | [[meta-6](../meta.md#meta-6)] | GEARS pattern + clause keywords | the keywords every item is written in |
-| [[meta-7](../meta.md#meta-7)] | GWT-to-GEARS mapping | companion to meta-6 |
-| [[meta-19](../meta.md#meta-19)] | `## References` section convention | heading in specs that cite sources |
-| [[meta-27](../meta.md#meta-27)] (new) | authoring-language declaration | see [Language as a spec item](#language-as-a-spec-item) |
-| `meta.md` reference `[1]` | GEARS reference URL | repointed to the Chinese page [[1]] |
-| `map.md` | spec index | short, user-facing, agent-extended |
+| [[meta-7](../meta.md#meta-7)] | GWT-to-GEARS mapping | the mapping authors use for Chinese test items |
+| [[meta-30](../meta.md#meta-30)] | package section-name literals | headings project authors must emit |
+| [[meta-27](../meta.md#meta-27)] (new) | `Authoring language: zh` | selects Chinese authoring; its instruction stays English |
+| `meta.md` reference `[1]` | Chinese GEARS source | supports the localized GEARS forms |
+| `meta.md` | file title | allowed title-only convenience |
+| `map.md` | complete spec index | read frequently by humans and updated in the project's language |
 
-- The first cut keeps these English: [DR-000](000-spec-structure-format.md), the git and licensing packages, the sample iteration record, the `agent-specs.txt` body, and every other meta item.
+- The first cut keeps these English: [DR-000](000-spec-structure-format.md), the git and licensing packages, the sample intent record, the `agent-specs.txt` body, and every other meta item.
+- meta-19 stays English because meta-4 and meta-30 own the localized reference-section names.
 - [DR-000](000-spec-structure-format.md) is not translated, but it is clarified once so localized scaffolds cannot make framework documents disagree: it defers DR/IR headings, the GWT mapping, and GEARS clause forms to the active `meta.md` instead of restating English forms as normative.
 
 ### Authoritative translations
 
-- Localized meta-6 and meta-7 draw on the published Chinese GEARS reference [[1]], which defines the clause meanings (静态前置条件 / 状态前置条件 / 触发 / 所要求的行为) and the GWT mapping; this DR does not treat the reference as fixing the exact Chinese clause keywords.
-- Exact Chinese surface wording is fixed in localized `meta.md` (meta-6), not by this DR, so it stays anchored to the cited reference without a separate glossary.
+- Localized meta-6 and meta-7 draw on the published Chinese GEARS reference [[1]], which defines the clause meanings (静态前置条件 / 状态前置条件 / 触发条件 / 所要求的行为) and the GWT mapping.
+- Exact Chinese wording is fixed in localized `meta.md`, not by this DR, so it stays anchored to the cited reference without a separate glossary.
 
 ### Language as a spec item
 
-- meta-27 is a new framework item: specs shall be authored in the language it declares.
+- meta-27 is a new framework item: spec content added for a project shall be authored in the language it declares; bundled instructions may remain English.
 - `--update` reads the same item to select localized templates, keeping the language self-described in `meta.md` with no separate marker or configuration file.
 - Agents read `meta.md` — reinforced by the `agent-specs.txt` pointer and `map.md` — before authoring: `--lang zh` writes a localized `meta.md` carrying meta-27, so new specs are authored in Chinese.
 - Before overwriting framework files, `--update` reads the existing meta-27 declaration, falls back to `en` when no declaration is present (a missing or pre-meta-27 `meta.md`), and rejects `--lang`; deliberate language switching is out of scope for the first cut.
 
 ### Overlay form and drift guard
 
-- Because several `meta.md` items are localized, each localized `meta.md` is a full overlay file, not injected regions.
-- The drift guard tests three things: completeness — every base `meta.md` item appears in each overlay, so new base items cannot be silently dropped; kept-English parity — untranslated items are byte-identical between the base and each overlay, catching accidental edits; translation freshness — each translated overlay item is pinned to the canonical hash of its English source item, so the test fails when the source changes without the translation being refreshed (for example, meta-6 changes in English but not in the `zh` overlay).
+- Localized `meta.md` and `map.md` are full overlay files, not injected regions.
+- The drift guard checks `meta.md` item completeness and per-item pins, with a whole-file pin for translated non-item content; translated `map.md` carries one whole-file pin and preserves the English index's link targets.
 
 ### File-history manifest
 
@@ -84,15 +85,15 @@ Localized for `zh` in the first cut:
 ## Consequences
 
 - English remains the source of truth; localization is additive and opt-in.
-- Generated specs read in the target language while bundled translations stay small.
+- Generated specs expose a target-language index and the forms needed for authoring while other instructions remain English.
 - GEARS terminology matches the published reference, avoiding a maintained glossary.
 - Exact Chinese clause renderings live in localized `meta.md` (meta-6), informed by the cited reference [[1]]; this DR does not pin individual renderings such as `shall`.
 - The authoring language is self-described in `meta.md`, so `--update` needs no hidden state.
 - New languages are added by adding an `i18n/<lang>/` overlay.
-- `meta.md` mixes English mechanics with localized surface-form items, and full overlay files duplicate both, so the drift guard must enforce parity and translation freshness per overlay; region injection would avoid duplication but was set aside for whole-file simplicity.
+- Full overlays duplicate canonical content, so the drift guard enforces source freshness per translated item or file; region injection was set aside for whole-file simplicity.
 - `--update` must resolve the language before overwriting framework files.
 - The authoring language is immutable after the first scaffold in the first cut; a repo that chose the wrong language waits for the future migration path, and mismatched `--lang` on an existing scaffold errors rather than silently diverging.
-- The translated set is a judgment call and may expand later (for example, meta-20, the DR-000 item-syntax section, or seed examples).
+- The translated set expands only when another target-language form is necessary to author valid specs.
 
 ## References
 

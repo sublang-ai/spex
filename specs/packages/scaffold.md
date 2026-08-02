@@ -268,10 +268,13 @@ Where bundled scaffold content is resolved for a language, the resolver shall re
 
 #### scaffold-32
 
-Where a localized `meta.md` overlay exists, the overlay shall include every English `meta-*` item:
+Where a localized `meta.md` or `map.md` overlay exists, every difference from its English source except the file title shall carry a current source pin:
 
-- for each untranslated item, the overlay item body remains byte-identical to the English item body;
-- for each translated item, the overlay item carries the canonical SHA-256 hash of its English source item, so source changes cannot leave a stale translation undetected.
+- a localized `meta.md` includes every English `meta-*` item;
+- translated non-item content in `meta.md` carries `<!-- spex-i18n-source: meta.md sha256-<digest> -->`, with the canonical SHA-256 hash of the English file;
+- an unchanged item body remains byte-identical and carries no source marker;
+- a changed item is preceded by `<!-- spex-i18n-source: <item-id> sha256-<digest> -->`, carrying the canonical SHA-256 hash of its English source item;
+- a translated `map.md` body carries `<!-- spex-i18n-source: map.md sha256-<digest> -->`, with the canonical SHA-256 hash of the English file, and preserves its Markdown link targets.
 
 ### Agent Spec Appending
 
@@ -344,7 +347,7 @@ Where the `scaffold` subcommand is exercised with language selection, the test s
 
 #### scaffold-34
 
-Where a localized `meta.md` overlay ships, the test suite shall enforce its completeness, kept-English parity, and translated-item source hashes ([[scaffold-32](#scaffold-32)]).
+Where localized `meta.md` or `map.md` overlays ship, the test suite shall enforce `meta.md` completeness and item/file source pins, plus the `map.md` file pin and link-target parity ([[scaffold-32](#scaffold-32)]).
 
 ## References
 
