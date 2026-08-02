@@ -43,7 +43,7 @@ When the user activates an attention entry, the Dashboard shall open the entry's
 
 #### dashboard-4
 
-While an attention entry is displayed, when its underlying condition resolves — the question is answered by a new Boss turn, the permission request is decided or its turn ends, the failure is acknowledged, or the awaiting-review session is viewed — the Dashboard shall remove that entry without any user action on the Dashboard itself.
+While an attention entry is displayed, when its underlying condition resolves — the question is answered by a new Boss turn, the permission request is decided or its turn ends, the failure is acknowledged, or the awaiting-review session is viewed — the Dashboard shall remove that entry without any user action on the Dashboard itself:
 
 - Resolving one entry removes no other entry.
 
@@ -51,7 +51,7 @@ While an attention entry is displayed, when its underlying condition resolves �
 
 #### dashboard-5
 
-While one or more project sessions are live, the Dashboard shall display a running-sessions overview listing, per session: the project name, the active playbook id (or an idle indicator when no engagement is active), a human-readable state label for the engagement's current state — tinted by the state's tone, with the raw state id in the tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and the elapsed time since the session started.
+While one or more project sessions are live, the Dashboard shall display a running-sessions overview listing, per session: the project name, the active playbook id (or an idle indicator when no engagement is active), a human-readable state label for the engagement's current state — tinted by the state's tone, with the raw state id in the tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and the elapsed time since the session started:
 
 - The overview updates as session records arrive, without a manual refresh.
 
@@ -59,7 +59,7 @@ While one or more project sessions are live, the Dashboard shall display a runni
 
 #### dashboard-6
 
-Where a project is bound to a forge repository and the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)) reports ready, the Dashboard shall display next-work lists for that project: open issues to do and open pull requests to review.
+Where a project is bound to a forge repository and the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)) reports ready, the Dashboard shall display next-work lists for that project: open issues to do and open pull requests to review:
 
 - Each list entry shows its title and number; activating it opens its canonical forge URL in the external browser.
 - Each list shows the age of its data and refreshes when the user triggers a manual refresh [[dashboard-14](#dashboard-14)].
@@ -68,7 +68,7 @@ Where a project is bound to a forge repository and the forge adapter ([DR-006](.
 
 #### dashboard-7
 
-Where completed turns have reported usage, the Dashboard shall display usage and cost rollups aggregated per session and per calendar day, with per-day totals spanning all projects.
+Where completed turns have reported usage, the Dashboard shall display usage and cost rollups aggregated per session and per calendar day, with per-day totals spanning all projects:
 
 - The rollups reflect only usage reported by adapter done payloads [[dashboard-13](#dashboard-13)]; the Dashboard displays no estimated figures for turns that reported none.
 
@@ -89,7 +89,7 @@ While a Dashboard section has no content, the Dashboard shall display guidance i
 
 #### dashboard-9
 
-The Dashboard shall publish an attention count equal to the number of entries in the attention queue, for consumers such as the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md)).
+The Dashboard shall publish an attention count equal to the number of entries in the attention queue, for consumers such as the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md)):
 
 - When the queue changes, the published count updates to the new queue size.
 
@@ -97,7 +97,7 @@ The Dashboard shall publish an attention count equal to the number of entries in
 
 #### dashboard-20
 
-When the next-work lists render with items from more than one project, the Dashboard shall group issues and pull requests by project with per-project counts, order items within each group by update recency, and show each item's labels.
+When the next-work lists render with items from more than one project, the Dashboard shall group issues and pull requests by project with per-project counts, order items within each group by update recency, and show each item's labels:
 
 - When the user selects a project filter, the Dashboard shows only that project's items until the filter is cleared.
 
@@ -135,7 +135,7 @@ While the app store's record history and review state are intact, when the core 
 
 #### dashboard-12
 
-Where Dashboard state is assembled, the dashboard read model shall source live-session state — attention conditions, running sessions, current engagement state ids — from the in-process record bus, and historical state — finished sessions, usage rollups, review markers — from the app-local store ([DR-004](../decisions/004-config-and-persistence.md)).
+Where Dashboard state is assembled, the dashboard read model shall source live-session state — attention conditions, running sessions, current engagement state ids — from the in-process record bus, and historical state — finished sessions, usage rollups, review markers — from the app-local store ([DR-004](../decisions/004-config-and-persistence.md)):
 
 - It does not query the embedded runtime directly, and it does not reach a forge except through the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)).
 
@@ -143,7 +143,7 @@ Where Dashboard state is assembled, the dashboard read model shall source live-s
 
 #### dashboard-13
 
-Where usage rollups are computed, the dashboard read model shall aggregate exactly the usage figures carried by player `done` events, keyed per session and per calendar day of the record timestamp in the local timezone.
+Where usage rollups are computed, the dashboard read model shall aggregate exactly the usage figures carried by player `done` events, keyed per session and per calendar day of the record timestamp in the local timezone:
 
 - Usage carried by `hidden`-visibility records is included, since hidden traffic still incurs cost ([DR-003](../decisions/003-runtime-reuse.md)).
 - A `done` event carrying no usage contributes nothing; the read model does not substitute estimates.

@@ -9,8 +9,7 @@ Accepted
 
 ## Context
 
-Packages name their platform subjects abstractly — "the identity store", "the deployment's media provider", "the pipeline" — per [[meta-14](../meta.md#meta-14)].
-The deployment must supply one concrete service for each subject; each choice is an inspectable installation obligation, stated by the platform-services package's supply items.
+Packages state required behavior without selecting a platform, and the platform-services package records the installation's inspectable realizations, per [[meta-14](../meta.md#meta-14)].
 This record holds the choice of services and its tradeoffs.
 
 ## Decision

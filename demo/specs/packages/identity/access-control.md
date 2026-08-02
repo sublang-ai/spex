@@ -15,7 +15,7 @@ Role administration beyond the configured designation — role lists, promotion 
 
 #### access-control-1
 
-Where the deployment configuration names a GitHub account by its stable account ID as the initial admin, when an account completes sign-in [[github-login-2](github-login.md#github-login-2)], the site shall hold the admin role for the account when its stable ID matches the configured one, and the member role otherwise.
+Where the deployment configuration names a GitHub account by its stable account ID as the initial admin, when an account completes sign-in [[github-login-2](github-login.md#github-login-2)], the site shall hold the admin role for the account when its stable ID matches the configured one, and the member role otherwise:
 
 - Usernames are mutable and never designate the initial admin.
 

@@ -13,7 +13,7 @@ This spec defines the `scaffold` subcommand: its user-visible behavior, the impl
 
 #### scaffold-1
 
-Where the `scaffold` subcommand is invoked with a `<path>` argument, the CLI shall create the specs directory structure inside the specified path.
+Where the `scaffold` subcommand is invoked with a `<path>` argument, the CLI shall create the specs directory structure inside the specified path:
 
 - The path must exist and be a directory; otherwise the CLI exits non-zero.
 
@@ -107,13 +107,13 @@ Where the `scaffold` subcommand is invoked without `--update`, when `--lang <cod
 
 #### scaffold-29
 
-Where the `scaffold` subcommand is invoked without `--update` while `specs/meta.md` exists, the CLI shall treat the existing authoring-language declaration as active, or `en` when no declaration is present.
+Where the `scaffold` subcommand is invoked without `--update` while `specs/meta.md` exists, the CLI shall treat the existing authoring-language declaration as active, or `en` when no declaration is present:
 
 - When an explicit `--lang` does not match the active language, the CLI exits non-zero without changing the existing scaffold.
 
 #### scaffold-30
 
-Where the `scaffold` subcommand is invoked with `--update`, the CLI shall reject `--lang` and exit non-zero.
+Where the `scaffold` subcommand is invoked with `--update`, the CLI shall reject `--lang` and exit non-zero:
 
 - The update language is read from the existing `specs/meta.md` authoring-language declaration, or `en` when no declaration is present.
 
@@ -152,7 +152,7 @@ Where `copyTemplates()` is called, it shall recursively copy files from the bund
 
 #### scaffold-9
 
-Where `getScaffoldDir()` resolves the bundled scaffold path, it shall navigate from the `dist/` output directory up to the package root and return the `scaffold/` directory path.
+Where `getScaffoldDir()` resolves the bundled scaffold path, it shall navigate from the `dist/` output directory up to the package root and return the `scaffold/` directory path:
 
 - In this repository the bundle's source of truth is the top-level `scaffold/` directory — CLI implementation detail, kept outside both the package sources and `specs/`.
 - The package build stages it into `packages/cli/scaffold/` (gitignored) so the npm `files` entry can ship it; the resolver and tests read the staged copy.
@@ -187,7 +187,7 @@ Where `getSeedSpecFiles()` is called, it shall return the file paths classified 
 
 #### scaffold-21
 
-Where `getFileHistory(relPath)` is called, it shall load the bundled file-history manifest at `scaffold/.file-history.json` and return the array of canonical SHA-256 content hashes recorded for that path, or an empty array when the path is not present.
+Where `getFileHistory(relPath)` is called, it shall load the bundled file-history manifest at `scaffold/.file-history.json` and return the array of canonical SHA-256 content hashes recorded for that path, or an empty array when the path is not present:
 
 - Canonical content hashing normalizes CRLF and CR line endings to LF for text content before hashing; content containing NUL bytes is hashed byte-for-byte.
 
@@ -215,7 +215,7 @@ Where `isPristine(basePath, relPath, language)` is called, it shall classify the
 
 #### scaffold-47
 
-Where `getLegacyFileHistory(relPath)` is called, it shall load the bundled `scaffold/.legacy-file-history.json` manifest and return the recorded canonical hash history for that path, or an empty array when the path is absent or the manifest is missing.
+Where `getLegacyFileHistory(relPath)` is called, it shall load the bundled `scaffold/.legacy-file-history.json` manifest and return the recorded canonical hash history for that path, or an empty array when the path is absent or the manifest is missing:
 
 - The legacy manifest holds exactly the previously bundled paths that no longer ship — the old `specs/user/`, `specs/dev/`, and `specs/test/` seeds and the retired `.gitkeep` placeholders of `specs/interactions/` and `specs/compositions/` — with their full hash histories, and it stays disjoint from the live manifest of [[scaffold-21](#scaffold-21)].
 - Where `isLegacyPristine(basePath, relPath)` is called, it classifies the file at that path as `missing`, `pristine`, or `modified` against the legacy manifest using the canonical content hash of [[scaffold-21](#scaffold-21)].
@@ -290,7 +290,7 @@ Where `appendAgentSpecs()` is called, it shall read `scaffold/agent-specs.txt` a
 
 #### scaffold-24
 
-Where `--update` is exercised ([[scaffold-11](#scaffold-11)]), the test suite shall cover each row of the state matrix below — the framework ([[scaffold-14](#scaffold-14)]) and seed ([[scaffold-23](#scaffold-23)]) refresh paths — asserting both (a) the printed indicator for that path and (b) the post-run file-system state, so that an over-eager indicator cannot pass while bytes remain unchanged or vice versa.
+Where `--update` is exercised ([[scaffold-11](#scaffold-11)]), the test suite shall cover each row of the state matrix below — the framework ([[scaffold-14](#scaffold-14)]) and seed ([[scaffold-23](#scaffold-23)]) refresh paths — asserting both (a) the printed indicator for that path and (b) the post-run file-system state, so that an over-eager indicator cannot pass while bytes remain unchanged or vice versa:
 
 - Hash comparisons use the canonical content hash from [[scaffold-21](#scaffold-21)].
 - A text file with CRLF line endings and otherwise bundled-current content remains in the bundled-current cell and preserves its existing bytes.
@@ -329,7 +329,7 @@ Where `--update` replaces a framework file, the test suite shall run the real CL
 
 #### scaffold-38
 
-Where the `scaffold` subcommand creates a project, the test suite shall assert that a top-level `LICENSE` file is written whose bytes equal the bundled `scaffold/LICENSE` ([[scaffold-36](#scaffold-36)]), that its canonical content hash equals the authoritative Apache License 2.0 hash ([[scaffold-37](#scaffold-37)]), and that no `NOTICE` file is written.
+Where the `scaffold` subcommand creates a project, the test suite shall assert that a top-level `LICENSE` file is written whose bytes equal the bundled `scaffold/LICENSE` ([[scaffold-36](#scaffold-36)]), that its canonical content hash equals the authoritative Apache License 2.0 hash ([[scaffold-37](#scaffold-37)]), and that no `NOTICE` file is written:
 
 - Where a `LICENSE` file already exists at the target root, the suite asserts that `scaffold` leaves its bytes unchanged and reports it with an `(already exists)` indicator ([[scaffold-36](#scaffold-36)]).
 

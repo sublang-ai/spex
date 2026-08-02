@@ -105,13 +105,15 @@ While a lesson's stored reference no longer resolves with the provider, the cour
 
 When a course is created, the catalog shall assign it a URL slug derived from its title, made unique by suffixing on collision and never changed thereafter.
 
-## Internal Behavior
-
-### Structure Integrity
+### Deletion Boundary
 
 #### course-catalog-18
 
 When a course is deleted [[course-catalog-12](#course-catalog-12)], the catalog shall delete its sections, lessons, and stored media references in the same operation, and shall not delete or alter any asset of the media provider.
+
+## Internal Behavior
+
+### Structure Integrity
 
 #### course-catalog-19
 

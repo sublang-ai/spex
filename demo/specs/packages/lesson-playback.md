@@ -12,10 +12,11 @@ The journey spans the catalog's public browsing, GitHub login, the video library
 
 ### lesson-playback-1
 
-Where a published course carries a lesson with a resolvable media attachment [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)], when an anonymous visitor opens that lesson [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)], the site shall carry them from landing to playback across one sign-in:
+Where a published course carries a lesson with a resolvable media attachment [[course-catalog-2](catalog/course-catalog.md#course-catalog-2)], when an anonymous visitor starts from the home page's course list [[site-navigation-2](site-navigation.md#site-navigation-2)] [[course-catalog-1](catalog/course-catalog.md#course-catalog-1)] and opens that lesson [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)], the site shall carry them from course discovery to playback across one sign-in:
 
-1. the lesson view shows the player in its sign-in-required state [[video-library-7](catalog/video-library.md#video-library-7)];
-2. signing in with GitHub from there [[github-login-2](identity/github-login.md#github-login-2)] returns the visitor to the same lesson with the player active [[video-library-6](catalog/video-library.md#video-library-6)].
+1. the visitor can follow the course list into the course and lesson, whose view shows the lesson title with its course and section context;
+2. the lesson view shows the player in its sign-in-required state [[video-library-7](catalog/video-library.md#video-library-7)];
+3. signing in with GitHub from there [[github-login-2](identity/github-login.md#github-login-2)] returns the visitor to the same lesson with the player active [[video-library-6](catalog/video-library.md#video-library-6)].
 
 ### lesson-playback-2
 
@@ -27,9 +28,9 @@ While a signed-in session is active, when the member opens any published lesson 
 
 Where a deployment is seeded with a published fixture course whose lesson carries a fixture asset, and a stub GitHub provider is configured, when the acceptance suite walks the journey from landing to playback, the suite shall assert each leg:
 
-1. walking from the home page's course list [[site-navigation-2](site-navigation.md#site-navigation-2)] [[course-catalog-1](catalog/course-catalog.md#course-catalog-1)] into the course and the lesson shows the lesson title with its course and section context [[course-catalog-3](catalog/course-catalog.md#course-catalog-3)] and the player in its sign-in-required state [[video-library-7](catalog/video-library.md#video-library-7)];
-2. signing in from that lesson [[github-login-2](identity/github-login.md#github-login-2)] returns the site to the same lesson [[lesson-playback-1](#lesson-playback-1)], and the media element reaches the playing state through a fresh access grant [[lesson-playback-2](#lesson-playback-2)], [[video-library-6](catalog/video-library.md#video-library-6)].
+1. walking from the home page's course list into the course and the lesson shows the lesson title with its course and section context and the player in its sign-in-required state [[lesson-playback-1](#lesson-playback-1)];
+2. signing in from that lesson returns the site to the same lesson [[lesson-playback-1](#lesson-playback-1)], and the media element reaches the playing state [[lesson-playback-2](#lesson-playback-2)].
 
 ### lesson-playback-4
 
-Where the same seeded deployment renders at a 360 px viewport, when the acceptance suite walks the same journey through the compact menu, the suite shall assert every step is operable without horizontal scrolling [[web-shell-4](site/web-shell.md#web-shell-4)] and playback reaches the playing state [[lesson-playback-1](#lesson-playback-1)], [[video-library-6](catalog/video-library.md#video-library-6)].
+Where the same seeded deployment renders at a 360 px viewport, when the acceptance suite repeats the same journey through the compact menu, the suite shall assert playback reaches the playing state [[lesson-playback-1](#lesson-playback-1)] [[lesson-playback-2](#lesson-playback-2)].

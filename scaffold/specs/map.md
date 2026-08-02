@@ -28,13 +28,13 @@ meta.md       The spec of specs
 
 | ID | File | Summary |
 | --- | --- | --- |
-| DR-000 | [000-spec-structure-format.md](decisions/000-spec-structure-format.md) | Spec structure, format, and naming conventions |
+| [DR-000](decisions/000-spec-structure-format.md) | 000-spec-structure-format.md | Spec structure, format, and naming conventions |
 
 ## Intents
 
 | ID | File | Intent |
 | --- | --- | --- |
-| IR-000 | [000-spdx-headers.md](intents/000-spdx-headers.md) | Add SPDX headers to applicable files |
+| [IR-000](intents/000-spdx-headers.md) | 000-spdx-headers.md | Add SPDX headers to applicable files |
 
 ## Packages
 

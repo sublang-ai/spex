@@ -5,8 +5,7 @@
 
 ## Intent
 
-The installed platform wires the product to its concrete backing services: Supabase for identity, data, and media storage; Vercel for hosting and configuration; GitHub for the repository and its pipeline.
-Each service seam the product's packages leave open — session issuance, the identity and role stores, catalog data, media storage and access grants, hosting, and the pipeline — is supplied by exactly one of these services, here and nowhere else.
+The installed platform realizes the product's session, persistence, protected-media, hosting, and deployment behavior through Supabase, Vercel, and GitHub, here and nowhere else.
 No product user observes these seams, so verification inspects a deployment rather than walking a journey.
 
 ## External Behavior
@@ -17,11 +16,11 @@ Where sessions are established by GitHub sign-in [[github-login-2](identity/gith
 
 ### platform-services-2
 
-Where the identity store maintains user records [[github-login-8](identity/github-login.md#github-login-8)], [[github-login-9](identity/github-login.md#github-login-9)], the role store records each account's role, the catalog store keeps content in explicit order, and asset records live in the library's asset store, the installed platform shall keep those stores in the environment's Supabase Postgres project — the installation supplies the storage only; each package's invariants over that storage remain its own.
+Where user records are created and refreshed [[github-login-8](identity/github-login.md#github-login-8)] [[github-login-9](identity/github-login.md#github-login-9)], requests act under each account's current role [[access-control-2](identity/access-control.md#access-control-2)], committed catalog changes appear atomically on the next read [[course-catalog-14](catalog/course-catalog.md#course-catalog-14)], and library assets keep stable identities [[video-library-8](catalog/video-library.md#video-library-8)], the installed platform shall realize those persistence behaviors through the environment's Supabase Postgres project.
 
 ### platform-services-3
 
-Where the content store holds asset content privately and the library's short-lived access grants rely on an installed grant mechanism, the installed platform shall back the content store with a private Supabase Storage bucket and realize each grant as a signed URL whose expiry is the grant's configured expiry.
+Where stored asset content has no permanently valid public URL and requires a valid access grant [[video-library-12](catalog/video-library.md#video-library-12)], the library issues access only after host authorization [[video-library-11](catalog/video-library.md#video-library-11)] and stops serving deleted assets [[video-library-5](catalog/video-library.md#video-library-5)], the installed platform shall realize those privacy, access, deletion, and grant-validity behaviors through a private Supabase Storage bucket and signed URLs that remain redeemable until the grant's expiry [[video-library-14](catalog/video-library.md#video-library-14)].
 
 ### platform-services-4
 
@@ -35,7 +34,7 @@ Where required checks report on a pull request [[delivery-1](ops/delivery.md#del
 
 ### platform-services-6
 
-Where behavior follows deployment configuration — the initial-admin account ID [[access-control-1](identity/access-control.md#access-control-1)], the session lifetime [[github-login-7](identity/github-login.md#github-login-7)], the upload size cap [[video-library-1](catalog/video-library.md#video-library-1)], the grant expiry, and the secrets and variables of the platform's environment configuration [[delivery-7](ops/delivery.md#delivery-7)] — the installed platform shall hold those values in the Vercel project's per-environment variables, secrets marked as such, and the pipeline's credentials in the repository's GitHub Actions secrets.
+Where behavior depends on deployment configuration — the initial-admin designation [[access-control-1](identity/access-control.md#access-control-1)], session expiry [[github-login-7](identity/github-login.md#github-login-7)], the configured size cap governing upload acceptance [[video-library-1](catalog/video-library.md#video-library-1)], signed-URL expiry [[platform-services-3](#platform-services-3)], and secret handling [[delivery-7](ops/delivery.md#delivery-7)] — the installed platform shall realize those configurable behaviors through the Vercel project's per-environment variables, secrets marked as such, and the pipeline's credentials in the repository's GitHub Actions secrets.
 
 ## Verification
 
@@ -53,11 +52,11 @@ Where the audit suite inspects a deployed environment's configuration and networ
 
 Where a fixture pull request runs through the pipeline, the audit suite shall assert each leg:
 
-1. the required checks report from GitHub Actions [[delivery-1](ops/delivery.md#delivery-1)] and branch protection refuses the merge while one fails [[platform-services-5](#platform-services-5)], [[delivery-2](ops/delivery.md#delivery-2)];
+1. the required checks report from GitHub Actions and branch protection refuses the merge while one fails [[platform-services-5](#platform-services-5)];
 2. the pipeline's credentials resolve from the repository's GitHub Actions secrets with none in tracked content [[platform-services-6](#platform-services-6)];
-3. the preview publishes on Vercel against a non-production Supabase project disjoint from production's [[platform-services-4](#platform-services-4)], [[delivery-5](ops/delivery.md#delivery-5)];
-4. a default-branch commit reaches production through the Git integration with no manual step [[platform-services-4](#platform-services-4)], [[delivery-4](ops/delivery.md#delivery-4)].
+3. the preview publishes on Vercel against a non-production Supabase project disjoint from production's [[platform-services-4](#platform-services-4)];
+4. a default-branch commit reaches production through the Git integration with no manual step [[platform-services-4](#platform-services-4)].
 
 ### platform-services-9
 
-Where production is served through the Vercel Git integration, the audit suite shall assert by deployment inspection that the serving revision reports the default-branch commit the integration built it from [[platform-services-4](#platform-services-4)] — not merely a commit that exists on that branch [[delivery-6](ops/delivery.md#delivery-6)].
+Where production is served through the Vercel Git integration, the audit suite shall assert by deployment inspection that the serving revision reports the default-branch commit the integration built it from [[platform-services-4](#platform-services-4)] — not merely a commit that exists on that branch.

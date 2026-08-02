@@ -17,7 +17,7 @@ Integration coverage is exercised through the core service's WebSocket protocol 
 
 #### settings-1
 
-Where the Settings surface is open, the Settings surface shall present the Captain's agent editor over the shared config's top-level `captain` entry, with the fields of an inline agent block: adapter (one of the embedded runtime's known adapters, each carrying its readiness indicator), optional model, optional reasoning effort offered only from the selected adapter's effort vocabulary, and permissions (mode `auto` or `bypass`, optional writable paths).
+Where the Settings surface is open, the Settings surface shall present the Captain's agent editor over the shared config's top-level `captain` entry, with the fields of an inline agent block: adapter (one of the embedded runtime's known adapters, each carrying its readiness indicator), optional model, optional reasoning effort offered only from the selected adapter's effort vocabulary, and permissions (mode `auto` or `bypass`, optional writable paths):
 
 - When a captain edit is saved, the change appears in the shared config file's `captain` entry as a merge patch that alters only the fields the editor surfaced, preserving hand-written fields such as `instruction` and granular permissions (see [[settings-21](#settings-21)]).
 
@@ -31,13 +31,13 @@ While a pending Settings edit violates a shared-config validation rule — the s
 
 #### settings-3
 
-While any pending edit in the Settings surface violates a shared-config validation rule ([DR-004](../decisions/004-config-and-persistence.md), amended by [DR-019](../decisions/019-inline-agent-configuration.md)), when the user attempts to save, the Settings surface shall not write the shared config file and shall state which violations block the save.
+While any pending edit in the Settings surface violates a shared-config validation rule ([DR-004](../decisions/004-config-and-persistence.md), amended by [DR-019](../decisions/019-inline-agent-configuration.md)), when the user attempts to save, the Settings surface shall not write the shared config file and shall state which violations block the save:
 
 - The Settings surface never writes an on-disk config that the shared validation rules reject, however small the saved merge patch.
 
 #### settings-4
 
-Where the Settings surface is open, the Settings surface shall display the captain configuration from the shared config's top-level `captain` entry in the Captain's agent editor [[settings-1](#settings-1)], rendering a hand-written scalar adapter id as that adapter's default agent block with no shorthand label.
+Where the Settings surface is open, the Settings surface shall display the captain configuration from the shared config's top-level `captain` entry in the Captain's agent editor [[settings-1](#settings-1)], rendering a hand-written scalar adapter id as that adapter's default agent block with no shorthand label:
 
 - When a captain edit is saved, the entry appears in the shared config file as an inline agent block, a scalar entry becoming a block on that first save.
 
@@ -45,7 +45,7 @@ Where the Settings surface is open, the Settings surface shall display the capta
 
 #### settings-5
 
-Where the Settings surface is open, the Settings surface shall show a per-adapter readiness panel holding one deduplicated entry per adapter the shared config references, each entry naming the positions using that adapter (`captain`, `<playbook>.<role>`) and reflecting the launcher-equivalent readiness checks of [DR-004](../decisions/004-config-and-persistence.md): ready, not ready, or unknown for an adapter with no preflight rule.
+Where the Settings surface is open, the Settings surface shall show a per-adapter readiness panel holding one deduplicated entry per adapter the shared config references, each entry naming the positions using that adapter (`captain`, `<playbook>.<role>`) and reflecting the launcher-equivalent readiness checks of [DR-004](../decisions/004-config-and-persistence.md): ready, not ready, or unknown for an adapter with no preflight rule:
 
 - When an adapter is not ready, its entry includes concrete fix instructions naming the environment variable to set or the adapter's login step (for example, set `ANTHROPIC_API_KEY` or log in with the `claude` CLI), and an adapter with no preflight rule carries verify-yourself guidance instead.
 
@@ -53,7 +53,7 @@ Where the Settings surface is open, the Settings surface shall show a per-adapte
 
 #### settings-6
 
-Where the Settings surface is open, the Settings surface shall provide editors for the shared config's `layout` (pane column weights), `notifications`, and `theme` maps.
+Where the Settings surface is open, the Settings surface shall provide editors for the shared config's `layout` (pane column weights), `notifications`, and `theme` maps:
 
 - When a preference change is saved, the change appears under the corresponding top-level map in the shared config file.
 
@@ -65,7 +65,7 @@ When a Settings edit is saved, the Settings surface shall write the shared confi
 
 #### settings-8
 
-While the Settings surface is open, when the shared config file changes on disk from outside the app, the Settings surface shall refresh the displayed values to the new file content and show a notice that the config changed externally.
+While the Settings surface is open, when the shared config file changes on disk from outside the app, the Settings surface shall refresh the displayed values to the new file content and show a notice that the config changed externally:
 
 - When the external change conflicts with unsaved edits in the Settings surface, the notice says so; resolution is last-writer-wins per [DR-004](../decisions/004-config-and-persistence.md).
 
@@ -97,7 +97,7 @@ While the shared config file is missing or invalid, the Settings surface shall s
 
 #### settings-11
 
-Where the core service validates the shared config — at load for session composition and on a Settings save command — the core service shall use a single validation module applying one launcher-parity rule set ([DR-019](../decisions/019-inline-agent-configuration.md)) with stable rule identifiers in both paths: inline agent blocks with scalar adapter ids normalizing to bare-adapter blocks, adapter ids bounded by the embedded runtime's known set, and reasoning efforts bounded by each adapter's vocabulary.
+Where the core service validates the shared config — at load for session composition and on a Settings save command — the core service shall use a single validation module applying one launcher-parity rule set ([DR-019](../decisions/019-inline-agent-configuration.md)) with stable rule identifiers in both paths: inline agent blocks with scalar adapter ids normalizing to bare-adapter blocks, adapter ids bounded by the embedded runtime's known set, and reasoning efforts bounded by each adapter's vocabulary:
 
 - A config rejected at load time is rejected on save with the same rule identifier, and vice versa; the retired `profiles` map and `profile` key are the one asymmetry — migrated in place at load, rejected in a save [[settings-2](#settings-2)].
 
@@ -109,7 +109,7 @@ When a Settings save command carries a merge patch whose resulting config fails 
 
 #### settings-13
 
-When the core service applies an accepted Settings save to the shared config file, the core service shall perform a targeted YAML edit: comments, key order, and keys not touched by the edit shall be preserved, and file content outside the edited nodes shall remain byte-identical.
+When the core service applies an accepted Settings save to the shared config file, the core service shall perform a targeted YAML edit: comments, key order, and keys not touched by the edit shall be preserved, and file content outside the edited nodes shall remain byte-identical:
 
 - Reformatting is confined to the edited nodes.
 
@@ -117,7 +117,7 @@ When the core service applies an accepted Settings save to the shared config fil
 
 #### settings-14
 
-Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — one deduplicated entry per adapter the active config references, each carrying the positions using it (`captain`, `<playbook>.<role>`) — applying per-adapter rules identical to the playbook launcher's ([DR-004](../decisions/004-config-and-persistence.md)): `claude` is ready when `ANTHROPIC_API_KEY` is set or `~/.claude` exists; `codex` is ready when `OPENAI_API_KEY` is set or `~/.codex` exists; an adapter with no preflight rule shall be reported with null readiness and verify-yourself guidance rather than not ready.
+Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — one deduplicated entry per adapter the active config references, each carrying the positions using it (`captain`, `<playbook>.<role>`) — applying per-adapter rules identical to the playbook launcher's ([DR-004](../decisions/004-config-and-persistence.md)): `claude` is ready when `ANTHROPIC_API_KEY` is set or `~/.claude` exists; `codex` is ready when `OPENAI_API_KEY` is set or `~/.codex` exists; an adapter with no preflight rule shall be reported with null readiness and verify-yourself guidance rather than not ready:
 
 - Environment lookups use the captured login-shell environment ([DR-004](../decisions/004-config-and-persistence.md)), not the bare app process environment.
 
@@ -125,7 +125,7 @@ Where the core service evaluates adapter readiness, the core service shall repor
 
 #### settings-15
 
-While the core service watches the shared config file, when the file changes on disk from a write the core service did not perform, the core service shall reload and revalidate the file and push the updated config state together with an external-change notice over the WebSocket protocol.
+While the core service watches the shared config file, when the file changes on disk from a write the core service did not perform, the core service shall reload and revalidate the file and push the updated config state together with an external-change notice over the WebSocket protocol:
 
 - Writes performed by the core service do not trigger the external-change notice.
 

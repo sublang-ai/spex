@@ -22,11 +22,8 @@ While no course exists, when the admin opens the course manager, the path from a
 
 ### admin-bootstrap-3
 
-Where a deployment with an empty database is configured with a stub GitHub provider and an initial-admin account, when the acceptance suite completes sign-in from the guard's redirect off its course-manager request, the suite shall assert each audience's admin surface:
-
-1. signed in as the configured account [[github-login-2](identity/github-login.md#github-login-2)] [[access-control-1](identity/access-control.md#access-control-1)], the header carries the Admin entry [[web-shell-2](site/web-shell.md#web-shell-2)] and the course manager — the requested target — loads [[admin-bootstrap-1](#admin-bootstrap-1)];
-2. signed in as another account, no Admin entry appears and the course manager responds not-authorized [[access-control-4](identity/access-control.md#access-control-4)].
+Where a deployment with an empty database is configured with a stub GitHub provider and an initial-admin account, when the acceptance suite completes sign-in from the guard's redirect off its course-manager request, the suite shall assert the configured account is treated as admin from the first response: the header carries the Admin entry and the course manager — the requested target — loads [[admin-bootstrap-1](#admin-bootstrap-1)].
 
 ### admin-bootstrap-4
 
-Where the configured account signs in on the empty deployment, the acceptance suite shall assert exactly one user record exists [[github-login-8](identity/github-login.md#github-login-8)], holding the admin role [[access-control-5](identity/access-control.md#access-control-5)], and that the course manager presents creation as its primary action [[admin-bootstrap-2](#admin-bootstrap-2)] [[course-catalog-7](catalog/course-catalog.md#course-catalog-7)]; and that one create action from there yields the site's first course — the path from the empty site one action deep [[admin-bootstrap-2](#admin-bootstrap-2)].
+Where the configured account signs in on the empty deployment, the acceptance suite shall assert the account is treated as admin [[admin-bootstrap-1](#admin-bootstrap-1)], and the course manager presents creation as its primary action, with one create action yielding the site's first course [[admin-bootstrap-2](#admin-bootstrap-2)].

@@ -32,7 +32,7 @@ Decisions and intents are stored as records.
   - Decision records (DRs) follow the ADR (Architectural Decision Record) format [[1]].
   - Intent records (IRs) plan an intent's implementation and track its progress [[meta-5](../meta.md#meta-5)].
 - **Items** must follow the GEARS pattern [[2]] to specify behaviors.
-Each item file is a spec package, stating the intent its items share [[meta-30](../meta.md#meta-30)].
+A spec package collects spec items that share an intent.
 
 ### Organization
 
@@ -48,31 +48,31 @@ Spex creates the default `specs/` directory under the repo root, with the follow
 
 ### Spec packages
 
-A spec package is a collection of behaviors for a shared intent.
-It is the unit of spec authoring, reuse, extension, and composition.
+A spec package is a collection of behaviors for a shared intent, in one file under `packages/`.
+It is the unit of spec authoring, reuse, customization, and composition.
 
-A spec package is one file under `packages/` or its subdirectory.
 For example, a spec package for generating short URLs may be `specs/packages/signing/gen-url.md`, where `signing/` is a local collection of related packages for development convenience.
 
-Each package file carries the same sections in the following order [[meta-30](../meta.md#meta-30)]:
+Each package file carries these sections in this order [[meta-30](../meta.md#meta-30)]:
 
+- `Intent` for the purpose the package's items share.
 - `External Behavior` for outcomes and guarantees the package's users rely on.
 A package's user may be a human or a system component.
-- `Internal Behavior` for implementation hidden from the package's users.
+- `Internal Behavior` (optional) for behavior hidden from the package's users.
 - `Verification` for test items that check the package's own claims.
+- `References` (optional) for external sources.
 
-A behavior phrase can bind to another package's External Behavior by citing it [[meta-14](../meta.md#meta-14)].
-But a spec package remains meaningfully self-contained.
-It reads in full without following any link.
+An installed package can be customized in place by adding, changing, or deleting spec items in its file; this changes only the installed copy and creates no peer package relationship.
 
 ### Package relationships
 
-Packages relate through one mechanism: a citation binding a general behavior to a specific External Behavior of another package.
-Three patterns cover most cases:
+A package behavior shall express every peer package relationship through binding citations to peer External Behavior [[meta-14](../meta.md#meta-14)]:
 
-- **Use**. A package relies on another's behavior and cites it where the reliance is.
-- **Extension**. A new package adds behavior for an existing area, with the extended package untouched.
-- **Composition**. A package states behavior that emerges only when several packages work together.
+| Case | Form |
+| --- | --- |
+| Fixed binding | The package definition fixes the binding to a required behavior at the exact phrase the cited behavior makes specific. |
+| Polymorphic binding | Instantiation resolves the binding to a selected behavior at the exact phrase the cited behavior makes specific. |
+| Composition | A behavior states an integrated outcome and cites each contributing behavior at the exact phrase it makes specific. |
 
 ### Citations
 
@@ -86,10 +86,10 @@ IRs may cite, but must not be cited by, DRs or items.
 
 - Consistent structure and format across development cycles
 - One file per package: a single read covers a package's external behavior, internal behavior, and verification
-- One package kind and one relationship mechanism cover use, extension, and composition
-- Every relationship is visible as a citation at the phrase that relies on it
+- One package kind supports in-place customization; one binding-citation form expresses every peer package relationship
+- Every peer package relationship is visible as a citation at the phrase that relies on it
 - A package stands alone once its citations are stripped
-- Flexible expression of interface, design, and implementation
+- Flexible expression of external, internal, and composed behavior
 
 ## References
 

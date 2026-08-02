@@ -29,8 +29,8 @@ Where the home page's content is the deployment's to choose — no package owns 
 
 Where fixture sessions exist for an admin, a member, and a signed-out visitor on a seeded deployment, the acceptance suite shall assert:
 
-- the home page presents the course list [[site-navigation-2](#site-navigation-2)] [[course-catalog-1](catalog/course-catalog.md#course-catalog-1)];
+- the home page presents the course list [[site-navigation-2](#site-navigation-2)];
 - the header's site name reads "Academy" [[site-navigation-1](#site-navigation-1)];
-- the header's "Courses" entry leads to the course list [[site-navigation-1](#site-navigation-1)] [[web-shell-1](site/web-shell.md#web-shell-1)];
-- the session control renders the account menu matching each session state [[site-navigation-1](#site-navigation-1)] [[github-login-5](identity/github-login.md#github-login-5)];
-- for the admin session only, the "Admin" entry leads to the admin area with the course manager and the video library both reachable [[site-navigation-1](#site-navigation-1)] [[web-shell-2](site/web-shell.md#web-shell-2)] [[course-catalog-6](catalog/course-catalog.md#course-catalog-6)] [[video-library-4](catalog/video-library.md#video-library-4)].
+- the header's "Courses" entry leads to the course list [[site-navigation-1](#site-navigation-1)];
+- the session control renders the account menu matching each session state [[site-navigation-1](#site-navigation-1)];
+- for the admin session only, the "Admin" entry leads to the admin area with the course manager and the video library both reachable [[site-navigation-1](#site-navigation-1)].

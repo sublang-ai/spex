@@ -30,18 +30,18 @@ Subdirectories under `packages/` are navigation collections with no semantics [[
 
 | ID | File | Summary |
 | --- | --- | --- |
-| DR-000 | [000-product-scope.md](decisions/000-product-scope.md) | Minimal course site: public catalog, gated playback, one admin, explicit out-of-scope list |
-| DR-001 | [001-web-stack.md](decisions/001-web-stack.md) | Next.js App Router + TypeScript, Tailwind CSS, vendored shadcn/ui kit, native video |
-| DR-002 | [002-platform-and-devops.md](decisions/002-platform-and-devops.md) | Supabase (Auth, Postgres, Storage) + Vercel + GitHub; the platform-services package states each supplied seam |
-| DR-003 | [003-admin-designation.md](decisions/003-admin-designation.md) | Initial admin as configured GitHub account ID, recomputed at each sign-in |
+| [DR-000](decisions/000-product-scope.md) | 000-product-scope.md | Minimal course site: public catalog, gated playback, one admin, explicit out-of-scope list |
+| [DR-001](decisions/001-web-stack.md) | 001-web-stack.md | Next.js App Router + TypeScript, Tailwind CSS, vendored shadcn/ui kit, native video |
+| [DR-002](decisions/002-platform-and-devops.md) | 002-platform-and-devops.md | Supabase (Auth, Postgres, Storage) + Vercel + GitHub; the platform-services package states each supplied seam |
+| [DR-003](decisions/003-admin-designation.md) | 003-admin-designation.md | Initial admin as configured GitHub account ID, recomputed at each sign-in |
 
 ## Intents
 
 | ID | File | Intent |
 | --- | --- | --- |
-| IR-001 | [001-walking-skeleton.md](intents/001-walking-skeleton.md) | Pipeline, deployment, sign-in, and guard proven end to end |
-| IR-002 | [002-course-catalog.md](intents/002-course-catalog.md) | Course structure, browsing, publishing; admin-bootstrap acceptance green |
-| IR-003 | [003-video-pipeline.md](intents/003-video-pipeline.md) | Upload to playback; the full release-acceptance gate green |
+| [IR-001](intents/001-walking-skeleton.md) | 001-walking-skeleton.md | Pipeline, deployment, sign-in, and guard proven end to end |
+| [IR-002](intents/002-course-catalog.md) | 002-course-catalog.md | Course structure, browsing, publishing; admin-bootstrap acceptance green |
+| [IR-003](intents/003-video-pipeline.md) | 003-video-pipeline.md | Upload to playback; the full release-acceptance gate green |
 
 ## Packages
 

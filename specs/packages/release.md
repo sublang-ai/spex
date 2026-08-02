@@ -17,7 +17,7 @@ The project shall follow Semantic Versioning [[1]]: `MAJOR.MINOR.PATCH` where MA
 
 #### release-2
 
-The version in the released package's `package.json` (`packages/cli/package.json`) shall match the git tag (without the `v` prefix).
+The version in the released package's `package.json` (`packages/cli/package.json`) shall match the git tag (without the `v` prefix):
 
 - The release workflow verifies this match before publishing [[release-8](#release-8)].
 

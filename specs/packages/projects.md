@@ -41,7 +41,7 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 
 #### projects-27
 
-When the user picks the palette's Academy-example action ([DR-015](../decisions/015-reference-content.md)), the palette shall create the project from the bundled Academy corpus — into a new or empty directory only — initialize a git repository with one seed commit of the corpus, and register the project and make it the workspace's current project.
+When the user picks the palette's Academy-example action ([DR-015](../decisions/015-reference-content.md)), the palette shall create the project from the bundled Academy corpus — into a new or empty directory only — initialize a git repository with one seed commit of the corpus, and register the project and make it the workspace's current project:
 
 - Target directory not empty: the palette reports the refusal and registers nothing.
 
@@ -67,13 +67,13 @@ Where a project's `origin` remote resolves to a GitHub repository, the forge pan
 
 #### projects-6
 
-Where a project is bound to a GitHub repository, while the gh CLI is installed and authenticated, the forge panel shall show the repository's open issues and open pull requests, each entry with its number and title.
+Where a project is bound to a GitHub repository, while the gh CLI is installed and authenticated, the forge panel shall show the repository's open issues and open pull requests, each entry with its number and title:
 
 - Activating an issue or pull-request entry opens that entry's GitHub page in the default browser.
 
 #### projects-7
 
-Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition — no GitHub `origin` remote, gh not installed, or gh not authenticated — instead of issue and pull-request lists.
+Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition — no GitHub `origin` remote, gh not installed, or gh not authenticated — instead of issue and pull-request lists:
 
 - While the panel shows setup guidance, the Repo tab keeps showing repository state [[projects-4](#projects-4)] and its remove control remains functional.
 
@@ -85,7 +85,7 @@ When the user picks a project from the palette or opens one of its sessions from
 
 #### projects-9
 
-When the user confirms removal in the Repo tab, the workspace shall forget the project and clear it from the project bar, leaving the repository directory, its files, and its git state on disk unmodified.
+When the user confirms removal in the Repo tab, the workspace shall forget the project and clear it from the project bar, leaving the repository directory, its files, and its git state on disk unmodified:
 
 - While the project has a live session, the Repo tab disables removal, stating that sessions must be ended first.
 
@@ -113,7 +113,7 @@ User-facing copy in the palette and the Repo tab shall say "GitHub" and shall no
 
 #### projects-10
 
-Where the core service manages projects, the project registry shall persist one entry per project — identifier, display name, absolute repository path, and creation time — in the app-local SQLite store ([DR-004](../decisions/004-config-and-persistence.md)), and shall restore all entries on core startup so registered projects survive app restarts.
+Where the core service manages projects, the project registry shall persist one entry per project — identifier, display name, absolute repository path, and creation time — in the app-local SQLite store ([DR-004](../decisions/004-config-and-persistence.md)), and shall restore all entries on core startup so registered projects survive app restarts:
 
 - Removing a project deletes only that project's registry entries; no file under the repository path is deleted or modified.
 
@@ -121,13 +121,13 @@ Where the core service manages projects, the project registry shall persist one 
 
 #### projects-11
 
-Where project repository state is collected — current branch or detached HEAD, dirty flag, ahead/behind counts, and `origin` remote URL — the repo-state provider shall obtain it exclusively by running local git commands against the project work tree.
+Where project repository state is collected — current branch or detached HEAD, dirty flag, ahead/behind counts, and `origin` remote URL — the repo-state provider shall obtain it exclusively by running local git commands against the project work tree:
 
 - The repo-state provider performs no network operation while collecting state, so ahead/behind counts reflect the locally recorded upstream ref.
 
 #### projects-12
 
-While projects are registered, when the app window gains focus, and on a periodic interval bounded between 10 seconds and 5 minutes, the repo-state provider shall refresh the projects' repository state.
+While projects are registered, when the app window gains focus, and on a periodic interval bounded between 10 seconds and 5 minutes, the repo-state provider shall refresh the projects' repository state:
 
 - A failed refresh attempt for a project keeps that project's last successfully collected state available, marked stale, and does not terminate the core service.
 
@@ -135,7 +135,7 @@ While projects are registered, when the app window gains focus, and on a periodi
 
 #### projects-13
 
-Where a project's `origin` remote URL matches a GitHub HTTPS or SSH remote form, the binding detector shall derive the bound `owner/repo` from the URL.
+Where a project's `origin` remote URL matches a GitHub HTTPS or SSH remote form, the binding detector shall derive the bound `owner/repo` from the URL:
 
 - No `origin` remote, or a URL matching neither form: the binding detector reports the project as unbound rather than guessing a binding.
 
@@ -145,13 +145,13 @@ Where core code needs forge data or forge authentication status, the core servic
 
 #### projects-15
 
-Where the GitHub forge adapter performs an operation — auth status, issue listing, or pull-request listing — it shall shell out to the locally authenticated `gh` CLI [[1]] requesting machine-readable JSON output, and parse that output.
+Where the GitHub forge adapter performs an operation — auth status, issue listing, or pull-request listing — it shall shell out to the locally authenticated `gh` CLI [[1]] requesting machine-readable JSON output, and parse that output:
 
 - The GitHub forge adapter never reads, persists, or logs tokens or other credentials; authentication state remains solely in gh's own storage.
 
 #### projects-16
 
-When a forge adapter operation fails — executable missing, not authenticated, network failure, non-zero exit, or unparsable output — the forge adapter shall return a typed failure carrying a condition category and human-readable guidance.
+When a forge adapter operation fails — executable missing, not authenticated, network failure, non-zero exit, or unparsable output — the forge adapter shall return a typed failure carrying a condition category and human-readable guidance:
 
 - The core service forwards that guidance as the forge panel state for the affected project and neither crashes nor stops serving the project's other state.
 

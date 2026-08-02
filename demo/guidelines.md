@@ -12,25 +12,25 @@ A package is one file, one intent, one closed set of subjects ([[meta-9](specs/m
 It stands alone: readable in full without following any link ([[meta-15](specs/meta.md#meta-15)]).
 
 - **Rely on another package only by citing it, at the exact phrase that relies on it.**
-  A citation is the only relationship between packages, and it binds a phrase to a specific External Behavior item of the cited package ([[meta-14](specs/meta.md#meta-14)], [[meta-16](specs/meta.md#meta-16)]).
+  Every behavior citation to peer External Behavior is a binding citation; test citations are verification evidence instead ([[meta-14](specs/meta.md#meta-14)], [[meta-20](specs/meta.md#meta-20)]).
   [[course-catalog-6](specs/packages/catalog/course-catalog.md#course-catalog-6)] is guarded admin-only by citing [[access-control-4](specs/packages/identity/access-control.md#access-control-4)] in its Where clause, while its shall clause acts only on the course manager — a course-catalog subject.
   And no clause leans on an undefined token: a phrase like "the course's author" would name nothing — no package defines authorship — which is why admin gating cites [[access-control-4](specs/packages/identity/access-control.md#access-control-4)] rather than an imagined owner field.
-- **Name a selectable counterparty abstractly, and let neither side name the other.**
-  A fixed semantic dependency gets a citation; a replaceable counterparty stays an uncited general phrase, which is sufficient ([[meta-14](specs/meta.md#meta-14)]).
+- **Name a selectable counterparty abstractly until instantiation binds it.**
+  A fixed peer dependency gets a binding citation; an unresolved polymorphic slot names no peer and therefore carries no peer citation ([[meta-14](specs/meta.md#meta-14)]).
   The catalog stores "one media attachment as an opaque reference" from "the deployment's media provider" ([[course-catalog-15](specs/packages/catalog/course-catalog.md#course-catalog-15)]); the video library serves "host surfaces" ([[video-library-6](specs/packages/catalog/video-library.md#video-library-6)]); the shell carries "the deployment's navigation entries" ([[web-shell-1](specs/packages/site/web-shell.md#web-shell-1)]).
-- **State the wiring as a composition package's own behavior, nowhere else.**
-  A composition package is an ordinary package whose behavior emerges only when several packages work together; one phrase may cite several packages exactly when it composes their behaviors ([[meta-14](specs/meta.md#meta-14)]).
+- **State an integrated outcome as a composition package's own behavior.**
+  A composition package is an ordinary package whose behavior emerges only when several packages work together; one phrase may carry several binding citations when their behaviors jointly make it specific ([[meta-14](specs/meta.md#meta-14)]).
   [[course-publishing-3](specs/packages/course-publishing.md#course-publishing-3)] serves every media delegation the catalog leaves open through the video library, citing both sides — "here and nowhere else"; [[site-navigation-1](specs/packages/site-navigation.md#site-navigation-1)] names what the shell's header presents; the platform seams no user walks are supplied in [platform-services.md](specs/packages/platform-services.md) — decisions only choose.
 - **Make the boundary itself testable from both sides.**
   [[course-catalog-18](specs/packages/catalog/course-catalog.md#course-catalog-18)]: deleting a course never deletes a provider asset.
   [[video-library-9](specs/packages/catalog/video-library.md#video-library-9)]: deleting an asset never touches host data.
-  Each package verifies its own side against a double of the abstract counterparty — [[meta-32](specs/meta.md#meta-32)] prefers executing the real behavior of a *cited* package, and the counterparty is deliberately uncited.
+  Each package verifies its own side against a double of the abstract counterparty; because the counterparty is uncited, [[meta-32](specs/meta.md#meta-32)] permits the double.
 
 ## 2. Split external from internal behavior by audience
 
-External behavior is what a package's users — humans, hosts, or peer packages — may rely on; internal behavior is implementation hidden from them ([[meta-30](specs/meta.md#meta-30)]).
-No behavior item cites a peer's internal item ([[meta-14](specs/meta.md#meta-14)]): [[protected-content-2](specs/packages/protected-content.md#protected-content-2)] pins four independent gate layers naming the internal ones only generally, while its sweep test [[protected-content-4](specs/packages/protected-content.md#protected-content-4)] cites [[course-catalog-20](specs/packages/catalog/course-catalog.md#course-catalog-20)] and [[web-shell-7](specs/packages/site/web-shell.md#web-shell-7)] directly — a citation the meta law is silent on: it neither licenses nor forbids a test citing peer Internal Behavior, and the citation reclassifies nothing.
-The split governs use, not verification: every stated behavior is verified unless verification is irrelevant to it, white-box or black-box ([[meta-33](specs/meta.md#meta-33)]).
+External behavior is what a package's users — humans, hosts, or peer packages — may rely on; internal behavior is hidden from them ([[meta-30](specs/meta.md#meta-30)]).
+No behavior or test item cites a peer's Internal Behavior ([[meta-14](specs/meta.md#meta-14)], [[meta-20](specs/meta.md#meta-20)]): [[protected-content-1](specs/packages/protected-content.md#protected-content-1)] binds peer External outcomes into the product's gating map, while [[protected-content-4](specs/packages/protected-content.md#protected-content-4)] cites only its own package's behavior.
+Every behavior is verified in its containing package, black-box or white-box; only that package's tests may cite its Internal Behavior ([[meta-33](specs/meta.md#meta-33)]).
 
 - **Write the strongest constraints as external/internal pairs.**
   [[course-catalog-4](specs/packages/catalog/course-catalog.md#course-catalog-4)] (external): drafts read as not-found.
@@ -41,10 +41,10 @@ The split governs use, not verification: every stated behavior is verified unles
   [[github-login-10](specs/packages/identity/github-login.md#github-login-10)]'s verification guarantee is external because [[video-library-13](specs/packages/catalog/video-library.md#video-library-13)] relies on it — what a peer may rely on is External Behavior ([[meta-30](specs/meta.md#meta-30)], [[meta-14](specs/meta.md#meta-14)]).
 - **State only behavior some test or inspection could distinguish** ([[meta-23](specs/meta.md#meta-23)], [[meta-33](specs/meta.md#meta-33)]).
   The demo once had an item no check could tell from its absence — "primitives come from the shared component kit" — and the cure was deletion, not relocation: no observable outcome separates a kit button from a pixel-identical hand-rolled one.
-- **One GEARS statement per item; attachments elaborate it** ([[meta-29](specs/meta.md#meta-29)]).
+- **One requirement per item; a final colon introduces attachments that only elaborate it** ([[meta-29](specs/meta.md#meta-29)]).
   [[course-publishing-3](specs/packages/course-publishing.md#course-publishing-3)] carries four delegations of one supplier relationship; [[course-catalog-10](specs/packages/catalog/course-catalog.md#course-catalog-10)] carries publish and unpublish as two rows of one publication-state transition; and [[delivery-4](specs/packages/ops/delivery.md#delivery-4)] folds its failure outcome into a rider of the one deployment attempt.
   A condition inside an attachment is a case label, not a trigger, so counting `When` decides nothing.
-  What decides is whether a part answers a *different contract*: [[web-shell-9](specs/packages/site/web-shell.md#web-shell-9)] left [[web-shell-8](specs/packages/site/web-shell.md#web-shell-8)] because cache privacy and response freshness are independent standing invariants, and [[video-library-5](specs/packages/catalog/video-library.md#video-library-5)] left [[video-library-4](specs/packages/catalog/video-library.md#video-library-4)] because listing assets and ending one's life are separately initiated operations.
+  What decides is whether a part states a *separate requirement*: [[web-shell-9](specs/packages/site/web-shell.md#web-shell-9)] left [[web-shell-8](specs/packages/site/web-shell.md#web-shell-8)] because cache privacy and response freshness are independent standing invariants, and [[video-library-5](specs/packages/catalog/video-library.md#video-library-5)] left [[video-library-4](specs/packages/catalog/video-library.md#video-library-4)] because listing assets and ending one's life are separately initiated operations.
   If naming an item's purpose needs "and" — "asset listing and deletion" — inspect it for a split: differing stateful preconditions or triggers are evidence of additional items ([[meta-29](specs/meta.md#meta-29)]).
 - **Decisions are not where implementation details live** ([[meta-24](specs/meta.md#meta-24)]).
   Three buckets: an observable outcome code generation must honor is a spec item; a technology or architecture choice is a decision with its rationale; what neither constrains behavior nor records a choice appears in no spec.
@@ -54,10 +54,12 @@ The split governs use, not verification: every stated behavior is verified unles
 
 Four of Academy's packages — [github-login](specs/packages/identity/github-login.md), [access-control](specs/packages/identity/access-control.md), [video-library](specs/packages/catalog/video-library.md), and [web-shell](specs/packages/site/web-shell.md) — contain no product noun and would drop into another product unchanged.
 
-- **Intents are self-contained prose with no citations** ([[meta-30](specs/meta.md#meta-30)], [[meta-15](specs/meta.md#meta-15)]).
-  A dependency worth stating is already an item-level citation; repeating it in the Intent couples the package to its current neighbors.
-- **Packages name platforms abstractly; decisions choose, the platform package supplies.**
-  The specs say "the identity store", "an access grant", "the pipeline"; [DR-002](specs/decisions/002-platform-and-devops.md) chooses Supabase, Vercel, and GitHub, and the items of [platform-services.md](specs/packages/platform-services.md) supply each seam, citing the package items they serve — never the reverse.
+- **Intents state purpose in self-contained prose** ([[meta-30](specs/meta.md#meta-30)], [[meta-15](specs/meta.md#meta-15)]).
+  Supporting citations are allowed, but package relationships belong in behavior items and no citation carries the Intent's meaning.
+- **Extend an installed package in place.**
+  Add, change, or delete spec items in its file; this customizes that copy and creates no package relationship.
+- **Packages state behavior without selecting platforms; decisions choose, the platform package realizes.**
+  [DR-002](specs/decisions/002-platform-and-devops.md) chooses Supabase, Vercel, and GitHub, and [platform-services.md](specs/packages/platform-services.md) realizes the required behaviors through them, citing the package behaviors involved — never package state.
   Swapping a vendor is a new decision record plus rewritten platform-services items; every other package's items stay unchanged.
   The exception proves the rule: GitHub appears in [github-login](specs/packages/identity/github-login.md) items because the user sees GitHub; the technology is the behavior there.
 - **Reuse within a project is citation.**
@@ -78,10 +80,10 @@ Release acceptance is every package's Verification items; the composition packag
 - **Specify matrix behavior as a map and sweep it.**
   [[protected-content-1](specs/packages/protected-content.md#protected-content-1)] pins the whole gating surface as one audience-by-surface table; its tests assert every cell.
   Deny paths are inherently cross-package, so security acceptance lands in composition packages naturally.
-- **A test cites every behavior it verifies, inline at the assertion that verifies it** ([[meta-20](specs/meta.md#meta-20)]).
+- **A test cites every behavior it verifies inline, confined to its own package** ([[meta-20](specs/meta.md#meta-20)]).
   These inline citations make coverage mechanically auditable — in the demo's adversarial review, every stale citation and unverified map cell was caught by walking them.
-  Items carry no relationship-metadata lines; the citations in an item's clauses are the single source of its relationships ([[meta-16](specs/meta.md#meta-16)]).
-  And a test prefers executing the real behavior of a cited package to substituting it ([[meta-32](specs/meta.md#meta-32)]): the composition tests run the composed packages for real on seeded deployments, with a stub only for the outside vendor ([[lesson-playback-3](specs/packages/lesson-playback.md#lesson-playback-3)]'s stub GitHub provider).
+  Binding citations and verification evidence are both inline; items carry no relationship-metadata lines ([[meta-14](specs/meta.md#meta-14)], [[meta-20](specs/meta.md#meta-20)]).
+  And a test prefers executing real behavior bound by the behavior under test to substituting it ([[meta-32](specs/meta.md#meta-32)]): the composition tests run the composed packages for real on seeded deployments, with a stub only for the outside vendor ([[lesson-playback-3](specs/packages/lesson-playback.md#lesson-playback-3)]'s stub GitHub provider).
 - **Know what the composition packages do not cover.**
   Single-package behavior that is still acceptance-relevant — upload refusal ([[video-library-2](specs/packages/catalog/video-library.md#video-library-2)]), responsive fit ([[web-shell-4](specs/packages/site/web-shell.md#web-shell-4)]), editor validation ([[course-catalog-11](specs/packages/catalog/course-catalog.md#course-catalog-11)]) — lives in its own package's Verification, which is why the release run includes both.
 
@@ -92,14 +94,14 @@ Two composition packages share one shape — behavior stated over other packages
 The split moves the External/Internal placement and the verification kind, and nothing else — both are ordinary packages under the same law.
 
 - **A user-walked seam is External Behavior with acceptance tests.**
-  [[course-publishing-1](specs/packages/course-publishing.md#course-publishing-1)]: publish once and exactly the resolvable lessons play — the admin crosses the picker seam in person, so [[course-publishing-4](specs/packages/course-publishing.md#course-publishing-4)] walks a course from creation through deletion as a journey.
+  [[course-publishing-1](specs/packages/course-publishing.md#course-publishing-1)]: publish once and exactly the resolvable lessons play — the admin crosses the picker seam in person, so [[course-publishing-4](specs/packages/course-publishing.md#course-publishing-4)] walks a course from creation through publication as a journey.
   The wiring behind it is Internal Behavior: [[course-publishing-3](specs/packages/course-publishing.md#course-publishing-3)] serves the catalog's media delegations through the video library, hidden from members and cited by the package's own tests at the assertions that verify it ([[meta-20](specs/meta.md#meta-20)]).
 - **An inspection-only supply seam is verified by inspecting a deployment.**
   No product user observes which store holds a record, so [[platform-services-7](specs/packages/platform-services.md#platform-services-7)] inspects configuration and egress instead of walking a journey — verification may be white-box ([[meta-33](specs/meta.md#meta-33)]).
   The supply items are External Behavior all the same: their users are the operator and the decision record, and [DR-002](specs/decisions/002-platform-and-devops.md) cites them to support its choices.
-- **A client never names its supplier — the composition package does the naming.**
-  The catalog states "the deployment's media provider" ([[course-catalog-15](specs/packages/catalog/course-catalog.md#course-catalog-15)]); the login package states "the identity store" ([[github-login-8](specs/packages/identity/github-login.md#github-login-8)]); delivery states "the platform's environment configuration" ([[delivery-7](specs/packages/ops/delivery.md#delivery-7)]).
-  [[course-publishing-3](specs/packages/course-publishing.md#course-publishing-3)] and [[platform-services-1](specs/packages/platform-services.md#platform-services-1)] name the video library and Supabase Auth, citing the items they serve; the cited packages never cite back.
+- **Leave a selectable supplier unnamed until instantiation.**
+  The catalog requires media delegation ([[course-catalog-15](specs/packages/catalog/course-catalog.md#course-catalog-15)]), login requires session behavior ([[github-login-2](specs/packages/identity/github-login.md#github-login-2)]), and delivery requires protected configuration ([[delivery-7](specs/packages/ops/delivery.md#delivery-7)]).
+  In this demo, [[course-publishing-3](specs/packages/course-publishing.md#course-publishing-3)] and [[platform-services-1](specs/packages/platform-services.md#platform-services-1)] record those installation choices in composition packages, citing behavior rather than package state; the cited packages never cite back.
 - **Exclusivity claims are installation policy, not package behavior.**
   github-login offers GitHub sign-in and knows nothing of other methods; only [[platform-services-1](specs/packages/platform-services.md#platform-services-1)] makes GitHub the sole method, and the product scope record ([DR-000](specs/decisions/000-product-scope.md)) keeps the why.
 - **State what a package asks of its host whole — rejection arm included — and leave the host general.**

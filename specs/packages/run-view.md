@@ -32,7 +32,7 @@ While a project session is live, when the session record stream delivers a failu
 
 #### run-view-3
 
-While a project session is live, when the session record stream delivers text or text deltas for a visible player, that player's pane shall render the accumulating message as formatted Markdown, appending each delta as it arrives rather than waiting for turn completion.
+While a project session is live, when the session record stream delivers text or text deltas for a visible player, that player's pane shall render the accumulating message as formatted Markdown, appending each delta as it arrives rather than waiting for turn completion:
 
 - A player pane is read-only — no text input, reply, or edit affordance — since Boss input happens only in the Boss composer [[run-view-8](#run-view-8)].
 
@@ -112,7 +112,7 @@ The run view shall provide light and dark color themes and size the Captain and 
 
 #### run-view-25
 
-Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting that names the current project (or points at the project bar when none is chosen), a chat composer, and the captain's adapter and model with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md).
+Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting that names the current project (or points at the project bar when none is chosen), a chat composer, and the captain's adapter and model with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
 
 - Project choice lives in the project bar and palette, not in the composer row.
 
@@ -178,7 +178,7 @@ Composer drafts (per session and on the Captain home) shall survive switching ta
 
 #### run-view-40
 
-When the abort control is activated, it shall acknowledge instantly — disabled with an "Aborting…" label until the turn ends or the failure is shown.
+When the abort control is activated, it shall acknowledge instantly — disabled with an "Aborting…" label until the turn ends or the failure is shown:
 
 - The abort control is disabled while the core connection is down.
 
@@ -208,13 +208,13 @@ The project palette shall be fully keyboard-operable ([DR-011](../decisions/011-
 
 #### run-view-43
 
-While a slash menu is open, when Escape is pressed, the slash menu shall hide without touching the composer draft, with typing reopening it.
+While a slash menu is open, when Escape is pressed, the slash menu shall hide without touching the composer draft, with typing reopening it:
 
 - The slash menu exposes listbox semantics (options with selection state reflected to assistive technology via the composer's active-descendant).
 
 #### run-view-47
 
-When the user ends a live session, the run view shall always use the inline confirm (safe default focused, Escape cancels), naming the number of queued messages that would be discarded — the emergency abort control stays one-click.
+When the user ends a live session, the run view shall always use the inline confirm (safe default focused, Escape cancels), naming the number of queued messages that would be discarded — the emergency abort control stays one-click:
 
 - After a tab closes, focus moves to a neighboring tab, never to the document body.
 
@@ -266,13 +266,13 @@ The Workspace shall carry a project bar naming the current project, rendered in 
 
 #### run-view-57
 
-Each project shall remember its last-active workspace tab (a session, the start tab, Specs, or Repo), restored when the project becomes current again, with the current project persisting across launches.
+Each project shall remember its last-active workspace tab (a session, the start tab, Specs, or Repo), restored when the project becomes current again, with the current project persisting across launches:
 
 - When the user arrives via an attention affordance (a Dashboard row or a palette row with a needs-you signal), the workspace focuses the session that needs the human instead of the remembered tab.
 
 #### run-view-58
 
-The tab strip shall end with pinned Specs and Repo tabs — one spec view and one repo view per project — that participate in the tab list and the tab-cycling shortcut.
+The tab strip shall end with pinned Specs and Repo tabs — one spec view and one repo view per project — that participate in the tab list and the tab-cycling shortcut:
 
 - Switching projects swaps the whole strip; sessions of other projects keep running and stay reachable through the palette's live-state rows and the Dashboard.
 
@@ -295,7 +295,7 @@ Where the run view receives a session's ordered record stream, the run view shal
 
 #### run-view-15
 
-Where a player transcript exceeds the visible viewport, the transcript view shall mount only the entries in and near the viewport, keeping the mounted entry count bounded regardless of transcript length.
+Where a player transcript exceeds the visible viewport, the transcript view shall mount only the entries in and near the viewport, keeping the mounted entry count bounded regardless of transcript length:
 
 - When the user scrolls, the transcript view reveals previously unmounted entries with content identical to an unvirtualized render.
 
@@ -387,7 +387,7 @@ While a fixture turn is active, the test suite shall assert the Captain thread s
 
 #### run-view-54
 
-The test suite shall assert time separators appear before the first line, after >10-minute gaps, and on day changes [[run-view-41](#run-view-41)]; that known states map to human labels with unknown ids humanized [[run-view-59](#run-view-59)]; that the project palette is driven end-to-end by keyboard (opens focused, arrows highlight, Enter picks, Escape closes with the composer draft intact) [[run-view-42](#run-view-42)] and its rows carry running and needs-you state [[projects-23](projects.md#projects-23)]; and that Escape hides the slash menu without touching the draft [[run-view-43](#run-view-43)].
+The test suite shall assert time separators appear before the first line, after >10-minute gaps, and on day changes [[run-view-41](#run-view-41)]; that known states map to human labels with unknown ids humanized [[run-view-59](#run-view-59)]; that the project palette is driven end-to-end by keyboard (opens focused, arrows highlight, Enter picks, Escape closes with the composer draft intact) [[run-view-42](#run-view-42)]; and that Escape hides the slash menu without touching the draft [[run-view-43](#run-view-43)].
 
 #### run-view-55
 

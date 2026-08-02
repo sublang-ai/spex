@@ -44,7 +44,7 @@ While an item row is displayed, the spec view shall render the row by its expans
 
 #### spec-view-19
 
-While an expanded item carries citations or is cited, the spec view shall present the item's relationships as plain inbound and outbound item citations — the citation being the only relationship between packages [[meta-14](../meta.md#meta-14)] — with no derived classes and no relationship metadata in the protocol:
+While an expanded item carries citations or is cited, the spec view shall present them as plain inbound and outbound item citations, with no derived classes and no relationship metadata in the protocol:
 
 - outbound rows list the item's citations in document order, each entry named by the cited item ID;
 - inbound citations render as grouped backlink rows on the cited target, each entry named by the citing item ID;

@@ -37,7 +37,7 @@ Where the file has comment syntax and is not excluded by the licensing scope [[l
 
 #### licensing-2
 
-Where the file has comment syntax, is not excluded by the licensing scope [[licensing-5](#licensing-5)], and one or more project-root license files match the license-file detector patterns [[licensing-6](#licensing-6)], while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-License-Identifier` in its first comment block after any shebang.
+Where the file has comment syntax, is not excluded by the licensing scope [[licensing-5](#licensing-5)], and one or more project-root license files match the license-file detector patterns [[licensing-6](#licensing-6)], while the file is git-tracked or `git add`-able, when preparing the file for inclusion in the repo, the file shall include `SPDX-License-Identifier` in its first comment block after any shebang:
 
 - This project carries a single `LICENSE` file (Apache-2.0), so all applicable files use:
 

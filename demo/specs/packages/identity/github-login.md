@@ -26,7 +26,7 @@ When the visitor activates "Continue with GitHub", the site shall run the OAuth 
 
 #### github-login-3
 
-A callback shall complete sign-in only when it matches a live sign-in attempt begun in the same browser and not yet consumed.
+A callback shall complete sign-in only when it matches a live sign-in attempt begun in the same browser and not yet consumed:
 
 - An unsolicited, mismatched, expired, or replayed callback establishes no session and shows the not-completed notice [[github-login-4](#github-login-4)].
 
@@ -73,7 +73,7 @@ Where a server-side handler decides whether a request is signed in, the decision
 
 #### github-login-11
 
-Where session state reaches the browser, it shall travel only in cookies scoped to the site's origin, marked Secure, and marked SameSite (Lax or stricter).
+Where session state reaches the browser, it shall travel only in cookies scoped to the site's origin, marked Secure, and marked SameSite (Lax or stricter):
 
 - Page script obtains no credential beyond the identity provider's own session tokens and their bounded lifetimes.
 

@@ -89,13 +89,14 @@ Each spec item shall be self-contained: every reliance on another item is an exp
 
 ### meta-29
 
-Each spec item shall be exactly one GEARS statement [[meta-6](#meta-6)], elaborated only by its attachments — such as a note, a list, a table, a (renderable) diagram, or an example.
+Each spec item shall state one requirement in one GEARS statement [[meta-6](#meta-6)], with attachments introduced by a colon at the statement's end and elaborating only that requirement:
 
 | Item kind | Example attachment |
 | --- | --- |
 | Behavior | ordered steps or the cases and outcomes of one operation or decision |
 | Test | the assertions of one execution flow or one explicit case matrix |
 
+- An attachment may take a form such as a note, list, table, renderable diagram, or example.
 - A condition inside an attachment is a case label.
 - Differing stateful preconditions or triggers are evidence of additional spec items.
 
@@ -103,23 +104,23 @@ Each spec item shall be exactly one GEARS statement [[meta-6](#meta-6)], elabora
 
 ### meta-13
 
-A spec package shall define a closed set of subjects and their behaviors for a shared intent.
+A spec package shall define a closed set of subjects and their behavioral requirements for a shared intent.
 
 ### meta-9
 
-A spec package shall be one item file under `specs/packages/` or its subdirectory.
+A spec package shall be one file containing spec items under `specs/packages/` or its subdirectory.
 
-<!-- spex-i18n-source: meta-30 sha256-7a8f0909efcbffc412450f64f749f822d0412490e067a2310300f434a9162693 -->
+<!-- spex-i18n-source: meta-30 sha256-0157482272767b0d31d355728e8b2df551310d4248d380ab886f71e6d0bfe93b -->
 ### meta-30
 
 每个包文件应只包含下列章节，并按此顺序排列：
 
 | 章节 | 是否必需 | 内容 |
 | ------- | -------- | ------- |
-| `意图` | 必需 | 包内条目共享的意图 |
+| `意图` | 必需 | 包的目的 |
 | `外部行为` | 必需 | 包的使用者可以依赖的结果与保证 |
-| `内部行为` | 可选 | 对包的使用者隐藏的实现 |
-| `验证` | 除非无关，否则必需 [[meta-33](#meta-33)] | 仅限验证本包条目的测试条目 |
+| `内部行为` | 可选 | 对包的使用者隐藏的行为 |
+| `验证` | 必需 | 验证本包行为的测试条目 |
 | `参考资料` | 可选 | 外部来源 [[meta-19](#meta-19)] |
 
 - 包的使用者是使用其契约的任何人或系统组件；外部与内部相对于包而言。
@@ -127,14 +128,14 @@ A spec package shall be one item file under `specs/packages/` or its subdirector
 
 ### meta-10
 
-A spec package shall use a unique lowercase kebab-case basename \<pack\>.md, with \<pack\> serving as its package identifier.
+A file containing spec items shall use a lowercase kebab-case basename \<pack\>.md unique across the specs tree, with \<pack\> serving as its identifier.
 
 ### meta-11
 
 Each spec item shall use \<pack\>-\<N\> as its lowercase heading, anchor, and citation text:
 
-- \<pack\> is its containing package's identifier [[meta-10](#meta-10)];
-- \<N\> is a positive integer unique within that package;
+- \<pack\> is its containing file's identifier [[meta-10](#meta-10)];
+- \<N\> is a positive integer unique within that file;
 - a new item takes the lowest positive \<N\> neither assigned nor reserved by a public release [[meta-12](#meta-12)].
 
 ### meta-12
@@ -147,10 +148,11 @@ A publicly released item ID shall remain permanently bound to the concern its it
 
 ### meta-14
 
-A citation shall be the only relationship between packages: any general phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-16](#meta-16)].
+A behavior item shall express every peer package relationship as a binding citation — an inline citation of that package's External Behavior at the exact phrase the cited behavior makes specific [[meta-16](#meta-16)]:
 
-- An uncited phrase stays general as it is sufficient for code generation and audit.
-- One phrase may cite several packages if it composes their behaviors.
+- a binding citation binds behavior, never package subjects or states alone;
+- one phrase may carry several binding citations when several behaviors make its different parts specific, respectively;
+- there is no uncited peer package dependency.
 
 ### meta-15
 
@@ -158,7 +160,7 @@ A spec package shall stand alone: readable in full without following any link �
 
 ### meta-31
 
-A subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
+A lowercase kebab-case subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
 
 ## Testing
 
@@ -168,17 +170,22 @@ Spec test items shall specify integration and system tests only: unit tests belo
 
 ### meta-32
 
-A test shall prefer executing the real behavior of a cited package [[meta-14](#meta-14)] to supplying a substitute for it.
+A test shall prefer executing the real behaviors bound by the behaviors it verifies [[meta-14](#meta-14)] to supplying substitutes for them.
 
 ### meta-33
 
-Each stated behavior shall be verified unless verification is irrelevant to it, white-box or black-box: External and Internal govern use, not verification.
+Each package's `Verification` section shall verify every behavior in that package, white-box or black-box.
 
 ## Citation
 
 ### meta-16
 
-A citation of a spec item shall be a relative link with an anchor, enclosed in square brackets (e.g., `[[meta-1](meta.md#meta-1)]`), written inline at the phrase that relies on it.
+A citation of a spec item or record shall be an inline relative link with the cited ID as its link text:
+
+| Cited | Form |
+| --- | --- |
+| Spec item | its heading anchor, in an outer pair of square brackets (e.g., `[[meta-1](meta.md#meta-1)]`) |
+| Record | its file, with no outer brackets (e.g., `[DR-000](decisions/000-spec-structure-format.md)`) |
 
 ### meta-18
 
@@ -191,16 +198,16 @@ No DR or spec item shall cite an IR or name it in prose.
 
 ### meta-20
 
-A test item shall cite every behavior item it verifies, inline at the assertion that verifies the behavior.
+A test item shall identify every behavior it verifies by an inline citation at the verifying assertion, with behavior citations confined to its own package.
 
 ## Authoring language
 
-<!-- spex-i18n-source: meta-27 sha256-31c8c10f1bcf6836b757e4b7cbe21be3854843c9cef548759a36e4c460fda5c1 -->
+<!-- spex-i18n-source: meta-27 sha256-15f8d7dd4f789e95a6ce274b8bd5baeafe74cdc769b17265cae925096112edac -->
 ### meta-27
 
-Authoring language: zh
+在规约树声明编写语言时——以本条目的机器可读标记行声明，采用精确格式 `Authoring language: <code>`，其中 `<code>` 只包含 ASCII 字母、数字和连字符——规约应使用该语言编写：
 
-在规约树声明编写语言时——以本条目的机器可读标记行声明，采用精确格式 `Authoring language: <code>`，其中 `<code>` 只包含 ASCII 字母、数字和连字符——规约应使用该语言编写。
+Authoring language: zh
 
 ## 参考资料
 

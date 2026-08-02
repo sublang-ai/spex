@@ -25,7 +25,7 @@ Where a configured playbook entry fails the fail-closed config validation ([DR-0
 
 #### playbook-library-3
 
-When the user toggles a playbook's enabled state, the Library shall persist the new state to that playbook's entry in the shared config file (state encoding per [DR-004](../decisions/004-config-and-persistence.md)), shall modify no other entry, and shall reflect the new state in the list.
+When the user toggles a playbook's enabled state, the Library shall persist the new state to that playbook's entry in the shared config file (state encoding per [DR-004](../decisions/004-config-and-persistence.md)), shall modify no other entry, and shall reflect the new state in the list:
 
 - Disabling does not remove the playbook's entry or its role-agent mapping from the shared config.
 
@@ -39,7 +39,7 @@ When the user edits a playbook's per-role player, the Library shall edit that ro
 
 #### playbook-library-5
 
-When the user starts the compile flow, the Library shall accept the playbook source as either a picked markdown file or in-app markdown text, and shall require the playbook's role names before compilation starts.
+When the user starts the compile flow, the Library shall accept the playbook source as either a picked markdown file or in-app markdown text, and shall require the playbook's role names before compilation starts:
 
 - A role name that does not match `^[a-z][a-z0-9_-]*$` is rejected before compilation starts.
 
@@ -90,13 +90,13 @@ While a configured playbook is listed, the Library shall label the playbook's re
 
 #### playbook-library-34
 
-When the Library surface is opened, the Library shall list each known built-in playbook absent from the shared config ([DR-015](../decisions/015-reference-content.md)) with its command, intent, required roles, and browsable source markdown, and shall offer an add flow that maps the built-in's roles to agent blocks and registers it through the shared-config write path [[playbook-library-16](#playbook-library-16)].
+When the Library surface is opened, the Library shall list each known built-in playbook absent from the shared config ([DR-015](../decisions/015-reference-content.md)) with its command, intent, required roles, and browsable source markdown, and shall offer an add flow that maps the built-in's roles to agent blocks and registers it through the shared-config write path [[playbook-library-16](#playbook-library-16)]:
 
 - Browsing a built-in's source requires no config change.
 
 #### playbook-library-35
 
-When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the pipeline grammar — source, normalized text, gears, and state machine — and shall offer a prefill action that fills the compile form with the example's normalized text and judgment fields — mapping the example's roles onto the default agent block — without starting a compile.
+When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the pipeline grammar — source, normalized text, gears, and state machine — and shall offer a prefill action that fills the compile form with the example's normalized text and judgment fields — mapping the example's roles onto the default agent block — without starting a compile:
 
 - Sources and gears served for display drop their leading maintainer comment headers.
 
@@ -104,7 +104,7 @@ When the Library surface is opened, the Library shall present the slc demo workf
 
 #### playbook-library-27
 
-While a compile is running, the Library shall render a secondary cancel control beside the streamed compile progress and shall keep the compile start control disabled for the whole time the compile runs.
+While a compile is running, the Library shall render a secondary cancel control beside the streamed compile progress and shall keep the compile start control disabled for the whole time the compile runs:
 
 - Activating the cancel control requests that the core abort the compile ([DR-010](../decisions/010-interface-craft.md) §5), with the cancellation recorded in the compile progress log.
 
@@ -120,7 +120,7 @@ While the shared config is missing or invalid, the Library shall replace its con
 
 #### playbook-library-11
 
-When toolchain resolution is requested, the toolchain resolver shall locate `slc` and `node` in this order — (1) an explicitly configured toolchain path in app settings ([DR-004](../decisions/004-config-and-persistence.md)), then (2) the captured login-shell `PATH` ([DR-004](../decisions/004-config-and-persistence.md)) — and shall verify that the resolved Node.js satisfies the version floor required by `slc` ([DR-005](../decisions/005-compilation-integration.md)).
+When toolchain resolution is requested, the toolchain resolver shall locate `slc` and `node` in this order — (1) an explicitly configured toolchain path in app settings ([DR-004](../decisions/004-config-and-persistence.md)), then (2) the captured login-shell `PATH` ([DR-004](../decisions/004-config-and-persistence.md)) — and shall verify that the resolved Node.js satisfies the version floor required by `slc` ([DR-005](../decisions/005-compilation-integration.md)):
 
 - Any prerequisite unresolvable: the resolver returns an unavailability result naming that prerequisite and the locations attempted, and spawns no process.
 
@@ -128,7 +128,7 @@ When toolchain resolution is requested, the toolchain resolver shall locate `slc
 
 #### playbook-library-12
 
-When a compile is started for playbook id `<id>`, the compile runner shall run `slc` as an external child process in a per-playbook directory `<library-root>/<id>/` under the app-managed library root ([DR-004](../decisions/004-config-and-persistence.md)) — materializing in-app source text as a markdown file there and linking the app-bundled runtime contract ([DR-005](../decisions/005-compilation-integration.md)) — and shall capture the process output per pipeline phase, reporting phase transitions for progress [[playbook-library-6](#playbook-library-6)] and the failing phase's output on failure [[playbook-library-9](#playbook-library-9)].
+When a compile is started for playbook id `<id>`, the compile runner shall run `slc` as an external child process in a per-playbook directory `<library-root>/<id>/` under the app-managed library root ([DR-004](../decisions/004-config-and-persistence.md)) — materializing in-app source text as a markdown file there and linking the app-bundled runtime contract ([DR-005](../decisions/005-compilation-integration.md)) — and shall capture the process output per pipeline phase, reporting phase transitions for progress [[playbook-library-6](#playbook-library-6)] and the failing phase's output on failure [[playbook-library-9](#playbook-library-9)]:
 
 - Compiled outputs of a previously successful compile for the same id are replaced only after the new compile succeeds.
 
@@ -136,7 +136,7 @@ When a compile is started for playbook id `<id>`, the compile runner shall run `
 
 #### playbook-library-13
 
-When `slc` completes successfully, the registry generator shall derive `idleStateId`, `finalStateId`, and `parkStateIds` by introspecting the emitted machine definition ([DR-005](../decisions/005-compilation-integration.md)), each derived id naming a state present in that machine, and shall report them as compile metadata for display [[playbook-library-22](#playbook-library-22)] — never as registry-entry fields ([DR-014](../decisions/014-released-toolchain.md)).
+When `slc` completes successfully, the registry generator shall derive `idleStateId`, `finalStateId`, and `parkStateIds` by introspecting the emitted machine definition ([DR-005](../decisions/005-compilation-integration.md)), each derived id naming a state present in that machine, and shall report them as compile metadata for display [[playbook-library-22](#playbook-library-22)] — never as registry-entry fields ([DR-014](../decisions/014-released-toolchain.md)):
 
 - Ambiguous derivation: the registry generator surfaces the candidate state ids for user selection in the registry form [[playbook-library-7](#playbook-library-7)] instead of choosing silently.
 
@@ -159,13 +159,13 @@ When a registry entry is about to be registered into the shared config, the regi
 
 #### playbook-library-32
 
-When a registration writes the `playbooks.<id>` entry after a compile, the compile flow shall re-key the submitted role-agent assignments onto the derived role ids [[playbook-library-14](#playbook-library-14)] by case-insensitive name match.
+When a registration writes the `playbooks.<id>` entry after a compile, the compile flow shall re-key the submitted role-agent assignments onto the derived role ids [[playbook-library-14](#playbook-library-14)] by case-insensitive name match:
 
 - A derived role matching no assignment: the compile flow fails naming the derived roles and the unmatched ones, writes no config change, and keeps the compiled artifacts so a corrected submission can register without recompiling.
 
 #### playbook-library-33
 
-When playbook loading imports a config `from` module that is a file path, and the module carries no registry-contract marker [[playbook-library-14](#playbook-library-14)], the registry validator shall treat the config as invalid with guidance naming the playbook and recompilation as the remedy ([DR-014](../decisions/014-released-toolchain.md)).
+When playbook loading imports a config `from` module that is a file path, and the module carries no registry-contract marker [[playbook-library-14](#playbook-library-14)], the registry validator shall treat the config as invalid with guidance naming the playbook and recompilation as the remedy ([DR-014](../decisions/014-released-toolchain.md)):
 
 - A package specifier `from` does not require the marker.
 
@@ -207,7 +207,7 @@ Where the shared config file contains comments and entries unrelated to the togg
 
 #### playbook-library-25
 
-Where a playbook was compiled into the library directory, when its artifacts are requested over the protocol, the test suite shall assert the response carries the source markdown, the gears markdown, the FSM code [[playbook-library-22](#playbook-library-22)], and the derived state ids [[playbook-library-24](#playbook-library-24)].
+Where a playbook was compiled into the library directory, when its artifacts are requested over the protocol, the test suite shall assert the response carries the source markdown, the gears markdown, the FSM code [[playbook-library-22](#playbook-library-22)], and the derived state ids [[playbook-library-24](#playbook-library-24)]:
 
 - A stage file removed: the test suite asserts the response names the missing stage while still serving the others [[playbook-library-24](#playbook-library-24)].
 

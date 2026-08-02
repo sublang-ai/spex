@@ -28,13 +28,13 @@ meta.md       规约的规约
 
 | ID | 文件 | 摘要 |
 | --- | --- | --- |
-| DR-000 | [000-spec-structure-format.md](decisions/000-spec-structure-format.md) | 规约结构、格式和命名约定 |
+| [DR-000](decisions/000-spec-structure-format.md) | 000-spec-structure-format.md | 规约结构、格式和命名约定 |
 
 ## 意图
 
 | ID | 文件 | 意图 |
 | --- | --- | --- |
-| IR-000 | [000-spdx-headers.md](intents/000-spdx-headers.md) | 为适用文件添加 SPDX 头 |
+| [IR-000](intents/000-spdx-headers.md) | 000-spdx-headers.md | 为适用文件添加 SPDX 头 |
 
 ## 包
 

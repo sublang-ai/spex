@@ -18,4 +18,4 @@ Where a project is bound to a GitHub repository and its forge data is served thr
 
 ### forge-work-lists-2
 
-Where a registered fixture repository is bound to GitHub and a stub `gh` executable on `PATH` reports an authenticated account and returns fixture issues and pull requests [[projects-15](projects.md#projects-15)], the integration suite shall assert that the Repo tab's lists [[projects-6](projects.md#projects-6)] and the Dashboard's next-work lists [[dashboard-6](dashboard.md#dashboard-6)] render the same fixture items for that project [[forge-work-lists-1](#forge-work-lists-1)] — the two surfaces present the same forge data for the project.
+Where a registered fixture repository is bound to GitHub and a stub `gh` executable on `PATH` reports an authenticated account and returns fixture issues and pull requests, the integration suite shall assert that the Repo tab's lists and the Dashboard's next-work lists render the same fixture items for that project [[forge-work-lists-1](#forge-work-lists-1)] — the two surfaces present the same forge data for the project.

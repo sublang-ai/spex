@@ -15,7 +15,7 @@ Every behavior in this package is observable over the WebSocket protocol; the se
 
 #### core-service-1
 
-Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on a loopback-only endpoint and report the endpoint address to the host.
+Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on a loopback-only endpoint and report the endpoint address to the host:
 
 - When a client connects, the core service sends a hello message carrying the protocol version before any other message, so clients can detect a protocol mismatch before issuing commands.
 
@@ -35,7 +35,7 @@ On every load and reload:
 
 #### core-service-3
 
-Where no config file exists at the shared config path, when the core service starts, the core service shall write a starter config file to that path, adopt it as the active config, and report the seeding to connected clients.
+Where no config file exists at the shared config path, when the core service starts, the core service shall write a starter config file to that path, adopt it as the active config, and report the seeding to connected clients:
 
 - When seeding, the core service does not overwrite an existing config file.
 
@@ -43,7 +43,7 @@ Where no config file exists at the shared config path, when the core service sta
 
 #### core-service-4
 
-Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md)) and the active config is valid, when a client requests a session for that project, the core service shall create a live session whose embedded runtime is initialized with the project directory as its working directory, and shall report the new session to subscribed clients.
+Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md)) and the active config is valid, when a client requests a session for that project, the core service shall create a live session whose embedded runtime is initialized with the project directory as its working directory, and shall report the new session to subscribed clients:
 
 - While a live session exists for a project, a further session request for the same project is rejected and creates no session.
 - Live sessions for distinct projects run concurrently.
@@ -53,7 +53,7 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 
 #### core-service-5
 
-While a session is live and no boss turn is active on it, when a client submits Boss composer text for that session, the core service shall start a boss turn on the session's runtime and stream the turn-started record to subscribed clients.
+While a session is live and no boss turn is active on it, when a client submits Boss composer text for that session, the core service shall start a boss turn on the session's runtime and stream the turn-started record to subscribed clients:
 
 - While a boss turn is active on a session, a further Boss submission for that session is rejected with a busy error and starts no turn, so boss turns on one session run strictly one at a time.
 
@@ -75,7 +75,7 @@ While a session is live, when the embedded runtime emits a record marked hidden 
 
 #### core-service-9
 
-When a client requests adapter readiness, the core service shall report one deduplicated entry per adapter the active config references, each entry naming the positions using that adapter (`captain`, `<playbook>.<role>`) and carrying a readiness status derived from the same adapter readiness rules as the playbook launcher ([DR-004](../decisions/004-config-and-persistence.md)), naming the unmet requirement for each adapter that is not ready and reporting null readiness with verify-yourself guidance for an adapter with no preflight rule.
+When a client requests adapter readiness, the core service shall report one deduplicated entry per adapter the active config references, each entry naming the positions using that adapter (`captain`, `<playbook>.<role>`) and carrying a readiness status derived from the same adapter readiness rules as the playbook launcher ([DR-004](../decisions/004-config-and-persistence.md)), naming the unmet requirement for each adapter that is not ready and reporting null readiness with verify-yourself guidance for an adapter with no preflight rule:
 
 - When the active config changes, refreshed readiness is broadcast to connected clients.
 
@@ -83,7 +83,7 @@ When a client requests adapter readiness, the core service shall report one dedu
 
 #### core-service-10
 
-The core service shall persist sessions, boss turns, records (including hidden records), and usage totals to the app-local store as they occur.
+The core service shall persist sessions, boss turns, records (including hidden records), and usage totals to the app-local store as they occur:
 
 - Where sessions have been persisted, a startup serves the stored sessions, turns, records, and usage over the protocol with the same content and record order as originally streamed, applying the same visibility filtering as live streaming [[core-service-8](#core-service-8)].
 - Where a session was live at shutdown, the next startup reports that session as no longer live.
@@ -100,13 +100,13 @@ The `packages/core` workspace package shall build as a headless Node package tha
 
 #### core-service-12
 
-The core package shall define the WebSocket protocol — message schemas, protocol version, and TypeScript message types — in one module and export the types from a dedicated entry point free of Node-only runtime imports, so the UI package consumes the protocol as type-only imports and never redefines it.
+The core package shall define the WebSocket protocol — message schemas, protocol version, and TypeScript message types — in one module and export the types from a dedicated entry point free of Node-only runtime imports, so the UI package consumes the protocol as type-only imports and never redefines it:
 
 - When the protocol changes incompatibly, the protocol version carried by the hello message [[core-service-1](#core-service-1)] is bumped.
 
 #### core-service-13
 
-When an inbound protocol message is received, the core package shall validate it against the message schema before acting on it.
+When an inbound protocol message is received, the core package shall validate it against the message schema before acting on it:
 
 - When a message fails validation or carries an unknown type, the core package sends an error response identifying the failure, makes no state change, and leaves the connection open.
 
@@ -120,7 +120,7 @@ The core package shall filter records by visibility [[core-service-8](#core-serv
 
 #### core-service-15
 
-The core package shall own the app-local SQLite store defined by [DR-004](../decisions/004-config-and-persistence.md): it shall define the schema, record a schema version in the store, and apply forward migrations at startup before accepting client connections.
+The core package shall own the app-local SQLite store defined by [DR-004](../decisions/004-config-and-persistence.md): it shall define the schema, record a schema version in the store, and apply forward migrations at startup before accepting client connections:
 
 - When a migration fails, the core package stops serving and reports the failure, so a partially migrated store is never served.
 - The core package is the store's only writer, exposing stored data solely over the protocol.
@@ -137,7 +137,7 @@ When a session is created, the core package shall instantiate the engagement hos
 
 #### core-service-29
 
-Where a configured playbook's registry entry accepts a `cwd` option and the config block leaves it unset, when a session is created, the core package shall pass the session project's directory as that playbook's `cwd` option in the captain options ([DR-014](../decisions/014-released-toolchain.md)).
+Where a configured playbook's registry entry accepts a `cwd` option and the config block leaves it unset, when a session is created, the core package shall pass the session project's directory as that playbook's `cwd` option in the captain options ([DR-014](../decisions/014-released-toolchain.md)):
 
 - A `cwd` set in the config block passes through unchanged.
 
@@ -157,7 +157,7 @@ The core package shall reject WebSocket handshakes that do not present the servi
 
 #### core-service-25
 
-The core package shall run at most one compile per playbook id at a time and accept a `compile.abort` command that cancels the in-flight compile for a playbook id.
+The core package shall run at most one compile per playbook id at a time and accept a `compile.abort` command that cancels the in-flight compile for a playbook id:
 
 - While a compile is in flight for a playbook id, a further `compile.run` for that id is rejected fail-closed with a `busy` error naming the id, per [DR-010](../decisions/010-interface-craft.md) principle 5.
 - `compile.abort` cancels the in-flight compile by terminating the toolchain child process, emits a final canceled progress line, and makes the pending `compile.run` reply with an `aborted` error; no further progress output follows the canceled line.

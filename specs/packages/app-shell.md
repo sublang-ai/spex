@@ -23,13 +23,13 @@ While a Spex instance is running, when the user launches Spex again, the app sha
 
 #### app-shell-3
 
-Where the shared config file's notification preferences enable an event kind, when a project session emits an event of that kind — a finished turn (`turn_finished`), a question awaiting the Boss's reply (`awaitBossReply`), or a failure — the app shall post a native desktop notification naming the project and the event.
+Where the shared config file's notification preferences enable an event kind, when a project session emits an event of that kind — a finished turn (`turn_finished`), a question awaiting the Boss's reply (`awaitBossReply`), or a failure — the app shall post a native desktop notification naming the project and the event:
 
 - Where the preferences disable an event kind, the app posts no notification for events of that kind.
 
 #### app-shell-4
 
-While the attention count published by the Dashboard [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the app shall display that count as the dock or taskbar badge.
+While the attention count published by the Dashboard [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the app shall display that count as the dock or taskbar badge:
 
 - When the attention count becomes zero, the app removes the badge.
 
@@ -41,7 +41,7 @@ When the user clicks a desktop notification posted by the app, the app shall foc
 
 #### app-shell-6
 
-When a UI flow requests a file or directory selection (for example, choosing a project directory or a playbook source), the app shall present the operating system's native file dialog and deliver the selected path to the requesting flow.
+When a UI flow requests a file or directory selection (for example, choosing a project directory or a playbook source), the app shall present the operating system's native file dialog and deliver the selected path to the requesting flow:
 
 - When the user cancels the dialog, the app delivers no path and changes no state.
 
@@ -49,7 +49,7 @@ When a UI flow requests a file or directory selection (for example, choosing a p
 
 #### app-shell-7
 
-While at least one project session has an active turn, when the user initiates quit, the app shall show a confirmation naming the projects with active turns and shall quit only after explicit confirmation.
+While at least one project session has an active turn, when the user initiates quit, the app shall show a confirmation naming the projects with active turns and shall quit only after explicit confirmation:
 
 - When the user cancels that confirmation, the app keeps running with those sessions unaffected.
 - When the app quits, the app disposes every live session's runtime before the process exits, leaving no orphan agent processes.
@@ -58,7 +58,7 @@ While at least one project session has an active turn, when the user initiates q
 
 #### app-shell-8
 
-The app shall require network access only for agent turns and forge operations ([DR-006](../decisions/006-projects-and-forge.md)).
+The app shall require network access only for agent turns and forge operations ([DR-006](../decisions/006-projects-and-forge.md)):
 
 - While the machine has no network connectivity, the app launches, opens projects, browses session history, and edits settings, and surfaces agent-turn and forge-operation failures as errors without blocking other functionality.
 
@@ -82,7 +82,7 @@ Where the app is built for distribution, the packaged app shall carry the Spex p
 
 #### app-shell-10
 
-The shell shall run the core service in the Electron main process or an Electron utility process, load the built UI in a renderer window, and connect the renderer to the core over the core's WebSocket protocol exactly as a browser client connects.
+The shell shall run the core service in the Electron main process or an Electron utility process, load the built UI in a renderer window, and connect the renderer to the core over the core's WebSocket protocol exactly as a browser client connects:
 
 - The shell carries no application features — commands, state, records, config — over Electron IPC; Electron-specific channels are limited to the shell's own OS integrations (native dialogs, notifications, badge, quit handling), so the UI bundle runs unmodified in a browser against the same core.
 
@@ -92,7 +92,7 @@ The shell shall run the core service in the Electron main process or an Electron
 
 #### app-shell-11
 
-The shell shall create renderer windows with the Chromium sandbox enabled, Node integration disabled, and context isolation enabled [[1]].
+The shell shall create renderer windows with the Chromium sandbox enabled, Node integration disabled, and context isolation enabled [[1]]:
 
 - The renderer has no direct Node or Electron API access; its data and effects flow only through the WebSocket protocol and the shell's OS-integration channels.
 
@@ -100,7 +100,7 @@ The shell shall create renderer windows with the Chromium sandbox enabled, Node 
 
 #### app-shell-12
 
-When the app starts, the shell shall capture the user's login-shell environment once and pass it to the core before the core runs any adapter readiness check or spawns any agent process, so credentials exported in shell profiles are visible to the GUI-launched app.
+When the app starts, the shell shall capture the user's login-shell environment once and pass it to the core before the core runs any adapter readiness check or spawns any agent process, so credentials exported in shell profiles are visible to the GUI-launched app:
 
 - The shell persists no captured environment values and does not refresh the snapshot while running, so shell-profile changes take effect on the next launch.
 
@@ -114,7 +114,7 @@ Where the app is packaged, the packaged app shall ship agent-SDK native binaries
 
 #### app-shell-14
 
-When a tag matching `app-v*` is pushed, the desktop release workflow shall build the macOS arm64 app with electron-builder [[3]] and attach the unsigned build artifacts to a GitHub release for that tag.
+When a tag matching `app-v*` is pushed, the desktop release workflow shall build the macOS arm64 app with electron-builder [[3]] and attach the unsigned build artifacts to a GitHub release for that tag:
 
 - The desktop release workflow does not publish to npm and does not run for `v*` tags, keeping the app and CLI release channels disjoint ([DR-002](../decisions/002-desktop-app-architecture.md)).
 
@@ -122,7 +122,7 @@ When a tag matching `app-v*` is pushed, the desktop release workflow shall build
 
 #### app-shell-15
 
-The shell shall place all app-local state, including the SQLite store, under the platform app-data directory (Electron `userData` [[4]]).
+The shell shall place all app-local state, including the SQLite store, under the platform app-data directory (Electron `userData` [[4]]):
 
 - The shell writes no app-only state to the shared config file or into project working trees ([DR-004](../decisions/004-config-and-persistence.md)).
 
@@ -134,13 +134,13 @@ The desktop package shall expose the native bridge of [DR-008](../decisions/008-
 
 #### app-shell-22
 
-The renderer shall enforce a content security policy that denies remote script, connection, and image loading (data: images excepted).
+The renderer shall enforce a content security policy that denies remote script, connection, and image loading (data: images excepted):
 
 - Transcript markdown does not fetch remote images, so untrusted agent output cannot beacon out of the app.
 
 #### app-shell-24
 
-Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-desktop-live-smoke.md)), when the desktop app starts, the desktop package shall redirect its user-data directory to the smoke-provided location before opening any store, start the core as usual, and write the core's socket address to the named file only after the core is listening.
+Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-desktop-live-smoke.md)), when the desktop app starts, the desktop package shall redirect its user-data directory to the smoke-provided location before opening any store, start the core as usual, and write the core's socket address to the named file only after the core is listening:
 
 - Where the acceptance variable is also set, the app refuses to launch naming the conflict.
 - Where neither variable is set, the behavior is unchanged.
@@ -161,7 +161,7 @@ While a packaged app instance is running, when the test suite launches a second 
 
 #### app-shell-18
 
-Where a fixture playbook that raises an `awaitBossReply` question is enabled and the shared config enables that notification kind, when the test suite runs a session until the question is raised, the test suite shall assert that a native desktop notification is posted identifying the project session [[app-shell-3](#app-shell-3)].
+Where a fixture playbook that raises an `awaitBossReply` question is enabled and the shared config enables that notification kind, when the test suite runs a session until the question is raised, the test suite shall assert that a native desktop notification is posted identifying the project session [[app-shell-3](#app-shell-3)]:
 
 - Where the shared config disables that notification kind, the test suite asserts that the same fixture run posts no notification [[app-shell-3](#app-shell-3)].
 
