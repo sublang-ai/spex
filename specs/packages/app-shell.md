@@ -163,6 +163,7 @@ While a packaged app instance is running, when the test suite launches a second 
 
 Where a fixture playbook that raises an `awaitBossReply` question is enabled and the shared config enables that notification kind, when the test suite runs a session until the question is raised, the test suite shall assert that a native desktop notification is posted identifying the project session [[app-shell-3](#app-shell-3)]:
 
+- While the question awaits a reply, the test suite asserts that the dock or taskbar badge displays the attention count [[app-shell-4](#app-shell-4)].
 - Where the shared config disables that notification kind, the test suite asserts that the same fixture run posts no notification [[app-shell-3](#app-shell-3)].
 
 ### Environment Coverage

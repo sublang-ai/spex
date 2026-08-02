@@ -395,3 +395,9 @@ The test suite shall assert first-hour failures surface at hand:
 
 - where a fixture config is invalid, the Captain home thread lists the errors with a Settings link [[run-view-44](#run-view-44)];
 - where a fixture readiness entry is not ready, the heads-up bubble offers a re-check that invokes the readiness refresh [[run-view-45](#run-view-45)].
+
+### Protocol Boundary Coverage
+
+#### run-view-19
+
+Where the run view's production modules are inspected, the test suite shall assert that they import no Node-only modules and call no `@sublang/cligent` or `@sublang/playbook` APIs, so every record they render can only arrive as a protocol message [[run-view-13](#run-view-13)].
