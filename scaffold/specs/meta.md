@@ -85,13 +85,14 @@ Each spec item shall be self-contained: every reliance on another item is an exp
 
 ### meta-29
 
-Each spec item shall be exactly one GEARS statement [[meta-6](#meta-6)], elaborated only by its attachments — such as a note, a list, a table, a (renderable) diagram, or an example.
+Each spec item shall state one requirement in one GEARS statement [[meta-6](#meta-6)], with attachments introduced by a colon at the statement's end and elaborating only that requirement:
 
 | Item kind | Example attachment |
 | --- | --- |
 | Behavior | ordered steps or the cases and outcomes of one operation or decision |
 | Test | the assertions of one execution flow or one explicit case matrix |
 
+- An attachment may take a form such as a note, list, table, renderable diagram, or example.
 - A condition inside an attachment is a case label.
 - Differing stateful preconditions or triggers are evidence of additional spec items.
 
@@ -99,11 +100,11 @@ Each spec item shall be exactly one GEARS statement [[meta-6](#meta-6)], elabora
 
 ### meta-13
 
-A spec package shall define a closed set of subjects and their behaviors for a shared intent.
+A spec package shall define a closed set of subjects and their behavioral requirements for a shared intent.
 
 ### meta-9
 
-A spec package shall be one item file under `specs/packages/` or its subdirectory.
+A spec package shall be one file containing spec items under `specs/packages/` or its subdirectory.
 
 ### meta-30
 
@@ -111,10 +112,10 @@ Each package file shall contain only the following sections, in this order:
 
 | Section | Presence | Content |
 | ------- | -------- | ------- |
-| `Intent` | required | the shared intent of the package's items |
+| `Intent` | required | the package's purpose |
 | `External Behavior` | required | outcomes and guarantees the package's users may rely on |
-| `Internal Behavior` | optional | implementation hidden from the package's users |
-| `Verification` | required unless irrelevant [[meta-33](#meta-33)] | only test items verifying the package's own items |
+| `Internal Behavior` | optional | behavior hidden from the package's users |
+| `Verification` | required | test items verifying this package's behavior |
 | `References` | optional | external sources [[meta-19](#meta-19)] |
 
 - A package's user is any human or system component using its contract; External and Internal are relative to the package.
@@ -122,14 +123,14 @@ Each package file shall contain only the following sections, in this order:
 
 ### meta-10
 
-A spec package shall use a unique lowercase kebab-case basename \<pack\>.md, with \<pack\> serving as its package identifier.
+A file containing spec items shall use a lowercase kebab-case basename \<pack\>.md unique across the specs tree, with \<pack\> serving as its identifier.
 
 ### meta-11
 
 Each spec item shall use \<pack\>-\<N\> as its lowercase heading, anchor, and citation text:
 
-- \<pack\> is its containing package's identifier [[meta-10](#meta-10)];
-- \<N\> is a positive integer unique within that package;
+- \<pack\> is its containing file's identifier [[meta-10](#meta-10)];
+- \<N\> is a positive integer unique within that file;
 - a new item takes the lowest positive \<N\> neither assigned nor reserved by a public release [[meta-12](#meta-12)].
 
 ### meta-12
@@ -142,10 +143,11 @@ A publicly released item ID shall remain permanently bound to the concern its it
 
 ### meta-14
 
-A citation shall be the only relationship between packages: any general phrase of a behavior binds to a specific External Behavior of another package by citing it [[meta-16](#meta-16)].
+A behavior item shall express every peer package relationship as a binding citation — an inline citation of that package's External Behavior at the exact phrase the cited behavior makes specific [[meta-16](#meta-16)]:
 
-- An uncited phrase stays general as it is sufficient for code generation and audit.
-- One phrase may cite several packages if it composes their behaviors.
+- a binding citation binds behavior, never package subjects or states alone;
+- one phrase may carry several binding citations when several behaviors make its different parts specific, respectively;
+- there is no uncited peer package dependency.
 
 ### meta-15
 
@@ -153,7 +155,7 @@ A spec package shall stand alone: readable in full without following any link �
 
 ### meta-31
 
-A subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
+A lowercase kebab-case subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
 
 ## Testing
 
@@ -163,17 +165,22 @@ Spec test items shall specify integration and system tests only: unit tests belo
 
 ### meta-32
 
-A test shall prefer executing the real behavior of a cited package [[meta-14](#meta-14)] to supplying a substitute for it.
+A test shall prefer executing the real behaviors bound by the behaviors it verifies [[meta-14](#meta-14)] to supplying substitutes for them.
 
 ### meta-33
 
-Each stated behavior shall be verified unless verification is irrelevant to it, white-box or black-box: External and Internal govern use, not verification.
+Each package's `Verification` section shall verify every behavior in that package, white-box or black-box.
 
 ## Citation
 
 ### meta-16
 
-A citation of a spec item shall be a relative link with an anchor, enclosed in square brackets (e.g., `[[meta-1](meta.md#meta-1)]`), written inline at the phrase that relies on it.
+A citation of a spec item or record shall be an inline relative link with the cited ID as its link text:
+
+| Cited | Form |
+| --- | --- |
+| Spec item | its heading anchor, in an outer pair of square brackets (e.g., `[[meta-1](meta.md#meta-1)]`) |
+| Record | its file, with no outer brackets (e.g., `[DR-000](decisions/000-spec-structure-format.md)`) |
 
 ### meta-18
 
@@ -185,15 +192,15 @@ An external reference shall cite an authoritative source (e.g., official docs) b
 
 ### meta-20
 
-A test item shall cite every behavior item it verifies, inline at the assertion that verifies the behavior.
+A test item shall identify every behavior it verifies by an inline citation at the verifying assertion, with behavior citations confined to its own package.
 
 ## Authoring language
 
 ### meta-27
 
-Authoring language: en
+Where a specs tree declares an authoring language — by this item's machine-readable marker line, in the exact format `Authoring language: <code>` with `<code>` of only ASCII letters, digits, and hyphens — the specs shall be authored in that language:
 
-Where a specs tree declares an authoring language — by this item's machine-readable marker line, in the exact format `Authoring language: <code>` with `<code>` of only ASCII letters, digits, and hyphens — the specs shall be authored in that language.
+Authoring language: en
 
 ## References
 
