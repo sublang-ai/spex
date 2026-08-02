@@ -105,9 +105,35 @@ function extractMetaShell(text: string): string {
   return lines.join("\n");
 }
 
+function duplicateItemHeadings(text: string): string[] {
+  const counts = new Map<string, number>();
+  for (const match of text.replace(/\r\n?/g, "\n").matchAll(/^### (meta-\d+)$/gm)) {
+    counts.set(match[1], (counts.get(match[1]) ?? 0) + 1);
+  }
+  return [...counts].filter(([, count]) => count > 1).map(([id]) => id);
+}
+
+function malformedSourcePins(text: string): string[] {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .filter(
+      (line) =>
+        line.startsWith("<!-- spex-i18n-source:") &&
+        !/^<!-- spex-i18n-source: (?:meta-\d+|meta\.md|map\.md) sha256-[a-f0-9]{64} -->$/.test(
+          line,
+        ),
+    );
+}
+
 describe("localized spec overlays", () => {
   it("allows only source-pinned meta translations and localized file titles", () => {
     const baseText = readFileSync(join(SCAFFOLD_ROOT, "specs", "meta.md"), "utf-8");
+    assert.deepEqual(
+      duplicateItemHeadings(baseText),
+      [],
+      "base meta.md repeats an item heading",
+    );
     const baseItems = extractMetaItems(baseText);
 
     for (const language of listOverlayLanguages()) {
@@ -115,6 +141,16 @@ describe("localized spec overlays", () => {
       if (!existsSync(overlayPath)) continue;
 
       const overlayText = readFileSync(overlayPath, "utf-8");
+      assert.deepEqual(
+        duplicateItemHeadings(overlayText),
+        [],
+        `${language} meta.md repeats an item heading`,
+      );
+      assert.deepEqual(
+        malformedSourcePins(overlayText),
+        [],
+        `${language} meta.md carries a malformed source pin`,
+      );
       const overlayItems = extractMetaItems(overlayText);
       const pins = extractSourcePins(overlayText);
       const fileMarkers = [
@@ -185,6 +221,11 @@ describe("localized spec overlays", () => {
       if (!existsSync(overlayPath)) continue;
 
       const overlayText = readFileSync(overlayPath, "utf-8");
+      assert.deepEqual(
+        malformedSourcePins(overlayText),
+        [],
+        `${language} map.md carries a malformed source pin`,
+      );
       const markers = [
         ...overlayText.matchAll(
           /^<!-- spex-i18n-source: map\.md (sha256-[a-f0-9]{64}) -->$/gm,
