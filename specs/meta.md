@@ -104,6 +104,10 @@ Each spec item shall state one requirement in one GEARS statement [[meta-6](#met
 
 A spec package shall define a closed set of subjects and their behavioral requirements for a shared intent.
 
+### meta-34
+
+A spec package shall be complete and exact for its intent: sufficient to reimplement its behavior, stating no requirement beyond that intent, leaving no gap within it, and stating no requirement another spec already states.
+
 ### meta-9
 
 A spec package shall be one file containing spec items under `specs/packages/` or its subdirectory.

@@ -1,13 +1,8 @@
 ## Specs (Source of Truth)
 
 - Canonical specs live in @specs/.
-  Start with @specs/map.md for a quick-reference index of all spec files and @specs/meta.md for the spec format.
+  Start with @specs/map.md for a quick-reference index of all spec files and @specs/meta.md for the spec format; spec packages live in @specs/packages.
 - Before making changes or suggestions in an area that has a spec, read the relevant spec file(s) first and follow them.
 - Whenever your changes involve any spec, or you make a decision worth recording, keep the specs in sync — don't let them drift.
-- Keep specs:
-  - Complete & coherent: sufficient for you to reimplement code.
-  - Right level: each package file in @specs/packages holds its shared intent (## Intent), behavior its users may rely on (## External Behavior), optional implementation hidden from them (## Internal Behavior), and tests of its own claims (## Verification); behavior that emerges from several packages working together is itself a spec package citing the peers' External Behavior — there is no @specs/compositions. Specify integration/system testing, not unit testing, and prefer tests that execute the real behavior of cited packages over substitutes.
-  - Minimal: essential and concise; also check against other spec items to avoid overlap.
-  - Well organized: spec packages are finely scoped, with high cohesion and low coupling.
-  - Single-source: item citations are enclosed relative links like `[[pack-3](pack.md#pack-3)]`, written inline at the phrase that relies on them; items carry no metadata lines (`Verifies:`, `Binds:`, `Composes:`, `Clients:`, `Suppliers:`, `Scope:`).
+- Keep specs lawful per @specs/meta.md — the law itself, not this summary: complete and exact (meta-34), minimal (meta-23), one requirement per item (meta-29), cohesive packages for a shared intent (meta-13), sections per meta-30, relationships and test evidence only as inline citations (meta-14, meta-16, meta-20), integration/system tests only (meta-21, meta-32).
 - Run `spex lint` to check structure, item IDs, and citations after editing specs; never add trace lines to satisfy an older checker.
