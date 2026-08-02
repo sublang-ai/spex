@@ -544,7 +544,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
       ctx,
       file.relPath,
       1,
-      "warning",
+      "error",
       "package/verification",
       'missing required "## Verification" section (meta-30)',
     );

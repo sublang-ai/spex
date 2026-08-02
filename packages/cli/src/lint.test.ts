@@ -252,14 +252,14 @@ describe("lintSpecs", () => {
     assert.ok(rules(duplicate).includes("package/sections"));
   });
 
-  it("warns on a missing required Verification section (meta-30)", () => {
+  it("errors on a missing required Verification section (meta-30)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n",
     });
     const warned = findings.filter((f) => f.rule === "package/verification");
     assert.equal(warned.length, 1, JSON.stringify(warned));
-    assert.equal(warned[0].severity, "warning");
+    assert.equal(warned[0].severity, "error");
   });
 
   // lint-5, lint-11: the H1 carries the file's basename.

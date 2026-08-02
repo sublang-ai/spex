@@ -50,7 +50,7 @@ Where a file under `specs/packages/` is linted, the linter shall report each bre
 - an error for a missing or malformed `# <pack>: <Title>` heading, or an H1 whose `<pack>` is not the file's basename [[meta-10](../meta.md#meta-10)];
 - an error for a missing `## Intent` or `## External Behavior`;
 - an error for an unexpected or duplicate `##` section, or sections out of the order Intent, External Behavior, Internal Behavior, Verification, References;
-- a warning for a missing required `## Verification` [[meta-30](../meta.md#meta-30)].
+- an error for a missing required `## Verification` [[meta-30](../meta.md#meta-30)].
 
 - The localized section names of the bundled templates are accepted.
 - `specs/meta.md` and `specs/map.md` are exempt from these package-file rules.
