@@ -21,14 +21,14 @@ The current generation renumbered and reworked them; retarget citations with thi
 | META-10 | meta-10 | basename identifier; ALLCAPS short forms abolished |
 | META-11 | meta-11 | `<pack>-<N>` lowercase heading/anchor/citation text |
 | META-12 | meta-12 | released IDs permanently bound |
-| META-13 | meta-13 | closed set of subjects (slot machinery gone) |
-| META-14 | meta-14 | citation is the only package relationship: a general phrase binds to a peer's External Behavior |
+| META-13 | meta-13 | closed subjects and their behavioral requirements |
+| META-14 | meta-14 | every peer behavior relationship is expressed by a behavior-only binding citation to External Behavior |
 | META-15 | meta-15 | a package stands alone |
-| META-16 | meta-16 | citation form is the enclosed `[[id](path#id)]` link, written inline at the phrase that relies on it |
+| META-16 | meta-16 | item citations are enclosed `[[id](path#id)]` links; record citations are plain links labeled by record ID |
 | META-17 | — | DRs-and-items-may-cite-each-other — removed in 1.0; drop the link, keep the prose (the general citation rules govern) |
 | META-18 | meta-18 | reworked: no DR or spec item cites an IR or names it in prose — map.md and the IRs themselves sit outside the prohibition |
 | META-19 | meta-19 | numbered external references |
-| META-20 | meta-20 | test citations, inline at the assertion; the peer-Internal allowance is gone — the 1.0 law is silent on it |
+| META-20 | meta-20 | test behavior citations are inline verification evidence confined to the containing package |
 | META-21 | meta-21 | integration/system tests only |
 | META-23 | meta-23 | minimal, bullets/tables/diagrams over prose |
 | META-24 | meta-24 | DRs record decisions, not implementation |
@@ -40,15 +40,15 @@ The current generation renumbered and reworked them; retarget citations with thi
 | META-33 | — | dead (packages-may-not-cite-compositions) |
 | META-34 | — | composition file sections — dead |
 | META-35 | — | bindable/consumed/invariant — dead |
-| META-36 | — | binding items — dead (tests-prefer-real-behavior is meta-32) |
+| META-36 | — | the special binding item grammar is dead; behavior-only binding is covered by meta-14 |
 | META-37 | meta-28 | intent-record semantics → IR disposability (or meta-5 for the format) |
-| META-38 | meta-33 | ⚠ content reversed: stubs-only verification became verify-unless-irrelevant; see also meta-32 |
+| META-38 | meta-33 | every stated behavior is verified; see also meta-32 |
 | META-39 | — | composition-test homing — dead |
 | META-40 | — | binding test coverage — dead |
 | META-41 | — | acceptance/inspection test grade — dead |
-| META-42 | meta-29 | one GEARS statement per item |
+| META-42 | meta-29 | one requirement per item |
 | META-43 | meta-22 | record IDs |
 | META-44 | — | removed in 1.0; the DR-support rule lives in DR-000 prose |
 
-When a phrase cites a dead item: keep the prose if the claim still holds under the new law and drop or retarget the link; if the claim itself is dead law (bindings, composition tests, stub-only verification), rewrite or remove the claim.
+When a phrase cites a dead item: keep the prose if the claim still holds under the new law and drop or retarget the link; if the claim itself is dead law (special binding items, composition-test homing, stub-only verification), rewrite or remove the claim.
 Never leave a link to a nonexistent anchor.

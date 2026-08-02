@@ -8,12 +8,12 @@ The spec structure defined by `specs/decisions/000-spec-structure-format.md` and
 | | Previous generation (spex 0.x) | Current generation (spex 1.0) |
 | --- | --- | --- |
 | Layout | `packages/` + `compositions/` | `packages/` only — composition is a package pattern |
-| Cross-package behavior | binding and scenario items in composition files | ordinary packages citing peers' External Behavior |
+| Cross-package behavior | binding and scenario items in composition files | binding citations to peers' External Behavior |
 | Item IDs | ALLCAPS short form (`AUTH-3`) | lowercase file basename (`github-login-3`) |
 | Item citations | `[AUTH-3](auth.md#auth-3)` | enclosed: `[[github-login-3](github-login.md#github-login-3)]` |
-| Package sections | Intent, External?, Internal?, Verification? | Intent, External (required), Internal?, Verification (unless irrelevant), References? |
+| Package sections | Intent, External?, Internal?, Verification? | Intent, External (required), Internal?, Verification, References? |
 | Intent records | Goal, Deliverables, Tasks, Acceptance criteria | Status, Intent, Deliverables, Tasks, Verification |
-| Tests | drive the package against stubs | prefer executing the real cited behavior |
+| Tests | drive the package against stubs | prefer executing real behavior bound by the behavior under test |
 
 Migrating a tree is judgment work — items reclassify between External and Internal, bindings become behaviors, intents are rewritten standalone — so it is done by an AI agent following the bundled **[spec-structure-migration skill](../skills/spec-structure-migration/README.md)**, not by a script ([DR-021](../specs/decisions/021-skill-based-migration.md)).
 
@@ -33,14 +33,14 @@ Migrating a tree is judgment work — items reclassify between External and Inte
 
 4. **Let it loop until mechanically clean.**
    The agent alternates migrating with two gates until both pass clean:
-   - `python3 .claude/skills/spec-structure-migration/scripts/check_specs.py specs` — links, anchors, citation form, ID case, sections, meta-14 targeting;
+   - `python3 .claude/skills/spec-structure-migration/scripts/check_specs.py specs` — links, anchors, item and record citation forms, ID case, sections, and behavior/test citation targeting;
    - `spex lint` — the CLI's rule set for the current generation.
 
 5. **Review the diff.**
    The mechanical gates cannot judge meaning; that is the reviewer's job. Focus on:
-   - **External vs Internal calls** — did guarantees your users rely on stay External, and implementation discipline stay Internal?
+   - **External vs Internal calls** — did guarantees your users rely on stay External, and behavior hidden from them stay Internal?
    - **Folded composition packages** — do the former binding/scenario files read as truthful packages, with citations at the phrases that rely on them?
-   - **Generalized phrases** — where the agent dropped a citation and left the phrase general, is the phrase still sufficient to generate and audit code?
+   - **Removed dependencies** — where the agent dropped a citation, did it also remove the peer-specific dependency rather than leave it hidden in prose?
    - **Record statuses** — superseded DRs, intent-record statuses, and any judgment calls the agent flagged instead of deciding.
 
 6. **Merge.**
