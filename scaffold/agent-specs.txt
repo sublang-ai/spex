@@ -4,5 +4,6 @@
   Start with @specs/map.md for a quick-reference index of all spec files and @specs/meta.md for the spec format; spec packages live in @specs/packages.
 - Before making changes or suggestions in an area that has a spec, read the relevant spec file(s) first and follow them.
 - Whenever your changes involve any spec, or you make a decision worth recording, keep the specs in sync — don't let them drift.
+- Update specs before coding: when an intended change conflicts with existing spec items, first resolve the conflict in the specs — or drop the intent — and code only against the updated specs.
 - Keep specs lawful per @specs/meta.md — the law itself, not this summary: complete and exact (meta-34), minimal (meta-23), one requirement per item (meta-29), cohesive packages for a shared intent (meta-13), sections per meta-30, relationships and test evidence only as inline citations (meta-14, meta-16, meta-20), integration/system tests only (meta-21, meta-32).
 - Run `spex lint` to check structure, item IDs, and citations after editing specs; never add trace lines to satisfy an older checker.
