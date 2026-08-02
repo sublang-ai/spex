@@ -16,7 +16,7 @@ The skill pairs those instructions with two deterministic aids:
 
 ## Is my tree old-generation?
 
-A tree scaffolded by any spex 0.x release is; the current generation ships with spex 1.0.
+A tree scaffolded by any spex 0.x release is; the current generation was introduced in spex 1.0 and tightened in 2.0.
 Any of these means yes:
 
 - a `specs/user/`, `specs/dev/`, or `specs/test/` directory (the oldest layout, spex ≤ 0.3);

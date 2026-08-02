@@ -3,9 +3,9 @@
 
 # Migrating a specs tree to the current generation
 
-The spec structure defined by `specs/decisions/000-spec-structure-format.md` and `specs/meta.md` — the generation spex 1.0 ships — replaced the previous one; trees scaffolded by spex 0.x releases carry it:
+The spec structure defined by `specs/decisions/000-spec-structure-format.md` and `specs/meta.md` — introduced in spex 1.0 and tightened in 2.0 — replaced the previous one; trees scaffolded by spex 0.x releases carry it:
 
-| | Previous generation (spex 0.x) | Current generation (spex 1.0) |
+| | Previous generation (spex 0.x) | Current generation (spex 2.0) |
 | --- | --- | --- |
 | Layout | `packages/` + `compositions/` | `packages/` only — composition is a package pattern |
 | Cross-package behavior | binding and scenario items in composition files | binding citations to peers' External Behavior |

@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-02
+
+### Changed
+
+- **The scaffolded spec law now uses one behavior-level binding model.**
+  Fixed, polymorphic, and composed package relationships cite peer
+  External Behavior inline; every package requires Verification of its
+  own behavior; record citations use plain ID links; and attachments
+  follow a statement-ending colon. Existing 1.x trees must run
+  `spex scaffold --update` and reconcile their packages with the new law.
+- **`spex lint` enforces the 2.0 law.** It rejects missing Verification
+  sections, peer behavior citations from Verification, malformed record
+  citations, and basename collisions involving any item-bearing file.
+- Agent and update guidance now points to the normative meta rules,
+  permits implementation-led exploration, resolves conflicts in the
+  specs before coding against them, and requires specs and code to agree
+  before an intent completes.
+- Chinese scaffolds are source-pinned and streamlined while retaining
+  Chinese GEARS syntax and a localized `map.md`.
+
+### Fixed
+
+- Managed `CLAUDE.md` and `AGENTS.md` refreshes now parse Markdown H2
+  boundaries, so heading-like lines inside fenced code blocks cannot
+  replace or truncate the managed Specs section.
+
 ## [1.0.0] - 2026-07-31
 
 Version 0.4.0 was prepared but never published; its changes are folded
@@ -222,7 +248,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/sublang-ai/spex/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/sublang-ai/spex/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/sublang-ai/spex/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/sublang-ai/spex/compare/v0.2.2...v0.2.3
