@@ -69,7 +69,7 @@ describe("recordForHref: resolved-path record matching", () => {
   });
 
   test("lookalike paths that resolve elsewhere stay inert", () => {
-    // A collection subdirectory (META-32) is not a record.
+    // A collection subdirectory (meta-31) is not a record.
     expect(
       recordForHref(
         "packages/auth.md",

@@ -6,7 +6,7 @@
 Trees seeded from the previous scaffold generation carry `meta.md` items with ALLCAPS `META-<N>` IDs.
 The current generation renumbered and reworked them; retarget citations with this table, never by number alone.
 
-⚠ The 1.0 law renumbered every surviving item by document order (`meta-1`…`meta-27`): outside META-1, META-4, META-5, and META-13 no number maps to itself — a blind `META-x` → `meta-x` rewrite corrupts citations.
+⚠ Released `META-<N>` numbers stay pinned, so most rows map to `meta-<N>` unchanged — but the moved rows (META-3→meta-30, META-28→meta-30, META-32→meta-31, META-37→meta-28, META-38→meta-33, META-42→meta-29, META-43→meta-22) and the removed items make a blind `META-x` → `meta-x` rewrite unsafe; retarget by the table, never by number alone.
 
 | Old | New | Note |
 | --- | --- | --- |

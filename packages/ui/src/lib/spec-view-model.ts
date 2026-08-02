@@ -314,7 +314,7 @@ export function linkItemTargets(text: string, href: string): string[] {
  * The href is resolved against the citing file's specs/-relative
  * path — hrefs are file-relative — and only an exact `record.path`
  * match opens a record, so `../packages/decisions/001-x.md` (a
- * collection subdirectory, META-32) and a bare sibling basename in
+ * collection subdirectory, meta-31) and a bare sibling basename in
  * a non-record directory stay inert, and `..` escaping specs/ never
  * matches. */
 export function recordForHref(
