@@ -36,8 +36,7 @@ jobs:
       - run: npm run build
 
       - name: Package the desktop app (unsigned arm64 zip)
-        working-directory: apps/desktop
-        run: npx electron-builder --mac --arm64 zip
+        run: npm run package -w apps/desktop
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2

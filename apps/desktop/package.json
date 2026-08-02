@@ -15,7 +15,7 @@
     "build": "tsc && node scripts/stage-ui.mjs",
     "start": "npm run build && electron .",
     "test": "node --test dist/*.test.js",
-    "package": "npm run build && npm run rebuild:electron && electron-builder --mac --arm64 --dir",
+    "package": "npm run build && npm run rebuild:electron && electron-builder --mac zip --arm64",
     "rebuild:electron": "node scripts/rebuild-native.mjs electron",
     "rebuild:node": "node scripts/rebuild-native.mjs node"
   },
@@ -25,13 +25,14 @@
   "devDependencies": {
     "@electron/rebuild": "^3.6.1",
     "@types/node": "^22.0.0",
-    "electron": "^33.0.0",
+    "electron": "33.4.11",
     "electron-builder": "^25.1.0",
     "typescript": "^5.8.0"
   },
   "build": {
     "appId": "ai.sublang.spex",
     "productName": "Spex",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
@@ -40,11 +41,6 @@
       "preload.cjs",
       "!dist/**/*.test.js",
       "ui-dist/**"
-    ],
-    "asarUnpack": [
-      "**/node_modules/@anthropic-ai/claude-agent-sdk/**",
-      "**/node_modules/@anthropic-ai/claude-agent-sdk-*/**",
-      "**/node_modules/better-sqlite3/**"
     ],
     "mac": {
       "target": [
