@@ -3,44 +3,39 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Heading } from "mdast";
 import { getScaffoldDir } from "./bundled-scaffold.js";
+import { headingText, parseMarkdown, startOffset } from "./markdown.js";
 
-const SECTION_HEADING = "## Specs (Source of Truth)";
+const SECTION_TITLE = "Specs (Source of Truth)";
 const AGENT_FILES = ["CLAUDE.md", "AGENTS.md"];
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /**
- * Extract the specs section from content: from the heading to the
- * next h2 heading or end of file.
+ * Extract the specs section from content: from the managed heading to
+ * the next h2 heading or end of file. The content is parsed as
+ * Markdown, so only a real heading matches — a lookalike line inside a
+ * fenced code block neither starts the section nor terminates it.
  * Returns [start, end] character offsets, or null if not found.
  */
 function findSection(content: string): [number, number] | null {
-  // Match only as a real H2 heading at start of a line (or start of file).
-  // Handle both LF and CRLF line endings.
-  const pattern = new RegExp(
-    `(?:^|\\r?\\n)${escapeRegExp(SECTION_HEADING)}(?:\\r?\\n|$)`,
+  const headings = parseMarkdown(content).children.filter(
+    (node): node is Heading => node.type === "heading" && node.depth === 2,
   );
-  const match = pattern.exec(content);
-  if (!match) return null;
+  const managed = headings.find(
+    (heading) => headingText(content, heading) === SECTION_TITLE,
+  );
+  if (managed === undefined) return null;
 
-  // Start at the heading itself, not the preceding line ending
-  const matchText = match[0];
-  let idx = match.index;
-  if (matchText.startsWith("\r\n")) idx += 2;
-  else if (matchText.startsWith("\n")) idx += 1;
+  const next = headings.find(
+    (heading) => startOffset(heading) > startOffset(managed),
+  );
+  if (next === undefined) return [startOffset(managed), content.length];
 
-  // Find the next ## heading after the section heading line
-  const afterHeading = idx + SECTION_HEADING.length;
-  const nextH2Match = content.slice(afterHeading).match(/\r?\n## /);
-  const end =
-    nextH2Match?.index !== undefined
-      ? afterHeading + nextH2Match.index
-      : content.length;
-
-  return [idx, end];
+  // End before the line ending that precedes the next heading, so the
+  // separator between sections stays outside the replaced range.
+  let end = startOffset(next);
+  if (content[end - 1] === "\n") end -= content[end - 2] === "\r" ? 2 : 1;
+  return [startOffset(managed), end];
 }
 
 /**
@@ -89,8 +84,9 @@ function processFile(
  * at basePath.
  *
  * SCAF-10: when neither exists, both are created; when only one
- * exists, only that file is updated. Section replacement uses
- * case-sensitive match on "## Specs (Source of Truth)".
+ * exists, only that file is updated. Section replacement parses
+ * Markdown and matches the H2 heading "Specs (Source of Truth)"
+ * case-sensitively, immune to lookalikes inside code fences.
  * SCAF-5: replace in place or skip when identical.
  *
  * With `createMissing: false` (the --update flow), absent files stay

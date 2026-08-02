@@ -284,7 +284,7 @@ Where `appendAgentSpecs()` is called, it shall read `scaffold/agent-specs.txt` a
 
 - when neither file exists, both are created, unless the caller passes `createMissing: false` (the `--update` flow), in which case absent files stay absent;
 - when only one exists, only that file is updated;
-- detection of an existing specs section uses a case-sensitive match on the heading `## Specs (Source of Truth)`; when found, the section is replaced in place and reported as updated, or skipped when the replacement is identical;
+- detection parses the file as Markdown and matches the H2 heading `Specs (Source of Truth)` case-sensitively, so a lookalike inside a code fence neither starts the section nor ends it; when found, the section is replaced in place up to the next H2 heading and reported as updated, or skipped when the replacement is identical;
 - when the heading is absent (including case mismatches), the content is appended to the file.
 
 ## Verification

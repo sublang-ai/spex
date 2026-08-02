@@ -211,6 +211,55 @@ describe("appendAgentSpecs", () => {
     }
   });
 
+  it("ignores a managed heading inside a code fence", () => {
+    const dir = makeTmp();
+    try {
+      const before =
+        "# Project\n\n```markdown\n## Specs (Source of Truth)\nfenced example\n```\n";
+      writeFileSync(join(dir, "CLAUDE.md"), before);
+      appendAgentSpecs(dir);
+
+      const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
+      assert.ok(
+        content.includes("fenced example\n```"),
+        "fenced example should remain intact",
+      );
+      assert.ok(
+        content.startsWith(before.slice(0, -1)),
+        "section should be appended after the fence, not spliced into it",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("replaces through a fenced h2 lookalike up to the real next heading", () => {
+    const dir = makeTmp();
+    try {
+      const stale =
+        "## Specs (Source of Truth)\n\nstale text\n\n```markdown\n## fenced lookalike\n```\n\nstale tail\n";
+      const before = `${stale}\n## Next Section\n\nuser content\n`;
+      writeFileSync(join(dir, "CLAUDE.md"), before);
+      appendAgentSpecs(dir);
+
+      const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
+      assert.ok(
+        !content.includes("stale tail"),
+        "the whole stale section should be replaced, past the fenced lookalike",
+      );
+      assert.ok(
+        content.includes("\n## Next Section\n\nuser content\n"),
+        "user content after the section should survive",
+      );
+      assert.ok(
+        content.startsWith(getExpectedContent()),
+        "managed section should hold the current agent text",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   // SCAF-10: heading absent (case mismatch) → append
   it("appends when heading has case mismatch", () => {
     const dir = makeTmp();
