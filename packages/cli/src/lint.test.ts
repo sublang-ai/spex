@@ -252,7 +252,7 @@ describe("lintSpecs", () => {
     assert.ok(rules(duplicate).includes("package/sections"));
   });
 
-  it("warns on a missing Verification section (meta-33)", () => {
+  it("warns on a missing required Verification section (meta-30)", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n",
@@ -323,7 +323,7 @@ describe("lintSpecs", () => {
     assert.equal(prefix[0].severity, "error");
   });
 
-  it("flags duplicate item IDs and duplicate package basenames", () => {
+  it("flags duplicate item IDs and non-unique item-file basenames", () => {
     const duplicateId = findingsFor({
       "specs/packages/auth.md": CLEAN_AUTH,
       "specs/packages/auth-two.md": CLEAN_AUTH.replace(
@@ -340,6 +340,11 @@ describe("lintSpecs", () => {
     const basename = duplicateBasename.filter((f) => f.rule === "id/basename");
     assert.equal(basename.length, 2, JSON.stringify(basename));
     assert.ok(basename.every((f) => f.severity === "error"));
+
+    const rootCollision = findingsFor({
+      "specs/packages/map.md": CLEAN_AUTH.replaceAll("auth", "map"),
+    });
+    assert.ok(rules(rootCollision).includes("id/basename"));
   });
 
   it("warns on items inside Intent or References sections", () => {
@@ -464,6 +469,29 @@ describe("lintSpecs", () => {
         "# a: A\n\n## External Behavior\n\n### a-1\n\nX shall Y per [the layout](../meta.md#overall).\n\n## Intent\n\nX.\n",
     });
     assert.ok(!rules(sectionLink).includes("cite/item-link"));
+  });
+
+  it("errors on malformed record citations (meta-16)", () => {
+    const malformed = findingsFor({
+      "specs/packages/a.md":
+        "# a: A\n\n## Intent\n\nBuilt per [the decision](../decisions/001-a.md).\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n",
+      "specs/decisions/001-a.md": DR("001", "A"),
+    });
+    assert.ok(rules(malformed).includes("cite/record-link"));
+
+    const enclosed = findingsFor({
+      "specs/packages/a.md":
+        "# a: A\n\n## Intent\n\nBuilt per [[DR-001](../decisions/001-a.md)].\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n",
+      "specs/decisions/001-a.md": DR("001", "A"),
+    });
+    assert.ok(rules(enclosed).includes("cite/record-link"));
+
+    const valid = findingsFor({
+      "specs/packages/a.md":
+        "# a: A\n\n## Intent\n\nBuilt per [DR-001](../decisions/001-a.md).\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n",
+      "specs/decisions/001-a.md": DR("001", "A"),
+    });
+    assert.ok(!rules(valid).includes("cite/record-link"));
   });
 
   // lint-8: no DR or spec item cites an IR or names it in prose
@@ -641,15 +669,15 @@ describe("lintSpecs", () => {
   });
 
   // lint-13: citation discipline.
-  it("errors on citations and markers in a package Intent (meta-15)", () => {
+  it("allows supporting citations and markers in a package Intent", () => {
     const findings = findingsFor({
       "specs/packages/a.md":
-        '# a: A\n\n## Intent\n\nBuilt per [DR-001](../decisions/001-a.md) and [[1]].\n\n## External Behavior\n\n### a-1\n\nX shall Y per [[1]].\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n\n## References\n\n[1]: https://one.example "One"\n',
+        '# a: A\n\n## Intent\n\nBuilt per [DR-001](../decisions/001-a.md), [the audit context](audit.md#intent), and [[1]].\n\n## External Behavior\n\n### a-1\n\nX shall Y per [[1]].\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n\n## References\n\n[1]: https://one.example "One"\n',
+      "specs/packages/audit.md": CLEAN_AUDIT,
       "specs/decisions/001-a.md": DR("001", "A"),
     });
-    const cited = findings.filter((f) => f.rule === "intent/cited");
-    assert.equal(cited.length, 2, JSON.stringify(cited));
-    assert.ok(cited.every((f) => f.severity === "error"));
+    assert.ok(!rules(findings).includes("intent/cited"));
+    assert.ok(!rules(findings).includes("cite/prose"));
   });
 
   it("errors on peer citations in section prose (lint-13)", () => {
@@ -683,10 +711,8 @@ describe("lintSpecs", () => {
     assert.ok(!rules(findings).includes("verify/uncited"));
   });
 
-  // lint-13: the law is silent on a Verification item reaching a
-  // peer's Internal Behavior, so lint tolerates the reach — and
-  // errors on anything outside the peer's behavior items.
-  it("tolerates Verification citing peer Internal Behavior, nothing further", () => {
+  // lint-13: Verification behavior citations stay in the package.
+  it("errors on Verification citing peer behavior items", () => {
     const internal = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)] flushes the log [[audit-2](audit.md#audit-2)].\n",
@@ -695,23 +721,37 @@ describe("lintSpecs", () => {
         "| File | Summary |\n| --- | --- |\n| [a.md](packages/a.md) | A |\n| [audit.md](packages/audit.md) | Audit |",
       ),
     });
-    assert.deepEqual(internal, []);
+    const internalFinding = internal.find((f) => f.rule === "verify/peer");
+    assert.ok(internalFinding, "expected a verify/peer finding");
+    assert.equal(internalFinding.severity, "error");
 
-    // A peer Verification item is outside the behavior items.
+    const external = findingsFor({
+      "specs/packages/a.md":
+        "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)] and peer recording [[audit-1](audit.md#audit-1)].\n",
+      "specs/packages/audit.md": CLEAN_AUDIT,
+    });
+    assert.ok(rules(external).includes("verify/peer"));
+
+    const ownInternal = findingsFor({
+      "specs/packages/a.md":
+        "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Internal Behavior\n\n### a-2\n\nX shall record Y.\n\n## Verification\n\n### a-3\n\nThe suite shall assert Y [[a-1](#a-1)] and its record [[a-2](#a-2)].\n",
+    });
+    assert.ok(!rules(ownInternal).includes("verify/peer"));
+
+    // META-20 confines behavior citations, not every supporting link.
     const verification = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)] like the peer suite [[audit-3](audit.md#audit-3)].\n",
       "specs/packages/audit.md": CLEAN_AUDIT,
     });
-    assert.ok(rules(verification).includes("cite/internal"));
+    assert.ok(!rules(verification).includes("verify/peer"));
 
-    // So is a section anchor.
     const sectionAnchor = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y.\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)] against [the audit intent](audit.md#intent).\n",
       "specs/packages/audit.md": CLEAN_AUDIT,
     });
-    assert.ok(rules(sectionAnchor).includes("cite/internal"));
+    assert.ok(!rules(sectionAnchor).includes("verify/peer"));
   });
 
   // lint-14: the multi-sentence advisory.
@@ -725,6 +765,7 @@ describe("lintSpecs", () => {
     const warned = findings.filter((f) => f.rule === "item/sentence");
     assert.equal(warned.length, 1, JSON.stringify(warned));
     assert.equal(warned[0].severity, "warning");
+    assert.match(warned[0].message, /second requirement/);
 
     // One sentence governing an attached algorithm and fence is
     // clean, and e.g./inline code never end a sentence.

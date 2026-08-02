@@ -11,15 +11,15 @@ packages/, map.md, meta.md). For each tree this reports:
   1. relative markdown links that do not resolve (file and anchor)
   2. item citations not in the enclosed form [[<id>](path#<id>)] with the
      link text equal to the target item ID
-  3. ALLCAPS item-ID residue outside code (record IDs DR-/IR- exempt)
-  4. package files with unexpected sections or sections out of order
-  5. DR/IR files missing required sections
-  6. behavior items citing a peer package's non-External item (meta-14);
-     Verification items are outside this check — the law is silent on a
-     test reaching peer Internal Behavior, so it is tolerated
-  7. IR references in DR or spec-item files — decisions/, packages/,
+  3. record citations not in the plain [<record-id>](path) form
+  4. ALLCAPS item-ID residue outside code (record IDs DR-/IR- exempt)
+  5. package files with unexpected sections or sections out of order
+  6. DR/IR files missing required sections
+  7. behavior items citing a peer package's non-External item, or
+     Verification items citing a peer package item (meta-14, meta-20)
+  8. IR references in DR or spec-item files — decisions/, packages/,
      meta.md (meta-18); intent records and map.md are exempt
-  8. leftover compositions/ directories
+  9. leftover compositions/ directories
 
 Exit 0 when clean, 1 when any problem is found. The checker is a guardrail,
 not the law: passing it does not prove conformance — meta.md does.
@@ -78,6 +78,7 @@ PKG_ORDER = ["Intent", "External Behavior", "Internal Behavior", "Verification",
              "意图", "外部行为", "内部行为", "验证", "参考资料"]
 EXTERNAL = {"External Behavior", "外部行为"}
 BEHAVIOR = {"External Behavior", "Internal Behavior", "外部行为", "内部行为"}
+VERIFICATION = {"Verification", "验证"}
 DR_REQUIRED = [("Status", "状态"), ("Context", "背景"), ("Decision", "决策"), ("Consequences", "影响")]
 IR_REQUIRED = [("Status", "状态"), ("Intent", "意图"), ("Deliverables", "交付项"),
                ("Tasks", "任务"), ("Verification", "验证")]
@@ -152,6 +153,16 @@ def check_tree(root):
                 if target and not os.path.exists(tp):
                     report(root, path, i, f"broken link: {m.group(0)} -> missing file")
                     continue
+                record = re.match(
+                    rf"^{re.escape(root)}{re.escape(os.sep)}(decisions|intents|iterations){re.escape(os.sep)}(\d+)-[^/]+\.md$",
+                    tp,
+                )
+                if record and target:
+                    expected = ("DR" if record.group(1) == "decisions" else "IR") + "-" + record.group(2)
+                    pre, post = ln[: m.start()], ln[m.end():]
+                    if txt != expected or pre.endswith("[") and post.startswith("]") or frag is not None:
+                        report(root, path, i,
+                               f"record citation must be [{expected}](path): {m.group(0)} (meta-16)")
                 if frag is not None:
                     entry = files.get(tp)
                     if entry is None:
@@ -174,6 +185,10 @@ def check_tree(root):
                                 report(root, path, i,
                                        f"behavior item cites peer non-External ({tsec}): "
                                        f"{m.group(0)} (meta-14)")
+                            elif cur_sec in VERIFICATION and tsec in BEHAVIOR:
+                                report(root, path, i,
+                                       f"Verification item cites peer item ({tsec}): "
+                                       f"{m.group(0)} (meta-20)")
             for m in ALLCAPS.finditer(ln):
                 if m.group(1) not in ALLCAPS_EXEMPT:
                     report(root, path, i, f"ALLCAPS item-id residue: {m.group(0)}")
@@ -188,7 +203,7 @@ def check_tree(root):
                 report(root, path, 0, f"unexpected package sections: {bad}")
             if ranks != sorted(ranks):
                 report(root, path, 0, f"package sections out of order: {secs}")
-            for req in (0, 1):  # Intent, External Behavior
+            for req in (0, 1, 3):  # Intent, External Behavior, Verification
                 if req not in ranks:
                     report(root, path, 0,
                            f"package missing required section {PKG_ORDER[req]}")

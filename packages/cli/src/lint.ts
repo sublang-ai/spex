@@ -546,7 +546,7 @@ function lintPackageFile(ctx: LintContext, file: SpecFile): void {
       1,
       "warning",
       "package/verification",
-      'missing "## Verification" section; verification is required unless irrelevant (meta-33)',
+      'missing required "## Verification" section (meta-30)',
     );
   }
 }
@@ -671,26 +671,28 @@ function lintItems(ctx: LintContext, items: ItemInfo[]): void {
     }
   }
 
-  // A package's identity is its basename (meta-10); one basename
-  // used by two files collides even across subdirectories.
+  // An item-bearing file's identity is its basename (meta-10),
+  // which is unique across the specs tree.
+  const itemFiles = new Set(items.map((item) => item.file.relPath));
   const byBasename = new Map<string, SpecFile[]>();
   for (const file of ctx.files.values()) {
-    if (!isUnder(file.relPath, "packages")) continue;
     const basename = basenameOf(file.relPath);
     const list = byBasename.get(basename) ?? [];
     list.push(file);
     byBasename.set(basename, list);
   }
   for (const [basename, list] of byBasename) {
-    if (list.length < 2) continue;
-    for (const file of list) {
+    if (list.length < 2 || !list.some((file) => itemFiles.has(file.relPath))) {
+      continue;
+    }
+    for (const file of list.filter((candidate) => itemFiles.has(candidate.relPath))) {
       report(
         ctx,
         file.relPath,
         1,
         "error",
         "id/basename",
-        `package basename "${basename}" is used by ${list
+        `item-bearing basename "${basename}" conflicts with ${list
           .map((other) => other.relPath)
           .join(", ")} (meta-10)`,
       );
@@ -822,11 +824,9 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
       }
     }
 
-    // Peer citations resolve against the peer's sections: a
-    // behavior item may rely on External Behavior alone (lint-7,
-    // meta-14); a Verification item cites behavior items (meta-20),
-    // and the law is silent on it reaching a peer's Internal
-    // Behavior, so lint tolerates that reach (lint-13).
+    // A behavior reaches peers through External Behavior alone
+    // (meta-14). Verification behavior citations stay within their
+    // own package (meta-20), where Internal Behavior remains valid.
     const isBehavior =
       item.section !== null && BEHAVIOR_SECTIONS.has(item.section);
     const isVerification = item.section === "Verification";
@@ -853,31 +853,28 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
               `item ${item.id} cites ${cited.id} in ${target.relPath}'s ${cited.section ?? "front matter"}; a peer behavior is relied on through External Behavior alone (meta-14)`,
             );
           }
-        } else if (target.fragment !== "") {
-          // Verification: the cited peer anchor must be an External
-          // or Internal Behavior item.
-          if (
-            cited === undefined ||
-            cited.section === null ||
-            !BEHAVIOR_SECTIONS.has(cited.section)
-          ) {
-            report(
-              ctx,
-              item.file.relPath,
-              link.line,
-              "error",
-              "cite/internal",
-              `Verification item ${item.id} cites ${target.relPath}#${target.fragment} outside the peer's External and Internal Behavior items (meta-20)`,
-            );
-          }
+        } else if (
+          target.fragment !== "" &&
+          cited?.section !== null &&
+          cited?.section !== undefined &&
+          BEHAVIOR_SECTIONS.has(cited.section)
+        ) {
+          report(
+            ctx,
+            item.file.relPath,
+            link.line,
+            "error",
+            "verify/peer",
+            `Verification item ${item.id} cites peer behavior ${cited.id}; behavior citations stay within the containing package (meta-20)`,
+          );
         }
       }
     }
   }
 
-  // One governing statement per item (meta-29), sentence count as
+  // One requirement per item (meta-29), sentence count as
   // its advisory proxy (lint-14) — a conformant item may carry
-  // several sentences of one contract's cases, so this only
+  // several sentences of one requirement's cases, so this only
   // prompts a read: prose outside fenced blocks, lists, tables,
   // blockquotes, and headings carries at most one sentence.
   // Terminators: ASCII before whitespace or line end, fullwidth
@@ -909,7 +906,7 @@ function lintItemRelationships(ctx: LintContext, items: ItemInfo[]): void {
         extraLine,
         "warning",
         "item/sentence",
-        `item ${item.id} carries more than one sentence; review it for a second governing statement (meta-29)`,
+        `item ${item.id} carries more than one sentence; review it for a second requirement (meta-29)`,
       );
     }
   }
@@ -919,8 +916,8 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
   for (const file of ctx.files.values()) {
     if (!isUnder(file.relPath, "packages")) continue;
 
-    // A package Intent is self-contained prose (meta-15): no
-    // citation links, no reference markers (lint-13).
+    // Intent may carry supporting citations, but it is not an item
+    // relationship source, so exclude its links from cite/prose.
     const h2s = file.headings.filter(
       (heading) => heading.depth === 2 && heading.root,
     );
@@ -932,38 +929,10 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
         end: h2s[index + 1]?.line ?? file.lines.length + 1,
       });
     }
-    for (const range of intentRanges) {
-      for (const link of file.links) {
-        if (link.kind !== "link") continue;
-        if (link.line > range.start && link.line < range.end) {
-          report(
-            ctx,
-            file.relPath,
-            link.line,
-            "error",
-            "intent/cited",
-            "the Intent section carries a citation; a package reads standalone (meta-15)",
-          );
-        }
-      }
-      for (const use of file.referenceUses) {
-        if (use.line > range.start && use.line < range.end) {
-          report(
-            ctx,
-            file.relPath,
-            use.line,
-            "error",
-            "intent/cited",
-            "the Intent section carries a reference marker; a package reads standalone (meta-15)",
-          );
-        }
-      }
-    }
-
     // Item statements are the single relationship source (meta-14):
     // a peer-package link from section prose outside every item
     // body declares no dependency (lint-13). Intent links are
-    // skipped here — they carry intent/cited already.
+    // supporting context rather than behavior relationships.
     const itemRanges = items
       .filter((item) => item.file === file)
       .map((item) => ({ start: item.heading.line, end: item.bodyEnd }));
@@ -1116,6 +1085,8 @@ function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
         continue;
       }
 
+      lintRecordCitationForm(ctx, file, link, resolved, fragment);
+
       if (fragment !== "" && resolved.endsWith(".md")) {
         const target = ctx.files.get(resolved);
         if (target !== undefined && !target.slugs.has(fragment)) {
@@ -1133,6 +1104,30 @@ function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
       }
     }
   }
+}
+
+/** Record citations are plain links to the file, labeled by record ID. */
+function lintRecordCitationForm(
+  ctx: LintContext,
+  file: SpecFile,
+  link: LinkInfo,
+  targetPath: string,
+  fragment: string,
+): void {
+  const match = targetPath.match(
+    /^specs\/(decisions|intents|iterations)\/(\d+)-[^/]+\.md$/,
+  );
+  if (match === null) return;
+  const expected = `${match[1] === "decisions" ? "DR" : "IR"}-${match[2]}`;
+  if (!link.enclosed && link.text === expected && fragment === "") return;
+  report(
+    ctx,
+    file.relPath,
+    link.line,
+    "error",
+    "cite/record-link",
+    `citation of ${expected} must be a plain relative link to its file with ${expected} as the link text (meta-16)`,
+  );
 }
 
 /**
