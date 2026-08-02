@@ -645,6 +645,8 @@ test("the staged Academy corpus parses end-to-end", () => {
   assert.equal(journey.section, "External Behavior");
   assert.deepEqual(journey.cites, [
     "course-catalog-2",
+    "site-navigation-2",
+    "course-catalog-1",
     "course-catalog-3",
     "video-library-7",
     "github-login-2",
