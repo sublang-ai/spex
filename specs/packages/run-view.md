@@ -400,4 +400,7 @@ The test suite shall assert first-hour failures surface at hand:
 
 #### run-view-19
 
-Where the run view's production modules are inspected, the test suite shall assert that they import no Node-only modules and call no `@sublang/cligent` or `@sublang/playbook` APIs, so every record they render can only arrive as a protocol message [[run-view-13](#run-view-13)].
+Where the run view's production modules are inspected, the test suite shall assert that project-session records reach the run view only as versioned protocol messages:
+
+- the modules import no Node-only modules and call no `@sublang/cligent` or `@sublang/playbook` APIs [[run-view-13](#run-view-13)];
+- every write to the rendered record state originates from the protocol client's message handling [[run-view-13](#run-view-13)].

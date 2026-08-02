@@ -72,7 +72,7 @@ For each file under `compositions/` (sections Intent / Binding? / Scenario? / Te
 ### Phase 3 — records
 
 - Every DR: sections Status/Context/Decision/Consequences(/References); item citations to the enclosed form per the map; record citations as plain links labeled by record ID; META citations per the mapping reference; where a cited item no longer exists, keep the historical prose truthful and drop the link. A DR whose primary decision the new DR-000 *reverses* gets `Status: Superseded by [DR-000](000-spec-structure-format.md)`; an absorbed-but-true decision stays Accepted.
-- Every IR: rename/reorder sections (`Goal`→`Intent`, `Acceptance criteria`→`Verification`, add `Status` — `Done` when the deliverables are checked, `In progress` otherwise, keep abandonment markings); retarget citations; when `Tasks` is missing, recover one minimal truthful task per realizing commit where history supports it, otherwise write a single truthful catch-all task and flag the gap for humans. Do not enrich or trim content otherwise — IRs are disposable history.
+- Every IR: rename/reorder sections (`Goal`→`Intent`, `Acceptance criteria`→`Verification`, add `Status` — `Done` when the deliverables are checked, `In progress` otherwise, keep abandonment markings); retarget citations; when `Tasks` is missing, recover one minimal truthful task per realizing commit where history supports it, otherwise write a single catch-all task stating that the decomposition is not recoverable, and flag the gap for humans. Do not enrich or trim content otherwise — IRs are disposable history.
 - ALLCAPS short-form prose mentions ("the AUTH package") become basename references ("the github-login package").
 
 ### Phase 4 — maps and guides
