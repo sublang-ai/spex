@@ -72,7 +72,7 @@ For each file under `compositions/` (sections Intent / Binding? / Scenario? / Te
 ### Phase 3 — records
 
 - Every DR: sections Status/Context/Decision/Consequences(/References); item citations to the enclosed form per the map; record citations as plain links labeled by record ID; META citations per the mapping reference; where a cited item no longer exists, keep the historical prose truthful and drop the link. A DR whose primary decision the new DR-000 *reverses* gets `Status: Superseded by [DR-000](000-spec-structure-format.md)`; an absorbed-but-true decision stays Accepted.
-- Every IR: rename/reorder sections (`Goal`→`Intent`, `Acceptance criteria`→`Verification`, add `Status` — `Done` when the deliverables are checked, `In progress` otherwise, keep abandonment markings); retarget citations; when `Tasks` is missing, recover one minimal truthful task per realizing commit where history supports it, otherwise write a single catch-all task stating that the decomposition is not recoverable, and flag the gap for humans. Do not enrich or trim content otherwise — IRs are disposable history.
+- Every IR: rename/reorder sections (`Goal`→`Intent`, `Acceptance criteria`→`Verification`, add `Status` — `Done` when the deliverables are checked, `In progress` otherwise, keep abandonment markings); retarget citations; when `Tasks` is missing, recover one minimal truthful task per realizing commit where history supports it, otherwise leave `Tasks` absent and flag the gap for the humans: commit-sized tasks are theirs to supply, and the migration is not complete until they do. Do not enrich or trim content otherwise — IRs are disposable history.
 - ALLCAPS short-form prose mentions ("the AUTH package") become basename references ("the github-login package").
 
 ### Phase 4 — maps and guides
@@ -83,6 +83,7 @@ For each file under `compositions/` (sections Intent / Binding? / Scenario? / Te
 
 1. Run the bundled checker on each tree and fix every finding, repeating until it reports zero:
    `python3 scripts/check_specs.py <path-to-tree>`
+   A finding you have flagged for the humans (an IR whose task decomposition history cannot support) is carried into the handover instead of fixed, and blocks completion until the humans resolve it.
 2. Run `spex lint` (when the CLI is available) and resolve findings the same way.
 3. Re-read every file you restructured heavily (composition folds, requirement splits) end to end: does it read standalone and truthfully, with binding citations at the behavior phrases they make specific and test citations at the assertions they verify?
 4. Grep for residue: old ALLCAPS IDs, `](…#` single-bracket item citations, `compositions/` paths, `Verifies:`-style metadata lines. None may remain outside historical commit references.
