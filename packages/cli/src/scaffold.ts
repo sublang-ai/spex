@@ -294,8 +294,9 @@ function updateScaffoldTemplates(): void {
     // but a localized tree lands mixed, so it is never silent.
     console.warn(
       "  warning: no specs/meta.md, so the authoring language is unknown; " +
-        "creating framework files as en. A localized tree should restore " +
-        "specs/meta.md, or re-run `spex scaffold --lang <code>` afterward.",
+        "creating framework files as en. On a localized tree, set the new " +
+        "`Authoring language:` line to that language and run " +
+        "`spex scaffold --update` again to refresh them from its overlay.",
     );
   }
   const language = active.kind === "undeterminable" ? "en" : active.language;

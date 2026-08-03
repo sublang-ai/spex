@@ -45,7 +45,7 @@ Where the `scaffold` subcommand is invoked without `--update`, the CLI shall emi
 
 #### scaffold-11
 
-Where the `scaffold` subcommand is invoked with `--update` and no `<path>` argument from within a git repository, while the `specs/` working tree is clean, the CLI shall:
+Where the `scaffold` subcommand is invoked with `--update` and no `<path>` argument from within a git repository and the authoring language resolves ([[scaffold-53](#scaffold-53)]), while the `specs/` working tree is clean, the CLI shall:
 
 1. Write every **framework file** from the bundled template, creating framework files that are missing in older specs trees:
    - when the framework file being replaced holds content that matches no recognized bundled version — a genuine user modification rather than an older pristine version — the CLI still replaces it, reports it with an `(overwritten — user-modified)` indicator, and warns clearly before completing, naming the file and pointing the user to where the change can be reviewed and reconciled;
@@ -113,13 +113,11 @@ Where the `scaffold` subcommand is invoked without `--update` while `specs/meta.
 
 #### scaffold-30
 
-Where the `scaffold` subcommand is invoked with `--update`, the CLI shall reject `--lang` and exit non-zero:
-
-- The update language is resolved from the tree ([[scaffold-53](#scaffold-53)]).
+Where the `scaffold` subcommand is invoked with `--update`, the CLI shall reject `--lang` and exit non-zero.
 
 #### scaffold-53
 
-Where `--update` resolves the target tree's authoring language, the CLI shall stop rather than guess when a localized tree would be replaced with English:
+Where `--update` resolves the target tree's authoring language, the CLI shall take it from `specs/meta.md`, stopping before any write when an existing `specs/meta.md` leaves it undeterminable:
 
 | `specs/meta.md` | Resolution |
 | --- | --- |
@@ -265,7 +263,7 @@ Where `updateScaffoldTemplates()` is called, it shall resolve the current git re
 Notes:
 
 - When `overwriteFrameworkSpecFiles()` ([[scaffold-14](#scaffold-14)]) returns one or more overwritten user-modified framework paths, the run prints a warning to stderr that names each such path and points the user to where the replaced content can be reviewed and reconciled (for example, `git diff -- specs` and git history); when that list is empty, no such warning is printed.
-- The active language is read from `specs/meta.md` before bundled templates are selected — `en` when no authoring-language declaration is present — and passed to the framework overwrite and seed refresh helpers.
+- The active language is resolved ([[scaffold-53](#scaffold-53)]) before bundled templates are selected, and passed to the framework overwrite and seed refresh helpers.
 
 ### Localization
 
