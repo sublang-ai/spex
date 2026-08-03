@@ -557,6 +557,20 @@ describe("CLI integration", () => {
       assert.match(result.stderr, /Authoring language: <code>/);
       // Nothing was written: the damaged file is still exactly as left.
       assert.equal(readFileSync(target, "utf-8"), damaged);
+
+      // The printed recovery must actually work, run verbatim: restore
+      // the line, commit (--update needs a clean specs/ tree), re-run.
+      writeFileSync(
+        target,
+        damaged.replace(/^Authoring language$/m, "Authoring language: zh"),
+      );
+      gitCommit(dir, "restore the marker");
+      const recovered = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(recovered.exitCode, 0, recovered.stderr);
+      assert.deepEqual(
+        readFileSync(target),
+        readFileSync(overlayPath("zh", "specs/meta.md")),
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -578,7 +592,25 @@ describe("CLI integration", () => {
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.match(result.stderr, /authoring language is unknown/);
-      assert.equal(existsSync(join(dir, "specs", "meta.md")), true);
+      const target = join(dir, "specs", "meta.md");
+      assert.equal(existsSync(target), true);
+
+      // The printed recovery must actually work, run verbatim: set the
+      // line, commit (--update needs a clean specs/ tree), re-run.
+      writeFileSync(
+        target,
+        readFileSync(target, "utf-8").replace(
+          /^Authoring language: en$/m,
+          "Authoring language: zh",
+        ),
+      );
+      gitCommit(dir, "declare zh");
+      const recovered = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(recovered.exitCode, 0, recovered.stderr);
+      assert.deepEqual(
+        readFileSync(target),
+        readFileSync(overlayPath("zh", "specs/meta.md")),
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }

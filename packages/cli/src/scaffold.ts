@@ -285,7 +285,8 @@ function updateScaffoldTemplates(): void {
       "specs/meta.md declares no authoring language and matches no bundled " +
         "version, so the language cannot be determined and updating would " +
         "replace the framework files with English. Restore its " +
-        "`Authoring language: <code>` line (`en` or `zh`) and run again.",
+        "`Authoring language: <code>` line (`en` or `zh`), commit the " +
+        "specs/ change, and run again — --update needs a clean specs/ tree.",
     );
   }
   if (active.kind === "undeterminable") {
@@ -295,8 +296,9 @@ function updateScaffoldTemplates(): void {
     console.warn(
       "  warning: no specs/meta.md, so the authoring language is unknown; " +
         "creating framework files as en. On a localized tree, set the new " +
-        "`Authoring language:` line to that language and run " +
-        "`spex scaffold --update` again to refresh them from its overlay.",
+        "`Authoring language:` line to that language, commit the specs/ " +
+        "changes, and run `spex scaffold --update` again to refresh them " +
+        "from its overlay.",
     );
   }
   const language = active.kind === "undeterminable" ? "en" : active.language;

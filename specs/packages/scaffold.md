@@ -117,13 +117,13 @@ Where the `scaffold` subcommand is invoked with `--update`, the CLI shall reject
 
 #### scaffold-53
 
-Where `--update` resolves the target tree's authoring language, the CLI shall take it from `specs/meta.md`, stopping before any write when an existing `specs/meta.md` leaves it undeterminable:
+Where `--update` needs the target tree's authoring language, the CLI shall determine it from the state of `specs/meta.md`:
 
 | `specs/meta.md` | Resolution |
 | --- | --- |
 | declares an authoring language | that language |
 | declares none, content matches a bundled version | `en`, silently — every bundled base `meta.md` is English |
-| declares none, content matches no bundled version | none: the CLI exits non-zero before writing, naming the marker line to restore |
+| declares none, content matches no bundled version | none: the CLI exits non-zero before writing, naming the marker line to restore and the commit the clean-tree precondition ([[scaffold-16](#scaffold-16)]) requires |
 | absent | `en`, with a warning — the tree is older and `--update` creates the missing framework files ([[scaffold-18](#scaffold-18)]) |
 
 ### Agent Instructions
