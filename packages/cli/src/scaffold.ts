@@ -34,7 +34,7 @@ type ScaffoldOptions =
       language?: ScaffoldLanguage;
       agents?: AgentName[];
     }
-  | { mode: "update"; agents?: AgentName[] };
+  | { mode: "update"; language?: ScaffoldLanguage; agents?: AgentName[] };
 
 const AUTHORING_LANGUAGE_RE = /^Authoring language:\s*([A-Za-z0-9-]+)\s*$/m;
 
@@ -116,13 +116,10 @@ function parseArgs(args: string[]): ScaffoldOptions {
   }
 
   if (update) {
-    if (language !== undefined) {
-      throw new Error("--update does not accept --lang");
-    }
     if (pathArgs.length !== 0) {
       throw new Error("--update does not accept a <path> argument");
     }
-    return { mode: "update", agents };
+    return { mode: "update", language, agents };
   }
 
   if (pathArgs.length > 1) {
@@ -306,20 +303,25 @@ function printMigrationGuidance(): void {
 
 // SCAF-18: the four-step --update pipeline — framework overwrite, seed
 // refresh, agent-file refresh, then the completion output.
-function updateScaffoldTemplates(agents?: readonly AgentName[]): void {
+function updateScaffoldTemplates(
+  agents?: readonly AgentName[],
+  requested?: ScaffoldLanguage,
+): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
   const active = resolveActiveLanguage(basePath);
-  if (active.kind === "undeterminable" && active.reason === "unrecognized") {
-    throw new Error(
-      "specs/meta.md declares no authoring language and matches no bundled " +
-        "version, so the language cannot be determined and updating would " +
-        "replace the framework files with English. Restore its " +
-        "`Authoring language: <code>` line (`en` or `zh`), commit the " +
-        "specs/ change, and run again — --update needs a clean specs/ tree.",
-    );
-  }
-  if (active.kind === "undeterminable") {
+  // An explicit --lang settles the language outright, so neither the
+  // undeterminable stop nor its warning applies.
+  if (active.kind === "undeterminable" && requested === undefined) {
+    if (active.reason === "unrecognized") {
+      throw new Error(
+        "specs/meta.md declares no authoring language and matches no bundled " +
+          "version, so the language cannot be determined and updating would " +
+          "replace the framework files with English. Restore its " +
+          "`Authoring language: <code>` line (`en` or `zh`), commit the " +
+          "specs/ change, and run again — --update needs a clean specs/ tree.",
+      );
+    }
     // Absent: an older tree being repaired, since --update creates
     // missing framework files. English is the only available answer,
     // but a localized tree lands mixed, so it is never silent.
@@ -331,15 +333,28 @@ function updateScaffoldTemplates(agents?: readonly AgentName[]): void {
         "from its overlay.",
     );
   }
-  const language = active.kind === "undeterminable" ? "en" : active.language;
+  const current = active.kind === "undeterminable" ? "en" : active.language;
+  const language = requested ?? current;
+  // A switch reads a tree written in one language and writes another,
+  // so both languages' bundled versions count as pristine: without
+  // that, the old language's files read as user customizations and
+  // seeds would be kept rather than converted.
+  const switchingFrom =
+    requested !== undefined && active.kind !== "undeterminable" && requested !== current
+      ? current
+      : undefined;
 
   // Sample legacy-generation markers before the framework overwrite
   // replaces specs/meta.md (SCAF-26).
   const legacyGeneration = detectLegacyGeneration(basePath, language);
   const agentTargets = resolveAgentTargets(basePath, agents);
 
-  const replacedFramework = overwriteFrameworkSpecFiles(basePath, language);
-  refreshPristineSeeds(basePath, { language });
+  const replacedFramework = overwriteFrameworkSpecFiles(
+    basePath,
+    language,
+    switchingFrom,
+  );
+  refreshPristineSeeds(basePath, { language, alsoRecognize: switchingFrom });
   reconcileAgentSpecs(basePath, agentTargets);
 
   warnReplacedFrameworkFiles(replacedFramework);
@@ -357,6 +372,21 @@ function updateScaffoldTemplates(agents?: readonly AgentName[]): void {
   console.log("```");
   console.log(readBundledMarkdown("update-merge-prompt.md"));
   console.log("```");
+
+  if (switchingFrom !== undefined) {
+    console.log("");
+    console.log(
+      `Authoring language switched from ${switchingFrom} to ${language}: bundled specs are now ${language}.`,
+    );
+    console.log(
+      "Existing project specs stay in their original language — translating them is agent work.",
+    );
+    console.log("Share this prompt with your AI agent to translate them:");
+    console.log("");
+    console.log("```");
+    console.log(readBundledMarkdown("language-switch-prompt.md"));
+    console.log("```");
+  }
 
   if (legacyGeneration) printMigrationGuidance();
 }
@@ -384,7 +414,7 @@ export function scaffold(args: string[] = []): void {
     const options = parseArgs(args);
 
     if (options.mode === "update") {
-      updateScaffoldTemplates(options.agents);
+      updateScaffoldTemplates(options.agents, options.language);
       return;
     }
 

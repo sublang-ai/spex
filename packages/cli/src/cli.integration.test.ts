@@ -429,14 +429,62 @@ describe("CLI integration", () => {
     }
   });
 
-  it("scaffold --update rejects --lang", () => {
+  // scaffold-54: a switch rewrites the bundled files in the target
+  // language and leaves the project's own specs to the printed prompt.
+  for (const [from, to] of [
+    ["en", "zh"],
+    ["zh", "en"],
+  ] as const) {
+    it(`update --lang switches the tree from ${from} to ${to}`, () => {
+      const dir = makeTmp();
+      try {
+        initGit(dir);
+        run(["scaffold", ...(from === "en" ? [] : ["--lang", from])], {
+          cwd: dir,
+        });
+        gitCommit(dir, `initial ${from} specs`);
+
+        const result = run(["scaffold", "--update", "--lang", to], {
+          cwd: dir,
+        });
+        assert.equal(result.exitCode, 0, result.stderr);
+
+        // Both overlay-bearing files convert, in either direction: the
+        // source language's bundled versions count as pristine, so they
+        // are converted rather than kept as user customizations.
+        for (const relPath of ["specs/meta.md", "specs/map.md"]) {
+          assert.deepEqual(
+            readFileSync(join(dir, relPath)),
+            readFileSync(
+              to === "en" ? bundledPath(relPath) : overlayPath(to, relPath),
+            ),
+            `${relPath} should be the ${to} bundled version`,
+          );
+        }
+
+        // A language change is not a user modification.
+        assert.doesNotMatch(result.stderr, /WARNING/);
+        assert.match(result.stdout, /switched from en to zh|switched from zh to en/);
+        // The project's own specs are the agent's job, and the prompt says so.
+        assert.match(result.stdout, /translate/i);
+      } finally {
+        rmSync(dir, { recursive: true });
+      }
+    });
+  }
+
+  it("update --lang matching the declared language is an ordinary update", () => {
     const dir = makeTmp();
     try {
-      const result = run(["scaffold", "--update", "--lang", "zh"], {
+      initGit(dir);
+      run(["scaffold"], { cwd: dir });
+      gitCommit(dir, "initial specs");
+
+      const result = run(["scaffold", "--update", "--lang", "en"], {
         cwd: dir,
       });
-      assert.notEqual(result.exitCode, 0);
-      assert.ok(result.stderr.includes("--update does not accept --lang"));
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.doesNotMatch(result.stdout, /switched from/);
     } finally {
       rmSync(dir, { recursive: true });
     }

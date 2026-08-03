@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `spex scaffold --update --lang <code>` switches a tree's authoring
+  language, rewriting the bundled specs in the target language in
+  either direction and printing an agent prompt for translating the
+  project's own specs. A code matching the tree's current language is
+  an ordinary update.
+
 - Scaffold and update runs now manage agent instructions for Claude
   Code, Codex, Gemini CLI, Kimi Code, and OpenCode through `CLAUDE.md`,
   `AGENTS.md`, and `GEMINI.md`. Interactive runs confirm or choose the

@@ -53,6 +53,13 @@ type RefreshPristineSeedsOptions = {
   migratedFrom?: ReadonlyMap<string, string>;
   language?: ScaffoldLanguage;
   /**
+   * A second language whose bundled versions also count as pristine.
+   * A language switch reads the tree in its old language and writes
+   * the new one, so a seed pristine in the old language is a
+   * convertible bundled file, not a user customization.
+   */
+  alsoRecognize?: ScaffoldLanguage;
+  /**
    * Replacement indicator text for user-modified seeds that this run
    * transformed in place (e.g. a restructured map.md), so one line
    * reports the seed's true outcome.
@@ -329,10 +336,12 @@ export function isLegacyPristine(
 function getRecognizedFileHistory(
   relPath: string,
   language: ScaffoldLanguage,
+  alsoRecognize?: ScaffoldLanguage,
 ): string[] {
   const history = new Set(getFileHistory(relPath));
-  if (language !== "en") {
-    for (const hash of getFileHistory(getOverlayRelPath(language, relPath))) {
+  for (const lang of [language, alsoRecognize]) {
+    if (lang === undefined || lang === "en") continue;
+    for (const hash of getFileHistory(getOverlayRelPath(lang, relPath))) {
       history.add(hash);
     }
   }
@@ -359,10 +368,13 @@ export function isPristine(
   basePath: string,
   relPath: string,
   language: ScaffoldLanguage = "en",
+  alsoRecognize?: ScaffoldLanguage,
 ): PristineState {
   const target = join(basePath, relPath);
   if (!existsSync(target)) return "missing";
-  return getRecognizedFileHistory(relPath, language).includes(hashFile(target))
+  return getRecognizedFileHistory(relPath, language, alsoRecognize).includes(
+    hashFile(target),
+  )
     ? "pristine"
     : "modified";
 }
@@ -373,10 +385,11 @@ export function isPristine(
 export function overwriteFrameworkSpecFiles(
   basePath: string,
   language: ScaffoldLanguage = "en",
+  alsoRecognize?: ScaffoldLanguage,
 ): string[] {
   const replacedUserModified: string[] = [];
   for (const relPath of FRAMEWORK_FILES) {
-    const state = isPristine(basePath, relPath, language);
+    const state = isPristine(basePath, relPath, language, alsoRecognize);
     const target = join(basePath, relPath);
     const source = getBundledSpecFilePath(relPath, language);
     if (state !== "missing" && hashFile(target) === hashFile(source)) {
@@ -413,7 +426,7 @@ export function refreshPristineSeeds(
 ): void {
   const language = options.language ?? "en";
   for (const relPath of SEED_FILES) {
-    const state = isPristine(basePath, relPath, language);
+    const state = isPristine(basePath, relPath, language, options.alsoRecognize);
     if (state === "modified") {
       const indicator = formatSeedIndicator(
         relPath,

@@ -113,7 +113,7 @@ Where the `scaffold` subcommand is invoked without `--update` while `specs/meta.
 
 #### scaffold-30
 
-Where the `scaffold` subcommand is invoked with `--update`, the CLI shall reject `--lang` and exit non-zero.
+Where the `scaffold` subcommand is invoked with `--update` and `--lang <code>`, the CLI shall treat a code matching the tree's authoring language as an ordinary update and a differing code as a language switch ([[scaffold-39](#scaffold-39)]).
 
 #### scaffold-53
 
@@ -127,6 +127,16 @@ Where `--update` needs the target tree's authoring language, the CLI shall deter
 | absent | `en`, with a warning — the tree is older and `--update` creates the missing framework files ([[scaffold-18](#scaffold-18)]) |
 
 - Where `specs/meta.md` declares no authoring language and matches no bundled version, and where it is absent, the diagnostic states the complete recovery: the `Authoring language:` line to set, the commit that the clean-tree precondition ([[scaffold-16](#scaffold-16)]) requires, and the `--update` rerun.
+
+#### scaffold-39
+
+Where `--update` switches the tree's authoring language, the CLI shall write the bundled specs in the target language and leave the project's own specs to their author:
+
+- both languages' bundled versions count as pristine for the run, so a file bundled in the source language converts rather than reporting as user-modified ([[scaffold-14](#scaffold-14)], [[scaffold-23](#scaffold-23)]);
+- files with no overlay for the target language stay at their English bundled version ([[scaffold-31](#scaffold-31)]);
+- a customized file is kept, as in any update;
+- the run reports the switch and prints `scaffold/language-switch-prompt.md`, the agent prompt for translating the project's own specs, since translation is judgment work rather than CLI work;
+- `--lang` also settles the language of a tree whose own declaration cannot ([[scaffold-53](#scaffold-53)]), so neither the stop nor its warning applies.
 
 ### Agent Instructions
 
@@ -363,6 +373,7 @@ Where the `scaffold` subcommand is exercised with language selection, the test s
 
 - the Chinese fresh scaffold case asserts that localized overlay files are written for paths that have overlays and that fallback files remain byte-identical to their English bundled templates ([[scaffold-31](#scaffold-31)]);
 - the localized update case asserts that `--update` on a Chinese specs tree ([[scaffold-30](#scaffold-30)]) refreshes a pristine framework ([[scaffold-14](#scaffold-14)]) or seed ([[scaffold-23](#scaffold-23)]) file from the active Chinese overlay ([[scaffold-18](#scaffold-18)]) rather than the English base template.
+- the language-switch cases assert that `--update --lang` converts the overlay-bearing bundled files in both directions with no user-modified warning and prints the translation prompt, and that a code matching the declared language is an ordinary update ([[scaffold-39](#scaffold-39)]);
 - the undeterminable-language cases assert that a Chinese tree whose marker line was damaged stops the update with nothing written, that a tree with no `specs/meta.md` proceeds as `en` with a warning, and that each diagnostic states the marker, commit, and rerun steps its recovery needs before the test performs exactly those steps and reaches the Chinese overlay ([[scaffold-53](#scaffold-53)]).
 
 #### scaffold-34

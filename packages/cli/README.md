@@ -99,6 +99,14 @@ spex scaffold --lang zh
 
 Chinese (`zh`) is currently bundled. Any file without a localized template falls back to English, so the tree is always complete. The chosen language is recorded in `specs/meta.md` and reused automatically on `spex scaffold --update`.
 
+To switch an existing tree to another language:
+
+```bash
+spex scaffold --update --lang zh
+```
+
+This rewrites the bundled specs in the target language and prints a prompt you can hand an AI agent to translate the project's own specs; passing the language the tree already uses is just an ordinary update.
+
 ### Updating templates
 
 When a new release ships updated templates, refresh them with:
