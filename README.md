@@ -38,9 +38,13 @@ npx @sublang/spex scaffold --update   # refresh spex-owned templates
 npx @sublang/spex lint                # check structure, IDs, and citations
 ```
 
-Rerunning `scaffold` is safe: it only adds missing files; the one
-in-place edit it makes is to an existing `CLAUDE.md`/`AGENTS.md`,
-whose managed specs section is added or refreshed.
+Rerunning `scaffold` is safe: authored specs and content outside
+Spex-managed sections stay untouched. It reconciles the managed specs
+section in the instruction files selected for Claude Code
+(`CLAUDE.md`), Codex/Kimi Code/OpenCode (`AGENTS.md`), and Gemini CLI
+(`GEMINI.md`). An interactive run confirms or selects these targets;
+when agents change, decline the confirmation and select again, or pass
+`--agents=claude,gemini` non-interactively.
 `--update` edits more, mechanically
 — it requires a clean `specs/` tree so every change stays reviewable
 in git: it refreshes the spex-owned framework files (`meta.md` and

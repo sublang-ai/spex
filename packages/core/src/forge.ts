@@ -120,12 +120,18 @@ export async function createProjectRepo(
   options: CreateProjectOptions,
 ): Promise<{ scaffolded: boolean }> {
   const run = options.run ?? defaultRunCommand;
+  const agentInstructionFiles = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"];
   const init = await run("git", ["init", options.path]);
   if (init.code !== 0) {
     throw new Error(`git init failed: ${init.stderr.trim() || init.stdout.trim()}`);
   }
   let scaffolded = false;
   if (options.scaffold) {
+    const preexistingAgentFiles = new Set(
+      agentInstructionFiles.filter((path) =>
+        existsSync(resolvePath(options.path, path)),
+      ),
+    );
     const [command, ...args] = options.scaffoldCommand ?? [
       "npx",
       "--yes",
@@ -142,9 +148,14 @@ export async function createProjectRepo(
         `scaffold failed: ${scaffoldRun.stderr.trim() || scaffoldRun.stdout.trim()}`,
       );
     }
-    // Commit only what scaffolding produced — never the user's
-    // pre-existing files (a picked folder may hold anything).
-    for (const path of ["specs", "CLAUDE.md", "AGENTS.md", "LICENSE"]) {
+    // Commit the generated scaffold without pulling a pre-existing
+    // agent-instruction file into the initial commit.
+    const createdAgentFiles = agentInstructionFiles.filter(
+      (path) =>
+        !preexistingAgentFiles.has(path) &&
+        existsSync(resolvePath(options.path, path)),
+    );
+    for (const path of ["specs", ...createdAgentFiles, "LICENSE"]) {
       await run("git", ["add", "--", path], options.path);
     }
     await run(

@@ -122,6 +122,7 @@ const SEEDED_SPECS = [
   "packages/git.md",
   "packages/licensing.md",
 ];
+const AGENT_FILES = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"];
 
 try {
   begin("preflight");
@@ -193,7 +194,7 @@ try {
       license.includes("Version 2.0, January 2004"),
     "root LICENSE is not the verbatim Apache-2.0 text",
   );
-  for (const agentFile of ["CLAUDE.md", "AGENTS.md"]) {
+  for (const agentFile of AGENT_FILES) {
     assert(
       scaffolded.stdout.includes(`${agentFile} (created)`),
       `scaffold did not report ${agentFile} (created)`,
@@ -237,6 +238,54 @@ try {
   assert(
     gitStatus(fresh) === "",
     `re-scaffold changed user content:\n${gitStatus(fresh)}`,
+  );
+
+  begin("agent-selection-switch");
+  const agentSwitch = initRepo("agent-switch");
+  const selectedAgents = spex(
+    ["scaffold", "--agents=claude,kimi"],
+    { cwd: agentSwitch },
+  );
+  assert(
+    selectedAgents.status === 0,
+    `explicit agent selection failed:\n${selectedAgents.stdout}${selectedAgents.stderr}`,
+  );
+  assert(
+    existsSync(join(agentSwitch, "CLAUDE.md")) &&
+      existsSync(join(agentSwitch, "AGENTS.md")) &&
+      !existsSync(join(agentSwitch, "GEMINI.md")),
+    "explicit Claude/Kimi selection did not map to CLAUDE.md and AGENTS.md only",
+  );
+  const agentsPath = join(agentSwitch, "AGENTS.md");
+  writeFileSync(
+    agentsPath,
+    `${read(agentsPath).trimEnd()}\n\n## Local instructions\n\nKeep this text.\n`,
+  );
+  commitAll(agentSwitch, "chore: scaffold for selected agents");
+  const switchedAgents = spex(
+    ["scaffold", "--update", "--agents=gemini"],
+    { cwd: agentSwitch },
+  );
+  assert(
+    switchedAgents.status === 0,
+    `agent switch during --update failed:\n${switchedAgents.stdout}${switchedAgents.stderr}`,
+  );
+  assert(
+    !existsSync(join(agentSwitch, "CLAUDE.md")),
+    "switching away from Claude kept its managed-only CLAUDE.md",
+  );
+  const preservedAgents = read(agentsPath);
+  assert(
+    preservedAgents.includes("## Local instructions") &&
+      preservedAgents.includes("Keep this text.") &&
+      !preservedAgents.includes("## Specs (Source of Truth)"),
+    "switching away from Kimi did not preserve only AGENTS.md user content",
+  );
+  assert(
+    read(join(agentSwitch, "GEMINI.md")).includes(
+      "## Specs (Source of Truth)",
+    ),
+    "switching to Gemini did not create its managed instructions",
   );
 
   begin("fresh-lint-breakage");
@@ -422,6 +471,8 @@ try {
     "specs/meta.md": [
       "# Specs Meta",
       "",
+      "Authoring language: en",
+      "",
       "## META-1",
       "",
       "Spec items use ALLCAPS ids and single-bracket citations.",
@@ -509,10 +560,11 @@ try {
       `--update modified legacy file ${relPath}`,
     );
   }
-  for (const agentFile of ["CLAUDE.md", "AGENTS.md"]) {
+  for (const agentFile of AGENT_FILES) {
     assert(
-      !existsSync(join(legacy, agentFile)),
-      `--update created ${agentFile}`,
+      existsSync(join(legacy, agentFile)) &&
+        read(join(legacy, agentFile)).includes("## Specs (Source of Truth)"),
+      `non-interactive --update did not create default ${agentFile}`,
     );
   }
 

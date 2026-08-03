@@ -243,6 +243,7 @@ describe("CLI integration", () => {
       // Agent files
       assert.ok(existsSync(join(dir, "CLAUDE.md")));
       assert.ok(existsSync(join(dir, "AGENTS.md")));
+      assert.ok(existsSync(join(dir, "GEMINI.md")));
       const claude = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(claude.includes("## Specs (Source of Truth)"));
       assert.ok(claude.includes("@specs/packages"));
@@ -963,8 +964,8 @@ describe("CLI integration", () => {
     }
   });
 
-  // --update refreshes existing agent files but creates none.
-  it("update: refreshes the managed section of an existing CLAUDE.md only", () => {
+  // scaffold-5: inferred managed targets are refreshed without widening them.
+  it("update: refreshes only the inferred managed target", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
@@ -974,6 +975,7 @@ describe("CLI integration", () => {
         "# Project\n\n## Specs (Source of Truth)\n\nStale section.\n\n## Other\n\nKept.\n",
       );
       rmSync(join(dir, "AGENTS.md"));
+      rmSync(join(dir, "GEMINI.md"));
       gitCommit(dir, "initial specs");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
@@ -985,8 +987,88 @@ describe("CLI integration", () => {
       assert.equal(
         existsSync(join(dir, "AGENTS.md")),
         false,
-        "--update must not create agent files",
+        "--update should keep the inferred target set",
       );
+      assert.equal(
+        existsSync(join(dir, "GEMINI.md")),
+        false,
+        "--update should keep the inferred target set",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold --agents selects native targets without prompting", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["scaffold", "--agents=gemini", dir]);
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(existsSync(join(dir, "CLAUDE.md")), false);
+      assert.equal(existsSync(join(dir, "AGENTS.md")), false);
+      assert.ok(existsSync(join(dir, "GEMINI.md")));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("update: an explicit agent switch preserves unrelated prose", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      assert.equal(run(["scaffold"], { cwd: dir }).exitCode, 0);
+      writeFileSync(
+        join(dir, "CLAUDE.md"),
+        `${readFileSync(join(dir, "CLAUDE.md"), "utf-8")}\n## Project\n\nKeep.\n`,
+      );
+      gitCommit(dir, "initial specs");
+
+      const result = run(["scaffold", "--update", "--agents=gemini"], {
+        cwd: dir,
+      });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(
+        readFileSync(join(dir, "CLAUDE.md"), "utf-8"),
+        "## Project\n\nKeep.\n",
+      );
+      assert.equal(existsSync(join(dir, "AGENTS.md")), false);
+      assert.ok(
+        readFileSync(join(dir, "GEMINI.md"), "utf-8").includes(
+          "## Specs (Source of Truth)",
+        ),
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("update: a target with no agent files receives the default set", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      assert.equal(run(["scaffold"], { cwd: dir }).exitCode, 0);
+      rmSync(join(dir, "CLAUDE.md"));
+      rmSync(join(dir, "AGENTS.md"));
+      rmSync(join(dir, "GEMINI.md"));
+      gitCommit(dir, "initial specs");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      for (const file of ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]) {
+        assert.ok(existsSync(join(dir, file)), `${file} should be created`);
+      }
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold rejects an unknown agent before writing", () => {
+    const dir = makeTmp();
+    try {
+      const result = run(["scaffold", "--agents=cursor", dir]);
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /Unknown agent/);
+      assert.equal(existsSync(join(dir, "specs")), false);
     } finally {
       rmSync(dir, { recursive: true });
     }

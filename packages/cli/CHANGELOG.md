@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Scaffold and update runs now manage agent instructions for Claude
+  Code, Codex, Gemini CLI, Kimi Code, and OpenCode through `CLAUDE.md`,
+  `AGENTS.md`, and `GEMINI.md`. Interactive runs confirm or choose the
+  selection; `--agents=<names>` selects it non-interactively; switching
+  agents removes only Spex's managed section from deselected targets.
+
 ## [2.0.0] - 2026-08-02
 
 ### Changed

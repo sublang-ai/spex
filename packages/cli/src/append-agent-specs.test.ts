@@ -13,7 +13,12 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { appendAgentSpecs } from "./append-agent-specs.js";
+import {
+  parseAgentNames,
+  reconcileAgentSpecs,
+  resolveAgentTargets,
+  type AgentInteraction,
+} from "./append-agent-specs.js";
 import { getScaffoldDir } from "./bundled-scaffold.js";
 
 function makeTmp(): string {
@@ -24,17 +29,19 @@ function getExpectedContent(): string {
   return readFileSync(join(getScaffoldDir(), "agent-specs.txt"), "utf-8");
 }
 
-describe("appendAgentSpecs", () => {
-  // SCAF-10: neither file exists → both created
-  it("creates both CLAUDE.md and AGENTS.md when neither exists", () => {
+describe("reconcileAgentSpecs", () => {
+  // scaffold-5/scaffold-10: a fresh default covers every native target.
+  it("creates all selected instruction targets", () => {
     const dir = makeTmp();
     try {
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]);
       const expected = getExpectedContent();
       assert.ok(existsSync(join(dir, "CLAUDE.md")), "CLAUDE.md should exist");
       assert.ok(existsSync(join(dir, "AGENTS.md")), "AGENTS.md should exist");
+      assert.ok(existsSync(join(dir, "GEMINI.md")), "GEMINI.md should exist");
       assert.equal(readFileSync(join(dir, "CLAUDE.md"), "utf-8"), expected);
       assert.equal(readFileSync(join(dir, "AGENTS.md"), "utf-8"), expected);
+      assert.equal(readFileSync(join(dir, "GEMINI.md"), "utf-8"), expected);
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -45,7 +52,7 @@ describe("appendAgentSpecs", () => {
     const dir = makeTmp();
     try {
       writeFileSync(join(dir, "CLAUDE.md"), "# Existing\n");
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["CLAUDE.md"]);
 
       const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(
@@ -70,7 +77,7 @@ describe("appendAgentSpecs", () => {
     const dir = makeTmp();
     try {
       writeFileSync(join(dir, "AGENTS.md"), "# Agents\n");
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["AGENTS.md"]);
 
       const content = readFileSync(join(dir, "AGENTS.md"), "utf-8");
       assert.ok(
@@ -92,7 +99,7 @@ describe("appendAgentSpecs", () => {
     try {
       const before = "# Project\n\n## Specs (Source of Truth)\n\nOld content.\n\n## Other\n\nKeep this.\n";
       writeFileSync(join(dir, "CLAUDE.md"), before);
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["CLAUDE.md"]);
 
       const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(
@@ -127,7 +134,7 @@ describe("appendAgentSpecs", () => {
       const before =
         "# Project\r\n\r\n## Specs (Source of Truth)\r\n\r\nOld content.\r\n\r\n## Other\r\n\r\nKeep this.\r\n";
       writeFileSync(join(dir, "CLAUDE.md"), before);
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["CLAUDE.md"]);
 
       const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(
@@ -166,7 +173,7 @@ describe("appendAgentSpecs", () => {
       const origLog = console.log;
       console.log = (msg: string) => output.push(msg);
       try {
-        appendAgentSpecs(dir);
+        reconcileAgentSpecs(dir, ["CLAUDE.md"]);
       } finally {
         console.log = origLog;
       }
@@ -192,7 +199,7 @@ describe("appendAgentSpecs", () => {
       const before =
         "# Project\n\nSee `## Specs (Source of Truth)` for details.\n";
       writeFileSync(join(dir, "CLAUDE.md"), before);
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["CLAUDE.md"]);
 
       const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       // Original prose preserved
@@ -217,7 +224,7 @@ describe("appendAgentSpecs", () => {
       const before =
         "# Project\n\n```markdown\n## Specs (Source of Truth)\nfenced example\n```\n";
       writeFileSync(join(dir, "CLAUDE.md"), before);
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["CLAUDE.md"]);
 
       const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(
@@ -240,7 +247,7 @@ describe("appendAgentSpecs", () => {
         "## Specs (Source of Truth)\n\nstale text\n\n```markdown\n## fenced lookalike\n```\n\nstale tail\n";
       const before = `${stale}\n## Next Section\n\nuser content\n`;
       writeFileSync(join(dir, "CLAUDE.md"), before);
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["CLAUDE.md"]);
 
       const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(
@@ -266,7 +273,7 @@ describe("appendAgentSpecs", () => {
     try {
       const before = "# Project\n\n## specs (source of truth)\n\nWrong case.\n";
       writeFileSync(join(dir, "CLAUDE.md"), before);
-      appendAgentSpecs(dir);
+      reconcileAgentSpecs(dir, ["CLAUDE.md"]);
 
       const content = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       // Original case-mismatched section preserved
@@ -277,6 +284,147 @@ describe("appendAgentSpecs", () => {
       // New section appended
       const lastIdx = content.lastIndexOf("## Specs (Source of Truth)");
       assert.ok(lastIdx > 0, "correct heading should be appended");
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("switches targets without removing unrelated file content", () => {
+    const dir = makeTmp();
+    try {
+      writeFileSync(
+        join(dir, "CLAUDE.md"),
+        `# Claude\n\n${getExpectedContent()}\n## Project Notes\n\nKeep this.\n`,
+      );
+
+      reconcileAgentSpecs(dir, ["GEMINI.md"]);
+
+      assert.equal(
+        readFileSync(join(dir, "CLAUDE.md"), "utf-8"),
+        "# Claude\n\n## Project Notes\n\nKeep this.\n",
+      );
+      assert.equal(
+        readFileSync(join(dir, "GEMINI.md"), "utf-8"),
+        getExpectedContent(),
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("deletes a deselected file containing only the managed section", () => {
+    const dir = makeTmp();
+    try {
+      writeFileSync(join(dir, "AGENTS.md"), getExpectedContent());
+      reconcileAgentSpecs(dir, ["GEMINI.md"]);
+      assert.equal(existsSync(join(dir, "AGENTS.md")), false);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+function scriptedInteraction(responses: string[]): AgentInteraction {
+  return {
+    interactive: true,
+    ask(): string | null {
+      return responses.shift() ?? null;
+    },
+  };
+}
+
+describe("agent target selection", () => {
+  it("maps every supported Cligent agent to its native target", () => {
+    assert.deepEqual(
+      resolveAgentTargets("/unused", parseAgentNames("all")),
+      ["CLAUDE.md", "AGENTS.md", "GEMINI.md"],
+    );
+    assert.deepEqual(
+      resolveAgentTargets("/unused", parseAgentNames("codex,kimi,opencode")),
+      ["AGENTS.md"],
+    );
+    assert.deepEqual(
+      resolveAgentTargets("/unused", parseAgentNames("gemini,claude")),
+      ["CLAUDE.md", "GEMINI.md"],
+    );
+  });
+
+  it("defaults a fresh non-interactive target to every file", () => {
+    const dir = makeTmp();
+    try {
+      assert.deepEqual(
+        resolveAgentTargets(dir, undefined, {
+          interactive: false,
+          ask: () => null,
+        }),
+        ["CLAUDE.md", "AGENTS.md", "GEMINI.md"],
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("keeps managed targets with one default-yes confirmation", () => {
+    const dir = makeTmp();
+    try {
+      writeFileSync(join(dir, "CLAUDE.md"), getExpectedContent());
+      const interaction = scriptedInteraction([""]);
+      assert.deepEqual(
+        resolveAgentTargets(dir, undefined, interaction),
+        ["CLAUDE.md"],
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("opens the selector when the current targets changed", () => {
+    const dir = makeTmp();
+    try {
+      writeFileSync(join(dir, "CLAUDE.md"), getExpectedContent());
+      assert.deepEqual(
+        resolveAgentTargets(
+          dir,
+          undefined,
+          scriptedInteraction(["n", "3"]),
+        ),
+        ["GEMINI.md"],
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("uses existing supported files as the one-time suggestion", () => {
+    const dir = makeTmp();
+    try {
+      writeFileSync(join(dir, "GEMINI.md"), "# Gemini\n");
+      assert.deepEqual(
+        resolveAgentTargets(
+          dir,
+          undefined,
+          scriptedInteraction(["yes"]),
+        ),
+        ["GEMINI.md"],
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("rejects invalid names and canceled prompts", () => {
+    assert.throws(() => parseAgentNames("cursor"), /Unknown agent/);
+    const dir = makeTmp();
+    try {
+      assert.throws(
+        () =>
+          resolveAgentTargets(
+            dir,
+            undefined,
+            scriptedInteraction([]),
+          ),
+        /canceled/,
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }

@@ -38,15 +38,37 @@ This creates:
   - `specs/decisions/` and `specs/intents/` hold decision records (DRs) and intent records (IRs); `specs/map.md` indexes the tree and `specs/meta.md` is the spec of specs.
   - Two starter packages (`git.md`, `licensing.md`) and a sample intent record seed the tree.
 - **`LICENSE`** — the verbatim Apache-2.0 text at the target root, written only when no `LICENSE` exists there.
-- **`CLAUDE.md` / `AGENTS.md`** — instructions that tell AI agents
-  (Claude, Codex, etc.) to read relevant specs, resolve conflicts there
-  first, and keep specs and code aligned.
+- **Agent instruction files** — a managed section that tells coding
+  agents to read relevant specs, resolve conflicts there first, and keep
+  specs and code aligned: `CLAUDE.md` for Claude Code, `AGENTS.md` for
+  Codex, Kimi Code, and OpenCode, and `GEMINI.md` for Gemini CLI.
 
 See `specs/decisions/000-spec-structure-format.md` and `specs/meta.md` for the spec format and naming conventions.
 
-Idempotency: rerunning `scaffold` is safe — it only adds missing files.
-The one in-place edit it makes is to an existing `CLAUDE.md`/`AGENTS.md`, whose managed `## Specs (Source of Truth)` section is added or refreshed.
+Idempotency: rerunning `scaffold` is safe — authored specs and content
+outside Spex's managed `## Specs (Source of Truth)` sections stay
+untouched. Agent instruction files are reconciled as described below.
 (`--update` edits more, mechanically; see below.)
+
+### Agent instructions
+
+Interactive scaffold and update runs infer the current instruction
+targets and ask for a quick default-yes confirmation. If you have
+changed agents, decline and select the agents you use now. A fresh
+project defaults to all supported targets.
+
+For a non-interactive run, or to select directly, pass agent names:
+
+```sh
+spex scaffold --agents=claude,codex
+spex scaffold --update --agents=gemini,kimi
+```
+
+Supported names are `claude`, `codex`, `gemini`, `kimi`, and
+`opencode`; `all` selects all of them. The selection is the desired
+state: Spex adds or refreshes selected managed sections and removes its
+managed section from deselected targets, preserving all other content.
+An otherwise empty deselected instruction file is removed.
 
 ### Linting
 
@@ -89,10 +111,14 @@ It runs from within a git repository and requires a clean `specs/` working tree,
 
 - Spex-authoritative *framework* files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally, including when they are absent. If you had modified one of these, `--update` warns and names it so you can reapply your changes from git history.
 - Starter *seed* files (`map.md`, the sample intent record, the starter packages) are refreshed when you have not customized them, and written from the bundled template when they are absent. Customized starter files are kept as-is. Remove a starter file *after* `--update` if you do not want it.
-- The managed specs section of an existing `CLAUDE.md`/`AGENTS.md` is refreshed; absent agent files are not created.
-- Files you authored are never edited.
+- Agent instruction files are reconciled with the confirmed or explicit
+  selection; a non-interactive run infers existing managed targets and
+  defaults to all targets when none exist.
+- Files outside the framework and seed sets and the supported agent
+  instruction targets are never edited.
 
-Review the changes with `git diff -- specs CLAUDE.md AGENTS.md` and run `spex lint`.
+Review the changes with
+`git diff -- specs CLAUDE.md AGENTS.md GEMINI.md` and run `spex lint`.
 The command prints a per-file indicator for every framework and seed path, plus a copy-paste-ready prompt for your AI agent to reconcile citations and local extensions with the refreshed law.
 
 ## Upgrading from an earlier release

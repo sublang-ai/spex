@@ -54,8 +54,8 @@ Where the `scaffold` subcommand is invoked with `--update` and no `<path>` argum
    - customized seeds are left unmodified and reported as `(kept — user-modified)`;
    - absent seeds are reported as `(created)`;
    - users who do not want a refreshed or newly created seed remove it after `--update`.
-3. Refresh the managed agent-instruction section of existing `CLAUDE.md`/`AGENTS.md` files per [[scaffold-5](#scaffold-5)] without creating absent ones.
-4. Leave any file outside the framework and seed sets unmodified.
+3. Reconcile the selected agent-instruction targets per [[scaffold-5](#scaffold-5)].
+4. Leave every other file unmodified.
 5. Print per-file indicators, a clear completion message that points to `spex lint`, a copy-paste-ready LLM merge prompt, and — on a tree carrying a legacy generation — the migration guidance of [[scaffold-26](#scaffold-26)]:
    - per-file indicators are the only path-level summary printed to stdout for the run, with exactly one indicator line per path, and no path summary follows the merge prompt or the guidance;
    - the stderr diagnostics of step 1 are not stdout path-level summaries and are exempt from this rule.
@@ -132,11 +132,19 @@ Where `--update` needs the target tree's authoring language, the CLI shall deter
 
 #### scaffold-5
 
-Where the `scaffold` subcommand is invoked, the CLI shall update agent spec instructions in `CLAUDE.md` and `AGENTS.md`:
+Where the `scaffold` subcommand is invoked, the CLI shall reconcile Spex's managed agent instructions with the selected instruction targets:
 
-- when neither file exists, both are created on the initial (non-`--update`) flow, while on `--update` absent files stay absent;
-- when only one exists, only that file is updated;
-- when a file contains a matching specs section heading, that section is replaced in place, or the file is skipped when the replacement is identical.
+| `--agents` name | Coding agent | Instruction target |
+| --- | --- | --- |
+| `claude` | Claude Code | `CLAUDE.md` |
+| `codex` | Codex | `AGENTS.md` |
+| `kimi` | Kimi Code | `AGENTS.md` |
+| `opencode` | OpenCode | `AGENTS.md` |
+| `gemini` | Gemini CLI | `GEMINI.md` |
+
+- Without `--agents`, an interactive run suggests targets already carrying the managed section, or supported files already present when no section is managed; it asks one default-yes confirmation when that suggestion is nonempty, and opens the selector only when the user declines it. A fresh target opens the selector with all targets as the default.
+- `--agents=<comma-separated names>` selects targets without prompting, and `all` selects every target; without interactive input or that option, the same inference applies and a fresh target selects all. An invalid selection or canceled prompt exits before any scaffold write.
+- A selected target is created, appended, refreshed, or skipped when identical. A deselected target loses only the managed section and is deleted only when no other content remains; an unmanaged deselected file stays untouched.
 
 ### Error Handling
 
@@ -255,11 +263,11 @@ Where `updateScaffoldTemplates()` is called on a clean `specs/` working tree, mi
 
 #### scaffold-18
 
-Where `updateScaffoldTemplates()` is called, it shall resolve the current git repository root, enforce update preconditions ([[scaffold-15](#scaffold-15)], [[scaffold-16](#scaffold-16)]), allow missing framework files ([[scaffold-17](#scaffold-17)]), and then run the update pipeline in order:
+Where `updateScaffoldTemplates()` is called, it shall resolve the current git repository root, enforce update preconditions ([[scaffold-15](#scaffold-15)], [[scaffold-16](#scaffold-16)]), allow missing framework files ([[scaffold-17](#scaffold-17)]), resolve the agent targets ([[scaffold-5](#scaffold-5)]) before writing, and then run the update pipeline in order:
 
 1. overwrite framework files ([[scaffold-14](#scaffold-14)]);
 2. refresh pristine seeds ([[scaffold-23](#scaffold-23)]);
-3. refresh existing agent files ([[scaffold-10](#scaffold-10)]);
+3. reconcile agent files ([[scaffold-10](#scaffold-10)]);
 4. read the bundled merge prompt from `scaffold/update-merge-prompt.md`, and print the per-file indicators, clear completion message, merge prompt, and legacy-generation migration guidance specified by [[scaffold-11](#scaffold-11)] and [[scaffold-26](#scaffold-26)].
 
 Notes:
@@ -288,16 +296,15 @@ Where a localized `meta.md` or `map.md` overlay exists, every difference from it
 - a translated `map.md` body carries `<!-- spex-i18n-source: map.md sha256-<digest> -->`, with the canonical SHA-256 hash of the English file, and preserves its Markdown link targets.
 - these markers travel into generated trees as provenance of the English source a translation was made from, and no generated tree consults them.
 
-### Agent Spec Appending
+### Agent Instruction Reconciliation
 
 #### scaffold-10
 
-Where `appendAgentSpecs()` is called, it shall read `scaffold/agent-specs.txt` and process `CLAUDE.md` and `AGENTS.md` at the base path:
+Where `reconcileAgentSpecs()` is called with selected targets, it shall read `scaffold/agent-specs.txt` and apply [[scaffold-5](#scaffold-5)] to `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` at the base path:
 
-- when neither file exists, both are created, unless the caller passes `createMissing: false` (the `--update` flow), in which case absent files stay absent;
-- when only one exists, only that file is updated;
-- detection parses the file as Markdown and matches the H2 heading `Specs (Source of Truth)` case-sensitively, so a lookalike inside a code fence neither starts the section nor ends it; when found, the section is replaced in place up to the next H2 heading and reported as updated, or skipped when the replacement is identical;
-- when the heading is absent (including case mismatches), the content is appended to the file.
+- detection parses each file as Markdown and matches the H2 heading `Specs (Source of Truth)` case-sensitively, so a lookalike inside a code fence neither starts the section nor ends it;
+- replacement or removal spans from that heading to the next H2 heading or end of file, preserving all content outside the managed section;
+- when a selected file has no matching heading, the managed content is appended.
 
 ## Verification
 
@@ -361,6 +368,16 @@ Where the `scaffold` subcommand is exercised with language selection, the test s
 #### scaffold-34
 
 Where localized `meta.md` or `map.md` overlays ship, the test suite shall enforce `meta.md` completeness and item/file source pins, plus the `map.md` file pin and link-target parity ([[scaffold-32](#scaffold-32)]).
+
+### Agent Instruction Coverage
+
+#### scaffold-54
+
+Where agent-instruction reconciliation is exercised ([[scaffold-5](#scaffold-5)]), the test suite shall cover the fresh default, default-yes confirmation, an explicit or interactive switch, an absent selected target during `--update`, and the shared `AGENTS.md` target:
+
+- selected files are created, appended, refreshed, or skipped as applicable;
+- deselection removes only the parsed managed section ([[scaffold-10](#scaffold-10)]), preserving other content and deleting a managed-only file;
+- an invalid selection or canceled prompt leaves the target tree unchanged.
 
 ## References
 

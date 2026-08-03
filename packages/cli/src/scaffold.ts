@@ -4,7 +4,12 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { appendAgentSpecs } from "./append-agent-specs.js";
+import {
+  parseAgentNames,
+  reconcileAgentSpecs,
+  resolveAgentTargets,
+  type AgentName,
+} from "./append-agent-specs.js";
 import { getScaffoldDir, readBundledMarkdown } from "./bundled-scaffold.js";
 import {
   canonicalContentHash,
@@ -23,8 +28,13 @@ import { createSpecsStructure } from "./create-specs-structure.js";
 import { resolveBase } from "./resolve-base.js";
 
 type ScaffoldOptions =
-  | { mode: "create"; pathArg?: string; language?: ScaffoldLanguage }
-  | { mode: "update" };
+  | {
+      mode: "create";
+      pathArg?: string;
+      language?: ScaffoldLanguage;
+      agents?: AgentName[];
+    }
+  | { mode: "update"; agents?: AgentName[] };
 
 const AUTHORING_LANGUAGE_RE = /^Authoring language:\s*([A-Za-z0-9-]+)\s*$/m;
 
@@ -52,6 +62,7 @@ function parseLanguage(code: string): ScaffoldLanguage {
 function parseArgs(args: string[]): ScaffoldOptions {
   let update = false;
   let language: ScaffoldLanguage | undefined;
+  let agents: AgentName[] | undefined;
   const pathArgs: string[] = [];
 
   for (let i = 0; i < args.length; i += 1) {
@@ -79,6 +90,25 @@ function parseArgs(args: string[]): ScaffoldOptions {
       language = parseLanguage(arg.slice("--lang=".length));
       continue;
     }
+    if (arg === "--agents") {
+      const value = args[i + 1];
+      if (value === undefined) {
+        throw new Error("--agents requires a comma-separated agent list");
+      }
+      if (agents !== undefined) {
+        throw new Error("--agents may only be specified once");
+      }
+      agents = parseAgentNames(value);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--agents=")) {
+      if (agents !== undefined) {
+        throw new Error("--agents may only be specified once");
+      }
+      agents = parseAgentNames(arg.slice("--agents=".length));
+      continue;
+    }
     if (arg.startsWith("-")) {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -92,14 +122,14 @@ function parseArgs(args: string[]): ScaffoldOptions {
     if (pathArgs.length !== 0) {
       throw new Error("--update does not accept a <path> argument");
     }
-    return { mode: "update" };
+    return { mode: "update", agents };
   }
 
   if (pathArgs.length > 1) {
     throw new Error(`Unexpected arguments: ${pathArgs.slice(1).join(" ")}`);
   }
 
-  return { mode: "create", pathArg: pathArgs[0], language };
+  return { mode: "create", pathArg: pathArgs[0], language, agents };
 }
 
 function getGitRoot(): string {
@@ -276,7 +306,7 @@ function printMigrationGuidance(): void {
 
 // SCAF-18: the four-step --update pipeline — framework overwrite, seed
 // refresh, agent-file refresh, then the completion output.
-function updateScaffoldTemplates(): void {
+function updateScaffoldTemplates(agents?: readonly AgentName[]): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
   const active = resolveActiveLanguage(basePath);
@@ -306,10 +336,11 @@ function updateScaffoldTemplates(): void {
   // Sample legacy-generation markers before the framework overwrite
   // replaces specs/meta.md (SCAF-26).
   const legacyGeneration = detectLegacyGeneration(basePath, language);
+  const agentTargets = resolveAgentTargets(basePath, agents);
 
   const replacedFramework = overwriteFrameworkSpecFiles(basePath, language);
   refreshPristineSeeds(basePath, { language });
-  appendAgentSpecs(basePath, { createMissing: false });
+  reconcileAgentSpecs(basePath, agentTargets);
 
   warnReplacedFrameworkFiles(replacedFramework);
 
@@ -353,7 +384,7 @@ export function scaffold(args: string[] = []): void {
     const options = parseArgs(args);
 
     if (options.mode === "update") {
-      updateScaffoldTemplates();
+      updateScaffoldTemplates(options.agents);
       return;
     }
 
@@ -361,10 +392,11 @@ export function scaffold(args: string[] = []): void {
     const language = resolveCreateLanguage(basePath, options.language);
 
     assertNoLegacyLayout(basePath);
+    const agentTargets = resolveAgentTargets(basePath, options.agents);
     createSpecsStructure(basePath);
     copyTemplates(basePath, language);
     copyRootLicense(basePath);
-    appendAgentSpecs(basePath);
+    reconcileAgentSpecs(basePath, agentTargets);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`spex scaffold: ${msg}`);

@@ -100,6 +100,63 @@ test("createProjectRepo surfaces scaffold failures", async () => {
   );
 });
 
+test("createProjectRepo stages every supported agent-instruction target", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-agent-targets-"));
+  const calls: Array<{ command: string; args: string[] }> = [];
+  const run: RunCommand = async (command, args) => {
+    calls.push({ command, args });
+    if (command === "spex") {
+      for (const file of ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]) {
+        writeFileSync(join(dir, file), "managed\n");
+      }
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+
+  await createProjectRepo({
+    path: dir,
+    scaffold: true,
+    scaffoldCommand: ["spex"],
+    run,
+  });
+
+  assert.deepEqual(
+    calls
+      .filter(({ command, args }) => command === "git" && args[0] === "add")
+      .map(({ args }) => args[2]),
+    ["specs", "CLAUDE.md", "AGENTS.md", "GEMINI.md", "LICENSE"],
+  );
+});
+
+test("createProjectRepo never stages a pre-existing agent file", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-agent-existing-"));
+  writeFileSync(join(dir, "GEMINI.md"), "user content\n");
+  const calls: Array<{ command: string; args: string[] }> = [];
+  const run: RunCommand = async (command, args) => {
+    calls.push({ command, args });
+    if (command === "spex") {
+      writeFileSync(join(dir, "CLAUDE.md"), "managed\n");
+      writeFileSync(join(dir, "AGENTS.md"), "managed\n");
+      writeFileSync(join(dir, "GEMINI.md"), "user content\nmanaged\n");
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+
+  await createProjectRepo({
+    path: dir,
+    scaffold: true,
+    scaffoldCommand: ["spex"],
+    run,
+  });
+
+  const staged = calls
+    .filter(({ command, args }) => command === "git" && args[0] === "add")
+    .map(({ args }) => args[2]);
+  assert.ok(staged.includes("CLAUDE.md"));
+  assert.ok(staged.includes("AGENTS.md"));
+  assert.ok(!staged.includes("GEMINI.md"));
+});
+
 test("parseGitHubRepo handles https and ssh remotes", () => {
   assert.equal(
     parseGitHubRepo("https://github.com/sublang-ai/spex.git"),

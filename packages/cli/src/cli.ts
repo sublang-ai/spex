@@ -8,10 +8,14 @@ import { scaffold } from "./scaffold.js";
 const USAGE = `Usage: spex <command> [options]
 
 Commands:
-  scaffold [--lang <code>] [<path>]   Create specs directory structure
-  scaffold --update                  Refresh scaffold-provided specs templates
+  scaffold [--lang <code>] [--agents <names>] [<path>]
+                                     Create specs directory structure
+  scaffold --update [--agents <names>]
+                                     Refresh scaffold-provided specs templates
   lint [<path>]                      Check the specs tree structure, item IDs,
-                                     and citations`;
+                                     and citations
+
+Agent names: claude, codex, gemini, kimi, opencode, or all`;
 
 function main(): void {
   const args = process.argv.slice(2);
