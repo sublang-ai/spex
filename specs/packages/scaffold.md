@@ -102,7 +102,7 @@ Where plain `scaffold` targets a tree whose `specs/` contains a legacy directory
 Where the `scaffold` subcommand is invoked without `--update`, when `--lang <code>` is provided, the CLI shall generate localized bundled specs for that language:
 
 - supported language codes are `en` and `zh`, with `zh` meaning Simplified Chinese;
-- when `--lang` is omitted and no existing `specs/meta.md` declares an authoring language, the CLI uses `en`; where `--update` finds an existing `specs/meta.md` declaring none, it warns before proceeding, since a localized tree that lost its marker line is otherwise replaced with English framework files without notice;
+- when `--lang` is omitted and no existing `specs/meta.md` declares an authoring language, the CLI uses `en`;
 - when an unsupported language code is provided, the CLI exits non-zero and lists the supported language codes.
 
 #### scaffold-29
@@ -115,7 +115,18 @@ Where the `scaffold` subcommand is invoked without `--update` while `specs/meta.
 
 Where the `scaffold` subcommand is invoked with `--update`, the CLI shall reject `--lang` and exit non-zero:
 
-- The update language is read from the existing `specs/meta.md` authoring-language declaration, or `en` when no declaration is present.
+- The update language is resolved from the tree ([[scaffold-53](#scaffold-53)]).
+
+#### scaffold-53
+
+Where `--update` resolves the target tree's authoring language, the CLI shall stop rather than guess when a localized tree would be replaced with English:
+
+| `specs/meta.md` | Resolution |
+| --- | --- |
+| declares an authoring language | that language |
+| declares none, content matches a bundled version | `en`, silently — every bundled base `meta.md` is English |
+| declares none, content matches no bundled version | none: the CLI exits non-zero before writing, naming the marker line to restore |
+| absent | `en`, with a warning — the tree is older and `--update` creates the missing framework files ([[scaffold-18](#scaffold-18)]) |
 
 ### Agent Instructions
 
@@ -345,6 +356,7 @@ Where the `scaffold` subcommand is exercised with language selection, the test s
 
 - the Chinese fresh scaffold case asserts that localized overlay files are written for paths that have overlays and that fallback files remain byte-identical to their English bundled templates ([[scaffold-31](#scaffold-31)]);
 - the localized update case asserts that `--update` on a Chinese specs tree ([[scaffold-30](#scaffold-30)]) refreshes a pristine framework ([[scaffold-14](#scaffold-14)]) or seed ([[scaffold-23](#scaffold-23)]) file from the active Chinese overlay ([[scaffold-18](#scaffold-18)]) rather than the English base template.
+- the undeterminable-language cases assert that a Chinese tree whose marker line was damaged stops the update with nothing written, and that a tree with no `specs/meta.md` proceeds as `en` with a warning ([[scaffold-53](#scaffold-53)]).
 
 #### scaffold-34
 

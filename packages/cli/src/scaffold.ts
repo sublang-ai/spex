@@ -7,9 +7,11 @@ import { join } from "node:path";
 import { appendAgentSpecs } from "./append-agent-specs.js";
 import { getScaffoldDir, readBundledMarkdown } from "./bundled-scaffold.js";
 import {
+  canonicalContentHash,
   copyRootLicense,
   copyTemplates,
   formatSupportedLanguages,
+  getFileHistory,
   isLegacyPristine,
   isPristine,
   isSupportedLanguage,
@@ -123,31 +125,42 @@ function assertCleanSpecsTree(basePath: string): void {
 }
 
 function readActiveLanguage(basePath: string): ScaffoldLanguage {
-  return resolveActiveLanguage(basePath).language;
+  const resolved = resolveActiveLanguage(basePath);
+  return resolved.kind === "undeterminable" ? "en" : resolved.language;
 }
 
+type LanguageResolution =
+  | { kind: "declared"; language: ScaffoldLanguage }
+  | { kind: "bundled-english"; language: "en" }
+  | { kind: "undeterminable"; reason: "absent" | "unrecognized" };
+
 /**
- * Resolve the tree's authoring language, reporting whether the answer
- * came from a declaration or from the `en` fallback. An existing
- * `specs/meta.md` that declares nothing is ambiguous — a pre-marker
- * tree, or a localized tree whose marker line was damaged — and the
- * two differ sharply in consequence, so the caller can warn.
+ * Resolve the tree's authoring language and how confidently.
+ *
+ * A declaration is definitive. Absent one, `specs/meta.md` matching a
+ * version this CLI shipped is still definitive — every bundled base
+ * `meta.md` is English — which keeps pre-marker trees updating
+ * silently. What remains is genuinely undeterminable: a file we never
+ * shipped that declares nothing (a localized tree whose marker line
+ * was lost reads exactly like this), or no file at all. Guessing `en`
+ * there replaces a localized tree's framework files with English, so
+ * the caller stops instead.
  */
-function resolveActiveLanguage(basePath: string): {
-  language: ScaffoldLanguage;
-  declared: boolean;
-  metaExists: boolean;
-} {
+function resolveActiveLanguage(basePath: string): LanguageResolution {
   const metaPath = join(basePath, "specs", "meta.md");
   if (!existsSync(metaPath)) {
-    return { language: "en", declared: false, metaExists: false };
+    return { kind: "undeterminable", reason: "absent" };
   }
 
-  const match = readFileSync(metaPath, "utf-8").match(AUTHORING_LANGUAGE_RE);
-  if (match === null) {
-    return { language: "en", declared: false, metaExists: true };
+  const content = readFileSync(metaPath);
+  const match = content.toString("utf-8").match(AUTHORING_LANGUAGE_RE);
+  if (match !== null) {
+    return { kind: "declared", language: parseLanguage(match[1]) };
   }
-  return { language: parseLanguage(match[1]), declared: true, metaExists: true };
+  if (getFileHistory("specs/meta.md").includes(canonicalContentHash(content))) {
+    return { kind: "bundled-english", language: "en" };
+  }
+  return { kind: "undeterminable", reason: "unrecognized" };
 }
 
 function resolveCreateLanguage(
@@ -267,15 +280,25 @@ function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
   const active = resolveActiveLanguage(basePath);
-  const language = active.language;
-  if (active.metaExists && !active.declared) {
-    console.warn(
-      "  warning: specs/meta.md declares no authoring language; " +
-        "updating as en. A localized tree whose marker line was lost " +
-        "must restore `Authoring language: <code>` before updating, or " +
-        "its framework files are replaced with English.",
+  if (active.kind === "undeterminable" && active.reason === "unrecognized") {
+    throw new Error(
+      "specs/meta.md declares no authoring language and matches no bundled " +
+        "version, so the language cannot be determined and updating would " +
+        "replace the framework files with English. Restore its " +
+        "`Authoring language: <code>` line (`en` or `zh`) and run again.",
     );
   }
+  if (active.kind === "undeterminable") {
+    // Absent: an older tree being repaired, since --update creates
+    // missing framework files. English is the only available answer,
+    // but a localized tree lands mixed, so it is never silent.
+    console.warn(
+      "  warning: no specs/meta.md, so the authoring language is unknown; " +
+        "creating framework files as en. A localized tree should restore " +
+        "specs/meta.md, or re-run `spex scaffold --lang <code>` afterward.",
+    );
+  }
+  const language = active.kind === "undeterminable" ? "en" : active.language;
 
   // Sample legacy-generation markers before the framework overwrite
   // replaces specs/meta.md (SCAF-26).

@@ -510,7 +510,7 @@ describe("CLI integration", () => {
       gitCommit(dir, "initial specs");
 
       const target = join(dir, "specs", "meta.md");
-      writeFileSync(target, "# locally extended\n");
+      writeFileSync(target, "# locally extended\n\nAuthoring language: en\n");
       gitCommit(dir, "extend meta");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
@@ -533,10 +533,10 @@ describe("CLI integration", () => {
     }
   });
 
-  // scaffold-18: an existing meta.md declaring no authoring language is
-  // ambiguous — a pre-marker tree, or a localized tree whose marker was
-  // lost — and the en fallback silently anglicizes the latter.
-  it("update: meta.md without an authoring-language marker warns before using en", () => {
+  // scaffold-53: a damaged marker on an unrecognized meta.md is
+  // undeterminable, and guessing en would anglicize a localized tree,
+  // so the update stops before writing anything.
+  it("update: damaged marker stops the update and writes nothing", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
@@ -552,9 +552,33 @@ describe("CLI integration", () => {
       gitCommit(dir, "damage the marker");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 1);
+      assert.match(result.stderr, /matches no bundled version/);
+      assert.match(result.stderr, /Authoring language: <code>/);
+      // Nothing was written: the damaged file is still exactly as left.
+      assert.equal(readFileSync(target, "utf-8"), damaged);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // scaffold-53: with no meta.md the language is unknown too, but
+  // --update repairs older trees by creating missing framework files,
+  // so it proceeds as en and says so rather than stopping.
+  it("update: missing meta.md warns that it proceeds as en", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold", "--lang", "zh"], { cwd: dir });
+      gitCommit(dir, "initial zh specs");
+
+      rmSync(join(dir, "specs", "meta.md"));
+      gitCommit(dir, "delete meta");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.match(result.stderr, /declares no authoring language/);
-      assert.match(result.stderr, /updating as en/);
+      assert.match(result.stderr, /authoring language is unknown/);
+      assert.equal(existsSync(join(dir, "specs", "meta.md")), true);
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -601,8 +625,10 @@ describe("CLI integration", () => {
         readFileSync(bundledPath("specs/meta.md")),
       );
 
-      // Updated cleanly: no replaced-user-content warning.
-      assert.doesNotMatch(result.stderr, /WARNING/);
+      // Updated cleanly: no warning of any kind — a bundled English
+      // meta.md predating the marker is recognized, not ambiguous
+      // (scaffold-53).
+      assert.doesNotMatch(result.stderr, /warning/i);
 
       // Old-generation marker: the guidance prints without a legacy dir.
       assertMigrationGuidance(result.stdout);
