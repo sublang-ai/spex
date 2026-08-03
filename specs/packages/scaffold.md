@@ -126,7 +126,7 @@ Where `--update` needs the target tree's authoring language, the CLI shall deter
 | declares none, content matches no bundled version | none: the CLI exits non-zero before writing |
 | absent | `en`, with a warning — the tree is older and `--update` creates the missing framework files ([[scaffold-18](#scaffold-18)]) |
 
-- Where the language is undeterminable, the diagnostic states the complete recovery: the `Authoring language:` line to set, the commit that the clean-tree precondition ([[scaffold-16](#scaffold-16)]) requires, and the `--update` rerun.
+- Where `specs/meta.md` matches no bundled version, and where it is absent, the diagnostic states the complete recovery: the `Authoring language:` line to set, the commit that the clean-tree precondition ([[scaffold-16](#scaffold-16)]) requires, and the `--update` rerun.
 
 ### Agent Instructions
 

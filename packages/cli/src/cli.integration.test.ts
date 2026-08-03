@@ -91,7 +91,10 @@ function gitCommit(dir: string, message: string): void {
 function assertRecoveryGuidance(message: string): void {
   assert.match(message, /Authoring language/, "names the marker line");
   assert.match(message, /commit/i, "names the commit step");
-  assert.match(message, /--update|run again/, "names the rerun");
+  // Both halves: an alternation lets "--update needs a clean tree"
+  // satisfy a message that never tells the user to run it again.
+  assert.match(message, /\bagain\b/, "names the rerun action");
+  assert.match(message, /--update/, "names the rerun command");
 }
 
 function parseIndicators(stdout: string): Map<string, string> {
