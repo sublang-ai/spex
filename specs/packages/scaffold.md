@@ -102,7 +102,7 @@ Where plain `scaffold` targets a tree whose `specs/` contains a legacy directory
 Where the `scaffold` subcommand is invoked without `--update`, when `--lang <code>` is provided, the CLI shall generate localized bundled specs for that language:
 
 - supported language codes are `en` and `zh`, with `zh` meaning Simplified Chinese;
-- when `--lang` is omitted and no existing `specs/meta.md` declares an authoring language, the CLI uses `en`;
+- when `--lang` is omitted and no existing `specs/meta.md` declares an authoring language, the CLI uses `en`; where `--update` finds an existing `specs/meta.md` declaring none, it warns before proceeding, since a localized tree that lost its marker line is otherwise replaced with English framework files without notice;
 - when an unsupported language code is provided, the CLI exits non-zero and lists the supported language codes.
 
 #### scaffold-29
@@ -275,6 +275,7 @@ Where a localized `meta.md` or `map.md` overlay exists, every difference from it
 - an unchanged item body remains byte-identical and carries no source marker;
 - a changed item is preceded by `<!-- spex-i18n-source: <item-id> sha256-<digest> -->`, carrying the canonical SHA-256 hash of its English source item;
 - a translated `map.md` body carries `<!-- spex-i18n-source: map.md sha256-<digest> -->`, with the canonical SHA-256 hash of the English file, and preserves its Markdown link targets.
+- these markers travel into generated trees as provenance of the English source a translation was made from, and no generated tree consults them.
 
 ### Agent Spec Appending
 

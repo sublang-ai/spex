@@ -533,6 +533,33 @@ describe("CLI integration", () => {
     }
   });
 
+  // scaffold-18: an existing meta.md declaring no authoring language is
+  // ambiguous — a pre-marker tree, or a localized tree whose marker was
+  // lost — and the en fallback silently anglicizes the latter.
+  it("update: meta.md without an authoring-language marker warns before using en", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold", "--lang", "zh"], { cwd: dir });
+      gitCommit(dir, "initial zh specs");
+
+      const target = join(dir, "specs", "meta.md");
+      const damaged = readFileSync(target, "utf-8").replace(
+        /^Authoring language: zh$/m,
+        "Authoring language",
+      );
+      writeFileSync(target, damaged);
+      gitCommit(dir, "damage the marker");
+
+      const result = run(["scaffold", "--update"], { cwd: dir });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stderr, /declares no authoring language/);
+      assert.match(result.stderr, /updating as en/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   // SCAF-24 cell: framework, hash in history but not current (older pristine).
   // SCAF-35: a pre-localization specs tree updates cleanly without warning.
   // SCAF-26: a pre-packages bundled meta.md is an old-generation marker,

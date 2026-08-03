@@ -123,12 +123,31 @@ function assertCleanSpecsTree(basePath: string): void {
 }
 
 function readActiveLanguage(basePath: string): ScaffoldLanguage {
+  return resolveActiveLanguage(basePath).language;
+}
+
+/**
+ * Resolve the tree's authoring language, reporting whether the answer
+ * came from a declaration or from the `en` fallback. An existing
+ * `specs/meta.md` that declares nothing is ambiguous — a pre-marker
+ * tree, or a localized tree whose marker line was damaged — and the
+ * two differ sharply in consequence, so the caller can warn.
+ */
+function resolveActiveLanguage(basePath: string): {
+  language: ScaffoldLanguage;
+  declared: boolean;
+  metaExists: boolean;
+} {
   const metaPath = join(basePath, "specs", "meta.md");
-  if (!existsSync(metaPath)) return "en";
+  if (!existsSync(metaPath)) {
+    return { language: "en", declared: false, metaExists: false };
+  }
 
   const match = readFileSync(metaPath, "utf-8").match(AUTHORING_LANGUAGE_RE);
-  if (match === null) return "en";
-  return parseLanguage(match[1]);
+  if (match === null) {
+    return { language: "en", declared: false, metaExists: true };
+  }
+  return { language: parseLanguage(match[1]), declared: true, metaExists: true };
 }
 
 function resolveCreateLanguage(
@@ -247,7 +266,16 @@ function printMigrationGuidance(): void {
 function updateScaffoldTemplates(): void {
   const basePath = getGitRoot();
   assertCleanSpecsTree(basePath);
-  const language = readActiveLanguage(basePath);
+  const active = resolveActiveLanguage(basePath);
+  const language = active.language;
+  if (active.metaExists && !active.declared) {
+    console.warn(
+      "  warning: specs/meta.md declares no authoring language; " +
+        "updating as en. A localized tree whose marker line was lost " +
+        "must restore `Authoring language: <code>` before updating, or " +
+        "its framework files are replaced with English.",
+    );
+  }
 
   // Sample legacy-generation markers before the framework overwrite
   // replaces specs/meta.md (SCAF-26).
