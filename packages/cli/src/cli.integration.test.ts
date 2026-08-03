@@ -84,6 +84,16 @@ function gitCommit(dir: string, message: string): void {
   execSync(`git commit -m "${message}"`, { cwd: dir, stdio: "ignore" });
 }
 
+// scaffold-53: a diagnostic is only usable if it names every step the
+// recovery takes — the marker line to set, the commit --update's
+// clean-tree precondition forces, and the rerun. Assert the elements,
+// not the prose, then perform exactly those steps.
+function assertRecoveryGuidance(message: string): void {
+  assert.match(message, /Authoring language/, "names the marker line");
+  assert.match(message, /commit/i, "names the commit step");
+  assert.match(message, /--update|run again/, "names the rerun");
+}
+
 function parseIndicators(stdout: string): Map<string, string> {
   const map = new Map<string, string>();
   for (const line of stdout.split("\n")) {
@@ -554,7 +564,7 @@ describe("CLI integration", () => {
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 1);
       assert.match(result.stderr, /matches no bundled version/);
-      assert.match(result.stderr, /Authoring language: <code>/);
+      assertRecoveryGuidance(result.stderr);
       // Nothing was written: the damaged file is still exactly as left.
       assert.equal(readFileSync(target, "utf-8"), damaged);
 
@@ -592,6 +602,7 @@ describe("CLI integration", () => {
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.match(result.stderr, /authoring language is unknown/);
+      assertRecoveryGuidance(result.stderr);
       const target = join(dir, "specs", "meta.md");
       assert.equal(existsSync(target), true);
 

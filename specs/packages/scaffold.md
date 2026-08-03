@@ -123,8 +123,10 @@ Where `--update` needs the target tree's authoring language, the CLI shall deter
 | --- | --- |
 | declares an authoring language | that language |
 | declares none, content matches a bundled version | `en`, silently — every bundled base `meta.md` is English |
-| declares none, content matches no bundled version | none: the CLI exits non-zero before writing, naming the marker line to restore and the commit the clean-tree precondition ([[scaffold-16](#scaffold-16)]) requires |
+| declares none, content matches no bundled version | none: the CLI exits non-zero before writing |
 | absent | `en`, with a warning — the tree is older and `--update` creates the missing framework files ([[scaffold-18](#scaffold-18)]) |
+
+- Where the language is undeterminable, the diagnostic states the complete recovery: the `Authoring language:` line to set, the commit that the clean-tree precondition ([[scaffold-16](#scaffold-16)]) requires, and the `--update` rerun.
 
 ### Agent Instructions
 
@@ -354,7 +356,7 @@ Where the `scaffold` subcommand is exercised with language selection, the test s
 
 - the Chinese fresh scaffold case asserts that localized overlay files are written for paths that have overlays and that fallback files remain byte-identical to their English bundled templates ([[scaffold-31](#scaffold-31)]);
 - the localized update case asserts that `--update` on a Chinese specs tree ([[scaffold-30](#scaffold-30)]) refreshes a pristine framework ([[scaffold-14](#scaffold-14)]) or seed ([[scaffold-23](#scaffold-23)]) file from the active Chinese overlay ([[scaffold-18](#scaffold-18)]) rather than the English base template.
-- the undeterminable-language cases assert that a Chinese tree whose marker line was damaged stops the update with nothing written, and that a tree with no `specs/meta.md` proceeds as `en` with a warning ([[scaffold-53](#scaffold-53)]).
+- the undeterminable-language cases assert that a Chinese tree whose marker line was damaged stops the update with nothing written, that a tree with no `specs/meta.md` proceeds as `en` with a warning, and that each diagnostic states the marker, commit, and rerun steps its recovery needs before the test performs exactly those steps and reaches the Chinese overlay ([[scaffold-53](#scaffold-53)]).
 
 #### scaffold-34
 
