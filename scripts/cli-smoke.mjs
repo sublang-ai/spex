@@ -111,6 +111,9 @@ function listTree(dir, prefixPath = "") {
 }
 
 const read = (path) => readFileSync(path, "utf-8");
+const migrationPrompt = read(join(root, "scaffold", "spec-migration-prompt.md"))
+  .replace(/^(?:<!-- SPDX-[\s\S]*?-->\r?\n)+\r?\n?/, "")
+  .trimEnd();
 
 // The exact seed set a fresh scaffold promises — nothing more, and
 // no specs/compositions/ (composition is a package pattern, DR-000).
@@ -403,7 +406,8 @@ try {
   );
   const withLang = spex(["scaffold", "--update", "--lang", "zh"], { cwd: bare });
   assert(
-    withLang.status !== 0 && withLang.stderr.includes("does not accept --lang"),
+    withLang.status !== 0 &&
+      withLang.stderr.includes("requires cwd inside a git repository"),
     `--update --lang did not name the precondition:\n${withLang.stderr}`,
   );
   const mapPath = join(fresh, "specs/map.md");
@@ -512,8 +516,9 @@ try {
     `no structure/legacy-layout error for specs/compositions:\n${legacyLint.stdout}`,
   );
   assert(
-    legacyLint.stdout.includes("spec-structure-migration"),
-    "legacy-layout finding does not name the migration skill",
+    legacyLint.stdout.includes("spex scaffold --update") &&
+      legacyLint.stdout.includes("migration prompt"),
+    "legacy-layout finding does not point to --update's migration prompt",
   );
 
   begin("legacy-scaffold-refused");
@@ -543,10 +548,8 @@ try {
     "specs/packages/git.md (created)",
     "specs/packages/licensing.md (created)",
     "spex scaffold --update completed.",
-    // Migration guidance after the completion message.
-    "legacy spec generation",
-    "skills/spec-structure-migration/",
-    "docs/spec-migration.md",
+    // Migration prompt after the completion message.
+    "Migrate every legacy Spex specs tree",
     "spex lint",
   ]) {
     assert(
@@ -554,6 +557,10 @@ try {
       `legacy --update output missing "${line}"`,
     );
   }
+  assert(
+    legacyUpdate.stdout.includes(migrationPrompt),
+    "legacy --update did not print the bundled migration prompt verbatim",
+  );
   for (const relPath of ["specs/packages/auth.md", "specs/compositions/main.md"]) {
     assert(
       read(join(legacy, relPath)) === legacyFiles[relPath],

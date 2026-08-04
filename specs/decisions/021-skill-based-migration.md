@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Superseded by [DR-022](022-prompt-based-migration.md)
 
 ## Context
 

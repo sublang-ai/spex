@@ -40,9 +40,8 @@ type ScaffoldOptions =
 const AUTHORING_LANGUAGE_RE = /^Authoring language:\s*([A-Za-z0-9-]+)\s*$/m;
 
 // SCAF-26 / SCAF-52: directories that mark a legacy spec generation.
-// Structural migration of a legacy generation is agent-skill work, not
-// CLI code (DR-021), so the CLI only detects these and points at the
-// spec-structure-migration skill.
+// Structural migration is agent judgment, not CLI code (DR-022), so
+// the CLI detects these and prints the bundled migration prompt.
 const LEGACY_GENERATION_DIRS = [
   "user",
   "dev",
@@ -278,30 +277,6 @@ function detectLegacyGeneration(
   );
 }
 
-// SCAF-26: the guidance names the migration skill, its guide, and the
-// lint gate. No path-level summary lines here — the per-file indicators
-// above are the run's only path summary (SCAF-11).
-function printMigrationGuidance(): void {
-  console.log("");
-  console.log(
-    "This specs tree carries a legacy spec generation (spex 0.x). The template refresh",
-  );
-  console.log(
-    "above left all legacy content untouched: structural migration is",
-  );
-  console.log("agent-skill work, not CLI code.");
-  console.log(
-    "To migrate, run the spec-structure-migration skill bundled with spex",
-  );
-  console.log(
-    "(skills/spec-structure-migration/ in the spex repo); its guide is",
-  );
-  console.log("docs/spec-migration.md.");
-  console.log(
-    "The migrated tree must pass `spex lint` — the mechanical gate.",
-  );
-}
-
 // SCAF-18: the four-step --update pipeline — framework overwrite, seed
 // refresh, agent-file refresh, then the completion output.
 function updateScaffoldTemplates(
@@ -385,11 +360,19 @@ function updateScaffoldTemplates(
   );
   console.log("then run `spex lint` to check the specs tree.");
   console.log(
-    "Optionally, share this prompt with your AI agent to reconcile citations and local extensions:",
+    legacyGeneration
+      ? "Share this prompt with your AI agent to migrate the untouched legacy content:"
+      : "Optionally, share this prompt with your AI agent to reconcile citations and local extensions:",
   );
   console.log("");
   console.log("```");
-  console.log(readBundledMarkdown("update-merge-prompt.md"));
+  console.log(
+    readBundledMarkdown(
+      legacyGeneration
+        ? "spec-migration-prompt.md"
+        : "update-merge-prompt.md",
+    ),
+  );
   console.log("```");
 
   if (switchingFrom !== undefined) {
@@ -408,19 +391,17 @@ function updateScaffoldTemplates(
     console.log(readBundledMarkdown("language-switch-prompt.md"));
     console.log("```");
   }
-
-  if (legacyGeneration) printMigrationGuidance();
 }
 
-// SCAF-52: a legacy tree gets guidance, not a re-scaffold — creating
-// current seed targets beside legacy files would entangle two spec
-// generations before the migration skill has run.
+// SCAF-52: a legacy tree gets the migration prompt, not a re-scaffold —
+// creating current seed targets beside legacy files would entangle two
+// spec generations before migration.
 function assertNoLegacyLayout(basePath: string): void {
   for (const dir of LEGACY_GENERATION_DIRS) {
     const abs = join(basePath, "specs", dir);
     if (existsSync(abs) && statSync(abs).isDirectory()) {
       throw new Error(
-        `specs/${dir}/ marks a legacy spec generation (spex 0.x); run \`spex scaffold --update\` to refresh templates and get migration guidance before scaffolding`,
+        `specs/${dir}/ marks a legacy spec generation (spex 0.x); run \`spex scaffold --update\` to refresh templates and get the migration prompt before scaffolding`,
       );
     }
   }

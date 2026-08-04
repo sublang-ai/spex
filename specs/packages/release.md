@@ -126,11 +126,11 @@ When preparing an app release tag, the developer/agent shall run the live deskto
 
 #### release-24
 
-When preparing a CLI release tag, the developer/agent shall run the live migration smoke (`npm run smoke:migration`) — a real coding agent migrating the bundled previous-generation fixture to the current spec generation with the packed CLI and the spec-structure-migration skill ([DR-021](../decisions/021-skill-based-migration.md)) — and record its outcome with the tag:
+When preparing a CLI release tag, the developer/agent shall run the live migration smoke (`npm run smoke:migration`) — a real coding agent migrating the bundled previous-generation fixture with the packed CLI's printed prompt ([DR-022](../decisions/022-prompt-based-migration.md)) — and record its outcome with the tag:
 
-- the run gates on the skill checker clean, `spex lint` clean, every fixture item surviving under its new id, intent-record checkbox states preserved, and no `compositions/` directory remaining;
+- the run gates on `spex lint` clean, every fixture item surviving under its new id, intent-record checkbox states preserved, and no `compositions/` directory remaining;
 - a provider-side failure may be retried or waived with the reason recorded;
-- a failure of the CLI, the skill, or the gates blocks the tag.
+- a failure of the CLI, the prompt-driven migration, or the gates blocks the tag.
 
 ## Verification
 

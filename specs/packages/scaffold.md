@@ -56,8 +56,8 @@ Where the `scaffold` subcommand is invoked with `--update` and no `<path>` argum
    - users who do not want a refreshed or newly created seed remove it after `--update`.
 3. Reconcile the selected agent-instruction targets per [[scaffold-5](#scaffold-5)].
 4. Leave every other file unmodified.
-5. Print per-file indicators, a clear completion message that points to `spex lint`, a copy-paste-ready LLM merge prompt, and — on a tree carrying a legacy generation — the migration guidance of [[scaffold-26](#scaffold-26)]:
-   - per-file indicators are the only path-level summary printed to stdout for the run, with exactly one indicator line per path, and no path summary follows the merge prompt or the guidance;
+5. Print per-file indicators, a clear completion message that points to `spex lint`, and one copy-paste-ready structure-reconciliation prompt: the ordinary merge prompt, or the migration prompt of [[scaffold-26](#scaffold-26)] on a tree carrying a legacy generation:
+   - per-file indicators are the only path-level summary printed to stdout for the run, with exactly one indicator line per path, and no path summary follows the selected structure-reconciliation prompt;
    - the stderr diagnostics of step 1 are not stdout path-level summaries and are exempt from this rule.
 
 #### scaffold-12
@@ -78,22 +78,21 @@ Where files bundled under `scaffold/specs/` are concerned, each file shall be cl
   - `specs/packages/licensing.md`
 - When a new file is added under `scaffold/specs/`, it is assigned to exactly one of these classes.
 - The seeded tree carries the layout of [[meta-1](../meta.md#meta-1)] — `decisions/`, `intents/`, `packages/`, `map.md`, `meta.md` — with no `compositions/` directory, and the seeded packages carry the sections of [[meta-30](../meta.md#meta-30)] and lowercase `<pack>-<N>` item IDs [[meta-11](../meta.md#meta-11)].
-- Bundled support assets outside `scaffold/specs/` (for example, `scaffold/update-merge-prompt.md`, the file-history manifests, and `scaffold/LICENSE`) are not framework or seed files.
+- Bundled support assets outside `scaffold/specs/` (for example, the update and migration prompts, the file-history manifests, and `scaffold/LICENSE`) are not framework or seed files.
 - The bundled root `scaffold/LICENSE` is emitted to the target root by [[scaffold-36](#scaffold-36)] on initial scaffold rather than refreshed by `--update`, and it is not localized.
 - Localized overlay files under `scaffold/i18n/<lang>/` inherit the class of the target path they replace.
 
 #### scaffold-26
 
-Where `--update` targets a tree whose `specs/` carries a legacy generation — a legacy directory (`user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, `iterations/`) or an old-generation marker — the CLI shall complete the template refresh ([[scaffold-11](#scaffold-11)]) and print migration guidance after the completion message:
+Where `--update` targets a tree whose `specs/` carries a legacy generation — a legacy directory (`user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, `iterations/`) or an old-generation marker — the CLI shall complete the template refresh ([[scaffold-11](#scaffold-11)]) and print the bundled `scaffold/spec-migration-prompt.md` after the completion message instead of the ordinary merge prompt:
 
-- structural migration of a legacy generation is agent-skill work, not CLI code ([DR-021](../decisions/021-skill-based-migration.md)): the run moves, merges, rewrites, and deletes no legacy content;
-- the guidance directs the user to the bundled `spec-structure-migration` skill (at `skills/spec-structure-migration/` in the spex repo) and its guide `docs/spec-migration.md`;
-- the guidance names `spex lint` as the mechanical gate the migrated tree must pass;
+- structural migration is AI-agent judgment work, not CLI code ([DR-022](../decisions/022-prompt-based-migration.md)): the run moves, merges, rewrites, and deletes no legacy content;
+- the prompt directs the agent to read the refreshed law, preserve existing meaning and record state, migrate every spec tree, and use `spex lint` as the sole mechanical gate;
 - an old-generation marker is target content the bundled histories recognize as a retired generation — a `specs/meta.md` matching a pre-packages bundled version in its chronological history ([[scaffold-21](#scaffold-21)]), or content matching a retired bundled seed in the legacy manifest ([[scaffold-47](#scaffold-47)]).
 
 #### scaffold-52
 
-Where plain `scaffold` targets a tree whose `specs/` contains a legacy directory — `user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, or `iterations/` — the CLI shall write nothing, exit non-zero, and direct the user to `spex scaffold --update` and its migration guidance ([[scaffold-26](#scaffold-26)]): creating current seed targets beside legacy files would entangle two spec generations before the migration skill has run.
+Where plain `scaffold` targets a tree whose `specs/` contains a legacy directory — `user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, or `iterations/` — the CLI shall write nothing, exit non-zero, and direct the user to `spex scaffold --update` for the migration prompt ([[scaffold-26](#scaffold-26)]): creating current seed targets beside legacy files would entangle two spec generations before migration.
 
 ### Language Selection
 
@@ -278,7 +277,7 @@ Where `updateScaffoldTemplates()` is called, it shall resolve the current git re
 1. overwrite framework files ([[scaffold-14](#scaffold-14)]);
 2. refresh pristine seeds ([[scaffold-23](#scaffold-23)]);
 3. reconcile agent files ([[scaffold-10](#scaffold-10)]);
-4. read the bundled merge prompt from `scaffold/update-merge-prompt.md`, and print the per-file indicators, clear completion message, merge prompt, and legacy-generation migration guidance specified by [[scaffold-11](#scaffold-11)] and [[scaffold-26](#scaffold-26)].
+4. select `scaffold/spec-migration-prompt.md` for a legacy generation and `scaffold/update-merge-prompt.md` otherwise, then print the per-file indicators, clear completion message, and selected prompt specified by [[scaffold-11](#scaffold-11)] and [[scaffold-26](#scaffold-26)].
 
 Notes:
 
@@ -347,7 +346,7 @@ Where `--update` is exercised over any cell of the [[scaffold-24](#scaffold-24)]
 Where `--update` is exercised on a repository whose `specs/` contains a legacy directory, the test suite shall run the real CLI and assert the legacy-generation contract ([[scaffold-26](#scaffold-26)]):
 
 - the run exits zero and completes the template refresh;
-- the migration guidance prints after the completion message, naming the `spec-structure-migration` skill, the `docs/spec-migration.md` guide, and `spex lint` as the mechanical gate;
+- the bundled migration prompt prints after the completion message instead of the ordinary merge prompt, and names `spex lint` as the mechanical gate;
 - every file under the legacy directories stays byte-identical and in place.
 
 #### scaffold-35

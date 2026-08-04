@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Live migration smoke (DR-021): proves a previous-generation user
+// Live migration smoke (DR-022): proves a previous-generation user
 // can upgrade with what we ship. Copies the deliberately old-gen
 // fixture (scripts/fixtures/legacy-tree) into a scratch repo,
-// installs the packed CLI and the spec-structure-migration skill,
+// installs the packed CLI, captures its bundled migration prompt,
 // and drives a REAL local coding agent through the migration, then
-// gates on the skill's checker, `spex lint`, and content survival.
+// gates on `spex lint` and content survival.
 // Requires a signed-in agent CLI (claude and/or codex); NOT
 // hermetic, NOT for CI — a local pre-release acceptance gate.
 //
@@ -34,7 +34,12 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const fixture = join(root, "scripts", "fixtures", "legacy-tree");
-const skillSource = join(root, "skills", "spec-structure-migration");
+const migrationPrompt = readFileSync(
+  join(root, "scaffold", "spec-migration-prompt.md"),
+  "utf-8",
+)
+  .replace(/^(?:<!-- SPDX-[\s\S]*?-->\r?\n)+\r?\n?/, "")
+  .trimEnd();
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -148,14 +153,6 @@ function postGates(repo, spexBin, inventory, boxes, setupCommits) {
   const problems = [];
   const specs = join(repo, "specs");
 
-  const checker = capture("python3", [
-    join(repo, ".claude", "skills", "spec-structure-migration", "scripts", "check_specs.py"),
-    specs,
-  ]);
-  if (checker.status !== 0) {
-    problems.push(`check_specs.py reports problems:\n${checker.output}`);
-  }
-
   const lint = capture(spexBin, ["lint"], { cwd: repo });
   if (lint.status !== 0) {
     problems.push(`spex lint reports errors:\n${lint.output}`);
@@ -258,66 +255,52 @@ function setupRepo(base, name, tarball) {
   if (!existsSync(spexBin)) throw new Error("spex bin missing after install");
   const env = { ...process.env, PATH: `${join(prefix, "bin")}:${process.env.PATH}` };
 
-  at(`${name}: refresh spec law (spex scaffold --update)`);
-  const refresh = capture(spexBin, ["scaffold", "--update"], {
+  at(`${name}: refresh spec law (spex scaffold --update --lang en)`);
+  // The synthetic fixture predates the language marker and is not a
+  // byte-identical released scaffold, so state its known target language.
+  const refresh = capture(spexBin, ["scaffold", "--update", "--lang", "en"], {
     cwd: repo,
     env,
   });
   process.stdout.write(refresh.output);
   if (refresh.status !== 0) throw new Error("spex scaffold --update failed");
-  if (!refresh.output.includes("spec-structure-migration")) {
-    throw new Error("legacy tree did not trigger the migration guidance");
+  if (!refresh.output.includes(migrationPrompt)) {
+    throw new Error("legacy tree did not print the bundled migration prompt");
   }
   run("git", ["add", "-A"], { cwd: repo });
   run("git", ["commit", "-q", "-m", "chore: refresh spec law templates"], {
     cwd: repo,
   });
 
-  at(`${name}: install migration skill`);
-  const skillTarget = join(repo, ".claude", "skills", "spec-structure-migration");
-  mkdirSync(dirname(skillTarget), { recursive: true });
-  cpSync(skillSource, skillTarget, { recursive: true });
-
   at(`${name}: pre-gate (fixture must be old-generation)`);
-  const pre = capture("python3", [
-    join(skillTarget, "scripts", "check_specs.py"),
-    join(repo, "specs"),
-  ]);
-  if (pre.status === 0) {
-    throw new Error("check_specs.py passed the unmigrated fixture");
-  }
   const preLint = capture(spexBin, ["lint"], { cwd: repo, env });
   if (preLint.status === 0) {
     throw new Error("spex lint passed the unmigrated fixture");
   }
 
-  return { repo, spexBin, env, setupCommits: 2 };
+  return { repo, spexBin, env, setupCommits: 2, migrationPrompt };
 }
 
 // ---------------------------------------------------------------------------
 // Agent drivers
 // ---------------------------------------------------------------------------
 
-const KICKOFF =
-  "Migrate the spec tree specs/ in this repository to the current spec " +
-  "generation using the spec-structure-migration skill installed at " +
-  ".claude/skills/spec-structure-migration — read its SKILL.md fully and " +
-  "follow it, including references/meta-id-mapping.md and " +
-  "scripts/check_specs.py. Work on the current branch (the tree is " +
-  "clean); commit in reviewable steps. Loop on " +
-  "`python3 .claude/skills/spec-structure-migration/scripts/check_specs.py specs` " +
-  "and `spex lint` until both are clean. This is a synthetic sample repo " +
-  "with no published releases: the item-ID renames are pre-approved, so " +
-  "do not stop to ask for confirmation; note judgment calls in your " +
-  "final summary instead. Finish by committing every remaining change — " +
-  "a clean working tree with the migration in git history is part of done.";
+function kickoff(prompt) {
+  return (
+    `${prompt}\n\n` +
+    "Migration-smoke context: work on the current branch and commit in " +
+    "reviewable steps. This synthetic sample has no published releases, " +
+    "so its item-ID spelling changes are pre-approved; record judgment " +
+    "calls instead of asking. Finish with `spex lint` clean and every " +
+    "change committed; a clean working tree is part of done."
+  );
+}
 
 // Only what the migration needs: file edits (acceptEdits) plus the
-// specific commands the skill loops on. Everything runs inside the
+// specific commands the prompt needs. Everything runs inside the
 // scratch repo.
 const CLAUDE_TOOLS = [
   "Bash(git:*)",
-  "Bash(python3:*)",
   "Bash(spex:*)",
   "Bash(ls:*)",
   "Bash(cat:*)",
@@ -336,13 +319,14 @@ const CLAUDE_TOOLS = [
   "Bash(sort:*)",
 ].join(",");
 
-function agentCommand(agent) {
+function agentCommand(agent, prompt) {
+  const task = kickoff(prompt);
   if (agent === "claude") {
     return [
       "claude",
       [
         "-p",
-        KICKOFF,
+        task,
         "--permission-mode",
         "acceptEdits",
         "--allowedTools",
@@ -358,14 +342,14 @@ function agentCommand(agent) {
       "workspace-write",
       "-c",
       "shell_environment_policy.inherit=all",
-      KICKOFF,
+      task,
     ],
   ];
 }
 
-function driveAgent(agent, repo, env) {
+function driveAgent(agent, repo, env, prompt) {
   at(`${agent}: migrate (budget ${timeoutMs / 60_000} min)`);
-  const [command, cmdArgs] = agentCommand(agent);
+  const [command, cmdArgs] = agentCommand(agent, prompt);
   return new Promise((resolve, reject) => {
     const child = spawn(command, cmdArgs, {
       cwd: repo,
@@ -417,16 +401,9 @@ try {
     }
     say(`post-gates correctly flag the unmigrated fixture (${bad.length} problems)`);
 
-    // ...and known-good: the migrated demo corpus passes the
-    // mechanical gates, proving the gate plumbing itself works.
-    at("self-check: checker and lint must pass demo/");
-    const checker = capture("python3", [
-      join(skillSource, "scripts", "check_specs.py"),
-      join(root, "demo", "specs"),
-    ]);
-    if (checker.status !== 0) {
-      throw new Error(`check_specs.py fails on demo/specs:\n${checker.output}`);
-    }
+    // ...and known-good: the migrated demo corpus passes lint,
+    // proving the mechanical gate itself works.
+    at("self-check: lint must pass demo/");
     const lint = capture(spexBin, ["lint", join(root, "demo")]);
     if (lint.status !== 0) {
       throw new Error(`spex lint fails on demo/:\n${lint.output}`);
@@ -434,13 +411,13 @@ try {
     say("self-check ok");
   } else {
     for (const agent of agents) {
-      const { repo, spexBin, env, setupCommits } = setupRepo(
+      const { repo, spexBin, env, setupCommits, migrationPrompt: printedPrompt } = setupRepo(
         base,
         agent,
         tarball,
       );
       try {
-        await driveAgent(agent, repo, env);
+        await driveAgent(agent, repo, env, printedPrompt);
         at(`${agent}: post-gates`);
         const problems = postGates(repo, spexBin, inventory, boxes, setupCommits);
         if (problems.length > 0) {

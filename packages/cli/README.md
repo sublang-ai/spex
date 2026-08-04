@@ -80,7 +80,7 @@ spex lint
 
 The linter validates the layout, package file sections and their order, item IDs — lowercase `<pack>-<N>` matching the file's basename, unique across the tree — citations (enclosed inline links like `[[pack-3](pack.md#pack-3)]` whose files and anchors exist), Verification items citing the behaviors they check, reference markers, record sections, and the `map.md` index.
 Relationship-metadata lines like `Verifies:` are errors — the citations woven into an item's statement are the single source of its relationships.
-Directories of previous spec generations (`specs/compositions/`, `specs/user/`, …) are errors pointing at the migration skill (see [Upgrading](#upgrading-from-an-earlier-release)).
+Directories of previous spec generations (`specs/compositions/`, `specs/user/`, …) are errors pointing to `spex scaffold --update` for the migration prompt (see [Upgrading](#upgrading-from-an-earlier-release)).
 Errors exit non-zero; warnings do not.
 
 **Try it:** review the sample intent record `specs/intents/000-spdx-headers.md`, update the copyright text, then prompt your AI coding agent:
@@ -134,7 +134,7 @@ The command prints a per-file indicator for every framework and seed path, plus 
 ### From 1.x
 
 Spex 2.0 tightens the packages-only law introduced in 1.0. Run
-`spex scaffold --update`, review the refreshed law and merge guidance,
+`spex scaffold --update`, review the refreshed law and printed merge prompt,
 then reconcile your packages until `spex lint` passes. In particular,
 every package now requires Verification of its own behavior, behavior
 citations from Verification stay inside that package, record citations
@@ -155,12 +155,12 @@ generation of the law. Spex 2.0 uses the following structure:
 
 The CLI detects but does not restructure a legacy tree:
 
-- `spex scaffold --update` still refreshes the spex-owned law files, leaves all legacy content untouched, and prints migration guidance when it recognizes a legacy generation.
+- `spex scaffold --update` still refreshes the spex-owned law files, leaves all legacy content untouched, and prints a self-contained migration prompt instead of the ordinary update prompt when it recognizes a legacy generation.
 - Plain `spex scaffold` refuses a tree with a legacy directory — it writes nothing and points at `--update` — so two generations never entangle.
 - `spex lint` reports legacy directories as errors pointing the same way.
 
-The structural migration itself — items reclassify, compositions fold into packages, intents get rewritten — is judgment work done by an AI agent following the **spec-structure-migration** skill shipped in the spex repo, not by a script (the scripted migration of earlier releases is retired).
-Follow the walkthrough in [docs/spec-migration.md](https://github.com/sublang-ai/spex/blob/main/docs/spec-migration.md), install the skill per [its README](https://github.com/sublang-ai/spex/blob/main/skills/spec-structure-migration/README.md), and let the agent loop until its checker and `spex lint` — the mechanical gate — pass clean.
+The structural migration itself — items reclassify, compositions fold into packages, intents get rewritten — is judgment work, not a script.
+Give the printed prompt to any capable AI agent, let it loop until `spex lint` passes, and review the resulting diff.
 
 ## Workflow
 

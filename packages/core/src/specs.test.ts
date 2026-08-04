@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // SPECV coverage: fixture spec trees in the packages-only layout
-// (DR-012, DR-021) driving parseSpecTree, path confinement for
+// (DR-012, DR-000) driving parseSpecTree, path confinement for
 // specs.read, an end-to-end parse of the staged Academy corpus, and
 // one protocol round-trip through the service.
 
@@ -603,7 +603,7 @@ test("the staged Academy corpus parses end-to-end", () => {
   assert.equal(tree.legacy, false);
   assert.deepEqual(tree.notices, []);
 
-  // The packages-only generation (DR-021): 12 package files, each
+  // The packages-only generation (DR-000): 12 package files, each
   // identified by its basename with an agreeing H1, no notices —
   // and the retired kind/shortForm fields gone from the wire.
   assert.equal(tree.files.length, 12);

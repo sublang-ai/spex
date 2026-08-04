@@ -169,33 +169,24 @@ function readBundledMergePrompt(): string {
   return readBundledMarkdown("update-merge-prompt.md");
 }
 
-// The always-printed merge prompt also names the skill, so guidance
-// detection keys on a sentence only the SCAF-26 guidance prints.
-const GUIDANCE_MARKER = "carries a legacy spec generation";
+function readBundledMigrationPrompt(): string {
+  return readBundledMarkdown("spec-migration-prompt.md");
+}
 
-/** SCAF-26 guidance assertions: skill, guide, and lint gate named. */
-function assertMigrationGuidance(stdout: string): void {
+const GUIDANCE_MARKER = "Migrate every legacy Spex specs tree";
+
+/** SCAF-26: the bundled migration prompt replaces the merge prompt. */
+function assertMigrationPrompt(stdout: string): void {
   const completedAt = stdout.indexOf("--update completed");
   const guidanceAt = stdout.indexOf(GUIDANCE_MARKER);
-  assert.ok(guidanceAt >= 0, "the migration guidance must print");
+  assert.ok(guidanceAt >= 0, "the migration prompt must print");
   assert.ok(
     completedAt >= 0 && completedAt < guidanceAt,
-    "guidance must print after the completion message",
+    "the migration prompt must print after the completion message",
   );
-  const guidance = stdout.slice(guidanceAt);
-  assert.ok(
-    guidance.includes("spec-structure-migration") &&
-      guidance.includes("skills/spec-structure-migration/"),
-    "guidance must name the skill and its location in the spex repo",
-  );
-  assert.ok(
-    guidance.includes("docs/spec-migration.md"),
-    "guidance must name the migration guide",
-  );
-  assert.ok(
-    guidance.includes("spex lint"),
-    "guidance must name spex lint as the mechanical gate",
-  );
+  assert.ok(stdout.includes(readBundledMigrationPrompt()));
+  assert.ok(!stdout.includes(readBundledMergePrompt()));
+  assert.ok(stdout.slice(guidanceAt).includes("spex lint"));
 }
 
 describe("CLI integration", () => {
@@ -720,8 +711,8 @@ describe("CLI integration", () => {
   // SCAF-24 cell: framework, hash in history but not current (older pristine).
   // SCAF-35: a pre-localization specs tree updates cleanly without warning.
   // SCAF-26: a pre-packages bundled meta.md is an old-generation marker,
-  // so the run also prints migration guidance — with no legacy directory.
-  it("update: pre-localization framework (older pristine) → (updated), no warning, guidance", () => {
+  // so the run also prints the migration prompt — with no legacy directory.
+  it("update: pre-localization framework (older pristine) → (updated), no warning, migration prompt", () => {
     const dir = makeTmp();
     try {
       const fixture = readFileSync(PRE_LOCALIZATION_META);
@@ -763,8 +754,8 @@ describe("CLI integration", () => {
       // (scaffold-53).
       assert.doesNotMatch(result.stderr, /warning/i);
 
-      // Old-generation marker: the guidance prints without a legacy dir.
-      assertMigrationGuidance(result.stdout);
+      // Old-generation marker: the prompt prints without a legacy dir.
+      assertMigrationPrompt(result.stdout);
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -819,7 +810,7 @@ describe("CLI integration", () => {
 
   // SCAF-24 cell: seed, hash in history but not current. The map.md
   // history holds the legacy-layout versions. An older bundled map is
-  // no old-generation marker on its own, so no guidance prints.
+  // no old-generation marker on its own, so no migration prompt prints.
   it("update: seed at prior bundled version → (updated), bytes equal bundled current", () => {
     const dir = makeTmp();
     try {
@@ -874,7 +865,7 @@ describe("CLI integration", () => {
   });
 
   // SCAF-52: plain scaffold refuses a legacy tree, writes nothing, and
-  // points at --update and its migration guidance.
+  // points at --update and its migration prompt.
   it("scaffold refuses a legacy tree and points at --update", () => {
     const dir = makeLegacyRepo();
     try {
@@ -882,9 +873,9 @@ describe("CLI integration", () => {
       assert.notEqual(result.exitCode, 0, result.stdout);
       assert.match(result.stderr, /legacy/);
       assert.match(result.stderr, /--update/);
-      assert.match(result.stderr, /migration guidance/);
+      assert.match(result.stderr, /migration prompt/);
       // Nothing was written: the current seed target must not exist,
-      // or the migration skill would face two entangled generations.
+      // or migration would face two entangled generations.
       assert.ok(!existsSync(join(dir, "specs", "packages", "git.md")));
       assert.ok(!existsSync(join(dir, "specs", "intents")));
     } finally {
@@ -945,9 +936,9 @@ describe("CLI integration", () => {
   });
 
   // SCAF-26 / SCAF-27: --update on a legacy tree completes the template
-  // refresh, touches no legacy content, and prints migration guidance
-  // naming the skill, the guide, and the lint gate.
-  it("update: legacy tree gets a template refresh, untouched legacy files, and guidance", () => {
+  // refresh, touches no legacy content, and prints the bundled migration
+  // prompt instead of the ordinary merge prompt.
+  it("update: legacy tree gets a template refresh, untouched legacy files, and migration prompt", () => {
     const dir = makeLegacyRepo();
     try {
       const gitHash = canonicalContentHash(
@@ -1004,11 +995,11 @@ describe("CLI integration", () => {
         );
       }
 
-      // The guidance prints after the completion message.
-      assertMigrationGuidance(result.stdout);
+      // The migration prompt prints after the completion message.
+      assertMigrationPrompt(result.stdout);
 
       // SCAF-11: exactly one indicator line per path, none after the
-      // merge prompt or the guidance.
+      // selected structure-reconciliation prompt.
       const metaIndicatorLines = result.stdout
         .split("\n")
         .filter((line) => /^\s+specs\/meta\.md \(/.test(line));
@@ -1023,7 +1014,7 @@ describe("CLI integration", () => {
   });
 
   // SCAF-25: over-eager indicator regression guard; a current-generation
-  // tree prints no migration guidance.
+  // tree prints no migration prompt.
   it("update: (updated) does not appear for any unchanged file", () => {
     const dir = makeTmp();
     try {
@@ -1043,7 +1034,7 @@ describe("CLI integration", () => {
       }
       assert.ok(
         !result.stdout.includes(GUIDANCE_MARKER),
-        "no migration guidance on a current-generation tree",
+        "no migration prompt on a current-generation tree",
       );
     } finally {
       rmSync(dir, { recursive: true });
@@ -1322,7 +1313,7 @@ describe("CLI integration", () => {
   });
 
   // Packaging: the bundled assets ship with the npm package.
-  it("npm pack ships the manifests, merge prompt, and seeds", () => {
+  it("npm pack ships the manifests, agent prompts, and seeds", () => {
     // execSync (a shell) so Windows resolves npm.cmd.
     const output = execSync("npm pack --dry-run --json", {
       cwd: ROOT,
@@ -1335,6 +1326,7 @@ describe("CLI integration", () => {
       "scaffold/.file-history.json",
       "scaffold/.legacy-file-history.json",
       "scaffold/update-merge-prompt.md",
+      "scaffold/spec-migration-prompt.md",
       "scaffold/specs/intents/000-spdx-headers.md",
       "scaffold/specs/packages/git.md",
       "scaffold/specs/packages/licensing.md",

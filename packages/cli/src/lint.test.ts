@@ -150,8 +150,8 @@ describe("lintSpecs", () => {
     }
   });
 
-  // lint-4: legacy directories point at the migration skill.
-  it("flags legacy directories, pointing at the migration skill", () => {
+  // lint-4: legacy directories point at --update's migration prompt.
+  it("flags legacy directories, pointing at the migration prompt", () => {
     const findings = findingsFor({
       "specs/user/auth.md": "# a\n",
       "specs/compositions/login-flow.md": "# login-flow: Login Flow\n",
@@ -162,7 +162,8 @@ describe("lintSpecs", () => {
     assert.ok(legacy.every((f) => f.severity === "error"));
     const compositions = legacy.find((f) => f.path === "specs/compositions");
     assert.ok(compositions, "expected a specs/compositions finding");
-    assert.match(compositions.message, /spec-structure-migration/);
+    assert.match(compositions.message, /spex scaffold --update/);
+    assert.match(compositions.message, /migration prompt/);
     const unknown = findings.filter(
       (f) => f.rule === "structure/unknown-entry",
     );

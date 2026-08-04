@@ -36,7 +36,7 @@ When linting completes, the CLI shall print one line per finding in the form `<p
 
 Where the specs tree is linted, structural rules shall report:
 
-- an error for each legacy directory (`specs/user/`, `specs/dev/`, `specs/test/`, `specs/items/`, `specs/interactions/`, `specs/compositions/`), pointing at the `spec-structure-migration` skill — structural migration is agent-skill work, not CLI code ([DR-021](../decisions/021-skill-based-migration.md));
+- an error for each legacy directory (`specs/user/`, `specs/dev/`, `specs/test/`, `specs/items/`, `specs/interactions/`, `specs/compositions/`), directing the user to `spex scaffold --update` for the self-contained migration prompt [[scaffold-26](scaffold.md#scaffold-26)];
 - an error when `specs/meta.md` or `specs/map.md` is missing;
 - a warning for any other unexpected top-level entry under `specs/` [[meta-1](../meta.md#meta-1)];
 - a warning when a legacy `specs/iterations/` directory coexists with `specs/intents/` ([DR-017](../decisions/017-intent-records.md));
@@ -131,7 +131,7 @@ Where `lintSpecs(basePath)` is called, it shall parse every markdown file under 
 
 Where the linter is exercised, the test suite shall cover at least one fixture per rule family, asserting rule IDs and severities:
 
-- structure and naming, including a legacy `specs/compositions/` directory whose finding points at the `spec-structure-migration` skill, and duplicate record numbers ([[lint-4](#lint-4)]);
+- structure and naming, including a legacy `specs/compositions/` directory whose finding points to `spex scaffold --update` for the migration prompt, and duplicate record numbers ([[lint-4](#lint-4)]);
 - package sections with localized zh names, an H1 whose identifier is not the basename, and the missing-Verification warning ([[lint-5](#lint-5)]);
 - item IDs — an uppercase heading, a mismatched prefix, a duplicate ID, a non-unique item-file basename — and misplaced items ([[lint-6](#lint-6)]);
 - relationship metadata, an uncited Verification item, and a behavior citation into a peer's Internal Behavior ([[lint-7](#lint-7)]);

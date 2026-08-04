@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selection; `--agents=<names>` selects it non-interactively; switching
   agents removes only Spex's managed section from deselected targets.
 
+### Changed
+
+- Legacy-generation updates now print one bundled, agent-neutral
+  migration prompt instead of directing users to a separately installed
+  skill and guide. `spex lint` remains the mechanical migration gate.
+
 ## [2.0.0] - 2026-08-02
 
 ### Changed

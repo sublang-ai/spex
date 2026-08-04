@@ -90,7 +90,7 @@ const HAS_CITATION_RE = /\[[^\]]*\]\([^)]*\)/;
 const CITATION_SCAN_RE = /\[[^\]]*\]\([^)]*\)/g;
 const DETACHED_VERIFIES_RE = /^Verifies\b(?:[\s,.;]|and\b)*$/;
 // Legacy directories of retired spec generations (lint-4); their
-// structural migration is agent-skill work, not CLI code (DR-021).
+// structural migration is agent judgment, not CLI code (DR-022).
 const LEGACY_DIRS = [
   "user",
   "dev",
@@ -349,7 +349,7 @@ function lintStructure(ctx: LintContext): void {
         1,
         "error",
         "structure/legacy-layout",
-        `legacy directory specs/${dir}/ found; run the spec-structure-migration skill to migrate to the current layout (DR-021)`,
+        `legacy directory specs/${dir}/ found; run \`spex scaffold --update\` to refresh the spec law and get the migration prompt`,
       );
     }
   }

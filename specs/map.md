@@ -46,7 +46,8 @@ meta.md       The spec of specs
 | [DR-018](decisions/018-one-contract-per-item.md) | 018-one-contract-per-item.md | One requirement per item: one governing GEARS statement with per-kind attachments; advisory lint |
 | [DR-019](decisions/019-inline-agent-configuration.md) | 019-inline-agent-configuration.md | Inline agent configuration: profile-less blocks, runtime-bounded adapters, adapter-scoped efforts, captain-adapter parity, no shorthand surface |
 | [DR-020](decisions/020-desktop-live-smoke.md) | 020-desktop-live-smoke.md | Desktop live smoke: env-guarded handshake, real-run driver, split hermetic/live release gates |
-| [DR-021](decisions/021-skill-based-migration.md) | 021-skill-based-migration.md | Skill-based spec migration: installable agent skill + guide replace scripted structural migration; CLI narrows to detection and guidance |
+| [DR-021](decisions/021-skill-based-migration.md) | 021-skill-based-migration.md | Superseded by DR-022: installable migration skill and guide |
+| [DR-022](decisions/022-prompt-based-migration.md) | 022-prompt-based-migration.md | Prompt-based spec migration: one bundled agent-neutral prompt, `spex lint`, and human review |
 
 ## Intents
 
@@ -96,12 +97,12 @@ meta.md       The spec of specs
 | [forge-work-lists.md](packages/forge-work-lists.md) | Repo tab and Dashboard render the same forge-adapter data |
 | [git.md](packages/git.md) | Commit message format and AI co-authorship trailers |
 | [licensing.md](packages/licensing.md) | SPDX header requirements, file-scope rules, and header presence checks |
-| [lint.md](packages/lint.md) | `spex lint`: structure with the legacy-tree skill pointer, package sections, item IDs, citation form and coverage, citation discipline, reference markers, records, map listing |
+| [lint.md](packages/lint.md) | `spex lint`: structure with the legacy-tree migration prompt pointer, package sections, item IDs, citation form and coverage, citation discipline, reference markers, records, map listing |
 | [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, per-role inline agents, slc compile pipeline, registry validation, comment-preserving config writes |
 | [projects.md](packages/projects.md) | Projects: register/create local git repos, repo state, gh forge binding and work lists, safe removal |
 | [release.md](packages/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene, end-user and live migration smokes |
 | [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, protocol-only rendering, fixture-stream coverage |
-| [scaffold.md](packages/scaffold.md) | Scaffold CLI: target resolution, idempotent seeding, LICENSE emission, language selection, --update template refresh with merge prompt and legacy-generation migration guidance to the spec-structure-migration skill |
+| [scaffold.md](packages/scaffold.md) | Scaffold CLI: target resolution, idempotent seeding, LICENSE emission, language selection, agent instructions, and --update prompts for reconciliation or legacy migration |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |
 | [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader; specs.get/specs.read parse contract for the packages layout (deferred from IR-017, realized in IR-020) |

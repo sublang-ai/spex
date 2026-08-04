@@ -10,13 +10,11 @@ single-bracket citations, and a Goal/Acceptance-criteria intent
 record, modeled on the pre-migration Academy corpus (commit
 954c10e).
 
-Do not "fix" or modernize it in this repo: `spex lint` and the
-migration skill's checker are SUPPOSED to fail on it. The
-migration smoke (`scripts/migration-smoke.mjs`, run as
-`npm run smoke:migration`) copies it into a scratch repo and has
-a real coding agent migrate that copy with the bundled
-spec-structure-migration skill; the fixture staying
-old-generation is the point.
+Do not "fix" or modernize it in this repo: `spex lint` is SUPPOSED
+to fail on it. The migration smoke (`scripts/migration-smoke.mjs`,
+run as `npm run smoke:migration`) copies it into a scratch repo and
+has a real coding agent migrate that copy with the prompt printed by
+the packed CLI; the fixture staying old-generation is the point.
 
 The notice lives here rather than inside `legacy-tree/` so the
 migrating agent never sees an instruction not to modernize the

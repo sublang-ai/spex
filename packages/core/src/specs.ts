@@ -19,7 +19,7 @@ import type {
 } from "./protocol.js";
 
 /** Directories marking a legacy tree: the pre-DR-012 user/dev/test
- * groups and the retired compositions collection (DR-021). */
+ * groups and the compositions collection retired by DR-000. */
 const LEGACY_DIRS = ["user", "dev", "test", "compositions"] as const;
 
 const KNOWN_TOP_LEVEL = new Set([
@@ -33,7 +33,7 @@ const KNOWN_TOP_LEVEL = new Set([
 ]);
 
 /** `### <pack>-<N>` / `#### <pack>-<N>` item heading (meta-11) —
- * lowercase kebab-case, with the pre-DR-021 ALLCAPS form kept so
+ * lowercase kebab-case, with the pre-DR-000 ALLCAPS form kept so
  * old-generation trees still parse, degraded to notices. */
 const ITEM_HEADING =
   /^(#{3,4})\s+((?:[a-z0-9]+(?:-[a-z0-9]+)*|[A-Z][A-Z0-9]*)-\d+)\s*$/;
@@ -508,7 +508,7 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
   if (realInside(specsDir, baseReal) === undefined) return absent;
 
   // Legacy layout — the pre-DR-012 user/dev/test groups or the
-  // retired compositions collection (DR-021): report the flag so the
+  // compositions collection retired by DR-000: report the flag so the
   // UI can render migration guidance with nothing parsed from any
   // collection; records still parse.
   const legacy = LEGACY_DIRS.some((name) => {

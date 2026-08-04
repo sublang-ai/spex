@@ -63,9 +63,9 @@ spec map. Errors fail the command; advisory warnings do not
 ([lint-3](specs/packages/lint.md#lint-3)).
 
 For a spex 0.x tree, `--update` refreshes the law but leaves legacy content
-untouched and points to the judgment-based migration process
-([scaffold-26](specs/packages/scaffold.md#scaffold-26)). Follow the
-[migration guide](docs/spec-migration.md).
+untouched and prints a self-contained migration prompt
+([scaffold-26](specs/packages/scaffold.md#scaffold-26)). Give that prompt to
+any capable AI agent, then review the diff and require `spex lint` to pass.
 
 ## Desktop app
 
