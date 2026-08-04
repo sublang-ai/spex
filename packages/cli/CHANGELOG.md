@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-04
+
 ### Added
 
 - `spex scaffold --update --lang <code>` switches a tree's authoring
@@ -25,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   agents removes only Spex's managed section from deselected targets.
 
 ### Changed
+
+- `spex scaffold --update` no longer assumes English when a tree's
+  authoring language cannot be determined. A `specs/meta.md` that
+  declares no language and matches no bundled version now stops the
+  update before any write, naming the marker line to restore; a missing
+  `specs/meta.md` proceeds as English with a warning. Previously both
+  cases silently replaced a localized tree's framework files with
+  English ones.
 
 - Legacy-generation updates now print one bundled, agent-neutral
   migration prompt instead of directing users to a separately installed
@@ -268,7 +278,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/sublang-ai/spex/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/sublang-ai/spex/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/sublang-ai/spex/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/sublang-ai/spex/compare/v0.2.3...v0.3.0
