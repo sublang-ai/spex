@@ -21,7 +21,7 @@ Migrating a tree is judgment work — items reclassify between External and Inte
 
 1. **Update spex and refresh the templates.**
    Upgrade to a spex release carrying the current scaffold, then run `spex scaffold --update` in the repo.
-   This merges the new `meta.md`, `map.md`, and prompt assets into your tree (local edits are conflict-kept for review) and — when it detects a legacy-generation tree — prints a pointer to this guide.
+   This refreshes framework files (warning when it replaces local changes), refreshes only uncustomized seed files, and prints merge guidance; when it detects a legacy-generation tree, it also points to this guide ([scaffold-11](../specs/packages/scaffold.md#scaffold-11)).
    After this step the *law* in your tree is current while the *content* is still old-generation; that mismatch is what the migration resolves.
 
 2. **Install the skill.**

@@ -9,160 +9,117 @@
 
 *See and act on your specs.*
 
-**Spex** is a spec tool. It builds on a small convention — a
-`specs/` tree of decision records, intent records, and spec
-packages (external behavior, internal behavior, verification) that
-people and AI agents both build against. Spex helps you author that
-tree, read it, and drive work through it:
+Spex makes a project's specifications readable and actionable by both
+people and AI agents:
 
-- **`@sublang/spex`** — a published CLI that scaffolds and lints the
-  `specs/` convention.
-- **The desktop app** — an interactive view of a project's `specs/`
-  tree, plus *playbooks*: workflows that drive AI coding agents to
-  build against those specs.
+- **`@sublang/spex`** scaffolds and lints a shared `specs/` convention.
+- **Spex Desktop** reads those specs and runs AI-agent playbooks against
+  local projects.
 
-Playbooks are workflows around your specs; the specs are the point.
+## CLI
 
-## Specs
-
-The convention Spex scaffolds is shared across the SubLang repos:
-decision records, intent records, and spec packages (one file per
-package with Intent / External Behavior / Internal Behavior /
-Verification sections); behavior that spans packages is itself a
-package citing the peers' External Behavior — there is no
-compositions directory.
+Requires Node.js 20 or later. Install globally with
+`npm install -g @sublang/spex`, or run it directly:
 
 ```sh
-npx @sublang/spex scaffold            # seed specs/ in the current repo
-npx @sublang/spex scaffold --update   # refresh spex-owned templates
-npx @sublang/spex lint                # check structure, IDs, and citations
+npx @sublang/spex scaffold                         # create specs/
+npx @sublang/spex scaffold --agents=claude,codex # choose coding agents
+npx @sublang/spex scaffold --lang zh              # use Chinese templates where available
+npx @sublang/spex scaffold --update               # refresh the scaffold
+npx @sublang/spex scaffold --update --lang zh     # switch a tree to Chinese
+npx @sublang/spex lint                             # check the tree
 ```
 
-Rerunning `scaffold` is safe: authored specs and content outside
-Spex-managed sections stay untouched. It reconciles the managed specs
-section in the instruction files selected for Claude Code
-(`CLAUDE.md`), Codex/Kimi Code/OpenCode (`AGENTS.md`), and Gemini CLI
-(`GEMINI.md`). An interactive run confirms or selects these targets;
-when agents change, decline the confirmation and select again, or pass
-`--agents=claude,gemini` non-interactively.
-`--update` edits more, mechanically
-— it requires a clean `specs/` tree so every change stays reviewable
-in git: it refreshes the spex-owned framework files (`meta.md` and
-the spec-format decision record) and uncustomized starters — warning
-before it replaces locally modified framework content, so the
-previous version stays recoverable in git.
-On a tree from a previous spec generation it touches no legacy
-content: structural migration is judgment work an AI agent does
-following the bundled
-[spec-structure-migration skill](skills/spec-structure-migration/README.md)
-(guide: [docs/spec-migration.md](docs/spec-migration.md)), with
-`spex lint` as the mechanical gate the migrated tree must pass.
-`--lang zh` selects the bundled Chinese templates.
+The scaffold contains decision records, intent records, and one Markdown
+file per spec package. A package states its intent, External Behavior that
+its users—people or software components—may rely on, optional hidden Internal
+Behavior, and Verification. Behavior that emerges across packages is itself
+a package citing its peers; there is no special compositions directory
+([meta-30](specs/meta.md#meta-30), [DR-000](specs/decisions/000-spec-structure-format.md)).
+An initial scaffold also writes an Apache-2.0 `LICENSE` when none exists
+([scaffold-36](specs/packages/scaffold.md#scaffold-36)).
+
+Scaffolding also installs a managed specs section for the selected coding
+agents: `CLAUDE.md` for Claude Code, `AGENTS.md` for Codex, Kimi Code, and
+OpenCode, and `GEMINI.md` for Gemini CLI. Interactive reruns infer the current
+targets and let you confirm or replace them without touching unrelated content
+([scaffold-5](specs/packages/scaffold.md#scaffold-5)).
+
+Plain `scaffold` reruns preserve authored files. `--update` requires a clean
+`specs/` working tree, refreshes Spex-owned framework files—warning when it
+overwrites local changes—refreshes only uncustomized starter files,
+reconciles agent instructions, and prints an agent prompt for judgment work
+([scaffold-11](specs/packages/scaffold.md#scaffold-11)).
+
+In `--update --lang zh`, **`zh` is the target language**: Spex switches the
+bundled files with Chinese templates to Simplified Chinese; other bundled
+files remain in English. It prints a prompt for an AI agent to translate
+project-authored specs rather than machine-translating them. If the tree
+already declares `zh`, the command is an ordinary update
+([scaffold-39](specs/packages/scaffold.md#scaffold-39)).
+
+`spex lint` checks layout, package sections, IDs, citations, records, and the
+spec map. Errors fail the command; advisory warnings do not
+([lint-3](specs/packages/lint.md#lint-3)).
+
+For a spex 0.x tree, `--update` refreshes the law but leaves legacy content
+untouched and points to the judgment-based migration process
+([scaffold-26](specs/packages/scaffold.md#scaffold-26)). Follow the
+[migration guide](docs/spec-migration.md).
 
 ## Desktop app
 
-The app opens a project's `specs/` tree as an interactive map —
-packages, items, group filters, and jump-to citation links — and
-runs playbooks against it. You are the *Boss*: you talk to a
-*Captain* that routes work to *player* coding agents, and every
-session streams live: transcripts, tool use, cost, and the
-questions that need your answer.
-(The built-in spec view reads the current packages layout —
-compositions-era trees still render — while a pre-0.4.0
-three-folder tree shows migration guidance instead.)
+Spex Desktop is a project workspace for reading specs and supervising
+playbook-driven development:
 
-### Install
+- a searchable package outline renders complete items, inbound and outbound
+  citations, record links, and in-view citation jumps
+  ([spec-view-1](specs/packages/spec-view.md#spec-view-1),
+  [spec-view-6](specs/packages/spec-view.md#spec-view-6));
+- live sessions show the Captain, streaming read-only player transcripts,
+  tool use, cost, questions needing the Boss, queued replies, and aborts
+  ([run-view-1](specs/packages/run-view.md#run-view-1),
+  [run-view-8](specs/packages/run-view.md#run-view-8));
+- the Dashboard prioritizes attention across projects, Playbooks can be
+  browsed or compiled, and each agent is configured inline with its adapter,
+  model, effort, and permissions
+  ([dashboard-1](specs/packages/dashboard.md#dashboard-1),
+  [playbook-library-5](specs/packages/playbook-library.md#playbook-library-5),
+  [run-view-32](specs/packages/run-view.md#run-view-32)).
 
-No packaged release yet — run it from source. Packaged builds
-(macOS Apple Silicon first) will land on
-[GitHub Releases](https://github.com/sublang-ai/spex/releases) under
-`app-v*` tags.
-
-You need Node.js >= 20.6, and a signed-in
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
-CLI (or `ANTHROPIC_API_KEY` in your shell profile). The GitHub
-issue/PR panels also use a locally-authenticated
-[`gh`](https://cli.github.com) CLI.
+Run the desktop app from source:
 
 ```sh
 git clone https://github.com/sublang-ai/spex.git
 cd spex
 npm ci
 npm run build
-npm run rebuild:electron -w apps/desktop   # native sqlite for Electron's ABI
+npm run rebuild:electron -w apps/desktop
 npm start -w apps/desktop
 ```
 
-### Surfaces
+Real playbook runs require a ready coding-agent adapter. GitHub issue and PR
+panels use an authenticated `gh` CLI. Compiling new playbooks requires
+[`slc`](https://github.com/sublang-ai/slc) and its supported Node.js version.
+Packaged macOS builds are published on
+[GitHub Releases](https://github.com/sublang-ai/spex/releases) when available.
 
-| Surface | What it does |
+## Repository
+
+| Path | Purpose |
 | --- | --- |
-| **Workspace** | Project-scoped, with a Cmd/Ctrl+P project palette and per-project tabs. **Specs** is the interactive reader for the project's `specs/` tree; **Repo** shows branch/dirty/ahead-behind plus GitHub issues & PRs; session tabs are the run view — Captain pane, read-only streaming player transcripts, and the Boss composer with queueing, abort, and a banner when a player asks |
-| **Dashboard** | Cross-project attention queue (questions, failures, idle sessions), running sessions, issues to do / PRs to review, usage rollups |
-| **Playbooks** | Configured workflows with role→profile mapping, plus the compile flow: prose → [`slc`](https://github.com/sublang-ai/slc) → a registry bundle registered into the shared config |
-| **Settings** | Profiles (adapter, model, effort, permissions) with readiness checks, captain selection, notifications, theme — comment-preserving edits to the shared config |
+| [`specs/`](specs) | Source of truth for this repository; start at the [spec map](specs/map.md) |
+| [`scaffold/`](scaffold), [`packages/cli`](packages/cli) | Shipped templates and the npm CLI |
+| [`packages/core`](packages/core), [`packages/ui`](packages/ui) | Headless service and protocol-only web UI |
+| [`apps/desktop`](apps/desktop) | Electron shell |
+| [`demo/`](demo) | Academy example and spec-package case study |
 
-Configuration lives in
-`${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml`,
-shared with the [`playbook`](https://github.com/sublang-ai/playbook)
-CLI: Spex validates it with the same rules as the `playbook`
-launcher, so the file stays portable between the app and the CLI.
-Spex is the GUI successor of
-[cligent](https://github.com/sublang-ai/cligent)'s `tmux-play` —
-the same headless runtime drives both.
+For development, run `npm ci`, `npm run build`, and `npm test`. Maintainers
+also use the [release smoke checklist](docs/release-smoke.md).
 
-## Monorepo layout
+Contributions are welcome through
+[issues](https://github.com/sublang-ai/spex/issues),
+[pull requests](https://github.com/sublang-ai/spex/pulls), and
+[Discord](https://discord.gg/XxTPjNqy9g).
 
-| Path | What | Distribution |
-| --- | --- | --- |
-| [`specs/`](specs) | Specifications for everything below | — |
-| [`packages/cli`](packages/cli) | `@sublang/spex` — specs scaffold + lint CLI | [npm](https://www.npmjs.com/package/@sublang/spex) (`v*` tags) |
-| [`scaffold/`](scaffold) | Template bundle the CLI ships (staged into `packages/cli` at build) | with the CLI |
-| [`packages/core`](packages/core) | Headless core service: config, sessions, spec parsing, embedded playbook runtime, SQLite store, WebSocket protocol | with the app |
-| [`packages/ui`](packages/ui) | Web UI (React + Vite + Tailwind) speaking only the protocol | with the app |
-| [`apps/desktop`](apps/desktop) | Electron shell: core in-process, sandboxed renderer, notifications, dock badge | GitHub Releases (`app-v*` tags) |
-
-The architecture is recorded as decision records DR-002 onward;
-start at the [spec map](specs/map.md). The core/UI split is
-web-first: a cloud deployment swaps only the Electron shell.
-
-## Develop
-
-```sh
-npm ci
-npm run build
-npm test
-```
-
-Run the desktop app as shown under [Install](#install). Switch the
-native sqlite module back before running core tests on system Node:
-
-```sh
-npm run rebuild:node -w apps/desktop
-```
-
-UI development against a scripted core (no credentials, streams a
-fake run with a seeded `specs/` tree):
-
-```sh
-npm run dev:fake -w packages/core   # ws://127.0.0.1:8137
-npm run dev -w packages/ui          # Vite dev server
-```
-
-Compiling playbooks from the Playbooks surface requires a system
-Node >= 23.6 and the [`slc`](https://github.com/sublang-ai/slc) CLI,
-resolved from `SPEX_SLC` or `PATH`; compilation drives a
-credentialed coding agent.
-
-## Contributing
-
-We welcome contributions of all kinds.
-
-- 🌟 Star our repo if you find Spex useful.
-- [Open an issue](https://github.com/sublang-ai/spex/issues) for bugs or feature requests.
-- [Open a PR](https://github.com/sublang-ai/spex/pulls) for fixes or improvements.
-- Discuss on [Discord](https://discord.gg/XxTPjNqy9g) for support or new ideas.
-
-## License
-
-[Apache-2.0](LICENSE)
+Licensed under [Apache-2.0](LICENSE).

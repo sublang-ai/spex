@@ -53,6 +53,10 @@ Where the file has comment syntax, is not excluded by the licensing scope [[lice
   // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
   ```
 
+#### licensing-7
+
+Where a file's first comment block already contains `SPDX-FileCopyrightText` or `SPDX-License-Identifier` from an upstream source, when preparing the file for inclusion in the repo, those existing SPDX lines shall be preserved unmodified, even when the project root carries a different license — each preserved upstream line satisfying its respective copyright-header requirement [[licensing-1](#licensing-1)] or license-header requirement [[licensing-2](#licensing-2)], with any missing required line supplied from upstream rather than the project license.
+
 ## Verification
 
 ### Header Checks
@@ -64,3 +68,7 @@ Where the file has comment syntax and is not excluded by the licensing scope [[l
 #### licensing-4
 
 Where the file has comment syntax, is not excluded by the licensing scope [[licensing-5](#licensing-5)], and a license file matching the detector patterns [[licensing-6](#licensing-6)] exists at project root, while git-tracked or `git add`-able, when checking its first comment block after any shebang, the file shall contain `SPDX-License-Identifier` [[licensing-2](#licensing-2)].
+
+#### licensing-8
+
+Where a file already contains upstream SPDX lines and the project license differs, when inclusion preparation runs, the verification shall assert byte-for-byte preservation of every upstream line and use of upstream rather than project-license data for any missing required line [[licensing-7](#licensing-7)].

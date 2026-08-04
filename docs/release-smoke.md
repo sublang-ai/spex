@@ -50,7 +50,7 @@ Launch: `npm run rebuild:electron -w apps/desktop && npm start -w apps/desktop`.
 | Playbooks surface | `/code` and `/discuss` pipelines show source, gears, and state machine; example card stages all four artifacts; prefill fills the compile form (roles pre-mapped) |
 | (The live run is automated by `npm run smoke:desktop`; spot-check the dock badge and notification banners during it) | Badge counts parked/failed sessions; banners appear per prefs |
 | Dashboard | The run's usage appears; attention queue lists any parked/aborted turn |
-| Settings | Profile edit round-trips (`effort` field); config stays valid |
+| Settings | A Captain agent edit round-trips (adapter, model, effort, permissions); config stays valid |
 | Dark theme (OS toggle) | Sidebar mark, panes, and spec view stay legible |
 
 ## 3. Manual pass — packaging

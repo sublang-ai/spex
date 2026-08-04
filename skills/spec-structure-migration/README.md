@@ -44,7 +44,7 @@ Claude Code discovers the skill by its frontmatter; invoke it by asking for a sp
 ## Run
 
 1. Start from a clean working tree on a fresh branch.
-2. Refresh the spec law first so the agent migrates *to* the current generation: `spex scaffold --update` (brings the new `meta.md`, `map.md`, and prompts; template conflicts are kept for review).
+2. Refresh the spec law first so the agent migrates *to* the current generation: `spex scaffold --update` (refreshes framework files, warns when it replaces local changes, keeps customized seeds, and prints merge guidance).
 3. Kick off the agent, for example:
 
    > Migrate every spec tree in this repo to the current spec generation using the spec-structure-migration skill. Work tree by tree, commit in reviewable steps, and loop on the checker and `spex lint` until both are clean. Flag any judgment call you are unsure of instead of guessing.
