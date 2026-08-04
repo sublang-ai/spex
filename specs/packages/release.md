@@ -99,7 +99,9 @@ The published package shall include a `README.md` that documents what the tool d
 
 #### release-15
 
-When preparing a release tag, the developer/agent shall verify that all tests pass and all changes are committed and pushed to `main`.
+When preparing a release tag, the developer/agent shall verify that all changes are committed and pushed to `main` and that the CI workflow concluded `success` for the commit to be tagged:
+
+- a local test run is not that verification: CI covers platforms and versions a developer's machine does not, and [[release-18](#release-18)] fails the release on a red commit, so tagging one only defers the failure.
 
 #### release-16
 
