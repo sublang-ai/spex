@@ -134,7 +134,7 @@ Where `--update` switches the tree's authoring language, the CLI shall write the
 
 - both languages' bundled versions count as pristine for the run, so a file bundled in the source language converts rather than reporting as user-modified ([[scaffold-14](#scaffold-14)], [[scaffold-23](#scaffold-23)]);
 - files with no overlay for the target language stay at their English bundled version ([[scaffold-31](#scaffold-31)]);
-- a customized file is kept, as in any update;
+- a customized seed is kept and a customized framework file replaced, as in any update ([[scaffold-11](#scaffold-11)]);
 - the run reports the switch and prints `scaffold/language-switch-prompt.md`, the agent prompt for translating the project's own specs, since translation is judgment work rather than CLI work;
 - `--lang` also settles the language of a tree whose own declaration cannot ([[scaffold-53](#scaffold-53)]), so neither the stop nor its warning applies.
 

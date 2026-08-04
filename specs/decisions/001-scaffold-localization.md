@@ -24,8 +24,8 @@ Accepted
 - In this first cut, `zh` means Simplified Chinese (`zh-Hans` [[2]]).
 - Unsupported codes abort non-zero and list the supported codes.
 - The authoring language is set by the first scaffold. In create mode, absent `specs/meta.md` uses the explicit `--lang`, or `en` when omitted. An existing `specs/meta.md` makes its meta-27 declaration active, or `en` when the file predates meta-27. An explicit `--lang` that mismatches the active language aborts non-zero rather than silently skipping the existing file under [[scaffold-4](../packages/scaffold.md#scaffold-4)].
-- Switching an existing scaffold's language is out of scope and reserved for a future migration.
-- `spex scaffold --update` rejects `--lang` and reads the language from the existing meta-27 declaration (see [Language as a spec item](#language-as-a-spec-item)).
+- Switching an existing scaffold's language was out of scope in this first cut; `spex scaffold --update --lang <code>` now performs it, rewriting the bundled specs in the target language and leaving the project's own specs to a printed translation prompt [[scaffold-39](../packages/scaffold.md#scaffold-39)].
+- `spex scaffold --update` without `--lang` reads the language from the existing meta-27 declaration (see [Language as a spec item](#language-as-a-spec-item)).
 
 ### Localization model
 

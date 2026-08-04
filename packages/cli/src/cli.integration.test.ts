@@ -473,6 +473,44 @@ describe("CLI integration", () => {
     });
   }
 
+  // scaffold-39: a tree that declares no language could hold any
+  // bundled language, so all of them count as convertible — otherwise
+  // the switch anglicizes meta.md and keeps a Chinese map.md beside it.
+  it("update --lang converts a tree whose declaration was lost", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      run(["scaffold", "--lang", "zh"], { cwd: dir });
+      gitCommit(dir, "initial zh specs");
+
+      const meta = join(dir, "specs", "meta.md");
+      writeFileSync(
+        meta,
+        readFileSync(meta, "utf-8").replace(
+          /^Authoring language: zh$/m,
+          "Authoring language",
+        ),
+      );
+      gitCommit(dir, "lose the declaration");
+
+      const result = run(["scaffold", "--update", "--lang", "en"], {
+        cwd: dir,
+      });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /Authoring language set to en/);
+      assert.match(result.stdout, /Translate this project/);
+      for (const relPath of ["specs/meta.md", "specs/map.md"]) {
+        assert.deepEqual(
+          readFileSync(join(dir, relPath)),
+          readFileSync(bundledPath(relPath)),
+          `${relPath} should be the English bundled version`,
+        );
+      }
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   it("update --lang matching the declared language is an ordinary update", () => {
     const dir = makeTmp();
     try {

@@ -58,7 +58,7 @@ type RefreshPristineSeedsOptions = {
    * the new one, so a seed pristine in the old language is a
    * convertible bundled file, not a user customization.
    */
-  alsoRecognize?: ScaffoldLanguage;
+  alsoRecognize?: readonly ScaffoldLanguage[];
   /**
    * Replacement indicator text for user-modified seeds that this run
    * transformed in place (e.g. a restructured map.md), so one line
@@ -336,11 +336,11 @@ export function isLegacyPristine(
 function getRecognizedFileHistory(
   relPath: string,
   language: ScaffoldLanguage,
-  alsoRecognize?: ScaffoldLanguage,
+  alsoRecognize: readonly ScaffoldLanguage[] = [],
 ): string[] {
   const history = new Set(getFileHistory(relPath));
-  for (const lang of [language, alsoRecognize]) {
-    if (lang === undefined || lang === "en") continue;
+  for (const lang of [language, ...alsoRecognize]) {
+    if (lang === "en") continue;
     for (const hash of getFileHistory(getOverlayRelPath(lang, relPath))) {
       history.add(hash);
     }
@@ -368,7 +368,7 @@ export function isPristine(
   basePath: string,
   relPath: string,
   language: ScaffoldLanguage = "en",
-  alsoRecognize?: ScaffoldLanguage,
+  alsoRecognize: readonly ScaffoldLanguage[] = [],
 ): PristineState {
   const target = join(basePath, relPath);
   if (!existsSync(target)) return "missing";
@@ -385,7 +385,7 @@ export function isPristine(
 export function overwriteFrameworkSpecFiles(
   basePath: string,
   language: ScaffoldLanguage = "en",
-  alsoRecognize?: ScaffoldLanguage,
+  alsoRecognize: readonly ScaffoldLanguage[] = [],
 ): string[] {
   const replacedUserModified: string[] = [];
   for (const relPath of FRAMEWORK_FILES) {

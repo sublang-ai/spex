@@ -17,6 +17,7 @@ import {
   copyTemplates,
   formatSupportedLanguages,
   getFileHistory,
+  SUPPORTED_LANGUAGES,
   isLegacyPristine,
   isPristine,
   isSupportedLanguage,
@@ -333,16 +334,34 @@ function updateScaffoldTemplates(
         "from its overlay.",
     );
   }
-  const current = active.kind === "undeterminable" ? "en" : active.language;
-  const language = requested ?? current;
+  // The declaration, not the fallback: an undeclared tree must not
+  // look like an English one, or --lang en reads as "same language"
+  // and the switch never runs.
+  const declared = active.kind === "undeterminable" ? undefined : active.language;
+  const language = requested ?? declared ?? "en";
   // A switch reads a tree written in one language and writes another,
   // so both languages' bundled versions count as pristine: without
   // that, the old language's files read as user customizations and
   // seeds would be kept rather than converted.
+  // A switch reads a tree written in one language and writes another.
+  // When the tree still declares its language, that one language is
+  // enough; when it declares none, any bundled language could be in
+  // the tree, so all of them count — otherwise the undeclared tree's
+  // seeds read as customizations and are kept in the old language.
   const switchingFrom =
-    requested !== undefined && active.kind !== "undeterminable" && requested !== current
-      ? current
-      : undefined;
+    requested === undefined
+      ? undefined
+      : declared === undefined
+        ? "unknown"
+        : requested === declared
+          ? undefined
+          : declared;
+  const alsoRecognize: readonly ScaffoldLanguage[] =
+    switchingFrom === undefined
+      ? []
+      : switchingFrom === "unknown"
+        ? SUPPORTED_LANGUAGES
+        : [switchingFrom];
 
   // Sample legacy-generation markers before the framework overwrite
   // replaces specs/meta.md (SCAF-26).
@@ -352,9 +371,9 @@ function updateScaffoldTemplates(
   const replacedFramework = overwriteFrameworkSpecFiles(
     basePath,
     language,
-    switchingFrom,
+    alsoRecognize,
   );
-  refreshPristineSeeds(basePath, { language, alsoRecognize: switchingFrom });
+  refreshPristineSeeds(basePath, { language, alsoRecognize });
   reconcileAgentSpecs(basePath, agentTargets);
 
   warnReplacedFrameworkFiles(replacedFramework);
@@ -376,7 +395,9 @@ function updateScaffoldTemplates(
   if (switchingFrom !== undefined) {
     console.log("");
     console.log(
-      `Authoring language switched from ${switchingFrom} to ${language}: bundled specs are now ${language}.`,
+      switchingFrom === "unknown"
+        ? `Authoring language set to ${language}: bundled specs are now ${language}.`
+        : `Authoring language switched from ${switchingFrom} to ${language}: bundled specs are now ${language}.`,
     );
     console.log(
       "Existing project specs stay in their original language — translating them is agent work.",
