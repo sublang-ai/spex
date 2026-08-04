@@ -69,7 +69,7 @@ Localized for `zh` in the first cut:
 - meta-27 is a new framework item: spec content added for a project shall be authored in the language it declares; bundled instructions may remain English.
 - `--update` reads the same item to select localized templates, keeping the language self-described in `meta.md` with no separate marker or configuration file.
 - Agents read `meta.md` — reinforced by the `agent-specs.txt` pointer and `map.md` — before authoring: `--lang zh` writes a localized `meta.md` carrying meta-27, so new specs are authored in Chinese.
-- Before overwriting framework files, `--update` reads the existing meta-27 declaration, falls back to `en` when no declaration is present (a missing or pre-meta-27 `meta.md`), and rejects `--lang`; deliberate language switching is out of scope for the first cut.
+- Before overwriting framework files, `--update` resolves the language from the existing meta-27 declaration, or from `--lang` when given — which switches the tree [[scaffold-39](../packages/scaffold.md#scaffold-39)] — and stops rather than guessing where an existing `meta.md` declares none [[scaffold-53](../packages/scaffold.md#scaffold-53)].
 
 ### Overlay form and drift guard
 
@@ -92,7 +92,7 @@ Localized for `zh` in the first cut:
 - New languages are added by adding an `i18n/<lang>/` overlay.
 - Full overlays duplicate canonical content, so the drift guard enforces source freshness per translated item or file; region injection was set aside for whole-file simplicity.
 - `--update` must resolve the language before overwriting framework files.
-- The authoring language is immutable after the first scaffold in the first cut; a repo that chose the wrong language waits for the future migration path, and mismatched `--lang` on an existing scaffold errors rather than silently diverging.
+- The authoring language is set by the first scaffold and changed afterwards only by `--update --lang` [[scaffold-39](../packages/scaffold.md#scaffold-39)]; on the create path a mismatched `--lang` still errors rather than silently diverging.
 - The translated set expands only when another target-language form is necessary to author valid specs.
 
 ## References
