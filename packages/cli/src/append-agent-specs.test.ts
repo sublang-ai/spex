@@ -312,6 +312,30 @@ describe("reconcileAgentSpecs", () => {
     }
   });
 
+  // The managed section's line endings are the bundle's, not the
+  // file's: git checks agent-specs.txt out with CRLF on Windows. The
+  // seam left behind must follow the content that survives, or
+  // removing the section rewrites the user's own line endings.
+  it("keeps surviving line endings when the removed section differs", () => {
+    const dir = makeTmp();
+    try {
+      const crlfSection = getExpectedContent().replace(/\r?\n/g, "\r\n");
+      writeFileSync(
+        join(dir, "CLAUDE.md"),
+        `# Claude\n\n${crlfSection}\n## Project Notes\n\nKeep this.\n`,
+      );
+
+      reconcileAgentSpecs(dir, ["GEMINI.md"]);
+
+      assert.equal(
+        readFileSync(join(dir, "CLAUDE.md"), "utf-8"),
+        "# Claude\n\n## Project Notes\n\nKeep this.\n",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   it("deletes a deselected file containing only the managed section", () => {
     const dir = makeTmp();
     try {

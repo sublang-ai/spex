@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.0] - 2026-08-04
 
+### Fixed
+
+- Removing the managed specs section no longer rewrites the rest of a
+  file's line endings. The seam now follows the surviving content
+  rather than the whole file, so a section carrying CRLF cannot push
+  CRLF into an otherwise LF file.
+
 ### Added
 
 - `spex scaffold --update --lang <code>` switches a tree's authoring

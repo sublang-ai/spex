@@ -246,7 +246,12 @@ function removeManagedSection(filePath: string): "removed" | null {
     return "removed";
   }
 
-  const lineEnding = existing.includes("\r\n") ? "\r\n" : "\n";
+  // Infer the seam from the content that survives, never from the
+  // whole file: the managed section carries the bundle's line endings
+  // (CRLF where git checked agent-specs.txt out on Windows), and a
+  // section being deleted must not impose them on what remains.
+  const surviving = before !== "" ? before : after;
+  const lineEnding = surviving.includes("\r\n") ? "\r\n" : "\n";
   const updated =
     before !== "" && after !== ""
       ? `${before}${lineEnding}${lineEnding}${after}`
