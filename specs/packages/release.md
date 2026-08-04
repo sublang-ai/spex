@@ -115,7 +115,9 @@ When preparing a release tag, the developer/agent shall run the automated smoke 
 
 #### release-21
 
-When preparing a release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the visuals and packaging pass automation cannot see — with a failing step blocking the tag until resolved.
+When preparing an app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the desktop visuals and packaging automation cannot see — with a failing step blocking the tag until resolved:
+
+- a CLI release tag is not gated on it: the checklist's only CLI step is the tarball inspection that [[release-17](#release-17)] already requires and [[release-23](#release-23)] verifies.
 
 #### release-22
 

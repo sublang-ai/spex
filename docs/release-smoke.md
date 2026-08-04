@@ -3,9 +3,11 @@
 
 # Release Smoke Checklist
 
-Run before tagging any release (RELEASE-20/21). The automated suite
-comes first; the manual passes exercise what automation cannot —
-real agents, packaging, and look-and-feel.
+Run before tagging an app release (release-20, release-21). The
+automated suite comes first; the manual passes exercise what
+automation cannot — real agents, packaging, and look-and-feel. A CLI
+release runs `npm run smoke` (release-20) and the live migration
+smoke (release-24), not this checklist.
 
 ## 1. Automated suite (hermetic — the tagging gate)
 
@@ -33,7 +35,7 @@ critical path over the app's own socket: seeded config valid →
 Academy seeds and parses → session starts → a minimal `/code` turn
 dispatches → the coder's live output is observed (real agents) →
 abort → clean teardown, with the ABI flipped and restored by the
-driver (RELEASE-22).
+driver (release-22).
 Needs a locally signed-in Claude adapter; budget ~5–8 minutes.
 Provider-side flakes may be retried or waived with the reason
 recorded beside the tag; app-side failures block.
@@ -63,9 +65,9 @@ npm run package -w apps/desktop
 | --- | --- |
 | Open the zip in `apps/desktop/release/` | App bundle carries the sunset-rabbit icon |
 | Launch the packaged app | Boots to Captain home; seeding and Specs tab work as in the dev pass |
-| `npm pack --dry-run -w packages/cli` | Tarball lists only production files (RELEASE-17) |
+| `npm pack --dry-run -w packages/cli` | Tarball lists only production files (release-17) |
 
 ## 4. Record
 
 Note the smoke run (date, commit, deviations) in the release PR or
-tag message. Any red step blocks the tag (RELEASE-21).
+tag message. Any red step blocks the tag (release-21).
