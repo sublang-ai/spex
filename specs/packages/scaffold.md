@@ -313,6 +313,7 @@ Where `reconcileAgentSpecs()` is called with selected targets, it shall read `sc
 
 - detection parses each file as Markdown and matches the H2 heading `Specs (Source of Truth)` case-sensitively, so a lookalike inside a code fence neither starts the section nor ends it;
 - replacement or removal spans from that heading to the next H2 heading or end of file, preserving all content outside the managed section;
+- removal rejoins the survivors with the line-ending style the surviving content evidences, never the removed section's;
 - when a selected file has no matching heading, the managed content is appended.
 
 ## Verification
@@ -386,7 +387,7 @@ Where localized `meta.md` or `map.md` overlays ship, the test suite shall enforc
 Where agent-instruction reconciliation is exercised ([[scaffold-5](#scaffold-5)]), the test suite shall cover the fresh default, default-yes confirmation, an explicit or interactive switch, an absent selected target during `--update`, and the shared `AGENTS.md` target:
 
 - selected files are created, appended, refreshed, or skipped as applicable;
-- deselection removes only the parsed managed section ([[scaffold-10](#scaffold-10)]), preserving other content and deleting a managed-only file;
+- deselection removes only the parsed managed section ([[scaffold-10](#scaffold-10)]), preserving other content and its line-ending style in both the CRLF and LF directions, and deleting a managed-only file;
 - an invalid selection or canceled prompt leaves the target tree unchanged.
 
 #### scaffold-55

@@ -337,6 +337,49 @@ describe("reconcileAgentSpecs", () => {
     }
   });
 
+  // The mirror direction: a one-line prefix carries no line-ending
+  // evidence, so the seam must follow the CRLF suffix instead of
+  // defaulting to LF.
+  it("keeps a CRLF file's endings when the prefix is one line", () => {
+    const dir = makeTmp();
+    try {
+      writeFileSync(
+        join(dir, "CLAUDE.md"),
+        `# Claude\r\n\r\n${getExpectedContent()}\r\n## Project Notes\r\n\r\nKeep this.\r\n`,
+      );
+
+      reconcileAgentSpecs(dir, ["GEMINI.md"]);
+
+      assert.equal(
+        readFileSync(join(dir, "CLAUDE.md"), "utf-8"),
+        "# Claude\r\n\r\n## Project Notes\r\n\r\nKeep this.\r\n",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // With a one-line survivor on one side only, the sole evidence left
+  // is the survivor's own trimmed-off line terminator.
+  it("keeps a one-line CRLF survivor's own terminator", () => {
+    const dir = makeTmp();
+    try {
+      writeFileSync(
+        join(dir, "CLAUDE.md"),
+        `# Claude\r\n\r\n${getExpectedContent()}`,
+      );
+
+      reconcileAgentSpecs(dir, ["GEMINI.md"]);
+
+      assert.equal(
+        readFileSync(join(dir, "CLAUDE.md"), "utf-8"),
+        "# Claude\r\n",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   it("deletes a deselected file containing only the managed section", () => {
     const dir = makeTmp();
     try {
