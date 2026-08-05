@@ -3,6 +3,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import {
   mkdtempSync,
   realpathSync,
@@ -452,5 +453,66 @@ describe("agent target selection", () => {
     } finally {
       rmSync(dir, { recursive: true });
     }
+  });
+});
+
+/**
+ * Run the real terminalInteraction.ask in a child process and reply on
+ * its stdin only after the prompt appears on stderr, so the reader is
+ * observed waiting for input rather than consuming a pre-buffered
+ * reply. Passing null ends stdin at the prompt instead of replying.
+ */
+function askInChild(
+  reply: string | null,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const moduleUrl = new URL("./append-agent-specs.js", import.meta.url).href;
+  const script =
+    `const { terminalInteraction } = await import(${JSON.stringify(moduleUrl)});\n` +
+    `const answer = terminalInteraction.ask("confirm? ");\n` +
+    `process.stdout.write(JSON.stringify(` +
+    `{ answer, interactive: terminalInteraction.interactive }));`;
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", script]);
+    let stdout = "";
+    let stderr = "";
+    let replied = false;
+    child.stdin.on("error", () => {});
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+      if (replied || !stderr.includes("confirm? ")) return;
+      replied = true;
+      setTimeout(() => {
+        if (reply === null) child.stdin.end();
+        else child.stdin.write(reply);
+      }, 50);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
+describe("terminal interaction", () => {
+  // scaffold-55: the real reader waits for a reply that arrives only
+  // after the prompt is shown.
+  it("delivers a reply given after the prompt is shown", async () => {
+    const result = await askInChild("y\n");
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      answer: "y",
+      interactive: false,
+    });
+  });
+
+  // scaffold-55: end of input at the prompt cancels instead of crashing.
+  it("returns null when input ends at the prompt", async () => {
+    const result = await askInChild(null);
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      answer: null,
+      interactive: false,
+    });
   });
 });

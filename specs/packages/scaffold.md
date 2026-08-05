@@ -389,6 +389,12 @@ Where agent-instruction reconciliation is exercised ([[scaffold-5](#scaffold-5)]
 - deselection removes only the parsed managed section ([[scaffold-10](#scaffold-10)]), preserving other content and deleting a managed-only file;
 - an invalid selection or canceled prompt leaves the target tree unchanged.
 
+#### scaffold-55
+
+Where interactive selection is exercised ([[scaffold-5](#scaffold-5)]), the test suite shall drive a prompt through the production terminal reader with the reply supplied only after the prompt is shown, asserting both the delivered reply and the canceled end-of-input outcome:
+
+- A reply buffered before the reader starts cannot discharge this item: a reader that fails while waiting for input is the regression it guards.
+
 ## References
 
 [1]: https://www.apache.org/licenses/LICENSE-2.0.txt "Apache License, Version 2.0"

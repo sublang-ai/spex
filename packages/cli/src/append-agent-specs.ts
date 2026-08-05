@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { isatty } from "node:tty";
 import type { Heading } from "mdast";
 import { getScaffoldDir } from "./bundled-scaffold.js";
 import { headingText, parseMarkdown, startOffset } from "./markdown.js";
@@ -44,14 +45,31 @@ export interface AgentInteraction {
   ask(prompt: string): string | null;
 }
 
-const terminalInteraction: AgentInteraction = {
-  interactive: Boolean(process.stdin.isTTY && process.stderr.isTTY),
+// fd-level probes and a raw fd read, never process.stdin: materializing
+// the stdin stream (even just reading .isTTY) switches fd 0 to
+// non-blocking behind this reader's back.
+export const terminalInteraction: AgentInteraction = {
+  interactive: isatty(0) && isatty(2),
   ask(prompt: string): string | null {
     process.stderr.write(prompt);
     const buffer = Buffer.alloc(1024);
-    const bytes = readSync(0, buffer, 0, buffer.length, null);
-    if (bytes === 0) return null;
-    return buffer.toString("utf-8", 0, bytes).trim();
+    for (;;) {
+      let bytes: number;
+      try {
+        bytes = readSync(0, buffer, 0, buffer.length, null);
+      } catch (error) {
+        // A non-blocking fd 0 — inherited from the spawning process, or
+        // a side effect of an import materializing process.stdin —
+        // reports EAGAIN instead of waiting for the reply.
+        if ((error as NodeJS.ErrnoException).code === "EAGAIN") {
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+          continue;
+        }
+        throw error;
+      }
+      if (bytes === 0) return null;
+      return buffer.toString("utf-8", 0, bytes).trim();
+    }
   },
 };
 
