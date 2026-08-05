@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-08-05
+
+### Fixed
+
+- Interactive agent selection no longer fails with `EAGAIN` in a real
+  terminal. The fresh-scaffold selector and the `--update`
+  confirmation both waited on a raw file-descriptor read that any
+  touch of Node's stdin stream — or a spawning parent — could switch
+  to non-blocking; the reader now probes the terminal at the
+  descriptor level and tolerates a non-blocking descriptor.
+
+- Removing the managed specs section now keeps a CRLF file's line
+  endings when the content surviving above the section is a single
+  line, completing the 2.1.0 line-ending fix in the other direction.
+
 ## [2.1.0] - 2026-08-04
 
 ### Fixed
@@ -285,7 +300,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v2.1.1...HEAD
+[2.1.1]: https://github.com/sublang-ai/spex/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/sublang-ai/spex/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/sublang-ai/spex/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/sublang-ai/spex/compare/v0.3.0...v1.0.0
