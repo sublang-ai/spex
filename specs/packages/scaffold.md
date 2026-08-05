@@ -392,7 +392,7 @@ Where agent-instruction reconciliation is exercised ([[scaffold-5](#scaffold-5)]
 
 #### scaffold-55
 
-Where interactive selection is exercised ([[scaffold-5](#scaffold-5)]), the test suite shall drive a prompt through the production terminal reader with the reply supplied only after the prompt is shown, asserting both the delivered reply and the canceled end-of-input outcome:
+Where interactive selection is exercised ([[scaffold-5](#scaffold-5)]), the test suite shall drive the selection through the production terminal reader with the reply supplied only after the prompt is shown, asserting the targets the reply resolves to and the canceled end-of-input outcome:
 
 - A reply buffered before the reader starts cannot discharge this item: a reader that fails while waiting for input is the regression it guards.
 

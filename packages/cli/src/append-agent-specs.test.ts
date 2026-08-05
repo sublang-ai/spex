@@ -500,20 +500,25 @@ describe("agent target selection", () => {
 });
 
 /**
- * Run the real terminalInteraction.ask in a child process and reply on
- * its stdin only after the prompt appears on stderr, so the reader is
- * observed waiting for input rather than consuming a pre-buffered
- * reply. Passing null ends stdin at the prompt instead of replying.
+ * Drive resolveAgentTargets in a child process with the production
+ * terminal reader, replying on stdin only after the selector prompt
+ * appears on stderr — the reader is observed waiting for input rather
+ * than consuming a pre-buffered reply. interactive is forced through
+ * the seam because a piped child has no terminal to detect; the
+ * prompts, the reader, and the reply parsing are the production ones.
+ * Passing null ends stdin at the prompt instead of replying.
  */
-function askInChild(
+function selectInChild(
   reply: string | null,
+  dir: string,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const moduleUrl = new URL("./append-agent-specs.js", import.meta.url).href;
   const script =
-    `const { terminalInteraction } = await import(${JSON.stringify(moduleUrl)});\n` +
-    `const answer = terminalInteraction.ask("confirm? ");\n` +
+    `const mod = await import(${JSON.stringify(moduleUrl)});\n` +
+    `const targets = mod.resolveAgentTargets(${JSON.stringify(dir)}, undefined, ` +
+    `{ interactive: true, ask: mod.terminalInteraction.ask });\n` +
     `process.stdout.write(JSON.stringify(` +
-    `{ answer, interactive: terminalInteraction.interactive }));`;
+    `{ targets, detected: mod.terminalInteraction.interactive }));`;
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--input-type=module", "-e", script]);
     let stdout = "";
@@ -525,7 +530,7 @@ function askInChild(
     });
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
-      if (replied || !stderr.includes("confirm? ")) return;
+      if (replied || !stderr.includes("[all]: ")) return;
       replied = true;
       setTimeout(() => {
         if (reply === null) child.stdin.end();
@@ -538,24 +543,34 @@ function askInChild(
 }
 
 describe("terminal interaction", () => {
-  // scaffold-55: the real reader waits for a reply that arrives only
-  // after the prompt is shown.
-  it("delivers a reply given after the prompt is shown", async () => {
-    const result = await askInChild("y\n");
-    assert.equal(result.code, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout), {
-      answer: "y",
-      interactive: false,
-    });
+  // scaffold-55: the fresh-target selector runs through the production
+  // reader, which waits for a reply that arrives only after the
+  // prompt is shown; the reply resolves to its targets. The piped
+  // child also pins the fd-level probe: a pipe is not a terminal.
+  it("resolves a selection typed after the prompt is shown", async () => {
+    const dir = makeTmp();
+    try {
+      const result = await selectInChild("3\n", dir);
+      assert.equal(result.code, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), {
+        targets: ["GEMINI.md"],
+        detected: false,
+      });
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
   });
 
-  // scaffold-55: end of input at the prompt cancels instead of crashing.
-  it("returns null when input ends at the prompt", async () => {
-    const result = await askInChild(null);
-    assert.equal(result.code, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout), {
-      answer: null,
-      interactive: false,
-    });
+  // scaffold-55: end of input at the prompt cancels the selection
+  // instead of crashing the reader.
+  it("cancels the selection when input ends at the prompt", async () => {
+    const dir = makeTmp();
+    try {
+      const result = await selectInChild(null, dir);
+      assert.notEqual(result.code, 0);
+      assert.match(result.stderr, /agent selection canceled/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
   });
 });
