@@ -27,5 +27,5 @@ Accepted
 - A cligent upgrade alone moves Spex's compatibility policy, and no Spex change is forced by a vendor SDK release.
 - The dependency closure no longer installs any agent SDK: cligent declares them optionally, so npm skips them. A hermetic gate cannot see this — every automated suite substitutes the fake adapter — so the absence surfaces only in a live session, where cligent reports the missing runtime with the exact install command for it.
 - Supplying the SDKs for live and packaged runs therefore becomes an app-shell concern rather than a core-dependency one, alongside the unimplemented asar-unpacked packaging of [app-shell-13](../packages/app-shell.md).
-  Settled by [DR-024](024-app-supplied-agent-runtimes.md): the desktop supplies the `claude` and `codex` SDKs and packages them asar-unpacked, and adapter readiness gains the runtime half.
+  Settled by [DR-024](024-app-supplied-agent-runtimes.md): the desktop supplies the `claude`, `codex`, and `opencode` SDKs and ships them installable in the packaged app, and adapter readiness gains the runtime half.
 - The three-way version drift between Spex, Playbook, and cligent ends: one declaration governs, and it ships with the package that loads the runtime.

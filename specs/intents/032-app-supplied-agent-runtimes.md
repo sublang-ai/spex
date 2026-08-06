@@ -14,8 +14,8 @@ Close the two gaps [DR-023](../decisions/023-runtime-compatibility-from-cligent.
 ## Deliverables
 
 - [x] DR-024 recorded; the readiness items and DR-023's open consequence carry the amendment; the spec map lists the new records
-- [x] `checkAdapterReadiness` combines a cligent-derived runtime half with the credential half: missing or below-floor runtimes report not ready with cligent's verdict and pinned install, both halves report together, and the null-readiness class survives only over a usable runtime
-- [x] `apps/desktop` declares the `claude` and `codex` SDKs at `*`, packaged builds unpack both SDK trees from the asar, and the lockfile carries the resolution
+- [x] `checkAdapterReadiness` combines a cligent-derived runtime half with the credential half: availability comes from cligent's own probe, faults report cligent's verdict with a repair rendered for the target's install tree, both halves report together, and the null-readiness class survives only over a usable runtime
+- [x] `apps/desktop` declares the `claude`, `codex`, and `opencode` SDKs at `*`, packaged builds carry every SDK-backed runtime (native binaries outside the asar), and the lockfile carries the resolution
 
 ## Tasks
 

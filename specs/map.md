@@ -49,7 +49,7 @@ meta.md       The spec of specs
 | [DR-021](decisions/021-skill-based-migration.md) | 021-skill-based-migration.md | Superseded by DR-022: installable migration skill and guide |
 | [DR-022](decisions/022-prompt-based-migration.md) | 022-prompt-based-migration.md | Prompt-based spec migration: one bundled agent-neutral prompt, `spex lint`, and human review |
 | [DR-023](decisions/023-runtime-compatibility-from-cligent.md) | 023-runtime-compatibility-from-cligent.md | Runtime compatibility from cligent: playbook 4.0 / cligent 0.18 floor, no Spex-declared agent SDKs, live-run supply becomes an app-shell concern |
-| [DR-024](decisions/024-app-supplied-agent-runtimes.md) | 024-app-supplied-agent-runtimes.md | App-supplied agent runtimes: desktop declares claude/codex SDKs at `*` and packages them asar-unpacked; readiness gains the cligent runtime half |
+| [DR-024](decisions/024-app-supplied-agent-runtimes.md) | 024-app-supplied-agent-runtimes.md | App-supplied agent runtimes: desktop declares the claude/codex/opencode SDKs at `*`; readiness probes availability through cligent with per-tree repairs |
 
 ## Intents
 
@@ -87,7 +87,7 @@ meta.md       The spec of specs
 | [IR-029](intents/029-spec-view-alignment.md) | 029-spec-view-alignment.md | Desktop parser and spec view aligned with the 1.0 law: legacy compositions, citation-only rows |
 | [IR-030](intents/030-spec-view-reading-craft.md) | 030-spec-view-reading-craft.md | Three-lens reading-craft round: plain-prose digests, cross-file rollups, jump return, reachable meta.md |
 | [IR-031](intents/031-meta-law-1-0.md) | 031-meta-law-1-0.md | Owner-tightened meta law renumbered to document order (meta-1..29) and propagated repo-wide |
-| [IR-032](intents/032-app-supplied-agent-runtimes.md) | 032-app-supplied-agent-runtimes.md | App-supplied agent runtimes: DR-024 settlements — desktop SDK supply, asar unpack, runtime-aware readiness |
+| [IR-032](intents/032-app-supplied-agent-runtimes.md) | 032-app-supplied-agent-runtimes.md | App-supplied agent runtimes: DR-024 settlements — desktop SDK supply, packaged-app runtimes, probe-backed readiness |
 
 ## Packages
 
