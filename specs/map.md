@@ -39,7 +39,7 @@ meta.md       The spec of specs
 | [DR-011](decisions/011-project-workspace.md) | 011-project-workspace.md | Project-first workspace: four-surface taxonomy, project palette, per-project tabs + Specs/Repo, interactive spec view |
 | [DR-012](decisions/012-spec-package-files.md) | 012-spec-package-files.md | One-file spec packages; mechanical migration; spec linter |
 | [DR-013](decisions/013-sublang-brand.md) | 013-sublang-brand.md | SubLang brand adoption: purple interaction hue, warm light neutrals, brand-recolored product logo and app icon |
-| [DR-014](decisions/014-released-toolchain.md) | 014-released-toolchain.md | Released toolchain adoption: playbook 2.0 / cligent 0.16 host boundary, effort key, slc-emitted registry wrapper, invalidation, session cwd |
+| [DR-014](decisions/014-released-toolchain.md) | 014-released-toolchain.md | Released toolchain adoption: playbook 2.0 / cligent 0.16 host boundary (floor superseded by DR-023), effort key, slc-emitted registry wrapper, invalidation, session cwd |
 | [DR-015](decisions/015-reference-content.md) | 015-reference-content.md | Reference content: built-in sources + catalog, slc demo example, Academy seed project, packages-layout spec view |
 | [DR-016](decisions/016-relationship-presentation.md) | 016-relationship-presentation.md | Superseded by DR-000: classified relationship presentation gives way to one citation mechanism |
 | [DR-017](decisions/017-intent-records.md) | 017-intent-records.md | Iterations become intents: disposable intent records, bare `IR-<N>` commit references, mechanical migration |
@@ -48,6 +48,7 @@ meta.md       The spec of specs
 | [DR-020](decisions/020-desktop-live-smoke.md) | 020-desktop-live-smoke.md | Desktop live smoke: env-guarded handshake, real-run driver, split hermetic/live release gates |
 | [DR-021](decisions/021-skill-based-migration.md) | 021-skill-based-migration.md | Superseded by DR-022: installable migration skill and guide |
 | [DR-022](decisions/022-prompt-based-migration.md) | 022-prompt-based-migration.md | Prompt-based spec migration: one bundled agent-neutral prompt, `spex lint`, and human review |
+| [DR-023](decisions/023-runtime-compatibility-from-cligent.md) | 023-runtime-compatibility-from-cligent.md | Runtime compatibility from cligent: playbook 4.0 / cligent 0.18 floor, no Spex-declared agent SDKs, live-run supply becomes an app-shell concern |
 
 ## Intents
 

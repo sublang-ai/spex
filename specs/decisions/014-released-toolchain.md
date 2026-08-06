@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted; the effort key and adapter set are amended by [DR-019](019-inline-agent-configuration.md) — effort vocabularies are adapter-scoped and the adapter set is the embedded runtime's.
+Accepted; the effort key and adapter set are amended by [DR-019](019-inline-agent-configuration.md) — effort vocabularies are adapter-scoped and the adapter set is the embedded runtime's — and the dependency floor is superseded by [DR-023](023-runtime-compatibility-from-cligent.md), which raises it and removes the agent SDKs from Spex's own declarations.
 
 ## Context
 
@@ -24,6 +24,7 @@ Accepted; the effort key and adapter set are amended by [DR-019](019-inline-agen
 ### Dependency floor
 
 - `packages/core` depends on `@sublang/playbook` ^2.0.0 and `@sublang/cligent` ^0.16.0.
+  Superseded by [DR-023](023-runtime-compatibility-from-cligent.md): the floor is now playbook ^4.0.0 and cligent ^0.18.0, and Spex declares no agent SDK of its own.
 - slc stays an external, never-imported toolchain per [DR-005](005-compilation-integration.md); its resolution order and the Node >= 23.6 floor are unchanged.
 
 ### Canonical `effort` key
