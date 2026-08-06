@@ -20,6 +20,7 @@ import {
   isEffortSupported,
   readRuntimeVersion,
   supportedEffortValues,
+  type RuntimeReadiness,
 } from "@sublang/cligent";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
@@ -673,39 +674,89 @@ export interface AdapterRuntimeCheck {
   requirement?: string;
 }
 
-// DR-024: readiness owns no version literal. cligent publishes each
-// adapter's runtime targets and enforces their floors at load; readiness
-// reads the same targets, so a missing or below-floor runtime is reported
-// before a session start would fail on it, with cligent's own verdict
-// wording and its pinned install command. `untested` and `unknown` stay
-// usable — the load gate itself fails open on both.
-export function checkAdapterRuntime(adapter: AdapterName): AdapterRuntimeCheck {
+// Adapter shorthand -> the cligent module that constructs it. API-shape
+// knowledge, not version knowledge: versions, floors, and repairs come
+// from cligent's descriptor.
+const ADAPTER_MODULES: Record<AdapterName, { module: string; name: string }> = {
+  claude: { module: "@sublang/cligent/adapters/claude-code", name: "ClaudeCodeAdapter" },
+  codex: { module: "@sublang/cligent/adapters/codex", name: "CodexAdapter" },
+  gemini: { module: "@sublang/cligent/adapters/gemini", name: "GeminiAdapter" },
+  kimi: { module: "@sublang/cligent/adapters/kimi", name: "KimiAdapter" },
+  opencode: { module: "@sublang/cligent/adapters/opencode", name: "OpenCodeAdapter" },
+};
+
+// DR-024: one repair per install tree. A PATH runtime is repairable in
+// place with cligent's pinned global install (plus any one-time step no
+// install performs); a bundled SDK is not — no npm command reaches
+// cligent's resolution tree inside the packaged app, and a global copy is
+// invisible to its module walk — so its honest remedy is reinstalling.
+export function describeRuntimeFault(verdict: RuntimeReadiness): string {
+  const described = describeRuntimeReadiness(verdict);
+  if (verdict.target.kind === "cli") {
+    const steps =
+      verdict.repair.steps.length > 0
+        ? `; then: ${verdict.repair.steps.join("; ")}`
+        : "";
+    return `${described} — install with: npm install -g ${verdict.repair.spec}${steps}`;
+  }
+  return `${described} — bundled with Spex; reinstall the app, or run npm install in a checkout`;
+}
+
+// DR-024: availability is cligent's own answer — the same load a session
+// start performs, so readiness cannot disagree with the run. Only when the
+// probe says no are the published targets consulted, to say which runtime
+// is at fault and how its tree is repaired. A target that classifies as
+// healthy while the probe fails is not named — naming a healthy half sends
+// the user to install what is already there. `untested` and `unknown` stay
+// non-faults: the load gate itself fails open on both.
+export async function checkAdapterRuntime(
+  adapter: AdapterName,
+): Promise<AdapterRuntimeCheck> {
+  let available = false;
+  try {
+    const entry = ADAPTER_MODULES[adapter];
+    const module = (await import(entry.module)) as Record<
+      string,
+      new () => { isAvailable(): Promise<boolean> }
+    >;
+    const AdapterClass = module[entry.name];
+    if (!AdapterClass) throw new Error(`missing export ${entry.name}`);
+    available = await new AdapterClass().isAvailable();
+  } catch {
+    available = false;
+  }
+  if (available) return { usable: true };
   const faults: string[] = [];
   for (const target of AGENT_RUNTIME_TARGETS[adapter] ?? []) {
     const installed = readRuntimeVersion(target);
-    const verdict = classifyRuntime(target, installed !== undefined, installed);
+    const verdict = classifyRuntime(target, false, installed);
+    if (verdict.state === "missing" && installed !== undefined) continue;
     if (verdict.state === "missing" || verdict.state === "unsupported") {
-      faults.push(
-        `${describeRuntimeReadiness(verdict)} — install with: npm install -g ${verdict.repair.spec}`,
-      );
+      faults.push(describeRuntimeFault(verdict));
     }
   }
-  return faults.length > 0
-    ? { usable: false, requirement: faults.join("; ") }
-    : { usable: true };
+  return {
+    usable: false,
+    requirement:
+      faults.length > 0
+        ? faults.join("; ")
+        : `the ${adapter} runtime failed to load — reinstall the app, or run npm install in a checkout`,
+  };
 }
 
-export function checkAdapterReadiness(
+export async function checkAdapterReadiness(
   adapter: AdapterName,
   env: NodeJS.ProcessEnv = process.env,
   home: string = env.HOME ?? homedir(),
   // Injectable so tests need neither installed SDKs nor CLIs on PATH.
-  runtime: (adapter: AdapterName) => AdapterRuntimeCheck = checkAdapterRuntime,
-): AdapterReadiness {
+  runtime: (
+    adapter: AdapterName,
+  ) => AdapterRuntimeCheck | Promise<AdapterRuntimeCheck> = checkAdapterRuntime,
+): Promise<AdapterReadiness> {
   // Both halves are evaluated so an adapter missing both reports both —
   // reporting one at a time sends the user round the loop twice.
   const faults: string[] = [];
-  const runtimeCheck = runtime(adapter);
+  const runtimeCheck = await runtime(adapter);
   if (!runtimeCheck.usable && runtimeCheck.requirement) {
     faults.push(runtimeCheck.requirement);
   }

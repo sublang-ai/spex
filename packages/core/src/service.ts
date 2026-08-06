@@ -76,7 +76,9 @@ export interface CoreServiceOptions {
    * too, for the same reason: the host machine's installed runtimes must
    * not decide a hermetic verdict.
    */
-  adapterRuntime?: (adapter: AdapterName) => AdapterRuntimeCheck;
+  adapterRuntime?: (
+    adapter: AdapterName,
+  ) => AdapterRuntimeCheck | Promise<AdapterRuntimeCheck>;
   captainFactory?: CaptainFactory;
   env?: NodeJS.ProcessEnv;
   home?: string;
@@ -259,7 +261,7 @@ export class CoreService {
       }
     }
     this.broadcast({ type: "config.state", state: this.configState });
-    this.broadcast({ type: "readiness.state", entries: this.readiness() });
+    this.broadcast({ type: "readiness.state", entries: await this.readiness() });
   }
 
   private watchConfigFile(): void {
@@ -275,7 +277,7 @@ export class CoreService {
     });
   }
 
-  readiness(): ReadinessEntry[] {
+  async readiness(): Promise<ReadinessEntry[]> {
     if (this.configState.status !== "valid") return [];
     const summary = this.configState.summary;
     // Adapter-keyed and deduplicated (DR-019): readiness is a
@@ -294,22 +296,24 @@ export class CoreService {
         note(player.agent.adapter, `${playbook.id}.${role}`);
       }
     }
-    return [...positions.entries()].map(([adapter, usedBy]) => {
-      const readiness = checkAdapterReadiness(
-        adapter,
-        this.env,
-        this.home,
-        this.options.adapterRuntime ?? checkAdapterRuntime,
-      );
-      return {
-        adapter,
-        ready: readiness.ready,
-        ...(readiness.requirement
-          ? { requirement: readiness.requirement }
-          : {}),
-        usedBy,
-      };
-    });
+    return Promise.all(
+      [...positions.entries()].map(async ([adapter, usedBy]) => {
+        const readiness = await checkAdapterReadiness(
+          adapter,
+          this.env,
+          this.home,
+          this.options.adapterRuntime ?? checkAdapterRuntime,
+        );
+        return {
+          adapter,
+          ready: readiness.ready,
+          ...(readiness.requirement
+            ? { requirement: readiness.requirement }
+            : {}),
+          usedBy,
+        };
+      }),
+    );
   }
 
   // -- websocket ------------------------------------------------------------

@@ -8,10 +8,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
+import { AGENT_RUNTIME_TARGETS, classifyRuntime } from "@sublang/cligent";
+
 import {
   checkAdapterReadiness,
   checkAdapterRuntime,
   composeConfig,
+  describeRuntimeFault,
   resolveConfigPath,
   seedConfig,
   templatePath,
@@ -416,33 +419,33 @@ test("resolveConfigPath honors XDG_CONFIG_HOME", () => {
 // nor CLIs on PATH; the real check derives from cligent's targets.
 const usableRuntime = () => ({ usable: true });
 
-test("adapter readiness mirrors the launcher credential rules", () => {
+test("adapter readiness mirrors the launcher credential rules", async () => {
   const home = mkdtempSync(join(tmpdir(), "spex-home-"));
   assert.equal(
-    checkAdapterReadiness("claude", {}, home, usableRuntime).ready,
+    (await checkAdapterReadiness("claude", {}, home, usableRuntime)).ready,
     false,
   );
   assert.equal(
-    checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home, usableRuntime)
+    (await checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home, usableRuntime))
       .ready,
     true,
   );
   mkdirSync(join(home, ".codex"));
   assert.equal(
-    checkAdapterReadiness("codex", {}, home, usableRuntime).ready,
+    (await checkAdapterReadiness("codex", {}, home, usableRuntime)).ready,
     true,
   );
   assert.equal(
-    checkAdapterReadiness("gemini", {}, home, usableRuntime).ready,
+    (await checkAdapterReadiness("gemini", {}, home, usableRuntime)).ready,
     null,
   );
   assert.equal(
-    checkAdapterReadiness("kimi", {}, home, usableRuntime).ready,
+    (await checkAdapterReadiness("kimi", {}, home, usableRuntime)).ready,
     null,
   );
 });
 
-test("a missing or stale runtime reports not ready, whatever the credential class", () => {
+test("a missing or stale runtime reports not ready, whatever the credential class", async () => {
   const home = mkdtempSync(join(tmpdir(), "spex-home-"));
   const missing = () => ({
     usable: false,
@@ -451,26 +454,48 @@ test("a missing or stale runtime reports not ready, whatever the credential clas
   });
   // Credentials satisfied, runtime missing: not ready, runtime named.
   mkdirSync(join(home, ".codex"));
-  const codex = checkAdapterReadiness("codex", {}, home, missing);
+  const codex = await checkAdapterReadiness("codex", {}, home, missing);
   assert.equal(codex.ready, false);
   assert.match(codex.requirement ?? "", /npm install -g @openai\/codex-sdk/);
   // The null credential class does not survive an unusable runtime.
-  const gemini = checkAdapterReadiness("gemini", {}, home, missing);
+  const gemini = await checkAdapterReadiness("gemini", {}, home, missing);
   assert.equal(gemini.ready, false);
   // Both halves unmet report both, not the first alone.
-  const both = checkAdapterReadiness("claude", {}, mkdtempSync(join(tmpdir(), "spex-home-")), missing);
+  const both = await checkAdapterReadiness("claude", {}, mkdtempSync(join(tmpdir(), "spex-home-")), missing);
   assert.equal(both.ready, false);
   assert.match(both.requirement ?? "", /npm install -g/);
   assert.match(both.requirement ?? "", /ANTHROPIC_API_KEY/);
 });
 
-test("the real runtime check derives from cligent's targets", () => {
-  // opencode's SDK is declared nowhere in this repository — DR-024 keeps
-  // it operator-supplied — so its runtime half reports the missing SDK
-  // with cligent's pinned install on every machine, and no version
-  // literal originates here. (Peer targets resolve from cligent's own
-  // tree, so a globally installed copy cannot satisfy this.)
-  const check = checkAdapterRuntime("opencode");
-  assert.equal(check.usable, false);
-  assert.match(check.requirement ?? "", /npm install -g @opencode-ai\/sdk@/);
+test("supplied SDKs probe available through cligent's own loaders", async () => {
+  // DR-024: the desktop supplies these SDKs, so this repository's tree
+  // carries them and cligent's probe — the same load a session start
+  // performs — answers available on every machine, CI included.
+  assert.equal((await checkAdapterRuntime("claude")).usable, true);
+  assert.equal((await checkAdapterRuntime("codex")).usable, true);
+});
+
+test("a fault's repair is rendered for its install tree", () => {
+  // Verdicts are built through cligent's own classifier over its real
+  // published targets, with the installed version forced — so the shapes
+  // are cligent's, while no version literal originates here.
+  const [sdkTarget, cliTarget] = AGENT_RUNTIME_TARGETS.opencode;
+  // A PATH runtime is repairable in place: pinned global install.
+  const cliMissing = classifyRuntime(cliTarget, false, undefined);
+  assert.match(
+    describeRuntimeFault(cliMissing),
+    new RegExp(`install with: npm install -g ${cliTarget.repairSpec.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}`),
+  );
+  // kimi's target carries a one-time step no install performs.
+  const kimiTarget = AGENT_RUNTIME_TARGETS.kimi[0];
+  const kimiMissing = classifyRuntime(kimiTarget, false, undefined);
+  if (kimiTarget.steps && kimiTarget.steps.length > 0) {
+    assert.match(describeRuntimeFault(kimiMissing), /; then: /);
+  }
+  // A bundled SDK is not repairable by any npm command — a global copy is
+  // invisible to cligent's module walk — so the remedy is reinstalling.
+  const sdkMissing = classifyRuntime(sdkTarget, false, undefined);
+  const fault = describeRuntimeFault(sdkMissing);
+  assert.doesNotMatch(fault, /npm install -g/);
+  assert.match(fault, /reinstall the app/);
 });
