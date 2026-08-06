@@ -20,6 +20,8 @@
     "rebuild:node": "node scripts/rebuild-native.mjs node"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "*",
+    "@openai/codex-sdk": "*",
     "@sublang/spex-core": "*"
   },
   "devDependencies": {
