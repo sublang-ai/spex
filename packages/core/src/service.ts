@@ -151,6 +151,8 @@ export class CoreService {
   >();
   /** One in-flight compile per playbook id; abort via compile.abort. */
   private readonly activeCompiles = new Map<string, AbortController>();
+  /** Monotonic reload identity; a superseded reload commits nothing. */
+  private reloadGeneration = 0;
 
   private constructor(options: CoreServiceOptions) {
     this.options = options;
@@ -236,32 +238,47 @@ export class CoreService {
   // -- config ---------------------------------------------------------------
 
   async reloadConfig(): Promise<void> {
+    // Reloads overlap: the watcher fires and forgets, two command paths
+    // await their own, and external edits add more. Each reload reads the
+    // file at its own start, so the newest reload holds the newest content
+    // and every superseded one must discard its work — committing it would
+    // publish an older file's state, and a readiness probe that outlived a
+    // newer reload would overwrite that reload's broadcast with entries
+    // for a configuration no longer active.
+    const generation = ++this.reloadGeneration;
+    let nextState: ConfigState;
+    let nextComposed: ComposedConfig | undefined;
     if (!existsSync(this.configPath)) {
-      this.configState = { status: "missing", path: this.configPath };
-      this.composed = undefined;
+      nextState = { status: "missing", path: this.configPath };
+      nextComposed = undefined;
     } else {
       try {
         const loaded = await loadConfig(this.configPath, this.options.loadModule);
-        this.composed = loaded.composed;
-        this.configState = {
+        nextComposed = loaded.composed;
+        nextState = {
           status: "valid",
           summary: summarizeConfig(loaded),
           seeded: this.seeded,
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        this.configState = {
+        nextState = {
           status: "invalid",
           path: this.configPath,
           errors: [message],
         };
         // Live sessions keep their previously composed config (CORE-2);
         // only new session creation is blocked.
-        this.composed = undefined;
+        nextComposed = undefined;
       }
     }
+    if (generation !== this.reloadGeneration) return;
+    this.composed = nextComposed;
+    this.configState = nextState;
     this.broadcast({ type: "config.state", state: this.configState });
-    this.broadcast({ type: "readiness.state", entries: await this.readiness() });
+    const entries = await this.readiness();
+    if (generation !== this.reloadGeneration) return;
+    this.broadcast({ type: "readiness.state", entries });
   }
 
   private watchConfigFile(): void {

@@ -156,6 +156,7 @@ async function startHarness(
     env?: NodeJS.ProcessEnv;
     runCommand?: import("./forge.js").RunCommand;
     compileSpawner?: import("./compile.js").LineSpawner;
+    adapterRuntime?: import("./service.js").CoreServiceOptions["adapterRuntime"];
   } = {},
 ): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "spex-core-it-"));
@@ -194,7 +195,7 @@ async function startHarness(
     adapterImports: imports,
     // DR-024: the fake-adapter harness fakes the readiness runtime half
     // too, so verdicts never depend on the host's installed runtimes.
-    adapterRuntime: () => ({ usable: true }),
+    adapterRuntime: options.adapterRuntime ?? (() => ({ usable: true })),
     captainFactory: async () => captain,
     env: options.env ?? {},
     home: join(dir, "home"),
@@ -534,6 +535,65 @@ test("CORE-23: readiness is adapter-keyed with positions and requirements", asyn
   assert.equal(byAdapter.get("gemini")?.ready, null);
   assert.deepEqual(byAdapter.get("gemini")?.usedBy, ["captain"]);
 
+  client.close();
+  await harness.service.stop();
+});
+
+test("a reload superseded while probing broadcasts no stale readiness", async () => {
+  // The race: an older reload snapshots one config, waits on a slow
+  // runtime probe, and would broadcast after a newer reload for a changed
+  // config already has — leaving clients holding readiness for the wrong
+  // configuration. The superseded reload must discard its result instead.
+  let gate: Promise<void> | undefined;
+  let openGate = (): void => {};
+  const harness = await startHarness(VALID_CONFIG, {
+    env: { ANTHROPIC_API_KEY: "test-key" },
+    adapterRuntime: async () => {
+      if (gate) await gate;
+      return { usable: true };
+    },
+  });
+  const client = new Client(harness.service.port());
+  await client.open();
+  const configPath = join(harness.dir, "playbook.config.yaml");
+  const readinessBroadcasts = () =>
+    client.messages.filter((message) => message.type === "readiness.state");
+  const baseline = readinessBroadcasts().length;
+
+  // Older reload: probes block on the gate after its config commit.
+  gate = new Promise((resolve) => {
+    openGate = resolve;
+  });
+  const older = harness.service.reloadConfig();
+  // Newer reload: the config now uses a different adapter set, and its
+  // probes must not block — reopen the gate for it only after the older
+  // reload is already parked on it.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  writeFileSync(configPath, READINESS_CONFIG);
+  gate = undefined;
+  await harness.service.reloadConfig();
+  // Broadcast delivery is asynchronous; wait for it rather than sampling.
+  await client.waitFor(
+    (message) => message.type === "readiness.state",
+  );
+  const afterNewer = readinessBroadcasts();
+  assert.equal(afterNewer.length, baseline + 1, "newer reload broadcast once");
+  const newest = afterNewer.at(-1) as { entries: ReadinessEntry[] };
+  assert.deepEqual(
+    newest.entries.map((entry) => entry.adapter).sort(),
+    ["claude", "codex", "gemini"],
+    "broadcast readiness is the newer config's",
+  );
+
+  // Release the older reload; it must commit nothing.
+  openGate();
+  await older;
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(
+    readinessBroadcasts().length,
+    baseline + 1,
+    "the superseded reload broadcast nothing",
+  );
   client.close();
   await harness.service.stop();
 });
