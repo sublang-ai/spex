@@ -192,6 +192,9 @@ async function startHarness(
     configPath,
     dbPath,
     adapterImports: imports,
+    // DR-024: the fake-adapter harness fakes the readiness runtime half
+    // too, so verdicts never depend on the host's installed runtimes.
+    adapterRuntime: () => ({ usable: true }),
     captainFactory: async () => captain,
     env: options.env ?? {},
     home: join(dir, "home"),

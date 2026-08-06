@@ -13,7 +13,14 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
-import { isEffortSupported, supportedEffortValues } from "@sublang/cligent";
+import {
+  AGENT_RUNTIME_TARGETS,
+  classifyRuntime,
+  describeRuntimeReadiness,
+  isEffortSupported,
+  readRuntimeVersion,
+  supportedEffortValues,
+} from "@sublang/cligent";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
 
@@ -651,7 +658,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
 }
 
 // ---------------------------------------------------------------------------
-// Readiness (launcher parity: checkReadiness)
+// Readiness (launcher parity: runtime half + credential half, DR-024)
 // ---------------------------------------------------------------------------
 
 export interface AdapterReadiness {
@@ -660,34 +667,70 @@ export interface AdapterReadiness {
   requirement?: string;
 }
 
+/** The runtime half of readiness: usable, or a requirement naming why not. */
+export interface AdapterRuntimeCheck {
+  usable: boolean;
+  requirement?: string;
+}
+
+// DR-024: readiness owns no version literal. cligent publishes each
+// adapter's runtime targets and enforces their floors at load; readiness
+// reads the same targets, so a missing or below-floor runtime is reported
+// before a session start would fail on it, with cligent's own verdict
+// wording and its pinned install command. `untested` and `unknown` stay
+// usable — the load gate itself fails open on both.
+export function checkAdapterRuntime(adapter: AdapterName): AdapterRuntimeCheck {
+  const faults: string[] = [];
+  for (const target of AGENT_RUNTIME_TARGETS[adapter] ?? []) {
+    const installed = readRuntimeVersion(target);
+    const verdict = classifyRuntime(target, installed !== undefined, installed);
+    if (verdict.state === "missing" || verdict.state === "unsupported") {
+      faults.push(
+        `${describeRuntimeReadiness(verdict)} — install with: npm install -g ${verdict.repair.spec}`,
+      );
+    }
+  }
+  return faults.length > 0
+    ? { usable: false, requirement: faults.join("; ") }
+    : { usable: true };
+}
+
 export function checkAdapterReadiness(
   adapter: AdapterName,
   env: NodeJS.ProcessEnv = process.env,
   home: string = env.HOME ?? homedir(),
+  // Injectable so tests need neither installed SDKs nor CLIs on PATH.
+  runtime: (adapter: AdapterName) => AdapterRuntimeCheck = checkAdapterRuntime,
 ): AdapterReadiness {
+  // Both halves are evaluated so an adapter missing both reports both —
+  // reporting one at a time sends the user round the loop twice.
+  const faults: string[] = [];
+  const runtimeCheck = runtime(adapter);
+  if (!runtimeCheck.usable && runtimeCheck.requirement) {
+    faults.push(runtimeCheck.requirement);
+  }
+  let credentialReady: boolean | null = null;
   if (adapter === "claude") {
-    const ready =
+    credentialReady =
       Boolean(env.ANTHROPIC_API_KEY) || existsSync(join(home, ".claude"));
-    return ready
-      ? { adapter, ready: true }
-      : {
-          adapter,
-          ready: false,
-          requirement:
-            "set ANTHROPIC_API_KEY or sign in with Claude Code (creates ~/.claude)",
-        };
-  }
-  if (adapter === "codex") {
-    const ready =
+    if (!credentialReady) {
+      faults.push(
+        "set ANTHROPIC_API_KEY or sign in with Claude Code (creates ~/.claude)",
+      );
+    }
+  } else if (adapter === "codex") {
+    credentialReady =
       Boolean(env.OPENAI_API_KEY) || existsSync(join(home, ".codex"));
-    return ready
-      ? { adapter, ready: true }
-      : {
-          adapter,
-          ready: false,
-          requirement:
-            "set OPENAI_API_KEY or sign in with the Codex CLI (creates ~/.codex)",
-        };
+    if (!credentialReady) {
+      faults.push(
+        "set OPENAI_API_KEY or sign in with the Codex CLI (creates ~/.codex)",
+      );
+    }
   }
-  return { adapter, ready: null };
+  if (faults.length > 0) {
+    return { adapter, ready: false, requirement: faults.join("; ") };
+  }
+  // The null class survives only over a usable runtime (settings-14): no
+  // credential rule exists, so the UI shows verify-yourself guidance.
+  return { adapter, ready: credentialReady === null ? null : true };
 }

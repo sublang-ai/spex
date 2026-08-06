@@ -10,6 +10,7 @@ import { parse as parseYaml } from "yaml";
 
 import {
   checkAdapterReadiness,
+  checkAdapterRuntime,
   composeConfig,
   resolveConfigPath,
   seedConfig,
@@ -410,18 +411,66 @@ test("resolveConfigPath honors XDG_CONFIG_HOME", () => {
   );
 });
 
-test("adapter readiness mirrors the launcher rules", () => {
+// DR-024: readiness combines the runtime half with the credential half.
+// Tests inject the runtime check so they depend on neither installed SDKs
+// nor CLIs on PATH; the real check derives from cligent's targets.
+const usableRuntime = () => ({ usable: true });
+
+test("adapter readiness mirrors the launcher credential rules", () => {
   const home = mkdtempSync(join(tmpdir(), "spex-home-"));
   assert.equal(
-    checkAdapterReadiness("claude", {}, home).ready,
+    checkAdapterReadiness("claude", {}, home, usableRuntime).ready,
     false,
   );
   assert.equal(
-    checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home).ready,
+    checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home, usableRuntime)
+      .ready,
     true,
   );
   mkdirSync(join(home, ".codex"));
-  assert.equal(checkAdapterReadiness("codex", {}, home).ready, true);
-  assert.equal(checkAdapterReadiness("gemini", {}, home).ready, null);
-  assert.equal(checkAdapterReadiness("kimi", {}, home).ready, null);
+  assert.equal(
+    checkAdapterReadiness("codex", {}, home, usableRuntime).ready,
+    true,
+  );
+  assert.equal(
+    checkAdapterReadiness("gemini", {}, home, usableRuntime).ready,
+    null,
+  );
+  assert.equal(
+    checkAdapterReadiness("kimi", {}, home, usableRuntime).ready,
+    null,
+  );
+});
+
+test("a missing or stale runtime reports not ready, whatever the credential class", () => {
+  const home = mkdtempSync(join(tmpdir(), "spex-home-"));
+  const missing = () => ({
+    usable: false,
+    requirement:
+      "@openai/codex is not installed (requires >=x) — install with: npm install -g @openai/codex-sdk@x",
+  });
+  // Credentials satisfied, runtime missing: not ready, runtime named.
+  mkdirSync(join(home, ".codex"));
+  const codex = checkAdapterReadiness("codex", {}, home, missing);
+  assert.equal(codex.ready, false);
+  assert.match(codex.requirement ?? "", /npm install -g @openai\/codex-sdk/);
+  // The null credential class does not survive an unusable runtime.
+  const gemini = checkAdapterReadiness("gemini", {}, home, missing);
+  assert.equal(gemini.ready, false);
+  // Both halves unmet report both, not the first alone.
+  const both = checkAdapterReadiness("claude", {}, mkdtempSync(join(tmpdir(), "spex-home-")), missing);
+  assert.equal(both.ready, false);
+  assert.match(both.requirement ?? "", /npm install -g/);
+  assert.match(both.requirement ?? "", /ANTHROPIC_API_KEY/);
+});
+
+test("the real runtime check derives from cligent's targets", () => {
+  // opencode's SDK is declared nowhere in this repository — DR-024 keeps
+  // it operator-supplied — so its runtime half reports the missing SDK
+  // with cligent's pinned install on every machine, and no version
+  // literal originates here. (Peer targets resolve from cligent's own
+  // tree, so a globally installed copy cannot satisfy this.)
+  const check = checkAdapterRuntime("opencode");
+  assert.equal(check.usable, false);
+  assert.match(check.requirement ?? "", /npm install -g @opencode-ai\/sdk@/);
 });

@@ -15,12 +15,14 @@ import type { AddressInfo } from "node:net";
 
 import {
   checkAdapterReadiness,
+  checkAdapterRuntime,
   createModuleLoader,
   loadConfig,
   resolveConfigPath,
   seedConfig,
   summarizeConfig,
   type ComposedConfig,
+  type AdapterRuntimeCheck,
   type LoadModule,
 } from "./config.js";
 import {
@@ -68,6 +70,13 @@ export interface CoreServiceOptions {
   port?: number;
   loadModule?: LoadModule;
   adapterImports?: PlayerAdapterImports;
+  /**
+   * Injectable runtime half of adapter readiness (DR-024); defaults to
+   * the cligent-derived check. Tests faking `adapterImports` fake this
+   * too, for the same reason: the host machine's installed runtimes must
+   * not decide a hermetic verdict.
+   */
+  adapterRuntime?: (adapter: AdapterName) => AdapterRuntimeCheck;
   captainFactory?: CaptainFactory;
   env?: NodeJS.ProcessEnv;
   home?: string;
@@ -286,7 +295,12 @@ export class CoreService {
       }
     }
     return [...positions.entries()].map(([adapter, usedBy]) => {
-      const readiness = checkAdapterReadiness(adapter, this.env, this.home);
+      const readiness = checkAdapterReadiness(
+        adapter,
+        this.env,
+        this.home,
+        this.options.adapterRuntime ?? checkAdapterRuntime,
+      );
       return {
         adapter,
         ready: readiness.ready,
