@@ -35,7 +35,7 @@ This creates:
 - **`specs/`** — the spec tree and its law:
   - `specs/packages/` holds one file per spec package: a self-contained `## Intent`, the behavior its users may rely on (`## External Behavior`), implementation hidden from them (`## Internal Behavior`), and the tests of its own claims (`## Verification`) — one read covers one package.
     Behavior that emerges from several packages working together is itself a spec package citing the peers' External Behavior — there is no compositions directory.
-  - `specs/decisions/` and `specs/intents/` hold decision records (DRs) and intent records (IRs); `specs/map.md` indexes the tree and `specs/meta.md` is the spec of specs.
+  - `specs/decisions/` and `specs/intents/` hold decision records (DRs) and intent records (IRs); `specs/map.md` indexes decisions and packages and `specs/meta.md` is the spec of specs.
   - Two starter packages (`git.md`, `licensing.md`) and a sample intent record seed the tree.
 - **`LICENSE`** — the verbatim Apache-2.0 text at the target root, written only when no `LICENSE` exists there.
 - **Agent instruction files** — a managed section that tells coding

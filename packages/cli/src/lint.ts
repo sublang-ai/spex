@@ -1107,7 +1107,12 @@ function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
   }
 }
 
-/** Record citations are plain links to the file, labeled by record ID. */
+/**
+ * DR citations are plain links to the file, labeled by record ID.
+ * meta-16 states a form for spec items and DRs alone: no spec but an
+ * intent record itself may cite one (meta-18), and the form of that
+ * one link is unstated, so this rule leaves intent records alone.
+ */
 function lintRecordCitationForm(
   ctx: LintContext,
   file: SpecFile,
@@ -1115,11 +1120,9 @@ function lintRecordCitationForm(
   targetPath: string,
   fragment: string,
 ): void {
-  const match = targetPath.match(
-    /^specs\/(decisions|intents|iterations)\/(\d+)-[^/]+\.md$/,
-  );
+  const match = targetPath.match(/^specs\/decisions\/(\d+)-[^/]+\.md$/);
   if (match === null) return;
-  const expected = `${match[1] === "decisions" ? "DR" : "IR"}-${match[2]}`;
+  const expected = `DR-${match[1]}`;
   if (!link.enclosed && link.text === expected && fragment === "") return;
   report(
     ctx,

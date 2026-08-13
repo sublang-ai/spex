@@ -53,7 +53,7 @@ Localized for `zh` in the first cut:
 | [[meta-27](../meta.md#meta-27)] (new) | `Authoring language: zh` | selects Chinese authoring; its instruction stays English |
 | `meta.md` reference `[1]` | Chinese GEARS source | supports the localized GEARS forms |
 | `meta.md` | file title | allowed title-only convenience |
-| `map.md` | complete spec index | read frequently by humans and updated in the project's language |
+| `map.md` | decision and package index | read frequently by humans and updated in the project's language |
 
 - The first cut keeps these English: [DR-000](000-spec-structure-format.md), the git and licensing packages, the sample intent record, the `agent-specs.txt` body, and every other meta item.
 - meta-19 stays English because meta-4 and meta-30 own the localized reference-section names.

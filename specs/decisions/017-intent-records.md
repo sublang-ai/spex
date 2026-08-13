@@ -18,11 +18,11 @@ Accepted
 ## Decision
 
 - `specs/iterations/` becomes `specs/intents/`, and an IR is an **intent record** [[meta-1](../meta.md#meta-1)].
-  The acronym, existing item IDs, and `<NNN>-<kebab-case>.md` naming are unchanged, so existing `IR-<N>` prose references stay valid everywhere.
+  The acronym, existing item IDs, and `<NNN>-<kebab-case>.md` naming are unchanged, so existing `IR-<N>` references stay valid wherever they were already allowed — commits and issues, never a spec [[meta-18](../meta.md#meta-18)].
 - Recording stays flexible and duplication-free [[meta-28](../meta.md#meta-28)]: an intent realized in a single commit needs no record; one spanning commits or requiring prior tracking gets an IR whose tasks are each sized to one commit [[meta-5](../meta.md#meta-5)]; the record carries only what is needed to understand the intent and its state, citing commits and issues rather than duplicating them.
 - A commit realizing a recorded intent references it by bare ID (`IR-<N>`) in the subject or body [[git-5](../packages/git.md#git-5)], the way issue keys are conventionally embedded in commit messages; no trailer key is needed.
 - Intent records stay on the management plane: no spec cites an IR — not the map, not another IR [[meta-18](../meta.md#meta-18)] — so behavior truth remains reimplementable from spec items alone and each IR stays independently disposable.
-- Migration is mechanical, following the [DR-012](012-spec-package-files.md) pattern: `spex scaffold --update` moves `specs/iterations/` to `specs/intents/` with conflict-keeping, rewrites citations, and renames the map's Iterations entries in both scaffold languages (the [scaffold](../packages/scaffold.md) package); `spex lint` guards the renamed layout (the [lint](../packages/lint.md) package); the core spec parser reads `intents/` and a legacy `iterations/` directory together — shadowing same-named files and reporting coexistence as tree notices — so un-migrated and partially migrated trees keep working (the [spec-view](../packages/spec-view.md) package).
+- Migration is mechanical, following the [DR-012](012-spec-package-files.md) pattern: `spex scaffold --update` moves `specs/iterations/` to `specs/intents/` with conflict-keeping, rewrites citations, and drops the map's Iterations entries in both scaffold languages (the [scaffold](../packages/scaffold.md) package); `spex lint` guards the renamed layout (the [lint](../packages/lint.md) package); the core spec parser reads `intents/` and a legacy `iterations/` directory together — shadowing same-named files and reporting coexistence as tree notices — so un-migrated and partially migrated trees keep working (the [spec-view](../packages/spec-view.md) package).
 
 ## Consequences
 
