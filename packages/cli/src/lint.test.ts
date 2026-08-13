@@ -688,15 +688,36 @@ describe("lintSpecs", () => {
     );
   });
 
-  // lint-9: every package file is reachable from the map.
-  it("warns when a package file is missing from the map", () => {
+  // lint-9: the map indexes decisions and packages (DR-000), so an
+  // unlisted file of either kind warns.
+  it("warns when a package or decision is missing from the map", () => {
     const findings = findingsFor({
       "specs/packages/auth.md": CLEAN_AUTH,
       "specs/packages/audit.md": CLEAN_AUDIT,
+      "specs/decisions/001-a.md": DR("001", "A"),
     });
     const unlisted = findings.filter((f) => f.rule === "map/unlisted");
-    assert.equal(unlisted.length, 2, JSON.stringify(unlisted));
+    assert.deepEqual(
+      unlisted.map((f) => f.path).sort(),
+      [
+        "specs/decisions/001-a.md",
+        "specs/packages/audit.md",
+        "specs/packages/auth.md",
+      ],
+      JSON.stringify(unlisted),
+    );
     assert.ok(unlisted.every((f) => f.severity === "warning"));
+
+    // Listing the decision clears its finding.
+    const listed = findingsFor({
+      "specs/packages/auth.md": CLEAN_AUTH,
+      "specs/decisions/001-a.md": DR("001", "A"),
+      "specs/map.md": MAP(
+        "| File | Summary |\n| --- | --- |\n| [auth.md](packages/auth.md) | Auth |",
+        "| ID | File |\n| --- | --- |\n| [DR-001](decisions/001-a.md) | 001-a.md |",
+      ),
+    });
+    assert.ok(!rules(listed).includes("map/unlisted"), JSON.stringify(listed));
   });
 
   // lint-13: citation discipline.

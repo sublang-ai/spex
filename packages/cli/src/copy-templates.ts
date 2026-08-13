@@ -31,26 +31,14 @@ const SEED_FILES = [
   "specs/packages/licensing.md",
 ] as const;
 
-const LEGACY_ITEM_DIRS = [
-  ["specs/items/user", "specs/user"],
-  ["specs/items/dev", "specs/dev"],
-  ["specs/items/test", "specs/test"],
-] as const;
-
 export type PristineState = "pristine" | "modified" | "missing";
 type SeedIndicator =
   | "created"
   | "updated"
   | "unchanged"
   | "kept — user-modified";
-export type LegacyItemLayoutResult = {
-  status: "migrated" | "conflict";
-  targetRelPath: string;
-  legacyRelPath: string;
-};
 
 type RefreshPristineSeedsOptions = {
-  migratedFrom?: ReadonlyMap<string, string>;
   language?: ScaffoldLanguage;
   /**
    * A second language whose bundled versions also count as pristine.
@@ -59,12 +47,6 @@ type RefreshPristineSeedsOptions = {
    * convertible bundled file, not a user customization.
    */
   alsoRecognize?: readonly ScaffoldLanguage[];
-  /**
-   * Replacement indicator text for user-modified seeds that this run
-   * transformed in place (e.g. a restructured map.md), so one line
-   * reports the seed's true outcome.
-   */
-  indicatorOverrides?: ReadonlyMap<string, string>;
 };
 
 export function isSupportedLanguage(code: string): code is ScaffoldLanguage {
@@ -201,44 +183,6 @@ function removeEmptyDirectories(dir: string): boolean {
   return false;
 }
 
-// SCAF-26.
-export function migrateLegacyItemLayout(
-  basePath: string,
-): LegacyItemLayoutResult[] {
-  const results: LegacyItemLayoutResult[] = [];
-
-  for (const [legacyRootRel, targetRootRel] of LEGACY_ITEM_DIRS) {
-    const legacyRoot = join(basePath, legacyRootRel);
-    if (!existsSync(legacyRoot)) continue;
-
-    for (const source of listFiles(legacyRoot)) {
-      const suffix = relative(legacyRoot, source).replace(/\\/g, "/");
-      const legacyRelPath = posix.join(legacyRootRel, suffix);
-      const targetRelPath = posix.join(targetRootRel, suffix);
-      const target = join(basePath, targetRelPath);
-
-      if (existsSync(target)) {
-        results.push({
-          status: "conflict",
-          targetRelPath,
-          legacyRelPath,
-        });
-        continue;
-      }
-
-      mkdirSync(dirname(target), { recursive: true });
-      renameSync(source, target);
-      results.push({
-        status: "migrated",
-        targetRelPath,
-        legacyRelPath,
-      });
-    }
-  }
-
-  removeEmptyDirectories(join(basePath, "specs", "items"));
-  return results;
-}
 
 // SCAF-21.
 export function getFileHistory(relPath: string): string[] {
@@ -353,18 +297,6 @@ export function overwriteFrameworkSpecFiles(
   return replacedUserModified;
 }
 
-// SCAF-23.
-function formatSeedIndicator(
-  relPath: string,
-  indicator: SeedIndicator | string,
-  migratedFrom?: ReadonlyMap<string, string>,
-): string {
-  const legacyRelPath = migratedFrom?.get(relPath);
-  if (legacyRelPath === undefined) return indicator;
-  if (indicator === "unchanged") return `migrated from ${legacyRelPath}`;
-  return `migrated from ${legacyRelPath}; ${indicator}`;
-}
-
 export function refreshPristineSeeds(
   basePath: string,
   options: RefreshPristineSeedsOptions = {},
@@ -373,34 +305,19 @@ export function refreshPristineSeeds(
   for (const relPath of SEED_FILES) {
     const state = isPristine(basePath, relPath, language, options.alsoRecognize);
     if (state === "modified") {
-      const indicator = formatSeedIndicator(
-        relPath,
-        options.indicatorOverrides?.get(relPath) ?? "kept — user-modified",
-        options.migratedFrom,
-      );
-      console.log(`  ${relPath} (${indicator})`);
+      console.log(`  ${relPath} (kept — user-modified)`);
       continue;
     }
     const target = join(basePath, relPath);
     const source = getBundledSpecFilePath(relPath, language);
     if (state === "pristine" && hashFile(target) === hashFile(source)) {
-      const indicator = formatSeedIndicator(
-        relPath,
-        "unchanged",
-        options.migratedFrom,
-      );
-      console.log(`  ${relPath} (${indicator})`);
+      console.log(`  ${relPath} (unchanged)`);
       continue;
     }
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(source, target);
-    const indicator = state === "missing" ? "created" : "updated";
     console.log(
-      `  ${relPath} (${formatSeedIndicator(
-        relPath,
-        indicator,
-        options.migratedFrom,
-      )})`,
+      `  ${relPath} (${state === "missing" ? "created" : "updated"})`,
     );
   }
 }
