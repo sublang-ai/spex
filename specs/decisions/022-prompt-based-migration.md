@@ -25,5 +25,3 @@ Accepted
 - Any capable AI agent can migrate a tree without installing or discovering a skill.
 - The instructions users receive are shipped with the CLI and cannot drift from its guidance.
 - Legacy updates print a longer prompt, but only when that judgment work is required.
-
-## References

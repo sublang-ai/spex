@@ -417,9 +417,9 @@ export interface SpecRecordInfo {
 export interface SpecTreeState {
   /** False when the project has no specs/ directory. */
   present: boolean;
-  /** True when specs/ holds a legacy directory — user/, dev/,
-   * test/, or compositions/; files stay empty and the view shows
-   * migration guidance. */
+  /** True when specs/ holds a legacy-generation directory other
+   * than iterations/ — see LEGACY_DIRS in specs.ts; files stay empty
+   * and the view shows migration guidance. */
   legacy: boolean;
   /** The packages/ collection's files, keyed by collection-relative
    * path. */

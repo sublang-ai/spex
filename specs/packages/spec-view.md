@@ -130,7 +130,7 @@ When `specs.get` names a known project, the core package shall parse the project
 
 - files are listed for the `packages/` collection [[meta-1](../meta.md#meta-1)], keyed by collection-relative path minus the extension, with collection subdirectories carried as navigation-only structure [[meta-31](../meta.md#meta-31)];
 - each file's items keep document order, never sorted by ID;
-- a tree containing a `user/`, `dev/`, `test/`, or `compositions/` directory is flagged legacy with no files parsed ([DR-015](../decisions/015-reference-content.md));
+- a tree carrying a legacy-generation directory other than `iterations/` [[scaffold-26](scaffold.md#scaffold-26)] is flagged legacy with no files parsed ([DR-015](../decisions/015-reference-content.md));
 - a project with no `specs/` directory yields a reply stating absence with empty lists rather than a failure.
 
 #### spec-view-11
@@ -192,7 +192,7 @@ Where a fixture tree defines package files at the collection root and nested in 
 
 - files are keyed by collection-relative path, and collection subdirectories carry no semantic grouping;
 - items keep document order when it differs from ID order;
-- a fixture tree holding a legacy `user/` or `compositions/` directory is flagged legacy with no files.
+- a fixture tree is flagged legacy with no files for a group directory, a retired collection, and each directory the classification adds beyond them [[spec-view-10](#spec-view-10)].
 
 #### spec-view-31
 
