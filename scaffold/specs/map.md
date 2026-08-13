@@ -3,7 +3,7 @@
 
 # Spec Map
 
-Quick-reference index for locating spec files.
+Quick-reference index for locating decisions and spec packages.
 Spec items are the source of truth.
 Code can be inconsistent with specs during development.
 

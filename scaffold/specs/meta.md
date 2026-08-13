@@ -190,7 +190,7 @@ A citation of a spec item or DR shall be an inline relative link with the cited 
 
 ### meta-18
 
-No other spec shall cite an IR or name it in prose.
+No spec shall cite an IR or name it in prose, except that IR itself.
 
 ### meta-19
 
