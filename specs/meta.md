@@ -181,16 +181,16 @@ Each package's `Verification` section shall verify every behavior in that packag
 
 ### meta-16
 
-A citation of a spec item or record shall be an inline relative link with the cited ID as its link text:
+A citation of a spec item or DR shall be an inline relative link with the cited ID as its link text:
 
 | Cited | Form |
 | --- | --- |
 | Spec item | its heading anchor, in an outer pair of square brackets (e.g., `[[meta-1](meta.md#meta-1)]`) |
-| Record | its file, with no outer brackets (e.g., `[DR-000](decisions/000-spec-structure-format.md)`) |
+| DR | its file, with no outer brackets (e.g., `[DR-000](decisions/000-spec-structure-format.md)`) |
 
 ### meta-18
 
-No DR or spec item shall cite an IR or name it in prose.
+No spec shall cite an IR or name it in prose, except that IR itself.
 
 ### meta-19
 

@@ -320,15 +320,16 @@ function isUnder(relPath: string, dir: string): boolean {
   return relPath.startsWith(`specs/${dir}/`);
 }
 
-// The meta-18 prohibition binds DRs and spec items — decisions/,
-// packages/, and meta.md. Intent records themselves and map.md sit
-// outside it, so an IR (or the map) referencing an IR is legal.
-function boundByIrProhibition(relPath: string): boolean {
-  return (
-    isUnder(relPath, "decisions") ||
-    isUnder(relPath, "packages") ||
-    relPath === "specs/meta.md"
-  );
+// meta-18 exempts one thing: the record naming itself, which every
+// IR does in its H1. So a file may reference only its own id — a
+// package, the map, and one IR naming another are all violations.
+// Returns the id a file may name, or null when it may name none.
+function ownIntentId(relPath: string): string | null {
+  if (!isUnder(relPath, "intents") && !isUnder(relPath, "iterations")) {
+    return null;
+  }
+  const leading = basenameOf(relPath).match(/^(\d+)/);
+  return leading === null ? null : `IR-${leading[1]}`;
 }
 
 function basenameOf(relPath: string): string {
@@ -982,24 +983,22 @@ function lintCitationDiscipline(ctx: LintContext, items: ItemInfo[]): void {
 function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
   const bySlug = itemsBySlug(items);
   for (const file of ctx.files.values()) {
-    // Naming an IR in prose is citing it, and no DR or spec item
-    // does either (meta-18) — so the check binds decisions/,
-    // packages/, and meta.md alone; intent records and map.md sit
-    // outside the prohibition. Matched over parsed inline text, so
+    // Naming an IR in prose is citing it, and no spec but that IR
+    // does either (meta-18). Matched over parsed inline text, so
     // inline code and code blocks cannot trip it (lint-10).
-    if (boundByIrProhibition(file.relPath)) {
-      for (const span of file.texts) {
-        for (const [offset, value] of span.value.split("\n").entries()) {
-          for (const match of value.matchAll(/\bIR-\d+\b/g)) {
-            report(
-              ctx,
-              file.relPath,
-              span.line + offset,
-              "error",
-              "cite/intent",
-              `no DR or spec item names an IR in prose (meta-18): ${match[0]}`,
-            );
-          }
+    const ownId = ownIntentId(file.relPath);
+    for (const span of file.texts) {
+      for (const [offset, value] of span.value.split("\n").entries()) {
+        for (const match of value.matchAll(/\bIR-\d+\b/g)) {
+          if (match[0] === ownId) continue;
+          report(
+            ctx,
+            file.relPath,
+            span.line + offset,
+            "error",
+            "cite/intent",
+            `no spec but that intent record names an IR in prose (meta-18): ${match[0]}`,
+          );
         }
       }
     }
@@ -1058,10 +1057,12 @@ function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
         continue;
       }
 
+      // A link into an intent record is a citation of it; only that
+      // record itself is exempt (meta-18).
       if (
         (resolved.startsWith("specs/intents/") ||
           resolved.startsWith("specs/iterations/")) &&
-        boundByIrProhibition(file.relPath)
+        resolved !== file.relPath
       ) {
         report(
           ctx,
@@ -1069,7 +1070,7 @@ function lintCitations(ctx: LintContext, items: ItemInfo[]): void {
           link.line,
           "error",
           "cite/intent",
-          `no DR or spec item cites an IR (meta-18)`,
+          `no spec but that intent record cites an IR (meta-18)`,
         );
       }
 

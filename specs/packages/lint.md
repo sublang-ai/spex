@@ -77,7 +77,7 @@ Where item relationships and verification evidence are linted, inline citations 
 Where citations are linted, the linter shall report:
 
 - an error for a relative link whose target file does not exist, a link into the legacy layout (including `specs/compositions/`), and a fragment that matches no heading anchor of the target file (GitHub anchor semantics);
-- an error for a link into `specs/intents/` — or the legacy `specs/iterations/` — from a DR file or a spec-item file (`specs/decisions/`, `specs/packages/`, `specs/meta.md`) [[meta-18](../meta.md#meta-18)]; a textual `IR-<n>` reference in such a file is likewise an error — naming an IR is citing it — while every other file, including intent records and the map, sits outside the prohibition;
+- an error for a link into `specs/intents/` — or the legacy `specs/iterations/` — from any spec but an intent record itself [[meta-18](../meta.md#meta-18)]; a textual `IR-<n>` reference in such a file is likewise an error — naming an IR is citing it — so the map and one IR naming another are both caught, while a record naming its own id is not;
 - an error for an item citation not written as an enclosed inline link — the relative link wrapped in an outer bracket pair, e.g. `[[<pack>-<N>](<path>#<pack>-<N>)]` — or whose link text is not the target item ID [[meta-16](../meta.md#meta-16)] [[meta-11](../meta.md#meta-11)];
 - an error for a record citation not written as a plain relative link to its file with the record ID as link text, e.g. `[DR-000](../decisions/000-spec-structure-format.md)` [[meta-16](../meta.md#meta-16)];
 - an error for a reference-style link in a `packages/` file unless it is a literal `[[N]]` reference marker — a numeric shortcut reference wrapped in the outer brackets [[meta-19](../meta.md#meta-19)]; a bare `[N]`, a collapsed `[N][]`, and a full-form reference are errors even with numeric labels, since item citations are inline links [[meta-16](../meta.md#meta-16)];
@@ -135,7 +135,7 @@ Where the linter is exercised, the test suite shall cover at least one fixture p
 - package sections with localized zh names, an H1 whose identifier is not the basename, and the missing-Verification warning ([[lint-5](#lint-5)]);
 - item IDs — an uppercase heading, a mismatched prefix, a duplicate ID, a non-unique item-file basename — and misplaced items ([[lint-6](#lint-6)]);
 - relationship metadata, an uncited Verification item, and a behavior citation into a peer's Internal Behavior ([[lint-7](#lint-7)]);
-- citations — broken link, broken anchor, legacy path, malformed item and record citations, and intent-record references outside the map, linked and textual ([[lint-8](#lint-8)]);
+- citations — broken link, broken anchor, legacy path, malformed item and record citations, and intent-record references from a spec that is not that record, linked and textual ([[lint-8](#lint-8)]);
 - reference markers, records, and map listing ([[lint-9](#lint-9)]);
 - citation discipline — a section-prose peer citation, a detached `Verifies` sentence, peer External and Internal citations from Verification, and a same-package Internal citation from Verification ([[lint-13](#lint-13)]);
 - the multi-sentence advisory ([[lint-14](#lint-14)]);

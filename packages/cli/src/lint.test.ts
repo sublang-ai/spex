@@ -495,10 +495,10 @@ describe("lintSpecs", () => {
     assert.ok(!rules(valid).includes("cite/record-link"));
   });
 
-  // lint-8: no DR or spec item cites an IR or names it in prose
-  // (meta-18); intent records and the map sit outside the
-  // prohibition.
-  it("errors on IR references in DRs and spec items, never in IRs", () => {
+  // lint-8: no spec but the intent record itself cites an IR or
+  // names it in prose (meta-18) — the map and one IR naming another
+  // are caught; a record naming its own id is not.
+  it("errors on IR references in every spec but that record", () => {
     const linked = findingsFor({
       "specs/packages/a.md":
         "# a: A\n\n## Intent\n\nX.\n\n## External Behavior\n\n### a-1\n\nX shall Y (see [the plan](../intents/001-b.md)).\n\n## Verification\n\n### a-2\n\nThe suite shall assert Y [[a-1](#a-1)].\n",
@@ -527,25 +527,31 @@ describe("lintSpecs", () => {
     assert.ok(inPackage, "expected a package cite/intent finding");
     assert.equal(inPackage.severity, "error");
 
-    // An intent record naming a peer IR is outside the meta-18
-    // prohibition and lints clean.
+    // One intent record naming another is a citation like any other:
+    // it would make a disposable record something else depends on.
     const crossRecord = findingsFor({
       "specs/intents/002-b.md": IR("002", "B").replace(
         "Ship.",
         "Build on the IR-001 groundwork.",
       ),
     });
-    assert.ok(
-      !rules(crossRecord).includes("cite/intent"),
-      JSON.stringify(crossRecord),
-    );
+    const peerNamed = crossRecord.find((f) => f.rule === "cite/intent");
+    assert.ok(peerNamed, JSON.stringify(crossRecord));
+    assert.equal(peerNamed.severity, "error");
 
-    // The map cites intent records freely.
+    // A record naming its own id — as every IR does in its H1 — is
+    // the one exemption.
+    const ownId = findingsFor({ "specs/intents/002-b.md": IR("002", "B") });
+    assert.ok(!rules(ownId).includes("cite/intent"), JSON.stringify(ownId));
+
+    // The map is a spec too, so it cites no intent record.
     const mapOnly = findingsFor({
       "specs/map.md": `${MAP("")}\n## Intents\n\n| ID | File |\n| --- | --- |\n| IR-001 | [001-b.md](intents/001-b.md) |\n`,
       "specs/intents/001-b.md": IR("001", "B"),
     });
-    assert.ok(!rules(mapOnly).includes("cite/intent"));
+    const mapNamed = mapOnly.find((f) => f.rule === "cite/intent");
+    assert.ok(mapNamed, JSON.stringify(mapOnly));
+    assert.equal(mapNamed.severity, "error");
 
     // Inline code never names an IR (lint-10).
     const inCode = findingsFor({

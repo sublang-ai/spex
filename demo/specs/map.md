@@ -3,7 +3,7 @@
 
 # Spec Map
 
-Quick-reference index for locating spec files.
+Quick-reference index for locating decisions and spec packages.
 Spec items are the source of truth.
 Code can be inconsistent with specs during development.
 
@@ -31,14 +31,6 @@ Subdirectories under `packages/` are navigation collections with no semantics [[
 | [DR-001](decisions/001-web-stack.md) | 001-web-stack.md | Next.js App Router + TypeScript, Tailwind CSS, vendored shadcn/ui kit, native video |
 | [DR-002](decisions/002-platform-and-devops.md) | 002-platform-and-devops.md | Supabase (Auth, Postgres, Storage) + Vercel + GitHub; the platform-services package states each supplied seam |
 | [DR-003](decisions/003-admin-designation.md) | 003-admin-designation.md | Initial admin as configured GitHub account ID, recomputed at each sign-in |
-
-## Intents
-
-| ID | File | Intent |
-| --- | --- | --- |
-| [IR-001](intents/001-walking-skeleton.md) | 001-walking-skeleton.md | Pipeline, deployment, sign-in, and guard proven end to end |
-| [IR-002](intents/002-course-catalog.md) | 002-course-catalog.md | Course structure, browsing, publishing; admin-bootstrap acceptance green |
-| [IR-003](intents/003-video-pipeline.md) | 003-video-pipeline.md | Upload to playback; the full release-acceptance gate green |
 
 ## Packages
 
