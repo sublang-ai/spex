@@ -79,8 +79,8 @@ A package behavior shall express every peer package relationship through binding
 DRs and items are persistent and may cite each other.
 A DR references a spec item only to support what the DR itself states, never to carry content it leaves unsaid.
 
-IRs may cite, but must not be cited by, DRs or items.
-`map.md` may cite all spec files and is kept in sync as files change.
+IRs may cite DRs and items, but no other spec may cite or name an IR.
+`map.md` indexes DRs and spec packages, and is kept in sync as those files change.
 
 ## Consequences
 

@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- spex-i18n-source: map.md sha256-6d93bd3c2c2fc35e0806229f45c751429ae4ef7ae86ff9e9089b76b0edbf7461 -->
+<!-- spex-i18n-source: map.md sha256-04a4c1eda482ec6fc3418ffec59303831c6f25ea88321e505b71ee166dd5a878 -->
 
 # 规约地图
 
@@ -27,12 +27,6 @@ meta.md       规约的规约
 | ID | 文件 | 摘要 |
 | --- | --- | --- |
 | [DR-000](decisions/000-spec-structure-format.md) | 000-spec-structure-format.md | 规约结构、格式和命名约定 |
-
-## 意图
-
-| ID | 文件 | 意图 |
-| --- | --- | --- |
-| [IR-000](intents/000-spdx-headers.md) | 000-spdx-headers.md | 为适用文件添加 SPDX 头 |
 
 ## 规约包
 

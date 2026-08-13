@@ -18,9 +18,9 @@ When the update created a current seed at a destination, reconcile legacy local 
 - Make each package self-contained with `# <basename>: <Title>` and the current section order.
 Classify guarantees its human or component users rely on as External Behavior and hidden behavior as Internal Behavior; behavior cited by a peer must be External.
 - Restate each item as one GEARS requirement and place its cases or steps after the statement's final colon.
-Use current item and record citation forms, put every peer binding citation at the behavior phrase it makes specific, confine Verification citations to the containing package, and remove relationship-metadata lines or detached `Verifies` sentences.
+Use current item and DR citation forms, put every peer binding citation at the behavior phrase it makes specific, confine Verification citations to the containing package, and remove relationship-metadata lines or detached `Verifies` sentences.
 - Give every DR and IR the current sections and truthful status.
-For a legacy IR missing commit-sized Tasks, recover minimal truthful tasks from history or flag the gap rather than inventing them; no DR or spec item may cite or name an IR.
+For a legacy IR missing commit-sized Tasks, recover minimal truthful tasks from history or flag the gap rather than inventing them; no other spec may cite or name an IR.
 - Update `map.md` and any project guidance describing the old layout.
 Preserve SPDX headers byte-for-byte, keep one sentence per line, and remove legacy files or directories only after their content and citations survive in the new tree.
 - Loop on `spex lint` until clean.
