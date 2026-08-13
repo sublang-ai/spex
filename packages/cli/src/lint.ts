@@ -51,9 +51,8 @@ const PACKAGE_SECTION_ORDER = [
 ];
 
 // Required record sections per meta-4 / meta-5, with the zh names
-// of the bundled templates. A DR's References section is listed by
-// meta-4 but holds no uncited entry (meta-19), so a DR without
-// external sources legitimately omits it — it is not required here.
+// of the bundled templates. meta-4 makes a DR's References section
+// conditional on citing an external source, so it is not listed.
 const DR_SECTIONS: Record<string, string[]> = {
   Status: ["Status", "状态"],
   Context: ["Context", "背景"],

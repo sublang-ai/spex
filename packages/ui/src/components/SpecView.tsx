@@ -678,7 +678,9 @@ export function SpecView(props: SpecViewProps) {
           <span className="font-mono">dev/</span>, and{" "}
           <span className="font-mono">test/</span> groups or a{" "}
           <span className="font-mono">compositions/</span> collection.
-          Update it to the current packages layout to browse it here:
+          Run this to refresh the spec law and print a migration prompt;
+          an AI agent applies it, and this view opens once the tree is
+          migrated:
         </p>
         {copyCommand("npx @sublang/spex scaffold --update")}
       </div>

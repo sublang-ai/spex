@@ -416,7 +416,7 @@ function parseIntentRecords(
   if (legacy.length === 0) return noticeDuplicateRecordIds(current, notices);
   if (current.length === 0) return noticeDuplicateRecordIds(legacy, notices);
   notices.push(
-    "legacy specs/iterations/ records coexist with specs/intents/; migrate with `spex scaffold --update`",
+    "legacy specs/iterations/ records coexist with specs/intents/; run `spex scaffold --update` for the migration prompt an agent applies",
   );
   const currentNames = new Set(
     current.map((record) => posix.basename(record.path)),

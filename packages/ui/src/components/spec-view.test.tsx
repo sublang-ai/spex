@@ -1020,6 +1020,13 @@ describe("SPECV-9/17/18: empty, legacy, and loading states", () => {
     ).toBeTruthy();
     expect(legacy.textContent).toContain("compositions/");
     expect(legacy.textContent).toContain("npx @sublang/spex scaffold --update");
+    // The command prints a migration prompt rather than migrating, so
+    // the notice must not promise the tree becomes browsable by
+    // running it (spec-view-18, DR-022).
+    expect(legacy.textContent).toContain("migration prompt");
+    expect(legacy.textContent).not.toContain(
+      "Update it to the current packages layout to browse it here",
+    );
     expect(
       within(legacy).getByRole("button", {
         name: "Copy command npx @sublang/spex scaffold --update",

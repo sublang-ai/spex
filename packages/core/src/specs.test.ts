@@ -523,7 +523,7 @@ test("intent records merge a coexisting legacy iterations directory", () => {
     { id: "IR-003", title: "Current copy", path: "intents/003-shadowing.md" },
   ]);
   assert.deepEqual(tree.notices, [
-    "legacy specs/iterations/ records coexist with specs/intents/; migrate with `spex scaffold --update`",
+    "legacy specs/iterations/ records coexist with specs/intents/; run `spex scaffold --update` for the migration prompt an agent applies",
     "iterations/003-shadowing.md is shadowed by the same-named file under intents/",
   ]);
 });

@@ -36,7 +36,7 @@ A spec file shall keep one sentence per line — with lists, tables, and diagram
 
 ### meta-4
 
-Each DR shall follow the ADR format [[2]], with sections Status, Context, Decision, Consequences, and References.
+Each DR shall follow the ADR format [[2]], with sections Status, Context, Decision, and Consequences, plus References where it cites an external source [[meta-19](#meta-19)].
 
 ### meta-5
 

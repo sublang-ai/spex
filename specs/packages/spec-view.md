@@ -116,7 +116,9 @@ Where the project has no `specs/` directory, the spec view's empty state shall a
 
 #### spec-view-18
 
-Where the project's `specs/` tree uses a legacy layout — a `user/`, `dev/`, `test/`, or `compositions/` directory — the spec view shall render a migration notice naming `npx @sublang/spex scaffold --update` as a copyable block instead of a tree ([DR-015](../decisions/015-reference-content.md)).
+Where the project's `specs/` tree uses a legacy layout — a `user/`, `dev/`, `test/`, or `compositions/` directory — the spec view shall render a migration notice naming `npx @sublang/spex scaffold --update` as a copyable block instead of a tree ([DR-015](../decisions/015-reference-content.md)):
+
+- the notice states that the command refreshes the spec law and prints a migration prompt for an AI agent to apply, since the command restructures nothing itself ([DR-022](../decisions/022-prompt-based-migration.md)), so the tree stays legacy — and this notice stays — until that migration lands.
 
 ## Internal Behavior
 
