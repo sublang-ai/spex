@@ -240,61 +240,6 @@ export function migrateLegacyItemLayout(
   return results;
 }
 
-// SCAF-51: iteration records become intent records (DR-017).
-export function migrateIterationsLayout(
-  basePath: string,
-): LegacyItemLayoutResult[] {
-  const results: LegacyItemLayoutResult[] = [];
-  const legacyRoot = join(basePath, "specs", "iterations");
-  if (!existsSync(legacyRoot) || !statSync(legacyRoot).isDirectory()) {
-    return results;
-  }
-
-  // Record ids form from the leading number, so a move may collide
-  // with a differently named intents/ file on the same number; such
-  // a move is kept in place and reported against the id holder.
-  const numberTaken = new Map<string, string>();
-  const targetRoot = join(basePath, "specs", "intents");
-  if (existsSync(targetRoot) && statSync(targetRoot).isDirectory()) {
-    for (const existing of listFiles(targetRoot)) {
-      const rel = relative(targetRoot, existing).replace(/\\/g, "/");
-      const digits = /^(\d+)/.exec(posix.basename(rel))?.[1];
-      if (digits !== undefined && !numberTaken.has(digits)) {
-        numberTaken.set(digits, posix.join("specs/intents", rel));
-      }
-    }
-  }
-
-  for (const source of listFiles(legacyRoot)) {
-    const suffix = relative(legacyRoot, source).replace(/\\/g, "/");
-    const legacyRelPath = posix.join("specs/iterations", suffix);
-    const targetRelPath = posix.join("specs/intents", suffix);
-    const target = join(basePath, targetRelPath);
-
-    if (existsSync(target)) {
-      results.push({ status: "conflict", targetRelPath, legacyRelPath });
-      continue;
-    }
-    const digits = /^(\d+)/.exec(posix.basename(suffix))?.[1];
-    const idHolder = digits === undefined ? undefined : numberTaken.get(digits);
-    if (idHolder !== undefined) {
-      results.push({
-        status: "conflict",
-        targetRelPath: idHolder,
-        legacyRelPath,
-      });
-      continue;
-    }
-    mkdirSync(dirname(target), { recursive: true });
-    renameSync(source, target);
-    if (digits !== undefined) numberTaken.set(digits, targetRelPath);
-    results.push({ status: "migrated", targetRelPath, legacyRelPath });
-  }
-
-  removeEmptyDirectories(legacyRoot);
-  return results;
-}
-
 // SCAF-21.
 export function getFileHistory(relPath: string): string[] {
   const manifestPath = join(getScaffoldDir(), ".file-history.json");

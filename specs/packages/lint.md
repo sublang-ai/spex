@@ -92,7 +92,7 @@ Where reference markers, records, and the map are linted, the linter shall repor
 - an error for a `[[N]]` marker without a matching numbered definition, and a warning for a numbered definition that is never cited [[meta-19](../meta.md#meta-19)];
 - an error for a numbered definition sitting outside `## References` or targeting a spec file — the marker mechanism cannot smuggle an item citation [[meta-19](../meta.md#meta-19)];
 - a warning for a DR missing a section of [[meta-4](../meta.md#meta-4)] or an IR missing a section of [[meta-5](../meta.md#meta-5)];
-- a warning for a `packages/` file not linked from `specs/map.md`.
+- a warning for a `packages/` or `decisions/` file not linked from `specs/map.md`, the two kinds the map indexes ([DR-000](../decisions/000-spec-structure-format.md)).
 
 #### lint-14
 
@@ -135,8 +135,8 @@ Where the linter is exercised, the test suite shall cover at least one fixture p
 - package sections with localized zh names, an H1 whose identifier is not the basename, and the missing-Verification warning ([[lint-5](#lint-5)]);
 - item IDs — an uppercase heading, a mismatched prefix, a duplicate ID, a non-unique item-file basename — and misplaced items ([[lint-6](#lint-6)]);
 - relationship metadata, an uncited Verification item, and a behavior citation into a peer's Internal Behavior ([[lint-7](#lint-7)]);
-- citations — broken link, broken anchor, legacy path, malformed item and record citations, and intent-record references from a spec that is not that record, linked and textual ([[lint-8](#lint-8)]);
-- reference markers, records, and map listing ([[lint-9](#lint-9)]);
+- citations — broken link, broken anchor, legacy path, malformed item and DR citations, and intent-record references from a spec that is not that record, linked and textual, including a record's own self-link ([[lint-8](#lint-8)]);
+- reference markers, records, and map listing for an unlisted package and an unlisted decision ([[lint-9](#lint-9)]);
 - citation discipline — a section-prose peer citation, a detached `Verifies` sentence, peer External and Internal citations from Verification, and a same-package Internal citation from Verification ([[lint-13](#lint-13)]);
 - the multi-sentence advisory ([[lint-14](#lint-14)]);
 - an item body spanning a nested subheading whose citations count for the item, a blockquote-wrapped package failing structure, and a literal triple-backtick line inside a longer fence staying undetected ([[lint-10](#lint-10)]);

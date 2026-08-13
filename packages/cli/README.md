@@ -137,7 +137,7 @@ Spex 2.0 tightens the packages-only law introduced in 1.0. Run
 `spex scaffold --update`, review the refreshed law and printed merge prompt,
 then reconcile your packages until `spex lint` passes. In particular,
 every package now requires Verification of its own behavior, behavior
-citations from Verification stay inside that package, record citations
+citations from Verification stay inside that package, DR citations
 use their exact IDs, and every item-bearing basename is tree-wide unique.
 
 ### From 0.x

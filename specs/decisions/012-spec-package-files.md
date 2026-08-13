@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the mechanical migration is superseded by [DR-022](022-prompt-based-migration.md) — the one-file package layout and the linter stand, but `--update` restructures no legacy content.
 
 ## Context
 

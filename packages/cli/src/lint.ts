@@ -1349,7 +1349,11 @@ function lintMap(ctx: LintContext): void {
   }
 
   for (const file of ctx.files.values()) {
-    if (!isUnder(file.relPath, "packages")) continue;
+    // The map indexes decisions and packages (DR-000), so both are
+    // checked; intent records are outside it (meta-18).
+    if (!isUnder(file.relPath, "packages") && !isUnder(file.relPath, "decisions")) {
+      continue;
+    }
     if (!listed.has(file.relPath)) {
       report(
         ctx,

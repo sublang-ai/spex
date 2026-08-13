@@ -37,12 +37,12 @@ meta.md       The spec of specs
 | [DR-009](decisions/009-at-hand-interaction.md) | 009-at-hand-interaction.md | At-hand interaction: no forced surface switches; in-place popovers; global attention badge; browsable history |
 | [DR-010](decisions/010-interface-craft.md) | 010-interface-craft.md | Interface craft: conversation-first, human status, honest async, guardrails, keyboard, accessibility, one visual grammar |
 | [DR-011](decisions/011-project-workspace.md) | 011-project-workspace.md | Project-first workspace: four-surface taxonomy, project palette, per-project tabs + Specs/Repo, interactive spec view |
-| [DR-012](decisions/012-spec-package-files.md) | 012-spec-package-files.md | One-file spec packages; mechanical migration; spec linter |
+| [DR-012](decisions/012-spec-package-files.md) | 012-spec-package-files.md | One-file spec packages; spec linter; mechanical migration superseded by DR-022 |
 | [DR-013](decisions/013-sublang-brand.md) | 013-sublang-brand.md | SubLang brand adoption: purple interaction hue, warm light neutrals, brand-recolored product logo and app icon |
 | [DR-014](decisions/014-released-toolchain.md) | 014-released-toolchain.md | Released toolchain adoption: playbook 2.0 / cligent 0.16 host boundary (floor superseded by DR-023), effort key, slc-emitted registry wrapper, invalidation, session cwd |
 | [DR-015](decisions/015-reference-content.md) | 015-reference-content.md | Reference content: built-in sources + catalog, slc demo example, Academy seed project, packages-layout spec view |
 | [DR-016](decisions/016-relationship-presentation.md) | 016-relationship-presentation.md | Superseded by DR-000: classified relationship presentation gives way to one citation mechanism |
-| [DR-017](decisions/017-intent-records.md) | 017-intent-records.md | Iterations become intents: disposable intent records, bare `IR-<N>` commit references, mechanical migration |
+| [DR-017](decisions/017-intent-records.md) | 017-intent-records.md | Iterations become intents: disposable intent records, bare `IR-<N>` commit references; mechanical migration superseded by DR-022 |
 | [DR-018](decisions/018-one-contract-per-item.md) | 018-one-contract-per-item.md | One requirement per item: one governing GEARS statement with per-kind attachments; advisory lint |
 | [DR-019](decisions/019-inline-agent-configuration.md) | 019-inline-agent-configuration.md | Inline agent configuration: profile-less blocks, runtime-bounded adapters, adapter-scoped efforts, captain-adapter parity, no shorthand surface |
 | [DR-020](decisions/020-desktop-live-smoke.md) | 020-desktop-live-smoke.md | Desktop live smoke: env-guarded handshake, real-run driver, split hermetic/live release gates |

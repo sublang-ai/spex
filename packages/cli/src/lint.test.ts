@@ -27,7 +27,11 @@ The spec of specs.
 Items shall have IDs.
 `;
 
-const MAP = (body: string) => `# Spec Map
+const MAP = (body: string, decisions = "") => `# Spec Map
+
+## Decisions
+
+${decisions}
 
 ## Packages
 
@@ -122,6 +126,11 @@ const FULL_MAP = MAP(
     "| --- | --- |",
     "| [auth.md](packages/auth.md) | Auth |",
     "| [audit.md](packages/audit.md) | Audit |",
+  ].join("\n"),
+  [
+    "| ID | File |",
+    "| --- | --- |",
+    "| [DR-001](decisions/001-a.md) | 001-a.md |",
   ].join("\n"),
 );
 
@@ -297,6 +306,7 @@ describe("lintSpecs", () => {
         "# IR-001: 意向\n\n## 状态\n\n进行中\n\n## 意图\n\n交付。\n\n## 交付项\n\n- [ ] X\n\n## 任务\n\n1. X\n\n## 验证\n\n完成即验收。\n",
       "specs/map.md": MAP(
         "| 文件 | 摘要 |\n| --- | --- |\n| [auth.md](packages/auth.md) | 认证 |",
+        "| 编号 | 文件 |\n| --- | --- |\n| [DR-001](decisions/001-a.md) | 001-a.md |",
       ),
     });
     assert.deepEqual(findings, []);
@@ -552,6 +562,20 @@ describe("lintSpecs", () => {
     const mapNamed = mapOnly.find((f) => f.rule === "cite/intent");
     assert.ok(mapNamed, JSON.stringify(mapOnly));
     assert.equal(mapNamed.severity, "error");
+
+    // A record's link to its own file is the one meta-18 permits, and
+    // meta-16 states no form for it, so neither rule fires (lint-8).
+    const selfLink = findingsFor({
+      "specs/intents/002-b.md": IR("002", "B").replace(
+        "Ship.",
+        "Ship, per [this record](002-b.md).",
+      ),
+    });
+    assert.ok(!rules(selfLink).includes("cite/intent"), JSON.stringify(selfLink));
+    assert.ok(
+      !rules(selfLink).includes("cite/record-link"),
+      JSON.stringify(selfLink),
+    );
 
     // Inline code never names an IR (lint-10).
     const inCode = findingsFor({
