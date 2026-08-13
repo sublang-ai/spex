@@ -131,6 +131,14 @@ The command prints a per-file indicator for every framework and seed path, plus 
 
 ## Upgrading from an earlier release
 
+### From 2.x
+
+Spex 3.0 makes intent records disposable planning artifacts: no other
+spec may cite or name an IR, and `specs/map.md` indexes decisions and
+packages only. Run `spex scaffold --update`, remove intent rows from a
+customized map and references to IRs from other specs, then reconcile
+until `spex lint` passes.
+
 ### From 1.x
 
 Spex 2.0 tightens the packages-only law introduced in 1.0. Run
@@ -143,9 +151,9 @@ use their exact IDs, and every item-bearing basename is tree-wide unique.
 ### From 0.x
 
 A tree scaffolded by a spex 0.x release carries the older structural
-generation of the law. Spex 2.0 uses the following structure:
+generation of the law. Spex 2.0 and later use the following structure:
 
-| | Previous generations (spex 0.x) | Current generation (spex 2.0) |
+| | Previous generations (spex 0.x) | Packages generation (spex 2.0+) |
 | --- | --- | --- |
 | Layout | `specs/user`/`dev`/`test`, later `packages/` + `compositions/` | `packages/` only — composition is a package pattern |
 | Cross-package behavior | binding and scenario items in composition files | behavior items binding inline to peers' External Behavior |

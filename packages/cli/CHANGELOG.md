@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-08-13
+
+### Changed
+
+- **Intent records are now disposable, non-addressable planning
+  artifacts.** No other spec may cite or name an IR, and `specs/map.md`
+  indexes decisions and packages only. `spex lint` enforces this across
+  maps and intent records while allowing a record to identify itself.
+  Existing trees must run `spex scaffold --update`, remove intent-map
+  rows and cross-IR references, then reconcile until `spex lint` passes.
+
+- Decision-record `References` sections are required only when the DR
+  cites an external source. English and Chinese scaffolds carry the
+  clarified law.
+
+### Fixed
+
+- `spex lint` now warns when a decision file, as well as a package file,
+  is missing from `specs/map.md`.
+
 ## [2.1.1] - 2026-08-05
 
 ### Fixed
@@ -300,7 +320,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/sublang-ai/spex/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/sublang-ai/spex/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/sublang-ai/spex/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/sublang-ai/spex/compare/v1.0.0...v2.0.0
