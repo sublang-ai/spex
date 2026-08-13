@@ -424,6 +424,24 @@ test("a user/dev/test directory flags the tree legacy with empty files", () => {
   ]);
 });
 
+// An items/ group and an interactions/ collection are legacy
+// generations too (scaffold-26): without them a packages/ tree beside
+// one rendered as current, hiding its cross-package specs.
+for (const dir of ["items", "interactions"]) {
+  test(`a ${dir}/ directory flags the tree legacy`, () => {
+    const fixtureDir = fixture({
+      [`specs/${dir}/legacy.md`]:
+        "# legacy: Legacy\n\n## External Behavior\n\n### legacy-1\n\nRetired.\n",
+      "specs/packages/new.md":
+        "# new: New\n\n## External Behavior\n\n### new-1\n\nA.\n",
+    });
+    const tree = parseSpecTree(fixtureDir);
+    assert.equal(tree.present, true);
+    assert.equal(tree.legacy, true);
+    assert.deepEqual(tree.files, []);
+  });
+}
+
 test("a compositions/ directory flags the tree legacy with empty files", () => {
   const dir = fixture({
     "specs/compositions/playback.md":

@@ -18,9 +18,19 @@ import type {
   SpecTreeState,
 } from "./protocol.js";
 
-/** Directories marking a legacy tree: the pre-DR-012 user/dev/test
- * groups and the compositions collection retired by DR-000. */
-const LEGACY_DIRS = ["user", "dev", "test", "compositions"] as const;
+/** Directories marking a legacy tree, per the scaffold package's
+ * legacy-generation classification: the pre-DR-012 user/dev/test/items
+ * groups and the interactions/compositions collections retired by
+ * DR-000. `iterations` is absent by design — intent records there
+ * still list (spec-view-14). */
+const LEGACY_DIRS = [
+  "user",
+  "dev",
+  "test",
+  "items",
+  "interactions",
+  "compositions",
+] as const;
 
 const KNOWN_TOP_LEVEL = new Set([
   "packages",
