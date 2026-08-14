@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the dependency floors are raised by [DR-025](025-playbook-7-adoption.md) to playbook 7.0 / cligent 0.20.
 
 ## Context
 

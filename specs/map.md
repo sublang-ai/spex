@@ -50,6 +50,7 @@ meta.md       The spec of specs
 | [DR-022](decisions/022-prompt-based-migration.md) | 022-prompt-based-migration.md | Prompt-based spec migration: one bundled agent-neutral prompt, `spex lint`, and human review |
 | [DR-023](decisions/023-runtime-compatibility-from-cligent.md) | 023-runtime-compatibility-from-cligent.md | Runtime compatibility from cligent: playbook 4.0 / cligent 0.18 floor, no Spex-declared agent SDKs, live-run supply becomes an app-shell concern |
 | [DR-024](decisions/024-app-supplied-agent-runtimes.md) | 024-app-supplied-agent-runtimes.md | App-supplied agent runtimes: desktop declares the claude/codex/opencode SDKs at `*`; readiness probes availability through cligent with per-tree repairs |
+| [DR-025](decisions/025-playbook-7-adoption.md) | 025-playbook-7-adoption.md | Playbook 7 adoption: code/review/decide built-ins, single-role CODE, controller Captain, cligent 0.20 floor |
 
 ## Packages
 

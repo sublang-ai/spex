@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted; the vendored built-in sources are amended by [DR-019](019-inline-agent-configuration.md) — playbook 3.1 ships them, so sources resolve from the installed package.
+Accepted; the built-in catalog is amended by [DR-025](025-playbook-7-adoption.md) — the built-ins are code, review, and decide, with sources shipped in the installed package.
 
 ## Context
 

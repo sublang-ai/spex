@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; the seeded lineup is amended by [DR-025](025-playbook-7-adoption.md) — single-role CODE plus the review and decide blocks.
 
 ## Context
 
