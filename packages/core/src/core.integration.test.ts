@@ -45,9 +45,6 @@ playbooks:
       coder:
         adapter: claude
         model: claude-test
-      reviewer:
-        adapter: codex
-    committer: coder
 `;
 
 class Client {
@@ -228,7 +225,7 @@ test("CORE-19: fake-adapter session end to end over the WebSocket", async () => 
   });
   assert.deepEqual(
     session.players.map((p) => p.id),
-    ["code-coder", "code-reviewer"],
+    ["code-coder"],
   );
 
   await client.expectOk("subscribe", {
@@ -377,27 +374,34 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
   {
     name: "unresolved required role",
     pattern: /required role "reviewer" has no players entry/,
-    config: VALID_CONFIG.replace("      reviewer:\n        adapter: codex\n", ""),
+    config:
+      VALID_CONFIG +
+      `  review:
+    from: "@sublang/playbook/review/registry"
+    players:
+      coder:
+        adapter: claude
+`,
   },
   {
     name: "zero visible roles",
     pattern: /resolves no visible local role/,
     config: VALID_CONFIG.replace(
-      /    players:\n      coder:\n        adapter: claude\n        model: claude-test\n      reviewer:\n        adapter: codex\n/,
+      /    players:\n      coder:\n        adapter: claude\n        model: claude-test\n/,
       "    players: {}\n",
     ),
   },
   {
     name: "unknown adapter",
-    pattern: /Unknown adapter "mystery" for playbooks\.code\.players\.reviewer/,
-    config: VALID_CONFIG.replace("        adapter: codex", "        adapter: mystery"),
+    pattern: /Unknown adapter "mystery" for playbooks\.code\.players\.coder/,
+    config: VALID_CONFIG.replace("        adapter: claude\n        model: claude-test", "        adapter: mystery"),
   },
   {
     name: "adapter-scoped invalid effort",
-    pattern: /effort "extreme" is not supported by the "codex" adapter/,
+    pattern: /effort "extreme" is not supported by the "claude" adapter/,
     config: VALID_CONFIG.replace(
-      "      reviewer:\n        adapter: codex\n",
-      "      reviewer:\n        adapter: codex\n        effort: extreme\n",
+      "        model: claude-test\n",
+      "        model: claude-test\n        effort: extreme\n",
     ),
   },
 ];
@@ -509,9 +513,14 @@ playbooks:
       coder:
         adapter: claude
         model: claude-test
+  review:
+    from: "@sublang/playbook/review/registry"
+    players:
+      coder:
+        adapter: claude
+        model: claude-test
       reviewer:
         adapter: codex
-    committer: coder
 `;
 
 test("CORE-23: readiness is adapter-keyed with positions and requirements", async () => {
@@ -527,10 +536,10 @@ test("CORE-23: readiness is adapter-keyed with positions and requirements", asyn
     readiness.map((entry: ReadinessEntry) => [entry.adapter, entry]),
   );
   assert.equal(byAdapter.get("claude")?.ready, true);
-  assert.deepEqual(byAdapter.get("claude")?.usedBy, ["code.coder"]);
+  assert.deepEqual(byAdapter.get("claude")?.usedBy, ["code.coder", "review.coder"]);
   assert.equal(byAdapter.get("codex")?.ready, false);
   assert.match(byAdapter.get("codex")?.requirement ?? "", /OPENAI_API_KEY/);
-  assert.deepEqual(byAdapter.get("codex")?.usedBy, ["code.reviewer"]);
+  assert.deepEqual(byAdapter.get("codex")?.usedBy, ["review.reviewer"]);
   // No preflight rule for gemini: unknown, verify yourself.
   assert.equal(byAdapter.get("gemini")?.ready, null);
   assert.deepEqual(byAdapter.get("gemini")?.usedBy, ["captain"]);
@@ -617,9 +626,10 @@ test("CORE-28: the single-vendor template dedupes to one claude entry", async ()
       usedBy: [
         "captain",
         "code.coder",
-        "code.reviewer",
-        "discuss.host",
-        "discuss.participant",
+        "review.coder",
+        "review.reviewer",
+        "decide.coder",
+        "decide.reviewer",
       ],
     },
   ]);
@@ -645,8 +655,11 @@ playbooks:
     from: "@sublang/playbook/code/registry"
     players:
       coder: claude
+  review:
+    from: "@sublang/playbook/review/registry"
+    players:
+      coder: claude
       reviewer: codex
-    committer: coder
 `;
 
 test("CORE-28: scalar shorthands compose and share adapter entries", async () => {
@@ -661,7 +674,7 @@ test("CORE-28: scalar shorthands compose and share adapter entries", async () =>
   assert.equal(state.status, "valid");
   if (state.status === "valid") {
     assert.deepEqual(state.summary.captain, { adapter: "claude" });
-    assert.deepEqual(state.summary.playbooks[0].players.reviewer, {
+    assert.deepEqual(state.summary.playbooks[1].players.reviewer, {
       agent: { adapter: "codex" },
       display: "codex",
     });
@@ -674,7 +687,7 @@ test("CORE-28: scalar shorthands compose and share adapter entries", async () =>
   );
   assert.equal(claude.length, 1);
   assert.equal(claude[0].ready, true);
-  assert.deepEqual(claude[0].usedBy, ["captain", "code.coder"]);
+  assert.deepEqual(claude[0].usedBy, ["captain", "code.coder", "review.coder"]);
   const codex = readiness.find(
     (entry: ReadinessEntry) => entry.adapter === "codex",
   );
@@ -867,7 +880,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
 // visible replies, and pane visibility — no LLM, no network.
 // ---------------------------------------------------------------------------
 
-test("real captain shell: bare /code reply and roster visibility", async () => {
+test("real captain shell: a Boss turn round-trips the captain reply", async () => {
   const dir = mkdtempSync(join(tmpdir(), "spex-shell-it-"));
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, VALID_CONFIG);
@@ -900,14 +913,17 @@ test("real captain shell: bare /code reply and roster visibility", async () => {
   });
   assert.deepEqual(
     session.players.map((p) => p.id),
-    ["code-coder", "code-reviewer"],
+    ["code-coder"],
   );
   await client.expectOk("subscribe", {
     channel: { kind: "session", sessionId: session.id },
   });
 
-  // A bare registered command: the real shell replies without any
-  // judge call and switches the visible roster to CODE's players.
+  // Playbook 7's controller Captain answers every Boss turn through
+  // the session Captain — a model call — so the faked adapter's text
+  // comes back as the visible reply. Core owns the wiring: registry
+  // loading, real shell construction, and the reply reaching the
+  // session channel with the turn completing.
   await client.expectOk("turn.submit", { sessionId: session.id, text: "/code" });
   await client.waitFor(
     (m) => m.type === "record" && m.record.type === "turn_finished",
@@ -915,17 +931,8 @@ test("real captain shell: bare /code reply and roster visibility", async () => {
 
   const transcript = JSON.stringify(client.records("session"));
   assert.ok(
-    transcript.includes("Ask what task to run with /code."),
-    `real shell reply missing; got: ${transcript.slice(0, 600)}`,
-  );
-  const viewChange = client
-    .records("session")
-    .find((m) => m.record.type === "player_view_changed");
-  assert.ok(viewChange, "shell did not switch pane visibility");
-  assert.deepEqual(
-    (viewChange.record as unknown as { visiblePlayerIds: string[] })
-      .visiblePlayerIds,
-    ["code-coder", "code-reviewer"],
+    transcript.includes("not json on purpose"),
+    `captain reply missing from the session channel; got: ${transcript.slice(0, 600)}`,
   );
 
   client.close();

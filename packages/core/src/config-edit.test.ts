@@ -32,10 +32,13 @@ function stubEntry(id: string, roles: string[]) {
 
 const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/code/registry") {
-    return { default: stubEntry("code", ["coder", "reviewer"]) };
+    return { default: stubEntry("code", ["coder"]) };
   }
-  if (specifier === "@sublang/playbook/discuss/registry") {
-    return { default: stubEntry("discuss", ["host", "participant"]) };
+  if (specifier === "@sublang/playbook/review/registry") {
+    return { default: stubEntry("review", ["coder", "reviewer"]) };
+  }
+  if (specifier === "@sublang/playbook/decide/registry") {
+    return { default: stubEntry("decide", ["coder", "reviewer"]) };
   }
   if (specifier === "@stub/other") {
     return { default: stubEntry("other", ["helper"]) };
@@ -83,7 +86,6 @@ test("captain.set merge patch preserves comments and unrelated keys", async () =
   // unrelated key are untouched.
   assert.match(after, /captain:\n\s+adapter: claude\n\s+model: claude-opus-4-9\n\s+effort: max/);
   assert.match(after, /claude-opus-4-8\[1m\]/);
-  assert.match(after, /committer: coder/);
 });
 
 test("playbook.player.set merge patch swaps a role's vendor in place", async () => {
@@ -92,7 +94,7 @@ test("playbook.player.set merge patch swaps a role's vendor in place", async () 
     path,
     {
       kind: "playbook.player.set",
-      playbookId: "code",
+      playbookId: "review",
       role: "reviewer",
       patch: { adapter: "codex", model: "gpt-5.5" },
     },
@@ -105,19 +107,18 @@ test("playbook.player.set merge patch swaps a role's vendor in place", async () 
   // Unrelated blocks and their comments survive.
   assert.match(after, /coder:\n\s+adapter: claude\n\s+model: claude-opus-4-8\[1m\]/);
   assert.match(after, /# protected auto mode for the Claude Coder/);
-  assert.match(after, /committer: coder\s+# which role commits/);
   const option = await editConfigFile(
     path,
     {
       kind: "playbook.option.set",
-      playbookId: "code",
-      key: "committer",
-      value: "reviewer",
+      playbookId: "review",
+      key: "focus",
+      value: "committed-phases",
     },
     stubLoader,
   );
   assert.equal(option.ok, true);
-  assert.match(readFileSync(path, "utf8"), /committer: reviewer/);
+  assert.match(readFileSync(path, "utf8"), /focus: committed-phases/);
 });
 
 test("a scalar shorthand becomes a block on first edit", () => {
@@ -241,7 +242,7 @@ test("edits the launcher would reject never reach the file", async () => {
     path,
     {
       kind: "playbook.player.set",
-      playbookId: "code",
+      playbookId: "review",
       role: "reviewer",
       patch: { effort: "off" },
     },

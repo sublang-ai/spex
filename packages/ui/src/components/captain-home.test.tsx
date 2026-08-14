@@ -55,10 +55,10 @@ const PLAYBOOKS: PlaybookSummary[] = [
     },
   },
   {
-    id: "discuss",
-    from: "@sublang/playbook/discuss/registry",
-    command: "discuss",
-    intent: "design discussion",
+    id: "review",
+    from: "@sublang/playbook/review/registry",
+    command: "review",
+    intent: "design review",
     players: {
       host: {
         agent: { adapter: "claude", model: "claude-opus-4-8" },
@@ -178,11 +178,11 @@ describe("RUN-31: slash menu and quick start dismissal", () => {
     fireEvent.change(composer, { target: { value: "/" } });
     expect(screen.getByTestId("slash-menu").textContent).toContain("/code");
     expect(screen.getByTestId("slash-menu").textContent).toContain(
-      "design discussion",
+      "design review",
     );
-    fireEvent.change(composer, { target: { value: "/di" } });
+    fireEvent.change(composer, { target: { value: "/re" } });
     const menu = screen.getByTestId("slash-menu");
-    expect(menu.textContent).toContain("/discuss");
+    expect(menu.textContent).toContain("/review");
     expect(menu.textContent).not.toContain("/code");
   });
 

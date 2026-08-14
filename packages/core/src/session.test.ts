@@ -31,16 +31,21 @@ function registryEntry() {
 
 async function setup(records: RecordEnvelope[]) {
   const top = parseYaml(readFileSync(templatePath(), "utf8"));
-  const composed = await composeConfig(top, async (specifier) => ({
-    default: specifier.includes("discuss")
-      ? {
-          ...registryEntry(),
-          id: "discuss",
-          command: "discuss",
-          requiredRoleIds: ["host", "participant"],
-        }
-      : registryEntry(),
-  }));
+  const composed = await composeConfig(top, async (specifier) => {
+    const forId = (id: string, roles: string[]) => ({
+      ...registryEntry(),
+      id,
+      command: id,
+      requiredRoleIds: roles,
+    });
+    if (specifier.includes("review")) {
+      return { default: forId("review", ["coder", "reviewer"]) };
+    }
+    if (specifier.includes("decide")) {
+      return { default: forId("decide", ["coder", "reviewer"]) };
+    }
+    return { default: forId("code", ["coder"]) };
+  });
   const store = new Store(join(mkdtempSync(join(tmpdir(), "spex-sess-")), "s.db"));
   const { imports, stats } = fakeAdapterImports({
     rules: [
@@ -77,13 +82,14 @@ test("end-to-end turn produces ordered persisted records with visibility flags",
   const info = await manager.createSession(project, composed);
   assert.deepEqual(
     info.players.map((p) => p.id),
-    ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
+    ["code-coder", "review-coder", "review-reviewer", "decide-coder", "decide-reviewer"],
   );
   assert.deepEqual(info.initialVisible, [
     "code-coder",
-    "code-reviewer",
-    "discuss-host",
-    "discuss-participant",
+    "review-coder",
+    "review-reviewer",
+    "decide-coder",
+    "decide-reviewer",
   ]);
 
   manager.submitTurn(info.id, "fix the bug");

@@ -15,7 +15,8 @@ import type { BuiltinPlaybookInfo } from "./protocol.js";
 /** Registry specifiers of the built-ins shipped by @sublang/playbook. */
 const BUILTIN_FROMS: Record<string, string> = {
   code: "@sublang/playbook/code/registry",
-  discuss: "@sublang/playbook/discuss/registry",
+  review: "@sublang/playbook/review/registry",
+  decide: "@sublang/playbook/decide/registry",
 };
 
 /**

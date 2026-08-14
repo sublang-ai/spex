@@ -133,7 +133,13 @@ test("ACCEPT: the bundled template composes against the real CODE registry", asy
 
   assert.deepEqual(
     composed.players.map((p) => p.id),
-    ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
+    [
+      "code-coder",
+      "review-coder",
+      "review-reviewer",
+      "decide-coder",
+      "decide-reviewer",
+    ],
   );
   assert.equal(composed.captainAgent.adapter, "claude");
   assert.equal(composed.playbooks[0].id, "code");
@@ -174,9 +180,21 @@ test("ACCEPT: a real session starts over the real shell and CODE registry", asyn
   });
   assert.deepEqual(
     session.players.map((p) => p.id),
-    ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
+    [
+      "code-coder",
+      "review-coder",
+      "review-reviewer",
+      "decide-coder",
+      "decide-reviewer",
+    ],
   );
-  assert.deepEqual(session.initialVisible, ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"]);
+  assert.deepEqual(session.initialVisible, [
+      "code-coder",
+      "review-coder",
+      "review-reviewer",
+      "decide-coder",
+      "decide-reviewer",
+    ]);
 
   client.close();
   await service.stop();
@@ -184,13 +202,13 @@ test("ACCEPT: a real session starts over the real shell and CODE registry", asyn
 
 // ---------------------------------------------------------------------------
 // A typical dev task flows through the app: the Captain divides the Boss
-// intent into an ordered plan and drives CODE's coder then reviewer over the
+// intent into an ordered plan and drives CODE's coder then REVIEW's reviewer over the
 // real project, producing an ascending, meaningful, fully-tracked turn. The
 // Captain is scripted here so the orchestration is deterministic; the cligent
 // runtime, record bus, store, and usage accounting are all real.
 // ---------------------------------------------------------------------------
 
-test("ACCEPT: a dev task divides into coder+reviewer calls over a real repo", async () => {
+test("ACCEPT: a dev task divides into code-coder and review-reviewer calls over a real repo", async () => {
   const dir = realRepo();
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, readFileSync(templatePath(), "utf8"));
@@ -222,7 +240,7 @@ test("ACCEPT: a dev task divides into coder+reviewer calls over a real repo", as
   const captain = createScriptedCaptain(async (turn, context, session) => {
     await session.emitStatus(`◇ planning: ${turn.prompt}`);
     await context.callPlayer("code-coder", `implement: ${turn.prompt}`);
-    await context.callPlayer("code-reviewer", `review the change for: ${turn.prompt}`);
+    await context.callPlayer("review-reviewer", `review the change for: ${turn.prompt}`);
     await session.emitStatus("done: implemented and reviewed");
   });
 
@@ -269,7 +287,7 @@ test("ACCEPT: a dev task divides into coder+reviewer calls over a real repo", as
   const prompts = records
     .filter((m) => m.record.type === "player_prompt")
     .map((m) => (m.record as unknown as { playerId: string }).playerId);
-  assert.deepEqual(prompts, ["code-coder", "code-reviewer"]);
+  assert.deepEqual(prompts, ["code-coder", "review-reviewer"]);
   assert.ok(types.filter((t) => t === "player_finished").length === 2);
 
   // The runtime cwd was the real project; usage was accounted for the turn.

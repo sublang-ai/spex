@@ -31,7 +31,7 @@ function registryEntry(overrides: Record<string, unknown> = {}) {
     id: "code",
     command: "code",
     intent: "software development / SDLC coding workflow",
-    requiredRoleIds: ["coder", "reviewer"],
+    requiredRoleIds: ["coder"],
     summaryPolicy: {
       stateCountLabels: {},
       copyPasteGuardNames: [],
@@ -42,7 +42,7 @@ function registryEntry(overrides: Record<string, unknown> = {}) {
     validateOptions: (value: unknown) => {
       const slice = (value ?? {}) as Record<string, unknown>;
       for (const key of Object.keys(slice)) {
-        if (key !== "committer") throw new Error(`unknown option "${key}"`);
+        throw new Error(`unknown option "${key}"`);
       }
       return slice;
     },
@@ -51,12 +51,22 @@ function registryEntry(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function discussEntry(overrides: Record<string, unknown> = {}) {
+function reviewEntry(overrides: Record<string, unknown> = {}) {
   return registryEntry({
-    id: "discuss",
-    command: "discuss",
-    intent: "design discussion: two agents converge on records",
-    requiredRoleIds: ["host", "participant"],
+    id: "review",
+    command: "review",
+    intent: "review committed phases: coder and reviewer converge",
+    requiredRoleIds: ["coder", "reviewer"],
+    ...overrides,
+  });
+}
+
+function decideEntry(overrides: Record<string, unknown> = {}) {
+  return registryEntry({
+    id: "decide",
+    command: "decide",
+    intent: "decision workflow: records a reviewed decision",
+    requiredRoleIds: ["coder", "reviewer"],
     ...overrides,
   });
 }
@@ -65,8 +75,11 @@ const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/code/registry") {
     return { default: registryEntry() };
   }
-  if (specifier === "@sublang/playbook/discuss/registry") {
-    return { default: discussEntry() };
+  if (specifier === "@sublang/playbook/review/registry") {
+    return { default: reviewEntry() };
+  }
+  if (specifier === "@sublang/playbook/decide/registry") {
+    return { default: decideEntry() };
   }
   throw new Error(`no module ${specifier}`);
 };
@@ -86,6 +99,14 @@ function codePlayers(top: Record<string, unknown>): Record<string, unknown> {
   return codeBlock(top).players as Record<string, unknown>;
 }
 
+function reviewBlock(top: Record<string, unknown>): Record<string, unknown> {
+  return (top.playbooks as Record<string, Record<string, unknown>>).review;
+}
+
+function reviewPlayers(top: Record<string, unknown>): Record<string, unknown> {
+  return reviewBlock(top).players as Record<string, unknown>;
+}
+
 test("bundled template composes with launcher-equivalent output", async () => {
   const composed = await composeConfig(baseConfig(), stubLoader);
   // The seeded lineup is fully-inline single-vendor Claude (DR-019).
@@ -98,17 +119,24 @@ test("bundled template composes with launcher-equivalent output", async () => {
   assert.equal(composed.captainOptions.captainAdapter, "claude");
   assert.deepEqual(
     composed.players.map((player) => player.id),
-    ["code-coder", "code-reviewer", "discuss-host", "discuss-participant"],
+    [
+      "code-coder",
+      "review-coder",
+      "review-reviewer",
+      "decide-coder",
+      "decide-reviewer",
+    ],
   );
   assert.deepEqual(composed.initialVisible, [
     "code-coder",
-    "code-reviewer",
-    "discuss-host",
-    "discuss-participant",
+    "review-coder",
+    "review-reviewer",
+    "decide-coder",
+    "decide-reviewer",
   ]);
   assert.deepEqual(composed.captainOptions.playbooks.code, {
     from: "@sublang/playbook/code/registry",
-    options: { committer: "coder" },
+    options: {},
   });
   assert.equal(composed.players[0].model, "claude-opus-4-8[1m]");
   assert.equal(composed.playbooks[0].command, "code");
@@ -155,10 +183,10 @@ test("the retired profile key is rejected on captain and player blocks", async (
   );
 
   const withPlayer = baseConfig();
-  codePlayers(withPlayer).reviewer = { profile: "codex-gpt", model: "gpt-6" };
+  reviewPlayers(withPlayer).reviewer = { profile: "codex-gpt", model: "gpt-6" };
   await expectError(
     withPlayer,
-    /^playbooks\.code\.players\.reviewer\.profile is retired: agents carry their own adapter, model, effort, and permissions$/,
+    /^playbooks\.review\.players\.reviewer\.profile is retired: agents carry their own adapter, model, effort, and permissions$/,
   );
 });
 
@@ -227,23 +255,25 @@ test("player coverage and resolution rules match the launcher", async () => {
   code.players = {};
   await expectError(top, /^playbooks\.code resolves no visible local role$/);
   code.players = { coder: { adapter: "claude" } };
+  const review = reviewBlock(top);
+  review.players = { coder: { adapter: "claude" } };
   await expectError(
     top,
-    /^playbooks\.code required role "reviewer" has no players entry$/,
+    /^playbooks\.review required role "reviewer" has no players entry$/,
   );
-  code.players = { coder: { adapter: "claude" }, reviewer: 42 };
+  review.players = { coder: { adapter: "claude" }, reviewer: 42 };
   await expectError(
     top,
-    /^playbooks\.code\.players\.reviewer must be an adapter shorthand or an agent block$/,
+    /^playbooks\.review\.players\.reviewer must be an adapter shorthand or an agent block$/,
   );
 });
 
 test("scalar shorthands still compose as bare-adapter blocks", async () => {
   const top = baseConfig();
-  codePlayers(top).reviewer = "claude";
+  reviewPlayers(top).reviewer = "claude";
   const composed = await composeConfig(top, stubLoader);
-  const reviewer = composed.players.find((p) => p.id === "code-reviewer");
-  assert.deepEqual(reviewer, { id: "code-reviewer", adapter: "claude" });
+  const reviewer = composed.players.find((p) => p.id === "review-reviewer");
+  assert.deepEqual(reviewer, { id: "review-reviewer", adapter: "claude" });
 });
 
 test("unknown agent fields and adapters are rejected; kimi is known", async () => {
@@ -252,38 +282,38 @@ test("unknown agent fields and adapters are rejected; kimi is known", async () =
   await expectError(top, /^Unknown config field captain\.typo$/);
   delete (top.captain as Record<string, unknown>).typo;
 
-  codePlayers(top).reviewer = "mystery";
+  reviewPlayers(top).reviewer = "mystery";
   // The valid set is cligent's own (DR-019) and now includes kimi.
   await expectError(
     top,
-    /^Unknown adapter "mystery" for playbooks\.code\.players\.reviewer\. Valid adapters: claude, codex, gemini, kimi, opencode$/,
+    /^Unknown adapter "mystery" for playbooks\.review\.players\.reviewer\. Valid adapters: claude, codex, gemini, kimi, opencode$/,
   );
 
-  codePlayers(top).reviewer = { adapter: "kimi" };
+  reviewPlayers(top).reviewer = { adapter: "kimi" };
   const composed = await composeConfig(top, stubLoader);
-  const reviewer = composed.players.find((p) => p.id === "code-reviewer");
+  const reviewer = composed.players.find((p) => p.id === "review-reviewer");
   assert.equal(reviewer?.adapter, "kimi");
 });
 
 test("effort vocabularies are adapter-scoped", async () => {
   // Kimi accepts only off/on.
   const top = baseConfig();
-  codePlayers(top).reviewer = { adapter: "kimi", effort: "off" };
+  reviewPlayers(top).reviewer = { adapter: "kimi", effort: "off" };
   let composed = await composeConfig(top, stubLoader);
   assert.equal(
-    composed.players.find((p) => p.id === "code-reviewer")?.effort,
+    composed.players.find((p) => p.id === "review-reviewer")?.effort,
     "off",
   );
-  codePlayers(top).reviewer = { adapter: "kimi", effort: "on" };
+  reviewPlayers(top).reviewer = { adapter: "kimi", effort: "on" };
   composed = await composeConfig(top, stubLoader);
   assert.equal(
-    composed.players.find((p) => p.id === "code-reviewer")?.effort,
+    composed.players.find((p) => p.id === "review-reviewer")?.effort,
     "on",
   );
-  codePlayers(top).reviewer = { adapter: "kimi", effort: "minimal" };
+  reviewPlayers(top).reviewer = { adapter: "kimi", effort: "minimal" };
   await expectError(
     top,
-    /^playbooks\.code\.players\.reviewer\.effort "minimal" is not supported by the "kimi" adapter \(valid: off, on\)$/,
+    /^playbooks\.review\.players\.reviewer\.effort "minimal" is not supported by the "kimi" adapter \(valid: off, on\)$/,
   );
 
   // Claude adds ultracode; Codex adds ultra.
@@ -293,10 +323,10 @@ test("effort vocabularies are adapter-scoped", async () => {
   assert.equal(composed.captainAgent.effort, "ultracode");
 
   const codexTop = baseConfig();
-  codePlayers(codexTop).reviewer = { adapter: "codex", effort: "ultra" };
+  reviewPlayers(codexTop).reviewer = { adapter: "codex", effort: "ultra" };
   composed = await composeConfig(codexTop, stubLoader);
   assert.equal(
-    composed.players.find((p) => p.id === "code-reviewer")?.effort,
+    composed.players.find((p) => p.id === "review-reviewer")?.effort,
     "ultra",
   );
 
@@ -331,8 +361,11 @@ test("legacy reasoningEffort composes as effort; both keys are invalid", async (
 
 test("cwd acceptance probe marks entries that take a cwd option", async () => {
   const cwdLoader: LoadModule = async (specifier) => {
-    if (specifier === "@sublang/playbook/discuss/registry") {
-      return { default: discussEntry() };
+    if (specifier === "@sublang/playbook/review/registry") {
+      return { default: reviewEntry() };
+    }
+    if (specifier === "@sublang/playbook/decide/registry") {
+      return { default: decideEntry() };
     }
     if (specifier === "@sublang/playbook/code/registry") {
       return {
@@ -340,7 +373,7 @@ test("cwd acceptance probe marks entries that take a cwd option", async () => {
           validateOptions: (value: unknown) => {
             const slice = (value ?? {}) as Record<string, unknown>;
             for (const key of Object.keys(slice)) {
-              if (key !== "cwd" && key !== "committer") {
+              if (key !== "cwd") {
                 throw new Error(`unknown option "${key}"`);
               }
             }

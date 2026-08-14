@@ -98,13 +98,13 @@ const BUILTINS: BuiltinPlaybookInfo[] = [
     source: "# Code Playbook",
   },
   {
-    id: "discuss",
-    command: "discuss",
-    intent: "structured design discussion",
-    from: "@sublang/playbook/discuss/registry",
+    id: "review",
+    command: "review",
+    intent: "review of committed phases",
+    from: "@sublang/playbook/review/registry",
     roles: ["host"],
     configured: false,
-    source: "# Discuss Playbook\n\nA **structured** discussion workflow.",
+    source: "# Review Playbook\n\nA **structured** review workflow.",
   },
 ];
 
@@ -211,9 +211,9 @@ describe("DR-015: built-ins section from the catalog", () => {
   test("only unconfigured entries render as available built-ins", () => {
     renderLibrary();
     const section = screen.getByTestId("builtins-section");
-    const card = within(section).getByTestId("builtin-discuss");
-    expect(card.textContent).toContain("/discuss");
-    expect(card.textContent).toContain("structured design discussion");
+    const card = within(section).getByTestId("builtin-review");
+    expect(card.textContent).toContain("/review");
+    expect(card.textContent).toContain("review of committed phases");
     expect(card.textContent).toContain("host:");
     // An unassigned role starts on the fixed neutral block (DR-019).
     expect(within(card).getByTestId("agent-chip").textContent).toContain(
@@ -225,16 +225,16 @@ describe("DR-015: built-ins section from the catalog", () => {
 
   test("the source toggle renders the playbook markdown", () => {
     renderLibrary();
-    fireEvent.click(screen.getByTestId("builtin-source-toggle-discuss"));
+    fireEvent.click(screen.getByTestId("builtin-source-toggle-review"));
     // Markdown rendered: **structured** becomes a <strong>.
     expect(screen.getByText("structured").tagName).toBe("STRONG");
-    fireEvent.click(screen.getByTestId("builtin-source-toggle-discuss"));
+    fireEvent.click(screen.getByTestId("builtin-source-toggle-review"));
     expect(screen.queryByText("structured")).toBeNull();
   });
 
   test("the add flow applies playbook.add with a block per role", async () => {
     renderLibrary();
-    const card = screen.getByTestId("builtin-discuss");
+    const card = screen.getByTestId("builtin-review");
     fireEvent.click(within(card).getByTestId("builtin-player-host"));
     const popover = within(card).getByTestId("agent-popover");
     fireEvent.click(within(popover).getByTestId("agent-adapter-codex"));
@@ -249,15 +249,15 @@ describe("DR-015: built-ins section from the catalog", () => {
       "codex · gpt-5.5-codex @ ultra",
     );
 
-    fireEvent.click(screen.getByTestId("builtin-add-discuss"));
+    fireEvent.click(screen.getByTestId("builtin-add-review"));
     await vi.waitFor(() =>
       // Every role maps to a whole agent block, keyed by role — never
       // a profile reference (DR-019).
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
         op: {
           kind: "playbook.add",
-          playbookId: "discuss",
-          from: "@sublang/playbook/discuss/registry",
+          playbookId: "review",
+          from: "@sublang/playbook/review/registry",
           players: {
             host: {
               adapter: "codex",
@@ -273,13 +273,13 @@ describe("DR-015: built-ins section from the catalog", () => {
 
   test("an untouched role is added on the neutral block", async () => {
     renderLibrary();
-    fireEvent.click(screen.getByTestId("builtin-add-discuss"));
+    fireEvent.click(screen.getByTestId("builtin-add-review"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
         op: {
           kind: "playbook.add",
-          playbookId: "discuss",
-          from: "@sublang/playbook/discuss/registry",
+          playbookId: "review",
+          from: "@sublang/playbook/review/registry",
           players: { host: NEUTRAL_BLOCK },
         },
       }),
@@ -298,9 +298,9 @@ describe("DR-015: built-ins section from the catalog", () => {
       return null;
     });
     renderLibrary();
-    fireEvent.click(screen.getByTestId("builtin-add-discuss"));
+    fireEvent.click(screen.getByTestId("builtin-add-review"));
     await vi.waitFor(() => {
-      const card = screen.getByTestId("builtin-discuss");
+      const card = screen.getByTestId("builtin-review");
       expect(card.textContent).toContain("config file is read-only");
     });
   });

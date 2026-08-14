@@ -20,10 +20,13 @@ function entry(id: string, roles: string[]) {
 
 const loader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/code/registry") {
-    return { default: entry("code", ["coder", "reviewer"]) };
+    return { default: entry("code", ["coder"]) };
   }
-  if (specifier === "@sublang/playbook/discuss/registry") {
-    return { default: entry("discuss", ["host", "participant"]) };
+  if (specifier === "@sublang/playbook/review/registry") {
+    return { default: entry("review", ["coder", "reviewer"]) };
+  }
+  if (specifier === "@sublang/playbook/decide/registry") {
+    return { default: entry("decide", ["coder", "reviewer"]) };
   }
   throw new Error(`no module ${specifier}`);
 };
@@ -32,32 +35,33 @@ test("catalog serves both built-ins with sources from the installed package", as
   // The registry entries come through the (stubbed) loader, but the
   // `from` specifiers are the real ones, so packagedSourcePath
   // resolves each source from the installed @sublang/playbook
-  // (playbook 3.1 ships reference/sdlc/code.md and discuss.md; the
-  // vendored copies are gone — DR-019).
+  // (playbook 7 ships reference/sdlc sources for code, review, and
+  // decide; the vendored copies are gone — DR-019).
   const builtins = await loadBuiltinCatalog(new Set(["code"]), loader);
   assert.deepEqual(
     builtins.map((b) => [b.id, b.configured]),
     [
       ["code", true],
-      ["discuss", false],
+      ["review", false],
+      ["decide", false],
     ],
   );
   const code = builtins.find((b) => b.id === "code");
   assert.ok((code?.source ?? "").startsWith("# Code"));
-  const discuss = builtins.find((b) => b.id === "discuss");
-  assert.deepEqual(discuss?.roles, ["host", "participant"]);
-  assert.equal(discuss?.from, "@sublang/playbook/discuss/registry");
+  const review = builtins.find((b) => b.id === "review");
+  assert.deepEqual(review?.roles, ["coder", "reviewer"]);
+  assert.equal(review?.from, "@sublang/playbook/review/registry");
   // Served without their maintainer-facing comment headers (DR-015).
-  assert.ok((discuss?.source ?? "").startsWith("# Discuss"));
-  assert.doesNotMatch(discuss?.source ?? "", /<!--/);
+  assert.ok((review?.source ?? "").startsWith("# Review"));
+  assert.doesNotMatch(review?.source ?? "", /<!--/);
 });
 
 test("a built-in whose registry fails to load is omitted", async () => {
   const flaky: LoadModule = async (specifier) => {
     if (specifier === "@sublang/playbook/code/registry") {
-      return { default: entry("code", ["coder", "reviewer"]) };
+      return { default: entry("code", ["coder"]) };
     }
-    throw new Error("package predates discuss");
+    throw new Error("package predates review");
   };
   const builtins = await loadBuiltinCatalog(new Set(), flaky);
   assert.deepEqual(

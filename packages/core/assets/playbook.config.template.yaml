@@ -23,8 +23,7 @@ notifications:
 
 # playbooks: enabled playbooks. Each key must equal the registry
 # manifest id; `from` names the registry module; `players` maps the
-# playbook's roles to agent blocks. Any other key is that playbook's
-# own option (e.g. CODE's `committer`).
+# playbook's roles to agent blocks.
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
@@ -35,6 +34,15 @@ playbooks:
         effort: xhigh
         permissions:
           mode: auto        # protected auto mode for the Claude Coder
+  review:
+    from: "@sublang/playbook/review/registry"
+    players:
+      coder:
+        adapter: claude
+        model: claude-opus-4-8
+        effort: xhigh
+        permissions:
+          mode: auto
       reviewer:
         adapter: claude     # single-vendor default; a second vendor reads better
         model: claude-opus-4-8
@@ -50,20 +58,18 @@ playbooks:
       #     mode: auto
       #     writablePaths:
       #       - .git        # allow git metadata writes under Codex auto mode
-    committer: coder      # which role commits - `coder` or `reviewer`
-  discuss:
-    from: "@sublang/playbook/discuss/registry"
+  decide:
+    from: "@sublang/playbook/decide/registry"
     players:
-      host:
+      coder:
         adapter: claude
         model: claude-opus-4-8
         effort: xhigh
         permissions:
           mode: auto
-      participant:
-        adapter: claude     # pairs well with a second-vendor block
+      reviewer:
+        adapter: claude
         model: claude-opus-4-8
         effort: xhigh
         permissions:
           mode: auto
-    committer: host       # which role commits - `host` or `participant`

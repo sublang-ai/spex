@@ -34,7 +34,7 @@ const READINESS: ReadinessEntry[] = [
     requirement: "set OPENAI_API_KEY or run `codex login`",
     usedBy: ["code.reviewer"],
   },
-  { adapter: "gemini", ready: null, usedBy: ["discuss.host"] },
+  { adapter: "gemini", ready: null, usedBy: ["review.reviewer"] },
 ];
 
 function saver() {
