@@ -101,6 +101,13 @@ const META_RECORD: SpecRecordInfo = {
   path: "meta.md",
 };
 
+/** The tree's own index, promoted beside meta (spec-view-7). */
+const MAP_RECORD: SpecRecordInfo = {
+  id: "map",
+  title: "map.md",
+  path: "map.md",
+};
+
 function itemDomId(id: string): string {
   return `specv-item-${id}`;
 }
@@ -200,7 +207,6 @@ export function SpecView(props: SpecViewProps) {
   // Jump origins, newest last: every in-view jump pushes its citing
   // item so the floating chip can walk back one level at a time.
   const [jumpOrigins, setJumpOrigins] = useState<readonly string[]>([]);
-  const [recordsOpen, setRecordsOpen] = useState(false);
   const [reader, setReader] = useState<ReaderState | null>(null);
   const [pendingJump, setPendingJump] = useState<string>();
   const [copiedId, setCopiedId] = useTransient(1500);
@@ -214,19 +220,12 @@ export function SpecView(props: SpecViewProps) {
   const readerBackRef = useRef<HTMLButtonElement | null>(null);
   // DOM id that takes focus back when the reader closes (§6).
   const readerReturnId = useRef<string | null>(null);
-  const popoverRef = useRef<HTMLDivElement | null>(null);
-  const recordsToggleRef = useRef<HTMLButtonElement | null>(null);
 
   const outlineRoot = useMemo(() => buildDirTree(tree.files), [tree]);
   const itemIndex = useMemo(() => buildItemIndex(tree.files), [tree]);
   // Backlinks and cross-file per-file citation rollups (SPECV-19).
   const citations = useMemo(() => buildCitationModel(tree.files), [tree]);
   const totals = useMemo(() => treeCounts(tree.files), [tree]);
-  const records = useMemo(
-    () => [...tree.decisions, ...tree.intents],
-    [tree],
-  );
-
   const searching = viewState.search.trim().length > 0;
   const search = useMemo(
     () => searchDigest(tree.files, viewState),
@@ -260,32 +259,6 @@ export function SpecView(props: SpecViewProps) {
   // Escape or an outside pointerdown closes it, its first entry takes
   // focus on open, and any close hands focus back to the toggle — a
   // disconnected toggle means the reader took over and owns focus.
-  useEffect(() => {
-    if (!recordsOpen) return;
-    popoverRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    const escape = (event: KeyboardEvent) => {
-      // Captured, so the popover claims Escape before the surface's
-      // last rung reaches the selection (spec-view-42).
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setRecordsOpen(false);
-    };
-    const outside = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (popoverRef.current?.contains(target)) return;
-      if (recordsToggleRef.current?.contains(target)) return;
-      setRecordsOpen(false);
-    };
-    window.addEventListener("keydown", escape, true);
-    document.addEventListener("pointerdown", outside);
-    return () => {
-      window.removeEventListener("keydown", escape, true);
-      document.removeEventListener("pointerdown", outside);
-      if (recordsToggleRef.current?.isConnected) {
-        recordsToggleRef.current.focus();
-      }
-    };
-  }, [recordsOpen]);
 
   // The reader takes focus on its Back control when it opens and hands
   // focus back to its invoker's DOM id on close (§6: never strand).
@@ -476,7 +449,6 @@ export function SpecView(props: SpecViewProps) {
    * reader's own Retry so the original invoker is kept. */
   function openRecord(record: SpecRecordInfo, returnFocusId?: string) {
     if (returnFocusId) readerReturnId.current = returnFocusId;
-    setRecordsOpen(false);
     setLiveNote(`Opened ${record.id}`);
     setReader({ record, loading: true });
     props
@@ -517,7 +489,15 @@ export function SpecView(props: SpecViewProps) {
     // resolution. An href resolving to exactly the tree's meta.md
     // opens the synthetic meta record.
     const sourcePath = itemIndex.get(itemId)?.sourcePath ?? "";
-    const record = recordForHref(sourcePath, href, [...records, META_RECORD]);
+    // Links inside a body — and inside the reader — reach every
+    // record the tree lists, plus the two tree-wide documents
+    // (spec-view-7).
+    const record = recordForHref(sourcePath, href, [
+      ...tree.decisions,
+      ...tree.intents,
+      META_RECORD,
+      MAP_RECORD,
+    ]);
     if (record) {
       openRecord(record, itemDomId(itemId));
       return;
@@ -598,6 +578,75 @@ export function SpecView(props: SpecViewProps) {
       </div>
     );
   }
+
+  /** The decision records as the outline's last branch: rows that
+   * open the reader, not tree nodes to expand (spec-view-7). Its own
+   * collapse key cannot collide with a collection directory, which
+   * always carries the "packages/" prefix (meta-31). */
+  const DECISIONS_KEY = "\u0000decisions";
+  const renderDecisions = (): ReactNode => {
+    const open = searching || !collapsedDirs.has(DECISIONS_KEY);
+    const shown = searching
+      ? tree.decisions.filter(
+          (record) =>
+            record.id.toLowerCase().includes(viewState.search.trim().toLowerCase()) ||
+            record.title
+              .toLowerCase()
+              .includes(viewState.search.trim().toLowerCase()),
+        )
+      : tree.decisions;
+    if (searching && shown.length === 0) return null;
+    return (
+      <li key={DECISIONS_KEY} data-testid="decisions-branch">
+        <button
+          type="button"
+          data-testid="decisions-toggle"
+          aria-expanded={open}
+          aria-label={`Decisions, ${tree.decisions.length} records`}
+          onClick={() =>
+            setCollapsedDirs((current) => {
+              const next = new Set(current);
+              if (next.has(DECISIONS_KEY)) next.delete(DECISIONS_KEY);
+              else next.add(DECISIONS_KEY);
+              return next;
+            })
+          }
+          className="flex items-center gap-1.5 rounded px-1 py-0.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+        >
+          <Icon
+            name="caretDown"
+            className={`h-3 w-3 text-neutral-400 transition-transform ${
+              open ? "" : "-rotate-90"
+            }`}
+          />
+          decisions
+          <span className="text-neutral-400">{tree.decisions.length}</span>
+        </button>
+        {open ? (
+          <ul className="ml-[7px] flex flex-col border-l border-neutral-200 pl-3 dark:border-neutral-800">
+            {shown.map((record) => (
+              <li key={record.path}>
+                <button
+                  id={`specv-record-${record.id}`}
+                  type="button"
+                  data-testid={`record-${record.id}`}
+                  onClick={() => openRecord(record, `specv-record-${record.id}`)}
+                  className="flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left text-xs hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                >
+                  <span className="shrink-0 font-mono text-[11px] font-semibold text-neutral-500">
+                    {record.id}
+                  </span>
+                  <span className="truncate text-neutral-600 dark:text-neutral-300">
+                    {record.title}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </li>
+    );
+  };
 
   // -------------------------------------------------------------------------
   // Empty and degraded whole-view states (DR-011: never blank).
@@ -706,6 +755,32 @@ export function SpecView(props: SpecViewProps) {
           migrated:
         </p>
         {copyCommand("npx @sublang/spex scaffold --update")}
+        {/* A legacy tree parses no packages, but its records are read
+            all the same and stay reachable (spec-view-18). */}
+        <div className="flex items-center justify-center gap-1.5 border-t border-neutral-200 pt-3 text-xs text-neutral-500 dark:border-neutral-800">
+          <button
+            id="specv-records-meta"
+            type="button"
+            data-testid="records-meta"
+            onClick={() => openRecord(META_RECORD, "specv-records-meta")}
+            className="hover:text-neutral-700 dark:hover:text-neutral-300"
+          >
+            meta
+          </button>
+          <span aria-hidden="true">·</span>
+          <button
+            id="specv-records-map"
+            type="button"
+            data-testid="records-map"
+            onClick={() => openRecord(MAP_RECORD, "specv-records-map")}
+            className="hover:text-neutral-700 dark:hover:text-neutral-300"
+          >
+            map
+          </button>
+        </div>
+        {tree.decisions.length > 0 ? (
+          <ul className="flex flex-col text-left">{renderDecisions()}</ul>
+        ) : null}
       </div>
     );
   }
@@ -1136,8 +1211,15 @@ export function SpecView(props: SpecViewProps) {
           </div>
         );
 
+        const decisionsBranch =
+          tree.decisions.length > 0 ? renderDecisions() : null;
         const outline =
-          tree.files.length > 0 ? renderDir(outlineRoot, outlineRoot.name) : null;
+          tree.files.length > 0 ? (
+            <>
+              {outlineRoot.dirs.filter(dirMatches).map((child) => renderDir(child))}
+              {outlineRoot.files.filter(fileMatches).map(renderFile)}
+            </>
+          ) : null;
 
         // The outline is permanent; the graph joins it beside
         // (spec-view-20). Both panes scroll independently, and the
@@ -1219,13 +1301,17 @@ export function SpecView(props: SpecViewProps) {
               {outlineControls}
               <ul className="flex min-h-0 flex-col overflow-y-auto pr-1">
                 {outline}
+                {decisionsBranch}
               </ul>
             </div>
           </div>
         ) : (
           <div className="flex flex-col">
             {outlineControls}
-            <ul className="flex flex-col">{outline}</ul>
+            <ul className="flex flex-col">
+              {outline}
+              {decisionsBranch}
+            </ul>
           </div>
         );
       })()}
@@ -1235,21 +1321,9 @@ export function SpecView(props: SpecViewProps) {
         </div>
       ) : null}
 
-      <div className="relative mt-2 flex shrink-0 items-center gap-1.5 border-t border-neutral-200 pt-2 text-xs text-neutral-500 dark:border-neutral-800">
-        <button
-          ref={recordsToggleRef}
-          id="specv-records-toggle"
-          type="button"
-          data-testid="records-toggle"
-          aria-expanded={recordsOpen}
-          onClick={() => setRecordsOpen((open) => !open)}
-          className="hover:text-neutral-700 dark:hover:text-neutral-300"
-        >
-          {tree.decisions.length} decisions · {tree.intents.length}{" "}
-          intents
-        </button>
-        <span aria-hidden="true">·</span>
-        {/* meta.md opens directly — the popover stays records-only. */}
+      {/* The footer keeps only the two tree-wide documents; the
+          decision records live in the outline now (spec-view-7). */}
+      <div className="mt-2 flex shrink-0 items-center gap-1.5 border-t border-neutral-200 pt-2 text-xs text-neutral-500 dark:border-neutral-800">
         <button
           id="specv-records-meta"
           type="button"
@@ -1259,34 +1333,16 @@ export function SpecView(props: SpecViewProps) {
         >
           meta
         </button>
-        {recordsOpen ? (
-          <div
-            ref={popoverRef}
-            data-testid="records-popover"
-            role="dialog"
-            aria-label="Decision and intent records"
-            className="absolute bottom-full left-0 z-10 mb-1 flex max-h-80 w-96 max-w-full flex-col overflow-y-auto rounded-lg border border-neutral-200 bg-white p-1.5 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            {records.map((record) => (
-              <button
-                key={record.path}
-                type="button"
-                onClick={() => openRecord(record, "specv-records-toggle")}
-                className="flex items-baseline gap-2 rounded px-2 py-1 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              >
-                <span className="shrink-0 font-mono text-xs font-semibold text-neutral-500">
-                  {record.id}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{record.title}</span>
-              </button>
-            ))}
-            {records.length === 0 ? (
-              <div className="px-2 py-1 text-xs text-neutral-400">
-                no records yet
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        <span aria-hidden="true">·</span>
+        <button
+          id="specv-records-map"
+          type="button"
+          data-testid="records-map"
+          onClick={() => openRecord(MAP_RECORD, "specv-records-map")}
+          className="hover:text-neutral-700 dark:hover:text-neutral-300"
+        >
+          map
+        </button>
       </div>
       {jumpOrigins.length > 0 ? (
         <button

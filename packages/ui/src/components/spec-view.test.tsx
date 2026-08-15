@@ -163,7 +163,7 @@ const TREE: SpecTreeState = {
           firstLine: "Eligibility shall be the deployment's answer.",
           // The body carries an inert sibling link (map) and a dead
           // citation-shaped link (SET-99) beyond its two live cites.
-          text: "Where the catalog lists published courses ([CAT-1](catalog/courses.md#cat-1)), eligibility shall be the deployment's answer, feeding session mechanics ([AUTH-8](identity/auth.md#auth-8)); see the [index](../map.md) and ([SET-99](settings.md#set-99)).",
+          text: "Where the catalog lists published courses ([CAT-1](catalog/courses.md#cat-1)), eligibility shall be the deployment's answer, feeding session mechanics ([AUTH-8](identity/auth.md#auth-8)); see the [index](../map.md), the [guide](../../README.md) and ([SET-99](settings.md#set-99)).",
           cites: ["CAT-1", "AUTH-8"],
         },
         {
@@ -264,9 +264,8 @@ const liveText = () => screen.getByTestId("specv-live").textContent;
 describe("SPECV-1/2: outline shape and file nodes", () => {
   test("the collection root nests directories and files; counts and intents render", () => {
     render(<Harness />);
-    // One packages root, default open.
-    const packagesRoot = screen.getByTestId("branch-packages");
-    expect(packagesRoot.textContent).toContain("Packages");
+    // No collection root row spends a level (spec-view-1).
+    expect(screen.queryByTestId("branch-packages")).toBeNull();
     // Directories sort alphabetically; the root-level file follows.
     const catalogDir = screen.getByText("catalog/");
     const identityDir = screen.getByText("identity/");
@@ -644,11 +643,16 @@ describe("SPECV-19/37: citation rows and backlinks", () => {
     fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
     fireEvent.click(screen.getByTestId("item-toggle-GUARD-5"));
     // A relative link that is neither an item nor a record is inert.
-    fireEvent.click(screen.getByRole("link", { name: "index" }));
+    fireEvent.click(screen.getByRole("link", { name: "guide" }));
     expect(screen.queryByTestId("record-reader")).toBeNull();
     expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
+    // map.md is a reader target of its own now (spec-view-7).
+    fireEvent.click(screen.getByRole("link", { name: "index" }));
+    expect(onReadRecord).toHaveBeenCalledWith("map.md");
+    await screen.findByText("Decided.");
+    fireEvent.click(screen.getByText("← Back"));
     // A DR citation swaps to the records reader.
-    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId(`file-chevron-${AUTH}`));
     fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
     fireEvent.click(screen.getByRole("link", { name: "DR-011" }));
     expect(onReadRecord).toHaveBeenCalledWith(
@@ -807,21 +811,17 @@ describe("DR-010 §6: focus follows", () => {
     expect(document.activeElement).toBe(row);
   });
 
-  test("the reader takes focus on Back and returns it to the popover's toggle", async () => {
+  test("the reader takes focus on Back and returns it to the record's row", async () => {
     const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nBody.");
     render(<Harness onReadRecord={onReadRecord} />);
-    fireEvent.click(screen.getByTestId("records-toggle"));
-    // The popover's first entry takes focus on open.
-    const popover = screen.getByTestId("records-popover");
-    const first = within(popover).getAllByRole("button")[0];
-    expect(document.activeElement).toBe(first);
-    fireEvent.click(first);
+    const row = screen.getByTestId("record-DR-011");
+    fireEvent.click(row);
     await screen.findByText("Body.");
     const back = screen.getByText("← Back");
     expect(document.activeElement).toBe(back);
     fireEvent.click(back);
-    // Closing hands focus back to the records toggle.
-    expect(document.activeElement).toBe(screen.getByTestId("records-toggle"));
+    // Closing hands focus back to the invoking row (spec-view-7).
+    expect(document.activeElement).toBe(screen.getByTestId("record-DR-011"));
   });
 
   test("a body-link record open returns focus to the citing item row", async () => {
@@ -835,29 +835,14 @@ describe("DR-010 §6: focus follows", () => {
     expect(document.activeElement).toBe(screen.getByTestId("item-AUTH-8"));
   });
 
-  test("outside pointerdown dismisses the popover and restores the toggle", () => {
-    render(<Harness />);
-    fireEvent.click(screen.getByTestId("records-toggle"));
-    expect(screen.getByTestId("records-popover")).toBeTruthy();
-    fireEvent.pointerDown(document.body);
-    expect(screen.queryByTestId("records-popover")).toBeNull();
-    expect(document.activeElement).toBe(screen.getByTestId("records-toggle"));
-  });
-
-  test("Escape closes the records popover and restores the toggle", () => {
-    render(<Harness />);
-    fireEvent.click(screen.getByTestId("records-toggle"));
-    expect(screen.getByTestId("records-popover")).toBeTruthy();
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByTestId("records-popover")).toBeNull();
-    expect(document.activeElement).toBe(screen.getByTestId("records-toggle"));
-  });
 });
 
 describe("DR-010 §7: accessible names and affordances", () => {
   test("section and topic labels are exposed; toggles carry names", () => {
     render(<Harness />);
-    expect(screen.getByRole("button", { name: "Toggle Packages" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Decisions, 1 records" }),
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Toggle identity/" }),
     ).toBeTruthy();
@@ -897,14 +882,12 @@ describe("DR-010 §7: accessible names and affordances", () => {
 });
 
 describe("SPECV-6/7: meta.md routing", () => {
-  test("the footer offers meta directly; the popover stays records-only", async () => {
+  test("the footer offers meta and map directly", async () => {
     const onReadRecord = vi.fn().mockResolvedValue("# meta\n\nGlossary.");
     render(<Harness onReadRecord={onReadRecord} />);
-    fireEvent.click(screen.getByTestId("records-toggle"));
-    expect(
-      within(screen.getByTestId("records-popover")).queryByText("meta"),
-    ).toBeNull();
-    fireEvent.keyDown(window, { key: "Escape" });
+    // The footer carries the two tree-wide documents and nothing
+    // else (spec-view-7).
+    expect(screen.getByTestId("records-map").textContent).toBe("map");
     const meta = screen.getByTestId("records-meta");
     expect(meta.textContent).toBe("meta");
     fireEvent.click(meta);
@@ -930,17 +913,21 @@ describe("SPECV-6/7: meta.md routing", () => {
   });
 });
 
-describe("SPECV-7: records footer and reader", () => {
-  test("footer opens the list; picking a record swaps to the reader", async () => {
+describe("spec-view-7/45: records in their places", () => {
+  test("the decisions branch stands last and opens the reader", async () => {
     const onReadRecord = vi
       .fn()
       .mockResolvedValue("# Record body\n\nHello from the record.");
     render(<Harness onReadRecord={onReadRecord} />);
-    fireEvent.click(screen.getByTestId("records-toggle"));
-    const popover = screen.getByTestId("records-popover");
-    expect(within(popover).getByText("Project workspace")).toBeTruthy();
-    expect(within(popover).getByText("IR-016")).toBeTruthy();
-    fireEvent.click(within(popover).getByText("Project workspace"));
+    // Decisions are a branch of the outline, and intents are nowhere
+    // in the view — they belong to the Dashboard (spec-view-7).
+    const branch = screen.getByTestId("decisions-branch");
+    expect(within(branch).getByText("Project workspace")).toBeTruthy();
+    expect(screen.queryByText("IR-016")).toBeNull();
+    // Last in the outline, after every package.
+    const rows = screen.getAllByTestId(/^(file-|decisions-branch)/);
+    expect(rows[rows.length - 1]).toBe(branch);
+    fireEvent.click(within(branch).getByText("Project workspace"));
     expect(onReadRecord).toHaveBeenCalledWith(
       "decisions/011-project-workspace.md",
     );
@@ -951,6 +938,38 @@ describe("SPECV-7: records footer and reader", () => {
     // Back returns to the tree.
     fireEvent.click(screen.getByText("← Back"));
     expect(screen.getByTestId(`file-${AUTH}`)).toBeTruthy();
+  });
+
+  test("the branch stands on a file-less tree and narrows with search", () => {
+    // Records outlive their packages: a tree with no package files
+    // still reaches its decisions (spec-view-7).
+    const fileLess: SpecTreeState = {
+      ...TREE,
+      files: [],
+      decisions: [
+        { id: "DR-001", title: "Scaffold localization", path: "decisions/001-scaffold.md" },
+        { id: "DR-011", title: "Project workspace", path: "decisions/011-workspace.md" },
+      ],
+    };
+    render(<Harness tree={fileLess} />);
+    const branch = screen.getByTestId("decisions-branch");
+    expect(within(branch).getByText("Scaffold localization")).toBeTruthy();
+    expect(within(branch).getByText("Project workspace")).toBeTruthy();
+
+    // A search narrows the branch by record ID and title, the way it
+    // narrows packages (spec-view-5).
+    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
+      target: { value: "DR-011" },
+    });
+    expect(screen.queryByTestId("record-DR-001")).toBeNull();
+    expect(screen.getByTestId("record-DR-011")).toBeTruthy();
+
+    // A group filter is a lens on items and leaves the branch whole
+    // (spec-view-7).
+    fireEvent.click(screen.getByTestId("search-clear"));
+    fireEvent.click(screen.getByTestId("filter-external"));
+    expect(screen.getByTestId("record-DR-001")).toBeTruthy();
+    expect(screen.getByTestId("record-DR-011")).toBeTruthy();
   });
 });
 
@@ -1062,7 +1081,7 @@ describe("view-state migration", () => {
         onViewState={() => {}}
       />,
     );
-    expect(screen.getByTestId("branch-packages")).toBeTruthy();
+    expect(screen.getByTestId(`file-${AUTH}`)).toBeTruthy();
     // Defaults: all three DR-015 groups on.
     for (const group of ["external", "internal", "test"]) {
       expect(
@@ -1254,7 +1273,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     fireEvent.click(screen.getByTestId("view-graph"));
     expect(screen.queryByTestId("spec-graph")).toBeNull();
     expect(screen.getByTestId("filter-external")).toBeTruthy();
-    expect(screen.getByTestId("records-toggle")).toBeTruthy();
+    expect(screen.getByTestId("records-meta")).toBeTruthy();
     fireEvent.click(screen.getByTestId("view-graph"));
     expect(screen.getByTestId("spec-graph")).toBeTruthy();
     restore();
