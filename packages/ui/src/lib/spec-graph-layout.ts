@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The citation graph's data model and its settled layout
-// (spec-view-22, spec-view-23, spec-view-28). Physics comes from
-// d3-force under our own rendering (DR-026 §6): this module owns the
-// counting, the encodings' scales, and a deterministic settle; the
-// component owns every pixel.
+// The citation graph's model, its settled arrangement, and the
+// presentation that turns one into a picture (spec-view-22,
+// spec-view-23, spec-view-28).
+//
+// Two stages, kept apart on purpose (DR-027). The arrangement is a
+// pure function of the tree — topology only, no label extents, no
+// pane — settled deterministically by d3-force. The presentation is a
+// pure function of that arrangement and the pane: it maps positions
+// onto the drawing area within a bounded aspect relaxation, then
+// solves the one mark scale at which nothing overlaps. Density is
+// solved here; it is never tuned into the force constants.
 
 import {
   forceCenter,
@@ -22,33 +28,46 @@ import {
 import type { SpecFileInfo } from "@sublang/spex-core/protocol";
 import { GROUP_ORDER, type SpecGroup } from "./spec-view-model.js";
 
-// --- Encoding scales (DR-026 §1) -------------------------------------------
-//
-// Node area carries the item count, so the radius runs on a square
-// root; the band keeps the largest node under ~3x the smallest, which
-// is the range size can be read as an ordering rather than a value.
-//
-// The forces below are tuned tight on purpose: a narrower graph pane
-// must be absorbed by the space between marks, never by the type,
-// which holds its on-screen size whatever the camera does.
+// --- Encoding bands (DR-026 §1) --------------------------------------------
 
-export const NODE_MIN_RADIUS = 14;
-export const NODE_MAX_RADIUS = 38;
-/** Edge width band, in canvas units. */
+/** Node area carries the item count, so the radius runs on a square
+ * root. Radii are unit-free here: the presentation multiplies them by
+ * the one solved scale, which is what keeps the band's ratio — the
+ * largest node under ~3x the smallest — true at every pane size. */
+export const NODE_UNIT_MIN = 1;
+export const NODE_UNIT_MAX = 2.7;
+/** Smallest rendered radius, in pixels: a 24px activation target
+ * (WCAG 2.2 SC 2.5.8), which outranks overlap. */
+export const MARK_SCALE_FLOOR = 12;
+/** Largest rendered radius, as a fraction of the pane's short side. */
+export const MARK_CAP_FRACTION = 0.15;
+/** Edge width band, in pixels. */
 export const EDGE_MIN_WIDTH = 2;
 export const EDGE_MAX_WIDTH = 6;
-/** Label and numeral size floor, in on-screen pixels. */
+/** Label size and the gap under a node's rim, in pixels. */
 export const LABEL_FONT_SIZE = 12;
-/** Gap between a node's rim and its label's cap height. */
-export const LABEL_GAP = 7;
+export const LABEL_GAP = 6;
+/** No label may claim more width than this; past it the name
+ * ellipsizes, so one long pair cannot shrink the whole map. */
+export const LABEL_MAX_WIDTH = 116;
+/** Padding between the drawing area's edge and any mark. */
+export const FIT_PADDING = 14;
+/** How far the two axis scales may differ — bounded fill, never the
+ * unbounded stretch DR-026 §4 condemned. */
+export const ASPECT_RELAXATION = 1.25;
 
-/** Area carries the count: r grows with its square root, floored so
- * the smallest package stays a legible target and capped so the
- * largest cannot dominate the layout. */
-export function nodeRadius(items: number, maxItems: number): number {
-  if (maxItems <= 0) return NODE_MIN_RADIUS;
-  const scaled = NODE_MAX_RADIUS * Math.sqrt(items / maxItems);
-  return Math.min(NODE_MAX_RADIUS, Math.max(NODE_MIN_RADIUS, scaled));
+/** Model-space radius unit for the simulation. Arbitrary but fixed:
+ * it sets the arrangement's internal scale, never the picture's. */
+const NOMINAL_RADIUS = 16;
+
+/** Area carries the count: the unit radius grows with its square
+ * root, floored so the smallest package keeps a share of the band. */
+export function nodeUnit(items: number, maxItems: number): number {
+  if (maxItems <= 0) return NODE_UNIT_MIN;
+  return Math.min(
+    NODE_UNIT_MAX,
+    Math.max(NODE_UNIT_MIN, NODE_UNIT_MAX * Math.sqrt(items / maxItems)),
+  );
 }
 
 /** Width carries the citation count on an absolute scale — never
@@ -77,9 +96,8 @@ export interface GraphNode extends SimulationNodeDatum {
   outbound: number;
   /** Cited by at least one peer — the role node fill encodes. */
   cited: boolean;
-  r: number;
-  /** Measured label width in on-screen pixels at LABEL_FONT_SIZE. */
-  labelWidth: number;
+  /** Unit radius; the presentation scales it into pixels. */
+  unit: number;
   x: number;
   y: number;
 }
@@ -91,8 +109,8 @@ export interface GraphEdge extends SimulationLinkDatum<GraphNode> {
   targetKey: string;
   /** Cross-file citations from source to target. */
   weight: number;
-  /** Perpendicular offset separating a reciprocally citing pair
-   * (spec-view-23); 0 for every one-way edge. */
+  /** Which side of a reciprocal pair this edge takes; 0 when the pair
+   * is one-way (spec-view-23). */
   offset: number;
 }
 
@@ -101,15 +119,7 @@ export interface GraphModel {
   edges: GraphEdge[];
 }
 
-/** Measures a label's width in pixels at LABEL_FONT_SIZE. Injected so
- * the layout is a pure function of the tree and its metrics, and so a
- * headless renderer still settles deterministically. */
-export type MeasureLabel = (text: string) => number;
-
-export function buildGraphModel(
-  files: readonly SpecFileInfo[],
-  measure: MeasureLabel,
-): GraphModel {
+export function buildGraphModel(files: readonly SpecFileInfo[]): GraphModel {
   // Longest-first so "course-catalog-3" resolves to course-catalog,
   // never to a shorter accidental prefix (basenames are tree-unique
   // identifiers per meta-10).
@@ -142,7 +152,7 @@ export function buildGraphModel(
   }
 
   // Stable order fixes the seeded starting positions, so the same tree
-  // always settles to the same picture (spec-view-28).
+  // always settles to the same arrangement (spec-view-28).
   const ordered = [...files].sort((a, b) =>
     a.basename < b.basename ? -1 : a.basename > b.basename ? 1 : 0,
   );
@@ -157,7 +167,7 @@ export function buildGraphModel(
     // Deterministic phyllotaxis seed placement: no random start, so
     // the settle below has nothing to vary on.
     const angle = i * Math.PI * (3 - Math.sqrt(5));
-    const radius = 24 * Math.sqrt(i + 0.5);
+    const radius = 26 * Math.sqrt(i + 0.5);
     return {
       key: file.key,
       basename: file.basename,
@@ -166,8 +176,7 @@ export function buildGraphModel(
       inbound: inbound.get(file.basename) ?? 0,
       outbound: outbound.get(file.basename) ?? 0,
       cited: (inbound.get(file.basename) ?? 0) > 0,
-      r: nodeRadius(file.items.length, maxItems),
-      labelWidth: measure(file.basename),
+      unit: nodeUnit(file.items.length, maxItems),
       x: radius * Math.cos(angle),
       y: radius * Math.sin(angle),
     };
@@ -176,8 +185,6 @@ export function buildGraphModel(
   const edges: GraphEdge[] = [];
   for (const key of [...weights.keys()].sort()) {
     const [sourceKey, targetKey] = key.split(" ");
-    // A reciprocal pair draws as two offset edges rather than one
-    // ambiguous double-headed line (spec-view-23).
     const reciprocal = weights.has(`${targetKey} ${sourceKey}`);
     edges.push({
       source: sourceKey,
@@ -185,14 +192,14 @@ export function buildGraphModel(
       sourceKey,
       targetKey,
       weight: weights.get(key) ?? 0,
-      offset: reciprocal ? (sourceKey < targetKey ? 7 : -7) : 0,
+      offset: reciprocal ? (sourceKey < targetKey ? 1 : -1) : 0,
     });
   }
 
   return { nodes, edges };
 }
 
-// --- Settle ----------------------------------------------------------------
+// --- Arrangement ------------------------------------------------------------
 
 /** Fixed-seed LCG standing in for Math.random inside the simulation,
  * so even coincident-node jiggle is reproducible (spec-view-28). */
@@ -204,51 +211,27 @@ function seededRandom(seed = 0x5eed): () => number {
   };
 }
 
-/** Half-extents of a node's whole mark: the circle, and the label
- * hanging under it. Collision runs on these boxes rather than on the
- * circles, so labels are separated by construction (DR-026 §4). */
-function markBox(node: GraphNode): {
-  halfWidth: number;
-  halfHeight: number;
-  centerY: number;
-} {
-  const labelBottom = node.r + LABEL_GAP + LABEL_FONT_SIZE;
-  return {
-    halfWidth: Math.max(node.r, node.labelWidth / 2),
-    halfHeight: (node.r + labelBottom) / 2,
-    centerY: (labelBottom - node.r) / 2,
-  };
-}
-
-/** Rectangular separation over the mark boxes — the label-aware
- * collision d3's circular collide cannot express. O(n²) is free at
- * the tree sizes DR-026 scopes. */
-function forceMarkBoxes(padding: number): Force<GraphNode, GraphEdge> {
+/** Model-space separation: nodes never settle closer than their own
+ * radii plus a margin, which is what lower-bounds the scale the
+ * presentation can solve (spec-view-28). */
+function forceSeparation(margin: number): Force<GraphNode, GraphEdge> {
   let nodes: GraphNode[] = [];
   const force = (alpha: number) => {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i];
         const b = nodes[j];
-        const boxA = markBox(a);
-        const boxB = markBox(b);
         const dx = b.x - a.x;
-        const dy = b.y + boxB.centerY - (a.y + boxA.centerY);
-        const overlapX = boxA.halfWidth + boxB.halfWidth + padding - Math.abs(dx);
-        const overlapY =
-          boxA.halfHeight + boxB.halfHeight + padding - Math.abs(dy);
-        if (overlapX <= 0 || overlapY <= 0) continue;
-        // Part along the axis needing the smaller correction.
-        const strength = 0.5 * alpha;
-        if (overlapX < overlapY) {
-          const push = (dx >= 0 ? 1 : -1) * overlapX * strength;
-          a.x -= push;
-          b.x += push;
-        } else {
-          const push = (dy >= 0 ? 1 : -1) * overlapY * strength;
-          a.y -= push;
-          b.y += push;
-        }
+        const dy = b.y - a.y;
+        const distance = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const wanted =
+          (a.unit + b.unit) * NOMINAL_RADIUS + margin;
+        if (distance >= wanted) continue;
+        const push = ((wanted - distance) / distance) * 0.5 * alpha;
+        a.x -= dx * push;
+        a.y -= dy * push;
+        b.x += dx * push;
+        b.y += dy * push;
       }
     }
   };
@@ -258,9 +241,9 @@ function forceMarkBoxes(padding: number): Force<GraphNode, GraphEdge> {
   return force as Force<GraphNode, GraphEdge>;
 }
 
-/** Builds the simulation behind the graph. It is created stopped: the
- * caller settles it synchronously for the first paint, and reheats it
- * only under the reader's hand (spec-view-28). */
+/** Builds the simulation behind the graph. Topology only: no label
+ * extents, no pane, no density tuning — those belong to the
+ * presentation (DR-027). Created stopped; the caller settles it. */
 export function createSimulation(
   model: GraphModel,
 ): Simulation<GraphNode, GraphEdge> {
@@ -269,31 +252,27 @@ export function createSimulation(
     .distance((edge) => {
       const source = edge.source as GraphNode;
       const target = edge.target as GraphNode;
-      return source.r + target.r + 26;
+      return (source.unit + target.unit) * NOMINAL_RADIUS + 46;
     })
-    .strength(0.4);
+    .strength(0.35);
 
   return forceSimulation(model.nodes)
     .randomSource(seededRandom())
     .force("link", link)
-    .force("charge", forceManyBody<GraphNode>().strength(-260).distanceMax(420))
+    .force("charge", forceManyBody<GraphNode>().strength(-380).distanceMax(900))
     // forceCenter only recenters the whole system; the weak positional
     // pull is what keeps a package no citation reaches from drifting
-    // off the canvas (spec-view-28).
-    // Asymmetric on purpose: the graph pane is taller than it is wide
-    // at any reasonable split, so the layout settles portrait and the
-    // camera's fit wastes less. Both strengths are constants, so the
-    // picture stays a function of the tree, not of the pane.
-    .force("x", forceX<GraphNode>(0).strength(0.15))
-    .force("y", forceY<GraphNode>(0).strength(0.075))
+    // away from it (spec-view-28).
+    .force("x", forceX<GraphNode>(0).strength(0.05))
+    .force("y", forceY<GraphNode>(0).strength(0.05))
     .force("center", forceCenter<GraphNode>(0, 0))
-    .force("marks", forceMarkBoxes(7))
+    .force("separation", forceSeparation(18))
     .alphaDecay(0.02)
     .stop();
 }
 
 /** Runs the simulation to rest without painting a frame, so the graph
- * opens on its settled picture instead of animating into one. */
+ * opens on its settled arrangement instead of animating into one. */
 export function settle(simulation: Simulation<GraphNode, GraphEdge>): void {
   simulation.alpha(1);
   const ticks = Math.ceil(
@@ -303,27 +282,253 @@ export function settle(simulation: Simulation<GraphNode, GraphEdge>): void {
   simulation.stop();
 }
 
-/** The layout's extent, including each label's box — what the camera
- * fits on open (spec-view-27). */
-export function layoutBounds(nodes: readonly GraphNode[]): {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-} {
-  if (nodes.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+// --- Presentation -----------------------------------------------------------
+
+export interface Placement {
+  key: string;
+  x: number;
+  y: number;
+  /** Rendered radius in pixels: unit × the solved scale. */
+  r: number;
+  /** Label as drawn, ellipsized to LABEL_MAX_WIDTH. */
+  label: string;
+  /** Drawn label's width in pixels. */
+  labelWidth: number;
+}
+
+export interface Presentation {
+  places: Map<string, Placement>;
+  /** The one solved mark scale (pixels per unit radius). */
+  scale: number;
+  /** Presentation pixels back to model space — what a drag needs, so
+   * the pointer can address the arrangement the simulation holds. */
+  toModel: (x: number, y: number) => { x: number; y: number };
+}
+
+export type MeasureLabel = (text: string) => number;
+
+/** Cuts a label to the width cap, keeping the measurement honest by
+ * re-measuring the truncation. */
+function ellipsize(
+  text: string,
+  measure: MeasureLabel,
+): { label: string; width: number } {
+  const full = measure(text);
+  if (full <= LABEL_MAX_WIDTH) return { label: text, width: full };
+  let cut = text;
+  while (cut.length > 1) {
+    cut = cut.slice(0, -1);
+    const candidate = `${cut}…`;
+    const width = measure(candidate);
+    if (width <= LABEL_MAX_WIDTH) return { label: candidate, width };
+  }
+  return { label: "…", width: measure("…") };
+}
+
+/** The smallest scale at which two marks touch, or Infinity if they
+ * never do.
+ *
+ * A mark is the axis-aligned box around its circle and the label
+ * hanging under it: half-width max(unit·s, labelHalf), top y−unit·s,
+ * bottom y+unit·s+gap+font. Every edge of that box moves outward as s
+ * grows, so overlap is monotone in s and each axis contributes one
+ * threshold; the pair's contact scale is the larger of the two. That
+ * monotonicity is what makes an exact solve possible — a label-only
+ * box would translate rather than grow, and no such threshold would
+ * exist. */
+interface SolveMark {
+  x: number;
+  y: number;
+  unit: number;
+  labelHalf: number;
+}
+
+function pairContactScale(a: SolveMark, b: SolveMark): number {
+  const gap = LABEL_GAP + LABEL_FONT_SIZE;
+  const dx = Math.abs(a.x - b.x);
+  const dy = Math.abs(a.y - b.y);
+  const units = a.unit + b.unit;
+
+  // Vertical: the boxes span [y − unit·s, y + unit·s + gap], so they
+  // meet once |dy| < units·s + gap.
+  const vertical = Math.max(0, (dy - gap) / units);
+
+  // Horizontal: half-widths are max(unit·s, labelHalf) — piecewise
+  // linear and non-decreasing, with a breakpoint per node.
+  const labels = a.labelHalf + b.labelHalf;
+  let horizontal: number;
+  if (dx < labels) {
+    horizontal = 0;
+  } else {
+    const breakA = a.labelHalf / a.unit;
+    const breakB = b.labelHalf / b.unit;
+    const first = Math.min(breakA, breakB);
+    const second = Math.max(breakA, breakB);
+    // Between the breakpoints one side still rides its label.
+    const risingUnit = breakA <= breakB ? a.unit : b.unit;
+    const heldLabel = breakA <= breakB ? b.labelHalf : a.labelHalf;
+    const middle = (dx - heldLabel) / risingUnit;
+    if (middle >= first && middle <= second) {
+      horizontal = middle;
+    } else {
+      horizontal = dx / units;
+    }
+  }
+  return Math.max(vertical, horizontal);
+}
+
+/** Maps a settled arrangement onto the pane and solves the picture's
+ * one mark scale (spec-view-28). Pure in (nodes, area, metrics). */
+export function presentLayout(
+  nodes: readonly GraphNode[],
+  area: { width: number; height: number },
+  measure: MeasureLabel,
+  /** Holds the mark scale steady while the reader drags: a local
+   * gesture must not resize every mark on the canvas. Overlaps a drag
+   * creates are the reader's own (spec-view-28). */
+  heldScale?: number,
+): Presentation {
+  const labels = new Map<string, { label: string; width: number }>();
+  for (const node of nodes) labels.set(node.key, ellipsize(node.basename, measure));
+
+  const places = new Map<string, Placement>();
+  const identity = (x: number, y: number) => ({ x, y });
+  if (nodes.length === 0 || area.width <= 0 || area.height <= 0) {
+    return { places, scale: MARK_SCALE_FLOOR, toModel: identity };
+  }
+
+  const shortSide = Math.min(area.width, area.height);
+  const cap = Math.max(
+    MARK_SCALE_FLOOR,
+    (shortSide * MARK_CAP_FRACTION) / NODE_UNIT_MAX,
+  );
+
   let minX = Infinity;
-  let minY = Infinity;
   let maxX = -Infinity;
+  let minY = Infinity;
   let maxY = -Infinity;
   for (const node of nodes) {
-    const halfWidth = Math.max(node.r, node.labelWidth / 2);
-    minX = Math.min(minX, node.x - halfWidth);
-    maxX = Math.max(maxX, node.x + halfWidth);
-    minY = Math.min(minY, node.y - node.r);
-    maxY = Math.max(maxY, node.y + node.r + LABEL_GAP + LABEL_FONT_SIZE);
+    minX = Math.min(minX, node.x);
+    maxX = Math.max(maxX, node.x);
+    minY = Math.min(minY, node.y);
+    maxY = Math.max(maxY, node.y);
   }
-  return { minX, minY, maxX, maxY };
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+
+  // Margins reserve room for the marks themselves, which are only
+  // known once the scale is solved; three passes settle the mutual
+  // dependency, and the loop is fixed-length so the result stays a
+  // pure function of its inputs.
+  let marginX = 0;
+  let marginY = 0;
+  let scale = MARK_SCALE_FLOOR;
+  let positions = new Map<string, { x: number; y: number }>();
+  let finalKx = 1;
+  let finalKy = 1;
+
+  for (let pass = 0; pass < 3; pass++) {
+    const availableX = Math.max(
+      1,
+      area.width - 2 * FIT_PADDING - 2 * marginX,
+    );
+    const availableY = Math.max(
+      1,
+      area.height - 2 * FIT_PADDING - 2 * marginY,
+    );
+    // A span too small to map keeps the identity scale, centered.
+    let kx = spanX > 0.5 ? availableX / spanX : 1;
+    let ky = spanY > 0.5 ? availableY / spanY : 1;
+    // Bounded fill: the axes may differ, but only so far.
+    if (kx > ky * ASPECT_RELAXATION) kx = ky * ASPECT_RELAXATION;
+    if (ky > kx * ASPECT_RELAXATION) ky = kx * ASPECT_RELAXATION;
+
+    finalKx = kx;
+    finalKy = ky;
+    positions = new Map();
+    for (const node of nodes) {
+      positions.set(node.key, {
+        x: area.width / 2 + (node.x - midX) * kx,
+        y: area.height / 2 + (node.y - midY) * ky,
+      });
+    }
+
+    // The largest scale at which nothing touches: the smallest contact
+    // scale over every pair.
+    const marks: SolveMark[] = nodes.map((node) => {
+      const place = positions.get(node.key)!;
+      return {
+        x: place.x,
+        y: place.y,
+        unit: node.unit,
+        labelHalf: (labels.get(node.key)?.width ?? 0) / 2,
+      };
+    });
+    if (heldScale !== undefined) {
+      scale = heldScale;
+    } else {
+      let solved = Infinity;
+      for (let i = 0; i < marks.length; i++) {
+        for (let j = i + 1; j < marks.length; j++) {
+          solved = Math.min(solved, pairContactScale(marks[i], marks[j]));
+        }
+      }
+      // The activation-target floor outranks overlap; the cap applies
+      // to what the solve allows.
+      scale = Math.max(
+        MARK_SCALE_FLOOR,
+        Math.min(Number.isFinite(solved) ? solved : cap, cap),
+      );
+    }
+
+    // Does anything now sit outside the drawing area?
+    let overflowX = 0;
+    let overflowY = 0;
+    for (const node of nodes) {
+      const place = positions.get(node.key)!;
+      const half = Math.max(
+        node.unit * scale,
+        (labels.get(node.key)?.width ?? 0) / 2,
+      );
+      overflowX = Math.max(
+        overflowX,
+        FIT_PADDING - (place.x - half),
+        place.x + half - (area.width - FIT_PADDING),
+      );
+      overflowY = Math.max(
+        overflowY,
+        FIT_PADDING - (place.y - node.unit * scale),
+        place.y +
+          node.unit * scale +
+          LABEL_GAP +
+          LABEL_FONT_SIZE -
+          (area.height - FIT_PADDING),
+      );
+    }
+    if (overflowX <= 0.5 && overflowY <= 0.5) break;
+    marginX += Math.max(0, overflowX);
+    marginY += Math.max(0, overflowY);
+  }
+
+  for (const node of nodes) {
+    const place = positions.get(node.key)!;
+    const label = labels.get(node.key)!;
+    places.set(node.key, {
+      key: node.key,
+      x: place.x,
+      y: place.y,
+      r: node.unit * scale,
+      label: label.label,
+      labelWidth: label.width,
+    });
+  }
+  const toModel = (x: number, y: number) => ({
+    x: midX + (x - area.width / 2) / (finalKx || 1),
+    y: midY + (y - area.height / 2) / (finalKy || 1),
+  });
+  return { places, scale, toModel };
 }
 
 /** Group order for the details card's breakdown (spec-view-26). */

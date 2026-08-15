@@ -1462,6 +1462,38 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(Number.isFinite(glossary[0])).toBe(true);
     expect(Number.isFinite(glossary[1])).toBe(true);
 
+    // The solved presentation: nothing overlaps, and every node keeps
+    // its activation-target floor (spec-view-28).
+    const marks = ["auth", "billing", "session", "glossary"].map((name) => {
+      const circle = circleOf(name);
+      const label = screen.getByTestId(`graph-label-${name}`);
+      return {
+        name,
+        x: Number(circle.getAttribute("cx")),
+        y: Number(circle.getAttribute("cy")),
+        r: Number(circle.getAttribute("r")),
+        // The rendered label's own box, as the solve measured it.
+        half: Math.max(
+          Number(circle.getAttribute("r")),
+          (label.textContent?.length ?? 0) * 3.2,
+        ),
+      };
+    });
+    for (const mark of marks) expect(mark.r).toBeGreaterThanOrEqual(12);
+    for (let i = 0; i < marks.length; i++) {
+      for (let j = i + 1; j < marks.length; j++) {
+        const a = marks[i];
+        const b = marks[j];
+        const apart =
+          Math.abs(a.x - b.x) >= a.half + b.half ||
+          Math.abs(a.y - b.y) >= a.r + b.r + 6 + 12;
+        expect(
+          apart,
+          `${a.name} and ${b.name} overlap in the solved picture`,
+        ).toBe(true);
+      }
+    }
+
     // Dragging moves the held node (spec-view-28).
     // Driven as MouseEvents: jsdom has no PointerEvent, and a plain
     // synthetic event carries no coordinates to drag by.

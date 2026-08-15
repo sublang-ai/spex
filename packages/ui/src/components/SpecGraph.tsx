@@ -29,13 +29,14 @@ import {
   buildGraphModel,
   createSimulation,
   edgeWidth,
-  layoutBounds,
+  presentLayout,
   settle,
   GRAPH_GROUP_ORDER,
   LABEL_FONT_SIZE,
   LABEL_GAP,
   type GraphEdge,
   type GraphNode,
+  type Placement,
 } from "../lib/spec-graph-layout.js";
 import type { SpecGroup } from "../lib/spec-view-model.js";
 
@@ -48,9 +49,9 @@ export {
 /** The card waits for the pointer to settle, so crossing the canvas
  * does not flash a card per mark (spec-view-26). */
 const HOVER_DELAY_MS = 130;
-/** Camera padding around the fitted layout, in pixels. */
-const FIT_PADDING = 28;
-/** How far past the fitted whole the camera may zoom in. */
+/** How far past the fitted whole the camera may zoom in. The base
+ * picture is the fit, so the reader's transform starts at identity
+ * and only ever adds to it (spec-view-27). */
 const MAX_ZOOM_FACTOR = 4;
 
 /** Group hues for the card's breakdown, matching the outline's chips
@@ -170,12 +171,15 @@ export function SpecGraph({
   // Bumped by simulation ticks: node positions live on the datum
   // objects the simulation mutates, so a counter is what tells React
   // a settled frame changed.
-  const [, setFrame] = useState(0);
+  const [frame, setFrame] = useState(0);
+  /** The scale in force while a drag runs, so moving one node never
+   * resizes the whole canvas (spec-view-28). */
+  const heldScale = useRef<number | undefined>(undefined);
 
   // The model and its settled layout: rebuilt only when the tree
   // changes, so a drag never survives a remount (spec-view-28).
   const { model, simulation } = useMemo(() => {
-    const next = buildGraphModel(files, measureLabel);
+    const next = buildGraphModel(files);
     const sim = createSimulation(next);
     settle(sim);
     return { model: next, simulation: sim };
@@ -190,38 +194,34 @@ export function SpecGraph({
     };
   }, [simulation]);
 
-  const bounds = useMemo(() => layoutBounds(model.nodes), [model]);
+  // The picture: the settled arrangement mapped onto this pane, with
+  // its one solved mark scale. Pure in (arrangement, pane), so it is
+  // the base the reader's camera composes over (spec-view-28).
+  // The frame counter is a dependency on purpose: the simulation
+  // mutates node positions in place, so a tick is the only signal
+  // that the arrangement — and therefore the picture — moved.
+  const presentation = useMemo(
+    () => presentLayout(model.nodes, size, measureLabel, heldScale.current),
+    [model, size, frame],
+  );
+  const placeOf = useCallback(
+    (key: string): Placement | undefined => presentation.places.get(key),
+    [presentation],
+  );
 
-  /** The camera showing the whole layout with padding. */
-  const fitTransform = useCallback((): ZoomTransform => {
-    const width = size.width;
-    const height = size.height;
-    const spanX = Math.max(bounds.maxX - bounds.minX, 1);
-    const spanY = Math.max(bounds.maxY - bounds.minY, 1);
-    if (!width || !height) return zoomIdentity;
-    const scale = Math.min(
-      (width - 2 * FIT_PADDING) / spanX,
-      (height - 2 * FIT_PADDING) / spanY,
-    );
-    const k = Math.max(scale, 0.05);
-    return zoomIdentity
-      .translate(
-        (width - (bounds.minX + bounds.maxX) * k) / 2,
-        (height - (bounds.minY + bounds.maxY) * k) / 2,
-      )
-      .scale(k);
-  }, [bounds, size]);
-
+  /** The fitted whole is the identity transform: the presentation
+   * already fills the pane, so the camera only ever carries the
+   * reader's own pan and zoom on top (spec-view-27). */
   const applyFit = useCallback(() => {
     const svg = svgRef.current;
     const behavior = zoomRef.current;
-    if (!svg || !behavior || !size.width) return;
+    if (!svg || !behavior) return;
     movedRef.current = false;
-    select(svg).call(behavior.transform, fitTransform());
-  }, [fitTransform, size.width]);
+    select(svg).call(behavior.transform, zoomIdentity);
+  }, []);
 
   // Track the drawing surface — the svg itself, not the container it
-  // shares with the legend, or the fit would frame the graph against a
+  // shares with the legend, or the picture would be laid out against a
   // viewport taller than it can paint (spec-view-27).
   useEffect(() => {
     const element = svgRef.current;
@@ -237,12 +237,13 @@ export function SpecGraph({
     return () => observer.disconnect();
   }, []);
 
-  // The camera itself: d3-zoom owns pan, zoom-toward-pointer, and the
-  // bounds, so none of that math is ours to maintain (DR-026 §6).
+  // The camera: d3-zoom owns pan and zoom-toward-pointer, bounded
+  // between the fitted whole and a detail limit. Because the base is
+  // the fit, a pane change re-lays the base while the reader's own
+  // transform rides along unchanged (spec-view-27).
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
-    const fitted = fitTransform();
     const behavior = d3Zoom<SVGSVGElement, unknown>()
       // The pane is the viewport: stated outright rather than read
       // back off the SVG's geometry attributes.
@@ -250,7 +251,7 @@ export function SpecGraph({
         [0, 0],
         [size.width, size.height],
       ])
-      .scaleExtent([fitted.k, fitted.k * MAX_ZOOM_FACTOR])
+      .scaleExtent([1, MAX_ZOOM_FACTOR])
       .filter((event: Event) => {
         // A press on a node starts a drag, never a pan.
         const target = event.target as Element | null;
@@ -264,21 +265,11 @@ export function SpecGraph({
     zoomRef.current = behavior;
     const selection = select(svg);
     selection.call(behavior);
-    // Double-click belongs to the fit control's shortcut, not to
-    // d3-zoom's own step zoom (spec-view-27).
-    selection.on("dblclick.zoom", null);
     return () => {
       selection.on(".zoom", null);
       zoomRef.current = null;
     };
-  }, [fitTransform, size.width, size.height]);
-
-  // Fit on open, and re-fit while the reader has not moved the
-  // camera — a tree change, a pane resize, or the toggle (spec-view-27).
-  useEffect(() => {
-    if (movedRef.current) return;
-    applyFit();
-  }, [applyFit, model]);
+  }, [size.width, size.height]);
 
   // --- Emphasis (spec-view-25) ---------------------------------------------
 
@@ -347,6 +338,7 @@ export function SpecGraph({
     // carries no button at all, which counts as primary.
     if (event.button) return;
     event.stopPropagation();
+    heldScale.current = presentation.scale;
     dragging.current = {
       node,
       pointer: pointerIdOf(event),
@@ -373,12 +365,16 @@ export function SpecGraph({
     if (!active || active.pointer !== pointerIdOf(event)) return;
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const [x, y] = transform.invert([
+    // The pointer lands in presentation pixels; the simulation holds
+    // model space, so the camera and then the presentation are both
+    // inverted before the arrangement hears about it.
+    const [px, py] = transform.invert([
       event.clientX - rect.left,
       event.clientY - rect.top,
     ]);
+    const { x, y } = presentation.toModel(px, py);
     // A pointer without usable coordinates must never reach the
-    // simulation: one NaN there poisons the whole layout.
+    // simulation: one NaN there poisons the whole arrangement.
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     if (
       Math.abs(event.clientX - active.startX) +
@@ -400,6 +396,7 @@ export function SpecGraph({
     const active = dragging.current;
     if (!active || active.pointer !== pointerIdOf(event)) return;
     dragging.current = null;
+    heldScale.current = undefined;
     active.node.fx = null;
     active.node.fy = null;
     // Release and cool: the layout comes to rest, and nothing about
@@ -502,9 +499,10 @@ export function SpecGraph({
       : cardEdge
         ? nodeAt(cardEdge.targetKey)
         : null;
-    if (!anchor) return null;
-    const [x, y] = transform.apply([anchor.x, anchor.y]);
-    return { left: x, top: y + anchor.r * transform.k + 14 };
+    const place = anchor ? placeOf(anchor.key) : undefined;
+    if (!place) return null;
+    const [x, y] = transform.apply([place.x, place.y]);
+    return { left: x, top: y + place.r * transform.k + 14 };
   };
 
   const anchor = cardAnchor();
@@ -568,11 +566,9 @@ export function SpecGraph({
           transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}
         >
           {model.edges.map((edge) => {
-            const source = edge.source as GraphNode;
-            const target = edge.target as GraphNode;
-            if (typeof source !== "object" || typeof target !== "object") {
-              return null;
-            }
+            const source = placeOf((edge.source as GraphNode)?.key ?? "");
+            const target = placeOf((edge.target as GraphNode)?.key ?? "");
+            if (!source || !target) return null;
             const id = `${edge.sourceKey}--${edge.targetKey}`;
             const inFocus =
               emphasis !== null &&
@@ -600,8 +596,11 @@ export function SpecGraph({
             const forward = edge.sourceKey < edge.targetKey;
             const px = forward ? -uy : uy;
             const py = forward ? ux : -ux;
-            const ox = px * edge.offset;
-            const oy = py * edge.offset;
+            // The offset scales with the marks, so a reciprocal pair
+            // separates by the same proportion at any pane size.
+            const spread = edge.offset * presentation.scale * 0.45;
+            const ox = px * spread;
+            const oy = py * spread;
             const x1 = source.x + ux * source.r + ox;
             const y1 = source.y + uy * source.r + oy;
             const x2 = target.x - ux * (target.r + 1) + ox;
@@ -646,13 +645,13 @@ export function SpecGraph({
             const dim = dimOf(node.basename);
             const selected = node.basename === selectedName;
             const focused = node.basename === keyFocus;
+            const place = placeOf(node.key);
+            if (!place) return null;
             const matched = searching && matchedKeys?.has(node.key);
-            // Type lives in canvas units like every other mark, so
-            // the collision that separated the labels and the fit that
-            // frames them measure exactly what gets drawn. The layout
-            // is compact enough that the fitted camera renders it at
-            // the type scale (spec-view-22).
-            const numeral = Math.max(LABEL_FONT_SIZE, node.r * 0.52);
+            // Marks are drawn in presentation pixels, which is exactly
+            // what the scale was solved against, so the numeral and
+            // label read at their own size (spec-view-22).
+            const numeral = Math.max(LABEL_FONT_SIZE, place.r * 0.52);
             return (
               <g
                 key={node.key}
@@ -700,9 +699,9 @@ export function SpecGraph({
                 {matched && (
                   <circle
                     data-testid={`graph-match-${node.basename}`}
-                    cx={node.x}
-                    cy={node.y}
-                    r={node.r + 9}
+                    cx={place.x}
+                    cy={place.y}
+                    r={place.r + 9}
                     fill="none"
                     strokeWidth={2}
                     strokeDasharray="4 3"
@@ -712,26 +711,26 @@ export function SpecGraph({
                 {(selected || focused) && (
                   <circle
                     data-testid={`graph-halo-${node.basename}`}
-                    cx={node.x}
-                    cy={node.y}
-                    r={node.r + 5}
+                    cx={place.x}
+                    cy={place.y}
+                    r={place.r + 5}
                     fill="none"
                     strokeWidth={focused ? 3 : 2}
                     className={EMPHASIS_STROKE}
                   />
                 )}
                 <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={node.r}
+                  cx={place.x}
+                  cy={place.y}
+                  r={place.r}
                   strokeWidth={node.cited ? 0 : 2.5}
                   className={
                     node.cited ? INK_FILL : `${TINT_FILL} ${INK_STROKE}`
                   }
                 />
                 <text
-                  x={node.x}
-                  y={node.y}
+                  x={place.x}
+                  y={place.y}
                   textAnchor="middle"
                   dominantBaseline="central"
                   fontSize={numeral}
@@ -746,23 +745,27 @@ export function SpecGraph({
 
           {/* Names last: a label is the one mark that must never be
               painted over, whatever the node order (spec-view-22). */}
-          {model.nodes.map((node) => (
-            <text
-              key={`label-${node.key}`}
-              data-testid={`graph-label-${node.basename}`}
-              x={node.x}
-              y={node.y + node.r + LABEL_GAP + LABEL_FONT_SIZE * 0.8}
-              textAnchor="middle"
-              fontSize={LABEL_FONT_SIZE}
-              paintOrder="stroke"
-              strokeLinejoin="round"
-              strokeWidth={3}
-              opacity={dimOf(node.basename)}
-              className={`pointer-events-none fill-neutral-700 dark:fill-neutral-300 ${SURFACE_STROKE}`}
-            >
-              {node.basename}
-            </text>
-          ))}
+          {model.nodes.map((node) => {
+            const place = placeOf(node.key);
+            if (!place) return null;
+            return (
+              <text
+                key={`label-${node.key}`}
+                data-testid={`graph-label-${node.basename}`}
+                x={place.x}
+                y={place.y + place.r + LABEL_GAP + LABEL_FONT_SIZE * 0.8}
+                textAnchor="middle"
+                fontSize={LABEL_FONT_SIZE}
+                paintOrder="stroke"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                opacity={dimOf(node.basename)}
+                className={`pointer-events-none fill-neutral-700 dark:fill-neutral-300 ${SURFACE_STROKE}`}
+              >
+                {place.label}
+              </text>
+            );
+          })}
         </g>
       </svg>
 
