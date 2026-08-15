@@ -35,6 +35,9 @@ export interface SpecViewState {
   expandedFiles: string[];
   /** Item IDs with the full body expanded. */
   expandedItems: string[];
+  /** Whether the citation graph stands beside the outline; the
+   * outline itself is permanent (spec-view-20). */
+  graph: boolean;
 }
 
 export const initialSpecViewState: SpecViewState = {
@@ -42,6 +45,7 @@ export const initialSpecViewState: SpecViewState = {
   search: "",
   expandedFiles: [],
   expandedItems: [],
+  graph: false,
 };
 
 /** Coerce a possibly-stale persisted view state to the current shape.
@@ -57,6 +61,7 @@ export function normalizeSpecViewState(value: unknown): SpecViewState {
     search?: unknown;
     expandedFiles?: unknown;
     expandedItems?: unknown;
+    graph?: unknown;
   };
   const strings = (entry: unknown): entry is string[] =>
     Array.isArray(entry) && entry.every((e) => typeof e === "string");
@@ -69,6 +74,12 @@ export function normalizeSpecViewState(value: unknown): SpecViewState {
     !strings(state.expandedItems)
   ) {
     return initialSpecViewState;
+  }
+  // The graph toggle joined the persisted state after the fields
+  // above; a state written before it stays valid and starts with the
+  // outline alone (spec-view-20).
+  if (typeof state.graph !== "boolean") {
+    return { ...(value as SpecViewState), graph: false };
   }
   return value as SpecViewState;
 }

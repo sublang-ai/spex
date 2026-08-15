@@ -172,11 +172,9 @@ export function SpecView(props: SpecViewProps) {
 
   // Branch/directory collapse is cosmetic and local: levels default
   // open.
-  // Three projections of one tree (spec-view-20): the outline for
-  // reading, an IDE split for navigating, the graph alone for
-  // surveying. Cosmetic, local, never persisted. The selection is
-  // shared with the outline so both projections point at one file.
-  const [viewMode, setViewMode] = useState<"tree" | "split" | "graph">("tree");
+  // Two projections of one tree (spec-view-20): the outline is
+  // permanent and the graph joins it under one persisted toggle. The
+  // selection is shared, so both projections point at one file.
   const [graphSelection, setGraphSelection] = useState<string | null>(null);
   const [collapsedDirs, setCollapsedDirs] = useState<ReadonlySet<string>>(
     new Set(),
@@ -888,12 +886,11 @@ export function SpecView(props: SpecViewProps) {
     );
   };
 
-  // Graph-bearing modes fill the surface like an IDE editor split;
-  // the tree alone keeps a readable document column.
-  const graphful = viewMode !== "tree" && tree.files.length > 0;
+  // With the graph on, the surface fills like an IDE editor split;
+  // the outline alone keeps a readable document column.
+  const graphful = viewState.graph && tree.files.length > 0;
 
   const openFromGraph = (fileKey: string) => {
-    setViewMode("split");
     setGraphSelection(fileKey);
     // Effective expansion, not the persisted set: while searching,
     // toggleFile flips the computed state, so gating on the persisted
@@ -924,6 +921,24 @@ export function SpecView(props: SpecViewProps) {
           {totals.items} items
         </span>
         <span className="ml-auto flex items-center gap-1.5">
+          {/* One toggle, not a mode set: the outline never leaves, so
+              there is no state where nothing is shown (spec-view-20). */}
+          <button
+            type="button"
+            data-testid="view-graph"
+            aria-pressed={viewState.graph}
+            title="Show the citation graph beside the outline"
+            onClick={() =>
+              onViewState({ ...viewState, graph: !viewState.graph })
+            }
+            className={`rounded border px-2 py-0.5 text-xs ${
+              viewState.graph
+                ? "border-brand-600 bg-brand-50 text-brand-700 dark:border-brand-400 dark:bg-brand-950 dark:text-brand-300"
+                : "border-neutral-300 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            }`}
+          >
+            Graph
+          </button>
           <button
             type="button"
             aria-label="Refresh specs"
@@ -946,11 +961,18 @@ export function SpecView(props: SpecViewProps) {
         <ErrorStrip error={props.error} onRetry={props.onRefresh} />
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Item filters and search act on the outline, so they leave
-            with it (spec-view-20): no dead controls in graph mode. */}
-        {viewMode !== "graph" ? (
-          <>
+      {tree.notices.length > 0 ? (
+        <div className="text-xs text-neutral-400">
+          {tree.notices.join(" · ")}
+        </div>
+      ) : null}
+
+      {(() => {
+        // Item filters and search govern the outline alone, so they
+        // ride inside its pane rather than over the whole surface
+        // (spec-view-29).
+        const outlineControls = (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 pb-2">
             {GROUP_ORDER.map((group) => {
               const on = viewState.filters[group];
               return (
@@ -999,81 +1021,41 @@ export function SpecView(props: SpecViewProps) {
                 {search.count} {search.count === 1 ? "match" : "matches"}
               </span>
             ) : null}
-          </>
-        ) : null}
-        {/* One three-state control: every projection one click away,
-            no invalid "nothing shown" state to police. */}
-        <div
-          role="group"
-          aria-label="View mode"
-          className="ml-auto flex overflow-hidden rounded border border-neutral-300 text-xs dark:border-neutral-700"
-        >
-          {(
-            [
-              ["tree", "Outline alone"],
-              ["split", "Graph beside the outline"],
-              ["graph", "Graph alone"],
-            ] as const
-          ).map(([mode, hint], i) => (
-            <button
-              key={mode}
-              type="button"
-              data-testid={`view-${mode}`}
-              aria-pressed={viewMode === mode}
-              title={hint}
-              onClick={() => setViewMode(mode)}
-              className={`px-2 py-1 capitalize ${
-                viewMode === mode
-                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                  : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
-              } ${i > 0 ? "border-l border-neutral-300 dark:border-neutral-700" : ""}`}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {tree.notices.length > 0 ? (
-        <div className="text-xs text-neutral-400">
-          {tree.notices.join(" · ")}
-        </div>
-      ) : null}
-
-      {graphful ? (
-        // One structure for both graph modes, so switching between
-        // them keeps SpecGraph mounted and holds its pan and zoom.
-        // In split the map holds still while the outline scrolls
-        // independently beside it (spec-view-20).
-        <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-          <div
-            className={
-              viewMode === "split"
-                ? "min-h-0 flex-1 lg:h-full lg:w-1/2 lg:flex-none"
-                : "min-h-0 flex-1"
-            }
-          >
-            <SpecGraph
-              files={tree.files}
-              selectedKey={graphSelection}
-              expandedKeys={expandedFiles}
-              onClearSelection={() => setGraphSelection(null)}
-              onOpenFile={openFromGraph}
-            />
           </div>
-          {viewMode === "split" ? (
-            <ul className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pr-1">
-              {renderDir(outlineRoot, outlineRoot.name)}
-            </ul>
-          ) : null}
-        </div>
-      ) : (
-        <ul className="flex flex-col">
-          {tree.files.length > 0
-            ? renderDir(outlineRoot, outlineRoot.name)
-            : null}
-        </ul>
-      )}
+        );
+
+        const outline =
+          tree.files.length > 0 ? renderDir(outlineRoot, outlineRoot.name) : null;
+
+        // The outline is permanent; the graph joins it beside
+        // (spec-view-20). Both panes scroll independently, and the
+        // graph's own affordances live on the graph pane.
+        return graphful ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+            <div className="min-h-0 flex-1 lg:h-full lg:w-1/2 lg:flex-none">
+              <SpecGraph
+                files={tree.files}
+                selectedKey={graphSelection}
+                matchedKeys={search.fileKeys}
+                searching={searching}
+                onClearSelection={() => setGraphSelection(null)}
+                onOpenFile={openFromGraph}
+              />
+            </div>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {outlineControls}
+              <ul className="flex min-h-0 flex-col overflow-y-auto pr-1">
+                {outline}
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {outlineControls}
+            <ul className="flex flex-col">{outline}</ul>
+          </div>
+        );
+      })()}
       {tree.files.length === 0 ? (
         <div className="text-sm text-neutral-400">
           specs/ is present but holds no spec files yet.

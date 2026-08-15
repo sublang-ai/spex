@@ -1,461 +1,809 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { useEffect, useMemo, useRef, useState } from "react";
+// The package citation graph (spec-view-20 and spec-view-22 through
+// spec-view-29): one node per spec file, one directed edge per
+// citing→cited pair. Under meta-14 every peer reliance is a citation,
+// so this graph is the complete architecture.
+//
+// Every encoding here answers DR-026: node area counts items and says
+// so with a numeral, edge width counts citations on an absolute
+// scale, direction reads at rest through constant-size glyphs, the
+// two roles are achromatic so brand purple stays interaction's alone,
+// and every channel is keyed by the legend. Layout and camera come
+// from d3-force and d3-zoom; the rendering stays ours.
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { select } from "d3-selection";
+import { zoom as d3Zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import type { SpecFileInfo } from "@sublang/spex-core/protocol";
+import {
+  buildGraphModel,
+  createSimulation,
+  edgeWidth,
+  layoutBounds,
+  settle,
+  GRAPH_GROUP_ORDER,
+  LABEL_FONT_SIZE,
+  LABEL_GAP,
+  type GraphEdge,
+  type GraphNode,
+} from "../lib/spec-graph-layout.js";
+import type { SpecGroup } from "../lib/spec-view-model.js";
 
-/**
- * The package citation graph (spec-view-20): one node per spec file,
- * one directed edge per citing→cited package pair, weighted by the
- * number of cross-file citations. Under meta-14 every peer reliance
- * is a citation, so this graph is the complete architecture — cited
- * packages are the contracts the system rests on, zero-inbound
- * packages are the compositions built over them, and the two roles
- * carry distinct colors.
- */
+export {
+  buildGraphModel,
+  type GraphEdge,
+  type GraphNode,
+} from "../lib/spec-graph-layout.js";
 
-export interface GraphNode {
-  key: string;
-  basename: string;
-  items: number;
-  inbound: number;
-  outbound: number;
-  x: number;
-  y: number;
+/** Hover takes emphasis only after the pointer settles, so crossing
+ * the canvas never strips a deliberate selection (spec-view-25). */
+const HOVER_DELAY_MS = 130;
+/** Camera padding around the fitted layout, in pixels. */
+const FIT_PADDING = 28;
+/** How far past the fitted whole the camera may zoom in. */
+const MAX_ZOOM_FACTOR = 4;
+
+/** Group hues for the card's breakdown, matching the outline's chips
+ * (spec-view-2): color is never the only channel — every count keeps
+ * its group word. */
+const GROUP_TEXT: Record<SpecGroup, string> = {
+  external: "text-sky-700 dark:text-sky-300",
+  internal: "text-fuchsia-700 dark:text-fuchsia-300",
+  test: "text-teal-700 dark:text-teal-300",
+};
+const GROUP_LABEL: Record<SpecGroup, string> = {
+  external: "External",
+  internal: "Internal",
+  test: "Tests",
+};
+
+/** Ink at text-grade contrast on both grounds. The roles are
+ * achromatic by design (DR-026 §2): the palette's hues are spoken for
+ * — brand purple is interaction, sky/fuchsia/teal are the item
+ * groups, emerald/amber/red are status — and a gray *category* would
+ * collide with the dim treatment, so the two roles differ by fill
+ * treatment instead: solid ink where peers cite, ink ring on a tinted
+ * fill where none do. */
+const INK_FILL = "fill-neutral-700 dark:fill-neutral-200";
+const INK_STROKE = "stroke-neutral-700 dark:stroke-neutral-200";
+const TINT_FILL = "fill-neutral-100 dark:fill-neutral-800";
+const SURFACE_FILL = "fill-neutral-50 dark:fill-neutral-950";
+const SURFACE_STROKE = "stroke-neutral-50 dark:stroke-neutral-950";
+const EDGE_STROKE = "stroke-neutral-500";
+/** One step stronger than its edge in each theme, so the glyph reads
+ * as a mark rather than a thickening. */
+const ARROW_FILL = "fill-neutral-600 dark:fill-neutral-400";
+const EMPHASIS_STROKE = "stroke-brand-600 dark:stroke-brand-400";
+const EMPHASIS_FILL = "fill-brand-600 dark:fill-brand-400";
+
+/** Opacity of a mark outside the emphasized neighborhood. Only this
+ * transient state may fall under the contrast floor (spec-view-39). */
+const DIM_OPACITY = 0.18;
+
+type Emphasis = { kind: "node" | "edge"; id: string } | null;
+
+let measureCanvas: CanvasRenderingContext2D | null | undefined;
+
+/** Measures a label in the font the graph actually renders. A
+ * headless renderer has no 2D context, so it falls back to a
+ * deterministic estimate — the layout stays a pure function of the
+ * tree and whatever metrics the environment reports (spec-view-28). */
+function measureLabel(text: string): number {
+  if (measureCanvas === undefined) {
+    try {
+      const canvas = document.createElement("canvas");
+      measureCanvas = canvas.getContext("2d");
+      if (measureCanvas) {
+        const font = getComputedStyle(document.body).fontFamily || "sans-serif";
+        measureCanvas.font = `${LABEL_FONT_SIZE}px ${font}`;
+      }
+    } catch {
+      measureCanvas = null;
+    }
+  }
+  const measured = measureCanvas?.measureText(text).width;
+  return measured && measured > 0 ? measured : text.length * 6.4;
 }
 
-export interface GraphEdge {
-  source: string;
-  target: string;
-  weight: number;
+/** Pointer identity, tolerating environments that dispatch pointer
+ * events without a PointerEvent interface behind them. */
+function pointerIdOf(event: { pointerId?: number }): number {
+  return event.pointerId ?? 0;
 }
 
-export function buildSpecGraph(files: readonly SpecFileInfo[]): {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-} {
-  // Longest-first so "course-catalog-3" resolves to course-catalog,
-  // never to a shorter accidental prefix (basenames are tree-unique
-  // identifiers per meta-10).
-  const basenames = files
-    .map((f) => f.basename)
-    .sort((a, b) => b.length - a.length);
-  // Case-insensitive: the parser also serves legacy ALLCAPS ids.
-  const fileOf = (id: string): string | undefined => {
-    const lower = id.toLowerCase();
-    return basenames.find((b) => lower.startsWith(`${b}-`));
-  };
-
-  const weights = new Map<string, number>();
-  for (const file of files) {
-    for (const item of file.items) {
-      for (const cite of item.cites ?? []) {
-        const target = fileOf(cite);
-        if (!target || target === file.basename) continue;
-        const key = `${file.basename} ${target}`;
-        weights.set(key, (weights.get(key) ?? 0) + 1);
-      }
-    }
-  }
-  const inbound = new Map<string, number>();
-  const outbound = new Map<string, number>();
-  const edges: GraphEdge[] = [];
-  for (const [key, weight] of weights) {
-    const [source, target] = key.split(" ");
-    edges.push({ source, target, weight });
-    inbound.set(target, (inbound.get(target) ?? 0) + weight);
-    outbound.set(source, (outbound.get(source) ?? 0) + weight);
-  }
-
-  // Deterministic layout: seeded initial ring + a small force
-  // relaxation. Same tree, same picture — a map you cannot memorize
-  // is a bad map.
-  let seed = 42;
-  const rand = () => {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    return seed / 2147483648;
-  };
-  const nodes: GraphNode[] = files.map((f, i) => ({
-    key: f.key,
-    basename: f.basename,
-    items: f.items.length,
-    inbound: inbound.get(f.basename) ?? 0,
-    outbound: outbound.get(f.basename) ?? 0,
-    x: 400 + 260 * Math.cos((2 * Math.PI * i) / files.length) + rand() * 20,
-    y: 320 + 230 * Math.sin((2 * Math.PI * i) / files.length) + rand() * 20,
-  }));
-  const byName = new Map(nodes.map((n) => [n.basename, n]));
-  const k = 190;
-  for (let step = 0; step < 300; step++) {
-    const t = 1 - step / 300;
-    const fx = new Map<string, number>();
-    const fy = new Map<string, number>();
-    for (const a of nodes) {
-      // A light pull to the center keeps disconnected packages from
-      // drifting into the frame edge.
-      let dx = (400 - a.x) * 0.002;
-      let dy = (320 - a.y) * 0.002;
-      for (const b of nodes) {
-        if (a === b) continue;
-        const ddx = a.x - b.x;
-        const ddy = a.y - b.y;
-        const d2 = Math.max(ddx * ddx + ddy * ddy, 25);
-        const rep = (k * k) / d2;
-        dx += ddx * rep * 0.02;
-        dy += ddy * rep * 0.02;
-      }
-      fx.set(a.basename, dx);
-      fy.set(a.basename, dy);
-    }
-    for (const e of edges) {
-      const s = byName.get(e.source);
-      const d = byName.get(e.target);
-      if (!s || !d) continue;
-      const ddx = d.x - s.x;
-      const ddy = d.y - s.y;
-      const dist = Math.sqrt(Math.max(ddx * ddx + ddy * ddy, 1));
-      const att = (dist / k) * 0.9;
-      fx.set(s.basename, (fx.get(s.basename) ?? 0) + ddx * att * 0.02);
-      fy.set(s.basename, (fy.get(s.basename) ?? 0) + ddy * att * 0.02);
-      fx.set(d.basename, (fx.get(d.basename) ?? 0) - ddx * att * 0.02);
-      fy.set(d.basename, (fy.get(d.basename) ?? 0) - ddy * att * 0.02);
-    }
-    for (const n of nodes) {
-      n.x += Math.max(-8, Math.min(8, (fx.get(n.basename) ?? 0) * t));
-      n.y += Math.max(-8, Math.min(8, (fy.get(n.basename) ?? 0) * t));
-      n.x = Math.max(70, Math.min(730, n.x));
-      n.y = Math.max(46, Math.min(594, n.y));
-    }
-  }
-
-  // Fill the frame: rescale the settled layout into the padded
-  // canvas so no run wastes margin, whatever shape the forces chose.
-  const padX = 80;
-  const padTop = 40;
-  const padBottom = 64;
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const n of nodes) {
-    minX = Math.min(minX, n.x);
-    maxX = Math.max(maxX, n.x);
-    minY = Math.min(minY, n.y);
-    maxY = Math.max(maxY, n.y);
-  }
-  for (const n of nodes) {
-    n.x =
-      maxX - minX < 1
-        ? 400
-        : padX + ((n.x - minX) / (maxX - minX)) * (800 - 2 * padX);
-    n.y =
-      maxY - minY < 1
-        ? 320
-        : padTop + ((n.y - minY) / (maxY - minY)) * (640 - padTop - padBottom);
-  }
-
-  // Declutter: labels hang under their nodes, so resolve circle and
-  // label-box collisions with deterministic nudges — a map with
-  // stacked names is unreadable at any size.
-  const labelHalf = (n: GraphNode) => n.basename.length * 3.3 + 6;
-  for (let pass = 0; pass < 40; pass++) {
-    let moved = false;
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i];
-        const b = nodes[j];
-        const dx = b.x - a.x;
-        const dyc = b.y - a.y;
-        const circles = nodeRadius(a) + nodeRadius(b) + 10;
-        const labelYA = a.y + nodeRadius(a) + 13;
-        const labelYB = b.y + nodeRadius(b) + 13;
-        const circleHit =
-          Math.abs(dx) < circles && Math.abs(dyc) < circles;
-        const labelHit =
-          Math.abs(dx) < labelHalf(a) + labelHalf(b) &&
-          Math.abs(labelYA - labelYB) < 14;
-        if (!circleHit && !labelHit) continue;
-        moved = true;
-        // Labels are wide and short: separate them vertically;
-        // circle hits part along their wider gap.
-        if (labelHit || Math.abs(dyc) >= Math.abs(dx)) {
-          const dir = dyc >= 0 ? 1 : -1;
-          a.y -= 7 * dir;
-          b.y += 7 * dir;
-        } else {
-          const dir = dx >= 0 ? 1 : -1;
-          a.x -= 7 * dir;
-          b.x += 7 * dir;
-        }
-      }
-    }
-    if (!moved) break;
-    for (const n of nodes) {
-      n.x = Math.max(padX, Math.min(800 - padX, n.x));
-      n.y = Math.max(padTop, Math.min(640 - padBottom, n.y));
-    }
-  }
-
-  return { nodes, edges };
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
 }
 
 export interface SpecGraphProps {
   files: readonly SpecFileInfo[];
-  /** The node last opened from the graph — kept emphasized so the
-   * map and the outline share one visible selection. */
+  /** The package selected in either projection; emphasized here and
+   * expanded in the outline — one selection, two projections. */
   selectedKey?: string | null;
-  /** Files currently expanded in the outline — lightly ringed. */
-  expandedKeys: ReadonlySet<string>;
-  /** Open this file in the parallel outline; the graph stays. */
+  /** Packages holding search matches, marked without moving a node
+   * (spec-view-29). */
+  matchedKeys?: ReadonlySet<string>;
+  /** Whether a search is running at all. */
+  searching?: boolean;
+  /** Open this file in the outline beside the graph. */
   onOpenFile: (fileKey: string) => void;
-  /** Clicking empty space (not a pan) clears the selection. */
+  /** Activating empty space clears the selection. */
   onClearSelection?: () => void;
 }
 
 export function SpecGraph({
   files,
   selectedKey,
-  expandedKeys,
+  matchedKeys,
+  searching = false,
   onOpenFile,
   onClearSelection,
 }: SpecGraphProps) {
-  const { nodes, edges } = useMemo(() => buildSpecGraph(files), [files]);
-  const [hover, setHover] = useState<string | null>(null);
-
-  // The viewport is dynamic: drag pans, the wheel zooms toward the
-  // pointer, double-click resets — a large tree is explored by moving
-  // the camera, never by re-laying-out the map.
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [view, setView] = useState({ x: 0, y: 0, w: 800, h: 640 });
-  const pan = useRef<{ id: number; x: number; y: number } | null>(null);
-  // Distinguishes a pan release from a plain background click.
-  const panned = useRef(false);
+  const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  /** Set once the reader moves the camera; suspends auto-fit until
+   * the fit control brings it back (spec-view-27). */
+  const movedRef = useRef(false);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
-  const onNode = (target: EventTarget): boolean =>
-    target instanceof Element &&
-    target.closest('[data-testid^="graph-node-"]') !== null;
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
+  const [hover, setHover] = useState<Emphasis>(null);
+  const [keyFocus, setKeyFocus] = useState<string | null>(null);
+  // Bumped by simulation ticks: node positions live on the datum
+  // objects the simulation mutates, so a counter is what tells React
+  // a settled frame changed.
+  const [, setFrame] = useState(0);
 
+  // The model and its settled layout: rebuilt only when the tree
+  // changes, so a drag never survives a remount (spec-view-28).
+  const { model, simulation } = useMemo(() => {
+    const next = buildGraphModel(files, measureLabel);
+    const sim = createSimulation(next);
+    settle(sim);
+    return { model: next, simulation: sim };
+  }, [files]);
+
+  useEffect(() => {
+    const sim = simulation;
+    sim.on("tick", () => setFrame((frame) => frame + 1));
+    return () => {
+      sim.on("tick", null);
+      sim.stop();
+    };
+  }, [simulation]);
+
+  const bounds = useMemo(() => layoutBounds(model.nodes), [model]);
+
+  /** The camera showing the whole layout with padding. */
+  const fitTransform = useCallback((): ZoomTransform => {
+    const width = size.width;
+    const height = size.height;
+    const spanX = Math.max(bounds.maxX - bounds.minX, 1);
+    const spanY = Math.max(bounds.maxY - bounds.minY, 1);
+    if (!width || !height) return zoomIdentity;
+    const scale = Math.min(
+      (width - 2 * FIT_PADDING) / spanX,
+      (height - 2 * FIT_PADDING) / spanY,
+    );
+    const k = Math.max(scale, 0.05);
+    return zoomIdentity
+      .translate(
+        (width - (bounds.minX + bounds.maxX) * k) / 2,
+        (height - (bounds.minY + bounds.maxY) * k) / 2,
+      )
+      .scale(k);
+  }, [bounds, size]);
+
+  const applyFit = useCallback(() => {
+    const svg = svgRef.current;
+    const behavior = zoomRef.current;
+    if (!svg || !behavior || !size.width) return;
+    movedRef.current = false;
+    select(svg).call(behavior.transform, fitTransform());
+  }, [fitTransform, size.width]);
+
+  // Track the pane so the camera can fit it (spec-view-27).
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const read = () =>
+      setSize({ width: element.clientWidth, height: element.clientHeight });
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(read);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // The camera itself: d3-zoom owns pan, zoom-toward-pointer, and the
+  // bounds, so none of that math is ours to maintain (DR-026 §6).
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const rect = svg.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      setView((v) => {
-        const w = Math.min(1600, Math.max(160, v.w * Math.exp(e.deltaY * 0.0015)));
-        const h = w * 0.8;
-        // Exact xMidYMid-meet inverse: letterboxed panes center the
-        // drawing, so anchor the zoom at the true pointer position.
-        const s = Math.min(rect.width / v.w, rect.height / v.h);
-        const px =
-          v.x + (e.clientX - rect.left - (rect.width - v.w * s) / 2) / s;
-        const py =
-          v.y + (e.clientY - rect.top - (rect.height - v.h * s) / 2) / s;
-        return {
-          x: px - ((px - v.x) * w) / v.w,
-          y: py - ((py - v.y) * h) / v.h,
-          w,
-          h,
-        };
+    const fitted = fitTransform();
+    const behavior = d3Zoom<SVGSVGElement, unknown>()
+      // The pane is the viewport: stated outright rather than read
+      // back off the SVG's geometry attributes.
+      .extent((): [[number, number], [number, number]] => [
+        [0, 0],
+        [size.width, size.height],
+      ])
+      .scaleExtent([fitted.k, fitted.k * MAX_ZOOM_FACTOR])
+      .filter((event: Event) => {
+        // A press on a node starts a drag, never a pan.
+        const target = event.target as Element | null;
+        if (target?.closest?.("[data-graph-node]")) return false;
+        return !(event as MouseEvent).button;
+      })
+      .on("zoom", (event: { transform: ZoomTransform; sourceEvent: unknown }) => {
+        if (event.sourceEvent) movedRef.current = true;
+        setTransform(event.transform);
       });
+    zoomRef.current = behavior;
+    const selection = select(svg);
+    selection.call(behavior);
+    // Double-click belongs to the fit control's shortcut, not to
+    // d3-zoom's own step zoom (spec-view-27).
+    selection.on("dblclick.zoom", null);
+    return () => {
+      selection.on(".zoom", null);
+      zoomRef.current = null;
     };
-    svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [fitTransform, size.width, size.height]);
+
+  // Fit on open, and re-fit while the reader has not moved the
+  // camera — a tree change, a pane resize, or the toggle (spec-view-27).
+  useEffect(() => {
+    if (movedRef.current) return;
+    applyFit();
+  }, [applyFit, model]);
+
+  // --- Emphasis (spec-view-25) ---------------------------------------------
 
   const selectedName = useMemo(
-    () => nodes.find((n) => n.key === selectedKey)?.basename ?? null,
-    [nodes, selectedKey],
+    () => model.nodes.find((node) => node.key === selectedKey)?.basename ?? null,
+    [model, selectedKey],
   );
-  // Hover trumps selection for focus; either isolates a neighborhood.
-  const focus = hover ?? selectedName;
-  const neighbors = useMemo(() => {
-    if (!focus) return null;
-    const set = new Set<string>([focus]);
-    for (const e of edges) {
-      if (e.source === focus) set.add(e.target);
-      if (e.target === focus) set.add(e.source);
+
+  const emphasis: Emphasis = useMemo(() => {
+    if (hover) return hover;
+    if (keyFocus) return { kind: "node", id: keyFocus };
+    if (selectedName) return { kind: "node", id: selectedName };
+    return null;
+  }, [hover, keyFocus, selectedName]);
+
+  const neighborhood = useMemo(() => {
+    if (!emphasis) return null;
+    const set = new Set<string>();
+    if (emphasis.kind === "node") {
+      set.add(emphasis.id);
+      for (const edge of model.edges) {
+        if (edge.sourceKey === emphasis.id) set.add(edge.targetKey);
+        if (edge.targetKey === emphasis.id) set.add(edge.sourceKey);
+      }
+    } else {
+      const [source, target] = emphasis.id.split("--");
+      set.add(source);
+      set.add(target);
     }
     return set;
-  }, [focus, edges]);
+  }, [emphasis, model]);
 
-  const byName = new Map(nodes.map((n) => [n.basename, n]));
-  const maxWeight = Math.max(1, ...edges.map((e) => e.weight));
+  const setHoverSoon = useCallback((next: Emphasis) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setHover(next), HOVER_DELAY_MS);
+  }, []);
+
+  const clearHover = useCallback(() => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setHover(null);
+  }, []);
+
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+
+  // --- Drag (spec-view-28) --------------------------------------------------
+
+  const dragging = useRef<{ node: GraphNode; pointer: number } | null>(null);
+  const reduced = prefersReducedMotion();
+
+  const onNodePointerDown = (
+    event: ReactPointerEvent<SVGGElement>,
+    node: GraphNode,
+  ) => {
+    // A non-primary button never drags; a synthetic pointer event
+    // carries no button at all, which counts as primary.
+    if (event.button) return;
+    event.stopPropagation();
+    dragging.current = { node, pointer: pointerIdOf(event) };
+    try {
+      (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+    } catch {
+      // Capture is a convenience: without it the drag still tracks
+      // while the pointer stays over the surface.
+    }
+    node.fx = node.x;
+    node.fy = node.y;
+    // The layout adjusts live around the held node; under reduced
+    // motion only the node itself moves and the rest re-settles once
+    // on release (DR-026 §6).
+    if (!reduced) simulation.alphaTarget(0.28).restart();
+  };
+
+  const onNodePointerMove = (event: ReactPointerEvent<SVGGElement>) => {
+    const active = dragging.current;
+    if (!active || active.pointer !== pointerIdOf(event)) return;
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const [x, y] = transform.invert([
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+    ]);
+    // The held node follows the pointer this frame; the simulation's
+    // own ticks carry the rest of the layout after it.
+    active.node.fx = x;
+    active.node.fy = y;
+    active.node.x = x;
+    active.node.y = y;
+    setFrame((frame) => frame + 1);
+  };
+
+  const endDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    const active = dragging.current;
+    if (!active || active.pointer !== pointerIdOf(event)) return;
+    dragging.current = null;
+    active.node.fx = null;
+    active.node.fy = null;
+    // Release and cool: the layout comes to rest, and nothing about
+    // the drag is kept (spec-view-28).
+    if (reduced) {
+      settle(simulation);
+      setFrame((frame) => frame + 1);
+    } else {
+      simulation.alphaTarget(0);
+    }
+  };
+
+  // --- Keyboard (spec-view-25, spec-view-27) --------------------------------
+
+  const zoomBy = useCallback((factor: number) => {
+    const svg = svgRef.current;
+    const behavior = zoomRef.current;
+    if (!svg || !behavior) return;
+    movedRef.current = true;
+    select(svg).call(behavior.scaleBy, factor);
+  }, []);
+
+  const panBy = useCallback((dx: number, dy: number) => {
+    const svg = svgRef.current;
+    const behavior = zoomRef.current;
+    if (!svg || !behavior) return;
+    movedRef.current = true;
+    select(svg).call(behavior.translateBy, dx, dy);
+  }, []);
+
+  const onSurfaceKeyDown = (event: ReactKeyboardEvent) => {
+    switch (event.key) {
+      case "Escape":
+        // Hover emphasis first, then the selection (spec-view-25).
+        if (hover) {
+          event.preventDefault();
+          clearHover();
+        } else if (selectedName) {
+          event.preventDefault();
+          onClearSelection?.();
+        }
+        return;
+      case "+":
+      case "=":
+        event.preventDefault();
+        zoomBy(1.25);
+        return;
+      case "-":
+        event.preventDefault();
+        zoomBy(0.8);
+        return;
+      case "0":
+        event.preventDefault();
+        applyFit();
+        return;
+      case "ArrowLeft":
+        event.preventDefault();
+        panBy(40, 0);
+        return;
+      case "ArrowRight":
+        event.preventDefault();
+        panBy(-40, 0);
+        return;
+      case "ArrowUp":
+        event.preventDefault();
+        panBy(0, 40);
+        return;
+      case "ArrowDown":
+        event.preventDefault();
+        panBy(0, -40);
+        return;
+      default:
+    }
+  };
+
+  // --- Card (spec-view-26) --------------------------------------------------
+
+  const cardNode = useMemo(() => {
+    const id = hover?.kind === "node" ? hover.id : keyFocus;
+    return id ? model.nodes.find((node) => node.basename === id) ?? null : null;
+  }, [hover, keyFocus, model]);
+
+  const cardEdge = useMemo(() => {
+    if (hover?.kind !== "edge") return null;
+    const [source, target] = hover.id.split("--");
+    return (
+      model.edges.find(
+        (edge) => edge.sourceKey === source && edge.targetKey === target,
+      ) ?? null
+    );
+  }, [hover, model]);
+
+  const nodeAt = (basename: string): GraphNode | undefined =>
+    model.nodes.find((node) => node.basename === basename);
+
+  const cardAnchor = (): { left: number; top: number } | null => {
+    const anchor = cardNode
+      ? cardNode
+      : cardEdge
+        ? nodeAt(cardEdge.targetKey)
+        : null;
+    if (!anchor) return null;
+    const [x, y] = transform.apply([anchor.x, anchor.y]);
+    return { left: x, top: y + anchor.r * transform.k + 14 };
+  };
+
+  const anchor = cardAnchor();
+
+  // --- Render ----------------------------------------------------------------
+
+  const dimOf = (name: string): number =>
+    neighborhood && !neighborhood.has(name) ? DIM_OPACITY : 1;
+
+  // Labels and numerals hold their on-screen size whatever the zoom
+  // (spec-view-22); everything geometric scales with the camera.
+  const screenFont = LABEL_FONT_SIZE / (transform.k || 1);
 
   return (
-    <div data-testid="spec-graph" className="flex h-full min-h-0 flex-col">
+    <div
+      ref={containerRef}
+      data-testid="spec-graph"
+      className="relative flex h-full min-h-0 flex-col"
+    >
       <svg
         ref={svgRef}
-        viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
-        preserveAspectRatio="xMidYMid meet"
-        className="min-h-0 w-full flex-1 cursor-grab select-none touch-none active:cursor-grabbing"
-        role="img"
+        className="min-h-0 w-full flex-1 cursor-grab touch-none select-none active:cursor-grabbing"
+        role="application"
+        tabIndex={0}
         aria-label="Spec package citation graph"
-        onPointerDown={(e) => {
-          if (onNode(e.target)) return;
-          pan.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
-          panned.current = false;
-          (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-        }}
-        onPointerMove={(e) => {
-          const p = pan.current;
-          if (!p || p.id !== e.pointerId) return;
-          const rect = e.currentTarget.getBoundingClientRect();
-          if (!rect.width || !rect.height) return;
-          if (Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y) > 3) {
-            panned.current = true;
-          }
-          // Units per pixel under xMidYMid meet: the letterboxed
-          // axis must not slow the drag.
-          const scale = Math.max(view.w / rect.width, view.h / rect.height);
-          setView((v) => ({
-            ...v,
-            x: v.x - (e.clientX - p.x) * scale,
-            y: v.y - (e.clientY - p.y) * scale,
-          }));
-          pan.current = { id: p.id, x: e.clientX, y: e.clientY };
-        }}
-        onClick={(e) => {
-          if (onNode(e.target) || panned.current) return;
+        onKeyDown={onSurfaceKeyDown}
+        onDoubleClick={applyFit}
+        onClick={(event) => {
+          const target = event.target as Element;
+          if (target.closest("[data-graph-node]")) return;
           onClearSelection?.();
-        }}
-        onPointerUp={() => {
-          pan.current = null;
-        }}
-        onPointerCancel={() => {
-          pan.current = null;
-        }}
-        onDoubleClick={(e) => {
-          if (onNode(e.target)) return;
-          setView({ x: 0, y: 0, w: 800, h: 640 });
         }}
       >
         <defs>
+          {/* Constant-size glyphs: markerUnits="userSpaceOnUse" is what
+              decouples the arrowhead from the edge's width, so weight
+              can ride the stroke without the heads turning ugly
+              (spec-view-23). */}
           <marker
             id="spec-graph-arrow"
             viewBox="0 0 10 10"
-            refX="8.5"
+            refX="9"
             refY="5"
-            markerWidth="4.5"
-            markerHeight="4.5"
+            markerUnits="userSpaceOnUse"
+            markerWidth="11"
+            markerHeight="11"
             orient="auto-start-reverse"
           >
-            <path
-              d="M 0 0 L 10 5 L 0 10 z"
-              className="fill-brand-400 dark:fill-brand-500"
-            />
+            <path d="M 0 0 L 10 5 L 0 10 z" className={ARROW_FILL} />
+          </marker>
+          <marker
+            id="spec-graph-arrow-emphasis"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerUnits="userSpaceOnUse"
+            markerWidth="11"
+            markerHeight="11"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" className={EMPHASIS_FILL} />
           </marker>
         </defs>
-        {edges.map((e) => {
-          const s = byName.get(e.source);
-          const d = byName.get(e.target);
-          if (!s || !d) return null;
-          const inFocus =
-            focus !== null && (e.source === focus || e.target === focus);
-          const dim = neighbors !== null && !inFocus;
-          const r = nodeRadius(d) + 5;
-          const dx = d.x - s.x;
-          const dy = d.y - s.y;
-          const len = Math.sqrt(dx * dx + dy * dy) || 1;
-          const tx = d.x - (dx / len) * r;
-          const ty = d.y - (dy / len) * r;
-          // A gentle bow keeps parallel edges apart and reads organic.
-          const mx = (s.x + tx) / 2 - (dy / len) * 18;
-          const my = (s.y + ty) / 2 + (dx / len) * 18;
-          return (
-            <path
-              key={`${e.source}->${e.target}`}
-              data-testid={`graph-edge-${e.source}--${e.target}`}
-              d={`M ${s.x} ${s.y} Q ${mx} ${my} ${tx} ${ty}`}
-              fill="none"
-              strokeWidth={0.6 + (2.2 * e.weight) / maxWeight}
-              className={
-                inFocus
-                  ? "stroke-brand-400 dark:stroke-brand-500"
-                  : "stroke-neutral-400 dark:stroke-neutral-600"
-              }
-              opacity={dim ? 0.08 : inFocus ? 0.85 : 0.25}
-              // Direction on demand: arrowheads appear with focus,
-              // keeping the resting picture calm.
-              markerEnd={inFocus ? "url(#spec-graph-arrow)" : undefined}
-            />
-          );
-        })}
-        {nodes.map((n) => {
-          const dim = neighbors !== null && !neighbors.has(n.basename);
-          const r = nodeRadius(n);
-          const contract = n.inbound > 0;
-          const selected = n.basename === selectedName;
-          return (
-            <g
-              key={n.key}
-              data-testid={`graph-node-${n.basename}`}
-              data-role={contract ? "contract" : "composition"}
-              className="cursor-pointer"
-              opacity={dim ? 0.18 : 1}
-              onMouseEnter={() => setHover(n.basename)}
-              onMouseLeave={() => setHover(null)}
-              onClick={() => onOpenFile(n.key)}
-            >
-              <title>
-                {`${n.basename} — ${n.items} items · ${n.inbound} inbound · ${n.outbound} outbound`}
-              </title>
-              {selected ? (
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r + 4.5}
-                  className="fill-none stroke-brand-500"
-                  strokeWidth={1.5}
-                  opacity={0.9}
+
+        <g
+          transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}
+        >
+          {model.edges.map((edge) => {
+            const source = edge.source as GraphNode;
+            const target = edge.target as GraphNode;
+            if (typeof source !== "object" || typeof target !== "object") {
+              return null;
+            }
+            const id = `${edge.sourceKey}--${edge.targetKey}`;
+            const inFocus =
+              emphasis !== null &&
+              (emphasis.kind === "edge"
+                ? emphasis.id === id
+                : emphasis.id === edge.sourceKey ||
+                  emphasis.id === edge.targetKey);
+            const dim =
+              neighborhood !== null &&
+              !(
+                neighborhood.has(edge.sourceKey) &&
+                neighborhood.has(edge.targetKey)
+              );
+            const dx = target.x - source.x;
+            const dy = target.y - source.y;
+            const length = Math.sqrt(dx * dx + dy * dy) || 1;
+            const ux = dx / length;
+            const uy = dy / length;
+            // Straight lines: curvature carries no meaning here, and a
+            // reciprocal pair separates by a perpendicular offset
+            // instead (spec-view-23). The perpendicular is taken along
+            // the pair's canonical direction, so the two edges of a
+            // reciprocal pair land on opposite sides instead of both
+            // flipping with their own heading.
+            const forward = edge.sourceKey < edge.targetKey;
+            const px = forward ? -uy : uy;
+            const py = forward ? ux : -ux;
+            const ox = px * edge.offset;
+            const oy = py * edge.offset;
+            const x1 = source.x + ux * source.r + ox;
+            const y1 = source.y + uy * source.r + oy;
+            const x2 = target.x - ux * (target.r + 1) + ox;
+            const y2 = target.y - uy * (target.r + 1) + oy;
+            return (
+              <g key={id}>
+                <line
+                  data-testid={`graph-edge-${id}`}
+                  data-weight={edge.weight}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  strokeWidth={edgeWidth(edge.weight)}
+                  strokeLinecap="round"
+                  className={inFocus ? EMPHASIS_STROKE : EDGE_STROKE}
+                  opacity={dim ? DIM_OPACITY : 1}
+                  markerEnd={
+                    inFocus
+                      ? "url(#spec-graph-arrow-emphasis)"
+                      : "url(#spec-graph-arrow)"
+                  }
                 />
-              ) : null}
-              <circle
-                cx={n.x}
-                cy={n.y}
-                r={r}
-                className={
-                  contract
-                    ? "fill-brand-400 stroke-brand-600 dark:fill-brand-500 dark:stroke-brand-300"
-                    : "fill-neutral-300 stroke-neutral-400 dark:fill-neutral-600 dark:stroke-neutral-500"
+                {/* A wide invisible companion makes the thin line a
+                    reachable hover target for its card. */}
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="transparent"
+                  strokeWidth={Math.max(12, edgeWidth(edge.weight) + 8)}
+                  className="cursor-pointer"
+                  onMouseEnter={() => setHoverSoon({ kind: "edge", id })}
+                  onMouseLeave={clearHover}
+                />
+              </g>
+            );
+          })}
+
+          {model.nodes.map((node) => {
+            const dim = dimOf(node.basename);
+            const selected = node.basename === selectedName;
+            const focused = node.basename === keyFocus;
+            const matched = searching && matchedKeys?.has(node.key);
+            const numeral = Math.max(screenFont, node.r * 0.52);
+            return (
+              <g
+                key={node.key}
+                data-graph-node=""
+                data-testid={`graph-node-${node.basename}`}
+                data-role={node.cited ? "cited" : "uncited"}
+                data-items={node.items}
+                data-match={matched ? "true" : undefined}
+                tabIndex={0}
+                role="button"
+                aria-label={`${node.basename}, ${node.items} items, ${node.inbound} inbound, ${node.outbound} outbound citations`}
+                className="cursor-pointer focus:outline-none"
+                opacity={dim}
+                onMouseEnter={() =>
+                  setHoverSoon({ kind: "node", id: node.basename })
                 }
-                strokeWidth={expandedKeys.has(n.key) ? 2 : 0.75}
-                opacity={contract ? 0.95 : 0.9}
-              />
-              {/* Paper-colored halo keeps names readable over edges. */}
-              <text
-                x={n.x}
-                y={n.y + r + 14}
-                textAnchor="middle"
-                paintOrder="stroke"
-                strokeLinejoin="round"
-                strokeWidth={3}
-                className="fill-neutral-500 stroke-neutral-50 text-[11px] dark:fill-neutral-400 dark:stroke-neutral-950"
+                onMouseLeave={clearHover}
+                onFocus={() => setKeyFocus(node.basename)}
+                onBlur={() => setKeyFocus((now) => (now === node.basename ? null : now))}
+                onClick={() => onOpenFile(node.key)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onOpenFile(node.key);
+                  }
+                }}
+                onPointerDown={(event) => onNodePointerDown(event, node)}
+                onPointerMove={onNodePointerMove}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
               >
-                {n.basename}
-              </text>
-            </g>
-          );
-        })}
+                {/* Selection, keyboard focus, and search marking are
+                    the only brand marks on the canvas, so none can be
+                    mistaken for a category (DR-026 §2) — and they are
+                    separate rings, so a marked package still shows
+                    plainly whether it is the selected one. */}
+                {matched && (
+                  <circle
+                    data-testid={`graph-match-${node.basename}`}
+                    cx={node.x}
+                    cy={node.y}
+                    r={node.r + 9}
+                    fill="none"
+                    strokeWidth={2}
+                    strokeDasharray="4 3"
+                    className={EMPHASIS_STROKE}
+                  />
+                )}
+                {(selected || focused) && (
+                  <circle
+                    data-testid={`graph-halo-${node.basename}`}
+                    cx={node.x}
+                    cy={node.y}
+                    r={node.r + 5}
+                    fill="none"
+                    strokeWidth={focused ? 3 : 2}
+                    className={EMPHASIS_STROKE}
+                  />
+                )}
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={node.r}
+                  strokeWidth={node.cited ? 0 : 2.5}
+                  className={
+                    node.cited ? INK_FILL : `${TINT_FILL} ${INK_STROKE}`
+                  }
+                />
+                <text
+                  x={node.x}
+                  y={node.y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={numeral}
+                  fontWeight={600}
+                  className={node.cited ? SURFACE_FILL : INK_FILL}
+                >
+                  {node.items}
+                </text>
+                <text
+                  x={node.x}
+                  y={node.y + node.r + LABEL_GAP + screenFont * 0.8}
+                  textAnchor="middle"
+                  fontSize={screenFont}
+                  paintOrder="stroke"
+                  strokeLinejoin="round"
+                  strokeWidth={3 / (transform.k || 1)}
+                  className={`fill-neutral-700 dark:fill-neutral-300 ${SURFACE_STROKE}`}
+                >
+                  {node.basename}
+                </text>
+              </g>
+            );
+          })}
+        </g>
       </svg>
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
+
+      {/* Details at hand rather than a native tooltip (spec-view-26). */}
+      {anchor && (cardNode || cardEdge) ? (
+        <div
+          data-testid="graph-card"
+          role="tooltip"
+          className="pointer-events-none absolute z-10 w-56 -translate-x-1/2 rounded-lg border border-neutral-200 bg-white p-2.5 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+          style={{
+            left: Math.min(Math.max(anchor.left, 96), Math.max(size.width - 96, 96)),
+            top: Math.min(anchor.top, Math.max(size.height - 132, 8)),
+          }}
+        >
+          {cardNode ? (
+            <>
+              <div className="font-medium text-neutral-900 dark:text-neutral-100">
+                {cardNode.basename}
+              </div>
+              <div className="mt-1 text-neutral-600 dark:text-neutral-300">
+                {cardNode.items} {cardNode.items === 1 ? "item" : "items"} in
+                total
+              </div>
+              <ul className="mt-1 space-y-0.5">
+                {GRAPH_GROUP_ORDER.map((group) => (
+                  <li
+                    key={group}
+                    className="flex justify-between gap-3"
+                    aria-label={`${cardNode.groups[group]} ${group} items`}
+                  >
+                    <span className={GROUP_TEXT[group]}>
+                      {GROUP_LABEL[group]}
+                    </span>
+                    <span
+                      className={
+                        cardNode.groups[group] === 0
+                          ? "text-neutral-400 dark:text-neutral-500"
+                          : "text-neutral-700 dark:text-neutral-200"
+                      }
+                    >
+                      {cardNode.groups[group]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-1.5 border-t border-neutral-200 pt-1.5 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
+                {cardNode.inbound} cited by peers · {cardNode.outbound} cited of
+                peers
+              </div>
+            </>
+          ) : cardEdge ? (
+            <>
+              <div className="font-medium text-neutral-900 dark:text-neutral-100">
+                {cardEdge.sourceKey} → {cardEdge.targetKey}
+              </div>
+              <div className="mt-1 text-neutral-600 dark:text-neutral-300">
+                {cardEdge.weight}{" "}
+                {cardEdge.weight === 1 ? "citation" : "citations"}
+              </div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Every channel and affordance in use, keyed (spec-view-24). */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-2 text-xs text-neutral-600 dark:text-neutral-400">
         <span className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className="h-2.5 w-2.5 rounded-full bg-brand-400 dark:bg-brand-500" />
-          contract — cited by peers
+          <span className="h-2.5 w-2.5 rounded-full bg-neutral-700 dark:bg-neutral-200" />
+          cited by peers
         </span>
         <span className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
-          composition — cites only
+          <span className="h-2.5 w-2.5 rounded-full border-2 border-neutral-700 bg-neutral-100 dark:border-neutral-200 dark:bg-neutral-800" />
+          not cited by peers
         </span>
+        <span className="whitespace-nowrap">size — items</span>
+        <span className="whitespace-nowrap">width — citations</span>
+        <span className="whitespace-nowrap">arrow — cites</span>
+        <button
+          type="button"
+          data-testid="graph-fit"
+          onClick={applyFit}
+          className="rounded border border-neutral-300 px-1.5 py-0.5 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        >
+          Fit
+        </button>
         <span className="ml-auto whitespace-nowrap">
-          hover to trace · click to open · drag to pan · scroll to zoom
+          click opens · drag moves · scroll zooms · double-click or 0 fits
         </span>
       </div>
     </div>
   );
-}
-
-function nodeRadius(n: { items: number; inbound: number }): number {
-  return 9 + Math.min(13, Math.sqrt(n.inbound) * 2.2 + n.items * 0.3);
 }

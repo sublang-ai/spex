@@ -1070,8 +1070,45 @@ describe("view-state migration", () => {
   });
 });
 
-// spec-view-20/21: the graph projection of the same tree.
-describe("spec-view-20: citation graph projection", () => {
+// The citation graph beside the outline (spec-view-20, spec-view-22
+// through spec-view-29), verified per spec-view-21 and spec-view-38
+// through spec-view-41.
+describe("spec-view-20: citation graph beside the outline", () => {
+  const item = (
+    id: string,
+    group: "external" | "internal" | "test",
+    cites: string[] = [],
+  ) => ({
+    id,
+    group,
+    section:
+      group === "test"
+        ? "Verification"
+        : group === "internal"
+          ? "Internal Behavior"
+          : "External Behavior",
+    firstLine: `${id} line.`,
+    text: `${id} body.`,
+    cites,
+  });
+
+  const file = (
+    basename: string,
+    items: ReturnType<typeof item>[],
+  ) => ({
+    path: `specs/packages/${basename}.md`,
+    key: basename,
+    dir: "",
+    basename,
+    title: basename,
+    intent: `${basename} intent.`,
+    notices: [],
+    items,
+  });
+
+  // Differing item counts, a reciprocally citing pair
+  // (billing <-> session), and a package no citation reaches
+  // (glossary) — the shapes spec-view-38 and spec-view-40 name.
   const GRAPH_TREE: SpecTreeState = {
     present: true,
     legacy: false,
@@ -1080,129 +1117,410 @@ describe("spec-view-20: citation graph projection", () => {
     decisions: [],
     intents: [],
     files: [
-      {
-        path: "specs/packages/auth.md",
-        key: "auth",
-        dir: "",
-        basename: "auth",
-        title: "Auth",
-        intent: "Sign-in.",
-        notices: [],
-        items: [
-          {
-            id: "auth-1",
-            group: "external",
-            section: "External Behavior",
-            firstLine: "The app shall sign users in.",
-            text: "The app shall sign users in.",
-            cites: [],
-          },
-        ],
-      },
-      {
-        path: "specs/packages/billing.md",
-        key: "billing",
-        dir: "",
-        basename: "billing",
-        title: "Billing",
-        intent: "Charging.",
-        notices: [],
-        items: [
-          {
-            id: "billing-1",
-            group: "external",
-            section: "External Behavior",
-            firstLine: "Charges require a signed-in user.",
-            text: "Charges require a signed-in user [[auth-1](auth.md#auth-1)].",
-            cites: ["auth-1"],
-          },
-          {
-            id: "billing-2",
-            group: "external",
-            section: "External Behavior",
-            firstLine: "Receipts identify the user.",
-            text: "Receipts identify the user [[auth-1](auth.md#auth-1)].",
-            cites: ["auth-1"],
-          },
-        ],
-      },
+      file("auth", [item("auth-1", "external")]),
+      file("billing", [
+        item("billing-1", "external", ["auth-1"]),
+        item("billing-2", "external", ["auth-1"]),
+        item("billing-3", "internal", ["session-1"]),
+      ]),
+      file("session", [
+        item("session-1", "external", ["auth-1"]),
+        item("session-2", "test", ["billing-1"]),
+      ]),
+      file("glossary", [item("glossary-1", "external")]),
     ],
   };
 
-  test("split renders nodes, weighted directed edges, roles, and the click expansion", () => {
-    render(<Harness tree={GRAPH_TREE} />);
-    fireEvent.click(screen.getByTestId("view-split"));
-
-    // One node per file, beside the outline (spec-view-20).
-    expect(screen.getByTestId("spec-graph")).toBeTruthy();
-    expect(screen.getByTestId("graph-node-auth")).toBeTruthy();
-    expect(screen.getByTestId("graph-node-billing")).toBeTruthy();
-    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
-
-    // Role colors (spec-view-20): the cited package is a contract,
-    // the zero-inbound package a composition.
-    expect(
-      screen.getByTestId("graph-node-auth").getAttribute("data-role"),
-    ).toBe("contract");
-    expect(
-      screen.getByTestId("graph-node-billing").getAttribute("data-role"),
-    ).toBe("composition");
-
-    // One directed edge, citing -> cited, carrying both citations'
-    // weight (spec-view-20).
-    const edge = screen.getByTestId("graph-edge-billing--auth");
-    expect(edge.getAttribute("stroke-width")).toBe(String(0.6 + (2.2 * 2) / 2));
-    expect(screen.queryByTestId("graph-edge-auth--billing")).toBeNull();
-
-    // Clicking a node keeps the graph beside the outline and expands
-    // that file (spec-view-20) — one selection, two projections.
-    fireEvent.click(screen.getByTestId("graph-node-auth"));
-    expect(screen.getByTestId("spec-graph")).toBeTruthy();
-    expect(
-      screen.getByTestId("file-toggle-auth").getAttribute("aria-expanded"),
-    ).toBe("true");
-
-    // A live search expands its matching files by computation rather
-    // than by the persisted set, so clicking such a file's node must
-    // open — never collapse — it (spec-view-20). billing matches and
-    // was never expanded by hand, which is exactly the divergence.
-    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
-      target: { value: "Receipts" },
+  /** A pane with real dimensions, so the camera has something to fit
+   * (spec-view-27); jsdom reports zero otherwise. */
+  const sized = () => {
+    const width = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientWidth",
+    );
+    const height = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientHeight",
+    );
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get: () => 800,
     });
-    expect(
-      screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),
-    ).toBe("true");
-    fireEvent.click(screen.getByTestId("graph-node-billing"));
-    expect(
-      screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),
-    ).toBe("true");
-  });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get: () => 600,
+    });
+    return () => {
+      if (width) Object.defineProperty(HTMLElement.prototype, "clientWidth", width);
+      if (height)
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", height);
+    };
+  };
 
-  test("graph mode hides the outline and its controls; a click opens the split", () => {
+  const showGraph = () => {
     render(<Harness tree={GRAPH_TREE} />);
     fireEvent.click(screen.getByTestId("view-graph"));
+  };
 
-    // Outline-scoped controls leave with the outline (spec-view-20).
-    expect(screen.getByTestId("spec-graph")).toBeTruthy();
-    expect(screen.queryByTestId("file-toggle-auth")).toBeNull();
-    expect(screen.queryByTestId("filter-external")).toBeNull();
+  const node = (name: string) => screen.getByTestId(`graph-node-${name}`);
+  const circleOf = (name: string) =>
+    node(name).querySelector("circle:not([data-testid])") as SVGCircleElement;
+  const radiusOf = (name: string) => Number(circleOf(name).getAttribute("r"));
+  const edge = (from: string, to: string) =>
+    screen.getByTestId(`graph-edge-${from}--${to}`);
 
-    // A node click answers by opening the split on that file
+  test("the toggle adds the graph beside the outline and keeps one selection", () => {
+    const restore = sized();
+    render(<Harness tree={GRAPH_TREE} />);
+
+    // The outline is permanent: it renders before the graph exists
     // (spec-view-20).
-    fireEvent.click(screen.getByTestId("graph-node-auth"));
+    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
+    expect(screen.queryByTestId("spec-graph")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("view-graph"));
     expect(screen.getByTestId("spec-graph")).toBeTruthy();
-    expect(
-      screen.getByTestId("view-split").getAttribute("aria-pressed"),
-    ).toBe("true");
+    // The outline and its own controls stay beside it (spec-view-29).
+    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
+    expect(screen.getByTestId("filter-external")).toBeTruthy();
+
+    // One node per file, one directed edge per citing -> cited pair
+    // (spec-view-20).
+    for (const name of ["auth", "billing", "session", "glossary"]) {
+      expect(node(name)).toBeTruthy();
+    }
+    expect(edge("billing", "auth")).toBeTruthy();
+    expect(edge("session", "auth")).toBeTruthy();
+    expect(screen.queryByTestId("graph-edge-auth--billing")).toBeNull();
+
+    // Choosing a node expands that file in the outline without
+    // taking the outline off screen (spec-view-20).
+    fireEvent.click(node("auth"));
+    expect(screen.getByTestId("spec-graph")).toBeTruthy();
     expect(
       screen.getByTestId("file-toggle-auth").getAttribute("aria-expanded"),
     ).toBe("true");
+    expect(screen.getByTestId(`graph-halo-auth`)).toBeTruthy();
 
-    // Back to the outline alone closes the round trip: the graph
-    // leaves and its outline-scoped controls return (spec-view-20).
-    fireEvent.click(screen.getByTestId("view-tree"));
+    // A live search expands its matching files by computation rather
+    // than by the persisted set, so choosing such a file's node must
+    // open — never collapse — it.
+    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
+      target: { value: "billing-3" },
+    });
+    fireEvent.click(node("billing"));
+    expect(
+      screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),
+    ).toBe("true");
+
+    // Activating empty graph space clears the selection (spec-view-20).
+    fireEvent.click(screen.getByLabelText("Spec package citation graph"));
+    expect(screen.queryByTestId("graph-halo-billing")).toBeNull();
+
+    // Toggling back leaves the outline alone on the surface.
+    fireEvent.click(screen.getByTestId("view-graph"));
     expect(screen.queryByTestId("spec-graph")).toBeNull();
     expect(screen.getByTestId("filter-external")).toBeTruthy();
     expect(screen.getByTestId("records-toggle")).toBeTruthy();
+    restore();
+  });
+
+  test("the toggle's state persists with the rest of the view state", () => {
+    // The toggle lives in the persisted view state, not in the
+    // component, so a remount restores it (spec-view-20).
+    let saved: SpecViewState = initialSpecViewState;
+    const Persisting = () => {
+      const [state, setState] = useState(saved);
+      saved = state;
+      return (
+        <SpecView
+          tree={GRAPH_TREE}
+          onRefresh={() => {}}
+          onReadRecord={async () => ""}
+          viewState={state}
+          onViewState={setState}
+        />
+      );
+    };
+    const first = render(<Persisting />);
+    fireEvent.click(screen.getByTestId("view-graph"));
+    expect(screen.getByTestId("spec-graph")).toBeTruthy();
+    expect(saved.graph).toBe(true);
+    first.unmount();
+
+    render(<Persisting />);
+    expect(screen.getByTestId("spec-graph")).toBeTruthy();
+  });
+
+  // spec-view-38: the encodings, and the legend that keys them.
+  test("node area counts items, edge width counts citations, direction reads at rest", () => {
+    const restore = sized();
+    showGraph();
+
+    // Node area carries the item count, stated as a numeral on the
+    // node (spec-view-22).
+    expect(radiusOf("billing")).toBeGreaterThan(radiusOf("session"));
+    expect(radiusOf("session")).toBeGreaterThan(radiusOf("auth"));
+    expect(node("billing").getAttribute("data-items")).toBe("3");
+    expect(within(node("billing")).getByText("3")).toBeTruthy();
+    expect(within(node("auth")).getByText("1")).toBeTruthy();
+
+    // The two roles, without the reserved hues: solid ink where peers
+    // cite, ink ring on a tint where none do (spec-view-22).
+    expect(node("auth").getAttribute("data-role")).toBe("cited");
+    expect(node("glossary").getAttribute("data-role")).toBe("uncited");
+    const citedFill = circleOf("auth").getAttribute("class") ?? "";
+    const uncitedFill = circleOf("glossary").getAttribute("class") ?? "";
+    expect(citedFill).toContain("fill-neutral-700");
+    expect(uncitedFill).toContain("stroke-neutral-700");
+    for (const cls of [citedFill, uncitedFill]) {
+      expect(cls).not.toMatch(/brand|sky|fuchsia|teal|emerald|amber|red/);
+    }
+
+    // Width carries the citation count on an absolute scale — a
+    // weight-2 edge measures the same in every tree (spec-view-23).
+    const heavy = Number(edge("billing", "auth").getAttribute("stroke-width"));
+    const light = Number(edge("session", "auth").getAttribute("stroke-width"));
+    expect(heavy).toBeCloseTo(1.5 * Math.SQRT2, 5);
+    expect(light).toBeCloseTo(1.5, 5);
+    expect(heavy).toBeGreaterThan(light);
+
+    // Direction reads at rest, through a glyph whose size never
+    // follows the edge's width (spec-view-23).
+    expect(edge("session", "auth").getAttribute("marker-end")).toBeTruthy();
+    const marker = document.querySelector("#spec-graph-arrow");
+    expect(marker?.getAttribute("markerUnits")).toBe("userSpaceOnUse");
+    const markerWidth = marker?.getAttribute("markerWidth");
+    expect(
+      document
+        .querySelector("#spec-graph-arrow-emphasis")
+        ?.getAttribute("markerWidth"),
+    ).toBe(markerWidth);
+
+    // The reciprocal pair draws as two offset edges, never one edge
+    // with two heads (spec-view-23).
+    const forward = edge("billing", "session");
+    const back = edge("session", "billing");
+    const midpoint = (line: Element) => [
+      (Number(line.getAttribute("x1")) + Number(line.getAttribute("x2"))) / 2,
+      (Number(line.getAttribute("y1")) + Number(line.getAttribute("y2"))) / 2,
+    ];
+    const [ax, ay] = midpoint(forward);
+    const [bx, by] = midpoint(back);
+    expect(Math.hypot(ax - bx, ay - by)).toBeGreaterThan(10);
+
+    // Every channel and affordance in use is keyed (spec-view-24).
+    const graph = screen.getByTestId("spec-graph");
+    for (const key of [
+      "cited by peers",
+      "not cited by peers",
+      "size — items",
+      "width — citations",
+      "arrow — cites",
+    ]) {
+      expect(within(graph).getByText(key)).toBeTruthy();
+    }
+    expect(within(graph).getByText(/click opens/)).toBeTruthy();
+    expect(screen.getByTestId("graph-fit")).toBeTruthy();
+    restore();
+  });
+
+  // spec-view-39: contrast as a computed composite, not a judgement.
+  test("every resting mark clears its contrast floor in both themes", () => {
+    const restore = sized();
+    showGraph();
+
+    // The tokens these classes name (index.css), and the surface each
+    // theme paints behind the graph.
+    const TOKENS: Record<string, { light: string; dark: string }> = {
+      "neutral-50": { light: "#f7f4ef", dark: "#f7f4ef" },
+      "neutral-100": { light: "#efeae2", dark: "#efeae2" },
+      "neutral-200": { light: "#e3ded5", dark: "#e3ded5" },
+      "neutral-300": { light: "#d8d2c6", dark: "#d8d2c6" },
+      "neutral-400": { light: "#a3a3a3", dark: "#a3a3a3" },
+      "neutral-500": { light: "#696969", dark: "#737373" },
+      "neutral-600": { light: "#525252", dark: "#525252" },
+      "neutral-700": { light: "#404040", dark: "#404040" },
+      "neutral-800": { light: "#262626", dark: "#262626" },
+      "neutral-950": { light: "#0a0a0a", dark: "#0a0a0a" },
+      "brand-400": { light: "#bb6ee9", dark: "#bb6ee9" },
+      "brand-600": { light: "#890fbc", dark: "#890fbc" },
+    };
+    const SURFACE = { light: "#f7f4ef", dark: "#0a0a0a" };
+
+    const luminance = (hex: string) => {
+      const channel = (i: number) => {
+        const value = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+        return value <= 0.03928
+          ? value / 12.92
+          : ((value + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+    };
+    const ratio = (a: string, b: string) => {
+      const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (high + 0.05) / (low + 0.05);
+    };
+    /** The token a class list paints in one theme: the dark: variant
+     * wins there, the bare utility elsewhere. */
+    const paint = (
+      classes: string,
+      property: "fill" | "stroke" | "text",
+      theme: "light" | "dark",
+    ) => {
+      const pattern = new RegExp(
+        `(^|\\s)${theme === "dark" ? "dark:" : ""}${property}-(neutral|brand)-(\\d+)`,
+        "g",
+      );
+      const matches = [...classes.matchAll(pattern)];
+      const last = matches[matches.length - 1];
+      if (!last && theme === "dark") return paint(classes, property, "light");
+      if (!last) throw new Error(`no ${property} token in "${classes}"`);
+      const token = TOKENS[`${last[2]}-${last[3]}`];
+      if (!token) throw new Error(`unknown token ${last[2]}-${last[3]}`);
+      return token[theme];
+    };
+
+    const citedCircle = circleOf("auth").getAttribute("class") ?? "";
+    const uncitedCircle = circleOf("glossary").getAttribute("class") ?? "";
+    const edgeLine = edge("billing", "auth").getAttribute("class") ?? "";
+    const label = (node("auth").querySelectorAll("text")[1].getAttribute(
+      "class",
+    ) ?? "");
+    const numeral =
+      node("auth").querySelectorAll("text")[0].getAttribute("class") ?? "";
+    const legend =
+      screen.getByText("size — items").parentElement?.getAttribute("class") ??
+      "";
+
+    for (const theme of ["light", "dark"] as const) {
+      const ground = SURFACE[theme];
+      // Graphical marks: the 3:1 non-text floor (WCAG 1.4.11).
+      expect(ratio(paint(citedCircle, "fill", theme), ground)).toBeGreaterThanOrEqual(3);
+      expect(
+        ratio(paint(uncitedCircle, "stroke", theme), ground),
+      ).toBeGreaterThanOrEqual(3);
+      expect(ratio(paint(edgeLine, "stroke", theme), ground)).toBeGreaterThanOrEqual(3);
+      // Text marks: the 4.5:1 floor, the numeral against its own fill.
+      expect(ratio(paint(label, "fill", theme), ground)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        ratio(paint(numeral, "fill", theme), paint(citedCircle, "fill", theme)),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(paint(legend, "text", theme), ground)).toBeGreaterThanOrEqual(4.5);
+    }
+    restore();
+  });
+
+  // spec-view-40: the settled layout, and what a drag does not keep.
+  test("the layout settles the same picture twice and keeps no drag", () => {
+    const restore = sized();
+    const positions = () =>
+      ["auth", "billing", "session", "glossary"].map((name) => [
+        Number(circleOf(name).getAttribute("cx")),
+        Number(circleOf(name).getAttribute("cy")),
+      ]);
+
+    const first = render(<Harness tree={GRAPH_TREE} />);
+    fireEvent.click(screen.getByTestId("view-graph"));
+    const settled = positions();
+    // A package no citation reaches still holds a place in the
+    // layout (spec-view-28).
+    const glossary = settled[3];
+    expect(Number.isFinite(glossary[0])).toBe(true);
+    expect(Number.isFinite(glossary[1])).toBe(true);
+
+    // Dragging moves the held node (spec-view-28).
+    const target = node("auth");
+    fireEvent.pointerDown(target, { button: 0, pointerId: 1, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(target, { pointerId: 1, clientX: 700, clientY: 500 });
+    expect(Number(circleOf("auth").getAttribute("cx"))).not.toBeCloseTo(
+      settled[0][0],
+      3,
+    );
+    fireEvent.pointerUp(target, { pointerId: 1 });
+    first.unmount();
+
+    // The same tree settles the same picture, and the drag is gone
+    // (spec-view-28).
+    render(<Harness tree={GRAPH_TREE} />);
+    fireEvent.click(screen.getByTestId("view-graph"));
+    expect(positions()).toEqual(settled);
+    restore();
+  });
+
+  // spec-view-41: emphasis, keyboard, cards, camera, and scoping.
+  test("selection holds through transit, and the keyboard drives the graph", () => {
+    const restore = sized();
+    showGraph();
+
+    // A selection is the stable base state: pointer transit does not
+    // take it (spec-view-25).
+    fireEvent.click(node("auth"));
+    expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    fireEvent.mouseEnter(node("glossary"));
+    expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    fireEvent.mouseLeave(node("glossary"));
+
+    // Keyboard focus reaches a node, shows its card, and Enter opens
+    // it (spec-view-25, spec-view-26).
+    fireEvent.focus(node("billing"));
+    const card = screen.getByTestId("graph-card");
+    expect(within(card).getByText("billing")).toBeTruthy();
+    expect(within(card).getByText(/3 items in total/)).toBeTruthy();
+    // The breakdown is a list in the outline's count grammar.
+    expect(within(card).getByLabelText("2 external items")).toBeTruthy();
+    expect(within(card).getByLabelText("1 internal items")).toBeTruthy();
+    expect(within(card).getByLabelText("0 test items")).toBeTruthy();
+    expect(within(card).getByText(/1 cited by peers/)).toBeTruthy();
+    fireEvent.keyDown(node("billing"), { key: "Enter" });
+    expect(
+      screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),
+    ).toBe("true");
+    fireEvent.blur(node("billing"));
+
+    // Escape dismisses the selection once no hover holds the
+    // emphasis (spec-view-25).
+    const surface = screen.getByLabelText("Spec package citation graph");
+    fireEvent.keyDown(surface, { key: "Escape" });
+    expect(screen.queryByTestId("graph-halo-auth")).toBeNull();
+
+    // The camera zooms and returns to the fitted whole (spec-view-27).
+    const layer = () =>
+      screen.getByTestId("spec-graph").querySelector("svg > g") as SVGGElement;
+    const scaleOf = (element: SVGGElement) =>
+      Number(/scale\(([-\d.]+)\)/.exec(element.getAttribute("transform") ?? "")?.[1]);
+    const fitted = scaleOf(layer());
+    expect(fitted).toBeGreaterThan(0);
+    fireEvent.keyDown(surface, { key: "+" });
+    expect(scaleOf(layer())).toBeGreaterThan(fitted);
+    fireEvent.click(screen.getByTestId("graph-fit"));
+    expect(scaleOf(layer())).toBeCloseTo(fitted, 6);
+    restore();
+  });
+
+  test("search marks the graph while filters leave its counts whole", () => {
+    const restore = sized();
+    showGraph();
+
+    // A search marks the packages holding matches without moving a
+    // node (spec-view-29).
+    const before = Number(circleOf("billing").getAttribute("cx"));
+    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
+      target: { value: "billing-3" },
+    });
+    expect(node("billing").getAttribute("data-match")).toBe("true");
+    expect(screen.getByTestId("graph-match-billing")).toBeTruthy();
+    expect(node("auth").getAttribute("data-match")).toBeNull();
+    expect(Number(circleOf("billing").getAttribute("cx"))).toBeCloseTo(before, 6);
+
+    // The graph's counts follow the whole tree, whatever the filters
+    // exclude (spec-view-29).
+    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByTestId("filter-external"));
+    expect(node("billing").getAttribute("data-items")).toBe("3");
+    expect(radiusOf("billing")).toBeGreaterThan(radiusOf("auth"));
+    restore();
   });
 });
