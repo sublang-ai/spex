@@ -10,10 +10,35 @@ import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { Markdown } from "./Markdown.js";
+import { MachineCard } from "./MachineCard.js";
+import type { MachineGraph } from "@sublang/spex-core/protocol";
 
-function Line({ line }: { line: CaptainLine }) {
+function Line({
+  line,
+  graphs,
+}: {
+  line: CaptainLine;
+  graphs?: Record<string, MachineGraph | null>;
+}) {
   const time = new Date(line.at).toLocaleString();
   switch (line.kind) {
+    case "machine":
+      // A finished run's drawn record settles into the thread
+      // (run-view-62); without its frame it degrades to a plain line
+      // per run-view-17.
+      return line.frame ? (
+        <div title={time}>
+          <MachineCard
+            frame={line.frame}
+            graph={graphs?.[line.frame.playbookId]}
+            settled
+          />
+        </div>
+      ) : (
+        <div className="text-center font-mono text-xs text-neutral-500 dark:text-neutral-400">
+          {line.text}
+        </div>
+      );
     case "boss":
       return (
         <div className="flex justify-end" title={time}>
@@ -116,7 +141,15 @@ const STATE_TONE_CLASSES: Record<string, string> = {
     "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
 };
 
-export function CaptainPane({ view }: { view: SessionView }) {
+export function CaptainPane({
+  view,
+  machineGraphs,
+}: {
+  view: SessionView;
+  /** Served machine definitions by playbook id (run-view-64: absent
+   * definitions degrade to the observed drawing). */
+  machineGraphs?: Record<string, MachineGraph | null>;
+}) {
   const { scrollRef, onScroll, newBelow, jump } = useStickToBottom(
     view.captain.length + view.captainDraft.length + (view.turnActive ? 1 : 0),
   );
@@ -167,10 +200,23 @@ export function CaptainPane({ view }: { view: SessionView }) {
                     {separator}
                   </div>
                 ) : null}
-                <Line line={line} />
+                <Line line={line} graphs={machineGraphs} />
               </div>
             );
           })}
+          {view.frames.length > 0 ? (
+            // The live machines, parents before children — the run
+            // drawn while it runs (run-view-60/63).
+            <div data-testid="live-machines" className="flex flex-col gap-2">
+              {view.frames.map((frame) => (
+                <MachineCard
+                  key={frame.traceSessionId}
+                  frame={frame}
+                  graph={machineGraphs?.[frame.playbookId]}
+                />
+              ))}
+            </div>
+          ) : null}
           {view.captainDraft ? (
             <div className="flex justify-start">
               <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800">

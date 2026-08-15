@@ -5,7 +5,9 @@
 // fixture stream shows the expected panes and never hidden content.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen,
+  within,
+} from "@testing-library/react";
 
 afterEach(cleanup);
 
@@ -23,6 +25,7 @@ import type {
   SessionInfo,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
+import { MACHINE_RUN } from "../fixtures/sample-run.js";
 
 const SESSION: SessionInfo = {
   id: "s1",
@@ -220,5 +223,47 @@ describe("RUN-36: ended sessions render read-only", () => {
     );
     expect(screen.queryByTestId("boss-composer")).toBeNull();
     expect(screen.getByText("Start a new session")).toBeTruthy();
+  });
+});
+
+// run-view-66: the machine cards over a fixture replay (DR-028).
+describe("run-view-66: machine cards from the trace", () => {
+  test("a mid-run replay draws live stacked cards and absorbs the glyphs", () => {
+    // Replay up to the nested review's first transition: both frames
+    // open, parent before child (run-view-60/63).
+    renderRun(MACHINE_RUN.slice(0, 9));
+    const live = screen.getByTestId("live-machines");
+    const cards = within(live).getAllByTestId(/^machine-card-/);
+    expect(cards).toHaveLength(2);
+    expect(cards[0].getAttribute("data-playbook")).toBe("code");
+    expect(cards[1].getAttribute("data-playbook")).toBe("review");
+
+    // The parent's active state is drawn from observed truth alone —
+    // no definition was served (run-view-64).
+    const active = within(live).getByTestId(
+      "machine-state-t-code-runFirstPhase",
+    );
+    expect(active.getAttribute("data-active")).toBe("true");
+
+    // The active state names its player (run-view-61); the ⤷ glyph
+    // line was absorbed by the card while ◇ stayed (run-view-60).
+    expect(within(active).getByText(/code-coder/)).toBeTruthy();
+    expect(screen.getByText("◇ /code started")).toBeTruthy();
+    expect(screen.queryByText(/⤷ Coder: implement/)).toBeNull();
+  });
+
+  test("the settled finish moves each card into the thread", () => {
+    renderRun(MACHINE_RUN);
+    // Both frames closed: the live region is gone and two settled
+    // cards sit in the thread (run-view-62).
+    expect(screen.queryByTestId("live-machines")).toBeNull();
+    const settled = screen.getAllByTestId(/^machine-card-/);
+    expect(settled).toHaveLength(2);
+    for (const card of settled) {
+      expect(card.getAttribute("data-settled")).toBe("true");
+    }
+    // The review settled before the code run, in finish order.
+    expect(settled[0].getAttribute("data-playbook")).toBe("review");
+    expect(settled[1].getAttribute("data-playbook")).toBe("code");
   });
 });

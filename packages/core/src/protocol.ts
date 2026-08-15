@@ -69,8 +69,39 @@ export interface PlaybookArtifacts {
   fsm: string | null;
   /** Every state id of the FSM, when derivable. */
   stateIds: string[] | null;
+  /** The drawable machine graph (playbook-library-36, DR-028), null
+   * when the machine cannot be loaded. */
+  machine: MachineGraph | null;
   /** Stage names that could not be located. */
   missing: string[];
+}
+
+/** The machine graph the run view draws (DR-028): nodes and stable
+ * edges derived from the hosted machine's own config. */
+export interface MachineGraphNode {
+  id: string;
+  parent?: string;
+  kind: "state" | "final";
+  /** The player role the state invokes, as the machine names it. */
+  role?: string;
+  /** The state's own description, for human tooltips (DR-010 §2). */
+  description?: string;
+  tags: string[];
+}
+
+export interface MachineGraphEdge {
+  /** owner::event::branch::target — guarded siblings stay distinct. */
+  id: string;
+  from: string;
+  to: string;
+  /** Event name; "" names the always transition. */
+  event: string;
+}
+
+export interface MachineGraph {
+  initial: string;
+  nodes: MachineGraphNode[];
+  edges: MachineGraphEdge[];
 }
 
 export interface ConfigSummary {

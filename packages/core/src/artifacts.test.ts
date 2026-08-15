@@ -17,8 +17,8 @@ export const demoMachine = setup({}).createMachine({
   id: "demo",
   initial: "ready",
   states: {
-    ready: {},
-    work: {},
+    ready: { on: { GO: "work" } },
+    work: { on: { DONE: "done" } },
     awaitBossReply: {},
     failed: {},
     done: { type: "final" },
@@ -45,6 +45,12 @@ test("artifacts resolve from the compiled library layout with state ids", async 
   assert.match(artifacts.gears ?? "", /GEARS for demo/);
   assert.match(artifacts.fsm ?? "", /createMachine/);
   assert.deepEqual(artifacts.missing, []);
+  // playbook-library-36: the drawable graph rides beside the ids.
+  assert.ok(artifacts.machine, "machine graph must be served");
+  assert.equal(artifacts.machine?.initial, "ready");
+  assert.ok((artifacts.machine?.edges.length ?? 0) > 0);
+  const finals = artifacts.machine?.nodes.filter((n) => n.kind === "final");
+  assert.ok((finals?.length ?? 0) > 0);
   assert.deepEqual(artifacts.stateIds, [
     "ready",
     "work",

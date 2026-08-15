@@ -19,6 +19,7 @@ import type {
   ServerMessage,
   SessionInfo,
   SpecTreeState,
+  MachineGraph,
 } from "@sublang/spex-core/protocol";
 
 import { SpexClient, defaultCoreUrl, type ConnectionStatus } from "../lib/client.js";
@@ -53,6 +54,9 @@ export interface AppState {
   /** True once a connection has ever opened (first-paint banner). */
   everConnected: boolean;
   configState?: ConfigState;
+  /** Served machine definitions by playbook id (run-view-64); null
+   * records a fetch that found no machine. */
+  machineGraphs: Record<string, MachineGraph | null>;
   readiness: ReadinessEntry[];
   projects: ProjectInfo[];
   projectMeta: Record<string, ProjectMeta>;
@@ -94,6 +98,9 @@ export interface AppState {
    * Paths pass through as typed — the core expands a leading ~. */
   openAcademyExample(path?: string): Promise<ProjectInfo>;
   loadSpecs(projectId: string): Promise<void>;
+  /** Fetch every configured playbook's machine graph, once per
+   * config (run-view-64, playbook-library-36). */
+  loadMachineGraphs(): Promise<void>;
   readSpecRecord(projectId: string, path: string): Promise<string>;
   refreshReadiness(): Promise<void>;
   registerProject(path: string): Promise<ProjectInfo>;
@@ -340,6 +347,7 @@ export const useAppStore = create<AppState>((set, get) => {
     readiness: [],
     projects: [],
     projectMeta: {},
+    machineGraphs: {},
     compileProgress: {},
     sessions: [],
     views: {},
@@ -382,6 +390,7 @@ export const useAppStore = create<AppState>((set, get) => {
         getClient().command("session.list", {}),
       ]);
       set({ configState, readiness, projects, sessions });
+      void get().loadMachineGraphs();
       for (const project of projects) {
         void get().loadProjectMeta(project.id);
       }
@@ -494,6 +503,30 @@ export const useAppStore = create<AppState>((set, get) => {
             [projectId]: (cause as Error).message,
           },
         });
+      }
+    },
+
+    async loadMachineGraphs() {
+      const state = get();
+      if (state.configState?.status !== "valid") return;
+      const playbooks = state.configState.summary?.playbooks ?? [];
+      for (const playbook of playbooks) {
+        if (playbook.id in get().machineGraphs) continue;
+        try {
+          const artifacts = (await getClient().command("playbook.artifacts", {
+            playbookId: playbook.id,
+          })) as { machine?: MachineGraph | null };
+          set({
+            machineGraphs: {
+              ...get().machineGraphs,
+              [playbook.id]: artifacts.machine ?? null,
+            },
+          });
+        } catch {
+          // A failed fetch records nothing; the card degrades to the
+          // observed drawing (run-view-64) and a later config load
+          // retries.
+        }
       }
     },
 

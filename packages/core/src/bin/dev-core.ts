@@ -114,26 +114,80 @@ async function main(): Promise<void> {
         });
         return;
       }
+      // The scripted run narrates the real CODE machine's states and
+      // mirrors the runtime's playbook.trace shapes (DR-028), so the
+      // dev UI draws the same cards a real run produces.
+      const runId = `demo-code-${Date.now()}`;
+      let sequence = 0;
+      const trace = async (
+        type: string,
+        payload: Record<string, unknown>,
+      ): Promise<void> => {
+        sequence += 1;
+        await session.emitTelemetry({
+          topic: "playbook.trace",
+          payload: {
+            schemaVersion: 3,
+            sessionId: runId,
+            playbookId: "code",
+            rootSessionId: runId,
+            depth: 1,
+            sequence,
+            timestamp: Date.now(),
+            type,
+            payload,
+          },
+        });
+      };
+      const move = async (
+        from: string | null,
+        to: string,
+        event: string,
+        status: "active" | "done" = "active",
+        tags: string[] = [],
+      ): Promise<void> => {
+        await trace("fsm.transition", {
+          from,
+          to,
+          event: { type: event },
+          state: { value: to, activeStateIds: [to], tags, status, quiescent: true },
+        });
+        await session.emitTelemetry({
+          topic: "playbook.fsm.state",
+          payload: { from, to, event },
+        });
+      };
+
       await session.emitStatus(`◇ /code started`);
       await context.callCaptain(`route: ${turn.prompt}`, {
         visibility: "hidden",
       });
-      await session.emitTelemetry({
-        topic: "playbook.fsm.state",
-        payload: { from: "ready", to: "coding", event: "START_CODING" },
-      });
+      await trace("session.started", {});
+      await move("ready", "runFirstPhase", "START_CODE");
       await session.emitStatus("⤷ Coder: implement");
+      await trace("player.call.started", {
+        stateId: "runFirstPhase",
+        roleId: "coder",
+        playerId: "code-coder",
+      });
       await context.callPlayer("code-coder", `Implement: ${turn.prompt}`);
-      await session.emitTelemetry({
-        topic: "playbook.fsm.state",
-        payload: { from: "coding", to: "review", event: "CODE_READY" },
+      await trace("player.call.finished", {
+        stateId: "runFirstPhase",
+        status: "ok",
       });
+      await move("runFirstPhase", "reviewFirstCommit", "done");
       await session.emitStatus("⤷ Reviewer: review round 1");
-      await context.callPlayer("code-reviewer", "Review the change");
-      await session.emitTelemetry({
-        topic: "playbook.fsm.state",
-        payload: { from: "review", to: "ready", event: "APPROVED" },
+      await trace("player.call.started", {
+        stateId: "reviewFirstCommit",
+        roleId: "reviewer",
+        playerId: "code-reviewer",
       });
+      await context.callPlayer("code-reviewer", "Review the change");
+      await trace("player.call.finished", {
+        stateId: "reviewFirstCommit",
+        status: "ok",
+      });
+      await move("reviewFirstCommit", "done", "done", "done");
       await session.emitStatus("◇ /code finished");
     });
 

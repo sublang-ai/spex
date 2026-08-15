@@ -9,6 +9,7 @@ import type { PlaybookSummary, SessionInfo } from "@sublang/spex-core/protocol";
 import type { SessionView } from "../state/reducer.js";
 import type { ComposerState } from "../state/store.js";
 import { CaptainPane } from "./CaptainPane.js";
+import { useAppStore } from "../state/store.js";
 import { Composer } from "./Composer.js";
 import { PlayerPane } from "./PlayerPane.js";
 
@@ -47,6 +48,7 @@ export function RunView({
   onRemoveQueued: (index: number) => void;
   onDismissError: () => void;
 }) {
+  const machineGraphs = useAppStore((state) => state.machineGraphs);
   const visible = view.visible.length
     ? view.visible
     : session.players.map((player) => player.id);
@@ -55,7 +57,7 @@ export function RunView({
   return (
     <div className="flex min-h-0 flex-1 gap-3 p-3">
       <div className="flex w-[34%] min-w-[320px] flex-col gap-2">
-        <CaptainPane view={view} />
+        <CaptainPane view={view} machineGraphs={machineGraphs} />
         {readOnly ? (
           <>
             {error ? (

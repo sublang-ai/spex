@@ -52,11 +52,20 @@ export interface PlayerView {
   turnUsage?: UsageView;
 }
 
+import {
+  foldTrace,
+  type MachineFrame,
+} from "../lib/machine-frames.js";
+
+export type { MachineFrame };
+
 export interface CaptainLine {
   /** boss: the user's own message, echoed into the thread (RUN-30).
    * question: a player asking the Boss — a first-class incoming
    * message, not a log line (RUN-9, DR-010 §1). */
-  kind: "status" | "speech" | "error" | "boss" | "question";
+  kind: "status" | "speech" | "error" | "boss" | "question" | "machine";
+  /** The settled frame a "machine" line carries (run-view-62). */
+  frame?: MachineFrame;
   text: string;
   turnId: number | null;
   at: number;
@@ -77,6 +86,8 @@ export interface SessionView {
   loading?: boolean;
   fsmState?: string;
   captainMode?: string;
+  /** Live machine frames, parents before children (run-view-60/63). */
+  frames: MachineFrame[];
   /** Set while the playbook is parked awaiting a Boss reply. */
   pendingQuestion?: string;
   /** The asking player for the parked question (pane id). */
@@ -100,6 +111,7 @@ export function initialSessionView(
     visible: [...initialVisible],
     turnActive: false,
     currentTurnId: null,
+    frames: [],
     lastSeq: 0,
   };
 }
@@ -387,6 +399,15 @@ export function applyRecord(
     }
     case "captain_status": {
       const message = String(r.message);
+      // While a machine frame is open, its progress glyphs are drawn,
+      // not narrated: the card absorbs them (run-view-60). Failure ◆
+      // and engagement ◇ lines always stay (run-view-2).
+      if (
+        view.frames.length > 0 &&
+        /^[▸⮕⤷]/u.test(message.trimStart())
+      ) {
+        break;
+      }
       // The runtime narrates the parked question as a status line too;
       // once it lives in the thread as a question bubble, the echo is
       // noise (DR-010 §1).
@@ -460,6 +481,21 @@ export function applyRecord(
         }
       } else if (topic === "playbook.captain.fsm.state") {
         view.captainMode = stateText(payload?.to);
+      } else if (topic === "playbook.trace") {
+        // The structured trace opens, moves, and settles the machine
+        // frames the pane draws (run-view-60..63); folding is pure so
+        // a replay reproduces the same cards (run-view-14).
+        const fold = foldTrace(view.frames, r.payload, r.timestamp);
+        view.frames = [...fold.open];
+        if (fold.closed) {
+          pushCaptain(view, {
+            kind: "machine",
+            text: `${fold.closed.playbookId} ${fold.closed.outcome ?? "finished"}`,
+            frame: fold.closed,
+            turnId: r.turnId,
+            at: r.timestamp,
+          });
+        }
       }
       break;
     }

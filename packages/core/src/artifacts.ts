@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { resolveModulePath } from "./config.js";
-import { listFsmStates } from "./compile.js";
+import { loadFsmInfo } from "./compile.js";
 import type { PlaybookArtifacts } from "./protocol.js";
 
 function firstExisting(candidates: string[]): string | undefined {
@@ -73,6 +73,7 @@ export async function resolveArtifacts(
       gears: null,
       fsm: null,
       stateIds: null,
+      machine: null,
       missing: ["source", "gears", "fsm"],
     };
   }
@@ -99,11 +100,15 @@ export async function resolveArtifacts(
 
   const source = readOrNull(sourcePath);
   const gears = readOrNull(gearsPath);
+  const fsmInfo = fsmPath
+    ? await loadFsmInfo(fsmPath)
+    : { stateIds: null, machine: null };
   return {
     source: source === null ? null : stripLeadingComments(source),
     gears: gears === null ? null : stripLeadingComments(gears),
     fsm: readOrNull(fsmPath),
-    stateIds: fsmPath ? await listFsmStates(fsmPath) : null,
+    stateIds: fsmInfo.stateIds,
+    machine: fsmInfo.machine,
     missing,
   };
 }

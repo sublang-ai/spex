@@ -173,10 +173,170 @@ interface MachineLike {
   config?: { initial?: unknown; states?: Record<string, { type?: string }> };
 }
 
-/** Bundle an FSM module and list every state id, or null on failure. */
-export async function listFsmStates(
-  fsmPath: string,
-): Promise<string[] | null> {
+// --- Machine graph (playbook-library-36, DR-028) ---------------------------
+
+export interface MachineGraphNode {
+  id: string;
+  parent?: string;
+  kind: "state" | "final";
+  /** The player role the state invokes, as the machine names it. */
+  role?: string;
+  /** The state's own description, for human tooltips (DR-010 §2). */
+  description?: string;
+  tags: string[];
+}
+
+export interface MachineGraphEdge {
+  /** Stable identity: owner state, event, branch index, target index
+   * — guarded sibling branches stay distinct (DR-028). */
+  id: string;
+  from: string;
+  to: string;
+  /** Event name; "" names the always transition. */
+  event: string;
+}
+
+export interface MachineGraph {
+  initial: string;
+  nodes: MachineGraphNode[];
+  edges: MachineGraphEdge[];
+}
+
+interface StateConfigLike {
+  type?: string;
+  initial?: unknown;
+  tags?: string | string[];
+  meta?: { playbook?: { role?: unknown; player?: unknown; description?: unknown } };
+  description?: unknown;
+  on?: Record<string, unknown>;
+  always?: unknown;
+  invoke?: unknown;
+  states?: Record<string, StateConfigLike>;
+}
+
+/** Strip XState target syntax down to a local sibling id: '#m.a.b'
+ * and '.b' address forms reduce to their final segment path relative
+ * to the machine root. */
+function normalizeTarget(target: string, ownerPath: string[]): string | null {
+  if (target.startsWith("#")) {
+    const parts = target.slice(1).split(".");
+    return parts.slice(1).join(".") || null;
+  }
+  if (target.startsWith(".")) {
+    return [...ownerPath, target.slice(1)].join(".");
+  }
+  // A bare target names a sibling: resolve within the owner's parent.
+  return [...ownerPath.slice(0, -1), target].join(".");
+}
+
+function transitionBranches(value: unknown): { target?: unknown }[] {
+  if (value === undefined || value === null) return [];
+  const list = Array.isArray(value) ? value : [value];
+  return list.map((branch) =>
+    typeof branch === "string" ? { target: branch } : (branch as { target?: unknown }),
+  );
+}
+
+/** Derive the drawable graph from an imported machine's config — the
+ * config is data, so no XState import is needed (DR-028). */
+export function extractMachineGraph(machine: MachineLike): MachineGraph | null {
+  const config = machine.config as
+    | { initial?: unknown; states?: Record<string, StateConfigLike> }
+    | undefined;
+  const rootStates = config?.states;
+  const initial = typeof config?.initial === "string" ? config.initial : null;
+  if (!rootStates || !initial) return null;
+
+  const nodes: MachineGraphNode[] = [];
+  const edges: MachineGraphEdge[] = [];
+
+  const addEdges = (
+    ownerPath: string[],
+    event: string,
+    value: unknown,
+  ): void => {
+    const owner = ownerPath.join(".");
+    const branches = transitionBranches(value);
+    branches.forEach((branch, branchIndex) => {
+      const targets =
+        branch.target === undefined
+          ? []
+          : Array.isArray(branch.target)
+            ? branch.target
+            : [branch.target];
+      targets.forEach((target, targetIndex) => {
+        if (typeof target !== "string") return;
+        const to = normalizeTarget(target, ownerPath);
+        if (!to) return;
+        edges.push({
+          id: `${owner}::${event}::${branchIndex}::${targetIndex}`,
+          from: owner,
+          to,
+          event,
+        });
+      });
+    });
+  };
+
+  const walk = (
+    states: Record<string, StateConfigLike>,
+    parentPath: string[],
+  ): void => {
+    for (const [name, state] of Object.entries(states)) {
+      const path = [...parentPath, name];
+      const id = path.join(".");
+      // Published playbook-7 machines name the invoked player as
+      // meta.playbook.player; newer compiles say role. Accept both.
+      const meta = state.meta?.playbook;
+      const role = meta?.role ?? meta?.player;
+      const description = meta?.description ?? state.description;
+      nodes.push({
+        id,
+        ...(parentPath.length > 0 ? { parent: parentPath.join(".") } : {}),
+        kind: state.type === "final" ? "final" : "state",
+        ...(typeof role === "string" && role ? { role } : {}),
+        ...(typeof description === "string" && description
+          ? { description }
+          : {}),
+        tags:
+          typeof state.tags === "string"
+            ? [state.tags]
+            : Array.isArray(state.tags)
+              ? state.tags.filter((t): t is string => typeof t === "string")
+              : [],
+      });
+      for (const [event, value] of Object.entries(state.on ?? {})) {
+        addEdges(path, event, value);
+      }
+      if (state.always !== undefined) addEdges(path, "", state.always);
+      const invoke = state.invoke;
+      const invokes = Array.isArray(invoke) ? invoke : invoke ? [invoke] : [];
+      for (const entry of invokes) {
+        const shaped = entry as { onDone?: unknown; onError?: unknown };
+        if (shaped.onDone !== undefined) addEdges(path, "done", shaped.onDone);
+        if (shaped.onError !== undefined) addEdges(path, "error", shaped.onError);
+      }
+      if (state.states) walk(state.states, path);
+    }
+  };
+  walk(rootStates as Record<string, StateConfigLike>, []);
+
+  // Edges whose target names no known node are dropped rather than
+  // drawn dangling.
+  const known = new Set(nodes.map((node) => node.id));
+  return {
+    initial,
+    nodes,
+    edges: edges.filter((edge) => known.has(edge.from) && known.has(edge.to)),
+  };
+}
+
+/** Bundle an FSM module and serve its state ids and drawable graph,
+ * or nulls on failure (playbook-library-36). */
+export async function loadFsmInfo(fsmPath: string): Promise<{
+  stateIds: string[] | null;
+  machine: MachineGraph | null;
+}> {
   try {
     const { mkdtempSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
@@ -191,10 +351,20 @@ export async function listFsmStates(
       nodePaths: bundleNodePaths(),
     });
     const machine = await importMachine(outfile);
-    return Object.keys(machine.config?.states ?? {});
+    return {
+      stateIds: Object.keys(machine.config?.states ?? {}),
+      machine: extractMachineGraph(machine),
+    };
   } catch {
-    return null;
+    return { stateIds: null, machine: null };
   }
+}
+
+/** Bundle an FSM module and list every state id, or null on failure. */
+export async function listFsmStates(
+  fsmPath: string,
+): Promise<string[] | null> {
+  return (await loadFsmInfo(fsmPath)).stateIds;
 }
 
 export function deriveStateIds(machine: MachineLike): {
