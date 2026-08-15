@@ -64,6 +64,14 @@ Where a project is bound to a forge repository and the forge adapter ([DR-006](.
 - Each list entry shows its title and number; activating it opens its canonical forge URL in the external browser.
 - Each list shows the age of its data and refreshes when the user triggers a manual refresh [[dashboard-14](#dashboard-14)].
 
+#### dashboard-24
+
+Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.md#spec-view-14)], the Dashboard shall carry the project's intents in its next-work lists beside the forge lists [[dashboard-6](#dashboard-6)], because an intent record is work to finish, not spec law ([DR-027](../decisions/027-linked-views-contract.md)):
+
+- each entry names the record's ID and title; activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)];
+- the list shows the age of its data and refreshes when the user triggers a manual refresh;
+- a project whose tree lists no intents contributes no intents list.
+
 ### Usage
 
 #### dashboard-7
@@ -185,6 +193,12 @@ Where fixture player `done` events carry usage payloads across two sessions and 
 #### dashboard-19
 
 Where a stubbed forge adapter returns fixture open issues and pull requests for a bound project, when the Dashboard is displayed, the test suite shall assert that the next-work lists render the fixture entries with titles and numbers [[dashboard-6](#dashboard-6)], that a manual refresh invokes the stub again, and that a stub failure on refresh leaves the previously served lists in place with the failure and data age surfaced [[dashboard-14](#dashboard-14)].
+
+### Intents Coverage
+
+#### dashboard-25
+
+Where a fixture project's `specs/` tree lists intent records and a second project's tree lists none, the test suite shall assert the intents next-work lists of [[dashboard-24](#dashboard-24)]: the first project's entries render with record IDs and titles, activating one requests that record in the project's Specs surface [[dashboard-24](#dashboard-24)], and the second project shows no intents list [[dashboard-24](#dashboard-24)].
 
 ### Empty-State Coverage
 

@@ -7,6 +7,7 @@
 
 Accepted.
 Extends [DR-010](010-interface-craft.md)'s interface principles to data graphics, occasioned by the spec citation graph.
+§4's viewport rule and §7's emphasis precedence are amended by [DR-027](027-linked-views-contract.md): the presentation may fill the pane within a stated bound, and inspection never takes the emphasis.
 
 ## Context
 

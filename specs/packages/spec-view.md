@@ -17,8 +17,9 @@ Its data plane — the `specs.get` tree parse and the `specs.read` record fetch 
 
 When the spec view is opened for a project whose `specs/` tree has been read, the spec view shall present the tree as a left-rooted collapsible outline of the `packages/` collection ([DR-015](../decisions/015-reference-content.md)) — organized by spec files, never by item grouping at the top level ([DR-011](../decisions/011-project-workspace.md)):
 
-- the outline nests collection subdirectories and file nodes, with directory levels expanded and file nodes collapsed by default;
-- directories are ordered by name, and files by basename within their directory.
+- collection subdirectories and root-level file nodes list at the outline's top level, spending no row on a collection root ([DR-027](../decisions/027-linked-views-contract.md)), with directory levels expanded and file nodes collapsed by default;
+- directories are ordered by name, and files by basename within their directory;
+- the decisions branch [[spec-view-7](#spec-view-7)] stands last, below every collection entry.
 
 ### Package Nodes
 
@@ -67,10 +68,11 @@ When a group filter toggle is activated, the spec view shall hide or restore tha
 While the spec view's filter box contains text, the spec view shall narrow the outline to the matching items:
 
 - only items whose ID (matched case-insensitively) or text matches are shown, with the current match count displayed;
-- a package holding no match leaves the outline for the search's duration, as does a collection directory left with nothing to show — unlike a group filter, which keeps every package standing [[spec-view-4](#spec-view-4)];
+- a package holding no match leaves the outline for the search's duration — the selected package excepted [[spec-view-44](#spec-view-44)] — as does a collection directory left with nothing to show, unlike a group filter, which keeps every package standing [[spec-view-4](#spec-view-4)];
+- decision records match on their ID and title, narrowing the decisions branch the same way [[spec-view-7](#spec-view-7)];
 - packages containing matches auto-expand without persisting that expansion;
 - the box offers a control that clears it, and Escape within it clears it too;
-- clearing the box restores the expansion state from before the search.
+- clearing the box restores the expansion state from before the search, and the selection's reveal re-fires after the restore [[spec-view-43](#spec-view-43)].
 
 ### Citation Jumps
 
@@ -78,7 +80,7 @@ While the spec view's filter box contains text, the spec view shall narrow the o
 
 When a local link inside the view is activated, the spec view shall resolve it against the citing file's `specs/`-relative path and act by target ([DR-011](../decisions/011-project-workspace.md)):
 
-- an item citation or a backlink expands the target item's ancestors, reveals the target even when its group filter is toggled off or an active search excludes it — marking it as shown despite the filter or search — and scrolls to and briefly highlights it, without leaving the view;
+- an item citation or a backlink expands the target item's ancestors, reveals the target even when its group filter is toggled off or an active search excludes it — marking it as shown despite the filter or search — and scrolls to and briefly highlights it, without leaving the view and without writing the package selection [[spec-view-42](#spec-view-42)];
 - after an in-view jump, the view offers a one-step return to the citing item, its keyboard reach and announcement already legislated ([DR-010](../decisions/010-interface-craft.md) §6, §7);
 - a cited ID that does not exist in the tree shows a transient "not found" note beside the activated link and does not navigate;
 - a link resolving to a decision or intent record's exact path, or to the tree's own `meta.md`, opens that record in the records reader [[spec-view-7](#spec-view-7)];
@@ -92,10 +94,34 @@ While the spec tree renders, the spec view shall keep the outline permanent and 
 
 - the toggle defaults on and persists with the rest of the project's view state;
 - the graph is directed, carrying one node per spec file and one edge per citing→cited file pair;
-- one selection serves both projections: choosing a package in the graph expands that file in the outline and scrolls it into view, and leaves the surfaces on screen unchanged ([DR-009](../decisions/009-at-hand-interaction.md));
-- opening a package in the outline points the graph at it, the mirror of choosing its node, and closing it releases the selection;
-- the boundary between the two panes is draggable by pointer and by keyboard, within bounds that keep both panes readable, and persists with the toggle;
-- activating empty graph space clears the selection.
+- one selection serves both projections [[spec-view-42](#spec-view-42)], revealed in both when it changes [[spec-view-43](#spec-view-43)], and neither projection ever leaves the screen for it ([DR-009](../decisions/009-at-hand-interaction.md));
+- the boundary between the two panes is draggable by pointer and by keyboard, within bounds that keep both panes readable, and persists with the toggle.
+
+#### spec-view-42
+
+While the spec tree renders, the spec view shall hold one selection — a single package or none — written only by its own gestures and lasting the session, with the graph on screen or not ([DR-027](../decisions/027-linked-views-contract.md)):
+
+- selecting gestures: activating a package row in the outline by click or Enter, and activating a graph node by click or Enter; re-activating the selected package re-selects it and re-fires its reveal [[spec-view-43](#spec-view-43)];
+- a package row follows the tree idiom: the row is the single focusable, selectable target carrying aria-expanded and the selection's marking, its chevron — a pointer target of at least 24px — and the Left/Right arrow keys arrange only, and arranging never selects, deselects, or moves the camera;
+- the query and the lens never write the selection [[spec-view-4](#spec-view-4)] [[spec-view-5](#spec-view-5)];
+- an in-view citation jump navigates items and never moves the package selection [[spec-view-6](#spec-view-6)];
+- clearing gestures: Escape once the focused widget has nothing left to dismiss — search box, records list, details card — from either pane, and a graph-canvas press released within the drag threshold;
+- the outline marks the selected row in the interaction hue; the graph marks its node with the solid halo and isolates its neighborhood [[spec-view-25](#spec-view-25)].
+
+#### spec-view-43
+
+When the selection changes to a package, the spec view shall reveal it in both projections, additively ([DR-027](../decisions/027-linked-views-contract.md)):
+
+- in the outline, the package and its ancestors open and its row scrolls into view — writing the search's transient overlay while a search runs [[spec-view-5](#spec-view-5)], and re-firing after the search clears so the restore never hides the selection;
+- in the graph, the camera pans just enough to bring the node into the viewport, only when it lies outside, and the pan neither zooms nor counts as the reader moving the camera [[spec-view-27](#spec-view-27)];
+- reveal only opens and scrolls; it never collapses, clears, or closes anything.
+
+#### spec-view-44
+
+While a search narrows the outline [[spec-view-5](#spec-view-5)], the spec view shall retain the selected package in the outline whatever the query matches ([DR-027](../decisions/027-linked-views-contract.md)):
+
+- the retained row keeps its full selection emphasis with its ancestors standing, worded as shown despite the search in the grammar of [[spec-view-6](#spec-view-6)]'s reveals;
+- on the graph, the selection halo and the query's match marks hold full strength together, isolation included [[spec-view-25](#spec-view-25)] [[spec-view-29](#spec-view-29)].
 
 #### spec-view-22
 
@@ -104,7 +130,7 @@ While the graph renders a node, the spec view shall present the package by the e
 - the node's area carries its package's item count, within a bounded size range, and states that count as a numeral on the node;
 - a package cited by a peer is filled solid, and a package no peer cites is drawn as a ring on a tinted fill — neither treatment using the hues reserved for interaction, status, or item groups;
 - the node's basename labels it, haloed in the surface color where edges pass beneath;
-- the numeral and the label hold their legible size on screen whatever the camera's zoom [[spec-view-27](#spec-view-27)].
+- the numeral and the label never render below their legible floor, the fitted view included [[spec-view-27](#spec-view-27)] [[spec-view-28](#spec-view-28)].
 
 #### spec-view-23
 
@@ -120,12 +146,13 @@ While the graph renders, the spec view shall carry a legend naming every channel
 
 #### spec-view-25
 
-While the graph renders, the spec view shall emphasize one package at a time through dimming alone — never recoloring, resizing, or moving a mark — under the precedence of [DR-026](../decisions/026-data-graphics-craft.md):
+While the graph renders, the spec view shall emphasize through dimming alone — never recoloring, resizing, or moving a mark — with the selection [[spec-view-42](#spec-view-42)] as the only state that isolates ([DR-027](../decisions/027-linked-views-contract.md)):
 
-- a selected package holds the emphasis, and hovering never takes it — a hover reads a mark's numbers [[spec-view-26](#spec-view-26)] and leaves the picture whole, so inspecting and choosing never look alike;
-- keyboard focus reaches every node, carries the app's focus ring, and takes the emphasis the way hover does, with Enter opening the focused package [[spec-view-20](#spec-view-20)];
-- the emphasized package keeps its own marks and its citation neighbors at full strength while every other mark dims;
-- Escape dismisses the hovered card, then the selection.
+- the selected package keeps its own marks and its citation neighbors at full strength while every other mark dims;
+- hover and keyboard focus are inspection: they show the details card [[spec-view-26](#spec-view-26)] and the focus ring and lift the inspected mark and its label to full strength — never dimming others, isolating, or selecting;
+- keyboard focus reaches every node, with Enter selecting [[spec-view-42](#spec-view-42)];
+- the query's match marks hold full strength through an isolation [[spec-view-29](#spec-view-29)];
+- Escape follows the ladder of [[spec-view-42](#spec-view-42)]: the card first, then the selection.
 
 #### spec-view-26
 
@@ -138,18 +165,21 @@ When a node or an edge takes hover or keyboard focus, the spec view shall answer
 
 While the graph renders, the spec view shall move a camera over a fixed layout rather than re-laying out the tree ([DR-026](../decisions/026-data-graphics-craft.md)):
 
-- the camera fits the whole layout with padding when the graph opens, and re-fits when the tree, the pane size, or the toggle changes, until the reader moves it;
+- the camera fits the whole layout with padding when the graph opens; when the tree, the pane size, or the toggle changes, the base fit recomputes and the reader's own pan and zoom re-compose over it, so a resize never discards their navigation;
+- a reveal pan [[spec-view-43](#spec-view-43)] never counts as the reader's own camera move;
 - the camera pans by drag, zooms toward the pointer, and is bounded between the fitted whole and a detail limit, so the layout can never leave the canvas;
 - a labeled control returns the camera to the fitted whole.
 
 #### spec-view-28
 
-When the graph builds its layout, the spec view shall settle a deterministic layout before the first paint and reheat it only under the reader's hand ([DR-026](../decisions/026-data-graphics-craft.md)):
+When the graph builds its picture, the spec view shall settle a deterministic arrangement and solve its presentation rather than tune it ([DR-027](../decisions/027-linked-views-contract.md)):
 
-- the settled layout is a function of the tree and its rendered label extents, so the same tree renders the same picture with no opening animation;
-- a node dragged follows the pointer while the rest of the layout adjusts live, and the layout comes to rest after release;
-- a release that moved its node moves only that node, leaving the selection where it was [[spec-view-20](#spec-view-20)];
-- dragged positions are never persisted, so reopening the graph restores the settled layout;
+- the settled arrangement is a pure function of the tree alone — topology, no label extents — computed to rest before first paint with no opening animation, holding a minimum separation between nodes;
+- the picture maps the arrangement onto the pane: positions span the drawing area within a bounded aspect relaxation, never beyond the bound;
+- marks then take the largest single scale at which no circle-and-label mark touches another, solved exactly over pairs, with the 24px activation-target floor winning over overlap, the size cap applying last, and label widths capped with an ellipsis;
+- a span too small to map falls back to the identity scale, centered;
+- a node dragged follows the pointer while the rest adjusts live and comes to rest after release; a release that moved its node moves only that node, leaving the selection where it was [[spec-view-42](#spec-view-42)];
+- dragged positions are never persisted, so reopening the graph restores the settled arrangement;
 - a package no citation reaches is held on the canvas with the rest.
 
 #### spec-view-29
@@ -157,15 +187,18 @@ When the graph builds its layout, the spec view shall settle a deterministic lay
 While the graph renders beside the outline, the spec view shall seat the item filters and the search box within the outline pane and scope them to it ([DR-026](../decisions/026-data-graphics-craft.md)):
 
 - the graph's layout and its counts follow the whole tree, whatever the filters exclude [[spec-view-4](#spec-view-4)];
-- an active search [[spec-view-5](#spec-view-5)] marks the packages holding matches on the graph without moving a node.
+- an active search [[spec-view-5](#spec-view-5)] marks the packages holding matches on the graph without moving a node, the marks holding full strength through any isolation [[spec-view-25](#spec-view-25)].
 
 ### Records
 
 #### spec-view-7
 
-When the records footer line ("N decisions · M intents · meta") is activated, the spec view shall open an at-hand list of the tree's decision and intent records and its `meta.md`, each by ID and title ([DR-009](../decisions/009-at-hand-interaction.md)), closable with Escape:
+While the spec tree renders, the spec view shall serve the tree's records in their places ([DR-027](../decisions/027-linked-views-contract.md)) — the decision records as the outline's last branch [[spec-view-1](#spec-view-1)] and `meta.md` and `map.md` as footer links — each opening the records reader:
 
-- when a record is picked, the view replaces itself with that record's rendered markdown behind a Back control;
+- the decisions branch renders whenever decision records exist, file-less and legacy trees included, carrying its count in its label, its rows sorted by number, each announced as a reader opener rather than an expandable node, and the group filters never touch it;
+- intent records do not appear anywhere in the view — they are work items, carried by the Dashboard's next-work lists [[dashboard-24](dashboard.md#dashboard-24)];
+- when a record is picked, the view replaces itself with that record's rendered markdown behind a Back control, and Back restores focus to the invoking row and the outline's scroll position;
+- links inside the reader keep the view's semantics [[spec-view-6](#spec-view-6)]: a path resolving to a record, `meta.md`, or `map.md` opens in the reader, an item citation leaves the reader and jumps to the item, and any other local link stays inert;
 - the record fetch shows in progress, and any fetch failure shows with a retry.
 
 ### Freshness
@@ -193,9 +226,19 @@ Where the project has no `specs/` directory, the spec view's empty state shall a
 
 #### spec-view-18
 
-Where the project's `specs/` tree carries a legacy-generation directory other than `iterations/` [[scaffold-26](scaffold.md#scaffold-26)], whose records still list [[spec-view-14](#spec-view-14)], the spec view shall render a migration notice naming `npx @sublang/spex scaffold --update` as a copyable block instead of a tree ([DR-015](../decisions/015-reference-content.md)):
+Where the project's `specs/` tree carries a legacy-generation directory other than `iterations/` [[scaffold-26](scaffold.md#scaffold-26)], whose records still list [[spec-view-14](#spec-view-14)], the spec view shall render a migration notice naming `npx @sublang/spex scaffold --update` as a copyable block instead of a package tree, with the records access of [[spec-view-7](#spec-view-7)] still standing ([DR-015](../decisions/015-reference-content.md)):
 
 - the notice states that the command refreshes the spec law and prints a migration prompt for an AI agent to apply, since the command restructures nothing itself ([DR-022](../decisions/022-prompt-based-migration.md)), so the tree stays legacy — and this notice stays — until that migration lands.
+
+### Records Parsing
+
+#### spec-view-14
+
+The core package shall list `specs/decisions/*.md` as decision records and the union of `specs/intents/*.md` and legacy `specs/iterations/*.md` as intent records ([DR-017](../decisions/017-intent-records.md)), sorted by filename:
+
+- a legacy file whose basename reappears under `intents/` is omitted, and both the shadowing and the directory coexistence are reported as tree notices;
+- differently named files sharing a leading number all list, with each duplicated record ID a tree notice;
+- each record carries an ID formed from the record kind and the filename's leading number [[meta-22](../meta.md#meta-22)] (e.g. `DR-011`), a title taken from the file's first `#` heading minus any leading `DR-nnn:`/`IR-nnn:` prefix, and a path relative to `specs/`.
 
 ## Internal Behavior
 
@@ -230,16 +273,6 @@ For each parsed item, the core package shall report the fields the view presents
 #### spec-view-13
 
 The core package shall return the first paragraph under `## Intent` [[meta-30](../meta.md#meta-30)] for every file that has one, on that file, together with the H1 title, so the view renders a file's summary without a second fetch.
-
-### Records Parsing
-
-#### spec-view-14
-
-The core package shall list `specs/decisions/*.md` as decision records and the union of `specs/intents/*.md` and legacy `specs/iterations/*.md` as intent records ([DR-017](../decisions/017-intent-records.md)), sorted by filename:
-
-- a legacy file whose basename reappears under `intents/` is omitted, and both the shadowing and the directory coexistence are reported as tree notices;
-- differently named files sharing a leading number all list, with each duplicated record ID a tree notice;
-- each record carries an ID formed from the record kind and the filename's leading number [[meta-22](../meta.md#meta-22)] (e.g. `DR-011`), a title taken from the file's first `#` heading minus any leading `DR-nnn:`/`IR-nnn:` prefix, and a path relative to `specs/`.
 
 ### Degradation
 
@@ -314,7 +347,7 @@ Where a fixture tree carries a package item citing a peer's item, an intra-file 
 
 #### spec-view-21
 
-Where a fixture tree carries cross-file citations, the test suite shall assert the toggle round trip: the outline renders with the toggle off and the graph joins it with the toggle on, carrying one node per file and one directed edge per citing→cited pair [[spec-view-20](#spec-view-20)], the toggle's state survives a remount with the rest of the view state [[spec-view-20](#spec-view-20)], choosing a node expands that file in the outline while the outline stays on screen [[spec-view-20](#spec-view-20)], opening a package in the outline points the graph at it [[spec-view-20](#spec-view-20)], the divider moves the split within its bounds [[spec-view-20](#spec-view-20)], and activating empty graph space clears the selection [[spec-view-20](#spec-view-20)].
+Where a fixture tree carries cross-file citations, the test suite shall assert the toggle round trip: the outline renders with the toggle off and the graph joins it with the toggle on, carrying one node per file and one directed edge per citing→cited pair [[spec-view-20](#spec-view-20)], the toggle's state survives a remount with the rest of the view state [[spec-view-20](#spec-view-20)], selecting a node reveals its package in the outline while the outline stays on screen [[spec-view-43](#spec-view-43)], activating a package row selects it on the graph [[spec-view-42](#spec-view-42)], the divider moves the split within its bounds [[spec-view-20](#spec-view-20)], and a canvas press released within the drag threshold clears the selection [[spec-view-42](#spec-view-42)].
 
 #### spec-view-38
 
@@ -326,11 +359,17 @@ Where the graph renders in the light and the dark theme, the test suite shall as
 
 #### spec-view-40
 
-Where a fixture tree renders twice, the test suite shall assert the layout contract of [[spec-view-28](#spec-view-28)]: both renders settle identical node positions, a drag moves its node without taking the selection, a dragged node's positions are gone after a remount, and a package no citation reaches still holds a position within the layout.
+Where a fixture tree renders twice in one pane, the test suite shall assert the picture contract of [[spec-view-28](#spec-view-28)]: both renders settle identical node positions, no two circle-and-label marks overlap at the fitted view with every node at or above its activation-target floor [[spec-view-28](#spec-view-28)], a drag moves its node without taking the selection, a dragged node's positions are gone after a remount, and a package no citation reaches still holds a position within the layout.
 
 #### spec-view-41
 
-Where a fixture tree renders with the graph on, the test suite shall assert the graph's interaction: a selection survives pointer transit across the canvas [[spec-view-25](#spec-view-25)], keyboard focus reaches a node and Enter opens it [[spec-view-25](#spec-view-25)], Escape dismisses hover emphasis before selection [[spec-view-25](#spec-view-25)], a hover states a node's numbers without dimming the picture [[spec-view-25](#spec-view-25)], a node's card states the item total with its per-group breakdown and citation counts [[spec-view-26](#spec-view-26)], an edge's card states its citation count [[spec-view-26](#spec-view-26)], the camera's control restores the fitted whole after a pan [[spec-view-27](#spec-view-27)], and an active search marks matching nodes while a filter toggle leaves the graph's counts whole [[spec-view-29](#spec-view-29)].
+Where a fixture tree renders with the graph on, the test suite shall assert the contract's axis independence: expanding a second package by chevron leaves the selection where it was and collapsing either never clears it [[spec-view-42](#spec-view-42)], a citation jump flashes its target without moving the selection [[spec-view-42](#spec-view-42)], a search typed over a selection retains the selected package at full emphasis with the shown-despite wording [[spec-view-44](#spec-view-44)], match marks hold full strength while the selection isolates [[spec-view-25](#spec-view-25)], keyboard focus lifts a dimmed mark and shows its card without isolating, and Enter selects [[spec-view-25](#spec-view-25)], the Escape ladder dismisses card then selection from either pane [[spec-view-42](#spec-view-42)], a node's card states the item total with its per-group breakdown and citation counts [[spec-view-26](#spec-view-26)], an edge's card states its citation count [[spec-view-26](#spec-view-26)], the camera's control restores the fitted whole after a pan [[spec-view-27](#spec-view-27)], and a filter toggle leaves the graph's counts whole [[spec-view-29](#spec-view-29)].
+
+### Records Coverage (View)
+
+#### spec-view-45
+
+Where a fixture tree carries decision records — once alongside package files and once with none — the test suite shall assert the records access of [[spec-view-7](#spec-view-7)]: the decisions branch renders in both fixtures with its count and stands last in the outline [[spec-view-1](#spec-view-1)], no intent record appears anywhere in the view [[spec-view-7](#spec-view-7)], a record row opens the reader and Back restores focus to that row [[spec-view-7](#spec-view-7)], a search matching a decision's ID narrows the branch to it [[spec-view-5](#spec-view-5)], the footer's `meta` and `map` links open the reader [[spec-view-7](#spec-view-7)], and a record-internal item citation leaves the reader and lands on the item [[spec-view-7](#spec-view-7)].
 
 ### Confinement Coverage
 
