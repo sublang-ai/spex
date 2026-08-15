@@ -27,6 +27,7 @@ import type {
   SpecRecordInfo,
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
+import { SpecGraph } from "./SpecGraph.js";
 
 import {
   ancestorKeys,
@@ -171,6 +172,9 @@ export function SpecView(props: SpecViewProps) {
 
   // Branch/directory collapse is cosmetic and local: levels default
   // open.
+  // Graph is the map projection of the same tree (spec-view-33):
+  // cosmetic, local, never persisted.
+  const [graphMode, setGraphMode] = useState(false);
   const [collapsedDirs, setCollapsedDirs] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -959,6 +963,20 @@ export function SpecView(props: SpecViewProps) {
             {search.count} {search.count === 1 ? "match" : "matches"}
           </span>
         ) : null}
+        <button
+          type="button"
+          data-testid="graph-toggle"
+          aria-pressed={graphMode}
+          title={graphMode ? "Show the outline" : "Show the citation graph"}
+          onClick={() => setGraphMode((mode) => !mode)}
+          className={`rounded border px-2 py-1 text-xs ${
+            graphMode
+              ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+              : "border-neutral-300 text-neutral-500 hover:text-neutral-700 dark:border-neutral-700 dark:hover:text-neutral-300"
+          }`}
+        >
+          {graphMode ? "Tree" : "Graph"}
+        </button>
       </div>
 
       {tree.notices.length > 0 ? (
@@ -967,9 +985,22 @@ export function SpecView(props: SpecViewProps) {
         </div>
       ) : null}
 
-      <ul className="flex flex-col">
-        {tree.files.length > 0 ? renderDir(outlineRoot, outlineRoot.name) : null}
-      </ul>
+      {graphMode && tree.files.length > 0 ? (
+        <SpecGraph
+          files={tree.files}
+          expandedKeys={expandedFiles}
+          onOpenFile={(fileKey) => {
+            setGraphMode(false);
+            if (!expandedFiles.has(fileKey)) toggleFile(fileKey);
+          }}
+        />
+      ) : (
+        <ul className="flex flex-col">
+          {tree.files.length > 0
+            ? renderDir(outlineRoot, outlineRoot.name)
+            : null}
+        </ul>
+      )}
       {tree.files.length === 0 ? (
         <div className="text-sm text-neutral-400">
           specs/ is present but holds no spec files yet.

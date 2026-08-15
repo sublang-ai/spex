@@ -82,6 +82,17 @@ When a local link inside the view is activated, the spec view shall resolve it a
 - a link resolving to a decision or intent record's exact path, or to the tree's own `meta.md`, opens that record in the records reader [[spec-view-7](#spec-view-7)];
 - any other local link stays inert.
 
+### Citation Graph
+
+#### spec-view-20
+
+While the spec tree renders, when the graph projection is toggled, the spec view shall replace the outline with a directed package graph of the same tree — one node per spec file sized by its relationships, one edge per citing→cited file pair weighted by cross-file citation count — keeping the toggle, filters, and records footer in place:
+
+- an edge points from the citing package at the cited package, so hubs are the contracts relied on and zero-inbound nodes are compositions;
+- hovering a node isolates its neighborhood, dimming every non-neighbor;
+- clicking a node returns to the outline projection with that file expanded, and files already expanded in the outline are distinguished on their nodes — one selection, two projections;
+- the layout is deterministic for a given tree, so reopening the graph re-renders the same picture.
+
 ### Records
 
 #### spec-view-7
@@ -232,6 +243,12 @@ Where a fixture tree carries a package item citing a peer's item, an intra-file 
 - every file node, collapsed included, carries the rollup counting cross-file citations only, with the absent-ID citation counted as outbound;
 - an in-view jump lands from an outbound row and from a backlink, and afterwards the one-step return restores the citing item [[spec-view-6](#spec-view-6)];
 - a jump target excluded by an active search is revealed and marked [[spec-view-6](#spec-view-6)].
+
+### Graph Coverage
+
+#### spec-view-21
+
+Where a fixture tree carries cross-file citations, the test suite shall assert the graph projection round trip: toggling renders one node per file and a directed weighted edge per citing→cited pair [[spec-view-20](#spec-view-20)], and clicking a node returns to the outline with that file expanded [[spec-view-20](#spec-view-20)].
 
 ### Confinement Coverage
 

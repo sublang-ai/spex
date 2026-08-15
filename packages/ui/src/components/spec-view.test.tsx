@@ -1069,3 +1069,87 @@ describe("view-state migration", () => {
     }
   });
 });
+
+// spec-view-20/21: the graph projection of the same tree.
+describe("spec-view-20: citation graph projection", () => {
+  const GRAPH_TREE: SpecTreeState = {
+    present: true,
+    legacy: false,
+    readAt: Date.now(),
+    notices: [],
+    decisions: [],
+    intents: [],
+    files: [
+      {
+        path: "specs/packages/auth.md",
+        key: "auth",
+        dir: "",
+        basename: "auth",
+        title: "Auth",
+        intent: "Sign-in.",
+        notices: [],
+        items: [
+          {
+            id: "auth-1",
+            group: "external",
+            section: "External Behavior",
+            firstLine: "The app shall sign users in.",
+            text: "The app shall sign users in.",
+            cites: [],
+          },
+        ],
+      },
+      {
+        path: "specs/packages/billing.md",
+        key: "billing",
+        dir: "",
+        basename: "billing",
+        title: "Billing",
+        intent: "Charging.",
+        notices: [],
+        items: [
+          {
+            id: "billing-1",
+            group: "external",
+            section: "External Behavior",
+            firstLine: "Charges require a signed-in user.",
+            text: "Charges require a signed-in user [[auth-1](auth.md#auth-1)].",
+            cites: ["auth-1"],
+          },
+          {
+            id: "billing-2",
+            group: "external",
+            section: "External Behavior",
+            firstLine: "Receipts identify the user.",
+            text: "Receipts identify the user [[auth-1](auth.md#auth-1)].",
+            cites: ["auth-1"],
+          },
+        ],
+      },
+    ],
+  };
+
+  test("toggling renders nodes, weighted directed edges, and the click round trip", () => {
+    render(<Harness tree={GRAPH_TREE} />);
+    fireEvent.click(screen.getByTestId("graph-toggle"));
+
+    // One node per file (spec-view-20).
+    expect(screen.getByTestId("spec-graph")).toBeTruthy();
+    expect(screen.getByTestId("graph-node-auth")).toBeTruthy();
+    expect(screen.getByTestId("graph-node-billing")).toBeTruthy();
+
+    // One directed edge, citing -> cited, carrying both citations'
+    // weight (spec-view-20).
+    const edge = screen.getByTestId("graph-edge-billing--auth");
+    expect(edge.getAttribute("stroke-width")).toBe(String(0.75 + 2.5));
+    expect(screen.queryByTestId("graph-edge-auth--billing")).toBeNull();
+
+    // Clicking a node returns to the outline with the file expanded
+    // (spec-view-20): its items become visible.
+    fireEvent.click(screen.getByTestId("graph-node-auth"));
+    expect(screen.queryByTestId("spec-graph")).toBeNull();
+    expect(screen.getByTestId("file-toggle-auth").getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+  });
+});
