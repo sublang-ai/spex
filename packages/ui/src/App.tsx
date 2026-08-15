@@ -664,6 +664,20 @@ export function App() {
     setSurface("Workspace");
   };
 
+  // An intent picked off the Dashboard opens in its own project's
+  // Specs surface, where the records reader lives (dashboard-24).
+  const [pendingRecord, setPendingRecord] = useState<{
+    projectId: string;
+    path: string;
+  } | null>(null);
+  const openIntent = (projectId: string, path: string) => {
+    const state = useAppStore.getState();
+    state.setCurrentProject(projectId);
+    state.setWorkspaceTab(projectId, "specs");
+    setSurface("Workspace");
+    setPendingRecord({ projectId, path });
+  };
+
   // Picking a project with parked attention lands on the session that
   // needs the human (DR-011), not the last-active tab.
   const pickProject = (projectId: string) => {
@@ -895,6 +909,7 @@ export function App() {
             <DashboardSurface
               onOpenSession={openSessionAndShow}
               onNavigate={setSurface}
+              onOpenIntent={openIntent}
             />
           ) : (
             <WorkspaceSurface

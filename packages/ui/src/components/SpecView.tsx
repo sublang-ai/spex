@@ -156,6 +156,10 @@ export interface SpecViewProps {
   seedError?: string;
   viewState: SpecViewState;
   onViewState: (next: SpecViewState) => void;
+  /** A record another surface asked to read — the Dashboard sending
+   * an intent home, since the reader lives here (dashboard-24). */
+  openRecordPath?: string;
+  onRecordOpened?: () => void;
 }
 
 type ReaderState = {
@@ -259,6 +263,21 @@ export function SpecView(props: SpecViewProps) {
   // Escape or an outside pointerdown closes it, its first entry takes
   // focus on open, and any close hands focus back to the toggle — a
   // disconnected toggle means the reader took over and owns focus.
+
+  // A record requested from elsewhere opens here, where the reader
+  // lives (spec-view-7, dashboard-24).
+  const requestedRecord = props.openRecordPath;
+  const onRecordOpened = props.onRecordOpened;
+  useEffect(() => {
+    if (!requestedRecord) return;
+    const record = [...tree.decisions, ...tree.intents].find(
+      (entry) => entry.path === requestedRecord,
+    );
+    if (record) openRecord(record);
+    onRecordOpened?.();
+    // openRecord is stable for this purpose: it only reads props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedRecord]);
 
   // The reader takes focus on its Back control when it opens and hands
   // focus back to its invoker's DOM id on close (§6: never strand).

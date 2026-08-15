@@ -5,7 +5,10 @@
 // running sessions, work lists grouped by project, usage rollups.
 
 import { useEffect, useState, type ReactNode } from "react";
-import type { ForgeItem } from "@sublang/spex-core/protocol";
+import type {
+  ForgeItem,
+  SpecRecordInfo,
+} from "@sublang/spex-core/protocol";
 
 import { deriveAttention, type AttentionItem } from "../state/dashboard.js";
 import { getClient, useAppStore } from "../state/store.js";
@@ -51,6 +54,61 @@ type ProjectItems = {
 
 function byRecency(a: ForgeItem, b: ForgeItem): number {
   return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+}
+
+interface ProjectIntents {
+  projectId: string;
+  projectName: string;
+  records: SpecRecordInfo[];
+}
+
+/** The intents each project still owes, per project (dashboard-24). */
+function IntentList({
+  groups,
+  onOpenIntent,
+}: {
+  groups: ProjectIntents[];
+  onOpenIntent: (projectId: string, path: string) => void;
+}) {
+  const nonEmpty = groups.filter((group) => group.records.length > 0);
+  if (nonEmpty.length === 0) return null;
+  return (
+    <div className="min-w-0" data-testid="intent-lists">
+      <h2 className="mb-2 text-sm font-semibold text-neutral-500">
+        Intents to finish
+      </h2>
+      <div className="flex flex-col gap-3">
+        {nonEmpty.map((group) => (
+          <div key={group.projectId}>
+            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {group.projectName}
+              <span className="rounded-full bg-neutral-100 px-1.5 text-[11px] text-neutral-500 dark:bg-neutral-800">
+                {group.records.length}
+              </span>
+            </div>
+            <ul className="flex flex-col gap-1">
+              {group.records.map((record) => (
+                <li key={`${group.projectId}:${record.path}`}>
+                  <button
+                    type="button"
+                    data-testid={`intent-${group.projectId}-${record.id}`}
+                    onClick={() => onOpenIntent(group.projectId, record.path)}
+                    className="flex w-full items-baseline gap-2 truncate text-left text-sm"
+                    title={record.title}
+                  >
+                    <span className="shrink-0 font-mono text-xs text-brand-600 dark:text-brand-300">
+                      {record.id}
+                    </span>
+                    <span className="truncate">{record.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function WorkList({
@@ -138,14 +196,19 @@ function WorkList({
 export function DashboardSurface({
   onOpenSession,
   onNavigate,
+  onOpenIntent,
 }: {
   onOpenSession: (sessionId: string) => void;
   onNavigate: (surface: Surface) => void;
+  /** Open an intent record in its project's Specs surface — the one
+   * place a record can actually be read (dashboard-24). */
+  onOpenIntent: (projectId: string, path: string) => void;
 }) {
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
   const projects = useAppStore((state) => state.projects);
   const projectMeta = useAppStore((state) => state.projectMeta);
+  const specTrees = useAppStore((state) => state.specTrees);
   const connection = useAppStore((state) => state.connection);
 
   const [projectFilter, setProjectFilter] = useState<string>("all");
@@ -189,6 +252,13 @@ export function DashboardSurface({
     projectId: project.id,
     projectName: project.name,
     items: [...(projectMeta[project.id]?.forge?.prs ?? [])].sort(byRecency),
+  }));
+  // Intent records are work to finish, so they list beside the forge's
+  // work rather than in the spec view (dashboard-24).
+  const intentGroups: ProjectIntents[] = filtered.map((project) => ({
+    projectId: project.id,
+    projectName: project.name,
+    records: specTrees[project.id]?.intents ?? [],
   }));
 
   return (
@@ -322,6 +392,7 @@ export function DashboardSurface({
             emptyText="No open pull requests yet."
           />
         </div>
+        <IntentList groups={intentGroups} onOpenIntent={onOpenIntent} />
       </section>
 
       <section>
