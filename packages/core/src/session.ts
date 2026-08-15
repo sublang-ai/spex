@@ -188,18 +188,41 @@ export class SessionManager {
       turnActive: false,
     };
 
+    const append = (record: TmuxPlayRecord): void => {
+      entry.seq += 1;
+      const seq = entry.seq;
+      this.store.appendRecord(info.id, seq, record);
+      this.trackRecord(info.id, record);
+      this.onRecord({
+        sessionId: info.id,
+        seq,
+        record,
+        hidden: isHidden(record),
+      });
+    };
     const observer = {
       onRecord: (record: TmuxPlayRecord): void => {
-        entry.seq += 1;
-        const seq = entry.seq;
-        this.store.appendRecord(info.id, seq, record);
-        this.trackRecord(info.id, record);
-        this.onRecord({
-          sessionId: info.id,
-          seq,
-          record,
-          hidden: isHidden(record),
-        });
+        append(record);
+        // A captain turn that ends in error carries its cause on a
+        // hidden record only; the polite reply never names it. The
+        // cause must land visibly (core-service-30, DR-010 §5) —
+        // synthesized here so every session subscriber and the
+        // Dashboard's failure derivation see the same record.
+        if (record.type === "captain_finished" && isHidden(record)) {
+          const result = (record as {
+            result?: { status?: string; error?: string; finalText?: string };
+          }).result;
+          if (result?.status === "error") {
+            const cause = result.error ?? result.finalText ?? "unknown error";
+            append({
+              type: "runtime_error",
+              turnId: (record as { turnId: number | null }).turnId,
+              timestamp: this.now(),
+              message: `The Captain's turn failed: ${cause}`,
+              sourceRecordType: "captain_finished",
+            } as TmuxPlayRecord);
+          }
+        }
       },
     };
 

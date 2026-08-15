@@ -342,8 +342,42 @@ export function applyRecord(
       }
       break;
     }
+    case "captain_reply": {
+      // The playbook-7 shell speaks through captain_reply records —
+      // its durable calls (and their captain_finished) are hidden, so
+      // this record IS the Captain's visible prose (run-view-1). It
+      // was dropped before the case existed, which read as a normal
+      // chat producing nothing at all.
+      const text = String((r as { text?: unknown }).text ?? "");
+      if (text) {
+        pushCaptain(view, {
+          kind: "speech",
+          text,
+          turnId: r.turnId,
+          at: r.timestamp,
+        });
+      }
+      view.captainDraft = "";
+      break;
+    }
     case "captain_finished": {
-      const result = r.result as { finalText?: string; status: string };
+      const result = r.result as {
+        finalText?: string;
+        status: string;
+        error?: string;
+      };
+      // A visible errored result is a failure to show, never speech
+      // to pass off as the Captain's words (run-view-2, DR-010 §5).
+      if (result.status === "error") {
+        pushCaptain(view, {
+          kind: "error",
+          text: result.error ?? result.finalText ?? "the Captain's turn failed",
+          turnId: r.turnId,
+          at: r.timestamp,
+        });
+        view.captainDraft = "";
+        break;
+      }
       const text = result.finalText ?? view.captainDraft;
       if (text) {
         pushCaptain(view, { kind: "speech", text, turnId: r.turnId, at: r.timestamp });

@@ -13,7 +13,10 @@ import { parse as parseYaml } from "yaml";
 import { SessionManager, CoreError, type RecordEnvelope } from "./session.js";
 import { Store } from "./store.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
-import { createScriptedCaptain } from "./testing/scripted-captain.js";
+import {
+  createScriptedCaptain,
+  type CaptainTurnScript,
+} from "./testing/scripted-captain.js";
 
 function registryEntry() {
   return {
@@ -29,7 +32,13 @@ function registryEntry() {
   };
 }
 
-async function setup(records: RecordEnvelope[]) {
+async function setup(
+  records: RecordEnvelope[],
+  overrides?: {
+    rules?: Parameters<typeof fakeAdapterImports>[0]["rules"];
+    script?: CaptainTurnScript;
+  },
+) {
   const top = parseYaml(readFileSync(templatePath(), "utf8"));
   const composed = await composeConfig(top, async (specifier) => {
     const forId = (id: string, roles: string[]) => ({
@@ -48,7 +57,7 @@ async function setup(records: RecordEnvelope[]) {
   });
   const store = new Store(join(mkdtempSync(join(tmpdir(), "spex-sess-")), "s.db"));
   const { imports, stats } = fakeAdapterImports({
-    rules: [
+    rules: overrides?.rules ?? [
       {
         match: "route:",
         response: { result: '{"decision":"chat"}', usage: { totalCostUsd: 0.01 } },
@@ -56,7 +65,7 @@ async function setup(records: RecordEnvelope[]) {
     ],
     fallback: { deltas: ["work ", "done"], result: "work done" },
   });
-  const captain = createScriptedCaptain(async (turn, context, session) => {
+  const captain = createScriptedCaptain(overrides?.script ?? (async (turn, context, session) => {
     await session.emitStatus("◇ /code started");
     await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
     await context.callPlayer("code-coder", `do: ${turn.prompt}`);
@@ -64,7 +73,7 @@ async function setup(records: RecordEnvelope[]) {
       topic: "playbook.fsm.state",
       payload: { to: "ready" },
     });
-  });
+  }));
   const manager = new SessionManager({
     store,
     adapterImports: imports,
@@ -142,6 +151,47 @@ test("end-to-end turn produces ordered persisted records with visibility flags",
   await manager.disposeAll();
   const sessions = manager.listSessions();
   assert.ok(sessions.every((session) => !session.live));
+});
+
+test("an errored hidden captain result surfaces a visible failure record", async () => {
+  // core-service-30: the owner's normal chat failed with an expired
+  // sign-in that reached the store only as hidden records. The core
+  // synthesizes the visible cause; the hidden record stays hidden.
+  const records: RecordEnvelope[] = [];
+  const cause =
+    "Failed to authenticate: OAuth session expired and could not be refreshed";
+  const { manager, project, composed } = await setup(records, {
+    rules: [{ match: "route:", response: { result: cause, status: "error" } }],
+    script: async (turn, context) => {
+      try {
+        await context.callCaptain(`route: ${turn.prompt}`, {
+          visibility: "hidden",
+        });
+      } catch {
+        // The production shell composes a polite reply on failure;
+        // the cause itself must not depend on the reply.
+      }
+      await context.emitReply("I could not finish deciding that turn.");
+    },
+  });
+
+  const info = await manager.createSession(project, composed);
+  manager.submitTurn(info.id, "how are you doing?");
+  await waitFor(() => records.some((r) => r.record.type === "turn_finished"));
+
+  const failure = records.find((r) => r.record.type === "runtime_error");
+  assert.ok(failure, "a visible runtime_error must be synthesized");
+  assert.equal(failure.hidden, false);
+  assert.match(
+    (failure.record as { message: string }).message,
+    /OAuth session expired/,
+  );
+  // The hidden captain result itself never rides the session channel.
+  const hiddenFinished = records.filter(
+    (r) => r.record.type === "captain_finished" && r.hidden,
+  );
+  assert.ok(hiddenFinished.length > 0);
+  await manager.disposeAll();
 });
 
 async function waitFor(check: () => boolean, timeoutMs = 5000): Promise<void> {

@@ -125,6 +125,50 @@ describe("one name per agent: runtime roles resolve to pane ids", () => {
   });
 });
 
+describe("run-view-1: the playbook-7 shell's captain_reply is Captain speech", () => {
+  test("a captain_reply record renders as a speech bubble", () => {
+    // The playbook-7 shell speaks through captain_reply while its
+    // durable calls stay hidden; before the case existed the reply
+    // was dropped and a normal chat rendered nothing at all.
+    const view = applyRecords(fresh(), [
+      {
+        seq: 1,
+        record: {
+          type: "captain_reply",
+          turnId: 1,
+          timestamp: 5,
+          text: "Happy to help — what should we work on?",
+        } as TmuxPlayRecord,
+      },
+    ]);
+    const speech = view.captain.filter((line) => line.kind === "speech");
+    expect(speech).toHaveLength(1);
+    expect(speech[0].text).toBe("Happy to help — what should we work on?");
+  });
+
+  test("a visible errored captain result renders as a failure, not speech", () => {
+    const view = applyRecords(fresh(), [
+      {
+        seq: 1,
+        record: {
+          type: "captain_finished",
+          turnId: 1,
+          timestamp: 5,
+          result: {
+            status: "error",
+            error: "Failed to authenticate: OAuth session expired",
+            finalText: "Failed to authenticate: OAuth session expired",
+          },
+        } as TmuxPlayRecord,
+      },
+    ]);
+    expect(view.captain.filter((line) => line.kind === "speech")).toHaveLength(0);
+    const errors = view.captain.filter((line) => line.kind === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].text).toContain("OAuth session expired");
+  });
+});
+
 describe("RUN-22: abort surfaces the aborted state", () => {
   test("turn_aborted ends the turn with a captain status line", () => {
     const view = applyRecords(fresh(), [
