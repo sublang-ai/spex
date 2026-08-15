@@ -321,7 +321,15 @@ export function SpecGraph({
 
   // --- Drag (spec-view-28) --------------------------------------------------
 
-  const dragging = useRef<{ node: GraphNode; pointer: number } | null>(null);
+  const dragging = useRef<{
+    node: GraphNode;
+    pointer: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  /** Set once a press travels far enough to be a drag, so releasing
+   * it moves the node instead of opening its file. */
+  const draggedRef = useRef(false);
   const reduced = prefersReducedMotion();
 
   const onNodePointerDown = (
@@ -332,7 +340,13 @@ export function SpecGraph({
     // carries no button at all, which counts as primary.
     if (event.button) return;
     event.stopPropagation();
-    dragging.current = { node, pointer: pointerIdOf(event) };
+    dragging.current = {
+      node,
+      pointer: pointerIdOf(event),
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    draggedRef.current = false;
     try {
       (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
     } catch {
@@ -356,6 +370,16 @@ export function SpecGraph({
       event.clientX - rect.left,
       event.clientY - rect.top,
     ]);
+    // A pointer without usable coordinates must never reach the
+    // simulation: one NaN there poisons the whole layout.
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (
+      Math.abs(event.clientX - active.startX) +
+        Math.abs(event.clientY - active.startY) >
+      3
+    ) {
+      draggedRef.current = true;
+    }
     // The held node follows the pointer this frame; the simulation's
     // own ticks carry the rest of the layout after it.
     active.node.fx = x;
@@ -640,7 +664,15 @@ export function SpecGraph({
                 onMouseLeave={clearHover}
                 onFocus={() => setKeyFocus(node.basename)}
                 onBlur={() => setKeyFocus((now) => (now === node.basename ? null : now))}
-                onClick={() => onOpenFile(node.key)}
+                onClick={() => {
+                  // A release that moved the node was a drag, not a
+                  // choice: it must not also open the file.
+                  if (draggedRef.current) {
+                    draggedRef.current = false;
+                    return;
+                  }
+                  onOpenFile(node.key);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();

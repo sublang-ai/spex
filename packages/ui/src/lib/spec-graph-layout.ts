@@ -31,7 +31,7 @@ import { GROUP_ORDER, type SpecGroup } from "./spec-view-model.js";
 export const NODE_MIN_RADIUS = 14;
 export const NODE_MAX_RADIUS = 38;
 /** Edge width band, in canvas units. */
-export const EDGE_MIN_WIDTH = 1.5;
+export const EDGE_MIN_WIDTH = 2;
 export const EDGE_MAX_WIDTH = 6;
 /** Label and numeral size floor, in on-screen pixels. */
 export const LABEL_FONT_SIZE = 12;

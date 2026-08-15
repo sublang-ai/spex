@@ -144,6 +144,7 @@ When the graph builds its layout, the spec view shall settle a deterministic lay
 
 - the settled layout is a function of the tree and its rendered label extents, so the same tree renders the same picture with no opening animation;
 - a node dragged follows the pointer while the rest of the layout adjusts live, and the layout comes to rest after release;
+- a release that moved its node moves only that node, leaving the selection where it was [[spec-view-20](#spec-view-20)];
 - dragged positions are never persisted, so reopening the graph restores the settled layout;
 - a package no citation reaches is held on the canvas with the rest.
 
@@ -321,7 +322,7 @@ Where the graph renders in the light and the dark theme, the test suite shall as
 
 #### spec-view-40
 
-Where a fixture tree renders twice, the test suite shall assert the layout contract of [[spec-view-28](#spec-view-28)]: both renders settle identical node positions, a dragged node's positions are gone after a remount, and a package no citation reaches still holds a position within the layout.
+Where a fixture tree renders twice, the test suite shall assert the layout contract of [[spec-view-28](#spec-view-28)]: both renders settle identical node positions, a drag moves its node without taking the selection, a dragged node's positions are gone after a remount, and a package no citation reaches still holds a position within the layout.
 
 #### spec-view-41
 

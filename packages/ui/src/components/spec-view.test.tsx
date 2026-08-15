@@ -1281,8 +1281,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // weight-2 edge measures the same in every tree (spec-view-23).
     const heavy = Number(edge("billing", "auth").getAttribute("stroke-width"));
     const light = Number(edge("session", "auth").getAttribute("stroke-width"));
-    expect(heavy).toBeCloseTo(1.5 * Math.SQRT2, 5);
-    expect(light).toBeCloseTo(1.5, 5);
+    expect(heavy).toBeCloseTo(2 * Math.SQRT2, 5);
+    expect(light).toBeCloseTo(2, 5);
     expect(heavy).toBeGreaterThan(light);
 
     // Direction reads at rest, through a glyph whose size never
@@ -1430,14 +1430,28 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(Number.isFinite(glossary[1])).toBe(true);
 
     // Dragging moves the held node (spec-view-28).
+    // Driven as MouseEvents: jsdom has no PointerEvent, and a plain
+    // synthetic event carries no coordinates to drag by.
     const target = node("auth");
-    fireEvent.pointerDown(target, { button: 0, pointerId: 1, clientX: 0, clientY: 0 });
-    fireEvent.pointerMove(target, { pointerId: 1, clientX: 700, clientY: 500 });
+    const pointer = (type: string, x: number, y: number) =>
+      fireEvent(
+        target,
+        new MouseEvent(type, { bubbles: true, clientX: x, clientY: y }),
+      );
+    pointer("pointerdown", 0, 0);
+    pointer("pointermove", 700, 500);
     expect(Number(circleOf("auth").getAttribute("cx"))).not.toBeCloseTo(
       settled[0][0],
       3,
     );
-    fireEvent.pointerUp(target, { pointerId: 1 });
+    pointer("pointerup", 700, 500);
+    // A release that moved the node is a drag, not a choice: it moves
+    // the node and leaves the selection alone (spec-view-28).
+    fireEvent.click(target);
+    expect(screen.queryByTestId("graph-halo-auth")).toBeNull();
+    expect(
+      screen.getByTestId("file-toggle-auth").getAttribute("aria-expanded"),
+    ).toBe("false");
     first.unmount();
 
     // The same tree settles the same picture, and the drag is gone
