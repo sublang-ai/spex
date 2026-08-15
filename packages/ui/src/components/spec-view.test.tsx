@@ -305,7 +305,7 @@ describe("SPECV-1/2: outline shape and file nodes", () => {
     expect(intent.textContent).toBe("How users sign in.");
     // The header's truncated copy yields to the full block: one copy.
     expect(screen.getAllByText("How users sign in.").length).toBe(1);
-    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId(`file-chevron-${AUTH}`));
     expect(screen.queryByTestId(`intent-${AUTH}`)).toBeNull();
     expect(within(screen.getByTestId(`file-${AUTH}`)).getByText("How users sign in.")).toBeTruthy();
   });
@@ -513,13 +513,13 @@ describe("SPECV-5: search", () => {
     fireEvent.change(searchInput(), { target: { value: "cat-1" } });
     expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
     // A chevron collapses the matching file without touching state.
-    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId(`file-chevron-${GUARD}`));
     expect(screen.queryByTestId("item-GUARD-5")).toBeNull();
     expect(screen.getByTestId("match-count").textContent).toBe("3 matches");
     // And re-opens it.
-    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId(`file-chevron-${GUARD}`));
     expect(screen.getByTestId("item-GUARD-5")).toBeTruthy();
-    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId(`file-chevron-${GUARD}`));
     // Clearing restores pre-search expansion: auth open, guard closed.
     fireEvent.change(searchInput(), { target: { value: "" } });
     expect(screen.getByTestId("item-AUTH-2")).toBeTruthy();
@@ -787,7 +787,7 @@ describe("SPECV-6: search-time reveal", () => {
     render(<Harness />);
     fireEvent.change(searchInput(), { target: { value: "auth-8" } });
     // auth and guard both match; collapse guard by chevron.
-    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId(`file-chevron-${GUARD}`));
     expect(screen.queryByTestId("item-GUARD-5")).toBeNull();
     fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
     fireEvent.click(screen.getByTestId("inbound-AUTH-8"));
@@ -861,7 +861,7 @@ describe("DR-010 §7: accessible names and affordances", () => {
     expect(
       screen.getByRole("button", { name: "Toggle identity/" }),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Toggle auth" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "auth" })).toBeTruthy();
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     // Section/topic labels are no longer aria-hidden.
     expect(
@@ -1231,16 +1231,16 @@ describe("spec-view-20: citation graph beside the outline", () => {
     fireEvent.click(screen.getByLabelText("Spec package citation graph"));
     expect(screen.queryByTestId("graph-halo-billing")).toBeNull();
 
-    // The link runs both ways: opening a package in the outline points
-    // the graph at it, and closing it releases the selection
-    // (spec-view-20).
+    // The link runs both ways: activating a package row selects it on
+    // the graph, and arranging leaves the selection alone
+    // (spec-view-42).
     fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
       target: { value: "" },
     });
     fireEvent.click(screen.getByTestId("file-toggle-session"));
     expect(screen.getByTestId("graph-halo-session")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("file-toggle-session"));
-    expect(screen.queryByTestId("graph-halo-session")).toBeNull();
+    fireEvent.click(screen.getByTestId("file-chevron-session"));
+    expect(screen.getByTestId("graph-halo-session")).toBeTruthy();
 
     // The divider moves the split, within bounds (spec-view-20).
     const divider = screen.getByTestId("graph-split");
@@ -1610,6 +1610,43 @@ describe("spec-view-20: citation graph beside the outline", () => {
     fireEvent.click(screen.getByTestId("filter-external"));
     expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
     expect(screen.getByTestId("file-toggle-glossary")).toBeTruthy();
+    restore();
+  });
+
+  test("the axes stay independent: arranging, jumping, and searching leave the selection", () => {
+    const restore = sized();
+    showGraph();
+
+    // Selecting A, then arranging B, leaves the selection on A — and
+    // collapsing either never clears it (spec-view-42).
+    fireEvent.click(node("auth"));
+    expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("file-chevron-billing"));
+    expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    expect(screen.queryByTestId("graph-halo-billing")).toBeNull();
+    fireEvent.click(screen.getByTestId("file-chevron-auth"));
+    expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+
+    // A search over a selection keeps the selected package standing,
+    // said in the reveals' own words (spec-view-44).
+    const search = screen.getByLabelText("Filter items by ID or text");
+    fireEvent.change(search, { target: { value: "billing-3" } });
+    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
+    expect(screen.getByTestId("retained-auth").textContent).toContain(
+      "shown despite search",
+    );
+    expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    // Both voices sound at once: the match ring survives the
+    // selection's isolation (spec-view-44).
+    expect(screen.getByTestId("graph-match-billing")).toBeTruthy();
+    fireEvent.change(search, { target: { value: "" } });
+
+    // The ladder: Escape from the outline pane clears the selection
+    // once nothing else claims it (spec-view-42).
+    fireEvent.keyDown(screen.getByTestId("file-toggle-auth"), {
+      key: "Escape",
+    });
+    expect(screen.queryByTestId("graph-halo-auth")).toBeNull();
     restore();
   });
 

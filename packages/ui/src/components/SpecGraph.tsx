@@ -509,8 +509,14 @@ export function SpecGraph({
 
   // --- Render ----------------------------------------------------------------
 
+  /** Dimming belongs to the selection alone; inspection lifts the
+   * mark it reads so a keyboard walk never parks on a ghost
+   * (spec-view-25). */
+  const inspected = hover?.kind === "node" ? hover.id : keyFocus;
   const dimOf = (name: string): number =>
-    neighborhood && !neighborhood.has(name) ? DIM_OPACITY : 1;
+    neighborhood && !neighborhood.has(name) && name !== inspected
+      ? DIM_OPACITY
+      : 1;
 
   return (
     <div
@@ -696,18 +702,7 @@ export function SpecGraph({
                     mistaken for a category (DR-026 §2) — and they are
                     separate rings, so a marked package still shows
                     plainly whether it is the selected one. */}
-                {matched && (
-                  <circle
-                    data-testid={`graph-match-${node.basename}`}
-                    cx={place.x}
-                    cy={place.y}
-                    r={place.r + 9}
-                    fill="none"
-                    strokeWidth={2}
-                    strokeDasharray="4 3"
-                    className={EMPHASIS_STROKE}
-                  />
-                )}
+
                 {(selected || focused) && (
                   <circle
                     data-testid={`graph-halo-${node.basename}`}
@@ -742,6 +737,29 @@ export function SpecGraph({
               </g>
             );
           })}
+
+          {/* Match marks stand outside the node groups so an
+              isolation's dimming cannot mute them: selection and query
+              are separate voices that compose (spec-view-44). */}
+          {searching
+            ? model.nodes.map((node) => {
+                const place = placeOf(node.key);
+                if (!place || !matchedKeys?.has(node.key)) return null;
+                return (
+                  <circle
+                    key={`match-${node.key}`}
+                    data-testid={`graph-match-${node.basename}`}
+                    cx={place.x}
+                    cy={place.y}
+                    r={place.r + 9}
+                    fill="none"
+                    strokeWidth={2}
+                    strokeDasharray="4 3"
+                    className={`pointer-events-none ${EMPHASIS_STROKE}`}
+                  />
+                );
+              })
+            : null}
 
           {/* Names last: a label is the one mark that must never be
               painted over, whatever the node order (spec-view-22). */}

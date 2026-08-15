@@ -264,7 +264,11 @@ export function SpecView(props: SpecViewProps) {
     if (!recordsOpen) return;
     popoverRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setRecordsOpen(false);
+      // Captured, so the popover claims Escape before the surface's
+      // last rung reaches the selection (spec-view-42).
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setRecordsOpen(false);
     };
     const outside = (event: PointerEvent) => {
       const target = event.target as Node | null;
@@ -272,10 +276,10 @@ export function SpecView(props: SpecViewProps) {
       if (recordsToggleRef.current?.contains(target)) return;
       setRecordsOpen(false);
     };
-    window.addEventListener("keydown", escape);
+    window.addEventListener("keydown", escape, true);
     document.addEventListener("pointerdown", outside);
     return () => {
-      window.removeEventListener("keydown", escape);
+      window.removeEventListener("keydown", escape, true);
       document.removeEventListener("pointerdown", outside);
       if (recordsToggleRef.current?.isConnected) {
         recordsToggleRef.current.focus();
@@ -330,12 +334,10 @@ export function SpecView(props: SpecViewProps) {
     return expandedFiles.has(key);
   }
 
+  /** Arrangement alone: expanding or collapsing never writes the
+   * selection, the camera, or anything else (spec-view-42). */
   function toggleFile(key: string) {
-    // One selection, two projections: opening a package in the outline
-    // points the graph at it, the mirror of a node click, and closing
-    // it lets the selection go (spec-view-20).
     const opening = !isFileExpanded(key);
-    setGraphSelection(opening ? key : null);
     if (searching) {
       const next = new Map(searchOverrides);
       next.set(key, opening);
@@ -718,6 +720,7 @@ export function SpecView(props: SpecViewProps) {
     const counts = fileCounts(file);
     const items = visibleFileItems(file, viewState, revealed);
     const dimmed = searching && !expanded;
+    const selected = graphSelection === key;
     const allIds = file.items.map((item) => item.id);
     const allExpanded =
       allIds.length > 0 && allIds.every((id) => expandedItems.has(id));
@@ -734,15 +737,23 @@ export function SpecView(props: SpecViewProps) {
         <div
           className={`flex items-center gap-2 rounded px-1 py-1 ${
             dimmed ? "opacity-50" : ""
+          } ${
+            selected
+              ? "bg-brand-50 ring-1 ring-brand-600 dark:bg-brand-950 dark:ring-brand-400"
+              : ""
           }`}
         >
-          <button
-            type="button"
-            data-testid={`file-toggle-${key}`}
-            aria-expanded={expanded}
-            aria-label={`Toggle ${file.basename}`}
-            onClick={() => toggleFile(key)}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded text-left hover:bg-neutral-50 dark:hover:bg-neutral-900"
+          {/* The chevron arranges and nothing else; it is a pointer
+              target only, since Left/Right on the row carry the same
+              gesture for the keyboard (spec-view-42). */}
+          <span
+            data-testid={`file-chevron-${key}`}
+            aria-hidden="true"
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleFile(key);
+            }}
+            className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
           >
             <Icon
               name="caretDown"
@@ -750,6 +761,26 @@ export function SpecView(props: SpecViewProps) {
                 expanded ? "" : "-rotate-90"
               }`}
             />
+          </span>
+          <button
+            type="button"
+            data-testid={`file-toggle-${key}`}
+            aria-expanded={expanded}
+            aria-current={selected ? "true" : undefined}
+            aria-label={file.basename}
+            onClick={() => selectFile(key)}
+            onKeyDown={(event) => {
+              // Arranging by keyboard, never selecting (spec-view-42).
+              if (event.key === "ArrowRight" && !expanded) {
+                event.preventDefault();
+                toggleFile(key);
+              } else if (event.key === "ArrowLeft" && expanded) {
+                event.preventDefault();
+                toggleFile(key);
+              }
+            }}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded text-left hover:bg-neutral-50 dark:hover:bg-neutral-900"
+          >
             {/* The package identifier is the basename (META-10). */}
             <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
               {file.basename}
@@ -779,6 +810,14 @@ export function SpecView(props: SpecViewProps) {
                 {counts[group]} {group}
               </span>
             ))}
+            {searching && !search.fileKeys.has(key) && selected ? (
+              <span
+                data-testid={`retained-${key}`}
+                className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-[11px] text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+              >
+                shown despite search
+              </span>
+            ) : null}
             {rollup ? (
               <span
                 data-testid={`rollup-${key}`}
@@ -864,6 +903,7 @@ export function SpecView(props: SpecViewProps) {
   const fileMatches = (file: SpecFileInfo): boolean =>
     !searching ||
     search.fileKeys.has(file.key) ||
+    file.key === graphSelection ||
     file.items.some((item) => revealed.has(item.id));
   const dirMatches = (dir: SpecDirNode): boolean =>
     !searching ||
@@ -918,8 +958,10 @@ export function SpecView(props: SpecViewProps) {
   // the outline alone keeps a readable document column.
   const graphful = viewState.graph && tree.files.length > 0;
 
-  const openFromGraph = (fileKey: string) => {
-    setGraphSelection(fileKey);
+  /** Reveal: the one write a selection is allowed to make beyond its
+   * own axis, and additive only — it opens and scrolls, never
+   * collapses or clears (spec-view-43). */
+  const revealFile = (fileKey: string) => {
     // Effective expansion, not the persisted set: while searching,
     // toggleFile flips the computed state, so gating on the persisted
     // list would collapse a search-expanded file instead of opening it.
@@ -933,8 +975,28 @@ export function SpecView(props: SpecViewProps) {
     });
   };
 
+  /** The selection gesture, wherever it is made — a package row or a
+   * graph node. Re-selecting the selected package re-fires its
+   * reveal (spec-view-42). */
+  const selectFile = (fileKey: string) => {
+    setGraphSelection(fileKey);
+    revealFile(fileKey);
+  };
+
   return (
     <div
+      onKeyDown={(event) => {
+        // Last rung: whatever had something to dismiss has already
+        // claimed the key (spec-view-42).
+        if (
+          event.key === "Escape" &&
+          !event.defaultPrevented &&
+          graphSelection !== null
+        ) {
+          event.preventDefault();
+          setGraphSelection(null);
+        }
+      }}
       className={
         graphful
           ? "flex h-full w-full flex-col gap-3 overflow-hidden p-6"
@@ -1113,7 +1175,7 @@ export function SpecView(props: SpecViewProps) {
                 matchedKeys={search.fileKeys}
                 searching={searching}
                 onClearSelection={() => setGraphSelection(null)}
-                onOpenFile={openFromGraph}
+                onOpenFile={selectFile}
               />
             </div>
             {/* The reader sets the balance, within bounds that keep
