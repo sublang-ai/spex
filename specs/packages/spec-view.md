@@ -86,11 +86,12 @@ When a local link inside the view is activated, the spec view shall resolve it a
 
 #### spec-view-20
 
-While the spec tree renders, when the graph projection is toggled, the spec view shall replace the outline with a directed package graph of the same tree — one node per spec file sized by its relationships, one edge per citing→cited file pair weighted by cross-file citation count — keeping the toggle, filters, and records footer in place:
+While the spec tree renders, when the graph projection is toggled, the spec view shall show a directed package graph of the same tree beside the outline — one node per spec file sized by its relationships, one edge per citing→cited file pair weighted by cross-file citation count — keeping the toggle, filters, search, and records footer in place:
 
-- an edge points from the citing package at the cited package, so hubs are the contracts relied on and zero-inbound nodes are compositions;
-- hovering a node isolates its neighborhood, dimming every non-neighbor;
-- clicking a node returns to the outline projection with that file expanded, and files already expanded in the outline are distinguished on their nodes — one selection, two projections;
+- an edge points from the citing package at the cited package; packages cited by peers (contracts) and zero-inbound packages (compositions) carry distinct node colors, named by a legend;
+- hovering a node isolates its neighborhood, dimming every non-neighbor and directing the surviving edges;
+- clicking a node keeps the graph in place, marks that node selected, and expands and scrolls to its file in the outline — one selection, two projections — while clicking empty space clears the selection;
+- the viewport pans by drag, zooms toward the pointer, and resets on double-click;
 - the layout is deterministic for a given tree, so reopening the graph re-renders the same picture.
 
 ### Records
@@ -248,7 +249,7 @@ Where a fixture tree carries a package item citing a peer's item, an intra-file 
 
 #### spec-view-21
 
-Where a fixture tree carries cross-file citations, the test suite shall assert the graph projection round trip: toggling renders one node per file and a directed weighted edge per citing→cited pair [[spec-view-20](#spec-view-20)], and clicking a node returns to the outline with that file expanded [[spec-view-20](#spec-view-20)].
+Where a fixture tree carries cross-file citations, the test suite shall assert the graph projection round trip: toggling renders one node per file with contract and composition roles distinguished and a directed weighted edge per citing→cited pair [[spec-view-20](#spec-view-20)], and clicking a node keeps the graph while expanding that file in the outline [[spec-view-20](#spec-view-20)].
 
 ### Confinement Coverage
 

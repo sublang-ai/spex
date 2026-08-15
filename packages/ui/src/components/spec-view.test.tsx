@@ -1129,7 +1129,7 @@ describe("spec-view-20: citation graph projection", () => {
     ],
   };
 
-  test("toggling renders nodes, weighted directed edges, and the click round trip", () => {
+  test("toggling renders nodes, weighted directed edges, roles, and the click expansion", () => {
     render(<Harness tree={GRAPH_TREE} />);
     fireEvent.click(screen.getByTestId("graph-toggle"));
 
@@ -1138,18 +1138,27 @@ describe("spec-view-20: citation graph projection", () => {
     expect(screen.getByTestId("graph-node-auth")).toBeTruthy();
     expect(screen.getByTestId("graph-node-billing")).toBeTruthy();
 
+    // Role colors (spec-view-20): the cited package is a contract,
+    // the zero-inbound package a composition.
+    expect(
+      screen.getByTestId("graph-node-auth").getAttribute("data-role"),
+    ).toBe("contract");
+    expect(
+      screen.getByTestId("graph-node-billing").getAttribute("data-role"),
+    ).toBe("composition");
+
     // One directed edge, citing -> cited, carrying both citations'
     // weight (spec-view-20).
     const edge = screen.getByTestId("graph-edge-billing--auth");
-    expect(edge.getAttribute("stroke-width")).toBe(String(0.75 + 2.5));
+    expect(edge.getAttribute("stroke-width")).toBe(String(0.6 + (2.2 * 2) / 2));
     expect(screen.queryByTestId("graph-edge-auth--billing")).toBeNull();
 
-    // Clicking a node returns to the outline with the file expanded
-    // (spec-view-20): its items become visible.
+    // Clicking a node keeps the graph beside the outline and expands
+    // that file (spec-view-20) — one selection, two projections.
     fireEvent.click(screen.getByTestId("graph-node-auth"));
-    expect(screen.queryByTestId("spec-graph")).toBeNull();
-    expect(screen.getByTestId("file-toggle-auth").getAttribute("aria-expanded")).toBe(
-      "true",
-    );
+    expect(screen.getByTestId("spec-graph")).toBeTruthy();
+    expect(
+      screen.getByTestId("file-toggle-auth").getAttribute("aria-expanded"),
+    ).toBe("true");
   });
 });

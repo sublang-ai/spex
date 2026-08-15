@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:fake", "-w", "packages/core"],
       "port": 8137
+    },
+    {
+      "name": "ui-dist",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "serve", "-l", "4173", "apps/desktop/ui-dist"],
+      "port": 4173
     }
   ]
 }

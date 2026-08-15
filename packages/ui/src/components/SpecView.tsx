@@ -172,9 +172,11 @@ export function SpecView(props: SpecViewProps) {
 
   // Branch/directory collapse is cosmetic and local: levels default
   // open.
-  // Graph is the map projection of the same tree (spec-view-33):
-  // cosmetic, local, never persisted.
+  // Graph is the map projection of the same tree (spec-view-20):
+  // cosmetic, local, never persisted. The selection is shared with
+  // the outline so both projections point at one file.
   const [graphMode, setGraphMode] = useState(false);
+  const [graphSelection, setGraphSelection] = useState<string | null>(null);
   const [collapsedDirs, setCollapsedDirs] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -986,14 +988,33 @@ export function SpecView(props: SpecViewProps) {
       ) : null}
 
       {graphMode && tree.files.length > 0 ? (
-        <SpecGraph
-          files={tree.files}
-          expandedKeys={expandedFiles}
-          onOpenFile={(fileKey) => {
-            setGraphMode(false);
-            if (!expandedFiles.has(fileKey)) toggleFile(fileKey);
-          }}
-        />
+        // IDE-style split: the map stays put while the outline scrolls,
+        // so position in the structure and the package details are
+        // visible at once (spec-view-20).
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+          <div className="min-w-0 lg:sticky lg:top-2 lg:w-[46%]">
+            <SpecGraph
+              files={tree.files}
+              selectedKey={graphSelection}
+              expandedKeys={expandedFiles}
+              onClearSelection={() => setGraphSelection(null)}
+              onOpenFile={(fileKey) => {
+                setGraphSelection(fileKey);
+                if (!expandedFiles.has(fileKey)) toggleFile(fileKey);
+                // Next frame, so a just-expanded file exists to scroll to.
+                requestAnimationFrame(() => {
+                  const el = document.querySelector<HTMLElement>(
+                    `[data-testid="file-${fileKey}"]`,
+                  );
+                  el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+                });
+              }}
+            />
+          </div>
+          <ul className="flex min-w-0 flex-1 flex-col">
+            {renderDir(outlineRoot, outlineRoot.name)}
+          </ul>
+        </div>
       ) : (
         <ul className="flex flex-col">
           {tree.files.length > 0
