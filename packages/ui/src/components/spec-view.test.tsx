@@ -1129,14 +1129,15 @@ describe("spec-view-20: citation graph projection", () => {
     ],
   };
 
-  test("toggling renders nodes, weighted directed edges, roles, and the click expansion", () => {
+  test("split renders nodes, weighted directed edges, roles, and the click expansion", () => {
     render(<Harness tree={GRAPH_TREE} />);
-    fireEvent.click(screen.getByTestId("graph-toggle"));
+    fireEvent.click(screen.getByTestId("view-split"));
 
-    // One node per file (spec-view-20).
+    // One node per file, beside the outline (spec-view-20).
     expect(screen.getByTestId("spec-graph")).toBeTruthy();
     expect(screen.getByTestId("graph-node-auth")).toBeTruthy();
     expect(screen.getByTestId("graph-node-billing")).toBeTruthy();
+    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
 
     // Role colors (spec-view-20): the cited package is a contract,
     // the zero-inbound package a composition.
@@ -1160,5 +1161,48 @@ describe("spec-view-20: citation graph projection", () => {
     expect(
       screen.getByTestId("file-toggle-auth").getAttribute("aria-expanded"),
     ).toBe("true");
+
+    // A live search expands its matching files by computation rather
+    // than by the persisted set, so clicking such a file's node must
+    // open — never collapse — it (spec-view-20). billing matches and
+    // was never expanded by hand, which is exactly the divergence.
+    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
+      target: { value: "Receipts" },
+    });
+    expect(
+      screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),
+    ).toBe("true");
+    fireEvent.click(screen.getByTestId("graph-node-billing"));
+    expect(
+      screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  test("graph mode hides the outline and its controls; a click opens the split", () => {
+    render(<Harness tree={GRAPH_TREE} />);
+    fireEvent.click(screen.getByTestId("view-graph"));
+
+    // Outline-scoped controls leave with the outline (spec-view-20).
+    expect(screen.getByTestId("spec-graph")).toBeTruthy();
+    expect(screen.queryByTestId("file-toggle-auth")).toBeNull();
+    expect(screen.queryByTestId("filter-external")).toBeNull();
+
+    // A node click answers by opening the split on that file
+    // (spec-view-20).
+    fireEvent.click(screen.getByTestId("graph-node-auth"));
+    expect(screen.getByTestId("spec-graph")).toBeTruthy();
+    expect(
+      screen.getByTestId("view-split").getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen.getByTestId("file-toggle-auth").getAttribute("aria-expanded"),
+    ).toBe("true");
+
+    // Back to the outline alone closes the round trip: the graph
+    // leaves and its outline-scoped controls return (spec-view-20).
+    fireEvent.click(screen.getByTestId("view-tree"));
+    expect(screen.queryByTestId("spec-graph")).toBeNull();
+    expect(screen.getByTestId("filter-external")).toBeTruthy();
+    expect(screen.getByTestId("records-toggle")).toBeTruthy();
   });
 });

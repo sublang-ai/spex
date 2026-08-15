@@ -127,6 +127,75 @@ export function buildSpecGraph(files: readonly SpecFileInfo[]): {
       n.y = Math.max(46, Math.min(594, n.y));
     }
   }
+
+  // Fill the frame: rescale the settled layout into the padded
+  // canvas so no run wastes margin, whatever shape the forces chose.
+  const padX = 80;
+  const padTop = 40;
+  const padBottom = 64;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x);
+    maxX = Math.max(maxX, n.x);
+    minY = Math.min(minY, n.y);
+    maxY = Math.max(maxY, n.y);
+  }
+  for (const n of nodes) {
+    n.x =
+      maxX - minX < 1
+        ? 400
+        : padX + ((n.x - minX) / (maxX - minX)) * (800 - 2 * padX);
+    n.y =
+      maxY - minY < 1
+        ? 320
+        : padTop + ((n.y - minY) / (maxY - minY)) * (640 - padTop - padBottom);
+  }
+
+  // Declutter: labels hang under their nodes, so resolve circle and
+  // label-box collisions with deterministic nudges — a map with
+  // stacked names is unreadable at any size.
+  const labelHalf = (n: GraphNode) => n.basename.length * 3.3 + 6;
+  for (let pass = 0; pass < 40; pass++) {
+    let moved = false;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i];
+        const b = nodes[j];
+        const dx = b.x - a.x;
+        const dyc = b.y - a.y;
+        const circles = nodeRadius(a) + nodeRadius(b) + 10;
+        const labelYA = a.y + nodeRadius(a) + 13;
+        const labelYB = b.y + nodeRadius(b) + 13;
+        const circleHit =
+          Math.abs(dx) < circles && Math.abs(dyc) < circles;
+        const labelHit =
+          Math.abs(dx) < labelHalf(a) + labelHalf(b) &&
+          Math.abs(labelYA - labelYB) < 14;
+        if (!circleHit && !labelHit) continue;
+        moved = true;
+        // Labels are wide and short: separate them vertically;
+        // circle hits part along their wider gap.
+        if (labelHit || Math.abs(dyc) >= Math.abs(dx)) {
+          const dir = dyc >= 0 ? 1 : -1;
+          a.y -= 7 * dir;
+          b.y += 7 * dir;
+        } else {
+          const dir = dx >= 0 ? 1 : -1;
+          a.x -= 7 * dir;
+          b.x += 7 * dir;
+        }
+      }
+    }
+    if (!moved) break;
+    for (const n of nodes) {
+      n.x = Math.max(padX, Math.min(800 - padX, n.x));
+      n.y = Math.max(padTop, Math.min(640 - padBottom, n.y));
+    }
+  }
+
   return { nodes, edges };
 }
 
@@ -176,8 +245,13 @@ export function SpecGraph({
       setView((v) => {
         const w = Math.min(1600, Math.max(160, v.w * Math.exp(e.deltaY * 0.0015)));
         const h = w * 0.8;
-        const px = v.x + ((e.clientX - rect.left) / rect.width) * v.w;
-        const py = v.y + ((e.clientY - rect.top) / rect.height) * v.h;
+        // Exact xMidYMid-meet inverse: letterboxed panes center the
+        // drawing, so anchor the zoom at the true pointer position.
+        const s = Math.min(rect.width / v.w, rect.height / v.h);
+        const px =
+          v.x + (e.clientX - rect.left - (rect.width - v.w * s) / 2) / s;
+        const py =
+          v.y + (e.clientY - rect.top - (rect.height - v.h * s) / 2) / s;
         return {
           x: px - ((px - v.x) * w) / v.w,
           y: py - ((py - v.y) * h) / v.h,
@@ -210,11 +284,12 @@ export function SpecGraph({
   const maxWeight = Math.max(1, ...edges.map((e) => e.weight));
 
   return (
-    <div data-testid="spec-graph">
+    <div data-testid="spec-graph" className="flex h-full min-h-0 flex-col">
       <svg
         ref={svgRef}
         viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
-        className="h-auto w-full cursor-grab touch-none active:cursor-grabbing"
+        preserveAspectRatio="xMidYMid meet"
+        className="min-h-0 w-full flex-1 cursor-grab select-none touch-none active:cursor-grabbing"
         role="img"
         aria-label="Spec package citation graph"
         onPointerDown={(e) => {
@@ -227,11 +302,13 @@ export function SpecGraph({
           const p = pan.current;
           if (!p || p.id !== e.pointerId) return;
           const rect = e.currentTarget.getBoundingClientRect();
-          if (!rect.width) return;
+          if (!rect.width || !rect.height) return;
           if (Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y) > 3) {
             panned.current = true;
           }
-          const scale = view.w / rect.width;
+          // Units per pixel under xMidYMid meet: the letterboxed
+          // axis must not slow the drag.
+          const scale = Math.max(view.w / rect.width, view.h / rect.height);
           setView((v) => ({
             ...v,
             x: v.x - (e.clientX - p.x) * scale,
@@ -346,11 +423,15 @@ export function SpecGraph({
                 strokeWidth={expandedKeys.has(n.key) ? 2 : 0.75}
                 opacity={contract ? 0.95 : 0.9}
               />
+              {/* Paper-colored halo keeps names readable over edges. */}
               <text
                 x={n.x}
-                y={n.y + r + 13}
+                y={n.y + r + 14}
                 textAnchor="middle"
-                className="fill-neutral-500 text-[10px] dark:fill-neutral-400"
+                paintOrder="stroke"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                className="fill-neutral-500 stroke-neutral-50 text-[11px] dark:fill-neutral-400 dark:stroke-neutral-950"
               >
                 {n.basename}
               </text>
@@ -358,7 +439,7 @@ export function SpecGraph({
           );
         })}
       </svg>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
         <span className="flex items-center gap-1.5 whitespace-nowrap">
           <span className="h-2.5 w-2.5 rounded-full bg-brand-400 dark:bg-brand-500" />
           contract — cited by peers

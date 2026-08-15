@@ -172,10 +172,11 @@ export function SpecView(props: SpecViewProps) {
 
   // Branch/directory collapse is cosmetic and local: levels default
   // open.
-  // Graph is the map projection of the same tree (spec-view-20):
-  // cosmetic, local, never persisted. The selection is shared with
-  // the outline so both projections point at one file.
-  const [graphMode, setGraphMode] = useState(false);
+  // Three projections of one tree (spec-view-20): the outline for
+  // reading, an IDE split for navigating, the graph alone for
+  // surveying. Cosmetic, local, never persisted. The selection is
+  // shared with the outline so both projections point at one file.
+  const [viewMode, setViewMode] = useState<"tree" | "split" | "graph">("tree");
   const [graphSelection, setGraphSelection] = useState<string | null>(null);
   const [collapsedDirs, setCollapsedDirs] = useState<ReadonlySet<string>>(
     new Set(),
@@ -887,8 +888,34 @@ export function SpecView(props: SpecViewProps) {
     );
   };
 
+  // Graph-bearing modes fill the surface like an IDE editor split;
+  // the tree alone keeps a readable document column.
+  const graphful = viewMode !== "tree" && tree.files.length > 0;
+
+  const openFromGraph = (fileKey: string) => {
+    setViewMode("split");
+    setGraphSelection(fileKey);
+    // Effective expansion, not the persisted set: while searching,
+    // toggleFile flips the computed state, so gating on the persisted
+    // list would collapse a search-expanded file instead of opening it.
+    if (!isFileExpanded(fileKey)) toggleFile(fileKey);
+    // Next frame, so a just-expanded file exists to scroll to.
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(
+        `[data-testid="file-${fileKey}"]`,
+      );
+      el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    });
+  };
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 overflow-y-auto p-6">
+    <div
+      className={
+        graphful
+          ? "flex h-full w-full flex-col gap-3 overflow-hidden p-6"
+          : "mx-auto flex w-full max-w-3xl flex-col gap-3 overflow-y-auto p-6"
+      }
+    >
       {liveRegion}
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold">Specs</h1>
@@ -920,65 +947,91 @@ export function SpecView(props: SpecViewProps) {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        {GROUP_ORDER.map((group) => {
-          const on = viewState.filters[group];
-          return (
-            <button
-              key={group}
-              type="button"
-              data-testid={`filter-${group}`}
-              aria-pressed={on}
-              title={
-                on
-                  ? `Hide ${group} items`
-                  : `Show ${group} items`
+        {/* Item filters and search act on the outline, so they leave
+            with it (spec-view-20): no dead controls in graph mode. */}
+        {viewMode !== "graph" ? (
+          <>
+            {GROUP_ORDER.map((group) => {
+              const on = viewState.filters[group];
+              return (
+                <button
+                  key={group}
+                  type="button"
+                  data-testid={`filter-${group}`}
+                  aria-pressed={on}
+                  title={
+                    on
+                      ? `Hide ${group} items`
+                      : `Show ${group} items`
+                  }
+                  onClick={() => toggleFilter(group)}
+                  className={`rounded-full border px-2.5 py-0.5 text-xs ${
+                    on
+                      ? `border-transparent ${GROUP_CHIP[group]}`
+                      : "border-neutral-200 text-neutral-400 dark:border-neutral-700 dark:text-neutral-500"
+                  }`}
+                >
+                  {FILTER_LABEL[group]}{" "}
+                  <span
+                    aria-label={`${totals.perGroup[group]} ${group} items`}
+                    className={on ? "font-semibold" : "opacity-60"}
+                  >
+                    {totals.perGroup[group]}
+                  </span>
+                </button>
+              );
+            })}
+            <input
+              type="search"
+              value={viewState.search}
+              onChange={(event) =>
+                onViewState({ ...viewState, search: event.target.value })
               }
-              onClick={() => toggleFilter(group)}
-              className={`rounded-full border px-2.5 py-0.5 text-xs ${
-                on
-                  ? `border-transparent ${GROUP_CHIP[group]}`
-                  : "border-neutral-200 text-neutral-400 dark:border-neutral-700 dark:text-neutral-500"
-              }`}
-            >
-              {FILTER_LABEL[group]}{" "}
+              placeholder="Filter items — ID or text…"
+              aria-label="Filter items by ID or text"
+              className="min-w-40 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+            />
+            {searching ? (
               <span
-                aria-label={`${totals.perGroup[group]} ${group} items`}
-                className={on ? "font-semibold" : "opacity-60"}
+                data-testid="match-count"
+                className="text-xs text-neutral-500"
               >
-                {totals.perGroup[group]}
+                {search.count} {search.count === 1 ? "match" : "matches"}
               </span>
-            </button>
-          );
-        })}
-        <input
-          type="search"
-          value={viewState.search}
-          onChange={(event) =>
-            onViewState({ ...viewState, search: event.target.value })
-          }
-          placeholder="Filter items — ID or text…"
-          aria-label="Filter items by ID or text"
-          className="min-w-40 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
-        />
-        {searching ? (
-          <span data-testid="match-count" className="text-xs text-neutral-500">
-            {search.count} {search.count === 1 ? "match" : "matches"}
-          </span>
+            ) : null}
+          </>
         ) : null}
-        <button
-          type="button"
-          data-testid="graph-toggle"
-          aria-pressed={graphMode}
-          title={graphMode ? "Show the outline" : "Show the citation graph"}
-          onClick={() => setGraphMode((mode) => !mode)}
-          className={`rounded border px-2 py-1 text-xs ${
-            graphMode
-              ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-              : "border-neutral-300 text-neutral-500 hover:text-neutral-700 dark:border-neutral-700 dark:hover:text-neutral-300"
-          }`}
+        {/* One three-state control: every projection one click away,
+            no invalid "nothing shown" state to police. */}
+        <div
+          role="group"
+          aria-label="View mode"
+          className="ml-auto flex overflow-hidden rounded border border-neutral-300 text-xs dark:border-neutral-700"
         >
-          {graphMode ? "Tree" : "Graph"}
-        </button>
+          {(
+            [
+              ["tree", "Outline alone"],
+              ["split", "Graph beside the outline"],
+              ["graph", "Graph alone"],
+            ] as const
+          ).map(([mode, hint], i) => (
+            <button
+              key={mode}
+              type="button"
+              data-testid={`view-${mode}`}
+              aria-pressed={viewMode === mode}
+              title={hint}
+              onClick={() => setViewMode(mode)}
+              className={`px-2 py-1 capitalize ${
+                viewMode === mode
+                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                  : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+              } ${i > 0 ? "border-l border-neutral-300 dark:border-neutral-700" : ""}`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tree.notices.length > 0 ? (
@@ -987,33 +1040,32 @@ export function SpecView(props: SpecViewProps) {
         </div>
       ) : null}
 
-      {graphMode && tree.files.length > 0 ? (
-        // IDE-style split: the map stays put while the outline scrolls,
-        // so position in the structure and the package details are
-        // visible at once (spec-view-20).
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          <div className="min-w-0 lg:sticky lg:top-2 lg:w-[46%]">
+      {graphful ? (
+        // One structure for both graph modes, so switching between
+        // them keeps SpecGraph mounted and holds its pan and zoom.
+        // In split the map holds still while the outline scrolls
+        // independently beside it (spec-view-20).
+        <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+          <div
+            className={
+              viewMode === "split"
+                ? "min-h-0 flex-1 lg:h-full lg:w-1/2 lg:flex-none"
+                : "min-h-0 flex-1"
+            }
+          >
             <SpecGraph
               files={tree.files}
               selectedKey={graphSelection}
               expandedKeys={expandedFiles}
               onClearSelection={() => setGraphSelection(null)}
-              onOpenFile={(fileKey) => {
-                setGraphSelection(fileKey);
-                if (!expandedFiles.has(fileKey)) toggleFile(fileKey);
-                // Next frame, so a just-expanded file exists to scroll to.
-                requestAnimationFrame(() => {
-                  const el = document.querySelector<HTMLElement>(
-                    `[data-testid="file-${fileKey}"]`,
-                  );
-                  el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-                });
-              }}
+              onOpenFile={openFromGraph}
             />
           </div>
-          <ul className="flex min-w-0 flex-1 flex-col">
-            {renderDir(outlineRoot, outlineRoot.name)}
-          </ul>
+          {viewMode === "split" ? (
+            <ul className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pr-1">
+              {renderDir(outlineRoot, outlineRoot.name)}
+            </ul>
+          ) : null}
         </div>
       ) : (
         <ul className="flex flex-col">
@@ -1028,7 +1080,7 @@ export function SpecView(props: SpecViewProps) {
         </div>
       ) : null}
 
-      <div className="relative mt-2 flex items-center gap-1.5 border-t border-neutral-200 pt-2 text-xs text-neutral-500 dark:border-neutral-800">
+      <div className="relative mt-2 flex shrink-0 items-center gap-1.5 border-t border-neutral-200 pt-2 text-xs text-neutral-500 dark:border-neutral-800">
         <button
           ref={recordsToggleRef}
           id="specv-records-toggle"

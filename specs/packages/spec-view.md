@@ -86,13 +86,15 @@ When a local link inside the view is activated, the spec view shall resolve it a
 
 #### spec-view-20
 
-While the spec tree renders, when the graph projection is toggled, the spec view shall show a directed package graph of the same tree beside the outline — one node per spec file sized by its relationships, one edge per citing→cited file pair weighted by cross-file citation count — keeping the toggle, filters, search, and records footer in place:
+While the spec tree renders, the spec view shall project the tree three ways behind one three-state mode control — the outline alone as a reading column, the graph beside an independently scrolling outline as a surface-filling split, and the graph alone filling the surface:
 
+- the graph is directed, with one node per spec file sized by its relationships and one edge per citing→cited file pair weighted by cross-file citation count;
 - an edge points from the citing package at the cited package; packages cited by peers (contracts) and zero-inbound packages (compositions) carry distinct node colors, named by a legend;
+- controls acting only on the outline (item filters, search) hide with it in the graph-alone mode, while the mode control and records footer stay in every mode;
 - hovering a node isolates its neighborhood, dimming every non-neighbor and directing the surviving edges;
-- clicking a node keeps the graph in place, marks that node selected, and expands and scrolls to its file in the outline — one selection, two projections — while clicking empty space clears the selection;
+- clicking a node selects it and shows the split with that node's file expanded and scrolled into the outline — one selection, two projections — while clicking empty space clears the selection;
 - the viewport pans by drag, zooms toward the pointer, and resets on double-click;
-- the layout is deterministic for a given tree, so reopening the graph re-renders the same picture.
+- the layout is deterministic for a given tree, spread to fill the canvas with labels nudged apart, so reopening the graph re-renders the same picture.
 
 ### Records
 
@@ -249,7 +251,7 @@ Where a fixture tree carries a package item citing a peer's item, an intra-file 
 
 #### spec-view-21
 
-Where a fixture tree carries cross-file citations, the test suite shall assert the graph projection round trip: toggling renders one node per file with contract and composition roles distinguished and a directed weighted edge per citing→cited pair [[spec-view-20](#spec-view-20)], and clicking a node keeps the graph while expanding that file in the outline [[spec-view-20](#spec-view-20)].
+Where a fixture tree carries cross-file citations, the test suite shall assert the mode round trip: the split renders one node per file with contract and composition roles distinguished and a directed weighted edge per citing→cited pair beside the outline [[spec-view-20](#spec-view-20)], the graph-alone mode hides the outline and its filters [[spec-view-20](#spec-view-20)], and clicking a node shows the split with that file expanded [[spec-view-20](#spec-view-20)].
 
 ### Confinement Coverage
 
