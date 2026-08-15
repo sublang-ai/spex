@@ -33,7 +33,7 @@ Numeric floors below are deliberate defaults, revisable only by a recorded decis
 2. **Reserved hues stay reserved; no gray categories.**
    The hue budget is enumerated: brand purple marks interaction alone ([DR-013](013-sublang-brand.md)); emerald/amber/red mark status and neutral marks idle or de-emphasis (DR-010 §8); sky/fuchsia/teal mark the item groups ([DR-011](011-project-workspace.md)); a new categorical hue may come only from outside every reserved set, with a recorded decision.
    A category never wears the gray that elsewhere means disabled or de-emphasized [[4]]; de-emphasis is one uniform axis — opacity — orthogonal to what a mark is.
-   Applied to the graph: the map adds no new hue at all — its two roles are achromatic ink at text-grade contrast, distinguished by fill treatment: solid ink for contracts (cited by peers), ink ring on tinted fill for uncited packages, worded in the legend as "not cited by peers" so the class stays true for packages with no citations in either direction.
+   Applied to the graph: the map adds no new hue at all — its two roles are achromatic ink at text-grade contrast, distinguished by fill treatment: solid ink where peers cite the package, ink ring on a tinted fill where none do, worded in the legend as "cited by peers" and "not cited by peers" so both classes stay true for the packages no citation reaches at all.
    The weight asymmetry is intended hierarchy — contracts anchor the architecture — with both treatments unmistakably active, and interaction purple pops against the monochrome ground.
 3. **Contrast is computed, not eyeballed — and pinned.**
    Every resting mark meets the 3:1 non-text floor and every text mark meets 4.5:1, verified as computed composites — opacity times color over the actual theme token — in both themes [[1]].
@@ -46,7 +46,7 @@ Numeric floors below are deliberate defaults, revisable only by a recorded decis
    Labels are always on, sit on the app type scale with a 12px on-screen floor at the fitted view — DR-010 §8's no-arbitrary-type rule includes SVG text — and are haloed in the ground color where linework crosses them [[6]].
 5. **Direction reads at rest.**
    A directed edge shows its direction without hover: direction is structure, and structure never gates on pointer state [[5]].
-   Direction glyphs are constant-size — decoupled from stroke width [[2]] — sit at the target's rim, and take the edge's own hue a step darker, never the interaction hue, so they read as glyphs rather than line widening.
+   Direction glyphs are constant-size — decoupled from stroke width [[2]] — sit at the target's rim, and take the edge's own hue one step stronger against the surface, never the interaction hue, so they read as glyphs rather than line widening.
    Curvature never carries direction (the cited study found biased curvature the worst direction encoding [[7]]), and a reciprocal pair renders as two parallel-offset edges, never one double-headed line.
    The tapered-edge evidence [[7]] is noted and declined: width already carries weight, so a small constant head is the honest remainder — and a head that never scales with weight dissolves the "huge ugly arrows" dilemma.
 6. **A mature engine under our rendering.**
