@@ -179,7 +179,7 @@ export function SpecGraph({
   // The model and its settled layout: rebuilt only when the tree
   // changes, so a drag never survives a remount (spec-view-28).
   const { model, simulation } = useMemo(() => {
-    const next = buildGraphModel(files);
+    const next = buildGraphModel(files, measureLabel);
     const sim = createSimulation(next);
     settle(sim);
     return { model: next, simulation: sim };

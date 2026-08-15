@@ -814,6 +814,8 @@ describe("DR-010 §6: focus follows", () => {
   test("the reader takes focus on Back and returns it to the record's row", async () => {
     const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nBody.");
     render(<Harness onReadRecord={onReadRecord} />);
+    // The branch is closed until asked for (spec-view-7).
+    fireEvent.click(screen.getByTestId("decisions-toggle"));
     const row = screen.getByTestId("record-DR-011");
     fireEvent.click(row);
     await screen.findByText("Body.");
@@ -922,6 +924,7 @@ describe("spec-view-7/45: records in their places", () => {
     // Decisions are a branch of the outline, and intents are nowhere
     // in the view — they belong to the Dashboard (spec-view-7).
     const branch = screen.getByTestId("decisions-branch");
+    fireEvent.click(screen.getByTestId("decisions-toggle"));
     expect(within(branch).getByText("Project workspace")).toBeTruthy();
     expect(screen.queryByText("IR-016")).toBeNull();
     // Last in the outline, after every package.
@@ -953,6 +956,7 @@ describe("spec-view-7/45: records in their places", () => {
     };
     render(<Harness tree={fileLess} />);
     const branch = screen.getByTestId("decisions-branch");
+    fireEvent.click(screen.getByTestId("decisions-toggle"));
     expect(within(branch).getByText("Scaffold localization")).toBeTruthy();
     expect(within(branch).getByText("Project workspace")).toBeTruthy();
 
@@ -966,6 +970,7 @@ describe("spec-view-7/45: records in their places", () => {
 
     // A group filter is a lens on items and leaves the branch whole
     // (spec-view-7).
+    // The branch is still open from before the search.
     fireEvent.click(screen.getByTestId("search-clear"));
     fireEvent.click(screen.getByTestId("filter-external"));
     expect(screen.getByTestId("record-DR-001")).toBeTruthy();

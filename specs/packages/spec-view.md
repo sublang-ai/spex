@@ -174,7 +174,7 @@ While the graph renders, the spec view shall move a camera over a fixed layout r
 
 When the graph builds its picture, the spec view shall settle a deterministic arrangement and solve its presentation rather than tune it ([DR-027](../decisions/027-linked-views-contract.md)):
 
-- the settled arrangement is a pure function of the tree alone — topology, no label extents — computed to rest before first paint with no opening animation, holding a minimum separation between nodes;
+- the settled arrangement is a pure function of the tree and its rendered label extents — never of the pane — computed to rest before first paint with no opening animation, holding a minimum separation between whole marks, each node's name included;
 - the picture maps the arrangement onto the pane: positions span the drawing area within a bounded aspect relaxation, never beyond the bound;
 - marks then take the largest single scale at which no circle-and-label mark touches another, solved exactly over pairs, with the 24px activation-target floor winning over overlap, the size cap applying last, and label widths capped with an ellipsis;
 - a span too small to map falls back to the identity scale, centered;
@@ -195,7 +195,7 @@ While the graph renders beside the outline, the spec view shall seat the item fi
 
 While the spec tree renders, the spec view shall serve the tree's records in their places ([DR-027](../decisions/027-linked-views-contract.md)) — the decision records as the outline's last branch [[spec-view-1](#spec-view-1)] and `meta.md` and `map.md` as footer links — each opening the records reader:
 
-- the decisions branch renders whenever decision records exist, file-less and legacy trees included, carrying its count in its label, its rows sorted by number, each announced as a reader opener rather than an expandable node, and the group filters never touch it;
+- the decisions branch renders whenever decision records exist, file-less and legacy trees included, carrying its count in its label, closed until asked for, its rows sorted by number, each announced as a reader opener rather than an expandable node, and the group filters never touch it;
 - intent records do not appear anywhere in the view — they are work items, carried by the Dashboard's next-work lists [[dashboard-24](dashboard.md#dashboard-24)];
 - when a record is picked, the view replaces itself with that record's rendered markdown behind a Back control, and Back restores focus to the invoking row and the outline's scroll position;
 - links inside the reader keep the view's semantics [[spec-view-6](#spec-view-6)]: a path resolving to a record, `meta.md`, or `map.md` opens in the reader, an item citation leaves the reader and jumps to the item, and any other local link stays inert;

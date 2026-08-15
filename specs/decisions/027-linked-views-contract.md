@@ -40,7 +40,7 @@ Query marks count as interaction state under DR-026 §2's hue budget — a match
 
 **Density is solved, not tuned** (amending DR-026 §4):
 
-- the settled arrangement stays a pure function of the tree alone — topology, label extents excluded — deterministic, holding a minimum separation between nodes;
+- the settled arrangement stays a pure function of the tree and its label metrics — deterministic, pane-independent, holding a minimum separation between whole marks, names included, because an arrangement blind to names leaves the presentation a scale it cannot solve above the activation floor;
 - the rendered picture is a pure function of the arrangement and the pane: positions span the drawing area within a bounded aspect relaxation (axis-scale ratio at most ~1.25) — bounded fill, unlike the unbounded stretching §4 condemned [[8]];
 - with positions fixed, marks take one solved scale: the largest at which no circle-plus-label mark touches another, computed exactly over pairs rather than searched — the predicate is not monotone in the scale, so a search finds an arbitrary boundary;
 - the 24px activation-target floor [[9]] wins over overlap, the size cap applies last, and label widths are capped with an ellipsis so one long pair cannot shrink the whole map;

@@ -603,8 +603,10 @@ export function SpecView(props: SpecViewProps) {
    * collapse key cannot collide with a collection directory, which
    * always carries the "packages/" prefix (meta-31). */
   const DECISIONS_KEY = "\u0000decisions";
+  // Closed by default: the records are an annex to the packages, and
+  // a search opens the branch to show what it matched.
   const renderDecisions = (): ReactNode => {
-    const open = searching || !collapsedDirs.has(DECISIONS_KEY);
+    const open = searching || collapsedDirs.has(DECISIONS_KEY);
     const shown = searching
       ? tree.decisions.filter(
           (record) =>
@@ -624,6 +626,8 @@ export function SpecView(props: SpecViewProps) {
           aria-label={`Decisions, ${tree.decisions.length} records`}
           onClick={() =>
             setCollapsedDirs((current) => {
+              // The set holds the branch when it is OPEN, since the
+              // branch is the one node that starts closed.
               const next = new Set(current);
               if (next.has(DECISIONS_KEY)) next.delete(DECISIONS_KEY);
               else next.add(DECISIONS_KEY);

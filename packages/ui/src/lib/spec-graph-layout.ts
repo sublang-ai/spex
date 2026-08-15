@@ -47,6 +47,10 @@ export const EDGE_MAX_WIDTH = 6;
 /** Label size and the gap under a node's rim, in pixels. */
 export const LABEL_FONT_SIZE = 12;
 export const LABEL_GAP = 6;
+/** What a drawn label claims below its baseline: descenders plus the
+ * halo that keeps it readable over edges. The solve measures the mark
+ * as drawn, so marks clear rather than merely touch. */
+export const LABEL_DESCENT = 5;
 /** No label may claim more width than this; past it the name
  * ellipsizes, so one long pair cannot shrink the whole map. */
 export const LABEL_MAX_WIDTH = 116;
@@ -80,6 +84,9 @@ export function edgeWidth(weight: number): number {
   );
 }
 
+/** Measures a label's drawn width in pixels at LABEL_FONT_SIZE. */
+export type MeasureLabel = (text: string) => number;
+
 // --- Model -----------------------------------------------------------------
 
 export interface GraphNode extends SimulationNodeDatum {
@@ -98,6 +105,11 @@ export interface GraphNode extends SimulationNodeDatum {
   cited: boolean;
   /** Unit radius; the presentation scales it into pixels. */
   unit: number;
+  /** Half the label's drawn width, in pixels. The arrangement keeps
+   * room for it: a name is a mark, and an arrangement blind to names
+   * leaves the presentation a scale it cannot solve above the
+   * activation floor (spec-view-28). */
+  labelHalf: number;
   x: number;
   y: number;
 }
@@ -119,7 +131,10 @@ export interface GraphModel {
   edges: GraphEdge[];
 }
 
-export function buildGraphModel(files: readonly SpecFileInfo[]): GraphModel {
+export function buildGraphModel(
+  files: readonly SpecFileInfo[],
+  measure: MeasureLabel,
+): GraphModel {
   // Longest-first so "course-catalog-3" resolves to course-catalog,
   // never to a shorter accidental prefix (basenames are tree-unique
   // identifiers per meta-10).
@@ -177,6 +192,7 @@ export function buildGraphModel(files: readonly SpecFileInfo[]): GraphModel {
       outbound: outbound.get(file.basename) ?? 0,
       cited: (inbound.get(file.basename) ?? 0) > 0,
       unit: nodeUnit(file.items.length, maxItems),
+      labelHalf: Math.min(measure(file.basename), LABEL_MAX_WIDTH) / 2,
       x: radius * Math.cos(angle),
       y: radius * Math.sin(angle),
     };
@@ -211,9 +227,11 @@ function seededRandom(seed = 0x5eed): () => number {
   };
 }
 
-/** Model-space separation: nodes never settle closer than their own
- * radii plus a margin, which is what lower-bounds the scale the
- * presentation can solve (spec-view-28). */
+/** Model-space separation over each node's whole mark — its circle
+ * and the name under it. Rectangular, because a name is wide and
+ * short: separating circles alone leaves two long names side by side,
+ * and the presentation then has no scale that both clears them and
+ * holds the activation floor (spec-view-28). */
 function forceSeparation(margin: number): Force<GraphNode, GraphEdge> {
   let nodes: GraphNode[] = [];
   const force = (alpha: number) => {
@@ -223,15 +241,25 @@ function forceSeparation(margin: number): Force<GraphNode, GraphEdge> {
         const b = nodes[j];
         const dx = b.x - a.x;
         const dy = b.y - a.y;
-        const distance = Math.sqrt(dx * dx + dy * dy) || 0.001;
-        const wanted =
-          (a.unit + b.unit) * NOMINAL_RADIUS + margin;
-        if (distance >= wanted) continue;
-        const push = ((wanted - distance) / distance) * 0.5 * alpha;
-        a.x -= dx * push;
-        a.y -= dy * push;
-        b.x += dx * push;
-        b.y += dy * push;
+        const wantX =
+          Math.max(a.unit * NOMINAL_RADIUS, a.labelHalf) +
+          Math.max(b.unit * NOMINAL_RADIUS, b.labelHalf) +
+          margin;
+        const wantY = (a.unit + b.unit) * NOMINAL_RADIUS + margin;
+        const overX = wantX - Math.abs(dx);
+        const overY = wantY - Math.abs(dy);
+        if (overX <= 0 || overY <= 0) continue;
+        // Part along the axis needing the smaller correction.
+        const push = 0.5 * alpha;
+        if (overX < overY) {
+          const shift = (dx >= 0 ? 1 : -1) * overX * push;
+          a.x -= shift;
+          b.x += shift;
+        } else {
+          const shift = (dy >= 0 ? 1 : -1) * overY * push;
+          a.y -= shift;
+          b.y += shift;
+        }
       }
     }
   };
@@ -259,14 +287,18 @@ export function createSimulation(
   return forceSimulation(model.nodes)
     .randomSource(seededRandom())
     .force("link", link)
-    .force("charge", forceManyBody<GraphNode>().strength(-380).distanceMax(900))
+    // Repulsion only opens the topology; the separation force below
+    // is what sets how close marks may sit. Keeping charge modest
+    // stops the arrangement from sprawling, which is what leaves the
+    // presentation room to solve a larger mark scale (spec-view-28).
+    .force("charge", forceManyBody<GraphNode>().strength(-90).distanceMax(600))
     // forceCenter only recenters the whole system; the weak positional
     // pull is what keeps a package no citation reaches from drifting
     // away from it (spec-view-28).
     .force("x", forceX<GraphNode>(0).strength(0.05))
     .force("y", forceY<GraphNode>(0).strength(0.05))
     .force("center", forceCenter<GraphNode>(0, 0))
-    .force("separation", forceSeparation(18))
+    .force("separation", forceSeparation(16))
     .alphaDecay(0.02)
     .stop();
 }
@@ -305,8 +337,6 @@ export interface Presentation {
   toModel: (x: number, y: number) => { x: number; y: number };
 }
 
-export type MeasureLabel = (text: string) => number;
-
 /** Cuts a label to the width cap, keeping the measurement honest by
  * re-measuring the truncation. */
 function ellipsize(
@@ -344,7 +374,7 @@ interface SolveMark {
 }
 
 function pairContactScale(a: SolveMark, b: SolveMark): number {
-  const gap = LABEL_GAP + LABEL_FONT_SIZE;
+  const gap = LABEL_GAP + LABEL_FONT_SIZE + LABEL_DESCENT;
   const dx = Math.abs(a.x - b.x);
   const dy = Math.abs(a.y - b.y);
   const units = a.unit + b.unit;
@@ -503,7 +533,8 @@ export function presentLayout(
         place.y +
           node.unit * scale +
           LABEL_GAP +
-          LABEL_FONT_SIZE -
+          LABEL_FONT_SIZE +
+          LABEL_DESCENT -
           (area.height - FIT_PADDING),
       );
     }
