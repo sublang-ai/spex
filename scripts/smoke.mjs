@@ -76,11 +76,11 @@ async function coreRoundTrip() {
     throw new Error(`seeded template did not compose: ${config.error ?? config.status}`);
   }
   const commands = config.summary.playbooks.map((p) => p.command).sort();
-  if (!commands.includes("code") || !commands.includes("discuss")) {
+  if (!["code", "review", "decide"].every((id) => commands.includes(id))) {
     throw new Error(`template playbooks incomplete: ${commands.join(", ")}`);
   }
   const { builtins } = await command("library.builtins");
-  for (const id of ["code", "discuss"]) {
+  for (const id of ["code", "review", "decide"]) {
     const entry = builtins.find((b) => b.id === id);
     if (!entry) throw new Error(`builtin catalog missing ${id}`);
     if (!entry.source?.startsWith(`# ${id[0].toUpperCase()}${id.slice(1)}`)) {
