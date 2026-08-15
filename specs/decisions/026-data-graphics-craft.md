@@ -41,7 +41,7 @@ Numeric floors below are deliberate defaults, revisable only by a recorded decis
    The composites are not review folklore: the surface's verification items pin them as assertions over the rendered component's classes and tokens, so a regression fails a test, not a reviewer.
 4. **Content sets density; the camera fits content.**
    Layout extent grows from the content — measured label boxes and node radii set collision and link distances — and is never stretched to fill a viewport; proximity is meaning, and inflating all distances erases it.
-   The initial camera fits the content's bounding box with padding — overview first [[5]] — and re-fits on tree change, pane resize, or toggling the graph, unless the user has moved the camera, in which case a visible fit control (with double-click as its shortcut) is the way home.
+   The initial camera fits the content's bounding box with padding — overview first [[5]] — and re-fits on tree change, pane resize, or toggling the graph, unless the user has moved the camera, in which case a visible fit control is the way home — a hidden gesture that duplicates a visible control only muddies the plain click.
    Zoom is clamped between the fitted overview and a detail ceiling, so the picture can never be lost off-canvas.
    Labels are always on, sit on the app type scale with a 12px on-screen floor at the fitted view — DR-010 §8's no-arbitrary-type rule includes SVG text — and are haloed in the ground color where linework crosses them [[6]].
 5. **Direction reads at rest.**
@@ -57,11 +57,12 @@ Numeric floors below are deliberate defaults, revisable only by a recorded decis
    Emphasis transitions are short (on the order of 100–150 ms) so isolation never strobes; under the reduced-motion preference, transitions turn instant and drag feedback may fall back to discrete position updates [[10]].
 7. **One focus-state model: selection is stable, hover previews, details on demand.**
    All emphasis states speak the single dim axis of principle 2 — no state recolors, resizes, or moves anything — with precedence base < selection < keyboard focus < hover preview.
-   Click selects, and selection is the stable base state; hover layers a slightly delayed, transient preview, so pointer transit never destroys a selected reading; Escape dismisses the preview, then the selection.
+   The two gestures do different work: clicking chooses, and only a choice isolates a neighborhood; hovering inspects, showing a mark's numbers while leaving the picture whole — an emphasis on hover would merely restate what a click already says. Escape dismisses the card, then the selection.
    Keyboard focus reaches every node (DR-010 §6), shows the app's one focus ring ([DR-013](013-sublang-brand.md)), and triggers the same isolation hover does; Enter opens, and zoom, pan, and fit have key bindings.
    Details live in an instant, themed hover card — never the native `<title>` tooltip [[11]] — shown on focus as well: identity, the total behind the size encoding, then the per-group breakdown as a list in the group hues following the outline's count grammar [[spec-view-2](../packages/spec-view.md#spec-view-2)] — each count with its group word, zero muted rather than absent, color never the only channel; edges answer hover with their citation count.
 8. **Controls sit with what they govern.**
-   The outline is the permanent surface; one toggle — off by default, persisted with the project's view state — sets whether the graph stands beside it; the three-state mode control retires, and no maximize mode reintroduces a third state.
+   The outline is the permanent surface; one toggle — on by default, persisted with the project's view state — sets whether the graph stands beside it; the three-state mode control retires, and no maximize mode reintroduces a third state.
+   The reader sets the balance between the two panes with a draggable, keyboard-operable divider, bounded so neither pane can be squeezed past reading; a narrower graph pane is absorbed by the space between marks, never by the type, which holds its on-screen size.
    Item filters and search live in the outline pane and scope to it; graph geometry is a function of the tree alone — an active search reflects on the graph only as a non-geometric highlight of matching packages, and filters do not touch it — so the projections differ only where the controls visibly say so.
    Graph affordances — fit, legend, gesture hints — live on the graph pane, and selecting from the graph never rearranges the workspace ([DR-009](009-at-hand-interaction.md)).
 9. **No unexamined pixels.**

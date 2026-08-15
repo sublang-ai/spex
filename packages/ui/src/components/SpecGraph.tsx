@@ -45,8 +45,8 @@ export {
   type GraphNode,
 } from "../lib/spec-graph-layout.js";
 
-/** Hover takes emphasis only after the pointer settles, so crossing
- * the canvas never strips a deliberate selection (spec-view-25). */
+/** The card waits for the pointer to settle, so crossing the canvas
+ * does not flash a card per mark (spec-view-26). */
 const HOVER_DELAY_MS = 130;
 /** Camera padding around the fitted layout, in pixels. */
 const FIT_PADDING = 28;
@@ -220,12 +220,16 @@ export function SpecGraph({
     select(svg).call(behavior.transform, fitTransform());
   }, [fitTransform, size.width]);
 
-  // Track the pane so the camera can fit it (spec-view-27).
+  // Track the drawing surface — the svg itself, not the container it
+  // shares with the legend, or the fit would frame the graph against a
+  // viewport taller than it can paint (spec-view-27).
   useEffect(() => {
-    const element = containerRef.current;
+    const element = svgRef.current;
     if (!element) return;
-    const read = () =>
-      setSize({ width: element.clientWidth, height: element.clientHeight });
+    const read = () => {
+      const box = element.getBoundingClientRect();
+      setSize({ width: box.width, height: box.height });
+    };
     read();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(read);
@@ -283,12 +287,15 @@ export function SpecGraph({
     [model, selectedKey],
   );
 
+  // Hover reads a mark's numbers; it never dims the picture. Isolation
+  // is what a deliberate choice buys — selection, or the keyboard
+  // focus that stands in for it (spec-view-25), so the two gestures
+  // never look alike.
   const emphasis: Emphasis = useMemo(() => {
-    if (hover) return hover;
     if (keyFocus) return { kind: "node", id: keyFocus };
     if (selectedName) return { kind: "node", id: selectedName };
     return null;
-  }, [hover, keyFocus, selectedName]);
+  }, [keyFocus, selectedName]);
 
   const neighborhood = useMemo(() => {
     if (!emphasis) return null;
@@ -426,7 +433,8 @@ export function SpecGraph({
   const onSurfaceKeyDown = (event: ReactKeyboardEvent) => {
     switch (event.key) {
       case "Escape":
-        // Hover emphasis first, then the selection (spec-view-25).
+        // The card first, then the selection it sits over
+        // (spec-view-25).
         if (hover) {
           event.preventDefault();
           clearHover();
@@ -506,10 +514,6 @@ export function SpecGraph({
   const dimOf = (name: string): number =>
     neighborhood && !neighborhood.has(name) ? DIM_OPACITY : 1;
 
-  // Labels and numerals hold their on-screen size whatever the zoom
-  // (spec-view-22); everything geometric scales with the camera.
-  const screenFont = LABEL_FONT_SIZE / (transform.k || 1);
-
   return (
     <div
       ref={containerRef}
@@ -523,7 +527,6 @@ export function SpecGraph({
         tabIndex={0}
         aria-label="Spec package citation graph"
         onKeyDown={onSurfaceKeyDown}
-        onDoubleClick={applyFit}
         onClick={(event) => {
           const target = event.target as Element;
           if (target.closest("[data-graph-node]")) return;
@@ -644,7 +647,12 @@ export function SpecGraph({
             const selected = node.basename === selectedName;
             const focused = node.basename === keyFocus;
             const matched = searching && matchedKeys?.has(node.key);
-            const numeral = Math.max(screenFont, node.r * 0.52);
+            // Type lives in canvas units like every other mark, so
+            // the collision that separated the labels and the fit that
+            // frames them measure exactly what gets drawn. The layout
+            // is compact enough that the fitted camera renders it at
+            // the type scale (spec-view-22).
+            const numeral = Math.max(LABEL_FONT_SIZE, node.r * 0.52);
             return (
               <g
                 key={node.key}
@@ -655,7 +663,7 @@ export function SpecGraph({
                 data-match={matched ? "true" : undefined}
                 tabIndex={0}
                 role="button"
-                aria-label={`${node.basename}, ${node.items} items, ${node.inbound} inbound, ${node.outbound} outbound citations`}
+                aria-label={`${node.basename}, ${node.items} items, cites ${node.outbound}, cited by ${node.inbound}`}
                 className="cursor-pointer focus:outline-none"
                 opacity={dim}
                 onMouseEnter={() =>
@@ -732,21 +740,29 @@ export function SpecGraph({
                 >
                   {node.items}
                 </text>
-                <text
-                  x={node.x}
-                  y={node.y + node.r + LABEL_GAP + screenFont * 0.8}
-                  textAnchor="middle"
-                  fontSize={screenFont}
-                  paintOrder="stroke"
-                  strokeLinejoin="round"
-                  strokeWidth={3 / (transform.k || 1)}
-                  className={`fill-neutral-700 dark:fill-neutral-300 ${SURFACE_STROKE}`}
-                >
-                  {node.basename}
-                </text>
               </g>
             );
           })}
+
+          {/* Names last: a label is the one mark that must never be
+              painted over, whatever the node order (spec-view-22). */}
+          {model.nodes.map((node) => (
+            <text
+              key={`label-${node.key}`}
+              data-testid={`graph-label-${node.basename}`}
+              x={node.x}
+              y={node.y + node.r + LABEL_GAP + LABEL_FONT_SIZE * 0.8}
+              textAnchor="middle"
+              fontSize={LABEL_FONT_SIZE}
+              paintOrder="stroke"
+              strokeLinejoin="round"
+              strokeWidth={3}
+              opacity={dimOf(node.basename)}
+              className={`pointer-events-none fill-neutral-700 dark:fill-neutral-300 ${SURFACE_STROKE}`}
+            >
+              {node.basename}
+            </text>
+          ))}
         </g>
       </svg>
 
@@ -793,8 +809,7 @@ export function SpecGraph({
                 ))}
               </ul>
               <div className="mt-1.5 border-t border-neutral-200 pt-1.5 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-                {cardNode.inbound} cited by peers · {cardNode.outbound} cited of
-                peers
+                cites {cardNode.outbound} · cited by {cardNode.inbound}
               </div>
             </>
           ) : cardEdge ? (
@@ -815,11 +830,11 @@ export function SpecGraph({
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-2 text-xs text-neutral-600 dark:text-neutral-400">
         <span className="flex items-center gap-1.5 whitespace-nowrap">
           <span className="h-2.5 w-2.5 rounded-full bg-neutral-700 dark:bg-neutral-200" />
-          cited by peers
+          cited by packages
         </span>
         <span className="flex items-center gap-1.5 whitespace-nowrap">
           <span className="h-2.5 w-2.5 rounded-full border-2 border-neutral-700 bg-neutral-100 dark:border-neutral-200 dark:bg-neutral-800" />
-          not cited by peers
+          not cited by packages
         </span>
         <span className="whitespace-nowrap">size — items</span>
         <span className="whitespace-nowrap">width — citations</span>
@@ -827,13 +842,14 @@ export function SpecGraph({
         <button
           type="button"
           data-testid="graph-fit"
+          title="Show the whole graph (0)"
           onClick={applyFit}
           className="rounded border border-neutral-300 px-1.5 py-0.5 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           Fit
         </button>
         <span className="ml-auto whitespace-nowrap">
-          click opens · drag moves · scroll zooms · double-click or 0 fits
+          click opens · drag moves · scroll zooms
         </span>
       </div>
     </div>

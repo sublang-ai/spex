@@ -27,6 +27,10 @@ import { GROUP_ORDER, type SpecGroup } from "./spec-view-model.js";
 // Node area carries the item count, so the radius runs on a square
 // root; the band keeps the largest node under ~3x the smallest, which
 // is the range size can be read as an ordering rather than a value.
+//
+// The forces below are tuned tight on purpose: a narrower graph pane
+// must be absorbed by the space between marks, never by the type,
+// which holds its on-screen size whatever the camera does.
 
 export const NODE_MIN_RADIUS = 14;
 export const NODE_MAX_RADIUS = 38;
@@ -265,21 +269,25 @@ export function createSimulation(
     .distance((edge) => {
       const source = edge.source as GraphNode;
       const target = edge.target as GraphNode;
-      return source.r + target.r + 70;
+      return source.r + target.r + 26;
     })
     .strength(0.4);
 
   return forceSimulation(model.nodes)
     .randomSource(seededRandom())
     .force("link", link)
-    .force("charge", forceManyBody<GraphNode>().strength(-520).distanceMax(700))
+    .force("charge", forceManyBody<GraphNode>().strength(-260).distanceMax(420))
     // forceCenter only recenters the whole system; the weak positional
     // pull is what keeps a package no citation reaches from drifting
     // off the canvas (spec-view-28).
-    .force("x", forceX<GraphNode>(0).strength(0.045))
-    .force("y", forceY<GraphNode>(0).strength(0.045))
+    // Asymmetric on purpose: the graph pane is taller than it is wide
+    // at any reasonable split, so the layout settles portrait and the
+    // camera's fit wastes less. Both strengths are constants, so the
+    // picture stays a function of the tree, not of the pane.
+    .force("x", forceX<GraphNode>(0).strength(0.15))
+    .force("y", forceY<GraphNode>(0).strength(0.075))
     .force("center", forceCenter<GraphNode>(0, 0))
-    .force("marks", forceMarkBoxes(14))
+    .force("marks", forceMarkBoxes(7))
     .alphaDecay(0.02)
     .stop();
 }

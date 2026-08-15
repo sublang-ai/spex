@@ -38,7 +38,7 @@ While an item row is displayed, the spec view shall render the row by its expans
 
 - collapsed, the row shows the item's ID chip in its group color, its group tag, its first line, and a muted hint counting its outbound citations and inbound backlinks;
 - expanded, the row renders the item's full markdown body with horizontal overflow contained and its citations as outbound rows and grouped inbound backlinks per [[spec-view-19](#spec-view-19)], every entry an in-view link;
-- when the ID chip is activated, the view copies the item ID to the clipboard and acknowledges with a transient tick ([DR-010](../decisions/010-interface-craft.md) §3).
+- when the ID chip is activated, the view copies the item ID to the clipboard and acknowledges in words beside the chip ([DR-010](../decisions/010-interface-craft.md) §3).
 
 ### Citation Rows
 
@@ -67,7 +67,9 @@ When a group filter toggle is activated, the spec view shall hide or restore tha
 While the spec view's filter box contains text, the spec view shall narrow the outline to the matching items:
 
 - only items whose ID (matched case-insensitively) or text matches are shown, with the current match count displayed;
+- a package holding no match leaves the outline for the search's duration, as does a collection directory left with nothing to show — unlike a group filter, which keeps every package standing [[spec-view-4](#spec-view-4)];
 - packages containing matches auto-expand without persisting that expansion;
+- the box offers a control that clears it, and Escape within it clears it too;
 - clearing the box restores the expansion state from before the search.
 
 ### Citation Jumps
@@ -88,9 +90,11 @@ When a local link inside the view is activated, the spec view shall resolve it a
 
 While the spec tree renders, the spec view shall keep the outline permanent and add the citation graph beside it while the graph toggle is on ([DR-026](../decisions/026-data-graphics-craft.md)):
 
-- the toggle defaults off and persists with the rest of the project's view state;
+- the toggle defaults on and persists with the rest of the project's view state;
 - the graph is directed, carrying one node per spec file and one edge per citing→cited file pair;
 - one selection serves both projections: choosing a package in the graph expands that file in the outline and scrolls it into view, and leaves the surfaces on screen unchanged ([DR-009](../decisions/009-at-hand-interaction.md));
+- opening a package in the outline points the graph at it, the mirror of choosing its node, and closing it releases the selection;
+- the boundary between the two panes is draggable by pointer and by keyboard, within bounds that keep both panes readable, and persists with the toggle;
 - activating empty graph space clears the selection.
 
 #### spec-view-22
@@ -118,10 +122,10 @@ While the graph renders, the spec view shall carry a legend naming every channel
 
 While the graph renders, the spec view shall emphasize one package at a time through dimming alone — never recoloring, resizing, or moving a mark — under the precedence of [DR-026](../decisions/026-data-graphics-craft.md):
 
-- a selected package holds the emphasis as the stable base state, and pointer transit over the canvas never displaces it, hover taking the emphasis only after a settling delay and surrendering it on leaving;
+- a selected package holds the emphasis, and hovering never takes it — a hover reads a mark's numbers [[spec-view-26](#spec-view-26)] and leaves the picture whole, so inspecting and choosing never look alike;
 - keyboard focus reaches every node, carries the app's focus ring, and takes the emphasis the way hover does, with Enter opening the focused package [[spec-view-20](#spec-view-20)];
 - the emphasized package keeps its own marks and its citation neighbors at full strength while every other mark dims;
-- Escape dismisses a hover emphasis, then a selection.
+- Escape dismisses the hovered card, then the selection.
 
 #### spec-view-26
 
@@ -136,7 +140,7 @@ While the graph renders, the spec view shall move a camera over a fixed layout r
 
 - the camera fits the whole layout with padding when the graph opens, and re-fits when the tree, the pane size, or the toggle changes, until the reader moves it;
 - the camera pans by drag, zooms toward the pointer, and is bounded between the fitted whole and a detail limit, so the layout can never leave the canvas;
-- a labeled control returns the camera to the fitted whole, with double-click as its shortcut.
+- a labeled control returns the camera to the fitted whole.
 
 #### spec-view-28
 
@@ -310,7 +314,7 @@ Where a fixture tree carries a package item citing a peer's item, an intra-file 
 
 #### spec-view-21
 
-Where a fixture tree carries cross-file citations, the test suite shall assert the toggle round trip: the outline renders with the toggle off and the graph joins it with the toggle on, carrying one node per file and one directed edge per citing→cited pair [[spec-view-20](#spec-view-20)], the toggle's state survives a remount with the rest of the view state [[spec-view-20](#spec-view-20)], choosing a node expands that file in the outline while the outline stays on screen [[spec-view-20](#spec-view-20)], and activating empty graph space clears the selection [[spec-view-20](#spec-view-20)].
+Where a fixture tree carries cross-file citations, the test suite shall assert the toggle round trip: the outline renders with the toggle off and the graph joins it with the toggle on, carrying one node per file and one directed edge per citing→cited pair [[spec-view-20](#spec-view-20)], the toggle's state survives a remount with the rest of the view state [[spec-view-20](#spec-view-20)], choosing a node expands that file in the outline while the outline stays on screen [[spec-view-20](#spec-view-20)], opening a package in the outline points the graph at it [[spec-view-20](#spec-view-20)], the divider moves the split within its bounds [[spec-view-20](#spec-view-20)], and activating empty graph space clears the selection [[spec-view-20](#spec-view-20)].
 
 #### spec-view-38
 
@@ -326,7 +330,7 @@ Where a fixture tree renders twice, the test suite shall assert the layout contr
 
 #### spec-view-41
 
-Where a fixture tree renders with the graph on, the test suite shall assert the graph's interaction: a selection survives pointer transit across the canvas [[spec-view-25](#spec-view-25)], keyboard focus reaches a node and Enter opens it [[spec-view-25](#spec-view-25)], Escape dismisses hover emphasis before selection [[spec-view-25](#spec-view-25)], a node's card states the item total with its per-group breakdown and citation counts [[spec-view-26](#spec-view-26)], an edge's card states its citation count [[spec-view-26](#spec-view-26)], the camera's control restores the fitted whole after a pan [[spec-view-27](#spec-view-27)], and an active search marks matching nodes while a filter toggle leaves the graph's counts whole [[spec-view-29](#spec-view-29)].
+Where a fixture tree renders with the graph on, the test suite shall assert the graph's interaction: a selection survives pointer transit across the canvas [[spec-view-25](#spec-view-25)], keyboard focus reaches a node and Enter opens it [[spec-view-25](#spec-view-25)], Escape dismisses hover emphasis before selection [[spec-view-25](#spec-view-25)], a hover states a node's numbers without dimming the picture [[spec-view-25](#spec-view-25)], a node's card states the item total with its per-group breakdown and citation counts [[spec-view-26](#spec-view-26)], an edge's card states its citation count [[spec-view-26](#spec-view-26)], the camera's control restores the fitted whole after a pan [[spec-view-27](#spec-view-27)], and an active search marks matching nodes while a filter toggle leaves the graph's counts whole [[spec-view-29](#spec-view-29)].
 
 ### Confinement Coverage
 

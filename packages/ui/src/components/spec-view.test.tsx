@@ -413,7 +413,9 @@ describe("SPECV-3: item rows", () => {
     const chip = screen.getByRole("button", { name: "Copy AUTH-2" });
     fireEvent.click(chip);
     expect(writeText).toHaveBeenCalledWith("AUTH-2");
-    await waitFor(() => expect(chip.textContent).toContain("✓"));
+    await waitFor(() =>
+      expect(screen.getByTestId("copied-AUTH-2")).toBeTruthy(),
+    );
     expect(liveText()).toBe("Copied AUTH-2");
   });
 
@@ -1150,7 +1152,17 @@ describe("spec-view-20: citation graph beside the outline", () => {
       configurable: true,
       get: () => 600,
     });
+    // The graph measures its own drawing surface, which jsdom reports
+    // as zero unless the box is stubbed too.
+    const rect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function () {
+      return {
+        x: 0, y: 0, left: 0, top: 0, right: 800, bottom: 600,
+        width: 800, height: 600, toJSON: () => ({}),
+      } as DOMRect;
+    };
     return () => {
+      Element.prototype.getBoundingClientRect = rect;
       if (width) Object.defineProperty(HTMLElement.prototype, "clientWidth", width);
       if (height)
         Object.defineProperty(HTMLElement.prototype, "clientHeight", height);
@@ -1158,8 +1170,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
   };
 
   const showGraph = () => {
+    // The graph is on by default (spec-view-20): nothing to click.
     render(<Harness tree={GRAPH_TREE} />);
-    fireEvent.click(screen.getByTestId("view-graph"));
   };
 
   const node = (name: string) => screen.getByTestId(`graph-node-${name}`);
@@ -1168,18 +1180,20 @@ describe("spec-view-20: citation graph beside the outline", () => {
   const radiusOf = (name: string) => Number(circleOf(name).getAttribute("r"));
   const edge = (from: string, to: string) =>
     screen.getByTestId(`graph-edge-${from}--${to}`);
+  /** The graph pane's share of the split, as the style carries it. */
+  const graphPaneShare = () => {
+    const pane = screen.getByTestId("spec-graph").parentElement as HTMLElement;
+    return parseFloat(pane.style.getPropertyValue("--graph-share"));
+  };
 
   test("the toggle adds the graph beside the outline and keeps one selection", () => {
     const restore = sized();
     render(<Harness tree={GRAPH_TREE} />);
 
-    // The outline is permanent: it renders before the graph exists
+    // The graph opens with the view, beside a permanent outline
     // (spec-view-20).
-    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
-    expect(screen.queryByTestId("spec-graph")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("view-graph"));
     expect(screen.getByTestId("spec-graph")).toBeTruthy();
+    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
     // The outline and its own controls stay beside it (spec-view-29).
     expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
     expect(screen.getByTestId("filter-external")).toBeTruthy();
@@ -1217,11 +1231,32 @@ describe("spec-view-20: citation graph beside the outline", () => {
     fireEvent.click(screen.getByLabelText("Spec package citation graph"));
     expect(screen.queryByTestId("graph-halo-billing")).toBeNull();
 
-    // Toggling back leaves the outline alone on the surface.
+    // The link runs both ways: opening a package in the outline points
+    // the graph at it, and closing it releases the selection
+    // (spec-view-20).
+    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByTestId("file-toggle-session"));
+    expect(screen.getByTestId("graph-halo-session")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("file-toggle-session"));
+    expect(screen.queryByTestId("graph-halo-session")).toBeNull();
+
+    // The divider moves the split, within bounds (spec-view-20).
+    const divider = screen.getByTestId("graph-split");
+    fireEvent.keyDown(divider, { key: "ArrowRight" });
+    const wider = graphPaneShare();
+    fireEvent.keyDown(divider, { key: "ArrowLeft" });
+    expect(graphPaneShare()).toBeLessThan(wider);
+
+    // Toggling off leaves the outline alone on the surface, and back
+    // on restores the graph.
     fireEvent.click(screen.getByTestId("view-graph"));
     expect(screen.queryByTestId("spec-graph")).toBeNull();
     expect(screen.getByTestId("filter-external")).toBeTruthy();
     expect(screen.getByTestId("records-toggle")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("view-graph"));
+    expect(screen.getByTestId("spec-graph")).toBeTruthy();
     restore();
   });
 
@@ -1244,12 +1279,12 @@ describe("spec-view-20: citation graph beside the outline", () => {
     };
     const first = render(<Persisting />);
     fireEvent.click(screen.getByTestId("view-graph"));
-    expect(screen.getByTestId("spec-graph")).toBeTruthy();
-    expect(saved.graph).toBe(true);
+    expect(screen.queryByTestId("spec-graph")).toBeNull();
+    expect(saved.graph).toBe(false);
     first.unmount();
 
     render(<Persisting />);
-    expect(screen.getByTestId("spec-graph")).toBeTruthy();
+    expect(screen.queryByTestId("spec-graph")).toBeNull();
   });
 
   // spec-view-38: the encodings, and the legend that keys them.
@@ -1312,8 +1347,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // Every channel and affordance in use is keyed (spec-view-24).
     const graph = screen.getByTestId("spec-graph");
     for (const key of [
-      "cited by peers",
-      "not cited by peers",
+      "cited by packages",
+      "not cited by packages",
       "size — items",
       "width — citations",
       "arrow — cites",
@@ -1384,9 +1419,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const citedCircle = circleOf("auth").getAttribute("class") ?? "";
     const uncitedCircle = circleOf("glossary").getAttribute("class") ?? "";
     const edgeLine = edge("billing", "auth").getAttribute("class") ?? "";
-    const label = (node("auth").querySelectorAll("text")[1].getAttribute(
-      "class",
-    ) ?? "");
+    const label =
+      screen.getByTestId("graph-label-auth").getAttribute("class") ?? "";
     const numeral =
       node("auth").querySelectorAll("text")[0].getAttribute("class") ?? "";
     const legend =
@@ -1421,7 +1455,6 @@ describe("spec-view-20: citation graph beside the outline", () => {
       ]);
 
     const first = render(<Harness tree={GRAPH_TREE} />);
-    fireEvent.click(screen.getByTestId("view-graph"));
     const settled = positions();
     // A package no citation reaches still holds a place in the
     // layout (spec-view-28).
@@ -1457,7 +1490,6 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // The same tree settles the same picture, and the drag is gone
     // (spec-view-28).
     render(<Harness tree={GRAPH_TREE} />);
-    fireEvent.click(screen.getByTestId("view-graph"));
     expect(positions()).toEqual(settled);
     restore();
   });
@@ -1467,12 +1499,16 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const restore = sized();
     showGraph();
 
-    // A selection is the stable base state: pointer transit does not
-    // take it (spec-view-25).
+    // A selection is the stable base state, and hovering never takes
+    // it — a hover reads numbers and leaves the picture whole
+    // (spec-view-25).
     fireEvent.click(node("auth"));
     expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    const dimBefore = node("glossary").getAttribute("opacity");
     fireEvent.mouseEnter(node("glossary"));
     expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    expect(node("glossary").getAttribute("opacity")).toBe(dimBefore);
+    expect(screen.queryByTestId("graph-halo-glossary")).toBeNull();
     fireEvent.mouseLeave(node("glossary"));
 
     // Keyboard focus reaches a node, shows its card, and Enter opens
@@ -1485,7 +1521,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(within(card).getByLabelText("2 external items")).toBeTruthy();
     expect(within(card).getByLabelText("1 internal items")).toBeTruthy();
     expect(within(card).getByLabelText("0 test items")).toBeTruthy();
-    expect(within(card).getByText(/1 cited by peers/)).toBeTruthy();
+    expect(within(card).getByText(/cites 3 · cited by 1/)).toBeTruthy();
     fireEvent.keyDown(node("billing"), { key: "Enter" });
     expect(
       screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),
@@ -1509,6 +1545,39 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(scaleOf(layer())).toBeGreaterThan(fitted);
     fireEvent.click(screen.getByTestId("graph-fit"));
     expect(scaleOf(layer())).toBeCloseTo(fitted, 6);
+    restore();
+  });
+
+  test("a search narrows the outline to the packages that answer it", () => {
+    const restore = sized();
+    showGraph();
+    const search = screen.getByLabelText("Filter items by ID or text");
+
+    // A package holding no match leaves the outline for the search's
+    // duration; a group filter leaves every package standing
+    // (spec-view-5, spec-view-4).
+    fireEvent.change(search, { target: { value: "billing-3" } });
+    expect(screen.getByTestId("file-toggle-billing")).toBeTruthy();
+    expect(screen.queryByTestId("file-toggle-auth")).toBeNull();
+    expect(screen.queryByTestId("file-toggle-glossary")).toBeNull();
+    // The graph still maps the whole tree (spec-view-29).
+    expect(node("glossary")).toBeTruthy();
+
+    // The box offers a way out, and so does Escape (spec-view-5).
+    fireEvent.click(screen.getByTestId("search-clear"));
+    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
+    expect(screen.queryByTestId("search-clear")).toBeNull();
+
+    fireEvent.change(search, { target: { value: "billing-3" } });
+    expect(screen.queryByTestId("file-toggle-auth")).toBeNull();
+    fireEvent.keyDown(search, { key: "Escape" });
+    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
+
+    // A filter, by contrast, keeps every package on screen
+    // (spec-view-4).
+    fireEvent.click(screen.getByTestId("filter-external"));
+    expect(screen.getByTestId("file-toggle-auth")).toBeTruthy();
+    expect(screen.getByTestId("file-toggle-glossary")).toBeTruthy();
     restore();
   });
 

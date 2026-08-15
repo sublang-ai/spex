@@ -47,6 +47,8 @@ import {
   treeCounts,
   visibleFileItems,
   GROUP_ORDER,
+  MAX_GRAPH_WIDTH,
+  MIN_GRAPH_WIDTH,
   type CitationModel,
   type ItemLocation,
   type SpecDirNode,
@@ -128,6 +130,9 @@ function useTransient(
 }
 
 export interface SpecViewProps {
+  /** The project whose tree this is; names the surface, since "Specs"
+   * is already the tab's own word. */
+  projectName?: string;
   /** Absent while the first specs.get is still in flight. */
   tree?: SpecTreeState;
   /** First load in flight. */
@@ -176,6 +181,10 @@ export function SpecView(props: SpecViewProps) {
   // permanent and the graph joins it under one persisted toggle. The
   // selection is shared, so both projections point at one file.
   const [graphSelection, setGraphSelection] = useState<string | null>(null);
+  // The split's live fraction while the divider is under the pointer;
+  // committed to the view state on release.
+  const splitRef = useRef<HTMLDivElement | null>(null);
+  const [dragSplit, setDragSplit] = useState<number | null>(null);
   const [collapsedDirs, setCollapsedDirs] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -322,9 +331,14 @@ export function SpecView(props: SpecViewProps) {
   }
 
   function toggleFile(key: string) {
+    // One selection, two projections: opening a package in the outline
+    // points the graph at it, the mirror of a node click, and closing
+    // it lets the selection go (spec-view-20).
+    const opening = !isFileExpanded(key);
+    setGraphSelection(opening ? key : null);
     if (searching) {
       const next = new Map(searchOverrides);
-      next.set(key, !isFileExpanded(key));
+      next.set(key, opening);
       setSearchOverrides(next);
       return;
     }
@@ -842,6 +856,20 @@ export function SpecView(props: SpecViewProps) {
     );
   };
 
+  // A search is a query with an answer set, so packages holding no
+  // answer leave the outline rather than lining up empty
+  // (spec-view-5). A jump target revealed despite the search keeps its
+  // package on screen (spec-view-6). Group filters are a lens on item
+  // kinds instead, so they leave every package standing.
+  const fileMatches = (file: SpecFileInfo): boolean =>
+    !searching ||
+    search.fileKeys.has(file.key) ||
+    file.items.some((item) => revealed.has(item.id));
+  const dirMatches = (dir: SpecDirNode): boolean =>
+    !searching ||
+    dir.files.some(fileMatches) ||
+    dir.dirs.some(dirMatches);
+
   const renderDir = (dir: SpecDirNode, label?: string): ReactNode => {
     const open = searching || !collapsedDirs.has(dir.path);
     return (
@@ -878,8 +906,8 @@ export function SpecView(props: SpecViewProps) {
         </button>
         {open ? (
           <ul className="ml-[7px] flex flex-col border-l border-neutral-200 pl-3 dark:border-neutral-800">
-            {dir.dirs.map((child) => renderDir(child))}
-            {dir.files.map(renderFile)}
+            {dir.dirs.filter(dirMatches).map((child) => renderDir(child))}
+            {dir.files.filter(fileMatches).map(renderFile)}
           </ul>
         ) : null}
       </li>
@@ -915,7 +943,9 @@ export function SpecView(props: SpecViewProps) {
     >
       {liveRegion}
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-lg font-semibold">Specs</h1>
+        <h1 className="text-lg font-semibold">
+          {props.projectName ?? "Specs"}
+        </h1>
         <span className="text-xs text-neutral-400">
           {totals.packages} package{totals.packages === 1 ? "" : "s"} ·{" "}
           {totals.items} items
@@ -1009,10 +1039,30 @@ export function SpecView(props: SpecViewProps) {
               onChange={(event) =>
                 onViewState({ ...viewState, search: event.target.value })
               }
+              onKeyDown={(event) => {
+                // Live search has nothing to submit; Escape is the
+                // standard way out of a search field.
+                if (event.key === "Escape" && viewState.search) {
+                  event.preventDefault();
+                  onViewState({ ...viewState, search: "" });
+                }
+              }}
               placeholder="Filter items — ID or text…"
               aria-label="Filter items by ID or text"
               className="min-w-40 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
             />
+            {searching ? (
+              <button
+                type="button"
+                data-testid="search-clear"
+                aria-label="Clear the search"
+                title="Clear the search (Escape)"
+                onClick={() => onViewState({ ...viewState, search: "" })}
+                className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              >
+                ✕
+              </button>
+            ) : null}
             {searching ? (
               <span
                 data-testid="match-count"
@@ -1030,9 +1080,33 @@ export function SpecView(props: SpecViewProps) {
         // The outline is permanent; the graph joins it beside
         // (spec-view-20). Both panes scroll independently, and the
         // graph's own affordances live on the graph pane.
+        const share = dragSplit ?? viewState.graphWidth;
+        const commitSplit = (fraction: number) => {
+          const clamped = Math.min(
+            MAX_GRAPH_WIDTH,
+            Math.max(MIN_GRAPH_WIDTH, fraction),
+          );
+          setDragSplit(null);
+          onViewState({ ...viewState, graphWidth: clamped });
+        };
+        const fractionAt = (clientX: number): number | null => {
+          const box = splitRef.current?.getBoundingClientRect();
+          if (!box || !box.width) return null;
+          return Math.min(
+            MAX_GRAPH_WIDTH,
+            Math.max(MIN_GRAPH_WIDTH, (clientX - box.left) / box.width),
+          );
+        };
+
         return graphful ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-            <div className="min-h-0 flex-1 lg:h-full lg:w-1/2 lg:flex-none">
+          <div
+            ref={splitRef}
+            className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-0"
+          >
+            <div
+              className="min-h-0 flex-1 lg:h-full lg:w-[var(--graph-share)] lg:flex-none"
+              style={{ ["--graph-share" as string]: `${share * 100}%` }}
+            >
               <SpecGraph
                 files={tree.files}
                 selectedKey={graphSelection}
@@ -1041,6 +1115,43 @@ export function SpecView(props: SpecViewProps) {
                 onClearSelection={() => setGraphSelection(null)}
                 onOpenFile={openFromGraph}
               />
+            </div>
+            {/* The reader sets the balance, within bounds that keep
+                both panes readable (spec-view-20). */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize the graph pane"
+              tabIndex={0}
+              data-testid="graph-split"
+              className="group hidden shrink-0 cursor-col-resize items-stretch px-2 lg:flex"
+              onPointerDown={(event) => {
+                (event.currentTarget as Element).setPointerCapture?.(
+                  event.pointerId,
+                );
+              }}
+              onPointerMove={(event) => {
+                if (!event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+                  return;
+                }
+                const next = fractionAt(event.clientX);
+                if (next !== null) setDragSplit(next);
+              }}
+              onPointerUp={(event) => {
+                const next = fractionAt(event.clientX);
+                commitSplit(next ?? share);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  commitSplit(share - 0.05);
+                } else if (event.key === "ArrowRight") {
+                  event.preventDefault();
+                  commitSplit(share + 0.05);
+                }
+              }}
+            >
+              <span className="w-px bg-neutral-200 transition-colors group-hover:bg-brand-600 dark:bg-neutral-800 dark:group-hover:bg-brand-400" />
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               {outlineControls}
@@ -1332,8 +1443,15 @@ function ItemRow({
           className={`shrink-0 cursor-pointer rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold hover:ring-1 hover:ring-neutral-400 dark:hover:ring-neutral-500 ${GROUP_CHIP[group]}`}
         >
           {item.id}
-          {copied ? <span aria-hidden="true"> ✓</span> : null}
         </button>
+        {copied ? (
+          <span
+            data-testid={`copied-${item.id}`}
+            className="shrink-0 text-[11px] text-neutral-500 dark:text-neutral-400"
+          >
+            copied
+          </span>
+        ) : null}
         {copyFailed ? (
           <span className="shrink-0 text-[11px] text-red-600 dark:text-red-400">
             copy failed

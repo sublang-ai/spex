@@ -38,14 +38,23 @@ export interface SpecViewState {
   /** Whether the citation graph stands beside the outline; the
    * outline itself is permanent (spec-view-20). */
   graph: boolean;
+  /** The graph pane's share of the split, as a fraction of the
+   * surface's width (spec-view-20). */
+  graphWidth: number;
 }
+
+/** The split's bounds: neither pane may be squeezed past reading
+ * (spec-view-20). */
+export const MIN_GRAPH_WIDTH = 0.25;
+export const MAX_GRAPH_WIDTH = 0.65;
 
 export const initialSpecViewState: SpecViewState = {
   filters: { external: true, internal: true, test: true },
   search: "",
   expandedFiles: [],
   expandedItems: [],
-  graph: false,
+  graph: true,
+  graphWidth: 0.4,
 };
 
 /** Coerce a possibly-stale persisted view state to the current shape.
@@ -62,6 +71,7 @@ export function normalizeSpecViewState(value: unknown): SpecViewState {
     expandedFiles?: unknown;
     expandedItems?: unknown;
     graph?: unknown;
+    graphWidth?: unknown;
   };
   const strings = (entry: unknown): entry is string[] =>
     Array.isArray(entry) && entry.every((e) => typeof e === "string");
@@ -75,11 +85,19 @@ export function normalizeSpecViewState(value: unknown): SpecViewState {
   ) {
     return initialSpecViewState;
   }
-  // The graph toggle joined the persisted state after the fields
-  // above; a state written before it stays valid and starts with the
-  // outline alone (spec-view-20).
-  if (typeof state.graph !== "boolean") {
-    return { ...(value as SpecViewState), graph: false };
+  // The graph fields joined the persisted state after the ones above;
+  // a state written before them stays valid and takes the defaults
+  // (spec-view-20).
+  const graph =
+    typeof state.graph === "boolean" ? state.graph : initialSpecViewState.graph;
+  const graphWidth =
+    typeof state.graphWidth === "number" &&
+    state.graphWidth >= MIN_GRAPH_WIDTH &&
+    state.graphWidth <= MAX_GRAPH_WIDTH
+      ? state.graphWidth
+      : initialSpecViewState.graphWidth;
+  if (graph !== state.graph || graphWidth !== state.graphWidth) {
+    return { ...(value as SpecViewState), graph, graphWidth };
   }
   return value as SpecViewState;
 }
