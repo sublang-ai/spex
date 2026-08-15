@@ -22,7 +22,7 @@ While a project session is live, when the session record stream delivers a capta
 | --- | --- |
 | ◇ | engagement start, stop, and finished status |
 | ◆ | failure and await-Boss-reply notices |
-| ▸ ⮕ ⤷ | playbook state-machine progress stream |
+| ▸ ⮕ ⤷ | playbook state-machine progress stream — absorbed by the machine card while its run's frame is open [[run-view-60](#run-view-60)] |
 
 #### run-view-2
 
@@ -194,6 +194,41 @@ The session state chip shall show a human-readable label (amber while waiting on
 
 When new content arrives below the fold of a scrolled-up Captain or player pane, the pane shall show a jump-to-latest pill that scrolls to the bottom and resumes following.
 
+### Machine Cards
+
+#### run-view-60
+
+While a playbook run's trace records flow in a live session, the Captain pane shall draw that run as a live statechart card — one labeled box per state, one directed edge per transition, laid out left to right from the initial state, deterministically per machine ([DR-028](../decisions/028-run-machine-view.md)):
+
+- the card renders read-only, never intercepting the composer;
+- while the run's frame is open, the glyph progress lines of that run fold into the card instead of the thread [[run-view-1](#run-view-1)], while failure lines always stay in the thread [[run-view-2](#run-view-2)];
+- state labels are the human labels with raw ids in tooltips, matching the chip's law [[run-view-59](#run-view-59)].
+
+#### run-view-61
+
+While a machine card is live, the Captain pane shall show the run's state through the status palette, one voice per state kind ([DR-028](../decisions/028-run-machine-view.md)):
+
+- the active state carries the running emphasis, a parked state awaiting the Boss carries the attention emphasis, a failed state carries the failure emphasis, and every other state stays quiet ink;
+- a firing transition flashes once and decays in well under a second, instantly under the reduced-motion preference;
+- every transition shows its direction at rest with a constant-size glyph;
+- the active state names the player it runs and shows that player's running activity, when the trace attributes one.
+
+#### run-view-62
+
+When a playbook run's trace settles or its invocation is disposed, the Captain pane shall settle that run's card into the thread as a static history entry at its finish position, carrying the machine's final drawing and outcome, and shall empty the live region of that frame ([DR-028](../decisions/028-run-machine-view.md)).
+
+#### run-view-63
+
+While two or more machine frames are open at once, the Captain pane shall stack their live cards ordered by call depth — the parent first, each child visually joined to its caller — each card live and independently drawn ([DR-028](../decisions/028-run-machine-view.md)).
+
+#### run-view-64
+
+Where a run's machine definition is unavailable over the artifacts contract [[playbook-library-36](playbook-library.md#playbook-library-36)], the machine card shall draw the observed truth alone — the states and transitions the trace has delivered — and never block, error, or drop the card for the missing definition ([DR-028](../decisions/028-run-machine-view.md)).
+
+#### run-view-65
+
+When the session record stream delivers a captain turn result reporting an error, the Captain pane shall display the synthesized failure line naming the underlying cause [[core-service-30](core-service.md#core-service-30)] as a ◆ failure line [[run-view-2](#run-view-2)], never only the captain's composed reply.
+
 ### Keyboard and Guardrails (DR-010 §4/§6)
 
 #### run-view-42
@@ -327,7 +362,20 @@ The start view shall obtain projects, playbooks, captain identity, and readiness
 
 #### run-view-20
 
-Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per visible player, player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards [[run-view-4](#run-view-4)], and every completed turn with usage data shows its usage and cost [[run-view-6](#run-view-6)].
+Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per visible player, player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards [[run-view-4](#run-view-4)], every completed turn with usage data shows its usage and cost [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
+
+#### run-view-66
+
+Where a fixture stream carries a playbook run's trace records — an invocation start, transitions, a player call attributed to a state, a nested invocation at greater depth, and a settled finish — the test suite shall assert the machine cards over a replay [[run-view-14](#run-view-14)]:
+
+- a live card opens with the frame and draws the machine with the active state emphasized [[run-view-60](#run-view-60)] [[run-view-61](#run-view-61)];
+- the glyph progress lines of the framed run leave the thread while failure lines stay [[run-view-60](#run-view-60)];
+- the active state names its attributed player while that player runs [[run-view-61](#run-view-61)];
+- the nested invocation stacks a second card joined to its caller, ordered by depth [[run-view-63](#run-view-63)];
+- the settled finish moves the card into the thread as a static entry and empties the live region [[run-view-62](#run-view-62)];
+- with no machine definition served, the same replay still renders the card from observed states alone [[run-view-64](#run-view-64)];
+- a fixture captain reply record renders as Captain speech in the thread [[run-view-1](#run-view-1)];
+- a fixture captain result reporting an error renders the synthesized cause as a failure line [[run-view-65](#run-view-65)].
 
 #### run-view-21
 

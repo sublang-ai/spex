@@ -76,6 +76,21 @@ When the user opens a configured playbook's pipeline view, the Library shall pre
 
 Where a stage artifact cannot be located for a playbook, when the pipeline view is opened, the Library shall show which stages are available and name the missing ones, keeping the available stages readable.
 
+### Pipeline Artifact Handling
+
+#### playbook-library-24
+
+When a client requests a playbook's artifacts, the core package shall resolve them from the registry module's location: the compiled library layout (`<id>.md`, `<id>.playbook/<id>.gears.md`, `<id>.playbook/<id>.fsm.ts`) and the published-package layout used by `@sublang/playbook` registries, serving each stage's content, the state ids derived from the FSM, and the machine graph [[playbook-library-36](#playbook-library-36)] over the protocol, and naming absent stages without failing the request.
+
+#### playbook-library-36
+
+When the core package derives a playbook's artifacts from its FSM, the core package shall serve the machine graph beside the state ids, derived from the machine's own config rather than its source text ([DR-028](../decisions/028-run-machine-view.md)):
+
+- nodes carry the state id, its parent for a nested state, its kind (a final state named as such), the player role the state invokes when its meta names one, and its tags;
+- edges carry a stable identity of owner state, event, branch index, and target index — guarded sibling branches staying distinct — with the event name as the label and an empty event naming the always transition;
+- the graph names its initial state;
+- a machine that cannot be loaded serves a null graph, named among the absent stages without failing the request.
+
 ### Naming and Copy
 
 #### playbook-library-26
@@ -172,12 +187,6 @@ When playbook loading imports a config `from` module that is a file path, and th
 #### playbook-library-16
 
 When the config writer updates the shared config file — enabled state [[playbook-library-3](#playbook-library-3)], role-mapping edits [[playbook-library-4](#playbook-library-4)], or registration [[playbook-library-7](#playbook-library-7)] — it shall preserve comments, key order, and formatting of untouched content byte-for-byte, shall modify only the targeted keys, and shall replace the file atomically so an interrupted write cannot leave a partially written config.
-
-### Pipeline Artifact Handling
-
-#### playbook-library-24
-
-When a client requests a playbook's artifacts, the core package shall resolve them from the registry module's location: the compiled library layout (`<id>.md`, `<id>.playbook/<id>.gears.md`, `<id>.playbook/<id>.fsm.ts`) and the published-package layout used by `@sublang/playbook` registries, serving each stage's content and the state ids derived from the FSM over the protocol, and naming absent stages without failing the request.
 
 ## Verification
 

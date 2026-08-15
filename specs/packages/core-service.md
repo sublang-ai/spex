@@ -71,6 +71,10 @@ While a session is live, when the embedded runtime emits a record not marked hid
 
 While a session is live, when the embedded runtime emits a record marked hidden (for example judge or router traffic), the core service shall deliver it only to clients subscribed to the debug channel and shall not deliver it on any session subscription, per [DR-003](../decisions/003-runtime-reuse.md).
 
+#### core-service-30
+
+While a session is live, when the embedded runtime emits a captain result record marked hidden whose result reports an error, the core service shall synthesize a visible failure record carrying the underlying error text into the session stream ([DR-028](../decisions/028-run-machine-view.md)) — the cause reaches every session subscriber [[core-service-7](#core-service-7)] while the hidden record itself stays off the session channel [[core-service-8](#core-service-8)].
+
 ### Readiness
 
 #### core-service-9
@@ -182,6 +186,10 @@ Where the core service runs with a valid config and the scripted fake adapter [[
 - the turn ends with a finished record;
 - a second Boss submission during the turn is rejected with a busy error and starts no turn [[core-service-5](#core-service-5)];
 - no network connection is opened during the run [[core-service-18](#core-service-18)].
+
+#### core-service-31
+
+Where a session's captain finishes a turn with a hidden result reporting an error, the test suite shall assert the synthesized surfacing of [[core-service-30](#core-service-30)]: a session subscriber receives a visible failure record carrying the underlying error text with the turn's id, and no hidden record reaches the session channel [[core-service-8](#core-service-8)].
 
 ### Record Visibility Coverage
 
