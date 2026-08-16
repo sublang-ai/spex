@@ -36,6 +36,8 @@ const SESSION: SessionInfo = {
   endedAt: null,
   players: PLAYERS,
   initialVisible: INITIAL_VISIBLE,
+  turns: 0,
+  failed: false,
 };
 
 function renderRun(entries: typeof FULL_RUN) {

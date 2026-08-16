@@ -21,10 +21,29 @@ import { Icon } from "./Icon.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
 
-export interface PastSessionEntry {
-  id: string;
-  projectName: string;
-  endedAt: number | null;
+/** Storage access that tolerates a browser that has none (private
+ * mode, file://, a headless test): the home must render regardless. */
+function safeRead(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  key: string,
+): string | null {
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeWrite(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  key: string,
+  value: string,
+): void {
+  try {
+    storage.setItem(key, value);
+  } catch {
+    // Dismissal is best-effort.
+  }
 }
 
 export interface CaptainHomeProps {
@@ -38,10 +57,6 @@ export interface CaptainHomeProps {
   /** Adapter-keyed, deduped readiness entries (DR-019). */
   readiness: ReadinessEntry[];
   connected: boolean;
-  pastSessions?: PastSessionEntry[];
-  /** Past list scope; the toggle shows when the handler is wired. */
-  pastScope?: "project" | "all";
-  onTogglePastScope?: () => void;
   /** Invalid/missing config surfaces in the thread (DR-010 §5). */
   configStatus?: "valid" | "invalid" | "missing";
   configErrors?: string[];
@@ -55,7 +70,6 @@ export interface CaptainHomeProps {
   onNavigate: (surface: "Settings" | "Playbooks") => void;
   /** Apply a merge patch to the Captain's block (captain.set). */
   onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
-  onOpenPast?: (sessionId: string) => void;
   onStart: (text: string) => Promise<void>;
   /** Storage for the quick-start dismissal (tests inject a stub). */
   storage?: Pick<Storage, "getItem" | "setItem">;
@@ -99,14 +113,13 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [slashDismissed, setSlashDismissed] = useState(false);
   const [rechecking, setRechecking] = useState(false);
   const [quickStartHidden, setQuickStartHidden] = useState(
-    () => storage.getItem(QUICK_START_KEY) === "1",
+    () => safeRead(storage, QUICK_START_KEY) === "1",
   );
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [captainPopover, setCaptainPopover] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const gearRef = useRef<HTMLButtonElement>(null);
-  const [showAllPast, setShowAllPast] = useState(false);
 
   const captainReadiness = captain
     ? readiness.find((entry) => entry.adapter === captain.adapter)
@@ -147,11 +160,7 @@ export function CaptainHome(props: CaptainHomeProps) {
   // project chip, composer — instead of hugging the bottom fifth of
   // an empty window (DR-010 §8). Any real content reverts to the IM
   // bottom-docked layout.
-  const emptyCanvas =
-    (props.pastSessions?.length ?? 0) === 0 &&
-    notReady.length === 0 &&
-    !configBroken &&
-    !error;
+  const emptyCanvas = notReady.length === 0 && !configBroken && !error;
 
   return (
     <div
@@ -265,7 +274,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 title="Hide quick start (playbooks stay under / in the composer)"
                 aria-label="Hide the quick-start card"
                 onClick={() => {
-                  storage.setItem(QUICK_START_KEY, "1");
+                  safeWrite(storage, QUICK_START_KEY, "1");
                   setQuickStartHidden(true);
                 }}
                 className="ml-auto flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
@@ -294,57 +303,6 @@ export function CaptainHome(props: CaptainHomeProps) {
                 +{playbooks.length - 4} more under{" "}
                 <span className="font-mono">/</span>
               </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {props.pastSessions && props.pastSessions.length > 0 ? (
-          <div
-            data-testid="past-sessions"
-            className="ml-8 flex max-w-[85%] flex-col gap-0.5"
-          >
-            <span className="flex items-baseline gap-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-              Past sessions
-              {props.onTogglePastScope ? (
-                <button
-                  type="button"
-                  data-testid="past-scope-toggle"
-                  onClick={props.onTogglePastScope}
-                  className="font-normal normal-case tracking-normal text-brand-600 hover:underline dark:text-brand-300"
-                >
-                  {props.pastScope === "all"
-                    ? "this project only"
-                    : "all projects"}
-                </button>
-              ) : null}
-            </span>
-            {(showAllPast
-              ? props.pastSessions
-              : props.pastSessions.slice(0, 5)
-            ).map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                data-testid={`past-session-${entry.id}`}
-                onClick={() => props.onOpenPast?.(entry.id)}
-                className="flex items-baseline gap-2 rounded-md px-2 py-1 text-left text-xs text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
-              >
-                <span className="font-medium">{entry.projectName}</span>
-                <span className="text-neutral-400">
-                  {entry.endedAt
-                    ? new Date(entry.endedAt).toLocaleString()
-                    : "ended"}
-                </span>
-              </button>
-            ))}
-            {!showAllPast && props.pastSessions.length > 5 ? (
-              <button
-                type="button"
-                onClick={() => setShowAllPast(true)}
-                className="px-2 py-1 text-left text-[11px] text-brand-600 hover:underline dark:text-brand-300"
-              >
-                show all {props.pastSessions.length}
-              </button>
             ) : null}
           </div>
         ) : null}

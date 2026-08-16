@@ -37,6 +37,8 @@ function liveSession(id: string, projectId: string): SessionInfo {
     endedAt: null,
     players: [],
     initialVisible: [],
+    turns: 0,
+    failed: false,
   };
 }
 

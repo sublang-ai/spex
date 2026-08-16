@@ -76,6 +76,15 @@ export interface AppState {
   /** Per-project last-active workspace tab: a session id, "start",
    * "specs", or "repo" (DR-011 workspace memory). */
   workspaceTabs: Record<string, string>;
+  /** Per-project working set (run-view-57): the sessions open as
+   * tabs, in the order they were opened. This launch's, not durable —
+   * the sidebar is what carries history across launches. */
+  openTabs: Record<string, string[]>;
+  /** Sidebar chrome (DR-030), persisted app-wide. */
+  railCollapsed: boolean;
+  /** Per-project sidebar disclosure (run-view-67), persisted; a
+   * project with no entry follows the current-project default. */
+  expandedProjects: Record<string, boolean>;
   /** Parsed specs trees per project (specs.get). */
   specTrees: Record<string, SpecTreeState>;
   /** Spec-view load failures per project. */
@@ -89,6 +98,12 @@ export interface AppState {
   refresh(): Promise<void>;
   setCurrentProject(projectId: string | undefined): void;
   setWorkspaceTab(projectId: string, tab: string): void;
+  /** Add a session to a project's working set (idempotent). */
+  openTab(projectId: string, sessionId: string): void;
+  /** File a session out of the working set — never ends it. */
+  closeTab(projectId: string, sessionId: string): void;
+  setRailCollapsed(collapsed: boolean): void;
+  toggleProjectExpanded(projectId: string, expanded: boolean): void;
   /** Register a folder, silently git-initializing non-repos
    * (RUN-27); the palette and any surface share this one action. */
   addProjectByPath(path: string): Promise<ProjectInfo>;
@@ -135,6 +150,8 @@ export interface AppState {
 let client: SpexClient | undefined;
 
 const CURRENT_PROJECT_KEY = "spex.currentProject";
+const RAIL_COLLAPSED_KEY = "spex.railCollapsed";
+const EXPANDED_PROJECTS_KEY = "spex.expandedProjects";
 
 /** localStorage access that tolerates non-browser test environments. */
 function safeStorageGet(key: string): string | undefined {
@@ -150,6 +167,15 @@ function safeStorageSet(key: string, value: string): void {
     window.localStorage.setItem(key, value);
   } catch {
     // Persistence is best-effort.
+  }
+}
+
+function readExpandedProjects(): Record<string, boolean> {
+  try {
+    const raw = safeStorageGet(EXPANDED_PROJECTS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
   }
 }
 
@@ -354,6 +380,9 @@ export const useAppStore = create<AppState>((set, get) => {
     composers: {},
     runErrors: {},
     workspaceTabs: {},
+    openTabs: {},
+    railCollapsed: safeStorageGet(RAIL_COLLAPSED_KEY) === "1",
+    expandedProjects: readExpandedProjects(),
     specTrees: {},
     specErrors: {},
     homeDraft: "",
@@ -419,6 +448,11 @@ export const useAppStore = create<AppState>((set, get) => {
       if ((!active || !live.some((s) => s.id === active)) && inProject[0]) {
         set({ activeSessionId: inProject[0].id });
       }
+      // A launch opens the current project's live session and nothing
+      // else (run-view-57): the sidebar carries the rest.
+      if (current && inProject[0]) {
+        get().openTab(current, inProject[0].id);
+      }
     },
 
     setCurrentProject(projectId: string | undefined): void {
@@ -430,6 +464,45 @@ export const useAppStore = create<AppState>((set, get) => {
       set({
         workspaceTabs: { ...get().workspaceTabs, [projectId]: tab },
       });
+    },
+
+    openTab(projectId: string, sessionId: string): void {
+      const open = get().openTabs[projectId] ?? [];
+      if (open.includes(sessionId)) return;
+      set({
+        openTabs: { ...get().openTabs, [projectId]: [...open, sessionId] },
+      });
+    },
+
+    closeTab(projectId: string, sessionId: string): void {
+      const open = get().openTabs[projectId] ?? [];
+      const index = open.indexOf(sessionId);
+      if (index < 0) return;
+      const next = open.filter((id) => id !== sessionId);
+      const updates: Partial<AppState> = {
+        openTabs: { ...get().openTabs, [projectId]: next },
+      };
+      // Closing the tab you are looking at lands on a neighbour, never
+      // on nothing (run-view-47).
+      if (get().workspaceTabs[projectId] === sessionId) {
+        const neighbour = next[index] ?? next[index - 1];
+        updates.workspaceTabs = {
+          ...get().workspaceTabs,
+          [projectId]: neighbour ?? "start",
+        };
+      }
+      set(updates);
+    },
+
+    setRailCollapsed(collapsed: boolean): void {
+      set({ railCollapsed: collapsed });
+      safeStorageSet(RAIL_COLLAPSED_KEY, collapsed ? "1" : "0");
+    },
+
+    toggleProjectExpanded(projectId: string, expanded: boolean): void {
+      const next = { ...get().expandedProjects, [projectId]: expanded };
+      set({ expandedProjects: next });
+      safeStorageSet(EXPANDED_PROJECTS_KEY, JSON.stringify(next));
     },
 
     async addProjectByPath(path: string): Promise<ProjectInfo> {
@@ -603,10 +676,12 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       set({ activeSessionId: sessionId });
       // Focusing a session always carries its project context along
-      // (DR-011): Dashboard rows and palette rows route through here.
+      // (DR-011): sidebar rows, Dashboard rows and palette rows route
+      // through here, and each puts the session in the working set.
       const session = get().sessions.find((s) => s.id === sessionId);
       if (session) {
         get().setCurrentProject(session.projectId);
+        get().openTab(session.projectId, sessionId);
         get().setWorkspaceTab(session.projectId, sessionId);
       }
     },

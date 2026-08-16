@@ -27,6 +27,8 @@ function session(id: string): SessionInfo {
     endedAt: null,
     players: PLAYERS,
     initialVisible: INITIAL_VISIBLE,
+    turns: 0,
+    failed: false,
   };
 }
 

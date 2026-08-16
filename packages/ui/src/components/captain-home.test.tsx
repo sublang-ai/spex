@@ -79,7 +79,6 @@ function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
 function renderHome({
   onStart = vi.fn(async () => {}),
   onSaveCaptain = vi.fn(async (_patch: AgentPatch) => {}),
-  onOpenPast = vi.fn(),
   onNavigate = vi.fn(),
   onOpenPalette = vi.fn(),
   hasProject = true,
@@ -90,7 +89,6 @@ function renderHome({
   readiness = READY,
   configStatus = undefined as "valid" | "invalid" | "missing" | undefined,
   configErrors = undefined as string[] | undefined,
-  pastSessions = [] as { id: string; projectName: string; endedAt: number | null }[],
   storage = memoryStorage(),
 } = {}) {
   const view = render(
@@ -107,8 +105,6 @@ function renderHome({
       onOpenPalette={onOpenPalette}
       onNavigate={onNavigate}
       onSaveCaptain={onSaveCaptain}
-      pastSessions={pastSessions}
-      onOpenPast={onOpenPast}
       onStart={onStart}
       storage={storage}
     />,
@@ -116,7 +112,6 @@ function renderHome({
   return {
     onStart,
     onSaveCaptain,
-    onOpenPast,
     onNavigate,
     onOpenPalette,
     storage,
@@ -329,21 +324,5 @@ describe("RUN-45: readiness heals at hand", () => {
     expect(bubble.textContent).toContain("ANTHROPIC_API_KEY");
     fireEvent.click(screen.getByTestId("recheck-readiness"));
     await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalled());
-  });
-});
-
-describe("RUN-36: past sessions are listed and openable", () => {
-  test("ended sessions render with project and time; click opens", () => {
-    const onOpenPast = vi.fn();
-    renderHome({
-      onOpenPast,
-      pastSessions: [
-        { id: "s-old", projectName: "demo", endedAt: 1700000000000 },
-      ],
-    });
-    const list = screen.getByTestId("past-sessions");
-    expect(list.textContent).toContain("demo");
-    fireEvent.click(screen.getByTestId("past-session-s-old"));
-    expect(onOpenPast).toHaveBeenCalledWith("s-old");
   });
 });

@@ -194,7 +194,7 @@ Where a fixture repository is registered, when the project is removed and the co
 
 #### projects-26
 
-Where the Projects surface renders with one project holding a live session and one without, the test suite shall assert that the mode choices read "Add an existing repo" and "Create a new project" with the submit label mirroring the selected mode [[projects-22](#projects-22)], that the live project's open control reads "Open live session" and carries the pulsing status dot while the other project's reads "Open session" [[projects-23](#projects-23)], and that no user-facing string on the surface contains the word "forge" [[projects-25](#projects-25)].
+Where the project palette renders with one project holding a live session and one without, the test suite shall assert that the mode choices read "Add an existing repo" and "Create a new project" with the submit label mirroring the selected mode [[projects-22](#projects-22)], that the live project's open control reads "Open live session" and carries the pulsing status dot while the other project's reads "Open session" [[projects-23](#projects-23)], and that no user-facing string on the surface contains the word "forge" [[projects-25](#projects-25)].
 
 ## References
 
