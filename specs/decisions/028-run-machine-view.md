@@ -7,6 +7,7 @@
 
 Accepted.
 Applies [DR-026](026-data-graphics-craft.md)'s data-graphics craft and [DR-027](027-linked-views-contract.md)'s solved-layout doctrine to the run view; the playbook repository's sketch-view visualizer retires in its own repo once this lands.
+Amended by [DR-031](031-machine-call-tree.md): the stacked cards ordered by depth, the left-to-right rank direction, and the full-drawing history entry give way to the drawn call tree, the top-to-bottom layout as shipped, and settled strips.
 
 ## Context
 

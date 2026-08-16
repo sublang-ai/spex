@@ -56,6 +56,7 @@ meta.md       The spec of specs
 | [DR-028](decisions/028-run-machine-view.md) | 028-run-machine-view.md | Run machines drawn: live statechart cards in the Captain pane, machine graph over the artifacts contract, trace-folded frames, captain failures surfaced whole |
 | [DR-029](decisions/029-session-history-home.md) | 029-session-history-home.md | Sessions in the sidebar: Dashboard-first attention, projects with their sessions as the navigator, tabs as the working set, titled sessions over session.list |
 | [DR-030](decisions/030-workspace-chrome.md) | 030-workspace-chrome.md | Workspace chrome: two-state rail collapse, the divider idiom as house law, chrome state as preference, collapse never hiding a duty |
+| [DR-031](decisions/031-machine-call-tree.md) | 031-machine-call-tree.md | The run call tree: one card per run lifetime, calls drawn as containment, cards breathing between drawing and strip, one aliveness grammar, the edge-landing law |
 
 ## Packages
 

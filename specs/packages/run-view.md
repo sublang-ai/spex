@@ -197,32 +197,72 @@ When new content arrives below the fold of a scrolled-up Captain or player pane,
 
 #### run-view-60
 
-While a playbook run's trace records flow in a live session, the Captain pane shall draw that run as a live statechart card — one labeled box per state, one directed edge per transition, laid out left to right from the initial state, deterministically per machine ([DR-028](../decisions/028-run-machine-view.md)):
+While a playbook run's trace records flow in a live session, the Captain pane shall draw that run as a live statechart card — one labeled box per state, one directed edge per transition, laid out top to bottom from the initial state, deterministically per machine ([DR-031](../decisions/031-machine-call-tree.md)):
 
 - the card renders read-only, never intercepting the composer;
+- the card takes the form its disclosure assigns — the full drawing or the strip [[run-view-75](#run-view-75)];
 - while the run's frame is open, the glyph progress lines of that run fold into the card instead of the thread [[run-view-1](#run-view-1)], while failure lines always stay in the thread [[run-view-2](#run-view-2)];
 - state labels are the human labels with raw ids in tooltips, matching the chip's law [[run-view-59](#run-view-59)].
 
 #### run-view-61
 
-While a machine card is live, the Captain pane shall show the run's state through the status palette, one voice per state kind ([DR-028](../decisions/028-run-machine-view.md)):
+While a machine card is live, the Captain pane shall show the run's state through the status palette, one voice per state kind ([DR-031](../decisions/031-machine-call-tree.md)):
 
-- the active state carries the running emphasis, a parked state awaiting the Boss carries the attention emphasis, a failed state carries the failure emphasis, and every other state stays quiet ink;
-- a firing transition flashes once and decays in well under a second, instantly under the reduced-motion preference;
+- the active state carries the running emphasis with the app's one running mark — the pulsing dot the sidebar's running rows wear [[run-view-73](#run-view-73)], worn identically by the running player's pane — static under the reduced-motion preference;
+- a parked state awaiting the Boss carries the attention emphasis and a failed state the failure emphasis, the derivations of the attention count [[run-view-34](#run-view-34)], and every other state stays quiet ink;
+- a firing transition flashes once and decays in well under a second, instantly under reduced motion;
 - every transition shows its direction at rest with a constant-size glyph;
 - the active state names the player it runs and shows that player's running activity, when the trace attributes one.
 
 #### run-view-62
 
-When a playbook run's trace settles or its invocation is disposed, the Captain pane shall settle that run's card into the thread as a static history entry at its finish position, carrying the machine's final drawing and outcome, and shall empty the live region of that frame ([DR-028](../decisions/028-run-machine-view.md)).
+When a playbook run's trace settles, the Captain pane shall settle that run where it belongs — a child run as a strip under its calling state's position, in invocation order among that state's calls, a root run into the thread at the position of the record that settled it [[run-view-75](#run-view-75)] — and shall empty the live region of that frame ([DR-031](../decisions/031-machine-call-tree.md)):
+
+- the settled run carries its own reported final status: a finished run "done", a failed one "failed", and "stopped" reserved for a run that ended unfinished;
+- a disposal report closes only a frame still open, with that same status rule.
 
 #### run-view-63
 
-While two or more machine frames are open at once, the Captain pane shall stack their live cards ordered by call depth — the parent first, each child visually joined to its caller — each card live and independently drawn ([DR-028](../decisions/028-run-machine-view.md)).
+While a machine frame has a caller the pane knows, the Captain pane shall draw the call as containment ([DR-031](../decisions/031-machine-call-tree.md)):
+
+- the child card nests indented under its caller's card, joined by a drawn connector that leaves the calling state itself, so the line reads "this state is running that machine";
+- the calling state names its callee and carries the running mark while it delegates, and the child card's header names its calling state in return;
+- while the caller renders as a strip [[run-view-75](#run-view-75)], the strip names the calling state and its callee and the connector leaves the strip — the containment never disappears with the fold;
+- nesting recurses by the trace's parent link, never by depth arithmetic;
+- each card stays live and independently drawn.
 
 #### run-view-64
 
 Where a run's machine definition is unavailable over the artifacts contract [[playbook-library-36](playbook-library.md#playbook-library-36)], the machine card shall draw the observed truth alone — the states and transitions the trace has delivered — and never block, error, or drop the card for the missing definition ([DR-028](../decisions/028-run-machine-view.md)).
+
+#### run-view-74
+
+While trace records fold into the run view's state [[run-view-14](#run-view-14)], a machine frame shall exist exactly for a playbook run underway ([DR-031](../decisions/031-machine-call-tree.md)):
+
+- a frame opens only on evidence that a run is underway — its start, a transition, or a call it makes;
+- events that merely report on a run — statuses, turn settlements, disposal — never open one;
+- a settled run's trace session is tombstoned in the folded state, so later records for it change nothing, in live folding and replay alike;
+- the captain shell's own frame is not a playbook run and never draws a card.
+
+#### run-view-75
+
+While machine cards are shown, each card shall render as either its full drawing or a one-line strip — the playbook, its current state or outcome, its calling state for a child, and its status mark — with defaults partitioning the whole tree ([DR-031](../decisions/031-machine-call-tree.md)):
+
+- every running leaf card is expanded; every other card — running ancestors and settled runs — is a strip;
+- a disclosure toggle on each card overrides the default for that card, altering no fold state — a replay renders identically whatever was expanded ([DR-027](../decisions/027-linked-views-contract.md));
+- expanding a settled strip shows the machine's final drawing with its settled descendants in place, identical under replay;
+- a strip carries an accessible name stating the run, its status, and its caller, so the relation never depends on the connector alone.
+
+#### run-view-76
+
+When a machine card draws its edges, every edge shall end with its head touching the target state's border, oriented along its approach, and no edge shall cross a state box ([DR-031](../decisions/031-machine-call-tree.md)):
+
+- heads sharing a border distribute so none overlap;
+- same-rank edges route as laterals, rank-skipping and backward edges take side lanes, and reciprocal pairs stay offset.
+
+#### run-view-78
+
+Where a frame's trace names a caller the pane does not know, the frame's card shall render at the top level rather than vanishing ([DR-031](../decisions/031-machine-call-tree.md)).
 
 #### run-view-65
 
@@ -424,16 +464,25 @@ Where a recorded fixture stream of a completed playbook session is replayed into
 
 #### run-view-66
 
-Where a fixture stream carries a playbook run's trace records — an invocation start, transitions, a player call attributed to a state, a nested invocation at greater depth, and a settled finish — the test suite shall assert the machine cards over a replay [[run-view-14](#run-view-14)]:
+Where a fixture stream carries a playbook run's trace records — an invocation start, transitions, a player call attributed to a state, a nested invocation carrying the parent link, a settled finish, and the post-terminal reports a real runtime emits (a status, a turn settlement, and a disposal after the closing transition) — the test suite shall assert the machine cards over a replay [[run-view-14](#run-view-14)]:
 
-- a live card opens with the frame and draws the machine with the active state emphasized [[run-view-60](#run-view-60)] [[run-view-61](#run-view-61)];
+- a live card opens with the frame and draws the machine with the active state emphasized and wearing the running mark, static when reduced motion is preferred [[run-view-60](#run-view-60)] [[run-view-61](#run-view-61)];
 - the glyph progress lines of the framed run leave the thread while failure lines stay [[run-view-60](#run-view-60)];
-- the active state names its attributed player while that player runs [[run-view-61](#run-view-61)];
-- the nested invocation stacks a second card joined to its caller, ordered by depth [[run-view-63](#run-view-63)];
-- the settled finish moves the card into the thread as a static entry and empties the live region [[run-view-62](#run-view-62)];
+- the active state names its attributed player while that player runs [[run-view-61](#run-view-61)] and its callee while the nested run is open [[run-view-63](#run-view-63)];
+- the nested invocation renders nested directly under the card of the run that called it, with the connector and the mutual naming [[run-view-63](#run-view-63)];
+- while the child runs, the caller defaults to a strip naming its calling state and callee, and each strip's accessible name states its run, status, and caller [[run-view-75](#run-view-75)];
+- expanding the caller's strip while the child runs is arrangement only: both drawings show, and the fold state is unchanged [[run-view-75](#run-view-75)];
+- the child's settled finish lands as a strip under its calling state, and the root's settles into the thread as a strip whose expansion shows the final drawing [[run-view-62](#run-view-62)] [[run-view-75](#run-view-75)];
+- the post-terminal reports open no frame and change no settled card — exactly one card per run, its outcome "done" [[run-view-74](#run-view-74)] [[run-view-62](#run-view-62)];
+- a second fixture run that ends by disposal alone, without a terminal transition, settles exactly one card with the outcome "stopped" [[run-view-62](#run-view-62)] [[run-view-74](#run-view-74)];
+- a fixture child naming an unknown caller renders at the top level [[run-view-78](#run-view-78)];
 - with no machine definition served, the same replay still renders the card from observed states alone [[run-view-64](#run-view-64)];
 - a fixture captain reply record renders as Captain speech in the thread [[run-view-1](#run-view-1)];
 - a fixture captain result reporting an error renders the synthesized cause as a failure line [[run-view-65](#run-view-65)].
+
+#### run-view-77
+
+Where a fixture machine holds a same-rank edge, a rank-skipping edge, a backward edge, and a reciprocal pair, the test suite shall assert the routed geometry of [[run-view-76](#run-view-76)] over the card's computed drawing — the same solved layout the replayed card renders [[run-view-14](#run-view-14)]: every edge's head endpoint lies on its target's border, no two head endpoints on one border coincide, no edge path intersects any state box, and the reciprocal pair yields two distinct offset paths.
 
 #### run-view-70
 

@@ -88,6 +88,8 @@ When the core package derives a playbook's artifacts from its FSM, the core pack
 
 - nodes carry the state id, its parent for a nested state, its kind (a final state named as such), the player role the state invokes when its meta names one, and its tags;
 - edges carry a stable identity of owner state, event, branch index, and target index — guarded sibling branches staying distinct — with the event name as the label and an empty event naming the always transition;
+- a target naming a state's declared id resolves to that state, wherever it sits in the tree — never assumed to be machine-id-prefixed ([DR-031](../decisions/031-machine-call-tree.md));
+- machine-level transitions and a compound state's done transition are included ([DR-031](../decisions/031-machine-call-tree.md));
 - the graph names its initial state;
 - a machine that cannot be loaded serves a null graph, named among the absent stages without failing the request.
 
@@ -219,6 +221,10 @@ Where the shared config file contains comments and entries unrelated to the togg
 Where a playbook was compiled into the library directory, when its artifacts are requested over the protocol, the test suite shall assert the response carries the source markdown, the gears markdown, the FSM code [[playbook-library-22](#playbook-library-22)], and the derived state ids [[playbook-library-24](#playbook-library-24)]:
 
 - A stage file removed: the test suite asserts the response names the missing stage while still serving the others [[playbook-library-24](#playbook-library-24)].
+
+#### playbook-library-37
+
+When each installed built-in playbook's artifacts are requested, the test suite shall assert the served graph is whole [[playbook-library-36](#playbook-library-36)]: every edge's ends name served nodes, the edge set is non-empty for every built-in, declared-id targets resolve — the review machine's opening transition and a boss-reply resume transition among the resolved — a compound state's done transition appears as an edge, and a machine-level transition appears as an edge.
 
 ### Cancellation and Gate Coverage
 
