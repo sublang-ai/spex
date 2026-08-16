@@ -76,7 +76,7 @@ async function main(): Promise<void> {
             result:
               "### Review\n\n- `auth.ts` — the token refresh looks **correct**\n- consider a test for expiry skew\n",
             usage: { inputTokens: 850, outputTokens: 120, totalCostUsd: 0.04 },
-            delayMs: 600,
+            delayMs: 2400,
           },
         },
       ],
@@ -90,7 +90,7 @@ async function main(): Promise<void> {
         thinking: "tracing the token lifecycle",
         result: "Done — the bug is fixed.",
         usage: { inputTokens: 2400, outputTokens: 310, totalCostUsd: 0.12 },
-        delayMs: 800,
+        delayMs: 3200,
       },
     });
 
