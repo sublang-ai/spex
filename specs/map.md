@@ -54,7 +54,8 @@ meta.md       The spec of specs
 | [DR-026](decisions/026-data-graphics-craft.md) | 026-data-graphics-craft.md | Data-graphics craft: keyed honest encodings, computed contrast, content-driven density, d3 engine with live drag, permanent outline + graph toggle, design-check gate |
 | [DR-027](decisions/027-linked-views-contract.md) | 027-linked-views-contract.md | Linked-views contract: shared axes with a seven-rule coupling card, solved density, root-less outline with a decisions branch, intents to the Dashboard |
 | [DR-028](decisions/028-run-machine-view.md) | 028-run-machine-view.md | Run machines drawn: live statechart cards in the Captain pane, machine graph over the artifacts contract, trace-folded frames, captain failures surfaced whole |
-| [DR-029](decisions/029-session-history-home.md) | 029-session-history-home.md | Session history home: conversation-list treatment on the Captain home, titled sessions over session.list, end-of-session handoff, first-class read-only replay |
+| [DR-029](decisions/029-session-history-home.md) | 029-session-history-home.md | Sessions in the sidebar: Dashboard-first attention, projects with their sessions as the navigator, tabs as the working set, titled sessions over session.list |
+| [DR-030](decisions/030-workspace-chrome.md) | 030-workspace-chrome.md | Workspace chrome: two-state rail collapse, the divider idiom as house law, chrome state as preference, collapse never hiding a duty |
 
 ## Packages
 

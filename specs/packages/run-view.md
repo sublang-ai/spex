@@ -112,9 +112,9 @@ The run view shall provide light and dark color themes and size the Captain and 
 
 #### run-view-25
 
-Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting that names the current project (or points at the project bar when none is chosen), a chat composer, and the captain's adapter and model with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
+Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting that names the current project (or points at the sidebar when none is chosen), a chat composer, and the captain's adapter and model with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
 
-- Project choice lives in the project bar and palette, not in the composer row.
+- Project choice lives in the sidebar and palette, not in the composer row.
 
 #### run-view-26
 
@@ -155,8 +155,8 @@ The Captain home shall list recent ended sessions of the current project with th
 
 The run view shall keep cross-project attention and playbook creation at hand:
 
-- while the Dashboard's published attention count [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the Workspace navigation entry shows a badge with that count across all projects;
-- while a non-current project needs a human, the project bar's chip carries a dot in the most severe color;
+- while the Dashboard's published attention count [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the sidebar's Dashboard entry shows a badge with that count across all projects ([DR-029](../decisions/029-session-history-home.md)), surviving the sidebar's collapse [[run-view-71](#run-view-71)];
+- while a non-current project needs a human, that project's sidebar row carries a dot in the most severe color [[run-view-67](#run-view-67)];
 - the slash menu ends with a compile-a-new-playbook entry that opens the Playbooks surface's compile flow.
 
 ### Conversation Life (DR-010 §1/§3)
@@ -233,23 +233,41 @@ When the session record stream delivers a captain turn result reporting an error
 
 #### run-view-67
 
-While a project holds ended sessions, the Captain home shall list them as the project's conversations, newest first, each row scannable by its own words ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
+While the app is connected, the sidebar shall present navigation as a tree whose Workspace section lists every registered project with its sessions ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
 
-- a row shows the session's title, its ended time in relative terms, its turn count, a failure marker when it ended holding one, and its cost — a session with no turns saying so honestly;
-- the list is primary content whenever it is non-empty, above the greeting's supporting material, with the scope toggle between this project and all projects kept;
-- the start tab's accessible name and tooltip name both duties — a new session and the history.
+- Dashboard stands first, then the Workspace section, then Playbooks and Settings;
+- the current project's node is disclosed, showing its sessions newest first — each row titled by its session, marked running, ended, ended holding a failure, or never spoken, with its relative time, turn count, and cost in the row's tooltip;
+- each project lists a recent window of sessions with one control revealing the rest in place, and one control starting a new session in that project;
+- the active session's row carries the app's interaction hue, the treatment the navigation entries already use;
+- a project whose sessions need a human carries that signal on its own row, disclosed or not;
+- adding and creating a project live in the Workspace section.
+
 
 #### run-view-68
 
-When the user ends a session, the workspace shall land on the session home with the just-ended session newly at the top of the list, briefly highlighted, so the eye follows where the conversation went ([DR-029](../decisions/029-session-history-home.md)).
+When a session is activated in the sidebar, the workspace shall show that session's project and open the session as a tab, whatever project was current before ([DR-029](../decisions/029-session-history-home.md)):
+
+- a live session opens as its running tab, an ended one as a read-only tab;
+- a session already open is focused rather than opened twice;
+- closing a tab leaves the session in the sidebar, where it stays reachable.
+
 
 #### run-view-69
 
-When a past session is opened from the home, the run view shall replay it read-only in place — no surface switch — headed by its title and ended time ([DR-029](../decisions/029-session-history-home.md)):
+While a session's tab is shown, the run view shall render it live or read-only by the session's own state, never navigating on that change ([DR-029](../decisions/029-session-history-home.md)):
 
-- the transcript is the identical fold of the stored records [[run-view-14](#run-view-14)], settled machine cards included [[run-view-62](#run-view-62)];
-- the composer's place offers starting a fresh session for the same project;
-- Back returns to the session home with its scroll kept.
+- ending the live session keeps its transcript on screen, transitioned read-only with a fresh-session affordance in the composer's place, and marks it ended in the sidebar and on its tab;
+- a read-only session renders the identical fold of its stored records [[run-view-14](#run-view-14)], settled machine cards included [[run-view-62](#run-view-62)], headed by its title and ended time;
+- each open session keeps its own scroll position as tabs change.
+
+
+#### run-view-71
+
+The sidebar shall collapse between its two states — the tree, and the icon rail alone — behind a control at its foot and a keyboard binding, persisting across launches ([DR-030](../decisions/030-workspace-chrome.md)):
+
+- collapsed entries keep their accessible names and gain tooltips;
+- the attention count survives on the collapsed Dashboard entry [[run-view-34](#run-view-34)];
+- collapsing never strands focus.
 
 ### Keyboard and Guardrails (DR-010 §4/§6)
 
@@ -257,7 +275,7 @@ When a past session is opened from the home, the run view shall replay it read-o
 
 The project palette shall be fully keyboard-operable ([DR-011](../decisions/011-project-workspace.md)):
 
-- it opens from Cmd/Ctrl+P, the project bar, or submitting a composer with no project chosen;
+- it opens from Cmd/Ctrl+P, the sidebar's Workspace section, or submitting a composer with no project chosen;
 - its filter input holds focus;
 - arrow keys move the highlight over project rows and "Open folder…";
 - Enter picks;
@@ -279,13 +297,14 @@ When the user ends a live session, the run view shall always use the inline conf
 
 The tab strip shall show only the current project's live sessions:
 
-- session tabs are titled by the session's first Boss turn (truncated; "new session" before the first turn) with the full prompt and start time in the tooltip — never by the project name, which lives in the bar ([DR-011](../decisions/011-project-workspace.md));
+- the strip holds the sessions the reader has opened — the working set, not the archive, which the sidebar keeps [[run-view-67](#run-view-67)];
+- session tabs are titled by the session's first Boss turn (truncated; "new session" before the first turn) with the full prompt and start time in the tooltip — never by the project name, which the sidebar carries ([DR-011](../decisions/011-project-workspace.md));
 - tabs carry the shared attention signal: an amber dot for a waiting question and a red dot for a failure on background tabs (the active tab shows the banner instead), with the detail in the tab tooltip;
 - the strip scrolls horizontally when tabs overflow, keeps the new-session control reachable, exposes tab-list semantics, and keeps the active tab scrolled into view.
 
 #### run-view-49
 
-The app shall provide keyboard shortcuts implemented in the web UI (so they work identically in a browser): Cmd/Ctrl+1..4 switch surfaces, Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project palette, Cmd/Ctrl+N opens the new-session tab (or the palette when no project is chosen), Cmd/Ctrl+Shift+S toggles the Specs tab with the previous tab, Cmd/Ctrl+Shift+[ and ] cycle the current project's tabs including the pinned ones, and a printable key pressed outside any input refocuses the Boss composer.
+The app shall provide keyboard shortcuts implemented in the web UI (so they work identically in a browser): Cmd/Ctrl+1..4 switch surfaces, Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project palette, Cmd/Ctrl+N opens the new-session tab (or the palette when no project is chosen), Cmd/Ctrl+B collapses and restores the sidebar [[run-view-71](#run-view-71)], Cmd/Ctrl+Shift+S toggles the Specs tab with the previous tab, Cmd/Ctrl+Shift+[ and ] cycle the current project's tabs including the pinned ones, and a printable key pressed outside any input refocuses the Boss composer.
 
 ### First-Hour Integrity (DR-010 §5)
 
@@ -310,16 +329,17 @@ The app shall fail loudly and stay accessible:
 
 #### run-view-51
 
-Where the Captain home has no history (no past sessions, warnings, or errors), it shall center its whole cluster — greeting, quick start, project chip, and composer — on the canvas, reverting to the bottom-docked chat layout once real content exists.
+Where the Captain home has nothing to report (no warnings or errors), it shall center its whole cluster — greeting, quick start, project chip, and composer — on the canvas, reverting to the bottom-docked chat layout once real content exists; session history lives in the sidebar [[run-view-67](#run-view-67)], never on the home.
 
 ### Project Workspace (DR-011)
 
 #### run-view-56
 
-The Workspace shall carry a project bar naming the current project, rendered in every workspace state:
+The Workspace shall name the current project in the sidebar's Workspace section rather than in a bar of its own [[run-view-67](#run-view-67)] ([DR-029](../decisions/029-session-history-home.md)):
 
-- activating the bar opens the project palette;
-- while no project is chosen, the tab strip (including pinned tabs) is absent and the bar plus the Captain home's guidance is the whole surface.
+- the project palette opens from its keyboard binding [[run-view-49](#run-view-49)] and from the sidebar's Workspace section;
+- while no project is chosen, the tab strip (including pinned tabs) is absent and the sidebar plus the Captain home's guidance is the whole surface.
+
 
 #### run-view-57
 
@@ -401,7 +421,12 @@ Where a fixture stream carries a playbook run's trace records — an invocation 
 
 #### run-view-70
 
-Where a fixture store holds one ended titled session with turns, cost, and a failure, and one ended session with no turns, the test suite shall assert the session home round trip: the rows render title, relative ended time, turn count, failure marker, and cost — the empty session saying so [[run-view-67](#run-view-67)]; ending a live session lands on the home with the new top row highlighted [[run-view-68](#run-view-68)]; opening a titled row replays the identical transcript read-only with its title in the header, offers a fresh session, and Back returns to the home with scroll kept [[run-view-69](#run-view-69)].
+Where a fixture store holds two projects — one with a live titled session, an ended session holding a failure, and a session with no turns; the other with one ended session — the test suite shall assert the sidebar contract: Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)] and the current project's sessions render newest first with their titles, marks, and tooltips, the untouched project's row carrying its own attention signal [[run-view-67](#run-view-67)]; activating the other project's session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; ending the live session keeps its transcript on screen read-only and marks it ended [[run-view-69](#run-view-69)]; closing that tab leaves the session listed [[run-view-68](#run-view-68)]; and the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)].
+
+
+#### run-view-72
+
+Where the workspace renders with the sidebar expanded, the test suite shall assert the chrome contract of [[run-view-71](#run-view-71)]: the binding collapses the sidebar to icons that keep their accessible names and the Dashboard attention count, the state survives a remount, and the foot control restores the tree.
 
 #### run-view-21
 
