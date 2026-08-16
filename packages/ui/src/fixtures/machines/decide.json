@@ -1,0 +1,298 @@
+{
+  "initial": "ready",
+  "nodes": [
+    {
+      "id": "ready",
+      "kind": "state",
+      "description": "Waiting for a topic to decide.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "independentProposals",
+      "kind": "state",
+      "description": "Coder and Reviewer prepare independent proposals.",
+      "tags": []
+    },
+    {
+      "id": "independentProposals.coder",
+      "parent": "independentProposals",
+      "kind": "state",
+      "tags": []
+    },
+    {
+      "id": "independentProposals.coder.working",
+      "parent": "independentProposals.coder",
+      "kind": "state",
+      "role": "Coder",
+      "description": "Coder independently proposes a spec design.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "independentProposals.coder.waiting",
+      "parent": "independentProposals.coder",
+      "kind": "state",
+      "description": "Coder waits for Boss to answer a question.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "independentProposals.coder.complete",
+      "parent": "independentProposals.coder",
+      "kind": "final",
+      "description": "Coder proposal is staged for the parallel join.",
+      "tags": []
+    },
+    {
+      "id": "independentProposals.reviewer",
+      "parent": "independentProposals",
+      "kind": "state",
+      "tags": []
+    },
+    {
+      "id": "independentProposals.reviewer.working",
+      "parent": "independentProposals.reviewer",
+      "kind": "state",
+      "role": "Reviewer",
+      "description": "Reviewer independently proposes a spec design.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "independentProposals.reviewer.waiting",
+      "parent": "independentProposals.reviewer",
+      "kind": "state",
+      "description": "Reviewer waits for Boss to answer a question.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "independentProposals.reviewer.complete",
+      "parent": "independentProposals.reviewer",
+      "kind": "final",
+      "description": "Reviewer proposal is staged for the parallel join.",
+      "tags": []
+    },
+    {
+      "id": "commitCoderProposal",
+      "kind": "state",
+      "role": "Coder",
+      "description": "Coder writes and commits Coder’s independent proposal.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "awaitBossReply",
+      "kind": "state",
+      "description": "Waiting for Boss to answer Coder’s question.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "reviewCommit",
+      "kind": "state",
+      "description": "REVIEW examines the committed proposal.",
+      "tags": [
+        "playbook.suspended"
+      ]
+    },
+    {
+      "id": "failed",
+      "kind": "state",
+      "description": "DECIDE failed and is waiting for a new topic.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "reportedReviewFailure",
+      "kind": "final",
+      "description": "DECIDE reports REVIEW’s failure and its last commit.",
+      "tags": []
+    },
+    {
+      "id": "done",
+      "kind": "final",
+      "description": "DECIDE completed with an approved commit.",
+      "tags": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "ready::START_DECIDE::0::0",
+      "from": "ready",
+      "to": "independentProposals",
+      "event": "START_DECIDE"
+    },
+    {
+      "id": "independentProposals::done::0::0",
+      "from": "independentProposals",
+      "to": "commitCoderProposal",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.coder.working::done::0::0",
+      "from": "independentProposals.coder.working",
+      "to": "independentProposals.coder.waiting",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.coder.working::done::1::0",
+      "from": "independentProposals.coder.working",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.coder.working::done::2::0",
+      "from": "independentProposals.coder.working",
+      "to": "independentProposals.coder.complete",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.coder.working::done::3::0",
+      "from": "independentProposals.coder.working",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.coder.working::error::0::0",
+      "from": "independentProposals.coder.working",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "independentProposals.coder.waiting::BOSS_REPLY::0::0",
+      "from": "independentProposals.coder.waiting",
+      "to": "failed",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "independentProposals.coder.waiting::BOSS_REPLY::1::0",
+      "from": "independentProposals.coder.waiting",
+      "to": "independentProposals.coder.working",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "independentProposals.reviewer.working::done::0::0",
+      "from": "independentProposals.reviewer.working",
+      "to": "independentProposals.reviewer.waiting",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.reviewer.working::done::1::0",
+      "from": "independentProposals.reviewer.working",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.reviewer.working::done::2::0",
+      "from": "independentProposals.reviewer.working",
+      "to": "independentProposals.reviewer.complete",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.reviewer.working::done::3::0",
+      "from": "independentProposals.reviewer.working",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "independentProposals.reviewer.working::error::0::0",
+      "from": "independentProposals.reviewer.working",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "independentProposals.reviewer.waiting::BOSS_REPLY::0::0",
+      "from": "independentProposals.reviewer.waiting",
+      "to": "failed",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "independentProposals.reviewer.waiting::BOSS_REPLY::1::0",
+      "from": "independentProposals.reviewer.waiting",
+      "to": "independentProposals.reviewer.working",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "commitCoderProposal::done::0::0",
+      "from": "commitCoderProposal",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "commitCoderProposal::done::1::0",
+      "from": "commitCoderProposal",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "commitCoderProposal::done::2::0",
+      "from": "commitCoderProposal",
+      "to": "reviewCommit",
+      "event": "done"
+    },
+    {
+      "id": "commitCoderProposal::done::3::0",
+      "from": "commitCoderProposal",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "commitCoderProposal::error::0::0",
+      "from": "commitCoderProposal",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::0::0",
+      "from": "awaitBossReply",
+      "to": "failed",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::1::0",
+      "from": "awaitBossReply",
+      "to": "commitCoderProposal",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "reviewCommit::done::0::0",
+      "from": "reviewCommit",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "reviewCommit::done::1::0",
+      "from": "reviewCommit",
+      "to": "reportedReviewFailure",
+      "event": "done"
+    },
+    {
+      "id": "reviewCommit::error::0::0",
+      "from": "reviewCommit",
+      "to": "reportedReviewFailure",
+      "event": "error"
+    },
+    {
+      "id": "reviewCommit::error::1::0",
+      "from": "reviewCommit",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "failed::START_DECIDE::0::0",
+      "from": "failed",
+      "to": "independentProposals",
+      "event": "START_DECIDE"
+    }
+  ]
+}

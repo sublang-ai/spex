@@ -106,3 +106,55 @@ test("served source and gears drop leading comment headers", async () => {
   assert.ok((artifacts.source ?? "").startsWith("# demo workflow"));
   assert.match(artifacts.source ?? "", /an inline note stays/);
 });
+
+test("playbook-library-37: every built-in serves a whole machine graph", async () => {
+  // The review machine targets its states by their declared ids, and
+  // the extractor used to read those as machine-id-prefixed paths —
+  // so every one of its edges resolved to nothing and the card drew
+  // states with no transitions at all.
+  const builtins = {
+    code: "@sublang/playbook/code/registry",
+    review: "@sublang/playbook/review/registry",
+    decide: "@sublang/playbook/decide/registry",
+  };
+
+  for (const [id, from] of Object.entries(builtins)) {
+    const artifacts = await resolveArtifacts({ id, from });
+    const machine = artifacts.machine;
+    assert.ok(machine, `${id} must serve a machine graph`);
+    assert.ok(machine.edges.length > 0, `${id} must serve edges`);
+    const known = new Set(machine.nodes.map((node) => node.id));
+    for (const edge of machine.edges) {
+      assert.ok(known.has(edge.from), `${id}: edge from ${edge.from} is a node`);
+      assert.ok(known.has(edge.to), `${id}: edge to ${edge.to} is a node`);
+    }
+  }
+
+  // Declared-id targets resolve: review opens into its first review
+  // state and resumes from a parked boss reply.
+  const review = (await resolveArtifacts({ id: "review", from: builtins.review }))
+    .machine;
+  assert.ok(
+    review?.edges.some(
+      (edge) => edge.from === "ready" && edge.to === "reviewInitial",
+    ),
+    "review's opening transition must resolve",
+  );
+  assert.ok(
+    review?.edges.some(
+      (edge) => edge.from === "awaitBossReply" && edge.event === "BOSS_REPLY",
+    ),
+    "review's boss-reply resume must resolve",
+  );
+
+  // A compound state's own done transition is the join out of its
+  // regions — a real edge, previously dropped entirely.
+  const decide = (await resolveArtifacts({ id: "decide", from: builtins.decide }))
+    .machine;
+  assert.ok(
+    decide?.edges.some(
+      (edge) => edge.event === "done" && edge.from === "independentProposals",
+    ),
+    "decide's parallel join must appear as an edge",
+  );
+});

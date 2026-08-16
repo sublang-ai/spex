@@ -43,7 +43,8 @@ Amends [DR-028](028-run-machine-view.md): stacked machine cards give way to a dr
   Every edge ends with its head touching the target state's border, oriented along the approach; heads sharing a border distribute so none overlap.
   No edge crosses a state box: same-rank edges route as laterals, rank-skipping and backward edges take side lanes, and reciprocal pairs stay offset.
 - **The extractor tells the whole machine.**
-  Graph extraction resolves targets against the machine's declared state ids, includes machine-level and compound-done transitions, and keeps the stable edge identity so drawings keyed on edge ids never churn.
+  Graph extraction resolves targets against the machine's declared state ids and includes a compound state's own done transition, keeping the stable edge identity so drawings keyed on edge ids never churn.
+  A machine-level transition stays out: it has no single source state, so drawing it would either invent one or draw one edge per state — a hairball that says less than nothing.
 
 **Considered and declined:**
 

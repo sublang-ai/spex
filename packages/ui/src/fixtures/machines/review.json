@@ -1,0 +1,217 @@
+{
+  "initial": "ready",
+  "nodes": [
+    {
+      "id": "ready",
+      "kind": "state",
+      "description": "Waits for a caller to start a committed-work review.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "reviewInitial",
+      "kind": "state",
+      "role": "Reviewer",
+      "description": "REVIEW-1: Reviewer examines the latest commit against the caller input.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "addressFindings",
+      "kind": "state",
+      "role": "Coder",
+      "description": "REVIEW-2: Coder accepts or rejects every current review finding.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "reviewAfterCommit",
+      "kind": "state",
+      "role": "Reviewer",
+      "description": "REVIEW-3: Reviewer examines the new review-fix commit and repository state.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "reviewAfterRebuttal",
+      "kind": "state",
+      "role": "Reviewer",
+      "description": "REVIEW-4: Reviewer adjudicates an all-rejected Coder disposition.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "awaitBossReply",
+      "kind": "state",
+      "description": "Waits for Boss to answer the active player question.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "failed",
+      "kind": "state",
+      "description": "Retains a recoverable REVIEW failure for the caller.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "done",
+      "kind": "final",
+      "description": "The latest commit is approved with no unsettled findings.",
+      "tags": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "ready::START_REVIEW::0::0",
+      "from": "ready",
+      "to": "reviewInitial",
+      "event": "START_REVIEW"
+    },
+    {
+      "id": "reviewInitial::done::0::0",
+      "from": "reviewInitial",
+      "to": "addressFindings",
+      "event": "done"
+    },
+    {
+      "id": "reviewInitial::done::1::0",
+      "from": "reviewInitial",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "reviewInitial::done::2::0",
+      "from": "reviewInitial",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "reviewInitial::error::0::0",
+      "from": "reviewInitial",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "addressFindings::done::0::0",
+      "from": "addressFindings",
+      "to": "reviewAfterCommit",
+      "event": "done"
+    },
+    {
+      "id": "addressFindings::done::1::0",
+      "from": "addressFindings",
+      "to": "reviewAfterRebuttal",
+      "event": "done"
+    },
+    {
+      "id": "addressFindings::done::2::0",
+      "from": "addressFindings",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "addressFindings::error::0::0",
+      "from": "addressFindings",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "reviewAfterCommit::done::0::0",
+      "from": "reviewAfterCommit",
+      "to": "addressFindings",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterCommit::done::1::0",
+      "from": "reviewAfterCommit",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterCommit::done::2::0",
+      "from": "reviewAfterCommit",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterCommit::error::0::0",
+      "from": "reviewAfterCommit",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "reviewAfterRebuttal::done::0::0",
+      "from": "reviewAfterRebuttal",
+      "to": "addressFindings",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterRebuttal::done::1::0",
+      "from": "reviewAfterRebuttal",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterRebuttal::done::2::0",
+      "from": "reviewAfterRebuttal",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterRebuttal::error::0::0",
+      "from": "reviewAfterRebuttal",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "awaitBossReply::START_REVIEW::0::0",
+      "from": "awaitBossReply",
+      "to": "reviewInitial",
+      "event": "START_REVIEW"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::0::0",
+      "from": "awaitBossReply",
+      "to": "failed",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::1::0",
+      "from": "awaitBossReply",
+      "to": "reviewInitial",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::2::0",
+      "from": "awaitBossReply",
+      "to": "addressFindings",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::3::0",
+      "from": "awaitBossReply",
+      "to": "reviewAfterCommit",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::4::0",
+      "from": "awaitBossReply",
+      "to": "reviewAfterRebuttal",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "failed::START_REVIEW::0::0",
+      "from": "failed",
+      "to": "reviewInitial",
+      "event": "START_REVIEW"
+    }
+  ]
+}

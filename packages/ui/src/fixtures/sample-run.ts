@@ -238,226 +238,170 @@ export const HIDDEN_LEAK: FixtureEntry[] = [
  * mirror the real runtime's playbook.trace payloads — an invocation
  * at depth 1, transitions, a player call attributed to its state, a
  * nested review at depth 2, and the settled finish. */
+/** A playbook.trace envelope, as the runtime emits it (schemaVersion 3). */
+function trace(
+  seq: number,
+  at: number,
+  sessionId: string,
+  playbookId: string,
+  type: string,
+  body: Record<string, unknown>,
+  parentSessionId?: string,
+): FixtureEntry {
+  return rec(seq, {
+    type: "captain_telemetry",
+    turnId: 9,
+    timestamp: at,
+    topic: "playbook.trace",
+    payload: {
+      schemaVersion: 3,
+      sessionId,
+      playbookId,
+      ...(parentSessionId ? { parentSessionId } : {}),
+      depth: parentSessionId ? 2 : 1,
+      sequence: seq,
+      timestamp: at,
+      type,
+      payload: body,
+    },
+  });
+}
+
+const moved = (
+  from: string,
+  to: string,
+  event: string,
+  status = "active",
+  tags: string[] = [],
+): Record<string, unknown> => ({
+  from,
+  to,
+  event: { type: event },
+  state: { value: to, activeStateIds: [to], tags, status },
+});
+
+/** One /code run that calls /review, finishes, and is then talked
+ * about — the status, settlement and disposal a real runtime emits
+ * after the closing transition (run-view-66/74). */
 export const MACHINE_RUN: FixtureEntry[] = [
-  {
-    seq: 401,
-    record: {
-      type: "turn_started",
-      turnId: 9,
-      timestamp: 9_000,
-      turn: { id: 9, prompt: "/code fix the refresh path" },
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 402,
-    record: {
-      type: "captain_status",
-      turnId: 9,
-      timestamp: 9_001,
-      message: "◇ /code started",
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 403,
-    record: {
-      type: "captain_telemetry",
-      turnId: 9,
-      timestamp: 9_002,
-      topic: "playbook.trace",
-      payload: {
-        schemaVersion: 3,
-        sessionId: "t-code",
-        playbookId: "code",
-        rootSessionId: "t-root",
-        depth: 1,
-        sequence: 1,
-        timestamp: 9_002,
-        type: "session.started",
-        payload: {},
-      },
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 404,
-    record: {
-      type: "captain_telemetry",
-      turnId: 9,
-      timestamp: 9_003,
-      topic: "playbook.trace",
-      payload: {
-        schemaVersion: 3,
-        sessionId: "t-code",
-        playbookId: "code",
-        depth: 1,
-        sequence: 2,
-        timestamp: 9_003,
-        type: "fsm.transition",
-        payload: {
-          from: "ready",
-          to: "runFirstPhase",
-          event: { type: "START_CODE" },
-          state: {
-            value: "runFirstPhase",
-            activeStateIds: ["runFirstPhase"],
-            tags: ["playbook.busy"],
-            status: "active",
-          },
-        },
-      },
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 405,
-    record: {
-      type: "captain_status",
-      turnId: 9,
-      timestamp: 9_004,
-      message: "⤷ Coder: implement the refresh fix",
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 406,
-    record: {
-      type: "captain_telemetry",
-      turnId: 9,
-      timestamp: 9_004,
-      topic: "playbook.trace",
-      payload: {
-        schemaVersion: 3,
-        sessionId: "t-code",
-        playbookId: "code",
-        depth: 1,
-        sequence: 3,
-        timestamp: 9_004,
-        type: "player.call.started",
-        callId: "c1",
-        payload: { stateId: "runFirstPhase", roleId: "coder", playerId: "code-coder" },
-      },
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 407,
-    record: {
-      type: "captain_telemetry",
-      turnId: 9,
-      timestamp: 9_010,
-      topic: "playbook.trace",
-      payload: {
-        schemaVersion: 3,
-        sessionId: "t-code",
-        playbookId: "code",
-        depth: 1,
-        sequence: 4,
-        timestamp: 9_010,
-        type: "player.call.finished",
-        callId: "c1",
-        payload: { stateId: "runFirstPhase", status: "ok" },
-      },
-    } as TmuxPlayRecord,
-  },
-  // The nested review: a machine calling a machine (run-view-63).
-  {
-    seq: 408,
-    record: {
-      type: "captain_telemetry",
-      turnId: 9,
-      timestamp: 9_011,
-      topic: "playbook.trace",
-      payload: {
-        schemaVersion: 3,
-        sessionId: "t-review",
-        playbookId: "review",
-        parentSessionId: "t-code",
-        depth: 2,
-        sequence: 1,
-        timestamp: 9_011,
-        type: "session.started",
-        payload: {},
-      },
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 409,
-    record: {
-      type: "captain_telemetry",
-      turnId: 9,
-      timestamp: 9_012,
-      topic: "playbook.trace",
-      payload: {
-        schemaVersion: 3,
-        sessionId: "t-review",
-        playbookId: "review",
-        parentSessionId: "t-code",
-        depth: 2,
-        sequence: 2,
-        timestamp: 9_012,
-        type: "fsm.transition",
-        payload: {
-          from: "ready",
-          to: "reviewing",
-          event: { type: "START_REVIEW" },
-          state: { value: "reviewing", status: "active", tags: [] },
-        },
-      },
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 410,
-    record: {
-      type: "captain_telemetry",
-      turnId: 9,
-      timestamp: 9_020,
-      topic: "playbook.trace",
-      payload: {
-        schemaVersion: 3,
-        sessionId: "t-review",
-        playbookId: "review",
-        parentSessionId: "t-code",
-        depth: 2,
-        sequence: 3,
-        timestamp: 9_020,
-        type: "fsm.transition",
-        payload: {
-          from: "reviewing",
-          to: "done",
-          event: { type: "APPROVED" },
-          state: { value: "done", status: "done", tags: [] },
-        },
-      },
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 411,
-    record: {
-      type: "captain_telemetry",
-      turnId: 9,
-      timestamp: 9_030,
-      topic: "playbook.trace",
-      payload: {
-        schemaVersion: 3,
-        sessionId: "t-code",
-        playbookId: "code",
-        depth: 1,
-        sequence: 5,
-        timestamp: 9_030,
-        type: "fsm.transition",
-        payload: {
-          from: "runFirstPhase",
-          to: "done",
-          event: { type: "done" },
-          state: { value: "done", status: "done", tags: [] },
-        },
-      },
-    } as TmuxPlayRecord,
-  },
-  {
-    seq: 412,
-    record: {
-      type: "turn_finished",
-      turnId: 9,
-      timestamp: 9_031,
-    } as TmuxPlayRecord,
-  },
+  rec(401, {
+    type: "turn_started",
+    turnId: 9,
+    timestamp: 9_000,
+    turn: { id: 9, prompt: "/code fix the refresh path" },
+  }),
+  rec(402, {
+    type: "captain_status",
+    turnId: 9,
+    timestamp: 9_001,
+    message: "\u25c7 /code started",
+  }),
+  trace(403, 9_002, "t-code", "code", "session.started", {}),
+  trace(404, 9_003, "t-code", "code", "fsm.transition", moved(
+    "ready",
+    "runFirstPhase",
+    "START_CODE",
+    "active",
+    ["playbook.busy"],
+  )),
+  rec(405, {
+    type: "captain_status",
+    turnId: 9,
+    timestamp: 9_004,
+    message: "\u2937 Coder: implement the refresh fix",
+  }),
+  trace(406, 9_004, "t-code", "code", "player.call.started", {
+    stateId: "runFirstPhase",
+    roleId: "coder",
+    playerId: "code-coder",
+  }),
+  trace(407, 9_010, "t-code", "code", "player.call.finished", {
+    stateId: "runFirstPhase",
+    status: "ok",
+  }),
+  trace(408, 9_011, "t-code", "code", "fsm.transition", moved(
+    "runFirstPhase",
+    "reviewFirstCommit",
+    "done",
+  )),
+  // The caller names the state that delegates, and to whom.
+  trace(409, 9_012, "t-code", "code", "playbook.call.started", {
+    stateId: "reviewFirstCommit",
+    playbookId: "review",
+    text: "review the first commit",
+  }),
+  trace(410, 9_013, "t-review", "review", "session.started", {}, "t-code"),
+  trace(411, 9_014, "t-review", "review", "fsm.transition",
+    moved("ready", "reviewing", "START_REVIEW"), "t-code"),
+  trace(412, 9_020, "t-review", "review", "fsm.transition",
+    moved("reviewing", "done", "APPROVED", "done"), "t-code"),
+  // Everything below post-dates the review's closing transition: a
+  // settled run keeps being reported on, and none of it may revive it.
+  trace(413, 9_021, "t-review", "review", "status.emitted", {
+    message: "\u2192 approved",
+    stateId: "done",
+  }, "t-code"),
+  trace(414, 9_022, "t-review", "review", "boss.input.settled", {
+    outcome: "terminal",
+    stateId: "done",
+  }, "t-code"),
+  trace(415, 9_023, "t-review", "review", "session.disposed", {
+    state: { value: "done", status: "done" },
+    stateId: "done",
+  }, "t-code"),
+  trace(416, 9_024, "t-code", "code", "playbook.call.finished", {
+    stateId: "reviewFirstCommit",
+    playbookId: "review",
+    result: "approved",
+  }),
+  trace(417, 9_030, "t-code", "code", "fsm.transition",
+    moved("reviewFirstCommit", "done", "APPROVED", "done")),
+  trace(418, 9_031, "t-code", "code", "status.emitted", {
+    message: "\u2192 settled",
+    stateId: "done",
+  }),
+  trace(419, 9_032, "t-code", "code", "boss.input.settled", {
+    outcome: "terminal",
+    stateId: "done",
+  }),
+  trace(420, 9_033, "t-code", "code", "session.disposed", {
+    state: { value: "done", status: "done" },
+    stateId: "done",
+  }),
+  rec(421, { type: "turn_finished", turnId: 9, timestamp: 9_034 }),
+];
+
+/** A run that never reaches a final state and is disposed where it
+ * stands: unfinished, and it says so (run-view-62). */
+export const MACHINE_STOPPED: FixtureEntry[] = [
+  rec(501, {
+    type: "turn_started",
+    turnId: 11,
+    timestamp: 11_000,
+    turn: { id: 11, prompt: "/code start something" },
+  }),
+  trace(502, 11_001, "t-halt", "code", "session.started", {}),
+  trace(503, 11_002, "t-halt", "code", "fsm.transition",
+    moved("ready", "runFirstPhase", "START_CODE")),
+  trace(504, 11_010, "t-halt", "code", "session.disposed", {
+    state: { value: "runFirstPhase", status: "active" },
+    stateId: "runFirstPhase",
+  }),
+  rec(505, { type: "turn_finished", turnId: 11, timestamp: 11_011 }),
+];
+
+/** A child whose caller the pane never saw — it draws where it can be
+ * seen rather than vanishing (run-view-78). */
+export const MACHINE_ORPHAN: FixtureEntry[] = [
+  rec(601, {
+    type: "turn_started",
+    turnId: 12,
+    timestamp: 12_000,
+    turn: { id: 12, prompt: "/review something" },
+  }),
+  trace(602, 12_001, "t-lost", "review", "session.started", {}, "t-never-seen"),
+  trace(603, 12_002, "t-lost", "review", "fsm.transition",
+    moved("ready", "reviewing", "START_REVIEW"), "t-never-seen"),
 ];
 
 export const FULL_RUN: FixtureEntry[] = [

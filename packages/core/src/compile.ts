@@ -204,29 +204,64 @@ export interface MachineGraph {
 
 interface StateConfigLike {
   type?: string;
+  id?: unknown;
   initial?: unknown;
   tags?: string | string[];
   meta?: { playbook?: { role?: unknown; player?: unknown; description?: unknown } };
   description?: unknown;
   on?: Record<string, unknown>;
   always?: unknown;
+  onDone?: unknown;
   invoke?: unknown;
   states?: Record<string, StateConfigLike>;
 }
 
-/** Strip XState target syntax down to a local sibling id: '#m.a.b'
- * and '.b' address forms reduce to their final segment path relative
- * to the machine root. */
-function normalizeTarget(target: string, ownerPath: string[]): string | null {
+/** Strip XState target syntax down to a path from the machine root.
+ * A `#` target names a declared state id — resolved against the ids
+ * the machine actually declares, never assumed to be prefixed with
+ * the machine's own id (playbook-library-36). */
+function normalizeTarget(
+  target: string,
+  ownerPath: string[],
+  declaredIds: ReadonlyMap<string, string>,
+): string | null {
   if (target.startsWith("#")) {
-    const parts = target.slice(1).split(".");
-    return parts.slice(1).join(".") || null;
+    const address = target.slice(1);
+    const direct = declaredIds.get(address);
+    if (direct !== undefined) return direct;
+    // `#<id>.<child>`: the head names a declared state, the tail
+    // descends into it.
+    const cut = address.indexOf(".");
+    if (cut > 0) {
+      const head = declaredIds.get(address.slice(0, cut));
+      if (head !== undefined) return `${head}.${address.slice(cut + 1)}`;
+      // Legacy form: the head is the machine's own id, and the tail is
+      // already a root-relative path.
+      return address.slice(cut + 1) || null;
+    }
+    return null;
   }
   if (target.startsWith(".")) {
     return [...ownerPath, target.slice(1)].join(".");
   }
   // A bare target names a sibling: resolve within the owner's parent.
   return [...ownerPath.slice(0, -1), target].join(".");
+}
+
+/** Every state id the machine declares, mapped to its root-relative
+ * path. XState gives each state an implicit id of its path, and an
+ * explicit `id:` overrides it — both address the same state. */
+function collectDeclaredIds(
+  states: Record<string, StateConfigLike>,
+  parentPath: string[],
+  into: Map<string, string>,
+): void {
+  for (const [name, state] of Object.entries(states)) {
+    const path = [...parentPath, name];
+    const id = path.join(".");
+    if (typeof state.id === "string" && state.id) into.set(state.id, id);
+    if (state.states) collectDeclaredIds(state.states, path, into);
+  }
 }
 
 function transitionBranches(value: unknown): { target?: unknown }[] {
@@ -241,11 +276,20 @@ function transitionBranches(value: unknown): { target?: unknown }[] {
  * config is data, so no XState import is needed (DR-028). */
 export function extractMachineGraph(machine: MachineLike): MachineGraph | null {
   const config = machine.config as
-    | { initial?: unknown; states?: Record<string, StateConfigLike> }
+    | {
+        initial?: unknown;
+        states?: Record<string, StateConfigLike>;
+        on?: Record<string, unknown>;
+      }
     | undefined;
   const rootStates = config?.states;
   const initial = typeof config?.initial === "string" ? config.initial : null;
   if (!rootStates || !initial) return null;
+
+  // Targets are resolved against the ids the machine declares, so the
+  // id table is built before any edge is read.
+  const declaredIds = new Map<string, string>();
+  collectDeclaredIds(rootStates, [], declaredIds);
 
   const nodes: MachineGraphNode[] = [];
   const edges: MachineGraphEdge[] = [];
@@ -266,7 +310,7 @@ export function extractMachineGraph(machine: MachineLike): MachineGraph | null {
             : [branch.target];
       targets.forEach((target, targetIndex) => {
         if (typeof target !== "string") return;
-        const to = normalizeTarget(target, ownerPath);
+        const to = normalizeTarget(target, ownerPath, declaredIds);
         if (!to) return;
         edges.push({
           id: `${owner}::${event}::${branchIndex}::${targetIndex}`,
@@ -309,6 +353,9 @@ export function extractMachineGraph(machine: MachineLike): MachineGraph | null {
         addEdges(path, event, value);
       }
       if (state.always !== undefined) addEdges(path, "", state.always);
+      // A compound or parallel state's own done transition: the join
+      // out of its regions, a real state-to-state edge.
+      if (state.onDone !== undefined) addEdges(path, "done", state.onDone);
       const invoke = state.invoke;
       const invokes = Array.isArray(invoke) ? invoke : invoke ? [invoke] : [];
       for (const entry of invokes) {

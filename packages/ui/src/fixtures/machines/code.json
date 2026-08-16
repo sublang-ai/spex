@@ -1,0 +1,227 @@
+{
+  "initial": "ready",
+  "nodes": [
+    {
+      "id": "ready",
+      "kind": "state",
+      "description": "Waiting for a coding intent.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "runFirstPhase",
+      "kind": "state",
+      "role": "Coder",
+      "description": "Coder is implementing one direct phase or committing a new intent record.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "reviewFirstCommit",
+      "kind": "state",
+      "description": "The REVIEW playbook is checking the first phase commit.",
+      "tags": [
+        "playbook.suspended"
+      ]
+    },
+    {
+      "id": "runIrTask",
+      "kind": "state",
+      "role": "Coder",
+      "description": "Coder is implementing exactly one unfinished intent-record task.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "reviewIrTask",
+      "kind": "state",
+      "description": "The REVIEW playbook is checking the latest task commit.",
+      "tags": [
+        "playbook.suspended"
+      ]
+    },
+    {
+      "id": "awaitBossReply",
+      "kind": "state",
+      "description": "Waiting for Boss to answer Coder.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "failed",
+      "kind": "state",
+      "description": "The coding workflow failed and is waiting for a new coding intent.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "done",
+      "kind": "final",
+      "description": "The coding workflow completed after REVIEW found no unsettled findings.",
+      "tags": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "ready::START_CODE::0::0",
+      "from": "ready",
+      "to": "runFirstPhase",
+      "event": "START_CODE"
+    },
+    {
+      "id": "runFirstPhase::done::0::0",
+      "from": "runFirstPhase",
+      "to": "reviewFirstCommit",
+      "event": "done"
+    },
+    {
+      "id": "runFirstPhase::done::1::0",
+      "from": "runFirstPhase",
+      "to": "reviewFirstCommit",
+      "event": "done"
+    },
+    {
+      "id": "runFirstPhase::done::2::0",
+      "from": "runFirstPhase",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "runFirstPhase::done::3::0",
+      "from": "runFirstPhase",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "runFirstPhase::error::0::0",
+      "from": "runFirstPhase",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "reviewFirstCommit::done::0::0",
+      "from": "reviewFirstCommit",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "reviewFirstCommit::done::1::0",
+      "from": "reviewFirstCommit",
+      "to": "runIrTask",
+      "event": "done"
+    },
+    {
+      "id": "reviewFirstCommit::done::2::0",
+      "from": "reviewFirstCommit",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "reviewFirstCommit::error::0::0",
+      "from": "reviewFirstCommit",
+      "to": "done",
+      "event": "error"
+    },
+    {
+      "id": "reviewFirstCommit::error::1::0",
+      "from": "reviewFirstCommit",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "runIrTask::done::0::0",
+      "from": "runIrTask",
+      "to": "reviewIrTask",
+      "event": "done"
+    },
+    {
+      "id": "runIrTask::done::1::0",
+      "from": "runIrTask",
+      "to": "reviewIrTask",
+      "event": "done"
+    },
+    {
+      "id": "runIrTask::done::2::0",
+      "from": "runIrTask",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "runIrTask::done::3::0",
+      "from": "runIrTask",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "runIrTask::error::0::0",
+      "from": "runIrTask",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "reviewIrTask::done::0::0",
+      "from": "reviewIrTask",
+      "to": "runIrTask",
+      "event": "done"
+    },
+    {
+      "id": "reviewIrTask::done::1::0",
+      "from": "reviewIrTask",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "reviewIrTask::done::2::0",
+      "from": "reviewIrTask",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "reviewIrTask::error::0::0",
+      "from": "reviewIrTask",
+      "to": "done",
+      "event": "error"
+    },
+    {
+      "id": "reviewIrTask::error::1::0",
+      "from": "reviewIrTask",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::0::0",
+      "from": "awaitBossReply",
+      "to": "failed",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::1::0",
+      "from": "awaitBossReply",
+      "to": "runFirstPhase",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::2::0",
+      "from": "awaitBossReply",
+      "to": "runIrTask",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::START_CODE::0::0",
+      "from": "awaitBossReply",
+      "to": "runFirstPhase",
+      "event": "START_CODE"
+    },
+    {
+      "id": "failed::START_CODE::0::0",
+      "from": "failed",
+      "to": "runFirstPhase",
+      "event": "START_CODE"
+    }
+  ]
+}

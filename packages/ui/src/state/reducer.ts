@@ -88,6 +88,9 @@ export interface SessionView {
   captainMode?: string;
   /** Live machine frames, parents before children (run-view-60/63). */
   frames: MachineFrame[];
+  /** Trace sessions whose run has settled — the tombstones that keep
+   * a finished run's trailing reports from reviving it (run-view-74). */
+  settledRuns: string[];
   /** Set while the playbook is parked awaiting a Boss reply. */
   pendingQuestion?: string;
   /** The asking player for the parked question (pane id). */
@@ -112,6 +115,7 @@ export function initialSessionView(
     turnActive: false,
     currentTurnId: null,
     frames: [],
+    settledRuns: [],
     lastSeq: 0,
   };
 }
@@ -485,8 +489,14 @@ export function applyRecord(
         // The structured trace opens, moves, and settles the machine
         // frames the pane draws (run-view-60..63); folding is pure so
         // a replay reproduces the same cards (run-view-14).
-        const fold = foldTrace(view.frames, r.payload, r.timestamp);
+        const fold = foldTrace(
+          view.frames,
+          r.payload,
+          r.timestamp,
+          view.settledRuns,
+        );
         view.frames = [...fold.open];
+        view.settledRuns = [...fold.settled];
         if (fold.closed) {
           pushCaptain(view, {
             kind: "machine",

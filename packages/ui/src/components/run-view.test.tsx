@@ -25,7 +25,11 @@ import type {
   SessionInfo,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
-import { MACHINE_RUN } from "../fixtures/sample-run.js";
+import {
+  MACHINE_ORPHAN,
+  MACHINE_RUN,
+  MACHINE_STOPPED,
+} from "../fixtures/sample-run.js";
 
 const SESSION: SessionInfo = {
   id: "s1",
@@ -228,44 +232,119 @@ describe("RUN-36: ended sessions render read-only", () => {
   });
 });
 
-// run-view-66: the machine cards over a fixture replay (DR-028).
-describe("run-view-66: machine cards from the trace", () => {
-  test("a mid-run replay draws live stacked cards and absorbs the glyphs", () => {
-    // Replay up to the nested review's first transition: both frames
-    // open, parent before child (run-view-60/63).
-    renderRun(MACHINE_RUN.slice(0, 9));
+// run-view-66: the machine call tree over a fixture replay (DR-031).
+describe("run-view-66: the machine call tree from the trace", () => {
+  test("a running child nests under its caller, which folds to a strip", () => {
+    // Replay to the review's first transition: /code is delegating,
+    // /review is the running leaf.
+    renderRun(MACHINE_RUN.slice(0, 11));
     const live = screen.getByTestId("live-machines");
     const cards = within(live).getAllByTestId(/^machine-card-/);
     expect(cards).toHaveLength(2);
     expect(cards[0].getAttribute("data-playbook")).toBe("code");
     expect(cards[1].getAttribute("data-playbook")).toBe("review");
 
-    // The parent's active state is drawn from observed truth alone —
-    // no definition was served (run-view-64).
-    const active = within(live).getByTestId(
-      "machine-state-t-code-runFirstPhase",
+    // The caller is the ancestor: a strip that still names the calling
+    // state and the callee, so the containment survives the fold.
+    expect(cards[0].getAttribute("data-expanded")).toBe("false");
+    expect(cards[0].getAttribute("aria-label")).toContain("review first commit");
+    expect(cards[0].getAttribute("aria-label")).toContain("/review");
+    expect(
+      within(live).getByTestId("machine-connector-t-code"),
+    ).toBeTruthy();
+
+    // The running leaf is what is drawn, and its header names the
+    // state that called it.
+    expect(cards[1].getAttribute("data-expanded")).toBe("true");
+    expect(cards[1].getAttribute("data-caller-state")).toBe("reviewFirstCommit");
+    const active = within(cards[1]).getByTestId(
+      "machine-state-t-review-reviewing",
     );
     expect(active.getAttribute("data-active")).toBe("true");
 
-    // The active state names its player (run-view-61); the ⤷ glyph
-    // line was absorbed by the card while ◇ stayed (run-view-60).
-    expect(within(active).getByText(/code-coder/)).toBeTruthy();
+    // The running mark is the app's one pulse, and it says so.
+    const mark = within(cards[1]).getByTestId("machine-running-t-review");
+    expect(mark.getAttribute("data-running")).toBe("true");
+    expect(mark.className).toContain("motion-safe:animate-pulse");
+
+    // The ⤷ glyph line was absorbed by the card while ◇ stayed.
     expect(screen.getByText("◇ /code started")).toBeTruthy();
     expect(screen.queryByText(/⤷ Coder: implement/)).toBeNull();
   });
 
-  test("the settled finish moves each card into the thread", () => {
+  test("expanding the caller is arrangement, and shows both drawings", () => {
+    renderRun(MACHINE_RUN.slice(0, 11));
+    const before = screen
+      .getAllByTestId(/^machine-card-/)
+      .map((card) => card.getAttribute("data-playbook"));
+
+    fireEvent.click(screen.getByTestId("machine-disclose-t-code"));
+
+    const cards = screen.getAllByTestId(/^machine-card-/);
+    expect(cards[0].getAttribute("data-expanded")).toBe("true");
+    // The delegating state wears the call voice and names its callee.
+    const delegating = within(cards[0]).getByTestId(
+      "machine-state-t-code-reviewFirstCommit",
+    );
+    expect(delegating.getAttribute("data-delegating")).toBe("true");
+    expect(within(delegating).getByText("→ /review")).toBeTruthy();
+    // The child is untouched: the same tree, differently disclosed.
+    expect(cards.map((card) => card.getAttribute("data-playbook"))).toEqual(
+      before,
+    );
+    expect(cards[1].getAttribute("data-expanded")).toBe("true");
+  });
+
+  test("one card per run: the reports that trail a finish revive none", () => {
     renderRun(MACHINE_RUN);
-    // Both frames closed: the live region is gone and two settled
-    // cards sit in the thread (run-view-62).
+    // Nothing left running, and the root settled into the thread with
+    // its child settled inside it — not two loose cards.
     expect(screen.queryByTestId("live-machines")).toBeNull();
     const settled = screen.getAllByTestId(/^machine-card-/);
     expect(settled).toHaveLength(2);
+    expect(settled[0].getAttribute("data-playbook")).toBe("code");
+    expect(settled[1].getAttribute("data-playbook")).toBe("review");
     for (const card of settled) {
       expect(card.getAttribute("data-settled")).toBe("true");
     }
-    // The review settled before the code run, in finish order.
-    expect(settled[0].getAttribute("data-playbook")).toBe("review");
-    expect(settled[1].getAttribute("data-playbook")).toBe("code");
+    // The status, settlement and disposal that follow a finished run
+    // used to raise a blank second card labelled "stopped".
+    expect(screen.getByTestId("machine-outcome-t-code").textContent).toBe(
+      "done",
+    );
+    expect(screen.getByTestId("machine-outcome-t-review").textContent).toBe(
+      "done",
+    );
+    // The settled child stays anchored to the state that called it.
+    expect(settled[1].getAttribute("data-caller-state")).toBe(
+      "reviewFirstCommit",
+    );
+  });
+
+  test("a settled strip expands to its final drawing", () => {
+    renderRun(MACHINE_RUN);
+    const card = screen.getByTestId("machine-card-t-code");
+    expect(card.getAttribute("data-expanded")).toBe("false");
+    fireEvent.click(screen.getByTestId("machine-disclose-t-code"));
+    expect(
+      within(card).getByTestId("machine-state-t-code-done"),
+    ).toBeTruthy();
+  });
+
+  test("a run disposed where it stands settles unfinished", () => {
+    renderRun(MACHINE_STOPPED);
+    expect(screen.getAllByTestId(/^machine-card-/)).toHaveLength(1);
+    expect(screen.getByTestId("machine-outcome-t-halt").textContent).toBe(
+      "stopped",
+    );
+  });
+
+  test("a child whose caller is unknown draws at the top level", () => {
+    renderRun(MACHINE_ORPHAN);
+    const live = screen.getByTestId("live-machines");
+    const cards = within(live).getAllByTestId(/^machine-card-/);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].getAttribute("data-playbook")).toBe("review");
   });
 });
+

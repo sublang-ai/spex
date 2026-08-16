@@ -31,6 +31,7 @@ function Line({
           <MachineCard
             frame={line.frame}
             graph={graphs?.[line.frame.playbookId]}
+            graphs={graphs}
             settled
           />
         </div>
@@ -205,16 +206,33 @@ export function CaptainPane({
             );
           })}
           {view.frames.length > 0 ? (
-            // The live machines, parents before children — the run
-            // drawn while it runs (run-view-60/63).
+            // The live call tree: roots here, each card owning its own
+            // children — including a child whose caller the pane never
+            // saw, which renders at the top level rather than vanishing
+            // (run-view-63/78).
             <div data-testid="live-machines" className="flex flex-col gap-2">
-              {view.frames.map((frame) => (
-                <MachineCard
-                  key={frame.traceSessionId}
-                  frame={frame}
-                  graph={machineGraphs?.[frame.playbookId]}
-                />
-              ))}
+              {view.frames
+                .filter(
+                  (frame) =>
+                    !frame.parentSessionId ||
+                    !view.frames.some(
+                      (other) =>
+                        other.traceSessionId === frame.parentSessionId,
+                    ),
+                )
+                .map((frame) => (
+                  <MachineCard
+                    key={frame.traceSessionId}
+                    frame={frame}
+                    graph={machineGraphs?.[frame.playbookId]}
+                    graphs={machineGraphs}
+                    openFrames={view.frames}
+                    openChildren={view.frames.filter(
+                      (other) =>
+                        other.parentSessionId === frame.traceSessionId,
+                    )}
+                  />
+                ))}
             </div>
           ) : null}
           {view.captainDraft ? (
