@@ -228,16 +228,58 @@ export class Store {
           "FROM sessions s JOIN projects p ON p.id = s.project_id ORDER BY s.created_at",
       )
       .all() as SessionRow[];
-    return rows.map((row) => ({
-      id: row.id,
-      projectId: row.project_id,
-      projectPath: row.path,
-      createdAt: row.created_at,
-      live: row.live === 1,
-      endedAt: row.ended_at,
-      players: JSON.parse(row.players_json) as SessionInfo["players"],
-      initialVisible: JSON.parse(row.initial_visible_json) as string[],
-    }));
+    // The conversation summary each session carries (core-service-32),
+    // gathered set-wise: one query per field class, never one per
+    // session.
+    const titles = new Map<string, string>();
+    for (const row of this.db
+      .prepare(
+        "SELECT session_id, prompt FROM turns WHERE turn_id = " +
+          "(SELECT MIN(turn_id) FROM turns t2 WHERE t2.session_id = turns.session_id)",
+      )
+      .all() as { session_id: string; prompt: string }[]) {
+      titles.set(row.session_id, row.prompt);
+    }
+    const counts = new Map<string, number>();
+    for (const row of this.db
+      .prepare("SELECT session_id, COUNT(*) AS turns FROM turns GROUP BY session_id")
+      .all() as { session_id: string; turns: number }[]) {
+      counts.set(row.session_id, row.turns);
+    }
+    const failures = new Set<string>();
+    for (const row of this.db
+      .prepare(
+        "SELECT DISTINCT session_id FROM records WHERE type = 'runtime_error'",
+      )
+      .all() as { session_id: string }[]) {
+      failures.add(row.session_id);
+    }
+    const costs = new Map<string, number>();
+    for (const row of this.db
+      .prepare(
+        "SELECT session_id, SUM(total_cost_usd) AS cost FROM usage GROUP BY session_id",
+      )
+      .all() as { session_id: string; cost: number | null }[]) {
+      if (row.cost) costs.set(row.session_id, row.cost);
+    }
+    return rows.map((row) => {
+      const title = titles.get(row.id);
+      const cost = costs.get(row.id);
+      return {
+        id: row.id,
+        projectId: row.project_id,
+        projectPath: row.path,
+        createdAt: row.created_at,
+        live: row.live === 1,
+        endedAt: row.ended_at,
+        players: JSON.parse(row.players_json) as SessionInfo["players"],
+        initialVisible: JSON.parse(row.initial_visible_json) as string[],
+        ...(title !== undefined ? { title } : {}),
+        turns: counts.get(row.id) ?? 0,
+        failed: failures.has(row.id),
+        ...(cost !== undefined ? { costUsd: cost } : {}),
+      };
+    });
   }
 
   // -- turns ----------------------------------------------------------------

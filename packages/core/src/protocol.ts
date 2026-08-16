@@ -135,6 +135,15 @@ export interface SessionInfo {
   players: { id: string; adapter: AdapterName; model?: string }[];
   /** Panes visible at session start, before any player_view_changed record. */
   initialVisible: string[];
+  /** The session's own words: its first Boss turn, absent when the
+   * session held no turn (core-service-32). */
+  title?: string;
+  /** Turns this session held. */
+  turns: number;
+  /** Whether the session carries a failure record. */
+  failed: boolean;
+  /** Recorded cost, when any usage carried one. */
+  costUsd?: number;
 }
 
 export interface ReadinessEntry {

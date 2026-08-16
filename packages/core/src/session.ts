@@ -179,6 +179,10 @@ export class SessionManager {
         ...(player.model !== undefined ? { model: player.model } : {}),
       })),
       initialVisible: composed.initialVisible,
+      // A session begins with no conversation to summarize
+      // (core-service-32); the store fills these as it runs.
+      turns: 0,
+      failed: false,
     };
 
     const entry: LiveSession = {

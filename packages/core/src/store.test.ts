@@ -24,6 +24,8 @@ function sampleSession(store: Store): SessionInfo {
     live: true,
     endedAt: null,
     players: [{ id: "code-coder", adapter: "claude" }],
+    turns: 0,
+    failed: false,
     initialVisible: ["code-coder"],
   };
   store.createSession(session);
@@ -131,4 +133,61 @@ test("prefs round-trip JSON values", () => {
   store.setPref("ui", { theme: "light" });
   assert.deepEqual(store.getPref("ui"), { theme: "light" });
   store.close();
+});
+
+test("core-service-32: session.list carries each session's conversation summary", () => {
+  // The rail's rows are only scannable if the listing carries scent:
+  // the session's own first words, its size, whether it ended badly,
+  // and what it cost.
+  const store = new Store(tempStorePath());
+  const project = store.registerProject("/tmp/proj", "proj", 1000);
+  const base = {
+    projectId: project.id,
+    projectPath: project.path,
+    createdAt: 2000,
+    live: false,
+    endedAt: 9000,
+    players: [{ id: "code-coder", adapter: "claude" as const }],
+    initialVisible: ["code-coder"],
+    turns: 0,
+    failed: false,
+  };
+  store.createSession({ ...base, id: "rich" });
+  store.createSession({ ...base, id: "bare", createdAt: 3000 });
+
+  store.startTurn("rich", 1, "harden the session refresh", 2100);
+  store.endTurn("rich", 1, "finished", 2200);
+  store.startTurn("rich", 2, "add expiry-skew tests", 2300);
+  store.appendRecord("rich", 1, {
+    type: "runtime_error",
+    turnId: 2,
+    timestamp: 2400,
+    message: "The Captain's turn failed: adapter sign-in expired",
+  } as TmuxPlayRecord);
+  store.addUsage({
+    sessionId: "rich",
+    turnId: 1,
+    actorId: "code-coder",
+    inputTokens: 100,
+    outputTokens: 20,
+    toolUses: 1,
+    totalCostUsd: 0.16,
+    at: 2500,
+  });
+
+  const listed = store.listSessions();
+  const rich = listed.find((session) => session.id === "rich");
+  const bare = listed.find((session) => session.id === "bare");
+
+  assert.equal(rich?.title, "harden the session refresh");
+  assert.equal(rich?.turns, 2);
+  assert.equal(rich?.failed, true);
+  assert.equal(rich?.costUsd, 0.16);
+
+  // A session that never held a turn says so by carrying no title,
+  // rather than faking a name.
+  assert.equal(bare?.title, undefined);
+  assert.equal(bare?.turns, 0);
+  assert.equal(bare?.failed, false);
+  assert.equal(bare?.costUsd, undefined);
 });
