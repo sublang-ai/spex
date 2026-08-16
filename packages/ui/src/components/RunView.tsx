@@ -77,7 +77,7 @@ export function RunView({
         {readOnly ? (
           <span
             data-testid="session-ended-at"
-            className="shrink-0 text-xs text-neutral-400"
+            className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
           >
             ended{" "}
             {session.endedAt ? new Date(session.endedAt).toLocaleString() : ""}

@@ -28,6 +28,15 @@ export const SURFACES: readonly Surface[] = [
   "Settings",
 ];
 
+// The interaction hue's tinted fill is a hue shift, not a luminance
+// one — measured at 1.01:1 against the rail in dark. So "active" is
+// carried by a brand-500 edge (>=3:1 in both themes) alongside the
+// fill and the weight, and survives greyscale (DR-026 §3, DR-010 §8).
+const ACTIVE =
+  "border-l-2 border-brand-500 bg-brand-50 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300";
+const INACTIVE =
+  "border-l-2 border-transparent text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800";
+
 const SURFACE_ICONS: Record<Surface, IconName> = {
   Dashboard: "grid",
   Workspace: "folder",
@@ -101,8 +110,8 @@ const LIFE_MARKS: Record<Life, string> = {
   question: "bg-amber-500",
   failure: "bg-red-500",
   running: "bg-emerald-500",
-  "ended-failed": "border-2 border-red-400 dark:border-red-500",
-  ended: "border-2 border-neutral-300 dark:border-neutral-600",
+  "ended-failed": "border-2 border-red-500",
+  ended: "border-2 border-neutral-500",
 };
 
 function sessionLabel(
@@ -230,13 +239,23 @@ export function NavRail(props: NavRailProps) {
 
   function moveFocus(key: string): void {
     setFocusKey(key);
-    treeRef.current
-      ?.querySelector<HTMLElement>(`[data-row="${CSS.escape(key)}"]`)
-      ?.focus();
+    // Row keys carry ids, not CSS identifiers: find by value rather
+    // than build a selector out of one.
+    const rowElements = treeRef.current?.querySelectorAll<HTMLElement>("[data-row]");
+    for (const element of rowElements ?? []) {
+      if (element.dataset.row === key) {
+        element.focus();
+        return;
+      }
+    }
   }
 
   function onTreeKeyDown(event: React.KeyboardEvent): void {
-    const index = rows.findIndex((row) => row.key === focused);
+    // The focused row comes from the event, not from state: a burst of
+    // keys must not all navigate from the same stale place.
+    const from =
+      (event.target as HTMLElement | null)?.dataset?.row ?? focused;
+    const index = rows.findIndex((row) => row.key === from);
     if (index < 0) return;
     const row = rows[index];
     switch (event.key) {
@@ -321,13 +340,9 @@ export function NavRail(props: NavRailProps) {
             ? `${name} — ${attentionCount} need${attentionCount === 1 ? "s" : ""} your attention`
             : name
         }
-        className={`relative flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm ${
+        className={`relative flex items-center gap-2 rounded-md py-1.5 pr-2.5 pl-2 text-left text-sm ${
           collapsed ? "justify-center" : ""
-        } ${
-          active
-            ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-            : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-        }`}
+        } ${active ? ACTIVE : INACTIVE}`}
       >
         <Icon name={SURFACE_ICONS[name]} className="h-4 w-4 shrink-0" />
         {collapsed ? null : <span className="min-w-0 flex-1">{name}</span>}
@@ -351,9 +366,7 @@ export function NavRail(props: NavRailProps) {
    * the treatment the surface entries already use (run-view-73). */
   function rowClass(active: boolean): string {
     return `flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-1.5 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
-      active
-        ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-        : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
+      active ? ACTIVE : INACTIVE
     }`;
   }
 
@@ -412,7 +425,7 @@ export function NavRail(props: NavRailProps) {
                   event.stopPropagation();
                   onExpanded(project.id, !open);
                 }}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
               >
                 <Icon
                   name={open ? "caretDown" : "caretRight"}
@@ -463,12 +476,14 @@ export function NavRail(props: NavRailProps) {
                       />
                       <span
                         className={`min-w-0 flex-1 truncate ${
-                          session.title ? "" : "italic text-neutral-400"
+                          session.title
+                            ? ""
+                            : "italic text-neutral-500 dark:text-neutral-400"
                         }`}
                       >
                         {session.title ?? "no messages yet"}
                       </span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-neutral-400">
+                      <span className="shrink-0 text-[11px] tabular-nums text-neutral-500 dark:text-neutral-400">
                         {relativeTime(session.endedAt ?? session.createdAt, now)}
                       </span>
                     </div>
@@ -537,7 +552,12 @@ export function NavRail(props: NavRailProps) {
       {surfaceEntry("Dashboard")}
 
       {collapsed ? (
-        surfaceEntry("Workspace")
+        <>
+          {surfaceEntry("Workspace")}
+          {/* Entries keep their places across the fold: Playbooks and
+              Settings stay at the foot in both states. */}
+          <div className="flex-1" />
+        </>
       ) : (
         <section className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-1 px-1 pb-0.5 pt-2">
@@ -549,7 +569,7 @@ export function NavRail(props: NavRailProps) {
               className={`min-w-0 flex-1 rounded px-1 py-0.5 text-left text-[11px] font-semibold uppercase tracking-wide ${
                 surface === "Workspace"
                   ? "text-brand-700 dark:text-brand-300"
-                  : "text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                  : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"
               }`}
             >
               Workspace
@@ -560,7 +580,7 @@ export function NavRail(props: NavRailProps) {
               onClick={props.onOpenPalette}
               title="Switch or add a project (⌘P)"
               aria-label="Switch or add a project"
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
               <Icon name="plus" className="h-3.5 w-3.5" />
             </button>
@@ -587,7 +607,7 @@ export function NavRail(props: NavRailProps) {
           }
           aria-label={collapsed ? "Show the sidebar" : "Collapse the sidebar"}
           aria-expanded={!collapsed}
-          className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
         >
           <Icon name="sidebar" className="h-4 w-4" />
         </button>

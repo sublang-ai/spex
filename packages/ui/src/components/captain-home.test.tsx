@@ -154,7 +154,7 @@ describe("RUN-29: captain home structure and one-motion start", () => {
 
   test("submitting without a project opens the palette, draft intact", () => {
     const { onStart, onOpenPalette } = renderHome({ hasProject: false });
-    expect(screen.getByText(/Pick a project up top/)).toBeTruthy();
+    expect(screen.getByText(/Pick a project in the sidebar/)).toBeTruthy();
     const composer = screen.getByTestId(
       "start-composer",
     ) as HTMLTextAreaElement;

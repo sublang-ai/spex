@@ -184,9 +184,9 @@ export function CaptainHome(props: CaptainHomeProps) {
               </>
             ) : (
               <>
-                Hello! I'm your Captain. Pick a project up top to get
-                started — then tell me what to do and I'll route it to a
-                playbook and drive the players.
+                Hello! I'm your Captain. Pick a project in the sidebar
+                to get started — then tell me what to do and I'll route
+                it to a playbook and drive the players.
               </>
             )}
           </p>

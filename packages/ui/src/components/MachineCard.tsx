@@ -274,7 +274,10 @@ export function MachineCard({ frame, graph, settled = false, now }: MachineCardP
                   height={place.height}
                   rx={8}
                   strokeWidth={active ? 2 : 1.25}
-                  className={`transition-colors duration-300 motion-reduce:transition-none ${tone.box}`}
+                  // Stroke and width only: a transition over `fill`
+                  // sticks at its interpolated value when the OS theme
+                  // flips mid-render, leaving light-theme boxes dark.
+                  className={`transition-[stroke,stroke-width] duration-300 motion-reduce:transition-none ${tone.box}`}
                 />
                 {node.kind === "final" ? (
                   <rect

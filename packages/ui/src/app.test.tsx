@@ -252,6 +252,33 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     );
   });
 
+  test("the tree walks by keyboard and keeps its own letters", async () => {
+    render(<App />);
+    const project = screen.getByTestId("sidebar-project-p1");
+    project.focus();
+
+    // One focus stop, arrow keys within it (run-view-67).
+    fireEvent.keyDown(project, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(
+      screen.getByTestId("sidebar-session-a-live"),
+    );
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(project);
+
+    // Disclosure by keyboard, and it never moves the workspace.
+    fireEvent.keyDown(project, { key: "ArrowLeft" });
+    expect(project.getAttribute("aria-expanded")).toBe("false");
+    expect(useAppStore.getState().currentProjectId).toBe("p1");
+
+    // Type-ahead reaches a session by its own first words, and the
+    // composer does not steal the letter (run-view-49).
+    fireEvent.keyDown(project, { key: "ArrowRight" });
+    fireEvent.keyDown(project, { key: "c" });
+    expect(document.activeElement).toBe(
+      screen.getByTestId("sidebar-session-a-failed"),
+    );
+  });
+
   test("closing a tab files the session back, still listed", () => {
     render(<App />);
     fireEvent.click(screen.getByTestId("tab-close-a-live"));

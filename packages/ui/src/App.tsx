@@ -386,7 +386,7 @@ function WorkspaceSurface({
                 {session.live ? null : (
                   <span
                     data-testid={`tab-ended-${session.id}`}
-                    className="shrink-0 text-[11px] text-neutral-400"
+                    className="shrink-0 text-[11px] text-neutral-500 dark:text-neutral-400"
                   >
                     ended
                   </span>
