@@ -49,6 +49,14 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 - Live sessions for distinct projects run concurrently.
 - While a session is live, a client's disposal request disposes the session's runtime, reports the session as ended, and a subsequent session request for the same project is accepted.
 
+#### core-service-32
+
+When a client requests the session list, the core service shall reply with every stored session's lifecycle fields and its conversation summary ([DR-029](../decisions/029-session-history-home.md)):
+
+- each entry carries the session's project, creation and end times, and liveness;
+- each entry carries a title — the first Boss turn's text — absent when the session held no turn;
+- each entry carries its turn count, whether it ended holding a failure record, and its recorded cost.
+
 ### Boss Turns
 
 #### core-service-5
@@ -190,6 +198,10 @@ Where the core service runs with a valid config and the scripted fake adapter [[
 #### core-service-31
 
 Where a session's captain finishes a turn with a hidden result reporting an error, the test suite shall assert the synthesized surfacing of [[core-service-30](#core-service-30)]: a session subscriber receives a visible failure record carrying the underlying error text with the turn's id, and no hidden record reaches the session channel [[core-service-8](#core-service-8)].
+
+#### core-service-33
+
+Where a stored session held two turns, a failure record, and usage with cost, and a second stored session held none of these, the test suite shall assert the listing contract of [[core-service-32](#core-service-32)]: the first entry carries the first turn's text as its title, a turn count of two, the failure marker, and the recorded cost; the second entry carries no title, a zero count, no marker, and no cost.
 
 ### Record Visibility Coverage
 

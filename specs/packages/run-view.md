@@ -229,6 +229,28 @@ Where a run's machine definition is unavailable over the artifacts contract [[pl
 
 When the session record stream delivers a captain turn result reporting an error, the Captain pane shall display the synthesized failure line naming the underlying cause [[core-service-30](core-service.md#core-service-30)] as a ◆ failure line [[run-view-2](#run-view-2)], never only the captain's composed reply.
 
+### Session Home
+
+#### run-view-67
+
+While a project holds ended sessions, the Captain home shall list them as the project's conversations, newest first, each row scannable by its own words ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
+
+- a row shows the session's title, its ended time in relative terms, its turn count, a failure marker when it ended holding one, and its cost — a session with no turns saying so honestly;
+- the list is primary content whenever it is non-empty, above the greeting's supporting material, with the scope toggle between this project and all projects kept;
+- the start tab's accessible name and tooltip name both duties — a new session and the history.
+
+#### run-view-68
+
+When the user ends a session, the workspace shall land on the session home with the just-ended session newly at the top of the list, briefly highlighted, so the eye follows where the conversation went ([DR-029](../decisions/029-session-history-home.md)).
+
+#### run-view-69
+
+When a past session is opened from the home, the run view shall replay it read-only in place — no surface switch — headed by its title and ended time ([DR-029](../decisions/029-session-history-home.md)):
+
+- the transcript is the identical fold of the stored records [[run-view-14](#run-view-14)], settled machine cards included [[run-view-62](#run-view-62)];
+- the composer's place offers starting a fresh session for the same project;
+- Back returns to the session home with its scroll kept.
+
 ### Keyboard and Guardrails (DR-010 §4/§6)
 
 #### run-view-42
@@ -376,6 +398,10 @@ Where a fixture stream carries a playbook run's trace records — an invocation 
 - with no machine definition served, the same replay still renders the card from observed states alone [[run-view-64](#run-view-64)];
 - a fixture captain reply record renders as Captain speech in the thread [[run-view-1](#run-view-1)];
 - a fixture captain result reporting an error renders the synthesized cause as a failure line [[run-view-65](#run-view-65)].
+
+#### run-view-70
+
+Where a fixture store holds one ended titled session with turns, cost, and a failure, and one ended session with no turns, the test suite shall assert the session home round trip: the rows render title, relative ended time, turn count, failure marker, and cost — the empty session saying so [[run-view-67](#run-view-67)]; ending a live session lands on the home with the new top row highlighted [[run-view-68](#run-view-68)]; opening a titled row replays the identical transcript read-only with its title in the header, offers a fresh session, and Back returns to the home with scroll kept [[run-view-69](#run-view-69)].
 
 #### run-view-21
 
