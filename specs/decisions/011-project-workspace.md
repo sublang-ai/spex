@@ -7,6 +7,7 @@
 
 Accepted; the spec view's data layout and group model are amended by [DR-015](015-reference-content.md) — packages-layout parsing with section-kind groups replaces the user/dev/test triple.
 The Settings surface's profile inventory is amended by [DR-019](019-inline-agent-configuration.md).
+The project bar, the Captain home's session list, and the live-sessions-only tab strip are amended by [DR-029](029-session-history-home.md) — the sidebar became the navigator; the text below is rewritten where it named them.
 
 ## Context
 
@@ -20,7 +21,7 @@ The Settings surface's profile inventory is amended by [DR-019](019-inline-agent
 
 | Nav | Scope | Content |
 | --- | --- | --- |
-| Workspace | current project | project bar; session tabs + "+"; pinned Specs and Repo tabs |
+| Workspace | current project | open session tabs + "+"; pinned Specs and Repo tabs (project identity moved to the sidebar, [DR-029](029-session-history-home.md)) |
 | Dashboard | all projects | attention queue, running sessions, work lists, usage (unchanged) |
 | Playbooks | global | configured playbooks + compile (unchanged) |
 | Settings | global | profiles, captain, notifications, theme (unchanged) |
@@ -29,16 +30,16 @@ The Settings surface's profile inventory is amended by [DR-019](019-inline-agent
 
 ### Project palette (the switcher)
 
-- The project bar names the current project; activating it — or Cmd/Ctrl+P, or Enter in a composer with no project chosen — opens a centered command-palette popover: filter-as-you-type list of projects, "Open folder…" (native picker when present), add-by-path, and "Create a project…". Register→silent-git-init fallback moves to one store action the palette owns [[projects-1](../packages/projects.md#projects-1)].
-- Palette rows carry each project's live state: running-session count (emerald dot) and attention (amber/red dot + count), so quiet runs in other projects stay one keystroke away. The bar chip carries a dot in the most severe color of non-current projects' attention.
+- The sidebar's Workspace section names the current project; its palette control — or Cmd/Ctrl+P, or Enter in a composer with no project chosen — opens a centered command-palette popover: filter-as-you-type list of projects, "Open folder…" (native picker when present), add-by-path, and "Create a project…". Register→silent-git-init fallback moves to one store action the palette owns [[projects-1](../packages/projects.md#projects-1)].
+- Palette rows carry each project's live state: running-session count (emerald dot) and attention (amber/red dot + count), so quiet runs in other projects stay one keystroke away. Each sidebar project row carries the same attention dot in its most severe color.
 - Keyboard contract: the palette owns focus while open; arrows/Enter pick, Escape closes; when opened from a composer, focus returns to that composer with the draft intact and never auto-sends. Cmd/Ctrl+P is preventDefault'ed in browsers.
 
 ### Workspace state
 
-- Session tabs are titled by the session's first Boss turn (truncated snippet; "new session" before the first turn), full prompt and start time in the tooltip — the project name leaves the tab (it lives in the bar). Close confirms and a11y labels use the same title.
-- Per-project memory: each project remembers its last-active tab (session, start, Specs, or Repo), restored on switch; arriving via an attention affordance (Dashboard row, palette row) focuses the session that needs the human instead. The current project persists across launches.
-- With no project chosen, the strip (including pinned tabs) is absent; the bar and the Captain home's guidance are the whole surface. The bar and strip render in every other workspace state, including zero live sessions and past-transcript browsing.
-- The Captain home loses its composer project chip; past sessions list is scoped to the current project with an "all projects" toggle. Cmd/Ctrl+Shift+[ ] cycle the strip's tabs (sessions and pinned); Cmd/Ctrl+Shift+S toggles Specs ↔ the previous tab.
+- Session tabs are titled by the session's first Boss turn (truncated snippet; "new session" before the first turn), full prompt and start time in the tooltip — the project name leaves the tab (it lives in the sidebar). A11y labels use the same title.
+- Per-project memory: each project remembers its own working set and which tab is active, restored on switch; arriving via an attention affordance (Dashboard row, palette row) focuses the session that needs the human instead. The current project persists across launches.
+- With no project chosen, the strip (including pinned tabs) is absent; the sidebar and the Captain home's guidance are the whole surface. The strip renders in every other workspace state, including zero live sessions.
+- The Captain home loses its composer project chip; its greeting names the project a new session would target. Cmd/Ctrl+Shift+[ ] cycle the strip's tabs (sessions and pinned); Cmd/Ctrl+Shift+S toggles Specs ↔ the previous tab.
 
 ### The spec view
 
@@ -58,6 +59,6 @@ One per project, from the project's `specs/` tree, read-only.
 ## Consequences
 
 - New spec package `spec-view.md`; the run-view package's items for the start flow, tab strip, and shortcuts are amended; the projects package's items are amended to the Repo tab + palette reality.
-- The store gains `currentProjectId` with one contract: set only by the palette, by `focusSession` (deriving from the session), or at boot (persisted value, else the first live session's project); bootstrap session activation happens within it.
+- The store gains `currentProjectId` with one contract: set only by the palette, by the sidebar, by `focusSession` (deriving from the session), or at boot (persisted value, else the first live session's project); bootstrap session activation happens within it.
 - `tabTitles()` (project-path titling) is replaced by first-turn titling.
 - Deferred, recorded: side-by-side spec panel next to a running session (revisit when dogfooding shows frequent mid-run spec consultation); a specs file watcher; per-package coverage badges (inbound backlinks ship now; the aggregate badge waits for real use); open-in-editor / reveal-in-Finder (needs a [DR-008](008-native-shell-bridge.md) amendment).

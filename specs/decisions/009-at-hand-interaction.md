@@ -21,11 +21,11 @@ Accepted; the profile-popover wording is amended by [DR-019](019-inline-agent-co
   Wherever a profile is referenced (captain identity, role mappings), a small affordance opens an **anchored popover** that switches the profile and edits its essentials (model, reasoning effort) in place, with the same fail-closed validation as Settings.
   Full editors (Settings, Library) remain the canonical deep views; in-place popovers cover the common 90%.
 - **Attention is visible from anywhere.**
-  The Sessions navigation entry carries a badge with the count of sessions needing a human (questions, failures), consistent with the dock badge.
+  The Dashboard navigation entry carries a badge with the count of sessions needing a human (questions, failures) across every project, consistent with the dock badge ([DR-029](029-session-history-home.md) moved it there from Sessions, the aggregate view owning the aggregate signal); inside the Workspace the same rules mark the project and session rows that need one.
 - **Creation flows may navigate; dependence may not.**
   Heavyweight creation (compiling a playbook) lives on its surface, but is discoverable from the flow (a "compile a new playbook" entry at the end of the slash menu).
 - **Nothing the user produced becomes unreachable.**
-  Ended sessions stay browsable: the Captain home lists recent past sessions, and opening one shows its full read-only transcript with an affordance to start a fresh session.
+  Ended sessions stay browsable: the sidebar lists every project's sessions ([DR-029](029-session-history-home.md) moved the list there from the Captain home), and opening one shows its full read-only transcript with an affordance to start a fresh session.
 - New surfaces and affordances are held to these rules; deviations need a recorded decision.
 
 ## Consequences

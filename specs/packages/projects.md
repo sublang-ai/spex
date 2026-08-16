@@ -85,7 +85,7 @@ When the user picks a project from the palette or opens one of its sessions from
 
 #### projects-9
 
-When the user confirms removal in the Repo tab, the workspace shall forget the project and clear it from the project bar, leaving the repository directory, its files, and its git state on disk unmodified:
+When the user confirms removal in the Repo tab, the workspace shall forget the project and clear it from the sidebar, leaving the repository directory, its files, and its git state on disk unmodified:
 
 - While the project has a live session, the Repo tab disables removal, stating that sessions must be ended first.
 

@@ -89,8 +89,8 @@ While a Dashboard section has no content, the Dashboard shall display guidance i
 | Section | Empty condition | Guidance |
 | --- | --- | --- |
 | Attention queue | no attention condition holds | an all-clear indication |
-| Running sessions | no live session | how to start a session, with a navigation control to the Sessions surface |
-| Next work | no bound project, or forge adapter not ready | a plain-language note with a navigation control to the Projects surface, where GitHub is connected ([DR-006](../decisions/006-projects-and-forge.md)) |
+| Running sessions | no live session | how to start a session, with a navigation control to the Workspace |
+| Next work | no bound project, or forge adapter not ready | a plain-language note with a navigation control to the Workspace, whose Repo tab is where GitHub is connected ([DR-006](../decisions/006-projects-and-forge.md)) |
 | Usage | no recorded usage | a statement that no usage has been recorded yet |
 
 ### Attention Badge
@@ -204,7 +204,7 @@ Where a fixture project's `specs/` tree lists intent records and a second projec
 
 #### dashboard-22
 
-Where Dashboard state is derived with no registered project, the test suite shall assert that the Dashboard renders its sections with their empty-state guidance [[dashboard-8](#dashboard-8)] rather than a welcome takeover [[dashboard-21](#dashboard-21)], and that the next-work empty state offers an activatable navigation control to the Projects surface [[dashboard-8](#dashboard-8)].
+Where Dashboard state is derived with no registered project, the test suite shall assert that the Dashboard renders its sections with their empty-state guidance [[dashboard-8](#dashboard-8)] rather than a welcome takeover [[dashboard-21](#dashboard-21)], and that the next-work empty state offers an activatable navigation control to the Workspace [[dashboard-8](#dashboard-8)].
 
 ### Label Coverage
 

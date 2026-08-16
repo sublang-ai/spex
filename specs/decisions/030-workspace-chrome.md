@@ -28,6 +28,8 @@ Generalizes [DR-027](027-linked-views-contract.md)'s pane divider into house chr
   Rail collapse, divider positions, and disclosure state persist app-wide across launches — they are how this person arranges their tool, not facts about a project.
 - **Collapse never hides a duty.**
   A collapsed surface's attention signals survive on what remains — the badge on the collapsed entry, a dot on the reopen affordance — so "needs you" is never behind a closed door ([DR-009](009-at-hand-interaction.md)).
+  The rail's foot has two tenants, the collapse control and the config-and-playbooks indicator, and both keep an icon-only form with their accessible names: a first-hour failure must not go quiet because the chrome folded (DR-010 §5).
+  Collapse is chrome only — it rearranges nothing and reaches nothing away; what the collapsed rail stops listing, the open tabs still hold.
 
 **Considered and declined:**
 
