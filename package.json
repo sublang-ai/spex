@@ -25,5 +25,11 @@
   },
   "devDependencies": {
     "node-gyp": "^11.5.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "electron@33.4.11": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.24.2": true
   }
 }
