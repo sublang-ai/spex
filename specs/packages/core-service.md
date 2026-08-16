@@ -57,6 +57,10 @@ When a client requests the session list, the core service shall reply with every
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count, whether it ended holding a failure record, and its recorded cost.
 
+#### core-service-34
+
+When the core service reports a session's state to subscribed clients — at each turn's end and when the session ends — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with.
+
 ### Boss Turns
 
 #### core-service-5
@@ -202,6 +206,10 @@ Where a session's captain finishes a turn with a hidden result reporting an erro
 #### core-service-33
 
 Where a stored session held two turns, a failure record, and usage with cost, and a second stored session held none of these, the test suite shall assert the listing contract of [[core-service-32](#core-service-32)]: the first entry carries the first turn's text as its title, a turn count of two, the failure marker, and the recorded cost; the second entry carries no title, a zero count, no marker, and no cost.
+
+#### core-service-35
+
+Where a client subscribes to a session that then runs a fake-adapter turn and is disposed, the test suite shall assert the broadcast contract of [[core-service-34](#core-service-34)]: the state reported at the turn's end and the state reported at the session's end each carry the session's title and turn count, not the zeros the session was created with.
 
 ### Record Visibility Coverage
 

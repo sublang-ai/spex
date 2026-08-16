@@ -261,6 +261,13 @@ export class SessionManager {
     return info;
   }
 
+  /** A turn just changed the session's summary — its title, count,
+   * failure marker and cost (core-service-34). */
+  private refreshLiveState(sessionId: string): void {
+    const entry = this.live.get(sessionId);
+    if (entry) this.broadcastState(sessionId, true, null, entry.info);
+  }
+
   private trackRecord(sessionId: string, record: TmuxPlayRecord): void {
     switch (record.type) {
       case "turn_started": {
@@ -272,11 +279,13 @@ export class SessionManager {
         if (record.turnId !== null) {
           this.store.endTurn(sessionId, record.turnId, "finished", record.timestamp);
         }
+        this.refreshLiveState(sessionId);
         break;
       case "turn_aborted":
         if (record.turnId !== null) {
           this.store.endTurn(sessionId, record.turnId, "aborted", record.timestamp);
         }
+        this.refreshLiveState(sessionId);
         break;
       case "player_event":
       case "captain_event": {
@@ -355,7 +364,21 @@ export class SessionManager {
     this.liveByProject.delete(entry.info.projectId);
     const endedAt = this.now();
     this.store.endSession(sessionId, endedAt);
-    this.onSessionState({ ...entry.info, live: false, endedAt });
+    this.broadcastState(sessionId, false, endedAt, entry.info);
+  }
+
+  /** A session.state broadcast carries the conversation summary a
+   * listing would (core-service-34): the creation-time record holds
+   * zeros forever, and a client that replaces its entry with those
+   * would blank a row the reader is watching. */
+  private broadcastState(
+    sessionId: string,
+    live: boolean,
+    endedAt: number | null,
+    fallback: SessionInfo,
+  ): void {
+    const described = this.store.describeSession(sessionId);
+    this.onSessionState({ ...(described ?? fallback), live, endedAt });
   }
 
   async disposeAll(): Promise<void> {

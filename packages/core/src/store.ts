@@ -96,6 +96,31 @@ interface SessionRow {
   path: string;
 }
 
+/** One session row plus its gathered summary, in the single shape
+ * every listing and broadcast shares (core-service-32). */
+function sessionInfo(
+  row: SessionRow,
+  title: string | undefined,
+  turns: number,
+  failed: boolean,
+  costUsd: number | undefined,
+): SessionInfo {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    projectPath: row.path,
+    createdAt: row.created_at,
+    live: row.live === 1,
+    endedAt: row.ended_at,
+    players: JSON.parse(row.players_json) as SessionInfo["players"],
+    initialVisible: JSON.parse(row.initial_visible_json) as string[],
+    ...(title !== undefined ? { title } : {}),
+    turns,
+    failed,
+    ...(costUsd !== undefined ? { costUsd } : {}),
+  };
+}
+
 function isHidden(record: TmuxPlayRecord): boolean {
   return (
     "visibility" in record &&
@@ -221,6 +246,40 @@ export class Store {
     this.db.prepare("UPDATE sessions SET live = 0 WHERE live = 1").run();
   }
 
+  /** One session's listing row, carrying the same conversation
+   * summary a listing carries (core-service-32) — what the broadcasts
+   * that must stay truthful between listings send (core-service-34). */
+  describeSession(id: string): SessionInfo | undefined {
+    const row = this.db
+      .prepare(
+        "SELECT s.id, s.project_id, s.created_at, s.ended_at, s.live, s.players_json, s.initial_visible_json, p.path " +
+          "FROM sessions s JOIN projects p ON p.id = s.project_id WHERE s.id = ?",
+      )
+      .get(id) as SessionRow | undefined;
+    if (!row) return undefined;
+    const title = (
+      this.db
+        .prepare(
+          "SELECT prompt FROM turns WHERE session_id = ? ORDER BY turn_id LIMIT 1",
+        )
+        .get(id) as { prompt: string } | undefined
+    )?.prompt;
+    const { turns } = this.db
+      .prepare("SELECT COUNT(*) AS turns FROM turns WHERE session_id = ?")
+      .get(id) as { turns: number };
+    const failed = Boolean(
+      this.db
+        .prepare(
+          "SELECT 1 FROM records WHERE session_id = ? AND type = 'runtime_error' LIMIT 1",
+        )
+        .get(id),
+    );
+    const { cost } = this.db
+      .prepare("SELECT SUM(total_cost_usd) AS cost FROM usage WHERE session_id = ?")
+      .get(id) as { cost: number | null };
+    return sessionInfo(row, title, turns, failed, cost ?? undefined);
+  }
+
   listSessions(): SessionInfo[] {
     const rows = this.db
       .prepare(
@@ -262,24 +321,15 @@ export class Store {
       .all() as { session_id: string; cost: number | null }[]) {
       if (row.cost) costs.set(row.session_id, row.cost);
     }
-    return rows.map((row) => {
-      const title = titles.get(row.id);
-      const cost = costs.get(row.id);
-      return {
-        id: row.id,
-        projectId: row.project_id,
-        projectPath: row.path,
-        createdAt: row.created_at,
-        live: row.live === 1,
-        endedAt: row.ended_at,
-        players: JSON.parse(row.players_json) as SessionInfo["players"],
-        initialVisible: JSON.parse(row.initial_visible_json) as string[],
-        ...(title !== undefined ? { title } : {}),
-        turns: counts.get(row.id) ?? 0,
-        failed: failures.has(row.id),
-        ...(cost !== undefined ? { costUsd: cost } : {}),
-      };
-    });
+    return rows.map((row) =>
+      sessionInfo(
+        row,
+        titles.get(row.id),
+        counts.get(row.id) ?? 0,
+        failures.has(row.id),
+        costs.get(row.id),
+      ),
+    );
   }
 
   // -- turns ----------------------------------------------------------------

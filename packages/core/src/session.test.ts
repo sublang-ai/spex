@@ -194,6 +194,34 @@ test("an errored hidden captain result surfaces a visible failure record", async
   await manager.disposeAll();
 });
 
+test("core-service-35: session state broadcasts carry the live summary", async () => {
+  // The sidebar watches these broadcasts. Sending the creation-time
+  // record would blank a row the reader is looking at the moment its
+  // session ends (core-service-34).
+  const records: RecordEnvelope[] = [];
+  const { manager, project, composed } = await setup(records);
+  const states: import("./protocol.js").SessionInfo[] = [];
+  manager.onSessionState = (session) => states.push(session);
+
+  const info = await manager.createSession(project, composed);
+  assert.equal(states.at(-1)?.turns, 0, "a fresh session summarizes as empty");
+
+  manager.submitTurn(info.id, "harden the session refresh");
+  await waitFor(() => records.some((r) => r.record.type === "turn_finished"));
+
+  const afterTurn = states.at(-1);
+  assert.equal(afterTurn?.live, true);
+  assert.equal(afterTurn?.title, "harden the session refresh");
+  assert.equal(afterTurn?.turns, 1);
+
+  await manager.disposeSession(info.id);
+  const ended = states.at(-1);
+  assert.equal(ended?.live, false);
+  assert.ok(ended?.endedAt);
+  assert.equal(ended?.title, "harden the session refresh");
+  assert.equal(ended?.turns, 1);
+});
+
 async function waitFor(check: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now();
   while (!check()) {
