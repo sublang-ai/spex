@@ -406,7 +406,7 @@ export function DashboardSurface({
             </div>
           ) : usage.days.length === 0 ? (
             <div className="text-xs text-neutral-400">
-              No usage recorded yet — costs appear after your first turn.
+              No usage recorded yet — token counts appear after your first turn.
             </div>
           ) : (
             usage.days.slice(0, 7).map((entry) => (
@@ -416,9 +416,6 @@ export function DashboardSurface({
               >
                 <div className="font-mono text-neutral-500">{entry.day}</div>
                 <div className="mt-0.5 font-medium">
-                  ${entry.totals.totalCostUsd.toFixed(2)}
-                </div>
-                <div className="text-neutral-400">
                   {entry.totals.inputTokens.toLocaleString()}→
                   {entry.totals.outputTokens.toLocaleString()} tok
                 </div>

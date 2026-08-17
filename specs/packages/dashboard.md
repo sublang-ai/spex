@@ -76,7 +76,7 @@ Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.m
 
 #### dashboard-7
 
-Where completed turns have reported usage, the Dashboard shall display usage and cost rollups aggregated per session and per calendar day, with per-day totals spanning all projects:
+Where completed turns have reported usage, the Dashboard shall display token usage rollups aggregated per calendar day, with per-day totals spanning all projects:
 
 - The rollups reflect only usage reported by adapter done payloads [[dashboard-13](#dashboard-13)]; the Dashboard displays no estimated figures for turns that reported none.
 
@@ -153,7 +153,7 @@ Where Dashboard state is assembled, the dashboard read model shall source live-s
 
 Where usage rollups are computed, the dashboard read model shall aggregate exactly the usage figures carried by player `done` events, keyed per session and per calendar day of the record timestamp in the local timezone:
 
-- Usage carried by `hidden`-visibility records is included, since hidden traffic still incurs cost ([DR-003](../decisions/003-runtime-reuse.md)).
+- Usage carried by `hidden`-visibility records is included, since hidden traffic still consumes tokens ([DR-003](../decisions/003-runtime-reuse.md)).
 - A `done` event carrying no usage contributes nothing; the read model does not substitute estimates.
 
 ### Forge List Caching

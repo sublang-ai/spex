@@ -33,7 +33,7 @@ type Toolchain = CommandResults["compile.check"];
  * adapter, model, effort, and permissions instead. */
 export const NEUTRAL_BLOCK: AgentBlockInput = {
   adapter: "claude",
-  model: "claude-opus-4-8",
+  model: "claude-opus-5",
   effort: "high",
   permissions: { mode: "auto" },
 };

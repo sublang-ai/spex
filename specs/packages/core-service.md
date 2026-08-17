@@ -55,7 +55,7 @@ When a client requests the session list, the core service shall reply with every
 
 - each entry carries the session's project, creation and end times, and liveness;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
-- each entry carries its turn count, whether it ended holding a failure record, and its recorded cost.
+- each entry carries its turn count and whether it ended holding a failure record.
 
 #### core-service-34
 
@@ -205,7 +205,7 @@ Where a session's captain finishes a turn with a hidden result reporting an erro
 
 #### core-service-33
 
-Where a stored session held two turns, a failure record, and usage with cost, and a second stored session held none of these, the test suite shall assert the listing contract of [[core-service-32](#core-service-32)]: the first entry carries the first turn's text as its title, a turn count of two, the failure marker, and the recorded cost; the second entry carries no title, a zero count, no marker, and no cost.
+Where a stored session held two turns and a failure record, and a second stored session held neither, the test suite shall assert the listing contract of [[core-service-32](#core-service-32)]: the first entry carries the first turn's text as its title, a turn count of two, and the failure marker; the second entry carries no title, a zero count, and no marker.
 
 #### core-service-35
 

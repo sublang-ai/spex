@@ -11,7 +11,7 @@
 # captain: the Judge agent that routes Boss input and drives playbooks.
 captain:
   adapter: claude
-  model: claude-opus-4-8
+  model: claude-opus-5
   effort: high
   permissions:
     mode: auto        # protected auto mode for the Claude Captain
@@ -30,7 +30,7 @@ playbooks:
     players:
       coder:
         adapter: claude
-        model: claude-opus-4-8[1m]
+        model: claude-opus-5
         effort: xhigh
         permissions:
           mode: auto        # protected auto mode for the Claude Coder
@@ -39,20 +39,20 @@ playbooks:
     players:
       coder:
         adapter: claude
-        model: claude-opus-4-8
+        model: claude-opus-5
         effort: xhigh
         permissions:
           mode: auto
       reviewer:
         adapter: claude     # single-vendor default; a second vendor reads better
-        model: claude-opus-4-8
+        model: claude-opus-5
         effort: xhigh
         permissions:
           mode: auto
       # Example second-vendor reviewer — replace the block above once
       # the Codex CLI is signed in:
       #   adapter: codex
-      #   model: gpt-5.5
+      #   model: gpt-5.6-sol
       #   effort: xhigh
       #   permissions:
       #     mode: auto
@@ -63,13 +63,13 @@ playbooks:
     players:
       coder:
         adapter: claude
-        model: claude-opus-4-8
+        model: claude-opus-5
         effort: xhigh
         permissions:
           mode: auto
       reviewer:
         adapter: claude
-        model: claude-opus-4-8
+        model: claude-opus-5
         effort: xhigh
         permissions:
           mode: auto

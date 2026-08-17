@@ -27,17 +27,17 @@ const port = portArg ? Number(portArg.split("=")[1]) : 8137;
 const FAKE_CONFIG = `
 captain:
   adapter: claude
-  model: claude-opus-4-8
+  model: claude-opus-5
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
     players:
       coder:
         adapter: claude
-        model: claude-opus-4-8
+        model: claude-opus-5
       reviewer:
         adapter: codex
-        model: gpt-5.5
+        model: gpt-5.6-sol
     committer: coder
 `;
 

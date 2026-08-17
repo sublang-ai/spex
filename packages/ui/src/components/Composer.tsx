@@ -226,7 +226,7 @@ export function Composer({
                   : "Message the Captain — free text or /command…"
           }
           disabled={!connected}
-          className="max-h-[40vh] min-h-[3rem] flex-1 resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
+          className="max-h-[40vh] min-h-[3rem] flex-1 resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:focus:border-neutral-400"
         />
         <div className="flex flex-col gap-1">
           <button

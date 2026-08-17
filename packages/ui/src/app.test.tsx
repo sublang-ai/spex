@@ -66,7 +66,6 @@ const SESSIONS: SessionInfo[] = [
     endedAt: null,
     createdAt: NOW - 120_000,
     turns: 2,
-    costUsd: 0.42,
   }),
   session({
     id: "a-failed",
@@ -167,7 +166,6 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     // accessible description rather than behind a hover.
     expect(liveRow.textContent).toContain("2m");
     expect(liveRow.getAttribute("aria-label")).toContain("2 turns");
-    expect(liveRow.getAttribute("aria-label")).toContain("$0.42");
 
     // A failure the session ended holding is history, not a summons.
     expect(

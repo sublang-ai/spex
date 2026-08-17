@@ -21,9 +21,6 @@ function Usage({ usage }: { usage: UsageView }) {
   return (
     <span className="text-xs text-neutral-500">
       {usage.inputTokens.toLocaleString()}→{usage.outputTokens.toLocaleString()} tok
-      {usage.totalCostUsd !== undefined
-        ? ` · $${usage.totalCostUsd.toFixed(2)}`
-        : ""}
     </span>
   );
 }

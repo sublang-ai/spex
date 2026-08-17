@@ -85,7 +85,7 @@ test("captain.set merge patch preserves comments and unrelated keys", async () =
   // Only the provided keys changed; the rest of the block and every
   // unrelated key are untouched.
   assert.match(after, /captain:\n\s+adapter: claude\n\s+model: claude-opus-4-9\n\s+effort: max/);
-  assert.match(after, /claude-opus-4-8\[1m\]/);
+  assert.match(after, /claude-opus-5/);
 });
 
 test("playbook.player.set merge patch swaps a role's vendor in place", async () => {
@@ -105,7 +105,7 @@ test("playbook.player.set merge patch swaps a role's vendor in place", async () 
   // The role's own inline comment survives on the patched pair.
   assert.match(after, /reviewer:\n\s+adapter: codex[^\n]*\n\s+model: gpt-5\.5\n\s+effort: xhigh/);
   // Unrelated blocks and their comments survive.
-  assert.match(after, /coder:\n\s+adapter: claude\n\s+model: claude-opus-4-8\[1m\]/);
+  assert.match(after, /coder:\n\s+adapter: claude\n\s+model: claude-opus-5/);
   assert.match(after, /# protected auto mode for the Claude Coder/);
   const option = await editConfigFile(
     path,

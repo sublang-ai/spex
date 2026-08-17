@@ -123,10 +123,8 @@ function sessionLabel(
   const title = session.title ?? "no messages yet";
   const when = session.endedAt ?? session.createdAt;
   const turns = `${session.turns} turn${session.turns === 1 ? "" : "s"}`;
-  const cost =
-    session.costUsd !== undefined ? `, $${session.costUsd.toFixed(2)}` : "";
   const detail = item?.text ? ` — ${item.text}` : "";
-  return `${title} — ${LIFE_WORDS[life]}, ${relativeTime(when, now)} ago, ${turns}${cost}${detail}`;
+  return `${title} — ${LIFE_WORDS[life]}, ${relativeTime(when, now)} ago, ${turns}${detail}`;
 }
 
 interface Row {

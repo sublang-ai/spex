@@ -112,7 +112,7 @@ test("bundled template composes with launcher-equivalent output", async () => {
   // The seeded lineup is fully-inline single-vendor Claude (DR-019).
   assert.deepEqual(composed.captainAgent, {
     adapter: "claude",
-    model: "claude-opus-4-8",
+    model: "claude-opus-5",
     effort: "high",
     permissions: { mode: "auto" },
   });
@@ -138,7 +138,7 @@ test("bundled template composes with launcher-equivalent output", async () => {
     from: "@sublang/playbook/code/registry",
     options: {},
   });
-  assert.equal(composed.players[0].model, "claude-opus-4-8[1m]");
+  assert.equal(composed.players[0].model, "claude-opus-5");
   assert.equal(composed.playbooks[0].command, "code");
 });
 

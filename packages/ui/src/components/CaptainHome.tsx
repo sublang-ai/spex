@@ -368,7 +368,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               onCompileNew={() => props.onNavigate("Playbooks")}
             />
           ) : null}
-          <div className="flex items-end gap-2 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-brand-400 dark:border-neutral-700 dark:bg-neutral-900">
+          <div className="flex items-end gap-2 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:focus-within:border-neutral-400">
             <textarea
               ref={composerRef}
               data-testid="start-composer"

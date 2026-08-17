@@ -137,8 +137,7 @@ test("prefs round-trip JSON values", () => {
 
 test("core-service-32: session.list carries each session's conversation summary", () => {
   // The rail's rows are only scannable if the listing carries scent:
-  // the session's own first words, its size, whether it ended badly,
-  // and what it cost.
+  // the session's own first words, its size, and whether it ended badly.
   const store = new Store(tempStorePath());
   const project = store.registerProject("/tmp/proj", "proj", 1000);
   const base = {
@@ -182,12 +181,10 @@ test("core-service-32: session.list carries each session's conversation summary"
   assert.equal(rich?.title, "harden the session refresh");
   assert.equal(rich?.turns, 2);
   assert.equal(rich?.failed, true);
-  assert.equal(rich?.costUsd, 0.16);
 
   // A session that never held a turn says so by carrying no title,
   // rather than faking a name.
   assert.equal(bare?.title, undefined);
   assert.equal(bare?.turns, 0);
   assert.equal(bare?.failed, false);
-  assert.equal(bare?.costUsd, undefined);
 });

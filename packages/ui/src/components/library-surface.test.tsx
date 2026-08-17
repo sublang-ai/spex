@@ -387,7 +387,7 @@ describe("DR-015: the slc demo example card", () => {
 
     const row = screen.getByTestId("compile-player-Reviewer").parentElement!;
     expect(within(row).getByTestId("agent-chip").textContent).toContain(
-      "gemini · claude-opus-4-8 @ high",
+      "gemini · claude-opus-5 @ high",
     );
     // The untouched role keeps the neutral block.
     const coderRow = screen.getByTestId("compile-player-Coder").parentElement!;

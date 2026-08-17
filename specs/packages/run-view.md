@@ -51,7 +51,7 @@ When the session record stream delivers thinking content for a visible player, t
 
 When a player turn completes, that player's pane shall report the turn's usage by what the turn delivered:
 
-- with usage data — the pane displays the turn's token usage and cost at the end of the turn's transcript;
+- with usage data — the pane displays the turn's token usage at the end of the turn's transcript;
 - without usage data — the pane omits the usage line.
 
 ### Pane Visibility
@@ -287,7 +287,7 @@ While the app is connected, the sidebar shall present navigation as surface entr
 
 #### run-view-73
 
-Each session row in the sidebar shall read as its conversation — its title (the first Boss turn, or a never-spoken marker), its relative time, and a status mark — with its turn count and cost in the row's accessible description [[core-service-32](core-service.md#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)):
+Each session row in the sidebar shall read as its conversation — its title (the first Boss turn, or a never-spoken marker), its relative time, and a status mark — with its turn count in the row's accessible description [[core-service-32](core-service.md#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)):
 
 - the mark speaks attention first and life second, in the app's one status palette: amber while the session waits on the human, red while it holds an unacknowledged failure — the same derivation the Dashboard entry's count uses [[run-view-34](#run-view-34)] — then running, then ended;
 - a session that ended holding a failure wears a quieter historical mark that counts toward no attention signal;
@@ -462,7 +462,7 @@ The start view shall obtain projects, playbooks, captain identity, and readiness
 
 #### run-view-20
 
-Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per visible player, player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards [[run-view-4](#run-view-4)], every completed turn with usage data shows its usage and cost [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
+Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per visible player, player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards [[run-view-4](#run-view-4)], every completed turn with usage data shows its usage [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
 
 #### run-view-66
 
@@ -488,7 +488,7 @@ Where a fixture machine holds a neighbour edge, a same-rank pair, a rank-skippin
 
 #### run-view-70
 
-Where a fixture store holds two projects — the current one with a live titled session awaiting a Boss reply, more ended sessions than the recent window holds (one of them having held a failure), and a session with no turns; the other with a live session awaiting a reply and an ended session — the test suite shall assert the sidebar contract: Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)], the current project's rows carry their titles, relative times, and attention-first marks with the counts and cost in their accessible descriptions and the ended failure marked as history rather than attention [[run-view-73](#run-view-73)], and the other project's row carries its own attention signal [[run-view-67](#run-view-67)]; disclosing that project leaves the current project unchanged [[run-view-67](#run-view-67)]; activating its session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; ending the live session keeps its transcript on screen read-only and reveals its now-ended row [[run-view-69](#run-view-69)]; closing that tab leaves the session listed and running nothing [[run-view-68](#run-view-68)]; and the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)].
+Where a fixture store holds two projects — the current one with a live titled session awaiting a Boss reply, more ended sessions than the recent window holds (one of them having held a failure), and a session with no turns; the other with a live session awaiting a reply and an ended session — the test suite shall assert the sidebar contract: Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)], the current project's rows carry their titles, relative times, and attention-first marks with the turn counts in their accessible descriptions and the ended failure marked as history rather than attention [[run-view-73](#run-view-73)], and the other project's row carries its own attention signal [[run-view-67](#run-view-67)]; disclosing that project leaves the current project unchanged [[run-view-67](#run-view-67)]; activating its session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; ending the live session keeps its transcript on screen read-only and reveals its now-ended row [[run-view-69](#run-view-69)]; closing that tab leaves the session listed and running nothing [[run-view-68](#run-view-68)]; and the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)].
 
 
 #### run-view-72
