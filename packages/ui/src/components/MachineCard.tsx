@@ -140,7 +140,9 @@ export function MachineCard({
   );
   // Layout is solved once per machine, never on telemetry (DR-028).
   const layout = useMemo(() => layoutMachine(drawn), [drawn]);
-  const edges = useMemo(() => routeEdges(drawn, layout), [drawn, layout]);
+  const routed = useMemo(() => routeEdges(drawn, layout), [drawn, layout]);
+  const lines = routed.filter((edge) => edge.kind === "line");
+  const exits = routed.filter((edge) => edge.kind === "exit");
 
   const flash =
     running &&
@@ -287,7 +289,7 @@ export function MachineCard({
               </marker>
             </defs>
 
-            {edges.map((edge) => {
+            {lines.map((edge) => {
               const fired =
                 flash !== undefined &&
                 flash.from === edge.from &&
@@ -303,7 +305,7 @@ export function MachineCard({
                 <path
                   key={edge.id}
                   data-testid={`machine-edge-${edge.id}`}
-                  data-head={`${edge.head.x},${edge.head.y}`}
+                  data-head={`${edge.head!.x},${edge.head!.y}`}
                   d={edge.path}
                   fill="none"
                   strokeWidth={fired ? 2.5 : 1.5}
@@ -323,6 +325,45 @@ export function MachineCard({
               );
             })}
 
+            {/* Distance speaks in words (run-view-76): a transition
+                that is no layout neighbour is an exit label inside its
+                source, walked, fired and dashed like any edge. */}
+            {exits.map((edge) => {
+              const fired =
+                flash !== undefined &&
+                flash.from === edge.from &&
+                flash.to === edge.to &&
+                (flash.event === edge.event || edge.event === "");
+              const walked = frame.transitions.some(
+                (t) =>
+                  t.from === edge.from &&
+                  t.to === edge.to &&
+                  (t.event === edge.event || edge.event === ""),
+              );
+              return (
+                <text
+                  key={edge.id}
+                  data-testid={`machine-exit-${edge.id}`}
+                  x={edge.anchor!.x}
+                  y={edge.anchor!.y}
+                  fontSize={10}
+                  fontWeight={fired ? 600 : 400}
+                  className={`transition-[fill] duration-500 motion-reduce:transition-none ${
+                    fired
+                      ? "fill-emerald-600 dark:fill-emerald-400"
+                      : walked
+                        ? "fill-neutral-600 dark:fill-neutral-300"
+                        : "fill-neutral-400 dark:fill-neutral-500"
+                  }`}
+                >
+                  {`\u2192 ${humanizeId(edge.to)}`}
+                  <title>
+                    {edge.event ? humanizeId(edge.event) : "always"}
+                  </title>
+                </text>
+              );
+            })}
+
             {drawn.nodes.map((node) => {
               const place = layout.nodes.get(node.id);
               if (!place) return null;
@@ -330,12 +371,17 @@ export function MachineCard({
               const active = frame.active === node.id;
               const delegating =
                 running && frame.delegating?.stateId === node.id;
+              // From the call onward the calling state names its callee
+              // (run-view-63) — in the live drawing and the settled one.
+              const call = [...frame.calls]
+                .reverse()
+                .find((entry) => entry.stateId === node.id);
               const player =
                 frame.activePlayer && frame.activePlayer.stateId === node.id
                   ? frame.activePlayer
                   : undefined;
-              const caption = delegating
-                ? `→ /${frame.delegating?.playbookId}`
+              const caption = call
+                ? `call /${call.playbookId}`
                 : player
                   ? player.playerId
                   : node.role
@@ -351,6 +397,7 @@ export function MachineCard({
                   <title>
                     {node.description ?? node.id}
                     {node.role ? ` — runs ${node.role}` : ""}
+                    {call ? ` — called /${call.playbookId}` : ""}
                   </title>
                   <rect
                     x={place.x}
@@ -385,7 +432,7 @@ export function MachineCard({
                   ) : null}
                   <text
                     x={place.x + place.width / 2}
-                    y={place.y + (caption ? 16 : place.height / 2 + 4)}
+                    y={place.y + (caption ? 18 : 26)}
                     textAnchor="middle"
                     fontSize={12}
                     fontWeight={active || delegating ? 600 : 400}
@@ -396,11 +443,11 @@ export function MachineCard({
                   {caption ? (
                     <text
                       x={place.x + place.width / 2}
-                      y={place.y + place.height - 9}
+                      y={place.y + 33}
                       textAnchor="middle"
                       fontSize={10.5}
                       className={
-                        delegating
+                        call
                           ? "fill-brand-600 dark:fill-brand-300"
                           : player?.running
                             ? "fill-emerald-600 dark:fill-emerald-400"
@@ -412,8 +459,8 @@ export function MachineCard({
                   ) : null}
                   {player?.running ? (
                     <circle
-                      cx={place.x + 12}
-                      cy={place.y + place.height - 13}
+                      cx={place.x + 13}
+                      cy={place.y + 29.5}
                       r={3}
                       className="fill-emerald-500 motion-safe:animate-pulse"
                     />

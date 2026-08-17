@@ -211,7 +211,7 @@ While a machine card is live, the Captain pane shall show the run's state throug
 - the active state carries the running emphasis with the app's one running mark — the pulsing dot the sidebar's running rows wear [[run-view-73](#run-view-73)], worn identically by the running player's pane — static under the reduced-motion preference;
 - a parked state awaiting the Boss carries the attention emphasis and a failed state the failure emphasis, the derivations of the attention count [[run-view-34](#run-view-34)], and every other state stays quiet ink;
 - a firing transition flashes once and decays in well under a second, instantly under reduced motion;
-- every transition shows its direction at rest with a constant-size glyph;
+- every transition shows its direction at rest with a constant-size glyph, drawn lines and exit labels alike [[run-view-76](#run-view-76)];
 - the active state names the player it runs and shows that player's running activity, when the trace attributes one.
 
 #### run-view-62
@@ -226,7 +226,7 @@ When a playbook run's trace settles, the Captain pane shall settle that run wher
 While a machine frame has a caller the pane knows, the Captain pane shall draw the call as containment ([DR-031](../decisions/031-machine-call-tree.md)):
 
 - the child card nests indented under its caller's card, joined by a drawn connector that leaves the calling state itself, so the line reads "this state is running that machine";
-- the calling state names its callee and carries the running mark while it delegates, and the child card's header names its calling state in return;
+- from the call onward, the calling state names its callee in the call voice — in the live drawing and the settled one — carrying the running mark while the call is open, and the child card's header names its calling state in return;
 - while the caller renders as a strip [[run-view-75](#run-view-75)], the strip names the calling state and its callee and the connector leaves the strip — the containment never disappears with the fold;
 - nesting recurses by the trace's parent link, never by depth arithmetic;
 - each card stays live and independently drawn.
@@ -255,10 +255,12 @@ While machine cards are shown, each card shall render as either its full drawing
 
 #### run-view-76
 
-When a machine card draws its edges, every edge shall end with its head touching the target state's border, oriented along its approach, and no edge shall cross a state box ([DR-031](../decisions/031-machine-call-tree.md)):
+When a machine card draws its edges, an edge shall render as a drawn line only between layout neighbours — one rank apart or side by side with nothing between — and every other transition shall render as an exit label inside its source state, a constant direction glyph naming its target with the event in its tooltip ([DR-031](../decisions/031-machine-call-tree.md)):
 
-- heads sharing a border distribute so none overlap;
-- same-rank edges route as laterals, rank-skipping and backward edges take side lanes, and reciprocal pairs stay offset.
+- a drawn head touches the target's border at a port no other head shares, and no drawn path crosses a state box;
+- reciprocal drawn pairs stay offset;
+- a state's exit labels stack inside its box without overlap, and its box grows to hold them;
+- exit labels walk, fire, and dash exactly as drawn edges do.
 
 #### run-view-78
 
@@ -482,7 +484,7 @@ Where a fixture stream carries a playbook run's trace records — an invocation 
 
 #### run-view-77
 
-Where a fixture machine holds a same-rank edge, a rank-skipping edge, a backward edge, and a reciprocal pair, the test suite shall assert the routed geometry of [[run-view-76](#run-view-76)] over the card's computed drawing — the same solved layout the replayed card renders [[run-view-14](#run-view-14)]: every edge's head endpoint lies on its target's border, no two head endpoints on one border coincide, no edge path intersects any state box, and the reciprocal pair yields two distinct offset paths.
+Where a fixture machine holds a neighbour edge, a same-rank pair, a rank-skipping edge, a backward edge, and a fan of transitions into one state, the test suite shall assert the solved geometry of [[run-view-76](#run-view-76)] over the card's computed drawing — the same solved layout the replayed card renders [[run-view-14](#run-view-14)] — and over each installed built-in machine's served graph: every transition is exactly one drawn line or one exit label, every drawn head lies on its target's border at an unshared port, no drawn path intersects any state box, reciprocal drawn pairs yield distinct paths, and each exit label names its target from an unshared slot in its source.
 
 #### run-view-70
 

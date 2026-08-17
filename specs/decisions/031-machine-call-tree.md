@@ -28,7 +28,8 @@ Amends [DR-028](028-run-machine-view.md): stacked machine cards give way to a dr
   Disposal closes only a frame still open, and with the run's own reported final status — a finished run stays "done"; "stopped" is reserved for a run that ended unfinished.
 - **A call is containment, drawn.**
   A child run's card nests under its caller's card, indented, joined by a drawn connector that leaves the calling state itself — not the card's edge — so the line says "this state is running that machine."
-  The calling state names its callee and carries the running mark while it delegates; the child card's header names its calling state in return, so the relation survives with the connector out of view.
+  From the call onward the calling state names its callee — "call /review" in the call voice, in the live drawing and the settled one — carrying the running mark while the call is open; the child card's header names its calling state in return, so the relation survives with the connector out of view.
+  The arrow glyph stays reserved for transitions: a call is not a state change, so its label speaks in a verb.
   Nesting recurses by the trace's parent link, never by depth arithmetic; a child whose caller is unknown renders at the top level rather than vanishing.
   A child settles under its calling state's position as a strip, in invocation order among that state's calls; only a root run settles into the thread, at the position of the record that settled it.
 - **Cards breathe: the full drawing or a strip.**
@@ -39,9 +40,11 @@ Amends [DR-028](028-run-machine-view.md): stacked machine cards give way to a dr
 - **One aliveness grammar.**
   The pulsing running mark is the only running mark: the active state box, a running run's strip, the running player's pane, and the sidebar's running rows wear the same pulse, static under reduced motion.
   A parked state keeps the attention voice and a failed state the failure voice, from the same derivations the tabs and sidebar use.
-- **Arrows land, edges route.**
-  Every edge ends with its head touching the target state's border, oriented along the approach; heads sharing a border distribute so none overlap.
-  No edge crosses a state box: same-rank edges route as laterals, rank-skipping and backward edges take side lanes, and reciprocal pairs stay offset.
+- **Neighbours draw, distance speaks in words.**
+  An edge renders as a drawn line only between layout neighbours — one rank apart or side by side, close enough that its path touches nothing else; a drawn head lands on the target's border at a port no other head shares, and reciprocal pairs stay offset.
+  Every other transition — the skips, returns, and fan edges into the park and failure states — renders as an exit label inside its source state: a constant direction glyph and the target's name, walked, fired, and dashed exactly as a drawn edge is, with the event in its tooltip.
+  This is a density budget, not routing cleverness: these machines carry three edges per state, and at that fan-in every lane discipline ends in the hairball the owner kept finding — text cannot collide, and a state's exits read as its departure board.
+  A first attempt at side-lane routing is declined for the record: it survived the fixture and failed the shipped machines twice.
 - **The extractor tells the whole machine.**
   Graph extraction resolves targets against the machine's declared state ids and includes a compound state's own done transition, keeping the stable edge identity so drawings keyed on edge ids never churn.
   A machine-level transition stays out: it has no single source state, so drawing it would either invent one or draw one edge per state — a hairball that says less than nothing.
@@ -50,11 +53,12 @@ Amends [DR-028](028-run-machine-view.md): stacked machine cards give way to a dr
 
 - drawing the child machine inside the calling state's box (true statechart embedding): honest but explodes live layout, and a running child would resize its parent mid-read;
 - a breadcrumb-only view of the deepest run: compact but hides the caller's shape, which is exactly what the owner asked to see on demand;
-- persisting card disclosure: it is transient reading posture, not chrome ([DR-030](030-workspace-chrome.md) covers chrome; a fresh session starts from defaults).
+- persisting card disclosure: it is transient reading posture, not chrome ([DR-030](030-workspace-chrome.md) covers chrome; a fresh session starts from defaults);
+- reusing the spec view's force simulation and node dragging ([DR-026](026-data-graphics-craft.md)) for the machine drawing: a citation network has no canonical geometry, so exploration by drag earns its place there — a statechart's geometry is its meaning, rank order is progress, and cards live many-at-once inside a conversation; what carries over is the craft (computed contrast, the design-check gate, solved-once layout), and a dedicated zoomable machine explorer stays open as its own future decision.
 
 ## Consequences
 
 - The run-view machine items are rewritten to this shape — lifetime, containment, strips, the aliveness grammar, and the edge law — with replay coverage for the ghost-card, nesting, and geometry cases.
-- The playbook-library graph contract gains id-resolved targets, machine-level and compound-done transitions, and coverage that the installed built-ins each serve a complete, non-empty edge set.
+- The playbook-library graph contract gains id-resolved targets and compound-done transitions — machine-level transitions stay out — with coverage that the installed built-ins each serve a complete, non-empty edge set.
 - The card's stacked presentation and its depth-gated join are removed; the left-to-right direction [DR-028](028-run-machine-view.md) chose is corrected to the top-to-bottom the shipped drawing uses, recorded in that decision's Status, and the run-view item follows.
 - The design-check gate re-runs on the drawn result in both themes.

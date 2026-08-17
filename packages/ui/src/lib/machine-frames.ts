@@ -38,6 +38,9 @@ export interface MachineFrame {
   /** The nested run this frame's active state is delegating to, while
    * the call is open (run-view-63). */
   delegating?: { stateId: string; playbookId: string };
+  /** Every call this run has made, in order — the calling states stay
+   * labeled with their callees after settle (run-view-63). */
+  calls: { stateId: string; playbookId: string }[];
   /** The caller's state that started this run, when the pane knows it
    * — the anchor the child settles under (run-view-62/63). */
   callerStateId?: string;
@@ -259,6 +262,7 @@ export function foldTrace(
       visited: [],
       transitions: [],
       activeTags: [],
+      calls: [],
       settledCalls: [],
       openedAt: at,
     };
@@ -336,7 +340,11 @@ export function foldTrace(
       const stateId = asString(body.stateId) ?? frame.active ?? undefined;
       const callee = asString(body.playbookId);
       if (!stateId || !callee) return withFrame(frame);
-      return withFrame({ ...frame, delegating: { stateId, playbookId: callee } });
+      return withFrame({
+        ...frame,
+        delegating: { stateId, playbookId: callee },
+        calls: [...frame.calls, { stateId, playbookId: callee }],
+      });
     }
     case "playbook.call.finished": {
       const frame = opened();
@@ -354,7 +362,7 @@ export function foldTrace(
   }
 }
 
-// --- Layout (DR-028: solved once, tiny and fixed) ---------------------------
+// --- Layout and geometry (DR-031: solved once, tiny and fixed) --------------
 
 export interface MachinePlacement {
   x: number;
@@ -367,15 +375,19 @@ export interface MachineLayout {
   nodes: Map<string, MachinePlacement>;
   width: number;
   height: number;
+  /** Every transition's rendering kind: a drawn line between layout
+   * neighbours, or an exit label inside its source (run-view-76). */
+  kinds: Map<string, "line" | "exit">;
 }
 
-export const STATE_W = 128;
-export const STATE_H = 40;
+export const STATE_W = 132;
+/** Two text lines — title and caption — before any exit labels. */
+export const STATE_BASE_H = 44;
+export const EXIT_LINE_H = 13;
 /** Ranks run top to bottom: the Captain pane is tall and narrow, so
- * the machine reads down the thread like the conversation does
- * (DR-028). */
-export const RANK_GAP = 30;
-export const ROW_GAP = 22;
+ * the machine reads down the thread like the conversation does. */
+export const RANK_GAP = 42;
+export const ROW_GAP = 48;
 
 /** The graph a frame draws when no definition is served: the observed
  * states and transitions alone (run-view-64). */
@@ -404,9 +416,18 @@ export function observedGraph(frame: MachineFrame): MachineGraph {
   return { initial, nodes, edges };
 }
 
-/** Top-to-bottom layered layout: BFS ranks from the initial state,
+/**
+ * Top-to-bottom layered layout: BFS ranks from the initial state,
  * stable sibling order, one barycenter pass — deterministic per
- * machine, nothing physical, nothing tuned (DR-028). */
+ * machine, nothing physical, nothing tuned (DR-028).
+ *
+ * The layout also decides each transition's rendering kind. Only
+ * layout neighbours draw as lines — one rank apart or side by side,
+ * within one column; every other transition is an exit label inside
+ * its source box, which grows to hold its labels. These machines run
+ * three edges per state, and at that fan-in routed lanes always end
+ * in a hairball; text cannot collide (run-view-76, DR-031).
+ */
 export function layoutMachine(graph: MachineGraph): MachineLayout {
   const ids = graph.nodes.map((n) => n.id);
   const idSet = new Set(ids);
@@ -444,20 +465,20 @@ export function layoutMachine(graph: MachineGraph): MachineLayout {
     ranks.set(r, list);
   }
 
-  // One barycenter pass orders each rank by the mean row of its
+  // One barycenter pass orders each rank by the mean column of its
   // predecessors, ties by declaration order — stable and cheap.
-  const rowOf = new Map<string, number>();
+  const colOf = new Map<string, number>();
   const orderedRanks = [...ranks.keys()].sort((a, b) => a - b);
   for (const r of orderedRanks) {
     const members = ranks.get(r) as string[];
     if (r === orderedRanks[0]) {
-      members.forEach((id, i) => rowOf.set(id, i));
+      members.forEach((id, i) => colOf.set(id, i));
       continue;
     }
     const keyed = members.map((id, declared) => {
       const preds = graph.edges
         .filter((e) => e.to === id && (rank.get(e.from) ?? 0) < r)
-        .map((e) => rowOf.get(e.from) ?? 0);
+        .map((e) => colOf.get(e.from) ?? 0);
       const bary =
         preds.length > 0
           ? preds.reduce((a, b) => a + b, 0) / preds.length
@@ -465,332 +486,225 @@ export function layoutMachine(graph: MachineGraph): MachineLayout {
       return { id, bary, declared };
     });
     keyed.sort((a, b) => a.bary - b.bary || a.declared - b.declared);
-    keyed.forEach((entry, i) => rowOf.set(entry.id, i));
+    keyed.forEach((entry, i) => colOf.set(entry.id, i));
     ranks.set(
       r,
       keyed.map((entry) => entry.id),
     );
   }
 
-  const nodes = new Map<string, MachinePlacement>();
-  let width = 0;
-  let height = 0;
-  // Rank → row (y), position within rank → column (x): the machine
-  // flows downward, and ranks wider than the pane still read as one
-  // row of alternatives.
+  // Kind decision from rank structure alone, so box heights (which
+  // depend on exit counts) are known before placement.
+  const kinds = new Map<string, "line" | "exit">();
+  for (const edge of graph.edges) {
+    if (!idSet.has(edge.from) || !idSet.has(edge.to)) continue;
+    if (edge.from === edge.to) {
+      kinds.set(edge.id, "line");
+      continue;
+    }
+    const rankDiff = (rank.get(edge.to) as number) - (rank.get(edge.from) as number);
+    const colDiff = Math.abs(
+      (colOf.get(edge.to) ?? 0) - (colOf.get(edge.from) ?? 0),
+    );
+    const neighbour =
+      (Math.abs(rankDiff) === 1 && colDiff <= 1) ||
+      (rankDiff === 0 && colDiff === 1);
+    kinds.set(edge.id, neighbour ? "line" : "exit");
+  }
+
+  const exitCount = new Map<string, number>();
+  for (const edge of graph.edges) {
+    if (kinds.get(edge.id) !== "exit") continue;
+    exitCount.set(edge.from, (exitCount.get(edge.from) ?? 0) + 1);
+  }
+
+  // Boxes in a rank share the rank's height, so the bands between
+  // ranks stay empty and a neighbour line can never clip a taller
+  // sibling (run-view-76).
+  const rankHeight = new Map<number, number>();
   for (const r of orderedRanks) {
     const members = ranks.get(r) as string[];
-    members.forEach((id) => {
-      const y = r * (STATE_H + RANK_GAP);
-      const x = (rowOf.get(id) ?? 0) * (STATE_W + ROW_GAP);
-      nodes.set(id, { x, y, width: STATE_W, height: STATE_H });
-      width = Math.max(width, x + STATE_W);
-      height = Math.max(height, y + STATE_H);
-    });
+    const h = Math.max(
+      ...members.map(
+        (id) => STATE_BASE_H + (exitCount.get(id) ?? 0) * EXIT_LINE_H,
+      ),
+    );
+    rankHeight.set(r, h);
   }
-  return { nodes, width: Math.max(width, 1), height: Math.max(height, 1) };
+
+  const nodes = new Map<string, MachinePlacement>();
+  let width = 0;
+  let y = 0;
+  for (const r of orderedRanks) {
+    const members = ranks.get(r) as string[];
+    const height = rankHeight.get(r) as number;
+    for (const id of members) {
+      const x = (colOf.get(id) ?? 0) * (STATE_W + ROW_GAP);
+      nodes.set(id, { x, y, width: STATE_W, height });
+      width = Math.max(width, x + STATE_W);
+    }
+    y += height + RANK_GAP;
+  }
+  const height = Math.max(1, y - RANK_GAP);
+  return { nodes, width: Math.max(width, 1), height, kinds };
 }
 
-// --- Edge routing (run-view-76: arrows land, edges route) -------------------
+// --- Edge geometry (run-view-76: neighbours draw, distance speaks) ----------
 
-/** Where an edge meets a state box, and how it gets there. */
 export interface RoutedEdge {
   id: string;
   from: string;
   to: string;
   event: string;
-  /** SVG path data, ending exactly on the target's border. */
-  path: string;
-  /** The landing point — on the target's border, by construction. */
-  head: { x: number; y: number };
-  /** Which border the head lands on. */
-  side: "top" | "bottom" | "left" | "right";
+  kind: "line" | "exit";
+  /** Line: SVG path ending on the target's border. */
+  path?: string;
+  /** Line: the landing point, on the target's border by construction. */
+  head?: { x: number; y: number };
+  /** Exit: which slot in the source box the label occupies. */
+  slot?: number;
+  /** Exit: the label's text anchor inside the source box. */
+  anchor?: { x: number; y: number };
 }
 
-/** How far the innermost side lane swings clear of the boxes it
- * passes, and how far apart successive lanes track. */
-const LANE = 22;
-const LANE_PITCH = 13;
 /** Minimum gap between two heads sharing one border. */
-const PORT_GAP = 12;
+const PORT_GAP = 14;
+/** Reciprocal vertical pairs separate by this much. */
+const PAIR_SHIFT = 7;
 
 type Box = MachinePlacement;
-
 const centerX = (b: Box): number => b.x + b.width / 2;
-const centerY = (b: Box): number => b.y + b.height / 2;
-
-/** True when a segment from a to b passes through the box, ignoring
- * boxes the segment merely touches at its own endpoints. */
-function segmentHitsBox(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-  box: Box,
-): boolean {
-  // Sample the segment; boxes are large relative to the step, so a
-  // handful of points is a faithful test and stays cheap.
-  const steps = 24;
-  for (let i = 1; i < steps; i += 1) {
-    const t = i / steps;
-    const x = a.x + (b.x - a.x) * t;
-    const y = a.y + (b.y - a.y) * t;
-    if (
-      x > box.x + 0.5 &&
-      x < box.x + box.width - 0.5 &&
-      y > box.y + 0.5 &&
-      y < box.y + box.height - 0.5
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
 
 /**
- * Route a machine's edges over a solved layout: every head lands on
- * its target's border, heads sharing a border spread across it, and
- * no path crosses a state box (run-view-76). Pure over the layout, so
- * the geometry is assertable without rendering (run-view-77).
+ * Solve every transition's geometry over a layout: neighbour lines
+ * land on borders at unshared ports, everything else becomes an exit
+ * label at an unshared slot in its source (run-view-76). Pure over
+ * the layout, so the law is assertable exactly (run-view-77).
  */
 export function routeEdges(
   graph: MachineGraph,
   layout: MachineLayout,
 ): RoutedEdge[] {
-  const boxes = [...layout.nodes.values()];
-  // Reserve one port per incoming edge on each border, so two heads
-  // never land on the same point.
-  const incoming = new Map<string, string[]>();
-  for (const edge of graph.edges) {
-    if (!layout.nodes.has(edge.from) || !layout.nodes.has(edge.to)) continue;
-    if (edge.from === edge.to) continue;
-    const list = incoming.get(edge.to) ?? [];
-    list.push(edge.id);
-    incoming.set(edge.to, list);
-  }
-
-  // Edges that need a side lane get their own track, longest span
-  // outermost, so lanes nest instead of piling onto one line.
-  const laneOrder = new Map<string, number>();
-  const laneCandidates = graph.edges
-    .filter((edge) => {
-      const from = layout.nodes.get(edge.from);
-      const to = layout.nodes.get(edge.to);
-      if (!from || !to || edge.from === edge.to) return false;
-      if (Math.abs(to.y - from.y) < 1) return false;
-      const skip = Math.abs(to.y - from.y) > STATE_H + RANK_GAP + 1;
-      return skip || to.y < from.y;
-    })
-    .map((edge) => {
-      const from = layout.nodes.get(edge.from) as Box;
-      const to = layout.nodes.get(edge.to) as Box;
-      return {
-        id: edge.id,
-        right: centerX(from) >= centerX(to),
-        span: Math.abs(to.y - from.y),
-      };
-    });
-  for (const facing of [true, false]) {
-    laneCandidates
-      .filter((candidate) => candidate.right === facing)
-      .sort((a, b) => b.span - a.span || a.id.localeCompare(b.id))
-      .forEach((candidate, index) => laneOrder.set(candidate.id, index));
-  }
-
-  /** The border an edge lands on — one definition, so an edge and the
-   * siblings it shares a border with always agree. */
-  const sideOf = (from: Box, to: Box): RoutedEdge["side"] => {
-    const sameRank = Math.abs(to.y - from.y) < 1;
-    if (sameRank) {
-      const blocked = boxes.some(
-        (box) =>
-          box !== from &&
-          box !== to &&
-          Math.abs(box.y - from.y) < 1 &&
-          box.x > Math.min(from.x, to.x) &&
-          box.x + box.width < Math.max(from.x + from.width, to.x + to.width),
-      );
-      if (blocked) return "top";
+  // Reserve one port per drawn head on each (target, border) pair.
+  const portGroups = new Map<string, string[]>();
+  const borderOf = (edge: { id: string; from: string; to: string }): string => {
+    const from = layout.nodes.get(edge.from) as Box;
+    const to = layout.nodes.get(edge.to) as Box;
+    if (Math.abs(to.y - from.y) < 1) {
       return centerX(to) >= centerX(from) ? "left" : "right";
     }
     return to.y > from.y ? "top" : "bottom";
   };
+  for (const edge of graph.edges) {
+    if (layout.kinds.get(edge.id) !== "line" || edge.from === edge.to) continue;
+    if (!layout.nodes.has(edge.from) || !layout.nodes.has(edge.to)) continue;
+    const key = `${edge.to}|${borderOf(edge)}`;
+    const list = portGroups.get(key) ?? [];
+    list.push(edge.id);
+    portGroups.set(key, list);
+  }
 
+  const exitSlots = new Map<string, number>();
   const routed: RoutedEdge[] = [];
+
   for (const edge of graph.edges) {
     const from = layout.nodes.get(edge.from);
     const to = layout.nodes.get(edge.to);
     if (!from || !to) continue;
+    const base = { id: edge.id, from: edge.from, to: edge.to, event: edge.event };
+
+    if (layout.kinds.get(edge.id) === "exit") {
+      const slot = exitSlots.get(edge.from) ?? 0;
+      exitSlots.set(edge.from, slot + 1);
+      routed.push({
+        ...base,
+        kind: "exit",
+        slot,
+        anchor: {
+          x: from.x + 10,
+          y: from.y + STATE_BASE_H + 2 + slot * EXIT_LINE_H,
+        },
+      });
+      continue;
+    }
 
     if (edge.from === edge.to) {
-      // A self-loop arcs beside its own state and lands back on it.
-      const head = { x: from.x + from.width, y: from.y + from.height * 0.72 };
+      const head = { x: from.x + from.width, y: from.y + from.height * 0.66 };
       routed.push({
-        id: edge.id,
-        from: edge.from,
-        to: edge.to,
-        event: edge.event,
-        side: "right",
+        ...base,
+        kind: "line",
         head,
         path:
-          `M ${from.x + from.width} ${from.y + from.height * 0.28}` +
-          ` C ${from.x + from.width + 26} ${from.y}` +
-          ` ${from.x + from.width + 26} ${from.y + from.height}` +
+          `M ${from.x + from.width} ${from.y + from.height * 0.34}` +
+          ` C ${from.x + from.width + 24} ${from.y + from.height * 0.2}` +
+          ` ${from.x + from.width + 24} ${from.y + from.height * 0.8}` +
           ` ${head.x} ${head.y}`,
       });
       continue;
     }
 
-    const sameRank = Math.abs(to.y - from.y) < 1;
-    const side = sideOf(from, to);
-    // Same-rank neighbours meet across the row; same-rank states with
-    // something standing between them must go over it, not through it.
-    const between = sameRank && side === "top";
-    const lateral = sameRank && !between;
+    const lateral = Math.abs(to.y - from.y) < 1;
+    if (lateral) {
+      // Neighbours across the row meet on their facing borders, the
+      // two directions offset above and below the midline.
+      const leftToRight = centerX(to) >= centerX(from);
+      const offset = leftToRight ? -6 : 6;
+      const tail = leftToRight
+        ? { x: from.x + from.width, y: from.y + from.height / 2 + offset }
+        : { x: from.x, y: from.y + from.height / 2 + offset };
+      const head = leftToRight
+        ? { x: to.x, y: to.y + to.height / 2 + offset }
+        : { x: to.x + to.width, y: to.y + to.height / 2 + offset };
+      routed.push({
+        ...base,
+        kind: "line",
+        head,
+        path: `M ${tail.x} ${tail.y} L ${head.x} ${head.y}`,
+      });
+      continue;
+    }
+
+    // Vertical neighbours: forward lands on the top border, backward
+    // on the bottom; the pair splits left/right of center so a
+    // reciprocal never overlaps itself.
     const forward = to.y > from.y;
-
-    // Spread the heads that share this border.
-    const siblings = incoming.get(edge.to) ?? [];
-    const onSide = siblings.filter((id) => {
-      const other = graph.edges.find((e) => e.id === id);
-      const otherFrom = other ? layout.nodes.get(other.from) : undefined;
-      return otherFrom !== undefined && sideOf(otherFrom, to) === side;
-    });
-    const slot = Math.max(0, onSide.indexOf(edge.id));
-    const span = side === "top" || side === "bottom" ? to.width : to.height;
-    const usable = Math.max(PORT_GAP, span - 2 * PORT_GAP);
-    const offset =
-      onSide.length <= 1
-        ? span / 2
-        : PORT_GAP + (usable * slot) / (onSide.length - 1);
-
-    const head =
-      side === "top"
-        ? { x: to.x + offset, y: to.y }
-        : side === "bottom"
-          ? { x: to.x + offset, y: to.y + to.height }
-          : side === "left"
-            ? { x: to.x, y: to.y + offset }
-            : { x: to.x + to.width, y: to.y + offset };
-
-    // The tail leaves the source on the border facing the target.
-    const tail = lateral
-      ? centerX(to) >= centerX(from)
-        ? { x: from.x + from.width, y: centerY(from) }
-        : { x: from.x, y: centerY(from) }
-      : forward
-        ? { x: centerX(from), y: from.y + from.height }
-        : { x: centerX(from), y: from.y };
-
-    const rankSkip = Math.abs(to.y - from.y) > STATE_H + RANK_GAP + 1;
-    // The clearance test walks the curve the path actually draws, not
-    // the straight line between its ends: a cubic bulges, and a bulge
-    // through a third box is exactly what the law forbids.
-    const control = [
-      tail,
-      { x: tail.x, y: tail.y + 14 },
-      { x: head.x, y: head.y - 14 },
-      head,
-    ];
-    const straightClear =
-      !lateral &&
-      !rankSkip &&
-      forward &&
-      !boxes.some(
-        (box) =>
-          box !== from &&
-          box !== to &&
-          control.some((point, i) =>
-            i + 1 < control.length
-              ? segmentHitsBox(point, control[i + 1], box)
-              : false,
-          ),
-      );
-
-    let path: string;
-    if (between) {
-      // Over the row: up into the gap above, across, and down onto the
-      // target's top border — never through the state in between.
-      const gapY = from.y - RANK_GAP / 2;
-      path =
-        `M ${centerX(from)} ${from.y}` +
-        ` L ${centerX(from)} ${gapY}` +
-        ` L ${head.x} ${gapY}` +
-        ` L ${head.x} ${head.y}`;
-    } else if (straightClear) {
-      // A clean one-rank hop reads best as a plain curve.
-      path = `M ${tail.x} ${tail.y} C ${tail.x} ${tail.y + 14} ${head.x} ${head.y - 14} ${head.x} ${head.y}`;
-    } else if (lateral) {
-      // Same-rank neighbours meet across the row, never looping under
-      // it — the case that used to draw a head into empty space.
-      const dip = Math.min(18, Math.abs(head.x - tail.x) / 3 + 6);
-      path = `M ${tail.x} ${tail.y} C ${tail.x + (head.x - tail.x) / 3} ${tail.y - dip} ${head.x - (head.x - tail.x) / 3} ${head.y - dip} ${head.x} ${head.y}`;
-    } else {
-      // Skips and returns take a side lane. The lane runs beside every
-      // box whose rows it passes — clearing only the two endpoints
-      // would cut straight through their neighbours — and it reaches
-      // that lane through the gaps between ranks, never across a row.
-      const spanTop = Math.min(from.y, to.y);
-      const spanBottom = Math.max(from.y + from.height, to.y + to.height);
-      const crossed = boxes.filter(
-        (box) => box.y < spanBottom + 1 && box.y + box.height > spanTop - 1,
-      );
-      const goRight = centerX(from) >= centerX(to);
-      const track = laneOrder.get(edge.id) ?? 0;
-      const reach = LANE + track * LANE_PITCH;
-      const laneX = goRight
-        ? Math.max(...crossed.map((box) => box.x + box.width)) + reach
-        : Math.min(...crossed.map((box) => box.x)) - reach;
-
-      // Leave through the gap on the side the target lies, and arrive
-      // through the gap on the target's landing border.
-      // Successive lanes also spread within the rank gaps they share,
-      // so their horizontal runs never lie on top of one another.
-      const gap = 9 + (track % 2) * 7;
-      const exit = forward
-        ? { x: centerX(from), y: from.y + from.height }
-        : { x: centerX(from), y: from.y };
-      const exitLane = forward ? exit.y + gap : exit.y - gap;
-      const approachLane = side === "bottom" ? head.y + gap : head.y - gap;
-      path =
-        `M ${exit.x} ${exit.y}` +
-        ` L ${exit.x} ${exitLane}` +
-        ` L ${laneX} ${exitLane}` +
-        ` L ${laneX} ${approachLane}` +
-        ` L ${head.x} ${approachLane}` +
-        ` L ${head.x} ${head.y}`;
-    }
-
+    const border = forward ? "top" : "bottom";
+    const group = portGroups.get(`${edge.to}|${border}`) ?? [edge.id];
+    const slot = Math.max(0, group.indexOf(edge.id));
+    const usable = Math.max(PORT_GAP, to.width - 2 * PORT_GAP);
+    const portX =
+      group.length <= 1
+        ? centerX(to) + (forward ? -PAIR_SHIFT : PAIR_SHIFT)
+        : to.x + PORT_GAP + (usable * slot) / (group.length - 1);
+    const head = {
+      x: Math.min(to.x + to.width - 8, Math.max(to.x + 8, portX)),
+      y: forward ? to.y : to.y + to.height,
+    };
+    const tail = {
+      x: centerX(from) + (forward ? -PAIR_SHIFT : PAIR_SHIFT),
+      y: forward ? from.y + from.height : from.y,
+    };
+    const bend = forward ? 14 : -14;
     routed.push({
-      id: edge.id,
-      from: edge.from,
-      to: edge.to,
-      event: edge.event,
-      path,
+      ...base,
+      kind: "line",
       head,
-      side,
+      path:
+        `M ${tail.x} ${tail.y}` +
+        ` C ${tail.x} ${tail.y + bend} ${head.x} ${head.y - bend}` +
+        ` ${head.x} ${head.y}`,
     });
-  }
-
-  // Reciprocal pairs stay apart: nudge the second of a mirrored pair.
-  const seen = new Map<string, RoutedEdge>();
-  for (const edge of routed) {
-    const key = `${edge.from}>${edge.to}`;
-    const mirror = seen.get(`${edge.to}>${edge.from}`);
-    if (mirror && mirror.path === edge.path) {
-      edge.path = edge.path.replace(/^M ([\d.-]+) ([\d.-]+)/, (_m, x, y) =>
-        `M ${Number(x) + 6} ${Number(y)}`,
-      );
-    }
-    seen.set(key, edge);
   }
   return routed;
 }
 
-/** True when a routed path visibly crosses a state box it neither
+/** True when a routed line visibly crosses a state box it neither
  * starts nor ends at — the invariant run-view-76 forbids. */
 export function edgeCrossesBox(
   edge: RoutedEdge,
   layout: MachineLayout,
 ): boolean {
+  if (edge.kind !== "line" || !edge.path) return false;
   const points = samplePath(edge.path);
   for (const [id, box] of layout.nodes) {
     if (id === edge.from || id === edge.to) continue;
@@ -817,8 +731,6 @@ export function samplePath(path: string): { x: number; y: number }[] {
     points.push({ x: numbers[i], y: numbers[i + 1] });
   }
   if (points.length < 2) return points;
-  // Sample between successive control points; a control polygon that
-  // clears every box implies the curve does too, for these shapes.
   const dense: { x: number; y: number }[] = [];
   for (let i = 0; i + 1 < points.length; i += 1) {
     for (let step = 0; step <= 12; step += 1) {

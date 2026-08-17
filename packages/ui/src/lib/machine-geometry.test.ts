@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// run-view-77: the routed geometry of a drawn machine (DR-031).
-// Arrowheads used to float in empty space — a same-rank edge was
-// classified "forward" and looped under its own row, and skip edges
-// cut straight through the ranks between. The routing is a pure
-// function of the solved layout, so the law is assertable exactly.
+// run-view-77: the solved geometry of a drawn machine (DR-031).
+// Neighbours draw, distance speaks in words: only edges between
+// layout neighbours render as lines, and everything else is an exit
+// label inside its source. Two routed-lane attempts before this ended
+// in the hairball on the shipped machines, so the law is asserted on
+// those machines' served graphs, not only on a fixture.
 
 import { describe, expect, test } from "vitest";
 import type { MachineGraph } from "@sublang/spex-core/protocol";
@@ -18,6 +19,8 @@ import {
   edgeCrossesBox,
   layoutMachine,
   routeEdges,
+  type MachineLayout,
+  type RoutedEdge,
 } from "./machine-frames.js";
 
 const node = (id: string) => ({ id, kind: "state" as const, tags: [] });
@@ -28,145 +31,135 @@ const edge = (from: string, to: string, event: string) => ({
   event,
 });
 
-/** One machine holding every routing case the law names: two states
- * sharing a rank, a rank-skipping edge, a backward return, and a
- * reciprocal pair. */
+/** One machine holding every geometry case the law names: neighbour
+ * hops, a same-rank pair, a rank skip, a backward return, and a fan
+ * into one state. */
 const GRAPH: MachineGraph = {
   initial: "ready",
   nodes: ["ready", "work", "alt", "check", "retry", "done", "resume"].map(node),
   edges: [
-    // Two states share rank 1, so the edges between them are lateral.
     edge("ready", "work", "START"),
     edge("ready", "alt", "BRANCH"),
+    // A reciprocal same-rank pair.
     edge("work", "alt", "LATERAL"),
     edge("alt", "work", "BACK_LATERAL"),
-    // Two edges land on check's top border: the ports must spread.
+    // Two drawn heads land on check: the ports must spread.
     edge("work", "check", "NEXT"),
     edge("alt", "check", "JOIN"),
     edge("check", "retry", "FAILED"),
-    // A backward return across ranks takes a side lane.
-    edge("retry", "work", "AGAIN"),
+    // A backward neighbour return — drawn upward.
+    edge("retry", "check", "AGAIN"),
+    // A rank skip and a long return: distance speaks in words.
+    edge("ready", "done", "SHORTCUT"),
+    edge("retry", "ready", "RESTART"),
     edge("check", "done", "OK"),
-    // Reachable from nowhere: it sits below everything, and its edge
-    // back to the start spans the whole drawing.
+    // From an unreached state clear across the drawing.
     edge("resume", "ready", "RESUME"),
   ],
 };
 
-describe("run-view-77: routed edge geometry", () => {
-  const layout = layoutMachine(GRAPH);
-  const routed = routeEdges(GRAPH, layout);
+function assertLaw(id: string, graph: MachineGraph): {
+  layout: MachineLayout;
+  lines: RoutedEdge[];
+  exits: RoutedEdge[];
+} {
+  const layout = layoutMachine(graph);
+  const routed = routeEdges(graph, layout);
 
-  test("every head lands on its target's border", () => {
-    expect(routed).toHaveLength(GRAPH.edges.length);
-    for (const edgeRoute of routed) {
-      const box = layout.nodes.get(edgeRoute.to);
-      expect(box, edgeRoute.id).toBeTruthy();
-      const { x, y, width, height } = box!;
-      const onVertical =
-        Math.abs(edgeRoute.head.x - x) < 0.01 ||
-        Math.abs(edgeRoute.head.x - (x + width)) < 0.01;
-      const onHorizontal =
-        Math.abs(edgeRoute.head.y - y) < 0.01 ||
-        Math.abs(edgeRoute.head.y - (y + height)) < 0.01;
-      expect(onVertical || onHorizontal, `${edgeRoute.id} lands on a border`).toBe(
-        true,
-      );
-      // And within the border's own extent, not past its corner.
-      expect(edgeRoute.head.x).toBeGreaterThanOrEqual(x - 0.01);
-      expect(edgeRoute.head.x).toBeLessThanOrEqual(x + width + 0.01);
-      expect(edgeRoute.head.y).toBeGreaterThanOrEqual(y - 0.01);
-      expect(edgeRoute.head.y).toBeLessThanOrEqual(y + height + 0.01);
-    }
-  });
+  // Every transition is exactly one drawn line or one exit label.
+  const known = new Set(graph.nodes.map((n) => n.id));
+  const expected = graph.edges.filter(
+    (e) => known.has(e.from) && known.has(e.to),
+  );
+  expect(routed.map((e) => e.id).sort()).toEqual(
+    expected.map((e) => e.id).sort(),
+  );
+  const lines = routed.filter((e) => e.kind === "line");
+  const exits = routed.filter((e) => e.kind === "exit");
 
-  test("no two heads on one border coincide", () => {
-    const seen = new Map<string, string>();
-    for (const edgeRoute of routed) {
-      const key = `${edgeRoute.to}:${edgeRoute.side}:${edgeRoute.head.x.toFixed(2)},${edgeRoute.head.y.toFixed(2)}`;
-      expect(seen.has(key), `${edgeRoute.id} shares a port with ${seen.get(key)}`).toBe(
-        false,
-      );
-      seen.set(key, edgeRoute.id);
-    }
-  });
-
-  test("no edge path crosses a state box", () => {
-    const crossing = routed.filter((edgeRoute) =>
-      edgeCrossesBox(edgeRoute, layout),
+  const ports = new Map<string, string>();
+  for (const line of lines) {
+    const box = layout.nodes.get(line.to)!;
+    const head = line.head!;
+    if (line.from === line.to) continue;
+    // The head lies on its target's border.
+    const onVertical =
+      Math.abs(head.x - box.x) < 0.01 ||
+      Math.abs(head.x - (box.x + box.width)) < 0.01;
+    const onHorizontal =
+      Math.abs(head.y - box.y) < 0.01 ||
+      Math.abs(head.y - (box.y + box.height)) < 0.01;
+    expect(onVertical || onHorizontal, `${id}: ${line.id} lands on a border`).toBe(
+      true,
     );
-    expect(crossing.map((edgeRoute) => edgeRoute.id)).toEqual([]);
-  });
+    expect(head.x).toBeGreaterThanOrEqual(box.x - 0.01);
+    expect(head.x).toBeLessThanOrEqual(box.x + box.width + 0.01);
+    expect(head.y).toBeGreaterThanOrEqual(box.y - 0.01);
+    expect(head.y).toBeLessThanOrEqual(box.y + box.height + 0.01);
+    // At a port no other head shares.
+    const port = `${line.to}|${head.x.toFixed(2)},${head.y.toFixed(2)}`;
+    expect(
+      ports.has(port),
+      `${id}: ${line.id} shares a port with ${ports.get(port)}`,
+    ).toBe(false);
+    ports.set(port, line.id);
+    // And its path crosses no state box.
+    expect(edgeCrossesBox(line, layout), `${id}: ${line.id} crosses a box`).toBe(
+      false,
+    );
+  }
 
-  test("a reciprocal pair renders as two distinct paths", () => {
-    const out = routed.find((e) => e.from === "work" && e.to === "alt");
-    const back = routed.find((e) => e.from === "alt" && e.to === "work");
-    expect(out).toBeTruthy();
-    expect(back).toBeTruthy();
+  // Exit labels name their target from an unshared slot in the source.
+  const slots = new Map<string, string>();
+  for (const exit of exits) {
+    expect(exit.anchor, `${id}: ${exit.id} has an anchor`).toBeTruthy();
+    const key = `${exit.from}|${exit.slot}`;
+    expect(
+      slots.has(key),
+      `${id}: ${exit.id} shares a slot with ${slots.get(key)}`,
+    ).toBe(false);
+    slots.set(key, exit.id);
+    // The label sits inside its source box.
+    const box = layout.nodes.get(exit.from)!;
+    expect(exit.anchor!.x).toBeGreaterThan(box.x);
+    expect(exit.anchor!.y).toBeGreaterThan(box.y);
+    expect(exit.anchor!.y).toBeLessThan(box.y + box.height);
+  }
+
+  return { layout, lines, exits };
+}
+
+describe("run-view-77: solved machine geometry", () => {
+  test("the fixture partitions into drawn neighbours and worded exits", () => {
+    const { lines, exits } = assertLaw("fixture", GRAPH);
+
+    // Neighbour hops draw; the reciprocal pair draws as two paths.
+    const ids = (list: RoutedEdge[]) => list.map((e) => e.id);
+    expect(ids(lines)).toContain("ready::START::0::0");
+    expect(ids(lines)).toContain("retry::AGAIN::0::0");
+    const out = lines.find((e) => e.id === "work::LATERAL::0::0");
+    const back = lines.find((e) => e.id === "alt::BACK_LATERAL::0::0");
+    expect(out && back).toBeTruthy();
     expect(out!.path).not.toBe(back!.path);
-    // Same-rank neighbours meet across the row: their heads land on
-    // the facing side borders, never on a top border below the row —
-    // the misclassification that used to strand the arrowhead.
-    expect(out!.side).toBe("left");
-    expect(back!.side).toBe("right");
+
+    // Distance speaks in words: the skip, the long return, and the
+    // edge from the unreached state.
+    expect(ids(exits)).toContain("ready::SHORTCUT::0::0");
+    expect(ids(exits)).toContain("retry::RESTART::0::0");
+    expect(ids(exits)).toContain("resume::RESUME::0::0");
   });
 
-  test("a backward return leaves through a rank gap, not across a row", () => {
-    const back = routed.find((e) => e.from === "retry" && e.to === "work");
-    expect(back).toBeTruthy();
-    expect(back!.side).toBe("bottom");
-    // Its lane clears every box in the rows it passes, including the
-    // sibling sitting beside its source.
-    expect(edgeCrossesBox(back!, layout)).toBe(false);
-  });
-});
-
-// The fixture above holds the cases by construction; the built-ins
-// hold the cases that actually shipped — 8 states and 26 edges of
-// resume and failure paths, where a curve bulging through a third box
-// and a lateral edge cutting through the state between its ends both
-// survived a fixture that never posed them.
-describe("run-view-77: the law holds on the served built-in machines", () => {
-  const graphs = [
-    { id: "code", graph: codeGraph as MachineGraph },
-    { id: "review", graph: reviewGraph as MachineGraph },
-    { id: "decide", graph: decideGraph as MachineGraph },
-  ];
-
-  for (const { id, graph } of graphs) {
-    test(`${id} draws with every arrow landed and no box crossed`, () => {
-      const layout = layoutMachine(graph);
-      const routed = routeEdges(graph, layout);
-      expect(routed.length).toBeGreaterThan(0);
-
-      const ports = new Map<string, string>();
-      for (const edgeRoute of routed) {
-        const box = layout.nodes.get(edgeRoute.to);
-        expect(box, `${id}: ${edgeRoute.id} targets a placed state`).toBeTruthy();
-        const { x, y, width, height } = box!;
-        const onVertical =
-          Math.abs(edgeRoute.head.x - x) < 0.01 ||
-          Math.abs(edgeRoute.head.x - (x + width)) < 0.01;
-        const onHorizontal =
-          Math.abs(edgeRoute.head.y - y) < 0.01 ||
-          Math.abs(edgeRoute.head.y - (y + height)) < 0.01;
-        expect(
-          onVertical || onHorizontal,
-          `${id}: ${edgeRoute.id} lands on a border`,
-        ).toBe(true);
-
-        const port = `${edgeRoute.to}|${edgeRoute.head.x.toFixed(2)},${edgeRoute.head.y.toFixed(2)}`;
-        expect(
-          ports.has(port),
-          `${id}: ${edgeRoute.id} shares a port with ${ports.get(port)}`,
-        ).toBe(false);
-        ports.set(port, edgeRoute.id);
-
-        expect(
-          edgeCrossesBox(edgeRoute, layout),
-          `${id}: ${edgeRoute.id} crosses a state box`,
-        ).toBe(false);
-      }
+  // The machines that actually ship are the real gate: two routing
+  // attempts survived a fixture and failed on these.
+  for (const [id, graph] of [
+    ["code", codeGraph],
+    ["review", reviewGraph],
+    ["decide", decideGraph],
+  ] as const) {
+    test(`${id} holds the law over its served graph`, () => {
+      const { lines } = assertLaw(id, graph as MachineGraph);
+      // The spine still draws as lines — the drawing keeps its shape.
+      expect(lines.length).toBeGreaterThan(3);
     });
   }
 });

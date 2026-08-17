@@ -287,7 +287,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
       "machine-state-t-code-reviewFirstCommit",
     );
     expect(delegating.getAttribute("data-delegating")).toBe("true");
-    expect(within(delegating).getByText("→ /review")).toBeTruthy();
+    expect(within(delegating).getByText("call /review")).toBeTruthy();
     // The child is untouched: the same tree, differently disclosed.
     expect(cards.map((card) => card.getAttribute("data-playbook"))).toEqual(
       before,

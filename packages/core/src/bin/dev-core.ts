@@ -176,18 +176,77 @@ async function main(): Promise<void> {
         status: "ok",
       });
       await move("runFirstPhase", "reviewFirstCommit", "done");
-      await session.emitStatus("⤷ Reviewer: review round 1");
-      await trace("player.call.started", {
+      // The review runs as a nested playbook — the demo shows the
+      // call tree the way a real run traces it (DR-031).
+      const reviewId = `${runId}-review`;
+      let reviewSequence = 0;
+      const reviewTrace = async (
+        type: string,
+        payload: Record<string, unknown>,
+      ): Promise<void> => {
+        reviewSequence += 1;
+        await session.emitTelemetry({
+          topic: "playbook.trace",
+          payload: {
+            schemaVersion: 3,
+            sessionId: reviewId,
+            playbookId: "review",
+            rootSessionId: runId,
+            parentSessionId: runId,
+            depth: 2,
+            sequence: reviewSequence,
+            timestamp: Date.now(),
+            type,
+            payload,
+          },
+        });
+      };
+      const reviewMove = async (
+        from: string | null,
+        to: string,
+        event: string,
+        status: "active" | "done" = "active",
+      ): Promise<void> => {
+        await reviewTrace("fsm.transition", {
+          from,
+          to,
+          event: { type: event },
+          state: { value: to, activeStateIds: [to], tags: [], status },
+        });
+      };
+      await session.emitStatus("⮕ /review: first commit");
+      await trace("playbook.call.started", {
         stateId: "reviewFirstCommit",
+        playbookId: "review",
+        text: "review the first commit",
+      });
+      await reviewTrace("session.started", {});
+      await reviewMove("ready", "reviewInitial", "START_REVIEW");
+      await session.emitStatus("⤷ Reviewer: review round 1");
+      await reviewTrace("player.call.started", {
+        stateId: "reviewInitial",
         roleId: "reviewer",
         playerId: "code-reviewer",
       });
       await context.callPlayer("code-reviewer", "Review the change");
-      await trace("player.call.finished", {
-        stateId: "reviewFirstCommit",
+      await reviewTrace("player.call.finished", {
+        stateId: "reviewInitial",
         status: "ok",
       });
+      await reviewMove("reviewInitial", "done", "done", "done");
+      await reviewTrace("session.disposed", {
+        state: { value: "done", status: "done" },
+      });
+      await trace("playbook.call.finished", {
+        stateId: "reviewFirstCommit",
+        playbookId: "review",
+        result: "approved",
+      });
       await move("reviewFirstCommit", "done", "done", "done");
+      await trace("status.emitted", { message: "settled", stateId: "done" });
+      await trace("session.disposed", {
+        state: { value: "done", status: "done" },
+      });
       await session.emitStatus("◇ /code finished");
     });
 
