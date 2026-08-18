@@ -91,6 +91,11 @@ export interface UsageTotals {
   outputTokens: number;
   toolUses: number;
   totalCostUsd: number;
+  /** Every provenance the summed cost came from, sorted. A cost is
+   * only as good as its weakest source, so the reader gets the labels
+   * rather than a number that hides them (DR-032). Empty when no
+   * entry reported a cost at all. */
+  costSources: string[];
 }
 
 interface SessionRow {
@@ -127,6 +132,11 @@ function sessionInfo(
     failed,
     ...(costUsd !== undefined ? { costUsd } : {}),
   };
+}
+
+/** SQLite's GROUP_CONCAT gives a comma-joined list or null. */
+function splitSources(joined: string | null): string[] {
+  return joined ? [...new Set(joined.split(","))].filter(Boolean).sort() : [];
 }
 
 function isHidden(record: TmuxPlayRecord): boolean {
@@ -447,7 +457,8 @@ export class Store {
           "COALESCE(SUM(input_tokens),0) AS input_tokens, " +
           "COALESCE(SUM(output_tokens),0) AS output_tokens, " +
           "COALESCE(SUM(tool_uses),0) AS tool_uses, " +
-          "COALESCE(SUM(total_cost_usd),0) AS total_cost_usd " +
+          "COALESCE(SUM(total_cost_usd),0) AS total_cost_usd, " +
+          "GROUP_CONCAT(DISTINCT cost_source) AS cost_sources " +
           "FROM usage GROUP BY day ORDER BY day DESC LIMIT 30",
       )
       .all() as {
@@ -456,6 +467,7 @@ export class Store {
       output_tokens: number;
       tool_uses: number;
       total_cost_usd: number;
+      cost_sources: string | null;
     }[];
     return rows.map((row) => ({
       day: row.day,
@@ -464,6 +476,7 @@ export class Store {
         outputTokens: row.output_tokens,
         toolUses: row.tool_uses,
         totalCostUsd: row.total_cost_usd,
+        costSources: splitSources(row.cost_sources),
       },
     }));
   }
@@ -474,7 +487,8 @@ export class Store {
         "SELECT COALESCE(SUM(input_tokens),0) AS input_tokens, " +
           "COALESCE(SUM(output_tokens),0) AS output_tokens, " +
           "COALESCE(SUM(tool_uses),0) AS tool_uses, " +
-          "COALESCE(SUM(total_cost_usd),0) AS total_cost_usd " +
+          "COALESCE(SUM(total_cost_usd),0) AS total_cost_usd, " +
+          "GROUP_CONCAT(DISTINCT cost_source) AS cost_sources " +
           "FROM usage WHERE session_id = ?",
       )
       .get(sessionId) as {
@@ -482,12 +496,14 @@ export class Store {
       output_tokens: number;
       tool_uses: number;
       total_cost_usd: number;
+      cost_sources: string | null;
     };
     return {
       inputTokens: row.input_tokens,
       outputTokens: row.output_tokens,
       toolUses: row.tool_uses,
       totalCostUsd: row.total_cost_usd,
+      costSources: splitSources(row.cost_sources),
     };
   }
 

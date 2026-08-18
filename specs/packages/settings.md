@@ -41,11 +41,27 @@ Where the Settings surface is open, the Settings surface shall display the capta
 
 - When a captain edit is saved, the entry appears in the shared config file as an inline agent block, a scalar entry becoming a block on that first save.
 
+### Session Players
+
+#### settings-26
+
+Where the Settings surface is open, the Settings surface shall present the shared config's session-player roster ([DR-032](../decisions/032-session-players.md)) — each player's id, its agent with that adapter's readiness, and the `<playbook>.<role>` bindings it answers — and shall offer, per player, an agent editor with the fields of an inline agent block and a removal control:
+
+- A player no binding names is listed and marked as bound to no role, because an unreferenced lane is legal and reaching no session.
+- A saved player edit is a merge patch altering only the fields the editor surfaced, preserving hand-written fields such as `instruction` and granular permissions.
+- A removal the shared-config write path refuses is reported in that path's own words beside the player, and writes nothing.
+
+#### settings-27
+
+Where the Settings surface is open, the Settings surface shall offer adding a session player by naming its id and giving it a whole agent block ([DR-032](../decisions/032-session-players.md)), and shall report a rejected id in the shared-config write path's own words without writing:
+
+- The seeded block is a complete, deliberate choice, so an untouched draft is savable.
+
 ### Adapter Readiness
 
 #### settings-5
 
-Where the Settings surface is open, the Settings surface shall show a per-adapter readiness panel holding one deduplicated entry per adapter the shared config references, each entry naming the positions using that adapter (`captain`, `<playbook>.<role>`) and reflecting the launcher-equivalent readiness checks of [DR-004](../decisions/004-config-and-persistence.md): ready, not ready, or unknown for an adapter with no preflight rule:
+Where the Settings surface is open, the Settings surface shall show a per-adapter readiness panel holding one deduplicated entry per adapter the shared config references, each entry naming the positions using that adapter — `captain`, and each session player with the `<playbook>.<role>` bindings it answers [[settings-26](#settings-26)] — and reflecting the launcher-equivalent readiness checks of [DR-004](../decisions/004-config-and-persistence.md): ready, not ready, or unknown for an adapter with no preflight rule:
 
 - When an adapter is not ready, its entry includes concrete fix instructions naming the environment variable to set or the adapter's login step (for example, set `ANTHROPIC_API_KEY` or log in with the `claude` CLI), and an adapter with no preflight rule carries verify-yourself guidance instead.
 
@@ -117,7 +133,7 @@ When the core service applies an accepted Settings save to the shared config fil
 
 #### settings-14
 
-Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — one deduplicated entry per adapter the active config references, each carrying the positions using it (`captain`, `<playbook>.<role>`) — applying per-adapter rules identical to the playbook launcher's, which combine a runtime half with a credential half ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)): an adapter whose cligent-published runtime is missing or below cligent's supported floor is not ready, carrying cligent's verdict and the repair for its install tree — the pinned global install for a `PATH` runtime, reinstall guidance for a bundled SDK — whatever its credential class; over a usable runtime, `claude` is ready when `ANTHROPIC_API_KEY` is set or `~/.claude` exists; `codex` is ready when `OPENAI_API_KEY` is set or `~/.codex` exists; both halves unmet report both requirements; an adapter with a usable runtime and no credential rule shall be reported with null readiness and verify-yourself guidance rather than not ready:
+Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — one deduplicated entry per adapter the active config references, each carrying the positions using it — `captain`, and each session player with the bindings it answers — applying per-adapter rules identical to the playbook launcher's, which combine a runtime half with a credential half ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)): an adapter whose cligent-published runtime is missing or below cligent's supported floor is not ready, carrying cligent's verdict and the repair for its install tree — the pinned global install for a `PATH` runtime, reinstall guidance for a bundled SDK — whatever its credential class; over a usable runtime, `claude` is ready when `ANTHROPIC_API_KEY` is set or `~/.claude` exists; `codex` is ready when `OPENAI_API_KEY` is set or `~/.codex` exists; both halves unmet report both requirements; an adapter with a usable runtime and no credential rule shall be reported with null readiness and verify-yourself guidance rather than not ready:
 
 - Environment lookups use the captured login-shell environment ([DR-004](../decisions/004-config-and-persistence.md)), not the bare app process environment.
 
@@ -158,6 +174,12 @@ Where validation is exercised, given fixture edits the playbook launcher rejects
 #### settings-19
 
 Where adapter readiness is exercised, given fixture environments and home directories covering each launcher rule (credential environment variable set, credential directory present, both absent) and a config referencing one adapter from several positions, the test suite shall assert that the readiness results delivered over the protocol match the expected state per adapter as one deduplicated entry naming its positions [[settings-14](#settings-14)], that an adapter with no preflight rule reports null readiness with verify-yourself guidance [[settings-14](#settings-14)], and that each not-ready result includes fix instructions naming the environment variable or login step [[settings-5](#settings-5)].
+
+### Roster Coverage
+
+#### settings-28
+
+Where the Settings surface renders a config whose roster holds a bound player and an unbound one, the test suite shall assert each player prints its id, its agent with the adapter's readiness, and the bindings it answers [[settings-26](#settings-26)]; that editing one writes a merge patch over that player alone [[settings-26](#settings-26)]; that a refused removal shows the write path's own words beside it [[settings-26](#settings-26)]; and that adding a player writes the named id with the seeded block from an untouched draft [[settings-27](#settings-27)].
 
 ### External Edit Coverage
 

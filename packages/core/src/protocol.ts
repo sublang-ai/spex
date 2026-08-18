@@ -176,6 +176,17 @@ export interface ReadinessEntry {
   usedBy: string[];
 }
 
+/** What a run reported spending. `costSources` names every provenance
+ * the summed cost came from — a cost is only as trustworthy as its
+ * weakest source, so the label travels with the number (DR-032). */
+export interface UsageRollup {
+  inputTokens: number;
+  outputTokens: number;
+  toolUses: number;
+  totalCostUsd: number;
+  costSources: string[];
+}
+
 export interface StoredRecord {
   seq: number;
   record: TmuxPlayRecord;
@@ -413,21 +424,8 @@ export interface CommandResults {
   subscribe: null;
   unsubscribe: null;
   "history.get": { records: StoredRecord[] };
-  "usage.get": {
-    inputTokens: number;
-    outputTokens: number;
-    toolUses: number;
-    totalCostUsd: number;
-  };
-  "usage.days": {
-    day: string;
-    totals: {
-      inputTokens: number;
-      outputTokens: number;
-      toolUses: number;
-      totalCostUsd: number;
-    };
-  }[];
+  "usage.get": UsageRollup;
+  "usage.days": { day: string; totals: UsageRollup }[];
   "config.edit": ConfigState;
   "compile.check": {
     node: { ok: boolean; version?: string; command: string; guidance?: string };

@@ -380,10 +380,15 @@ export function MachineCard({
                 frame.activePlayer && frame.activePlayer.stateId === node.id
                   ? frame.activePlayer
                   : undefined;
+              // A running call names the role the machine asked for and
+              // the player answering it; a lane several roles share
+              // makes the pair the only unambiguous label (DR-032).
               const caption = call
                 ? `call /${call.playbookId}`
                 : player
-                  ? player.playerId
+                  ? player.playerId && player.playerId !== player.role
+                    ? `${player.role} · ${player.playerId}`
+                    : player.role
                   : node.role
                     ? humanizeId(node.role)
                     : undefined;

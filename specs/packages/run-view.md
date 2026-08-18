@@ -60,6 +60,12 @@ When a player turn completes, that player's pane shall report the turn's usage b
 
 While a project session is live, the run view shall show exactly one player pane per player marked visible by the session's current visibility state — adding and removing panes as visibility changes arrive — and shall not display the content of hidden records (for example, judge or router traffic) in any pane.
 
+#### run-view-79
+
+While a player pane holds a call the core resolved to a role [[core-service-36](core-service.md#core-service-36)], that call shall be labelled with its role where the call opens ([DR-032](../decisions/032-session-players.md)), so a lane several roles share reads as a sequence of calls rather than one voice:
+
+- A call the core resolved no role for is labelled with none: the view invents no label.
+
 ### Boss Composer
 
 #### run-view-8
@@ -545,7 +551,11 @@ Where a fixture holds one ended session with a stored transcript and one live se
 
 #### run-view-52
 
-When the awaitBossReply fixture stream is replayed, the test suite shall assert the question renders as one incoming bubble naming the asking player (resolved to its pane id, including from a bare role name), that no status-line duplicate of the question survives — in either arrival order of the narration and the telemetry — and that the banner names the player without repeating the question [[run-view-9](#run-view-9)].
+When the awaitBossReply fixture stream is replayed, the test suite shall assert the question renders as one incoming bubble naming the asking player by its pane id, that no status-line duplicate of the question survives — in either arrival order of the narration and the telemetry — and that the banner names the player without repeating the question [[run-view-9](#run-view-9)].
+
+#### run-view-80
+
+Where a fixture stream calls one player under two roles, the test suite shall assert each call carries its own role label where it opens and an unresolved call carries none [[run-view-79](#run-view-79)].
 
 #### run-view-53
 

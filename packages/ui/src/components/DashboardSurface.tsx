@@ -8,6 +8,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type {
   ForgeItem,
   SpecRecordInfo,
+  UsageRollup,
 } from "@sublang/spex-core/protocol";
 
 import { deriveAttention, type AttentionItem } from "../state/dashboard.js";
@@ -193,6 +194,35 @@ function WorkList({
   );
 }
 
+/** What a cost is worth depends on who counted it, so the provenance
+ * is on the line rather than in a footnote (DR-032). A run whose cost
+ * nobody reported shows none — never a zero standing in for silence. */
+function CostLine({ totals }: { totals: UsageRollup }) {
+  if (totals.costSources.length === 0) return null;
+  const reported = totals.costSources.every(
+    (source) => source === "provider-reported",
+  );
+  const words: Record<string, string> = {
+    "provider-reported": "reported by the provider",
+    "agent-estimate": "estimated by the agent",
+    "account-estimate": "estimated from account rates",
+  };
+  return (
+    <div
+      data-testid="usage-cost"
+      title={totals.costSources
+        .map((source) => words[source] ?? source)
+        .join("; ")}
+      className="mt-0.5 text-neutral-500 dark:text-neutral-400"
+    >
+      {reported ? "" : "≈"}${totals.totalCostUsd.toFixed(2)}{" "}
+      <span className="text-[11px]">
+        {reported ? "reported" : "estimated"}
+      </span>
+    </div>
+  );
+}
+
 export function DashboardSurface({
   onOpenSession,
   onNavigate,
@@ -215,13 +245,10 @@ export function DashboardSurface({
   const [now, setNow] = useState(() => Date.now());
   const [usage, setUsage] = useState<{
     state: "loading" | "ready" | "error";
-    days: {
-      day: string;
-      totals: { totalCostUsd: number; inputTokens: number; outputTokens: number };
-    }[];
+    days: { day: string; totals: UsageRollup }[];
   }>({ state: "loading", days: [] });
 
-  // Keep elapsed labels honest during quiet periods.
+  // Keep elapsed labels honest during quiet periods. (see CostLine)
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
@@ -419,6 +446,7 @@ export function DashboardSurface({
                   {entry.totals.inputTokens.toLocaleString()}→
                   {entry.totals.outputTokens.toLocaleString()} tok
                 </div>
+                <CostLine totals={entry.totals} />
               </div>
             ))
           )}

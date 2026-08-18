@@ -87,11 +87,20 @@ While a session is live, when the embedded runtime emits a record marked hidden 
 
 While a session is live, when the embedded runtime emits a captain result record marked hidden whose result reports an error, the core service shall synthesize a visible failure record carrying the underlying error text into the session stream ([DR-028](../decisions/028-run-machine-view.md)) — the cause reaches every session subscriber [[core-service-7](#core-service-7)] while the hidden record itself stays off the session channel [[core-service-8](#core-service-8)].
 
+#### core-service-36
+
+While a session is live, when the embedded runtime emits a player record, the core service shall deliver and persist it carrying the role of the call it belongs to ([DR-032](../decisions/032-session-players.md)), so a player several roles share is read as a sequence of calls rather than one voice:
+
+- a `player.call.started` trace opens a call on the player it names, and that player's `player.call.finished` closes it;
+- a player record between them carries the opening trace's role, and the closing record carries it too;
+- a trace naming no resolved player opens nothing, and a player record outside any open call carries no role;
+- a replayed record carries the same role the live stream carried [[core-service-10](#core-service-10)].
+
 ### Readiness
 
 #### core-service-9
 
-When a client requests adapter readiness, the core service shall report one deduplicated entry per adapter the active config references, each entry naming the positions using that adapter (`captain`, `<playbook>.<role>`) and carrying a readiness status derived from the same adapter readiness rules as the playbook launcher — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)) — naming the unmet requirement for each adapter that is not ready and reporting null readiness with verify-yourself guidance for an adapter with no preflight rule:
+When a client requests adapter readiness, the core service shall report one deduplicated entry per adapter the active config references, each entry naming the positions using that adapter — `captain`, and each session player as `<player>` followed by the `<playbook>.<role>` bindings it answers ([DR-032](../decisions/032-session-players.md)) — and carrying a readiness status derived from the same adapter readiness rules as the playbook launcher — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)) — naming the unmet requirement for each adapter that is not ready and reporting null readiness with verify-yourself guidance for an adapter with no preflight rule:
 
 - When the active config changes, refreshed readiness is broadcast to connected clients; a reload superseded by a newer one — before committing, or while its runtime probes are in flight — commits and broadcasts nothing, so the state and readiness clients hold always correspond to the newest configuration read.
 
@@ -145,7 +154,17 @@ The core package shall own the app-local SQLite store defined by [DR-004](../dec
 
 #### core-service-16
 
-The core package shall compose player identities, the playbook registry, and runtime options from the shared config with the same player-id namespacing and fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md): inline agent blocks with scalar adapter ids normalizing to bare-adapter blocks, adapter ids bounded by the embedded runtime's known set, adapter-scoped effort vocabularies, and the composed captain options carrying the Captain's adapter alongside the playbook enablement — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package.
+The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package:
+
+| Rule | Composition |
+| --- | --- |
+| Roster | a top-level `players` map of player id to inline agent block; a scalar adapter id normalizes to a bare-adapter block; an id outside `^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$`, or the reserved `captain`, is refused |
+| Bindings | `playbooks.<id>.roles` maps every id in the entry's `requiredRoleIds` to a roster player, as a bare player id or a block naming `player` with `model`/`effort`; a role left unbound, or bound to an absent player, is refused naming it |
+| Binding keys | `adapter`, `permissions`, `instruction` and `workspace` inside a binding are refused: they belong to the player's envelope |
+| Tuning | an omitted `model`/`effort` inherits the player's, `false` selects the provider's current default, and a string pins it; the composed selection is complete on every call |
+| Concurrency | every group in the entry's `concurrentRoleSets` must bind to pairwise-distinct players, refused naming the group otherwise |
+| Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
+| Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
 
 #### core-service-17
 
@@ -183,7 +202,7 @@ The core package shall run at most one compile per playbook id at a time and acc
 
 #### core-service-26
 
-The readiness report of [[core-service-9](#core-service-9)] shall be keyed by adapter: the core package shall resolve every configured position — the captain and each playbook player, whether an inline agent block or a scalar adapter id, under the same resolution rule as the launcher [[core-service-16](#core-service-16)] — to its adapter and emit exactly one entry per distinct adapter listing those positions, so that no referenced adapter's unmet requirement is hidden by deduplication and a hand-written scalar still surfaces its adapter's requirements before the first turn fails.
+The readiness report of [[core-service-9](#core-service-9)] shall be keyed by adapter: the core package shall resolve every configured position — the captain and each referenced session player, whether an inline agent block or a scalar adapter id, under the same resolution rule as the launcher [[core-service-16](#core-service-16)] — to its adapter and emit exactly one entry per distinct adapter listing those positions, so that no referenced adapter's unmet requirement is hidden by deduplication and a hand-written scalar still surfaces its adapter's requirements before the first turn fails.
 
 ## Verification
 
@@ -202,6 +221,10 @@ Where the core service runs with a valid config and the scripted fake adapter [[
 #### core-service-31
 
 Where a session's captain finishes a turn with a hidden result reporting an error, the test suite shall assert the synthesized surfacing of [[core-service-30](#core-service-30)]: a session subscriber receives a visible failure record carrying the underlying error text with the turn's id, and no hidden record reaches the session channel [[core-service-8](#core-service-8)].
+
+#### core-service-37
+
+Where a scripted captain calls one player twice within a turn, bracketing each call with the trace that names a different role, the test suite shall assert that the prompt and result records of the first call carry the first role and those of the second carry the second, that the trace records themselves carry none, and that reading the session back from the store yields the same roles [[core-service-36](#core-service-36)].
 
 #### core-service-33
 
@@ -250,4 +273,4 @@ Where the core service runs with an injected compile spawner whose toolchain run
 
 #### core-service-28
 
-Where the config references one adapter from several positions — as the captain and as a playbook player, including a hand-written scalar adapter id — the test suite shall assert that readiness reporting includes exactly one entry for that adapter [[core-service-26](#core-service-26)], naming each referencing position, marked per the adapter readiness rules with the unmet requirement named when the adapter is not ready [[core-service-9](#core-service-9)].
+Where the config references one adapter from several positions — as the captain and as a session player, including a hand-written scalar adapter id — the test suite shall assert that readiness reporting includes exactly one entry for that adapter [[core-service-26](#core-service-26)], naming each referencing position, marked per the adapter readiness rules with the unmet requirement named when the adapter is not ready [[core-service-9](#core-service-9)].

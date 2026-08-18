@@ -15,7 +15,7 @@ Verification requires integration coverage of the Library surface's compile, reg
 
 #### playbook-library-1
 
-When the Library surface is opened, the Library shall list every playbook configured in the shared config's `playbooks` map ([DR-004](../decisions/004-config-and-persistence.md)), showing for each entry its id, command, intent, required roles, per-role agent settings, and enabled state.
+When the Library surface is opened, the Library shall list every playbook configured in the shared config's `playbooks` map ([DR-004](../decisions/004-config-and-persistence.md)), showing for each entry its id, command, intent, each required role with the session player bound to it and what that binding effectively runs, and enabled state ([DR-032](../decisions/032-session-players.md)).
 
 #### playbook-library-2
 
@@ -27,13 +27,21 @@ Where a configured playbook entry fails the fail-closed config validation ([DR-0
 
 When the user toggles a playbook's enabled state, the Library shall persist the new state to that playbook's entry in the shared config file (state encoding per [DR-004](../decisions/004-config-and-persistence.md)), shall modify no other entry, and shall reflect the new state in the list:
 
-- Disabling does not remove the playbook's entry or its role-agent mapping from the shared config.
+- Disabling does not remove the playbook's entry or its role bindings from the shared config.
 
-### Role Mapping
+### Role Binding
 
 #### playbook-library-4
 
-When the user edits a playbook's per-role player, the Library shall edit that role's inline agent block in place ([DR-019](../decisions/019-inline-agent-configuration.md)) — offering the embedded runtime's adapters with their readiness, a model, the selected adapter's effort vocabulary, and permissions — shall write the edit as a merge patch that changes only the edited keys, and shall reject an edit that leaves a required role unresolved or that the shared-config write path refuses, naming the affected role.
+When the user edits a role's binding, the Library shall write which session player answers that role together with that role's own model and effort ([DR-032](../decisions/032-session-players.md)), and shall reject an edit the shared-config write path refuses, naming the affected role:
+
+- The players offered are the shared config's roster [[settings-26](settings.md#settings-26)]; the editor mints none and offers no adapter or permissions, which belong to the player's envelope.
+- Each tuning is inherit-the-player, the provider's current default, or a pinned value, written as omission, `false`, and the value respectively.
+- Choosing a player another binding already names states which bindings those are, because equal ids deliberately share one conversation.
+
+#### playbook-library-38
+
+Where a role's bound player is named by more than one binding, the Library shall mark that role's binding as shared and name the other positions holding the lane ([DR-032](../decisions/032-session-players.md)), so a shared conversation is never mistaken for two separate ones.
 
 ### Compile Flow
 
@@ -51,7 +59,7 @@ While a compile is running, the Library shall display each phase of the compile 
 
 When the compile pipeline succeeds, the Library shall present a registry form with fields for command, intent, and summary policy, prefilled where derivable from the playbook source and compiled output, and shall resolve each submission of the form by the cases below:
 
-- Submission passes registry validation [[playbook-library-15](#playbook-library-15)]: the Library registers the playbook by writing its entry — including the per-role agent blocks per [[playbook-library-4](#playbook-library-4)] — into the shared config's `playbooks` map.
+- Submission passes registry validation [[playbook-library-15](#playbook-library-15)]: the Library registers the playbook by writing its entry — including a role binding per required role [[playbook-library-4](#playbook-library-4)], with any player the submission names but the roster lacks written first — into the shared config's `playbooks` map.
 - Submission rejected: the rejection names the violated rule and causes no config write.
 
 #### playbook-library-8
@@ -108,13 +116,15 @@ While a configured playbook is listed, the Library shall label the playbook's re
 
 #### playbook-library-34
 
-When the Library surface is opened, the Library shall list each known built-in playbook absent from the shared config ([DR-015](../decisions/015-reference-content.md)) with its command, intent, required roles, and browsable source markdown, and shall offer an add flow that maps the built-in's roles to agent blocks and registers it through the shared-config write path [[playbook-library-16](#playbook-library-16)]:
+When the Library surface is opened, the Library shall list each known built-in playbook absent from the shared config ([DR-015](../decisions/015-reference-content.md)) with its command, intent, required roles, and browsable source markdown, and shall offer an add flow that gives each role a player and registers the playbook through the shared-config write path [[playbook-library-16](#playbook-library-16)]:
 
 - Browsing a built-in's source requires no config change.
+- A role's proposed player id is `dev.<role>`, editable before it is written, because the id is the sharing decision ([DR-032](../decisions/032-session-players.md)).
+- A proposed id the roster lacks is written to the roster first, carrying the agent block chosen for that role, so no binding is written dangling.
 
 #### playbook-library-35
 
-When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the pipeline grammar — source, normalized text, gears, and state machine — and shall offer a prefill action that fills the compile form with the example's normalized text and judgment fields — mapping the example's roles onto the default agent block — without starting a compile:
+When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the pipeline grammar — source, normalized text, gears, and state machine — and shall offer a prefill action that fills the compile form with the example's normalized text and judgment fields — giving each of the example's roles the default agent block — without starting a compile:
 
 - Sources and gears served for display drop their leading maintainer comment headers.
 
@@ -160,12 +170,12 @@ When `slc` completes successfully, the registry generator shall derive `idleStat
 
 #### playbook-library-14
 
-When the registry form [[playbook-library-7](#playbook-library-7)] is submitted with valid entries, the registry generator shall emit a registry manifest module into the playbook's library directory as a normalization wrapper over the `slc`-emitted registry entry ([DR-014](../decisions/014-released-toolchain.md)), returning the manifest path for the config entry's `from` key and the derived role ids:
+When the registry form [[playbook-library-7](#playbook-library-7)] is submitted with valid entries, the registry generator shall emit a registry manifest module into the playbook's library directory as a thin wrapper over the `slc`-emitted registry entry ([DR-014](../decisions/014-released-toolchain.md)), returning the manifest path for the config entry's `from` key and the derived role ids:
 
 - the user's command and intent override the entry's;
-- the entry's role ids are lowercased for the host boundary, with player ids re-cased to the entry's canonical casing at the port seam;
+- every other member of the entry passes through unchanged, including the role ids in their authored casing and the artifact schema the entry advertises — under artifact schema 2 a role is a playbook-local slot a user binds to a player, not a host player id ([DR-032](../decisions/032-session-players.md));
 - the module carries the registry-contract marker;
-- a derived role id that cannot form a valid host player id, or two role ids colliding after lowercasing, fails the compile naming the offending role.
+- two role ids colliding fails the compile naming the offending role.
 
 ### Registry Validation
 
@@ -177,9 +187,9 @@ When a registry entry is about to be registered into the shared config, the regi
 
 #### playbook-library-32
 
-When a registration writes the `playbooks.<id>` entry after a compile, the compile flow shall re-key the submitted role-agent assignments onto the derived role ids [[playbook-library-14](#playbook-library-14)] by case-insensitive name match:
+When a registration writes the `playbooks.<id>` entry after a compile, the compile flow shall re-key the submitted role bindings onto the derived role ids [[playbook-library-14](#playbook-library-14)] by case-insensitive name match:
 
-- A derived role matching no assignment: the compile flow fails naming the derived roles and the unmatched ones, writes no config change, and keeps the compiled artifacts so a corrected submission can register without recompiling.
+- A derived role matching no binding: the compile flow fails naming the derived roles and the unmatched ones, writes no config change, and keeps the compiled artifacts so a corrected submission can register without recompiling.
 
 #### playbook-library-33
 
@@ -189,7 +199,7 @@ When playbook loading imports a config `from` module that is a file path, and th
 
 #### playbook-library-16
 
-When the config writer updates the shared config file — enabled state [[playbook-library-3](#playbook-library-3)], role-mapping edits [[playbook-library-4](#playbook-library-4)], or registration [[playbook-library-7](#playbook-library-7)] — it shall preserve comments, key order, and formatting of untouched content byte-for-byte, shall modify only the targeted keys, and shall replace the file atomically so an interrupted write cannot leave a partially written config.
+When the config writer updates the shared config file — enabled state [[playbook-library-3](#playbook-library-3)], role-binding edits [[playbook-library-4](#playbook-library-4)], or registration [[playbook-library-7](#playbook-library-7)] — it shall preserve comments, key order, and formatting of untouched content byte-for-byte, shall modify only the targeted keys, and shall replace the file atomically so an interrupted write cannot leave a partially written config.
 
 ## Verification
 
@@ -226,6 +236,16 @@ Where a playbook was compiled into the library directory, when its artifacts are
 #### playbook-library-37
 
 When each installed built-in playbook's artifacts are requested, the test suite shall assert the served graph is whole [[playbook-library-36](#playbook-library-36)]: every edge's ends name served nodes, the edge set is non-empty for every built-in, declared-id targets resolve — the review machine's opening transition and a boss-reply resume transition among the resolved — and a compound state's done transition appears as an edge.
+
+### Binding Coverage
+
+#### playbook-library-39
+
+Where a configured playbook binds two roles, one to a player another playbook also names, the test suite shall assert the Library prints each role's bound player with what that binding effectively runs [[playbook-library-1](#playbook-library-1)], marks the shared role and names the other position holding it [[playbook-library-38](#playbook-library-38)], and leaves the unshared role unmarked; and that rebinding through the editor offers exactly the config's roster, writes the chosen player with a pinned effort, and surfaces a refusal inline while keeping the editor open [[playbook-library-4](#playbook-library-4)].
+
+#### playbook-library-40
+
+When a built-in whose roles the roster does not cover is added, the test suite shall assert the missing player is written to the roster first, carrying the block chosen for its role, and only then the playbook entry binding that role to it [[playbook-library-34](#playbook-library-34)].
 
 ### Cancellation and Gate Coverage
 

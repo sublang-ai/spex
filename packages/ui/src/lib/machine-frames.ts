@@ -34,7 +34,16 @@ export interface MachineFrame {
   /** The edge fired last, for the flash (owner::event derived). */
   lastFired?: { from: string; to: string; event: string; at: number };
   /** The player the active state runs, when the trace attributes one. */
-  activePlayer?: { stateId: string; playerId: string; running: boolean };
+  /** The call a state is running: the playbook-local role it invokes
+   * and, where the host resolved one, the session player answering it
+   * (DR-032). A card names both, because the role is what the machine
+   * asked for and the player is who is actually talking. */
+  activePlayer?: {
+    stateId: string;
+    role: string;
+    playerId?: string;
+    running: boolean;
+  };
   /** The nested run this frame's active state is delegating to, while
    * the call is open (run-view-63). */
   delegating?: { stateId: string; playbookId: string };
@@ -320,11 +329,17 @@ export function foldTrace(
     case "player.call.started": {
       const frame = opened();
       const stateId = asString(body.stateId) ?? frame.active ?? undefined;
-      const playerId = asString(body.playerId) ?? asString(body.roleId);
-      if (!stateId || !playerId) return withFrame(frame);
+      const role = asString(body.roleId);
+      const playerId = asString(body.playerId);
+      if (!stateId || !role) return withFrame(frame);
       return withFrame({
         ...frame,
-        activePlayer: { stateId, playerId, running: true },
+        activePlayer: {
+          stateId,
+          role,
+          ...(playerId ? { playerId } : {}),
+          running: true,
+        },
       });
     }
     case "player.call.finished": {

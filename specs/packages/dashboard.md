@@ -79,6 +79,7 @@ Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.m
 Where completed turns have reported usage, the Dashboard shall display token usage rollups aggregated per calendar day, with per-day totals spanning all projects:
 
 - The rollups reflect only usage reported by adapter done payloads [[dashboard-13](#dashboard-13)]; the Dashboard displays no estimated figures for turns that reported none.
+- A day's cost is shown only where a done payload reported one, labelled with the provenance the payload carried ([DR-032](../decisions/032-session-players.md)); where any contributing report is an estimate, the day's figure reads as an estimate, because a total is only as trustworthy as its weakest source.
 
 ### Empty States
 
@@ -154,7 +155,8 @@ Where Dashboard state is assembled, the dashboard read model shall source live-s
 Where usage rollups are computed, the dashboard read model shall aggregate exactly the usage figures carried by player `done` events, keyed per session and per calendar day of the record timestamp in the local timezone:
 
 - Usage carried by `hidden`-visibility records is included, since hidden traffic still consumes tokens ([DR-003](../decisions/003-runtime-reuse.md)).
-- A `done` event carrying no usage contributes nothing; the read model does not substitute estimates.
+- A `done` event carrying no usage contributes nothing, and one carrying no token report contributes no tokens; the read model substitutes neither estimates nor zeros for silence ([DR-032](../decisions/032-session-players.md)).
+- Spend attributes to the session player that incurred it, so a player several playbooks share rolls up across them; a rollup carries every cost provenance summed into it.
 
 ### Forge List Caching
 
@@ -186,7 +188,7 @@ Where a fixture record stream and review state are persisted to the app store, w
 
 #### dashboard-18
 
-Where fixture player `done` events carry usage payloads across two sessions and two calendar days, including one on a `hidden`-visibility record and one `done` event without usage, when rollups are computed, the test suite shall assert that per-session and per-day totals equal hand-computed sums of the fixture payloads [[dashboard-7](#dashboard-7)], that the hidden record's usage is included [[dashboard-13](#dashboard-13)], and that the usage-less `done` event contributes nothing.
+Where fixture player `done` events carry usage payloads across two sessions and two calendar days, including one on a `hidden`-visibility record, one `done` event without usage, one reporting no tokens, and one reporting a cost as an estimate, when rollups are computed, the test suite shall assert that per-session and per-day totals equal hand-computed sums of the fixture payloads [[dashboard-7](#dashboard-7)], that the hidden record's usage is included [[dashboard-13](#dashboard-13)], that the usage-less event and the token-less report contribute nothing rather than zero [[dashboard-13](#dashboard-13)], and that the mixed total carries both provenances so it reads as an estimate [[dashboard-7](#dashboard-7)].
 
 ### Forge Coverage
 

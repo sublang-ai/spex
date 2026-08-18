@@ -106,6 +106,7 @@ test("usage totals aggregate per session", () => {
     outputTokens: 40,
     toolUses: 3,
     totalCostUsd: 0.5,
+    costSource: "provider-reported",
     at: 1,
   });
   store.addUsage({
@@ -115,13 +116,19 @@ test("usage totals aggregate per session", () => {
     inputTokens: 10,
     outputTokens: 5,
     toolUses: 0,
+    totalCostUsd: 0.25,
+    costSource: "agent-estimate",
     at: 2,
   });
+  // The provenance of every contributing entry travels with the sum,
+  // so a total mixing a provider's bill with an agent's guess cannot be
+  // presented as if the provider reported all of it (DR-032).
   assert.deepEqual(store.sessionUsage("s1"), {
     inputTokens: 110,
     outputTokens: 45,
     toolUses: 3,
-    totalCostUsd: 0.5,
+    totalCostUsd: 0.75,
+    costSources: ["agent-estimate", "provider-reported"],
   });
   store.close();
 });
