@@ -95,16 +95,20 @@ function codeBlock(top: Record<string, unknown>): Record<string, unknown> {
   return (top.playbooks as Record<string, Record<string, unknown>>).code;
 }
 
-function codePlayers(top: Record<string, unknown>): Record<string, unknown> {
-  return codeBlock(top).players as Record<string, unknown>;
+function codeRoles(top: Record<string, unknown>): Record<string, unknown> {
+  return codeBlock(top).roles as Record<string, unknown>;
+}
+
+function roster(top: Record<string, unknown>): Record<string, unknown> {
+  return top.players as Record<string, unknown>;
 }
 
 function reviewBlock(top: Record<string, unknown>): Record<string, unknown> {
   return (top.playbooks as Record<string, Record<string, unknown>>).review;
 }
 
-function reviewPlayers(top: Record<string, unknown>): Record<string, unknown> {
-  return reviewBlock(top).players as Record<string, unknown>;
+function reviewRoles(top: Record<string, unknown>): Record<string, unknown> {
+  return reviewBlock(top).roles as Record<string, unknown>;
 }
 
 test("bundled template composes with launcher-equivalent output", async () => {
@@ -119,25 +123,31 @@ test("bundled template composes with launcher-equivalent output", async () => {
   assert.equal(composed.captainOptions.captainAdapter, "claude");
   assert.deepEqual(
     composed.players.map((player) => player.id),
-    [
-      "code-coder",
-      "review-coder",
-      "review-reviewer",
-      "decide-coder",
-      "decide-reviewer",
-    ],
+    ["dev.coder", "dev.reviewer"],
   );
-  assert.deepEqual(composed.initialVisible, [
-    "code-coder",
-    "review-coder",
-    "review-reviewer",
-    "decide-coder",
-    "decide-reviewer",
-  ]);
+  assert.deepEqual(composed.initialVisible, ["dev.coder", "dev.reviewer"]);
   assert.deepEqual(composed.captainOptions.playbooks.code, {
     from: "@sublang/playbook/code/registry",
+    roles: {
+      coder: {
+        playerId: "dev.coder",
+        // Inheritance resolves in composition, so the shell is told
+        // the outcome rather than left to infer it (DR-032).
+        model: { kind: "value", value: "claude-opus-5" },
+        effort: { kind: "value", value: "xhigh" },
+      },
+    },
     options: {},
   });
+  // The session's agents travel as one block the shell reads.
+  assert.deepEqual(
+    Object.keys(composed.captainOptions.sessionAgents.players).sort(),
+    ["dev.coder", "dev.reviewer"],
+  );
+  assert.equal(
+    composed.captainOptions.sessionAgents.captain.adapter,
+    "claude",
+  );
   assert.equal(composed.players[0].model, "claude-opus-5");
   assert.equal(composed.playbooks[0].command, "code");
 });
@@ -183,10 +193,10 @@ test("the retired profile key is rejected on captain and player blocks", async (
   );
 
   const withPlayer = baseConfig();
-  reviewPlayers(withPlayer).reviewer = { profile: "codex-gpt", model: "gpt-6" };
+  roster(withPlayer)["dev.reviewer"] = { profile: "codex-gpt", model: "gpt-6" };
   await expectError(
     withPlayer,
-    /^playbooks\.review\.players\.reviewer\.profile is retired: agents carry their own adapter, model, effort, and permissions$/,
+    /^players\.dev\.reviewer\.profile is retired: agents carry their own adapter, model, effort, and permissions$/,
   );
 });
 
@@ -242,38 +252,64 @@ test("reserved captain role is rejected in roles and players", async () => {
       default: registryEntry({ requiredRoleIds: ["captain"] }),
     }),
   );
-  codePlayers(top).captain = "claude";
+  codeRoles(top).captain = "dev.coder";
   await expectError(
     top,
-    /^playbooks\.code\.players\.captain binds local role "captain", which is reserved/,
+    /^playbooks\.code\.roles\.captain binds local role "captain", which is reserved/,
   );
 });
 
-test("player coverage and resolution rules match the launcher", async () => {
-  const top = baseConfig();
-  const code = codeBlock(top);
-  code.players = {};
-  await expectError(top, /^playbooks\.code resolves no visible local role$/);
-  code.players = { coder: { adapter: "claude" } };
-  const review = reviewBlock(top);
-  review.players = { coder: { adapter: "claude" } };
+test("role bindings cover the manifest exactly, as the launcher requires", async () => {
+  // Bindings must cover requiredRoleIds exactly: a missing role has no
+  // agent, an extra one names work the manifest never declares
+  // (DR-032).
+  const missing = baseConfig();
+  reviewBlock(missing).roles = { coder: "dev.coder" };
   await expectError(
-    top,
-    /^playbooks\.review required role "reviewer" has no players entry$/,
+    missing,
+    /^playbooks\.review\.roles must exactly cover requiredRoleIds; missing reviewer$/,
   );
-  review.players = { coder: { adapter: "claude" }, reviewer: 42 };
+
+  const extra = baseConfig();
+  codeRoles(extra).reviewer = "dev.reviewer";
   await expectError(
-    top,
-    /^playbooks\.review\.players\.reviewer must be an adapter shorthand or an agent block$/,
+    extra,
+    /^playbooks\.code\.roles must exactly cover requiredRoleIds; unknown reviewer$/,
   );
+
+  const absent = baseConfig();
+  codeRoles(absent).coder = "dev.nobody";
+  await expectError(
+    absent,
+    /^playbooks\.code\.roles\.coder names absent session player "dev\.nobody"$/,
+  );
+
+  // Adapter and permissions belong to the player envelope and are
+  // refused inside a binding.
+  const overreach = baseConfig();
+  codeRoles(overreach).coder = { player: "dev.coder", adapter: "codex" };
+  await expectError(
+    overreach,
+    /^playbooks\.code\.roles\.coder\.adapter is not a role binding key/,
+  );
+
+  // A roleless playbook is legal in v8 and contributes no player.
+  const roleless = baseConfig();
+  codeBlock(roleless).roles = {};
+  const composed = await composeConfig(roleless, async (specifier) =>
+    specifier.includes("code")
+      ? { default: registryEntry({ id: "code", command: "code", requiredRoleIds: [] }) }
+      : stubLoader(specifier),
+  );
+  assert.ok(!composed.players.some((player) => player.id === "code"));
 });
 
 test("scalar shorthands still compose as bare-adapter blocks", async () => {
   const top = baseConfig();
-  reviewPlayers(top).reviewer = "claude";
+  roster(top)["dev.reviewer"] = "claude";
   const composed = await composeConfig(top, stubLoader);
-  const reviewer = composed.players.find((p) => p.id === "review-reviewer");
-  assert.deepEqual(reviewer, { id: "review-reviewer", adapter: "claude" });
+  const reviewer = composed.players.find((p) => p.id === "dev.reviewer");
+  assert.deepEqual(reviewer, { id: "dev.reviewer", adapter: "claude" });
 });
 
 test("unknown agent fields and adapters are rejected; kimi is known", async () => {
@@ -282,38 +318,38 @@ test("unknown agent fields and adapters are rejected; kimi is known", async () =
   await expectError(top, /^Unknown config field captain\.typo$/);
   delete (top.captain as Record<string, unknown>).typo;
 
-  reviewPlayers(top).reviewer = "mystery";
+  roster(top)["dev.reviewer"] = "mystery";
   // The valid set is cligent's own (DR-019) and now includes kimi.
   await expectError(
     top,
-    /^Unknown adapter "mystery" for playbooks\.review\.players\.reviewer\. Valid adapters: claude, codex, gemini, kimi, opencode$/,
+    /^Unknown adapter "mystery" for players\.dev\.reviewer\. Valid adapters: claude, codex, gemini, kimi, opencode$/,
   );
 
-  reviewPlayers(top).reviewer = { adapter: "kimi" };
+  roster(top)["dev.reviewer"] = { adapter: "kimi" };
   const composed = await composeConfig(top, stubLoader);
-  const reviewer = composed.players.find((p) => p.id === "review-reviewer");
+  const reviewer = composed.players.find((p) => p.id === "dev.reviewer");
   assert.equal(reviewer?.adapter, "kimi");
 });
 
 test("effort vocabularies are adapter-scoped", async () => {
   // Kimi accepts only off/on.
   const top = baseConfig();
-  reviewPlayers(top).reviewer = { adapter: "kimi", effort: "off" };
+  roster(top)["dev.reviewer"] = { adapter: "kimi", effort: "off" };
   let composed = await composeConfig(top, stubLoader);
   assert.equal(
-    composed.players.find((p) => p.id === "review-reviewer")?.effort,
+    composed.players.find((p) => p.id === "dev.reviewer")?.effort,
     "off",
   );
-  reviewPlayers(top).reviewer = { adapter: "kimi", effort: "on" };
+  roster(top)["dev.reviewer"] = { adapter: "kimi", effort: "on" };
   composed = await composeConfig(top, stubLoader);
   assert.equal(
-    composed.players.find((p) => p.id === "review-reviewer")?.effort,
+    composed.players.find((p) => p.id === "dev.reviewer")?.effort,
     "on",
   );
-  reviewPlayers(top).reviewer = { adapter: "kimi", effort: "minimal" };
+  roster(top)["dev.reviewer"] = { adapter: "kimi", effort: "minimal" };
   await expectError(
     top,
-    /^playbooks\.review\.players\.reviewer\.effort "minimal" is not supported by the "kimi" adapter \(valid: off, on\)$/,
+    /^players\.dev\.reviewer\.effort "minimal" is not supported by the "kimi" adapter \(valid: off, on\)$/,
   );
 
   // Claude adds ultracode; Codex adds ultra.
@@ -323,10 +359,10 @@ test("effort vocabularies are adapter-scoped", async () => {
   assert.equal(composed.captainAgent.effort, "ultracode");
 
   const codexTop = baseConfig();
-  reviewPlayers(codexTop).reviewer = { adapter: "codex", effort: "ultra" };
+  roster(codexTop)["dev.reviewer"] = { adapter: "codex", effort: "ultra" };
   composed = await composeConfig(codexTop, stubLoader);
   assert.equal(
-    composed.players.find((p) => p.id === "review-reviewer")?.effort,
+    composed.players.find((p) => p.id === "dev.reviewer")?.effort,
     "ultra",
   );
 
@@ -342,13 +378,13 @@ test("effort vocabularies are adapter-scoped", async () => {
 
 test("legacy reasoningEffort composes as effort; both keys are invalid", async () => {
   const top = baseConfig();
-  const coder = codePlayers(top).coder as Record<string, unknown>;
+  const coder = roster(top)["dev.coder"] as Record<string, unknown>;
   // The template writes canonical `effort`; swap in the legacy alias.
   assert.equal(coder.effort, "xhigh");
   delete coder.effort;
   coder.reasoningEffort = "xhigh";
   const composed = await composeConfig(top, stubLoader);
-  const player = composed.players.find((p) => p.id === "code-coder");
+  const player = composed.players.find((p) => p.id === "dev.coder");
   assert.equal(player?.effort, "xhigh");
   assert.ok(!("reasoningEffort" in (player ?? {})));
 

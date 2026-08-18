@@ -23,10 +23,10 @@ function sampleSession(store: Store): SessionInfo {
     createdAt: 2000,
     live: true,
     endedAt: null,
-    players: [{ id: "code-coder", adapter: "claude" }],
+    players: [{ id: "dev.coder", adapter: "claude" }],
     turns: 0,
     failed: false,
-    initialVisible: ["code-coder"],
+    initialVisible: ["dev.coder"],
   };
   store.createSession(session);
   return session;
@@ -101,7 +101,7 @@ test("usage totals aggregate per session", () => {
   store.addUsage({
     sessionId: "s1",
     turnId: 1,
-    actorId: "code-coder",
+    actorId: "dev.coder",
     inputTokens: 100,
     outputTokens: 40,
     toolUses: 3,
@@ -146,8 +146,8 @@ test("core-service-32: session.list carries each session's conversation summary"
     createdAt: 2000,
     live: false,
     endedAt: 9000,
-    players: [{ id: "code-coder", adapter: "claude" as const }],
-    initialVisible: ["code-coder"],
+    players: [{ id: "dev.coder", adapter: "claude" as const }],
+    initialVisible: ["dev.coder"],
     turns: 0,
     failed: false,
   };
@@ -166,7 +166,7 @@ test("core-service-32: session.list carries each session's conversation summary"
   store.addUsage({
     sessionId: "rich",
     turnId: 1,
-    actorId: "code-coder",
+    actorId: "dev.coder",
     inputTokens: 100,
     outputTokens: 20,
     toolUses: 1,

@@ -38,13 +38,15 @@ const VALID_CONFIG = `
 captain:
   adapter: claude
   model: claude-test
+players:
+  dev.coder:
+    adapter: claude
+    model: claude-test
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
-    players:
-      coder:
-        adapter: claude
-        model: claude-test
+    roles:
+      coder: dev.coder
 `;
 
 class Client {
@@ -182,7 +184,7 @@ async function startHarness(
   const captain = createScriptedCaptain(async (turn, context, session) => {
     await session.emitStatus(`◇ turn ${turn.id}`);
     await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
-    await context.callPlayer("code-coder", `${turn.prompt}`);
+    await context.callPlayer("dev.coder", `${turn.prompt}`);
   });
 
   const service = await CoreService.start({
@@ -225,7 +227,7 @@ test("CORE-19: fake-adapter session end to end over the WebSocket", async () => 
   });
   assert.deepEqual(
     session.players.map((p) => p.id),
-    ["code-coder"],
+    ["dev.coder"],
   );
 
   await client.expectOk("subscribe", {
@@ -378,23 +380,35 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
       VALID_CONFIG +
       `  review:
     from: "@sublang/playbook/review/registry"
-    players:
-      coder:
-        adapter: claude
+    roles:
+      coder: dev.coder
 `,
   },
   {
-    name: "zero visible roles",
-    pattern: /resolves no visible local role/,
+    name: "bindings miss a required role",
+    pattern: /roles must exactly cover requiredRoleIds/,
+    config: VALID_CONFIG.replace("    roles:\n      coder: dev.coder\n", "    roles: {}\n"),
+  },
+  {
+    name: "a binding names an absent player",
+    pattern: /names absent session player/,
+    config: VALID_CONFIG.replace("coder: dev.coder", "coder: dev.missing"),
+  },
+  {
+    name: "the removed per-playbook players block",
+    pattern: /was removed in the explicit-session-player major release/,
     config: VALID_CONFIG.replace(
-      /    players:\n      coder:\n        adapter: claude\n        model: claude-test\n/,
-      "    players: {}\n",
+      "    roles:\n      coder: dev.coder\n",
+      "    players:\n      coder:\n        adapter: claude\n",
     ),
   },
   {
     name: "unknown adapter",
-    pattern: /Unknown adapter "mystery" for playbooks\.code\.players\.coder/,
-    config: VALID_CONFIG.replace("        adapter: claude\n        model: claude-test", "        adapter: mystery"),
+    pattern: /Unknown adapter "mystery" for players\.dev\.coder/,
+    config: VALID_CONFIG.replace(
+      "players:\n  dev.coder:\n    adapter: claude\n    model: claude-test",
+      "players:\n  dev.coder:\n    adapter: mystery",
+    ),
   },
   {
     name: "adapter-scoped invalid effort",
@@ -650,16 +664,19 @@ test("CORE-28: the single-vendor template dedupes to one claude entry", async ()
 
 const SHORTHAND_CONFIG = `
 captain: claude
+players:
+  dev.coder: claude
+  dev.reviewer: codex
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
-    players:
-      coder: claude
+    roles:
+      coder: dev.coder
   review:
     from: "@sublang/playbook/review/registry"
-    players:
-      coder: claude
-      reviewer: codex
+    roles:
+      coder: dev.coder
+      reviewer: dev.reviewer
 `;
 
 test("CORE-28: scalar shorthands compose and share adapter entries", async () => {
@@ -674,10 +691,23 @@ test("CORE-28: scalar shorthands compose and share adapter entries", async () =>
   assert.equal(state.status, "valid");
   if (state.status === "valid") {
     assert.deepEqual(state.summary.captain, { adapter: "claude" });
-    assert.deepEqual(state.summary.playbooks[1].players.reviewer, {
-      agent: { adapter: "codex" },
-      display: "codex",
-    });
+    // A scalar player reads as its adapter's defaults, and the
+    // reviewer role binds to that lane (DR-032).
+    const reviewer = state.summary.players.find(
+      (player) => player.id === "dev.reviewer",
+    );
+    assert.deepEqual(reviewer?.agent, { adapter: "codex" });
+    assert.equal(reviewer?.display, "codex");
+    assert.deepEqual(reviewer?.boundBy, ["review.reviewer"]);
+    assert.equal(
+      state.summary.playbooks[1].roles.reviewer.playerId,
+      "dev.reviewer",
+    );
+    // dev.coder answers both playbooks: one lane, one conversation.
+    const coder = state.summary.players.find(
+      (player) => player.id === "dev.coder",
+    );
+    assert.deepEqual(coder?.boundBy, ["code.coder", "review.coder"]);
   }
 
   const readiness = await client.expectOk("readiness.get", {});
@@ -913,7 +943,7 @@ test("real captain shell: a Boss turn round-trips the captain reply", async () =
   });
   assert.deepEqual(
     session.players.map((p) => p.id),
-    ["code-coder"],
+    ["dev.coder"],
   );
   await client.expectOk("subscribe", {
     channel: { kind: "session", sessionId: session.id },

@@ -68,7 +68,7 @@ async function setup(
   const captain = createScriptedCaptain(overrides?.script ?? (async (turn, context, session) => {
     await session.emitStatus("◇ /code started");
     await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
-    await context.callPlayer("code-coder", `do: ${turn.prompt}`);
+    await context.callPlayer("coder", `do: ${turn.prompt}`);
     await session.emitTelemetry({
       topic: "playbook.fsm.state",
       payload: { to: "ready" },
@@ -89,17 +89,13 @@ test("end-to-end turn produces ordered persisted records with visibility flags",
   const { manager, store, project, composed, stats } = await setup(records);
 
   const info = await manager.createSession(project, composed);
+  // Three playbooks bind the same two lanes, so the roster is those
+  // two — not one generated identity per role (DR-032).
   assert.deepEqual(
     info.players.map((p) => p.id),
-    ["code-coder", "review-coder", "review-reviewer", "decide-coder", "decide-reviewer"],
+    ["dev.coder", "dev.reviewer"],
   );
-  assert.deepEqual(info.initialVisible, [
-    "code-coder",
-    "review-coder",
-    "review-reviewer",
-    "decide-coder",
-    "decide-reviewer",
-  ]);
+  assert.deepEqual(info.initialVisible, ["dev.coder", "dev.reviewer"]);
 
   manager.submitTurn(info.id, "fix the bug");
   assert.throws(
