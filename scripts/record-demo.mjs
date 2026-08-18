@@ -23,9 +23,12 @@ import { join } from "node:path";
 
 const CORE_URL = process.env.CORE_URL;
 const OUT = process.env.OUT ?? "demo.mp4";
+// app.getAppPath() is this script's own directory when Electron is
+// pointed at a file rather than a package, so the UI is resolved from
+// the repo root instead.
 const UI_INDEX =
   process.env.UI_INDEX ??
-  join(app.getAppPath(), "apps", "desktop", "ui-dist", "index.html");
+  join(app.getAppPath(), "..", "apps", "desktop", "ui-dist", "index.html");
 const SCRIPT_PATH = process.env.SCRIPT_PATH;
 const FPS = Number(process.env.FPS ?? 12);
 const WIDTH = Number(process.env.WIDTH ?? 1280);

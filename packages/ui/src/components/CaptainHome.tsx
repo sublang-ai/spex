@@ -337,7 +337,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               onClick={() => setCaptainPopover((open) => !open)}
               className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
-              <Icon name="gear" className="h-3.5 w-3.5" />
+              <Icon name="edit" className="h-3.5 w-3.5" />
             </button>
             {captainPopover && captain ? (
               <AgentEditorPopover

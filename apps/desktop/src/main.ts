@@ -211,10 +211,33 @@ async function main(): Promise<void> {
 
   if (acceptancePath) {
     await new Promise((resolveWait) => setTimeout(resolveWait, 1500));
+    // SPEX_ACCEPTANCE_CLICKS: a comma-separated list of accessible
+    // names to activate before the capture, so a surface behind
+    // navigation can be proven to render too.
+    for (const label of (process.env.SPEX_ACCEPTANCE_CLICKS ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)) {
+      const clicked = (await window.webContents.executeJavaScript(
+        `(() => {
+          const name = ${JSON.stringify(label)};
+          const match = [...document.querySelectorAll("button,[role=tab],a")]
+            .find((node) =>
+              (node.getAttribute("aria-label") ?? node.textContent ?? "")
+                .trim()
+                .startsWith(name));
+          if (!match) return false;
+          match.click();
+          return true;
+        })()`,
+      )) as boolean;
+      if (!clicked) consoleErrors.push(`acceptance click missed: ${label}`);
+      await new Promise((resolveWait) => setTimeout(resolveWait, 700));
+    }
     const state = (await window.webContents.executeJavaScript(
       `({
         rootChildren: document.getElementById("root")?.children.length ?? 0,
-        bodyText: document.body.innerText.slice(0, 400),
+        bodyText: document.body.innerText.slice(0, 1200),
         title: document.title,
       })`,
     )) as { rootChildren: number; bodyText: string; title: string };

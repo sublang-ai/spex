@@ -200,7 +200,7 @@ function PlayerRoster({
                 }
                 className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
-                <Icon name="gear" />
+                <Icon name="edit" />
               </button>
               {confirmDelete === player.id ? (
                 <InlineConfirm

@@ -17,6 +17,11 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6 11 5M5 11l-1.4 1.4" />
     </>
   ),
+  // The gear names the Settings surface; an in-place editor wears the
+  // pencil, so one glyph never means two things (DR-010 §8).
+  edit: (
+    <path d="M11.4 2.6a1.5 1.5 0 0 1 2 2L6 12l-3 1 1-3 7.4-7.4Z" />
+  ),
   close: <path d="M4 4l8 8M12 4l-8 8" />,
   refresh: (
     <path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.8v2.7h-2.7" />

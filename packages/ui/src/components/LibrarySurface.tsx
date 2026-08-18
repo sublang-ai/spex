@@ -282,7 +282,7 @@ function BuiltinCard({
                 }
                 className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
-                <Icon name="gear" />
+                <Icon name="edit" />
               </button>
               {openRole === role ? (
                 <AgentEditorPopover
@@ -708,7 +708,7 @@ export function LibrarySurface({
                       }
                       className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     >
-                      <Icon name="gear" />
+                      <Icon name="edit" />
                     </button>
                     {rolePopover?.playbookId === playbook.id &&
                     rolePopover.role === role ? (
@@ -869,7 +869,7 @@ export function LibrarySurface({
                       }
                       className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     >
-                      <Icon name="gear" />
+                      <Icon name="edit" />
                     </button>
                     {compileRolePopover === role ? (
                       <AgentEditorPopover

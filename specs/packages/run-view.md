@@ -387,7 +387,8 @@ The app shall fail loudly and stay accessible:
 
 - when the app is connected but its initial state failed to load, a banner says so and offers retry — never a silently empty app;
 - one persistent polite live region announces a player waiting for a reply, connection loss and restoration, and attention-count increases to assistive technology;
-- icon-only controls carry accessible names and at-least-24px hit targets, and the navigation exposes the current surface and badge meaning to assistive technology.
+- icon-only controls carry accessible names and at-least-24px hit targets, and the navigation exposes the current surface and badge meaning to assistive technology;
+- one glyph carries one meaning across the app ([DR-010](../decisions/010-interface-craft.md) §8): the gear names the Settings surface, and an in-place editor wears the pencil.
 
 #### run-view-51
 
