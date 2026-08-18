@@ -310,6 +310,20 @@ export const MACHINE_RUN: FixtureEntry[] = [
     timestamp: 9_004,
     message: "\u2937 Coder: implement the refresh fix",
   }),
+  // The runtime also narrates its transitions with no glyph at all —
+  // raw event ids that used to land in the conversation as jargon.
+  rec(4051, {
+    type: "captain_status",
+    turnId: 9,
+    timestamp: 9_004,
+    message: "START_CODE",
+  }),
+  rec(4052, {
+    type: "captain_status",
+    turnId: 9,
+    timestamp: 9_005,
+    message: "\u2192 directCommit",
+  }),
   trace(406, 9_004, "t-code", "code", "player.call.started", {
     stateId: "runFirstPhase",
     roleId: "coder",

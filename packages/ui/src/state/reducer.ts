@@ -403,12 +403,15 @@ export function applyRecord(
     }
     case "captain_status": {
       const message = String(r.message);
-      // While a machine frame is open, its progress glyphs are drawn,
-      // not narrated: the card absorbs them (run-view-60). Failure ◆
-      // and engagement ◇ lines always stay (run-view-2).
+      // While a machine frame is open, the run's progress is drawn,
+      // not narrated: the card absorbs it (run-view-60). Only the ◇
+      // engagement and ◆ failure vocabularies stay in the thread
+      // (run-view-1/2) — everything else a run narrates is machine
+      // detail, including the bare event ids the runtime emits with
+      // no glyph at all ("START_CODE", "→ noFindings").
       if (
         view.frames.length > 0 &&
-        /^[▸⮕⤷]/u.test(message.trimStart())
+        !/^[◇◆]/u.test(message.trimStart())
       ) {
         break;
       }

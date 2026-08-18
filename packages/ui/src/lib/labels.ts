@@ -13,6 +13,9 @@ const STATE_LABELS: Record<string, string> = {
   failed: "needs attention",
   idle: "idle",
   ready: "ready",
+  // The captain shell's own control loop rests here between runs;
+  // "hub" is its wire id, not a thing to tell a person about.
+  hub: "idle",
 };
 
 /** camelCase / snake_case / kebab-case → spaced lowercase words.

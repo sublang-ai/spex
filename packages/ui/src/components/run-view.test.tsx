@@ -237,7 +237,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
   test("a running child nests under its caller, which folds to a strip", () => {
     // Replay to the review's first transition: /code is delegating,
     // /review is the running leaf.
-    renderRun(MACHINE_RUN.slice(0, 11));
+    renderRun(MACHINE_RUN.slice(0, 13));
     const live = screen.getByTestId("live-machines");
     const cards = within(live).getAllByTestId(/^machine-card-/);
     expect(cards).toHaveLength(2);
@@ -267,13 +267,17 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(mark.getAttribute("data-running")).toBe("true");
     expect(mark.className).toContain("motion-safe:animate-pulse");
 
-    // The ⤷ glyph line was absorbed by the card while ◇ stayed.
+    // The card absorbs the run's progress while ◇ engagement lines
+    // stay — including the bare event ids the runtime narrates with
+    // no glyph, which used to reach the reader as raw jargon.
     expect(screen.getByText("◇ /code started")).toBeTruthy();
     expect(screen.queryByText(/⤷ Coder: implement/)).toBeNull();
+    expect(screen.queryByText("START_CODE")).toBeNull();
+    expect(screen.queryByText("→ directCommit")).toBeNull();
   });
 
   test("expanding the caller is arrangement, and shows both drawings", () => {
-    renderRun(MACHINE_RUN.slice(0, 11));
+    renderRun(MACHINE_RUN.slice(0, 13));
     const before = screen
       .getAllByTestId(/^machine-card-/)
       .map((card) => card.getAttribute("data-playbook"));

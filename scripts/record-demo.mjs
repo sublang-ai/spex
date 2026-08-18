@@ -119,10 +119,10 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 2500));
 
   const recorder = new Recorder(window);
-  recorder.start();
 
   try {
     for (const step of steps) {
+      if (step.startsRecording) recorder.start();
       if (step.js) {
         const result = await window.webContents.executeJavaScript(
           `(async () => { ${step.js} })()`,
