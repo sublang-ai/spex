@@ -6,7 +6,9 @@
 
 const PROMPT =
   process.env.DEMO_PROMPT ??
-  "/code slugify leaves a stray hyphen when a title ends in punctuation — fix it so the two failing tests pass";
+  // Says enough that the run has no reason to stop and ask: the repo
+  // carries no specs tree, and the coder should not invent one.
+  "/code slugify leaves a stray hyphen when a title ends in punctuation — fix it so the two failing tests pass. No specs tree in this repo; don't add one.";
 
 const setValue = (selector, value) => `
   const el = document.querySelector(${JSON.stringify(selector)});
@@ -105,9 +107,28 @@ export default [
     dwellMs: 600,
   },
   {
+    // A run that parks on a question waits for a human, so the demo
+    // answers as a human would and lets it carry on. The tightened
+    // prompt makes this rare; leaving it unhandled would make the
+    // recording hang on the one run that asks.
     label: "the run: /code opens, calls /review, and settles",
-    // The root card settles into the thread when the run finishes.
-    waitForJs: `document.querySelector('[data-testid^="machine-card-"][data-settled="true"]')`,
+    waitForJs: `(() => {
+      if (document.querySelector('[data-testid^="machine-card-"][data-settled="true"]')) {
+        return true;
+      }
+      const banner = document.querySelector('[data-testid="boss-reply-banner"]');
+      const box = document.querySelector('[data-testid="boss-composer"]');
+      if (banner && box && !box.value) {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype, "value").set;
+        setter.call(box, "Go ahead with the judgement you just described.");
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        const send = [...document.querySelectorAll("button")]
+          .find((b) => b.textContent.trim() === "Send");
+        if (send) send.click();
+      }
+      return false;
+    })()`,
     timeoutMs: 900_000,
     dwellMs: 1200,
   },
