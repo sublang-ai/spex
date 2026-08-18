@@ -57,6 +57,7 @@ meta.md       The spec of specs
 | [DR-029](decisions/029-session-history-home.md) | 029-session-history-home.md | Sessions in the sidebar: Dashboard-first attention, projects with their sessions as the navigator, tabs as the working set, titled sessions over session.list |
 | [DR-030](decisions/030-workspace-chrome.md) | 030-workspace-chrome.md | Workspace chrome: two-state rail collapse, the divider idiom as house law, chrome state as preference, collapse never hiding a duty |
 | [DR-031](decisions/031-machine-call-tree.md) | 031-machine-call-tree.md | The run call tree: one card per run lifetime, calls drawn as containment with named call sites, cards breathing between drawing and strip, one aliveness grammar, neighbours-draw/distance-speaks edge law |
+| [DR-032](decisions/032-session-players.md) | 032-session-players.md | Session players: roles bind to explicit player lanes, a pane per player with per-call role labels, forked player/binding editors, guided legacy migration, playbook 8 / cligent 0.22 floors |
 
 ## Packages
 
