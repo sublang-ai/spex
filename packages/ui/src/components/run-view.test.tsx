@@ -244,6 +244,16 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(cards[0].getAttribute("data-playbook")).toBe("code");
     expect(cards[1].getAttribute("data-playbook")).toBe("review");
 
+    // A caption longer than its box is trimmed rather than spilling
+    // over the border, and the box's title keeps it whole (run-view-63).
+    const captions = [...cards[1].querySelectorAll("text")].map(
+      (node) => node.textContent ?? "",
+    );
+    expect(
+      captions.every((text) => text.length <= 24),
+      `a caption overflowed its box: ${captions.join(" | ")}`,
+    ).toBe(true);
+
     // A drawing wider than its column scrolls, and the column masks
     // its edge so the cut reads as "more this way" (run-view-81).
     const scroller = within(live).getAllByTestId(/^machine-scroll-/)[0];

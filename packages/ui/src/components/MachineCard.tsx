@@ -22,6 +22,15 @@ import { humanizeId } from "../lib/labels.js";
 import { RunningMark } from "./RunningMark.js";
 import { Icon } from "./Icon.js";
 
+/** SVG text cannot ellipsize, and a caption wider than its box spills
+ * over the border. The running mark takes the left inset, so the
+ * caption's room is the box less both insets; 10.5px text averages
+ * about 5.4px per character. The full text stays in the box's title. */
+function fitCaption(text: string, boxWidth: number): string {
+  const room = Math.max(4, Math.floor((boxWidth - 28) / 5.4));
+  return text.length <= room ? text : `${text.slice(0, room - 1)}…`;
+}
+
 /** Fired-edge flash decay; a CSS transition absorbs rapid streams and
  * collapses to an instant change under reduced motion (run-view-61). */
 const FLASH_MS = 700;
@@ -412,7 +421,9 @@ export function MachineCard({
                   data-delegating={delegating ? "true" : undefined}
                 >
                   <title>
-                    {node.description ?? node.id}
+                    {caption && fitCaption(caption, place.width) !== caption
+                      ? `${node.description ?? node.id} — ${caption}`
+                      : (node.description ?? node.id)}
                     {node.role ? ` — runs ${node.role}` : ""}
                     {call ? ` — called /${call.playbookId}` : ""}
                   </title>
@@ -471,7 +482,7 @@ export function MachineCard({
                             : "fill-neutral-500 dark:fill-neutral-400"
                       }
                     >
-                      {caption}
+                      {fitCaption(caption, place.width)}
                     </text>
                   ) : null}
                   {player?.running ? (

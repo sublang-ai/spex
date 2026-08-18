@@ -88,6 +88,12 @@ export default [
       // (run-view-81). Seven steps of 2% take 34% to 48%.
       const divider = document.querySelector('[data-testid="captain-divider"]');
       if (!divider) return { abort: "no divider" };
+      // Home restores the default first, so a re-record starts from
+      // the same place a first-time reader would.
+      divider.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Home", bubbles: true }),
+      );
+      await new Promise((r) => setTimeout(r, 120));
       for (let step = 0; step < 7; step += 1) {
         divider.dispatchEvent(
           new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
@@ -119,10 +125,23 @@ export default [
       const nested = root.querySelectorAll('[data-testid^="machine-card-"]');
       return { cards: nested.length + 1 };
     `,
+    dwellMs: 1400,
+  },
+  {
+    label: "land on the called machine — the point of the tree",
+    js: `
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const root = document.querySelector('[data-testid^="machine-card-"][data-settled="true"]');
+      const child = root?.querySelector('[data-testid^="machine-card-"]');
+      if (!child) return { abort: "no nested card" };
+      child.scrollIntoView({ block: "center", behavior: "smooth" });
+      await wait(900);
+      return child.getAttribute("data-playbook");
+    `,
     dwellMs: 2600,
   },
   {
     label: "hold on the finished tree",
-    dwellMs: 1800,
+    dwellMs: 1600,
   },
 ];
