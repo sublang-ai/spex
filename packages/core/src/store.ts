@@ -48,11 +48,32 @@ const MIGRATIONS: string[] = [
     hidden INTEGER NOT NULL DEFAULT 0,
     timestamp INTEGER NOT NULL,
     payload_json TEXT NOT NULL,
-    role TEXT,
     PRIMARY KEY (session_id, seq)
   );
   CREATE INDEX records_by_session ON records (session_id, seq);
   CREATE TABLE usage (
+    session_id TEXT NOT NULL,
+    turn_id INTEGER,
+    actor_id TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    tool_uses INTEGER NOT NULL,
+    total_cost_usd REAL,
+    duration_ms INTEGER,
+    at INTEGER NOT NULL
+  );
+  CREATE TABLE prefs (key TEXT PRIMARY KEY, value_json TEXT NOT NULL);
+  `,
+  // Session players (DR-032). A player record carries the role of the
+  // call it belongs to, and a cost carries the provenance cligent 0.22
+  // reports. Both are nullable because both are genuinely unknown for
+  // everything written before this migration — and because an absent
+  // report is not a zero. SQLite cannot drop a NOT NULL, so the token
+  // columns are rebuilt to admit the silence the new runtime reports.
+  `
+  ALTER TABLE records ADD COLUMN role TEXT;
+  ALTER TABLE usage ADD COLUMN cost_source TEXT;
+  CREATE TABLE usage_next (
     session_id TEXT NOT NULL,
     turn_id INTEGER,
     actor_id TEXT NOT NULL,
@@ -64,7 +85,11 @@ const MIGRATIONS: string[] = [
     duration_ms INTEGER,
     at INTEGER NOT NULL
   );
-  CREATE TABLE prefs (key TEXT PRIMARY KEY, value_json TEXT NOT NULL);
+  INSERT INTO usage_next SELECT session_id, turn_id, actor_id, input_tokens,
+    output_tokens, tool_uses, total_cost_usd, cost_source, duration_ms, at
+    FROM usage;
+  DROP TABLE usage;
+  ALTER TABLE usage_next RENAME TO usage;
   `,
 ];
 

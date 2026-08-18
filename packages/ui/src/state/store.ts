@@ -82,6 +82,10 @@ export interface AppState {
   openTabs: Record<string, string[]>;
   /** Sidebar chrome (DR-030), persisted app-wide. */
   railCollapsed: boolean;
+  /** The Captain pane's share of the run view, as a percentage. A
+   * machine drawing has a natural width that text does not, so the
+   * split is the reader's to set (DR-030). */
+  captainSplit: number;
   /** Per-project sidebar disclosure (run-view-67), persisted; a
    * project with no entry follows the current-project default. */
   expandedProjects: Record<string, boolean>;
@@ -103,6 +107,7 @@ export interface AppState {
   /** File a session out of the working set — never ends it. */
   closeTab(projectId: string, sessionId: string): void;
   setRailCollapsed(collapsed: boolean): void;
+  setCaptainSplit(percent: number): void;
   toggleProjectExpanded(projectId: string, expanded: boolean): void;
   /** Register a folder, silently git-initializing non-repos
    * (RUN-27); the palette and any surface share this one action. */
@@ -154,6 +159,17 @@ let client: SpexClient | undefined;
 const CURRENT_PROJECT_KEY = "spex.currentProject";
 const RAIL_COLLAPSED_KEY = "spex.railCollapsed";
 const EXPANDED_PROJECTS_KEY = "spex.expandedProjects";
+const CAPTAIN_SPLIT_KEY = "spex.captainSplit";
+export const CAPTAIN_SPLIT_DEFAULT = 34;
+export const CAPTAIN_SPLIT_MIN = 22;
+export const CAPTAIN_SPLIT_MAX = 70;
+
+function readCaptainSplit(): number {
+  const stored = Number(safeStorageGet(CAPTAIN_SPLIT_KEY));
+  return Number.isFinite(stored) && stored >= CAPTAIN_SPLIT_MIN && stored <= CAPTAIN_SPLIT_MAX
+    ? stored
+    : CAPTAIN_SPLIT_DEFAULT;
+}
 
 /** localStorage access that tolerates non-browser test environments. */
 function safeStorageGet(key: string): string | undefined {
@@ -388,6 +404,7 @@ export const useAppStore = create<AppState>((set, get) => {
     workspaceTabs: {},
     openTabs: {},
     railCollapsed: safeStorageGet(RAIL_COLLAPSED_KEY) === "1",
+    captainSplit: readCaptainSplit(),
     expandedProjects: readExpandedProjects(),
     specTrees: {},
     specErrors: {},
@@ -503,6 +520,15 @@ export const useAppStore = create<AppState>((set, get) => {
     setRailCollapsed(collapsed: boolean): void {
       set({ railCollapsed: collapsed });
       safeStorageSet(RAIL_COLLAPSED_KEY, collapsed ? "1" : "0");
+    },
+
+    setCaptainSplit(percent: number): void {
+      const clamped = Math.min(
+        CAPTAIN_SPLIT_MAX,
+        Math.max(CAPTAIN_SPLIT_MIN, Math.round(percent)),
+      );
+      set({ captainSplit: clamped });
+      safeStorageSet(CAPTAIN_SPLIT_KEY, String(clamped));
     },
 
     toggleProjectExpanded(projectId: string, expanded: boolean): void {

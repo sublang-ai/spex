@@ -198,13 +198,31 @@ test("core-service-35: session state broadcasts carry the live summary", async (
   const records: RecordEnvelope[] = [];
   const { manager, project, composed } = await setup(records);
   const states: import("./protocol.js").SessionInfo[] = [];
-  manager.onSessionState = (session) => states.push(session);
+  // One ordered timeline, so "the name arrived before the turn ended"
+  // is a fact about order rather than about how fast the fake ran.
+  const timeline: string[] = [];
+  manager.onSessionState = (session) => {
+    states.push(session);
+    if (session.title) timeline.push(`named:${session.title}`);
+  };
+  const priorOnRecord = manager.onRecord;
+  manager.onRecord = (envelope) => {
+    priorOnRecord(envelope);
+    timeline.push(`record:${envelope.record.type}`);
+  };
 
   const info = await manager.createSession(project, composed);
   assert.equal(states.at(-1)?.turns, 0, "a fresh session summarizes as empty");
 
   manager.submitTurn(info.id, "harden the session refresh");
   await waitFor(() => records.some((r) => r.record.type === "turn_finished"));
+  // The name arrives with the turn that starts, not the one that ends:
+  // a running session must never be listed as having said nothing.
+  assert.ok(
+    timeline.indexOf("named:harden the session refresh") <
+      timeline.indexOf("record:turn_finished"),
+    `named after the turn ended: ${timeline.join(" ")}`,
+  );
 
   const afterTurn = states.at(-1);
   assert.equal(afterTurn?.live, true);

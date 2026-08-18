@@ -221,11 +221,15 @@ async function main(): Promise<void> {
       const clicked = (await window.webContents.executeJavaScript(
         `(() => {
           const name = ${JSON.stringify(label)};
-          const match = [...document.querySelectorAll("button,[role=tab],a")]
-            .find((node) =>
-              (node.getAttribute("aria-label") ?? node.textContent ?? "")
-                .trim()
-                .startsWith(name));
+          // "@prefix" selects by test id prefix; anything else matches
+          // the accessible name, the way a reader would find it.
+          const match = name.startsWith("@")
+            ? document.querySelector(\`[data-testid^="\${name.slice(1)}"]\`)
+            : [...document.querySelectorAll("button,[role=tab],a")]
+                .find((node) =>
+                  (node.getAttribute("aria-label") ?? node.textContent ?? "")
+                    .trim()
+                    .startsWith(name));
           if (!match) return false;
           match.click();
           return true;
@@ -238,6 +242,13 @@ async function main(): Promise<void> {
       `({
         rootChildren: document.getElementById("root")?.children.length ?? 0,
         bodyText: document.body.innerText.slice(0, 1200),
+        // Overflow report: any drawing wider than its scroller is a
+        // clipped card, which reads as broken rather than scrollable.
+        overflow: [...document.querySelectorAll("svg[role=img]")].map((svg) => ({
+          label: svg.getAttribute("aria-label"),
+          drawing: svg.getBoundingClientRect().width,
+          scroller: svg.parentElement?.clientWidth ?? 0,
+        })),
         title: document.title,
       })`,
     )) as { rootChildren: number; bodyText: string; title: string };

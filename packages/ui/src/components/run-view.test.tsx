@@ -244,6 +244,12 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(cards[0].getAttribute("data-playbook")).toBe("code");
     expect(cards[1].getAttribute("data-playbook")).toBe("review");
 
+    // A drawing wider than its column scrolls, and the column masks
+    // its edge so the cut reads as "more this way" (run-view-81).
+    const scroller = within(live).getAllByTestId(/^machine-scroll-/)[0];
+    expect(scroller.className).toContain("overflow-x-auto");
+    expect(scroller.className).toContain("mask-image");
+
     // The caller is the ancestor: a strip that still names the calling
     // state and the callee, so the containment survives the fold.
     expect(cards[0].getAttribute("data-expanded")).toBe("false");

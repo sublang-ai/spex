@@ -59,7 +59,9 @@ When a client requests the session list, the core service shall reply with every
 
 #### core-service-34
 
-When the core service reports a session's state to subscribed clients — at each turn's end and when the session ends — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with.
+When the core service reports a session's state to subscribed clients — at each turn's start and end, and when the session ends — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with:
+
+- A session is named from the turn that starts, not the turn that finishes, so a running session is never listed as having said nothing.
 
 ### Boss Turns
 
@@ -149,6 +151,7 @@ The core package shall own the app-local SQLite store defined by [DR-004](../dec
 
 - When a migration fails, the core package stops serving and reports the failure, so a partially migrated store is never served.
 - The core package is the store's only writer, exposing stored data solely over the protocol.
+- A released migration is never edited: a schema change is a new migration, so a store written by an earlier release opens rather than failing on a column it has never seen.
 
 ### Runtime Composition
 
@@ -232,7 +235,7 @@ Where a stored session held two turns and a failure record, and a second stored 
 
 #### core-service-35
 
-Where a client subscribes to a session that then runs a fake-adapter turn and is disposed, the test suite shall assert the broadcast contract of [[core-service-34](#core-service-34)]: the state reported at the turn's end and the state reported at the session's end each carry the session's title and turn count, not the zeros the session was created with.
+Where a client subscribes to a session that then runs a fake-adapter turn and is disposed, the test suite shall assert the broadcast contract of [[core-service-34](#core-service-34)]: the state reported at the turn's start already carries the session's title, and the states reported at the turn's end and the session's end each carry the title and turn count, not the zeros the session was created with.
 
 ### Record Visibility Coverage
 
@@ -250,7 +253,9 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 
 #### core-service-22
 
-Where a session has completed a Boss turn, the test suite shall stop the core service, start it again on the same app-local store file [[core-service-15](#core-service-15)], and assert that the session, its turns, its records (content and order), and its usage totals are served identically after restart [[core-service-10](#core-service-10)], and that a session live at shutdown is reported as no longer live.
+Where a session has completed a Boss turn, the test suite shall stop the core service, start it again on the same app-local store file [[core-service-15](#core-service-15)], and assert that the session, its turns, its records (content and order), and its usage totals are served identically after restart [[core-service-10](#core-service-10)], and that a session live at shutdown is reported as no longer live:
+
+- Where a store carries an earlier release's schema and rows, the suite shall assert it opens, keeps every row, reads the columns that release lacked as unknown, and accepts writes to them [[core-service-15](#core-service-15)].
 
 ### Readiness Coverage
 

@@ -7,6 +7,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import Database from "better-sqlite3";
+
 import { Store } from "./store.js";
 import type { SessionInfo, TmuxPlayRecord } from "./protocol.js";
 
@@ -194,4 +196,68 @@ test("core-service-32: session.list carries each session's conversation summary"
   assert.equal(bare?.title, undefined);
   assert.equal(bare?.turns, 0);
   assert.equal(bare?.failed, false);
+});
+
+test("DR-032: a store written before session players upgrades in place", () => {
+  // A user's existing database predates the role and cost-source
+  // columns. Editing the first migration would have left it unopenable;
+  // it must migrate, keeping every row it already held.
+  const path = tempStorePath();
+  const legacy = new Database(path);
+  legacy.exec(`
+    CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE projects (
+      id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      registered_at INTEGER NOT NULL
+    );
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+      created_at INTEGER NOT NULL, ended_at INTEGER, live INTEGER NOT NULL,
+      players_json TEXT NOT NULL, initial_visible_json TEXT NOT NULL
+    );
+    CREATE TABLE turns (
+      session_id TEXT NOT NULL, turn_id INTEGER NOT NULL, prompt TEXT NOT NULL,
+      started_at INTEGER NOT NULL, ended_at INTEGER, status TEXT,
+      PRIMARY KEY (session_id, turn_id)
+    );
+    CREATE TABLE records (
+      session_id TEXT NOT NULL, seq INTEGER NOT NULL, turn_id INTEGER,
+      type TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0,
+      timestamp INTEGER NOT NULL, payload_json TEXT NOT NULL,
+      PRIMARY KEY (session_id, seq)
+    );
+    CREATE INDEX records_by_session ON records (session_id, seq);
+    CREATE TABLE usage (
+      session_id TEXT NOT NULL, turn_id INTEGER, actor_id TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
+      tool_uses INTEGER NOT NULL, total_cost_usd REAL, duration_ms INTEGER,
+      at INTEGER NOT NULL
+    );
+    CREATE TABLE prefs (key TEXT PRIMARY KEY, value_json TEXT NOT NULL);
+    INSERT INTO meta VALUES ('schema_version', '1');
+    INSERT INTO projects VALUES ('p1', '/tmp/proj', 'proj', 1);
+    INSERT INTO sessions VALUES ('s1', 'p1', 1, NULL, 1, '[]', '[]');
+    INSERT INTO usage VALUES ('s1', 1, 'dev.coder', 40, 10, 2, 0.25, 700, 5);
+  `);
+  legacy.close();
+
+  const store = new Store(path);
+  // The rows survive, and the new columns read as unknown rather than
+  // as measurements nobody made.
+  assert.deepEqual(store.sessionUsage("s1"), {
+    inputTokens: 40,
+    outputTokens: 10,
+    toolUses: 2,
+    totalCostUsd: 0.25,
+    costSources: [],
+  });
+  // The new columns accept what the new runtime reports.
+  store.appendRecord(
+    "s1",
+    1,
+    { type: "player_prompt", turnId: 1, timestamp: 9, playerId: "dev.coder", prompt: "go" } as unknown as TmuxPlayRecord,
+    "coder",
+  );
+  assert.equal(store.getRecords("s1")[0]?.role, "coder");
+  store.close();
 });

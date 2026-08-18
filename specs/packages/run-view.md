@@ -332,6 +332,14 @@ The sidebar shall collapse between its two states — the tree, and the icon rai
 - collapse is chrome only: the open tabs remain the reach [[run-view-48](#run-view-48)], so it makes nothing unreachable;
 - collapsing never strands focus.
 
+#### run-view-81
+
+The run view shall divide the Captain column from the player panes at a divider the reader sets, persisting across launches ([DR-030](../decisions/030-workspace-chrome.md)):
+
+- the divider drags, nudges by arrow key, and restores its default on a double-click or Home;
+- the split is bounded so neither side can be squeezed away;
+- a machine drawing wider than its column scrolls rather than shrinking [[run-view-60](#run-view-60)], and the column shows that more lies beyond its edge — a drawing cut without a sign reads as broken rather than scrollable.
+
 ### Keyboard and Guardrails (DR-010 §4/§6)
 
 #### run-view-42
@@ -560,6 +568,10 @@ When the awaitBossReply fixture stream is replayed, the test suite shall assert 
 #### run-view-80
 
 Where a fixture stream calls one player under two roles, the test suite shall assert each call carries its own role label where it opens and an unresolved call carries none [[run-view-79](#run-view-79)].
+
+#### run-view-82
+
+Where the run view renders with its default split, the test suite shall assert the divider contract of [[run-view-81](#run-view-81)]: an arrow key moves the split and a double-click restores the default, the split survives a remount, a nudge past either bound stops at that bound, and a machine drawing wider than its column is presented scrollable rather than cut.
 
 #### run-view-53
 

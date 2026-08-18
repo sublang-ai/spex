@@ -114,6 +114,7 @@ function seed(): void {
     openTabs: { p1: ["a-live"] },
     expandedProjects: {},
     railCollapsed: false,
+    captainSplit: 34,
     specTrees: {},
     specErrors: {},
     homeDraft: "",
@@ -323,5 +324,38 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     expect(
       screen.getByLabelText("Config invalid — open Settings"),
     ).toBeTruthy();
+  });
+});
+
+describe("run-view-81: the reader sets the Captain/players split", () => {
+  test("keys move it, a double-click restores it, and it persists", () => {
+    const { unmount } = render(<App />);
+    const column = screen.getByTestId("captain-column");
+    expect(column.style.width).toBe("34%");
+
+    const divider = screen.getByTestId("captain-divider");
+    fireEvent.keyDown(divider, { key: "ArrowRight" });
+    expect(screen.getByTestId("captain-column").style.width).toBe("36%");
+
+    // Chrome state is a preference: it survives a remount (DR-030).
+    unmount();
+    render(<App />);
+    expect(screen.getByTestId("captain-column").style.width).toBe("36%");
+
+    fireEvent.doubleClick(screen.getByTestId("captain-divider"));
+    expect(screen.getByTestId("captain-column").style.width).toBe("34%");
+  });
+
+  test("neither side can be squeezed away", () => {
+    render(<App />);
+    const divider = screen.getByTestId("captain-divider");
+    for (let nudge = 0; nudge < 40; nudge += 1) {
+      fireEvent.keyDown(divider, { key: "ArrowLeft" });
+    }
+    expect(screen.getByTestId("captain-column").style.width).toBe("22%");
+    for (let nudge = 0; nudge < 60; nudge += 1) {
+      fireEvent.keyDown(divider, { key: "ArrowRight" });
+    }
+    expect(screen.getByTestId("captain-column").style.width).toBe("70%");
   });
 });

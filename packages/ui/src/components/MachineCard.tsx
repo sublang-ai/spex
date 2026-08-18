@@ -260,7 +260,19 @@ export function MachineCard({
     >
       {header}
       {expanded ? (
-        <div className="overflow-x-auto">
+        // A drawing wider than the pane scrolls rather than shrinking
+        // (its state names are the point), and the mask says so — a
+        // hard cut reads as broken, a fade reads as "more this way".
+        <div
+          data-testid={`machine-scroll-${frame.traceSessionId}`}
+          className="overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)] [mask-repeat:no-repeat] [mask-size:100%_100%]"
+          onScroll={(event) => {
+            const box = event.currentTarget;
+            const atEnd =
+              box.scrollLeft + box.clientWidth >= box.scrollWidth - 1;
+            box.style.maskImage = atEnd ? "none" : "";
+          }}
+        >
           <svg
             role="img"
             aria-label={`${frame.playbookId} state machine${

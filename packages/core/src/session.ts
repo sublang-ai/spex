@@ -327,6 +327,10 @@ export class SessionManager {
       case "turn_started": {
         const turn = (record as { turn: { id: number; prompt: string } }).turn;
         this.store.startTurn(sessionId, turn.id, turn.prompt, record.timestamp);
+        // A session earns its name the moment it is asked for something
+        // (core-service-32): waiting for the turn to end would leave the
+        // rail saying "no messages yet" about a session already at work.
+        this.refreshLiveState(sessionId);
         break;
       }
       case "turn_finished":

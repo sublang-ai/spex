@@ -4,16 +4,91 @@
 // The project session run view (RUN-1..12): Captain column with the
 // Boss composer docked below, player panes for the visible roster.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { PlaybookSummary, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { SessionView } from "../state/reducer.js";
 import type { ComposerState } from "../state/store.js";
 import { CaptainPane } from "./CaptainPane.js";
-import { useAppStore } from "../state/store.js";
+import {
+  CAPTAIN_SPLIT_DEFAULT,
+  CAPTAIN_SPLIT_MAX,
+  CAPTAIN_SPLIT_MIN,
+  useAppStore,
+} from "../state/store.js";
 import { Composer } from "./Composer.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { PlayerPane } from "./PlayerPane.js";
+
+
+/** The Captain/players divider (DR-030). A machine drawing has a
+ * natural width that reflowing text does not, so the reader sets the
+ * split: drag it, nudge it by arrow key, or double-click to restore
+ * the default. */
+function SplitDivider({
+  percent,
+  onChange,
+  containerRef,
+}: {
+  percent: number;
+  onChange(next: number): void;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const [dragging, setDragging] = useState(false);
+
+  function fromClientX(clientX: number): number | undefined {
+    const box = containerRef.current?.getBoundingClientRect();
+    if (!box || box.width === 0) return undefined;
+    return ((clientX - box.left) / box.width) * 100;
+  }
+
+  return (
+    <div
+      data-testid="captain-divider"
+      data-dragging={dragging ? "1" : "0"}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the Captain pane"
+      aria-valuenow={percent}
+      aria-valuemin={CAPTAIN_SPLIT_MIN}
+      aria-valuemax={CAPTAIN_SPLIT_MAX}
+      tabIndex={0}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setDragging(true);
+      }}
+      onPointerMove={(event) => {
+        if (!dragging) return;
+        const next = fromClientX(event.clientX);
+        if (next !== undefined) onChange(next);
+      }}
+      onPointerUp={(event) => {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        setDragging(false);
+      }}
+      onDoubleClick={() => onChange(CAPTAIN_SPLIT_DEFAULT)}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") onChange(percent - 2);
+        else if (event.key === "ArrowRight") onChange(percent + 2);
+        else if (event.key === "Home") onChange(CAPTAIN_SPLIT_DEFAULT);
+        else return;
+        event.preventDefault();
+      }}
+      // A 12px hit target around a 2px rule: reachable without
+      // becoming a visible bar (DR-010 §6).
+      className="group relative -mx-1.5 w-3 shrink-0 cursor-col-resize touch-none focus:outline-none"
+    >
+      <span
+        aria-hidden
+        className={`absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded ${
+          dragging
+            ? "bg-brand-500"
+            : "bg-transparent group-hover:bg-neutral-300 group-focus:bg-brand-500 dark:group-hover:bg-neutral-700"
+        }`}
+      />
+    </div>
+  );
+}
 
 export function RunView({
   session,
@@ -58,6 +133,9 @@ export function RunView({
   onDismissError: () => void;
 }) {
   const machineGraphs = useAppStore((state) => state.machineGraphs);
+  const captainSplit = useAppStore((state) => state.captainSplit);
+  const setCaptainSplit = useAppStore((state) => state.setCaptainSplit);
+  const splitRef = useRef<HTMLDivElement>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const visible = view.visible.length
     ? view.visible
@@ -113,8 +191,12 @@ export function RunView({
           </button>
         ) : null}
       </div>
-      <div className="flex min-h-0 flex-1 gap-3 p-3">
-        <div className="flex w-[34%] min-w-[320px] flex-col gap-2">
+      <div ref={splitRef} className="flex min-h-0 flex-1 gap-3 p-3">
+        <div
+          data-testid="captain-column"
+          style={{ width: `${captainSplit}%` }}
+          className="flex min-w-[280px] flex-col gap-2"
+        >
           <CaptainPane view={view} machineGraphs={machineGraphs} />
           {readOnly ? (
             <>
@@ -169,6 +251,11 @@ export function RunView({
             />
           )}
         </div>
+        <SplitDivider
+          percent={captainSplit}
+          onChange={setCaptainSplit}
+          containerRef={splitRef}
+        />
         <div
           data-testid="player-grid"
           className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"

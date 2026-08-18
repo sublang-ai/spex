@@ -81,6 +81,24 @@ export default [
     dwellMs: 1200,
   },
   {
+    label: "widen the Captain pane so the whole machine is in frame",
+    js: `
+      // The /code drawing is 564px wide and the default split gives it
+      // 377, so the divider is nudged the way a reader would nudge it
+      // (run-view-81). Seven steps of 2% take 34% to 48%.
+      const divider = document.querySelector('[data-testid="captain-divider"]');
+      if (!divider) return { abort: "no divider" };
+      for (let step = 0; step < 7; step += 1) {
+        divider.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+        );
+        await new Promise((r) => setTimeout(r, 90));
+      }
+      return document.querySelector('[data-testid="captain-column"]').style.width;
+    `,
+    dwellMs: 600,
+  },
+  {
     label: "the run: /code opens, calls /review, and settles",
     // The root card settles into the thread when the run finishes.
     waitForJs: `document.querySelector('[data-testid^="machine-card-"][data-settled="true"]')`,
