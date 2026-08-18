@@ -49,10 +49,13 @@ When the session record stream delivers thinking content for a visible player, t
 
 #### run-view-6
 
-When a player turn completes, that player's pane shall report the turn's usage by what the turn delivered:
+When a player turn completes, that player's pane shall report the turn's usage by what the turn delivered, reporting each figure only where the turn reported it ([DR-032](../decisions/032-session-players.md)):
 
-- with usage data — the pane displays the turn's token usage at the end of the turn's transcript;
-- without usage data — the pane omits the usage line.
+| The turn reported | The pane shows |
+| --- | --- |
+| tokens | the turn's token totals, taken as given because they are inclusive of cached reads |
+| a cost | that cost, marked as an estimate unless the provider itself reported it |
+| neither | no usage line — an unreported figure is silence, never a zero nobody measured |
 
 ### Pane Visibility
 

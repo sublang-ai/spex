@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import {
   applyRecords,
   initialSessionView,
+  readDoneUsage,
   resolvePlayerId,
 } from "./reducer.js";
 import {
@@ -42,7 +43,15 @@ describe("RUN-19: fixture stream renders expected pane structure", () => {
     const tool = coder.segments[2];
     expect(tool.kind === "tool" && tool.status).toBe("success");
     const result = coder.segments[4];
-    expect(result.kind === "result" && result.usage?.totalCostUsd).toBe(0.05);
+    // The cligent 0.22 shape is read as sent: inclusive totals and a
+    // cost that carries its provenance (DR-032).
+    expect(result.kind === "result" && result.usage).toMatchObject({
+      inputTokens: 120,
+      outputTokens: 30,
+      toolUses: 1,
+      totalCostUsd: 0.05,
+      costSource: "provider-reported",
+    });
     expect(view.captain.some((line) => line.text === "◇ /code started")).toBe(
       true,
     );
@@ -291,5 +300,28 @@ describe("playbook 2.0 shell telemetry: object-shaped states fold safely", () =>
       },
     ]);
     expect(view.fsmState).toBeUndefined();
+  });
+});
+
+describe("DR-032: an unreported figure is silence, never zero", () => {
+  test("a done payload reporting no tokens yields no token figures", () => {
+    // The runtime tells us tool uses and nothing else; substituting a
+    // zero here would invent a measurement nobody made.
+    expect(readDoneUsage({ usage: { toolUses: 3 } })).toEqual({ toolUses: 3 });
+  });
+
+  test("a cost without a token report still arrives, with its source", () => {
+    expect(
+      readDoneUsage({
+        usage: {
+          toolUses: 0,
+          cost: { amount: 0.4, currency: "USD", source: "agent-estimate" },
+        },
+      }),
+    ).toEqual({ toolUses: 0, totalCostUsd: 0.4, costSource: "agent-estimate" });
+  });
+
+  test("no usage at all is no usage view", () => {
+    expect(readDoneUsage({ status: "success" })).toBeUndefined();
   });
 });

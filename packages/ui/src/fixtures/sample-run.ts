@@ -130,7 +130,16 @@ export const TURN_ONE: FixtureEntry[] = [
       payload: {
         status: "success",
         result: "Fixed.",
-        usage: { inputTokens: 120, outputTokens: 30, toolUses: 1, totalCostUsd: 0.05 },
+        // The cligent 0.22 DoneUsage shape, as the runtime sends it:
+        // totals are inclusive, and cost carries its provenance.
+        usage: {
+          toolUses: 1,
+          tokens: {
+            coverage: "full",
+            totals: { input: { total: 120 }, output: { total: 30 } },
+          },
+          cost: { amount: 0.05, currency: "USD", source: "provider-reported" },
+        },
         durationMs: 900,
       },
     },
