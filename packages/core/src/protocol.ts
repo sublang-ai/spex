@@ -46,9 +46,26 @@ export interface AgentSummary {
   permissions?: AgentPermissionsSummary;
 }
 
-export interface PlaybookPlayerSummary {
+/** A session player: an identity-bearing lane, with the roles that
+ * bind to it across every enabled playbook (DR-032). */
+export interface SessionPlayerSummary {
+  id: string;
   agent: AgentSummary;
   /** Human-readable identity: pinned model, else adapter. */
+  display: string;
+  /** `<playbook>.<role>` for every binding naming this player — the
+   * evidence that a lane is shared, and by whom. */
+  boundBy: string[];
+}
+
+/** One role's binding: which player answers it, and that role's own
+ * tuning. `false` means the provider's current default; absent means
+ * the player's own (DR-032). */
+export interface RoleBindingSummary {
+  playerId: string;
+  model?: string | false;
+  effort?: string | false;
+  /** What this role effectively runs, after inheritance. */
   display: string;
 }
 
@@ -57,7 +74,7 @@ export interface PlaybookSummary {
   from: string;
   command: string;
   intent: string;
-  players: Record<string, PlaybookPlayerSummary>;
+  roles: Record<string, RoleBindingSummary>;
 }
 
 export interface PlaybookArtifacts {
@@ -107,6 +124,8 @@ export interface MachineGraph {
 export interface ConfigSummary {
   path: string;
   captain: AgentSummary;
+  /** The session roster, in first-reference order (DR-032). */
+  players: SessionPlayerSummary[];
   playbooks: PlaybookSummary[];
   notifications?: Record<string, string>;
   theme?: string;

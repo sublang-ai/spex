@@ -42,7 +42,9 @@ export const REGISTRY_CONTRACT = 2;
 // the runtime's wording. Scalars are adapter shorthands normalizing
 // to bare-adapter blocks; Spex itself writes only inline blocks.
 const KNOWN_ADAPTERS = KNOWN_PLAYER_ADAPTERS;
-const PLAYBOOK_LAUNCHER_KEYS = ["from", "command", "players"];
+const PLAYBOOK_LAUNCHER_KEYS = ["from", "command", "roles"];
+/** A session player id: segmented, dots by convention only. */
+const PLAYER_ID_PATTERN = /^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/;
 const RESERVED_CAPTAIN_ROLE_ID = "captain";
 
 const AGENT_FIELDS = new Set([
@@ -85,14 +87,52 @@ export interface ComposedPlayer extends ResolvedAgent {
   id: string;
 }
 
+/** A role's binding: which session player answers it, and that role's
+ * own tuning. `false` selects the provider's current default;
+ * undefined inherits the player's own (DR-032). */
+/** A tuning choice the shell takes explicitly: a pinned value, or the
+ * provider's current default. Omission is not representable here —
+ * inheritance is resolved before the call (playbook DR-032 §4). */
+export type TuningSelection =
+  | { kind: "value"; value: string }
+  | { kind: "provider-default" };
+
+/** An agent envelope as the Captain shell's options carry it: the
+ * identity-bearing fields plus a complete tuning selection. */
+export interface SessionAgentBlock {
+  adapter: string;
+  model: TuningSelection;
+  effort: TuningSelection;
+  instruction?: string;
+  permissions?: unknown;
+}
+
+const providerDefault: TuningSelection = { kind: "provider-default" };
+const tuningOf = (value: string | undefined): TuningSelection =>
+  value === undefined ? providerDefault : { kind: "value", value };
+
+export interface ResolvedBinding {
+  playerId: string;
+  model?: string | false;
+  effort?: string | false;
+}
+
+/** The binding as the shell takes it: the lane, plus this role's
+ * complete tuning with inheritance already resolved. */
+export interface HostRoleBinding {
+  playerId: string;
+  model: TuningSelection;
+  effort: TuningSelection;
+}
+
 export interface ComposedPlaybook {
   id: string;
   command: string;
   intent: string;
   requiredRoleIds: readonly string[];
   from: string;
-  /** role -> resolved agent (local role names, not namespaced ids). */
-  players: Record<string, ResolvedAgent>;
+  /** local role -> its binding (DR-032). */
+  roles: Record<string, ResolvedBinding>;
   /** True when the entry takes a `cwd` option the config leaves
    * unset, so sessions may inject the project path (DR-014). */
   acceptsCwdOption: boolean;
@@ -104,8 +144,18 @@ export interface ComposedConfig {
   captainOptions: {
     playbooks: Record<
       string,
-      { from: string; command?: string; options: Record<string, unknown> }
+      {
+        from: string;
+        command?: string;
+        roles: Record<string, HostRoleBinding>;
+        options: Record<string, unknown>;
+      }
     >;
+    /** The session's agent envelopes, as the shell takes them. */
+    sessionAgents: {
+      captain: SessionAgentBlock;
+      players: Record<string, SessionAgentBlock>;
+    };
     /** The Captain's adapter, so the shell picks provider-level vs
      * prompt-level control-call tool restriction (DR-019). */
     captainAdapter: string;
@@ -360,6 +410,9 @@ export interface RegistryEntryLike {
   command: string;
   intent: string;
   requiredRoleIds: readonly string[];
+  /** Role groups the manifest may run at once (v8): each must bind to
+   * pairwise-distinct players. Absent on older entries. */
+  concurrentRoleSets?: readonly (readonly string[])[];
   validateOptions(captainOptions: unknown): unknown;
   createRuntime(options: unknown): unknown;
 }
@@ -382,6 +435,64 @@ export function isValidRegistryEntry(
 // ---------------------------------------------------------------------------
 // Composition (launcher parity: composeGenericConfig)
 // ---------------------------------------------------------------------------
+
+/** A role binding: a bare player id, or a block naming `player` with
+ * optional model/effort overrides. Adapter, permissions, instruction
+ * and workspace belong to the player and are refused here (DR-032). */
+function resolveBinding(value: unknown, path: string): ResolvedBinding {
+  if (typeof value === "string") {
+    if (!PLAYER_ID_PATTERN.test(value)) {
+      throw new Error(`${path} is not a canonical player id`);
+    }
+    return { playerId: value };
+  }
+  if (!isPlainObject(value)) {
+    throw new Error(`${path} must be a player id or a binding block`);
+  }
+  const allowed = new Set(["player", "model", "effort"]);
+  for (const key of Object.keys(value)) {
+    if (allowed.has(key)) continue;
+    throw new Error(
+      `${path}.${key} is not a role binding key: adapter, permissions, instruction and workspace belong to the session player`,
+    );
+  }
+  const playerId = value.player;
+  if (typeof playerId !== "string" || !PLAYER_ID_PATTERN.test(playerId)) {
+    throw new Error(`${path}.player must name a canonical player id`);
+  }
+  const tuning = (key: "model" | "effort"): string | false | undefined => {
+    const raw = value[key];
+    if (raw === undefined) return undefined;
+    // `false` is a positive choice — the provider's current default —
+    // distinct from omission, which inherits the player's.
+    if (raw === false) return false;
+    if (typeof raw === "string" && raw.length > 0) return raw;
+    throw new Error(
+      `${path}.${key} must be a string or false (the provider default)`,
+    );
+  };
+  return {
+    playerId,
+    ...(tuning("model") !== undefined ? { model: tuning("model") } : {}),
+    ...(tuning("effort") !== undefined ? { effort: tuning("effort") } : {}),
+  };
+}
+
+function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
+  return {
+    adapter: agent.adapter,
+    // Both selections travel on every call: an omitted pin means the
+    // provider's default, never "whatever the last role left behind".
+    model: tuningOf(agent.model),
+    effort: tuningOf(agent.effort),
+    ...(agent.instruction !== undefined
+      ? { instruction: agent.instruction }
+      : {}),
+    ...(agent.permissions !== undefined
+      ? { permissions: agent.permissions }
+      : {}),
+  };
+}
 
 export async function composeConfig(
   top: unknown,
@@ -421,8 +532,45 @@ export async function composeConfig(
   // to an empty allowlist, which the Codex adapter rejects outright.
   const captainOptions: ComposedConfig["captainOptions"] = {
     playbooks: {},
+    // v8 takes the session's agents as one block: the Captain's
+    // envelope and every referenced player's (DR-032). Filled after
+    // the bindings below decide which players the session references.
+    sessionAgents: { captain: sessionAgentOf(captainAgent), players: {} },
     captainAdapter: captainAgent.adapter,
   };
+  // The flat session roster: identity-bearing lanes, resolved before
+  // any binding can name one (DR-032).
+  const sessionPlayers = new Map<string, ResolvedAgent>();
+  if (top.players !== undefined) {
+    if (!isPlainObject(top.players)) {
+      throw new Error("players must be an object");
+    }
+    for (const [playerId, value] of Object.entries(top.players)) {
+      const path = `players.${playerId}`;
+      if (!PLAYER_ID_PATTERN.test(playerId)) {
+        throw new Error(
+          `${path} is not a canonical player id (lowercase segments, dots optional)`,
+        );
+      }
+      if (playerId === RESERVED_CAPTAIN_ROLE_ID) {
+        throw new Error(
+          `players.captain is reserved for the session Captain, which is configured at the top level`,
+        );
+      }
+      const resolved = resolveAgent(value, path);
+      if (
+        typeof resolved.adapter !== "string" ||
+        resolved.adapter.length === 0
+      ) {
+        throw new Error(`${path} must resolve an adapter`);
+      }
+      sessionPlayers.set(playerId, toResolvedAgent(resolved, path));
+    }
+  }
+  // Only a referenced player enters the roster and the readiness gate;
+  // an unused entry is legal and inert (DR-032).
+  const referenced = new Set<string>();
+
   const players: ComposedPlayer[] = [];
   const playbooks: ComposedPlaybook[] = [];
   const seenIds = new Set<string>();
@@ -494,48 +642,89 @@ export async function composeConfig(
       );
     }
 
-    if (!isPlainObject(block.players)) {
-      throw new Error(`playbooks.${id}.players must be an object`);
-    }
-    const playerBlocks = block.players;
-    if (RESERVED_CAPTAIN_ROLE_ID in playerBlocks) {
+    // v8 binds roles to session players (DR-032); a surviving
+    // per-playbook players block is the removed shape and rejects with
+    // the launcher's own wording rather than a paraphrase.
+    if (block.players !== undefined) {
       throw new Error(
-        `playbooks.${id}.players.captain binds local role "captain", which is reserved for the tmux-play Captain`,
+        `playbooks.${id}.players was removed in the explicit-session-player major release: ` +
+          "define stable ids in top-level players and bind them explicitly under " +
+          "playbooks.<id>.roles; automatic migration would choose which prior " +
+          "conversations share a session",
       );
     }
-    const roles = Object.keys(playerBlocks);
-    if (roles.length === 0) {
-      throw new Error(`playbooks.${id} resolves no visible local role`);
+    if (!isPlainObject(block.roles)) {
+      throw new Error(`playbooks.${id}.roles must be an object`);
     }
-    for (const required of entry.requiredRoleIds) {
-      if (!(required in playerBlocks)) {
+    const roleBlocks = block.roles;
+    if (RESERVED_CAPTAIN_ROLE_ID in roleBlocks) {
+      throw new Error(
+        `playbooks.${id}.roles.captain binds local role "captain", which is reserved for the tmux-play Captain`,
+      );
+    }
+    // Bindings cover requiredRoleIds exactly: a missing role has no
+    // agent and an extra one names work the manifest never declares.
+    const bound = Object.keys(roleBlocks);
+    const required = new Set(entry.requiredRoleIds);
+    const missing = entry.requiredRoleIds.filter((role) => !(role in roleBlocks));
+    const extra = bound.filter((role) => !required.has(role));
+    if (missing.length > 0 || extra.length > 0) {
+      throw new Error(
+        `playbooks.${id}.roles must exactly cover requiredRoleIds` +
+          (missing.length > 0 ? `; missing ${missing.join(", ")}` : "") +
+          (extra.length > 0 ? `; unknown ${extra.join(", ")}` : ""),
+      );
+    }
+
+    const roleBindings: Record<string, ResolvedBinding> = {};
+    const hostBindings: Record<string, HostRoleBinding> = {};
+    for (const role of entry.requiredRoleIds) {
+      const path = `playbooks.${id}.roles.${role}`;
+      const binding = resolveBinding(roleBlocks[role], path);
+      if (!sessionPlayers.has(binding.playerId)) {
         throw new Error(
-          `playbooks.${id} required role "${required}" has no players entry`,
+          `${path} names absent session player "${binding.playerId}"`,
+        );
+      }
+      roleBindings[role] = binding;
+      // Inheritance resolves here, once: omitted takes the player's
+      // default, `false` takes the provider's, a string pins. The
+      // shell is told the outcome, never asked to infer it.
+      const player = sessionPlayers.get(binding.playerId) as ResolvedAgent;
+      const select = (
+        override: string | false | undefined,
+        fallback: string | undefined,
+      ): TuningSelection =>
+        override === false
+          ? providerDefault
+          : tuningOf(override ?? fallback);
+      hostBindings[role] = {
+        playerId: binding.playerId,
+        model: select(binding.model, player.model),
+        effort: select(binding.effort, player.effort),
+      };
+      if (!referenced.has(binding.playerId)) {
+        referenced.add(binding.playerId);
+        // Roster order follows first reference, so panes appear in the
+        // order the enabled playbooks introduce them.
+        players.push({ id: binding.playerId, ...player });
+        captainOptions.sessionAgents.players[binding.playerId] =
+          sessionAgentOf(player);
+      }
+    }
+    // Roles a manifest may run at once must be distinct lanes: one
+    // player cannot hold two simultaneous calls (playbook DR-032 §3).
+    for (const set of entry.concurrentRoleSets ?? []) {
+      const ids = set.map((role: string) => roleBindings[role]?.playerId);
+      const distinct = new Set(
+        ids.filter((value: string | undefined) => value !== undefined),
+      );
+      if (distinct.size < ids.length) {
+        throw new Error(
+          `playbooks.${id} runs roles ${set.join(", ")} concurrently, so they must bind to distinct players`,
         );
       }
     }
-
-    const resolvedRolePlayers: Record<string, ResolvedAgent> = {};
-    const generatedIds: string[] = [];
-    for (const role of roles) {
-      const path = `playbooks.${id}.players.${role}`;
-      const resolved = resolveAgent(playerBlocks[role], path);
-      if (
-        typeof resolved.adapter !== "string" ||
-        resolved.adapter.length === 0
-      ) {
-        throw new Error(`${path} must resolve an adapter`);
-      }
-      const agent = toResolvedAgent(resolved, path);
-      resolvedRolePlayers[role] = agent;
-      const hostId = `${id}-${role}`;
-      players.push({ id: hostId, ...agent });
-      generatedIds.push(hostId);
-    }
-    // Launcher parity: the default visible set is every player across
-    // all playbooks (cligent resolveLayoutConfig); the previous
-    // first-playbook-only assignment was a single-playbook latent bug.
-    initialVisible.push(...generatedIds);
 
     const optionSlice: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(block)) {
@@ -557,6 +746,7 @@ export async function composeConfig(
     captainOptions.playbooks[id] = {
       from,
       ...(commandOverride ? { command: commandOverride } : {}),
+      roles: hostBindings,
       options: optionSlice,
     };
 
@@ -566,10 +756,14 @@ export async function composeConfig(
       intent: entry.intent,
       requiredRoleIds: entry.requiredRoleIds,
       from,
-      players: resolvedRolePlayers,
+      roles: roleBindings,
       acceptsCwdOption,
     });
   }
+
+  // Every referenced player is visible by default, in roster order;
+  // a roleless catalog is a legal session with no player panes.
+  initialVisible = players.map((player) => player.id);
 
   return {
     captainAgent,
@@ -633,22 +827,52 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
       ? { permissions: agent.permissions as AgentSummary["permissions"] }
       : {}),
   });
+  // Which bindings name each player — the shared-lane evidence the
+  // roster and the binding editors both show (DR-032).
+  const boundBy = new Map<string, string[]>();
+  for (const playbook of loaded.composed.playbooks) {
+    for (const [role, binding] of Object.entries(playbook.roles)) {
+      const list = boundBy.get(binding.playerId) ?? [];
+      list.push(`${playbook.id}.${role}`);
+      boundBy.set(binding.playerId, list);
+    }
+  }
+  const playerAgents = new Map(
+    loaded.composed.players.map((player) => [player.id, player]),
+  );
   return {
     path: loaded.path,
     captain: agentSummary(loaded.composed.captainAgent),
+    players: loaded.composed.players.map((player) => ({
+      id: player.id,
+      agent: agentSummary(player),
+      display: player.model ?? player.adapter,
+      boundBy: boundBy.get(player.id) ?? [],
+    })),
     playbooks: loaded.composed.playbooks.map((playbook) => ({
       id: playbook.id,
       from: playbook.from,
       command: playbook.command,
       intent: playbook.intent,
-      players: Object.fromEntries(
-        Object.entries(playbook.players).map(([role, agent]) => [
-          role,
-          {
-            agent: agentSummary(agent),
-            display: agent.model ?? agent.adapter,
-          },
-        ]),
+      roles: Object.fromEntries(
+        Object.entries(playbook.roles).map(([role, binding]) => {
+          const player = playerAgents.get(binding.playerId);
+          // What the role actually runs: its own pin, the provider
+          // default it chose, or the player's default it inherits.
+          const display =
+            binding.model === false
+              ? `${player?.adapter ?? "?"} default`
+              : (binding.model ?? player?.model ?? player?.adapter ?? "?");
+          return [
+            role,
+            {
+              playerId: binding.playerId,
+              ...(binding.model !== undefined ? { model: binding.model } : {}),
+              ...(binding.effort !== undefined ? { effort: binding.effort } : {}),
+              display,
+            },
+          ];
+        }),
       ),
     })),
     ...(isPlainObject(top.notifications)

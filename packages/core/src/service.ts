@@ -308,10 +308,13 @@ export class CoreService {
       else positions.set(adapter, [position]);
     };
     note(summary.captain.adapter, "captain");
-    for (const playbook of summary.playbooks) {
-      for (const [role, player] of Object.entries(playbook.players)) {
-        note(player.agent.adapter, `${playbook.id}.${role}`);
-      }
+    // A position is a session player, named by its own id; the roles
+    // it serves ride along, since one lane may answer several
+    // (DR-032). Only referenced players are in the roster, so an
+    // unused entry never gates a first run.
+    for (const player of summary.players) {
+      const roles = player.boundBy.length > 0 ? ` (${player.boundBy.join(", ")})` : "";
+      note(player.agent.adapter, `${player.id}${roles}`);
     }
     return Promise.all(
       [...positions.entries()].map(async ([adapter, usedBy]) => {

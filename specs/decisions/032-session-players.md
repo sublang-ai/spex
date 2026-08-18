@@ -30,8 +30,9 @@ Replaces [DR-003](003-runtime-reuse.md)'s pane roster: panes are player lanes, n
 
 ### The adoption's boundary
 
-Seven pieces, and omitting any one makes the app lie:
-composition mirroring the launcher exactly; the registry contract and compile wrapper rebuilt for artifact schema 2; a pane per player; the machine card naming role and player; the legacy-config question, fail-closed; the usage rewrite; and the seeded template in the released shape.
+Six pieces, and omitting any one makes the app lie:
+composition mirroring the launcher exactly; the registry contract and compile wrapper rebuilt for artifact schema 2; a pane per player; the machine card naming role and player; the usage rewrite; and the seeded template in the released shape.
+Migrating a legacy config is deliberately not among them.
 
 ### Composition mirrors the launcher; Spex invents no dialect
 
@@ -74,12 +75,14 @@ renaming or deleting a bound player states what happens to the conversation and 
 changing a bound player's adapter is an identity change, not tuning, and takes effect in the next session rather than the live one;
 an unreferenced roster entry stays listed, marked unused, and enters neither the host roster nor readiness.
 
-### Migration is a question, not a rewrite
+### There is no migration path, and that is the decision
 
-A legacy `playbooks.<id>.players` config is rejected before Spex's own profiles migration touches the file, leaving it byte-identical and carrying the launcher's `PLAYBOOK_LEGACY_PLAYERS` text rather than a paraphrase — the same order the launcher uses, so the two hosts never disagree about a file they share.
-Spex then offers what a CLI cannot: for each role name appearing in more than one playbook, it asks whether one conversation continues across them or each keeps its own, showing the legacy agents so the answer is informed.
-Where the blocks a merge would join differ in adapter, permissions, instruction, or workspace, the flow refuses to guess and asks which envelope survives — a field-wise merge would transplant one role's permissions onto another's work.
-Declining writes nothing and leaves the app in the invalid-config state it was already in, with the error in the Captain thread and a link to the flow ([[run-view-44](../packages/run-view.md#run-view-44)]).
+Spex does not migrate a v7 config and does not carry v7 sessions forward.
+The owner's call, and the right one: this is a pre-1.0 app whose config is a handful of lines and whose local history is disposable, so the cost of a guided merge flow — a surface, a merge-precedence rule, an ordering contract against the profiles migrator, and a permanent branch through composition — buys less than reseeding buys.
+
+A surviving `playbooks.<id>.players` block therefore fails closed exactly as the launcher fails, carrying its `PLAYBOOK_LEGACY_PLAYERS` text rather than a paraphrase, with the error in the Captain thread and a link to Settings ([[run-view-44](../packages/run-view.md#run-view-44)]).
+The remedy is the released shape, which the seeded template already demonstrates.
+Nothing in Spex reinterprets that file, because choosing player ids would choose which conversations merge — the reason playbook refused the same rewrite.
 
 ### Usage tells the truth the runtime told
 
@@ -91,6 +94,7 @@ Usage attributes to the player lane, so a shared player's rollup deliberately sp
 
 - multiplexing one player's transcript into per-role panes: it redraws the very conflation v8 removed, and one reply would have to appear twice;
 - any automatic legacy rewrite, including the "obvious" one where role names become player ids: both readings are guesses about which conversations merge, and playbook declined them for that reason;
+- a guided migration flow that asks the user which conversations merge: buildable, and genuinely the one thing a GUI can offer over a CLI, but it prices a whole surface and a permanent composition branch against a config a user can retype in a minute;
 - per-call role labels by arrival-order heuristic: exactly as fragile as the suffix match this decision deletes;
 - a general player CRUD with merge and split semantics: Spex would be inventing continuity operations the runtime does not offer;
 - keeping "at least one visible role" to avoid a zero-pane layout: it would make Spex refuse a file the launcher accepts.
@@ -100,5 +104,5 @@ Usage attributes to the player lane, so a shared player's rollup deliberately sp
 - The core-service, run-view, settings, playbook-library, shared-config-roundtrip, and dashboard packages all gain items; those asserting per-role agent blocks, generated player ids, the retired usage fields, or the readiness position string are rewritten rather than reinterpreted, since [[meta-12](../meta.md#meta-12)] binds an id to its concern.
 - Readiness positions stop being a parsed `<playbook>.<role>` string — the dot is now part of an id — and become structured: the captain, and each referenced player with the roles it serves.
 - The registry contract marker bumps: a playbook compiled by an earlier Spex fails closed with recompilation guidance, and the compile form asks for roles, emitting `Roles:` source.
-- `SessionInfo.players` becomes the bound player roster; a stored v7 session keeps rendering from its own records, since the roster it names is its own.
+- `SessionInfo.players` becomes the bound player roster; stored v7 sessions are discarded with the store rather than reinterpreted, since their generated ids name lanes the new model has no place for.
 - The seeded template ships the released shape with `dev.coder` and `dev.reviewer` shared across the three built-ins — the configuration that makes a coder's context survive a handoff.

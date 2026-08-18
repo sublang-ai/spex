@@ -21,55 +21,45 @@ notifications:
   player_finished: bell
   turn_finished: desktop
 
-# playbooks: enabled playbooks. Each key must equal the registry
-# manifest id; `from` names the registry module; `players` maps the
-# playbook's roles to agent blocks.
+# # Stable session players. Naming the same id from several role
+# bindings deliberately shares one provider conversation across those
+# playbooks — that is what makes a coder's context survive a handoff.
+# Change an id to isolate its conversation instead.
+players:
+  dev.coder:
+    adapter: claude
+    model: claude-opus-5
+    effort: xhigh
+    permissions:
+      mode: auto
+
+  dev.reviewer:
+    adapter: claude     # single-vendor default; a second vendor reads better
+    model: claude-opus-5
+    effort: xhigh
+    permissions:
+      mode: auto
+    # To review with a second vendor instead:
+    #   adapter: codex
+    #   model: gpt-5.6-sol
+
+# Enabled playbooks. Each is loaded from its explicit `from` module.
+# Every manifest role is bound explicitly; these three deliberately
+# reuse the same two players.
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
-    players:
-      coder:
-        adapter: claude
-        model: claude-opus-5
-        effort: xhigh
-        permissions:
-          mode: auto        # protected auto mode for the Claude Coder
+    roles:
+      coder: dev.coder
+
   review:
     from: "@sublang/playbook/review/registry"
-    players:
-      coder:
-        adapter: claude
-        model: claude-opus-5
-        effort: xhigh
-        permissions:
-          mode: auto
-      reviewer:
-        adapter: claude     # single-vendor default; a second vendor reads better
-        model: claude-opus-5
-        effort: xhigh
-        permissions:
-          mode: auto
-      # Example second-vendor reviewer — replace the block above once
-      # the Codex CLI is signed in:
-      #   adapter: codex
-      #   model: gpt-5.6-sol
-      #   effort: xhigh
-      #   permissions:
-      #     mode: auto
-      #     writablePaths:
-      #       - .git        # allow git metadata writes under Codex auto mode
+    roles:
+      coder: dev.coder
+      reviewer: dev.reviewer
+
   decide:
     from: "@sublang/playbook/decide/registry"
-    players:
-      coder:
-        adapter: claude
-        model: claude-opus-5
-        effort: xhigh
-        permissions:
-          mode: auto
-      reviewer:
-        adapter: claude
-        model: claude-opus-5
-        effort: xhigh
-        permissions:
-          mode: auto
+    roles:
+      coder: dev.coder
+      reviewer: dev.reviewer
