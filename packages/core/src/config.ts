@@ -35,7 +35,13 @@ export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
 
 /** Marker export stamped into Spex-generated registry bundles
  * (DR-014); composition refuses file-path registries without it. */
-export const REGISTRY_CONTRACT = 2;
+export const REGISTRY_CONTRACT = 3;
+
+/** The artifact format a v8 registry manifest must advertise. The
+ * shared runtime factory refuses a manifest that disagrees with the
+ * module it loads, so Spex checks it at generation time rather than
+ * letting a session fail at construction (DR-032). */
+export const ARTIFACT_SCHEMA = 2;
 
 // The adapter set is the embedded runtime's own (DR-019): an id
 // outside it cannot start a session, so composition rejects it with
@@ -409,6 +415,8 @@ export interface RegistryEntryLike {
   id: string;
   command: string;
   intent: string;
+  /** The artifact format this manifest advertises — 2 under v8. */
+  artifactSchema: number;
   requiredRoleIds: readonly string[];
   /** Role groups the manifest may run at once (v8): each must bind to
    * pairwise-distinct players. Absent on older entries. */
@@ -426,6 +434,10 @@ export function isValidRegistryEntry(
     typeof entry.id === "string" &&
     typeof entry.command === "string" &&
     typeof entry.intent === "string" &&
+    // A manifest that advertises no schema, or a different one, cannot
+    // construct its runtime — the factory refuses it — so it is not a
+    // valid entry here either (DR-032).
+    entry.artifactSchema === ARTIFACT_SCHEMA &&
     Array.isArray(entry.requiredRoleIds) &&
     typeof entry.validateOptions === "function" &&
     typeof entry.createRuntime === "function"

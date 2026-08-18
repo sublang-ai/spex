@@ -367,15 +367,15 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
   },
   {
     name: "reserved captain role",
-    pattern: /players\.captain binds local role "captain"/,
+    pattern: /roles\.captain binds local role "captain"/,
     config: VALID_CONFIG.replace(
-      "      coder:\n",
-      "      captain:\n        adapter: claude\n      coder:\n",
+      "      coder: dev.coder\n",
+      "      coder: dev.coder\n      captain: dev.coder\n",
     ),
   },
   {
     name: "unresolved required role",
-    pattern: /required role "reviewer" has no players entry/,
+    pattern: /roles must exactly cover requiredRoleIds; missing reviewer/,
     config:
       VALID_CONFIG +
       `  review:
@@ -414,8 +414,8 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     name: "adapter-scoped invalid effort",
     pattern: /effort "extreme" is not supported by the "claude" adapter/,
     config: VALID_CONFIG.replace(
-      "        model: claude-test\n",
-      "        model: claude-test\n        effort: extreme\n",
+      "    model: claude-test\n",
+      "    model: claude-test\n    effort: extreme\n",
     ),
   },
 ];
@@ -520,21 +520,24 @@ test("CORE-22: records, order, and usage survive a service restart", async () =>
 const READINESS_CONFIG = `
 captain:
   adapter: gemini
+players:
+  dev.coder:
+    adapter: claude
+    model: claude-test
+  dev.reviewer:
+    adapter: codex
+  dev.unused:
+    adapter: kimi
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
-    players:
-      coder:
-        adapter: claude
-        model: claude-test
+    roles:
+      coder: dev.coder
   review:
     from: "@sublang/playbook/review/registry"
-    players:
-      coder:
-        adapter: claude
-        model: claude-test
-      reviewer:
-        adapter: codex
+    roles:
+      coder: dev.coder
+      reviewer: dev.reviewer
 `;
 
 test("CORE-23: readiness is adapter-keyed with positions and requirements", async () => {
@@ -545,15 +548,27 @@ test("CORE-23: readiness is adapter-keyed with positions and requirements", asyn
   await client.open();
 
   const readiness = await client.expectOk("readiness.get", {});
+  // dev.unused is never bound, so its adapter never gates a run
+  // (DR-032): three adapters are configured, two are referenced, and
+  // the captain's makes the third entry.
   assert.equal(readiness.length, 3, "one entry per adapter in use");
   const byAdapter = new Map(
     readiness.map((entry: ReadinessEntry) => [entry.adapter, entry]),
   );
   assert.equal(byAdapter.get("claude")?.ready, true);
-  assert.deepEqual(byAdapter.get("claude")?.usedBy, ["code.coder", "review.coder"]);
+  // A position is a player lane and the roles it serves.
+  assert.deepEqual(byAdapter.get("claude")?.usedBy, [
+    "dev.coder (code.coder, review.coder)",
+  ]);
   assert.equal(byAdapter.get("codex")?.ready, false);
   assert.match(byAdapter.get("codex")?.requirement ?? "", /OPENAI_API_KEY/);
-  assert.deepEqual(byAdapter.get("codex")?.usedBy, ["review.reviewer"]);
+  assert.deepEqual(byAdapter.get("codex")?.usedBy, [
+    "dev.reviewer (review.reviewer)",
+  ]);
+  assert.ok(
+    !readiness.some((entry: ReadinessEntry) => entry.adapter === "kimi"),
+    "an unbound player never enters the readiness gate",
+  );
   // No preflight rule for gemini: unknown, verify yourself.
   assert.equal(byAdapter.get("gemini")?.ready, null);
   assert.deepEqual(byAdapter.get("gemini")?.usedBy, ["captain"]);
@@ -637,13 +652,12 @@ test("CORE-28: the single-vendor template dedupes to one claude entry", async ()
     {
       adapter: "claude",
       ready: true,
+      // One entry per adapter; its positions are the captain and each
+      // referenced lane with the roles it serves (DR-032).
       usedBy: [
         "captain",
-        "code.coder",
-        "review.coder",
-        "review.reviewer",
-        "decide.coder",
-        "decide.reviewer",
+        "dev.coder (code.coder, review.coder, decide.coder)",
+        "dev.reviewer (review.reviewer, decide.reviewer)",
       ],
     },
   ]);
@@ -717,7 +731,10 @@ test("CORE-28: scalar shorthands compose and share adapter entries", async () =>
   );
   assert.equal(claude.length, 1);
   assert.equal(claude[0].ready, true);
-  assert.deepEqual(claude[0].usedBy, ["captain", "code.coder", "review.coder"]);
+  assert.deepEqual(claude[0].usedBy, [
+    "captain",
+    "dev.coder (code.coder, review.coder)",
+  ]);
   const codex = readiness.find(
     (entry: ReadinessEntry) => entry.adapter === "codex",
   );
@@ -758,7 +775,8 @@ const COMPILE_INPUT = {
   roles: ["helper"],
   command: "demo",
   intent: "demo workflow for tests",
-  players: { helper: { adapter: "claude" } },
+  bindings: { helper: "dev.helper" },
+  newPlayers: { "dev.helper": { adapter: "claude" } },
 };
 
 test("CORE-27: a second compile.run for the same playbook rejects busy", async () => {

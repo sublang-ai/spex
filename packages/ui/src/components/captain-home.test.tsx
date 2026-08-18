@@ -47,24 +47,14 @@ const PLAYBOOKS: PlaybookSummary[] = [
     from: "@sublang/playbook/code/registry",
     command: "code",
     intent: "software development workflow",
-    players: {
-      coder: {
-        agent: { adapter: "claude", model: "claude-opus-4-8" },
-        display: "claude-opus-4-8",
-      },
-    },
+    roles: { coder: { playerId: "dev.coder", display: "claude-opus-5" } },
   },
   {
     id: "review",
     from: "@sublang/playbook/review/registry",
     command: "review",
     intent: "design review",
-    players: {
-      host: {
-        agent: { adapter: "claude", model: "claude-opus-4-8" },
-        display: "claude-opus-4-8",
-      },
-    },
+    roles: { host: { playerId: "dev.coder", display: "claude-opus-5" } },
   },
 ];
 

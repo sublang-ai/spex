@@ -24,7 +24,7 @@ export interface SegmentMeta {
 
 export type TranscriptSegment = SegmentMeta &
   (
-    | { kind: "prompt"; text: string }
+    | { kind: "prompt"; text: string; role?: string }
     | { kind: "text"; text: string; streaming: boolean }
     | { kind: "thinking"; summary: string }
     | {
@@ -150,21 +150,16 @@ export function parseBossQuestion(
   return undefined;
 }
 
-/** One name per agent (DR-010 §2): the runtime's role name ("coder")
- * resolves to the pane id the user sees ("code-coder") when one
- * matches by equality or suffix. */
+/** A pane is a session player, named by its own id (DR-032). A name
+ * that is already a lane is one; anything else — a local role the
+ * trace has not resolved — is left as it came, never guessed into a
+ * lane by spelling. */
 export function resolvePlayerId(
   view: SessionView,
   player: string | undefined,
 ): string | undefined {
   if (!player) return undefined;
-  const ids = Object.keys(view.players);
-  const lower = player.toLowerCase();
-  return (
-    ids.find((id) => id.toLowerCase() === lower) ??
-    ids.find((id) => id.toLowerCase().endsWith(`-${lower}`)) ??
-    player
-  );
+  return Object.keys(view.players).find((id) => id === player) ?? player;
 }
 
 /** Abort reasons are runtime plumbing; translate the known ones. */
@@ -277,6 +272,10 @@ export function applyRecord(
   view: SessionView,
   seq: number,
   record: TmuxPlayRecord,
+  /** The role this record's call served, resolved by the core from the
+   * trace (DR-032). A shared lane needs it to read as several calls
+   * rather than one voice; the renderer never guesses it. */
+  role?: string,
 ): SessionView {
   view.lastSeq = Math.max(view.lastSeq, seq);
   const r = record as unknown as Record<string, unknown> & {
@@ -320,7 +319,12 @@ export function applyRecord(
       const target = player(view, String(r.playerId));
       target.running = true;
       target.turnUsage = undefined;
-      target.segments.push({ ...meta, kind: "prompt", text: String(r.prompt) });
+      target.segments.push({
+        ...meta,
+        kind: "prompt",
+        text: String(r.prompt),
+        ...(role !== undefined ? { role } : {}),
+      });
       break;
     }
     case "player_event": {
@@ -533,8 +537,10 @@ export function applyRecord(
 
 export function applyRecords(
   view: SessionView,
-  records: readonly { seq: number; record: TmuxPlayRecord }[],
+  records: readonly { seq: number; record: TmuxPlayRecord; role?: string }[],
 ): SessionView {
-  for (const entry of records) applyRecord(view, entry.seq, entry.record);
+  for (const entry of records) {
+    applyRecord(view, entry.seq, entry.record, entry.role);
+  }
   return view;
 }

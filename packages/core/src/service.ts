@@ -407,6 +407,7 @@ export class CoreService {
           sessionId: envelope.sessionId,
           seq: envelope.seq,
           record: envelope.record,
+          ...(envelope.role !== undefined ? { role: envelope.role } : {}),
         });
       }
     }
@@ -693,24 +694,43 @@ export class CoreService {
           // onto them case-insensitively; an unmatched role fails
           // before any config write, keeping the artifacts for a
           // re-registration without recompiling.
+          // The compiled entry's derived roles are authoritative
+          // (DR-014); each must name the lane that answers it.
           const assignments = new Map(
-            Object.entries(command.players).map(([role, agent]) => [
+            Object.entries(command.bindings).map(([role, playerId]) => [
               role.toLowerCase(),
-              agent,
+              playerId,
             ]),
           );
-          const players: Record<string, AgentBlock> = {};
+          const roles: Record<string, string> = {};
           const unmatched: string[] = [];
           for (const role of result.roles) {
-            const agent = assignments.get(role);
-            if (agent === undefined) unmatched.push(role);
-            else players[role] = agent as AgentBlock;
+            const playerId = assignments.get(role);
+            if (playerId === undefined) unmatched.push(role);
+            else roles[role] = playerId;
           }
           if (unmatched.length > 0) {
             throw new CoreError(
               "invalid_request",
-              `compiled, but the playbook's derived roles are [${result.roles.join(", ")}] and no agent was assigned for: ${unmatched.join(", ")}. Re-submit with players for the derived roles; the compiled artifacts are kept.`,
+              `compiled, but the playbook's derived roles are [${result.roles.join(", ")}] and no player was bound for: ${unmatched.join(", ")}. Re-submit with a binding per derived role; the compiled artifacts are kept.`,
             );
+          }
+          // Lanes the bindings name but the roster lacks are created
+          // first, so the binding never dangles (DR-032).
+          for (const [playerId, block] of Object.entries(
+            command.newPlayers ?? {},
+          )) {
+            const minted = await editConfigFile(
+              this.configPath,
+              { kind: "player.set", playerId, patch: block as AgentBlock },
+              this.options.loadModule,
+            );
+            if (!minted.ok) {
+              throw new CoreError(
+                "invalid_config",
+                `compiled, but creating session player "${playerId}" was refused: ${minted.error}`,
+              );
+            }
           }
           const edit = await editConfigFile(
             this.configPath,
@@ -718,7 +738,7 @@ export class CoreService {
               kind: "playbook.add",
               playbookId: command.playbookId,
               from: result.from,
-              players,
+              roles,
             },
             this.options.loadModule,
           );

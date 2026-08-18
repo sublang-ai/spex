@@ -34,6 +34,16 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
           className="rounded border border-neutral-200 bg-neutral-100/60 px-2 py-1 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900/60 dark:text-neutral-400"
         >
           <summary className="cursor-pointer select-none">
+            {/* A lane answers several roles over a session, so the call
+                that opens here says which one it served (DR-032). */}
+            {segment.role ? (
+              <span
+                data-testid={`call-role-${segment.seq}`}
+                className="mr-2 rounded bg-brand-50 px-1.5 py-0.5 font-mono text-[11px] text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+              >
+                {segment.role}
+              </span>
+            ) : null}
             Prompt
             <span className="ml-2 text-xs text-neutral-400">
               {new Date(segment.at).toLocaleTimeString()}

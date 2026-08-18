@@ -24,6 +24,7 @@ function stubEntry(id: string, roles: string[]) {
     id,
     command: id,
     intent: `${id} stub`,
+    artifactSchema: 2,
     requiredRoleIds: roles,
     validateOptions: () => ({}),
     createRuntime: () => ({}),
@@ -88,14 +89,13 @@ test("captain.set merge patch preserves comments and unrelated keys", async () =
   assert.match(after, /claude-opus-5/);
 });
 
-test("playbook.player.set merge patch swaps a role's vendor in place", async () => {
+test("player.set merge patch swaps a lane's vendor in place", async () => {
   const path = templateFile();
   const result = await editConfigFile(
     path,
     {
-      kind: "playbook.player.set",
-      playbookId: "review",
-      role: "reviewer",
+      kind: "player.set",
+      playerId: "dev.reviewer",
       patch: { adapter: "codex", model: "gpt-5.5" },
     },
     stubLoader,
@@ -103,10 +103,12 @@ test("playbook.player.set merge patch swaps a role's vendor in place", async () 
   assert.equal(result.ok, true);
   const after = readFileSync(path, "utf8");
   // The role's own inline comment survives on the patched pair.
-  assert.match(after, /reviewer:\n\s+adapter: codex[^\n]*\n\s+model: gpt-5\.5\n\s+effort: xhigh/);
-  // Unrelated blocks and their comments survive.
-  assert.match(after, /coder:\n\s+adapter: claude\n\s+model: claude-opus-5/);
-  assert.match(after, /# protected auto mode for the Claude Coder/);
+  assert.match(
+    after,
+    /dev\.reviewer:\n\s+adapter: codex[^\n]*\n\s+model: gpt-5\.5\n\s+effort: xhigh/,
+  );
+  // Unrelated lanes and their comments survive.
+  assert.match(after, /dev\.coder:\n\s+adapter: claude\n\s+model: claude-opus-5/);
   const option = await editConfigFile(
     path,
     {
@@ -122,21 +124,20 @@ test("playbook.player.set merge patch swaps a role's vendor in place", async () 
 });
 
 test("a scalar shorthand becomes a block on first edit", () => {
-  const text = `captain: claude\nplaybooks:\n  code:\n    from: "@sublang/playbook/code/registry"\n    players:\n      coder: claude\n      reviewer: codex\n`;
+  const text = `captain: claude\nplayers:\n  dev.coder: claude\n  dev.reviewer: codex\nplaybooks:\n  code:\n    from: "@sublang/playbook/code/registry"\n    roles:\n      coder: dev.coder\n`;
   const captain = applyConfigOp(text, {
     kind: "captain.set",
     patch: { model: "claude-test" },
   });
   assert.match(captain, /captain:\n\s+adapter: claude\n\s+model: claude-test/);
   const player = applyConfigOp(captain, {
-    kind: "playbook.player.set",
-    playbookId: "code",
-    role: "coder",
+    kind: "player.set",
+    playerId: "dev.coder",
     patch: { effort: "high" },
   });
-  assert.match(player, /coder:\n\s+adapter: claude\n\s+effort: high/);
+  assert.match(player, /dev\.coder:\n\s+adapter: claude\n\s+effort: high/);
   // The untouched scalar stays as written.
-  assert.match(player, /reviewer: codex/);
+  assert.match(player, /dev\.reviewer: codex/);
 });
 
 test("hand-written fields survive a model/effort patch", () => {
@@ -147,12 +148,14 @@ test("hand-written fields survive a model/effort patch", () => {
   permissions:
     mode: auto
     shellExecute: ask
+players:
+  dev.coder: claude
+  dev.reviewer: claude
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
-    players:
-      coder: claude
-      reviewer: claude
+    roles:
+      coder: dev.coder
 `;
   const patched = applyConfigOp(text, {
     kind: "captain.set",
@@ -170,14 +173,16 @@ test("an effort patch retires the legacy reasoningEffort key", () => {
   const text = `captain:
   adapter: claude
   reasoningEffort: low
+players:
+  dev.coder:
+    adapter: claude
+    reasoningEffort: low
+  dev.reviewer: claude
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
-    players:
-      coder:
-        adapter: claude
-        reasoningEffort: low
-      reviewer: claude
+    roles:
+      coder: dev.coder
 `;
   const captain = applyConfigOp(text, {
     kind: "captain.set",
@@ -185,31 +190,31 @@ playbooks:
   });
   assert.match(captain, /captain:\n\s+adapter: claude\n\s+effort: high/);
   const player = applyConfigOp(captain, {
-    kind: "playbook.player.set",
-    playbookId: "code",
-    role: "coder",
+    kind: "player.set",
+    playerId: "dev.coder",
     patch: { effort: "xhigh" },
   });
   assert.doesNotMatch(player, /reasoningEffort/);
-  assert.match(player, /coder:\n\s+adapter: claude\n\s+effort: xhigh/);
+  assert.match(player, /dev\.coder:\n\s+adapter: claude\n\s+effort: xhigh/);
 });
 
-test("playbook.add registers a playbook with full agent blocks", async () => {
+test("playbook.add binds its roles to session players", async () => {
   const path = templateFile();
+  // A binding may only name a lane that exists, so the lane is minted
+  // first — the order the compile flow uses (DR-032).
+  const minted = await editConfigFile(
+    path,
+    { kind: "player.set", playerId: "dev.helper", patch: { adapter: "claude" } },
+    stubLoader,
+  );
+  assert.equal(minted.ok, true);
   const result = await editConfigFile(
     path,
     {
       kind: "playbook.add",
       playbookId: "other",
       from: "@stub/other",
-      players: {
-        helper: {
-          adapter: "claude",
-          model: "claude-test",
-          instruction: "be brief",
-          permissions: { mode: "auto" },
-        },
-      },
+      roles: { helper: "dev.helper" },
       options: { committer: "helper" },
     },
     stubLoader,
@@ -217,9 +222,8 @@ test("playbook.add registers a playbook with full agent blocks", async () => {
   assert.equal(result.ok, true);
   const after = readFileSync(path, "utf8");
   assert.match(after, /other:\n\s+from: "@stub\/other"/);
-  assert.match(after, /helper:\n\s+adapter: claude\n\s+model: claude-test/);
-  // Optional hand-written fields carried by the block schema land too.
-  assert.match(after, /instruction: be brief/);
+  // Enabling binds roles to lanes; the lanes live in their own map.
+  assert.match(after, /roles:\n\s+helper: dev\.helper/);
   assert.match(after, /committer: helper/);
 });
 
@@ -241,9 +245,8 @@ test("edits the launcher would reject never reach the file", async () => {
   const badEffort = await editConfigFile(
     path,
     {
-      kind: "playbook.player.set",
-      playbookId: "review",
-      role: "reviewer",
+      kind: "player.set",
+      playerId: "dev.reviewer",
       patch: { effort: "off" },
     },
     stubLoader,
@@ -266,12 +269,13 @@ test("the retired profile key never survives an edit", async () => {
     `captain:
   adapter: claude
   profile: legacy-opus
+players:
+  dev.coder: claude
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
-    players:
-      coder: claude
-      reviewer: claude
+    roles:
+      coder: dev.coder
 `,
   );
   const result = await editConfigFile(

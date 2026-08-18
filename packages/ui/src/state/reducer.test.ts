@@ -27,7 +27,7 @@ function fresh() {
 describe("RUN-19: fixture stream renders expected pane structure", () => {
   test("turn one produces coder transcript segments in order", () => {
     const view = applyRecords(fresh(), TURN_ONE);
-    const coder = view.players["code-coder"];
+    const coder = view.players["dev.coder"];
     expect(coder.segments.map((s) => s.kind)).toEqual([
       "prompt",
       "text",
@@ -48,7 +48,7 @@ describe("RUN-19: fixture stream renders expected pane structure", () => {
     );
     expect(view.fsmState).toBe("ready");
     expect(view.turnActive).toBe(false);
-    expect(view.visible).toEqual(["code-coder", "code-reviewer"]);
+    expect(view.visible).toEqual(["dev.coder", "dev.reviewer"]);
   });
 });
 
@@ -69,7 +69,7 @@ describe("RUN-21: awaitBossReply banner and reply routing", () => {
     const view = applyRecords(fresh(), [...TURN_ONE, ...TURN_TWO_QUESTION]);
     expect(view.fsmState).toBe("awaitBossReply");
     expect(view.pendingQuestion).toBe("Which auth flow should I prioritize?");
-    expect(view.pendingQuestionPlayer).toBe("code-reviewer");
+    expect(view.pendingQuestionPlayer).toBe("dev.reviewer");
   });
 
   test("the question becomes a bubble, replacing its status echo", () => {
@@ -77,7 +77,7 @@ describe("RUN-21: awaitBossReply banner and reply routing", () => {
     const questions = view.captain.filter((line) => line.kind === "question");
     expect(questions).toHaveLength(1);
     expect(questions[0].text).toBe("Which auth flow should I prioritize?");
-    expect(questions[0].player).toBe("code-reviewer");
+    expect(questions[0].player).toBe("dev.reviewer");
     // The "◆ … asks:" status narration is replaced, not duplicated.
     expect(
       view.captain.some(
@@ -96,7 +96,7 @@ describe("RUN-21: awaitBossReply banner and reply routing", () => {
           turnId: 2,
           timestamp: 900,
           message:
-            "◆ code-reviewer asks: Which auth flow should I prioritize?",
+            "◆ dev.reviewer asks: Which auth flow should I prioritize?",
         } as unknown as TmuxPlayRecord,
       },
     ]);
@@ -115,12 +115,16 @@ describe("RUN-21: awaitBossReply banner and reply routing", () => {
   });
 });
 
-describe("one name per agent: runtime roles resolve to pane ids", () => {
-  test("a bare role name resolves to the suffix-matching pane", () => {
+describe("a pane is a session player, never a guessed one", () => {
+  test("a lane resolves to itself; nothing else is guessed into one", () => {
     const view = fresh();
-    expect(resolvePlayerId(view, "coder")).toBe("code-coder");
-    expect(resolvePlayerId(view, "code-reviewer")).toBe("code-reviewer");
-    expect(resolvePlayerId(view, "committer")).toBe("committer");
+    // The id the roster carries is the pane (DR-032).
+    expect(resolvePlayerId(view, "dev.coder")).toBe("dev.coder");
+    expect(resolvePlayerId(view, "dev.reviewer")).toBe("dev.reviewer");
+    // A bare local role is NOT matched onto a lane by spelling — the
+    // suffix heuristic that turned "coder" into "dev.coder" is gone,
+    // because v8 resolves the binding and the trace carries both.
+    expect(resolvePlayerId(view, "coder")).toBe("coder");
     expect(resolvePlayerId(view, undefined)).toBeUndefined();
   });
 });
@@ -204,7 +208,7 @@ describe("streaming deltas coalesce", () => {
   test("consecutive deltas build one streaming segment, closed by done", () => {
     const view = fresh();
     applyRecords(view, TURN_ONE.slice(0, 6));
-    const coder = view.players["code-coder"];
+    const coder = view.players["dev.coder"];
     const last = coder.segments[coder.segments.length - 1];
     expect(last.kind === "text" && last.streaming).toBe(true);
     applyRecords(view, TURN_ONE.slice(6));

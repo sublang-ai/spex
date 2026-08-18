@@ -142,8 +142,10 @@ export interface AppState {
     roles: string[];
     command: string;
     intent: string;
-    /** Full inline agent blocks per role (DR-019). */
-    players: Record<string, AgentBlockInput>;
+    /** role -> the session player that answers it (DR-032). */
+    bindings: Record<string, string>;
+    /** Lanes to create for bindings the roster does not yet hold. */
+    newPlayers?: Record<string, AgentBlockInput>;
   }): Promise<void>;
 }
 
@@ -184,7 +186,11 @@ function readExpandedProjects(): Record<string, boolean> {
  * backfill in seq order). */
 const backfilling = new Map<
   string,
-  { seq: number; record: import("@sublang/spex-core/protocol").TmuxPlayRecord }[]
+  {
+    seq: number;
+    record: import("@sublang/spex-core/protocol").TmuxPlayRecord;
+    role?: string;
+  }[]
 >();
 
 export function getClient(): SpexClient {
@@ -264,13 +270,13 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!target) return;
       for (const entry of history.records) {
         if (entry.seq > target.lastSeq) {
-          applyRecord(target, entry.seq, entry.record);
+          applyRecord(target, entry.seq, entry.record, entry.role);
         }
       }
       const buffered = backfilling.get(sessionId) ?? [];
       for (const entry of buffered) {
         if (entry.seq > target.lastSeq) {
-          applyRecord(target, entry.seq, entry.record);
+          applyRecord(target, entry.seq, entry.record, entry.role);
         }
       }
       target.loading = false;
@@ -330,10 +336,10 @@ export const useAppStore = create<AppState>((set, get) => {
         break;
       }
       case "record": {
-        const { sessionId, seq, record } = message;
+        const { sessionId, seq, record, role } = message;
         const buffer = backfilling.get(sessionId);
         if (buffer) {
-          buffer.push({ seq, record });
+          buffer.push({ seq, record, ...(role !== undefined ? { role } : {}) });
           break;
         }
         const state = get();
@@ -344,7 +350,7 @@ export const useAppStore = create<AppState>((set, get) => {
             session?.players ?? [],
             session?.initialVisible ?? [],
           );
-        applyRecord(view, seq, record);
+        applyRecord(view, seq, record, role);
 
         const updates: Partial<AppState> = {
           views: { ...state.views, [sessionId]: { ...view } },

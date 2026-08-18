@@ -57,13 +57,59 @@ export interface RecordEnvelope {
   seq: number;
   record: TmuxPlayRecord;
   hidden: boolean;
+  /** The role a player record's call served (DR-032). */
+  role?: string;
 }
+
+/** One player call the trace opened and has not yet closed, keyed by
+ * the lane it runs on. v8 rejects simultaneous calls resolving to one
+ * player, so a lane holds at most one — the bracket is unambiguous by
+ * construction (DR-032). */
+type OpenCalls = Map<string, string>;
 
 interface LiveSession {
   info: SessionInfo;
   runtime: TmuxPlayRuntime;
   seq: number;
   turnActive: boolean;
+  openCalls: OpenCalls;
+}
+
+/** Resolves the role a player record's call is serving, by folding the
+ * same trace the machine cards fold (DR-032). A `player.call.started`
+ * opens its lane, the matching finish closes it, and every player
+ * record in between belongs to that call's role. A trace that names no
+ * resolved player invents nothing: the lane simply stays unlabelled. */
+function trackCallBrackets(open: OpenCalls, record: TmuxPlayRecord): void {
+  if (record.type !== "captain_telemetry") return;
+  const telemetry = record as { topic: string; payload?: unknown };
+  if (telemetry.topic !== "playbook.trace") return;
+  const event = telemetry.payload as {
+    type?: string;
+    payload?: { roleId?: string; playerId?: string };
+  };
+  const playerId = event?.payload?.playerId;
+  if (typeof playerId !== "string" || playerId.length === 0) return;
+  if (event.type === "player.call.started") {
+    const roleId = event.payload?.roleId;
+    if (typeof roleId === "string" && roleId.length > 0) {
+      open.set(playerId, roleId);
+    }
+  } else if (event.type === "player.call.finished") {
+    open.delete(playerId);
+  }
+}
+
+/** The role to stamp on this record, if it belongs to an open call. */
+function roleFor(open: OpenCalls, record: TmuxPlayRecord): string | undefined {
+  if (
+    record.type !== "player_prompt" &&
+    record.type !== "player_event" &&
+    record.type !== "player_finished"
+  ) {
+    return undefined;
+  }
+  return open.get((record as { playerId: string }).playerId);
 }
 
 function isHidden(record: TmuxPlayRecord): boolean {
@@ -190,18 +236,26 @@ export class SessionManager {
       runtime: undefined as unknown as TmuxPlayRuntime,
       seq: 0,
       turnActive: false,
+      openCalls: new Map(),
     };
 
     const append = (record: TmuxPlayRecord): void => {
       entry.seq += 1;
       const seq = entry.seq;
-      this.store.appendRecord(info.id, seq, record);
+      // A player record is stamped with the role whose call is open on
+      // its lane; the finish trace closes the bracket after the last
+      // record it covers, so the order here is stamp-then-track only
+      // for the trace itself (DR-032).
+      const role = roleFor(entry.openCalls, record);
+      trackCallBrackets(entry.openCalls, record);
+      this.store.appendRecord(info.id, seq, record, role);
       this.trackRecord(info.id, record);
       this.onRecord({
         sessionId: info.id,
         seq,
         record,
         hidden: isHidden(record),
+        ...(role !== undefined ? { role } : {}),
       });
     };
     const observer = {
@@ -294,25 +348,44 @@ export class SessionManager {
         if (event.type === "done") {
           const payload = event.payload as {
             usage?: {
-              inputTokens?: number;
-              outputTokens?: number;
               toolUses?: number;
-              totalCostUsd?: number;
+              // cligent 0.22: an absent report means the runtime told
+              // us nothing, which is not the same as measuring zero.
+              tokens?: {
+                coverage?: string;
+                totals?: {
+                  input?: { total?: number };
+                  output?: { total?: number };
+                };
+              };
+              cost?: { amount?: number; currency?: string; source?: string };
             };
             durationMs?: number;
           };
+          const tokens = payload.usage?.tokens;
+          const cost = payload.usage?.cost;
           this.store.addUsage({
             sessionId,
             turnId: record.turnId,
+            // Usage attributes to the lane that spent it, so a shared
+            // player's rollup spans the playbooks sharing it (DR-032).
             actorId:
               record.type === "player_event"
                 ? (record as { playerId: string }).playerId
                 : "captain",
-            inputTokens: payload.usage?.inputTokens ?? 0,
-            outputTokens: payload.usage?.outputTokens ?? 0,
+            // Totals are inclusive of cached reads: never re-added.
+            ...(tokens?.totals
+              ? {
+                  inputTokens: tokens.totals.input?.total ?? 0,
+                  outputTokens: tokens.totals.output?.total ?? 0,
+                }
+              : {}),
             toolUses: payload.usage?.toolUses ?? 0,
-            ...(payload.usage?.totalCostUsd !== undefined
-              ? { totalCostUsd: payload.usage.totalCostUsd }
+            ...(typeof cost?.amount === "number"
+              ? {
+                  totalCostUsd: cost.amount,
+                  ...(cost.source ? { costSource: cost.source } : {}),
+                }
               : {}),
             ...(payload.durationMs !== undefined
               ? { durationMs: payload.durationMs }

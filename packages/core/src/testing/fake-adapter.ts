@@ -116,12 +116,27 @@ export function fakeAdapterImports(
           status: response.status ?? "success",
           result: response.result,
           resumeToken: `fake-resume-${sessionId}`,
+          // The shape cligent 0.22 reports: an optional token report
+          // with inclusive totals, and a cost carrying its provenance.
           usage: {
-            inputTokens: response.usage?.inputTokens ?? prompt.length,
-            outputTokens: response.usage?.outputTokens ?? response.result.length,
             toolUses: response.usage?.toolUses ?? 0,
+            tokens: {
+              coverage: "complete",
+              totals: {
+                input: { total: response.usage?.inputTokens ?? prompt.length },
+                output: {
+                  total: response.usage?.outputTokens ?? response.result.length,
+                },
+              },
+            },
             ...(response.usage?.totalCostUsd !== undefined
-              ? { totalCostUsd: response.usage.totalCostUsd }
+              ? {
+                  cost: {
+                    amount: response.usage.totalCostUsd,
+                    currency: "USD",
+                    source: "provider-reported",
+                  },
+                }
               : {}),
           },
           durationMs: 1,

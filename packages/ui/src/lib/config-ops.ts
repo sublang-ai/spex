@@ -26,12 +26,43 @@ export function setCaptain(patch: AgentPatch): Promise<unknown> {
   });
 }
 
+/** Edit a session player's envelope — identity and defaults. Settings
+ * owns this; a role binding cannot reach it (DR-032). */
 export function patchPlayer(
-  playbookId: string,
-  role: string,
+  playerId: string,
   patch: AgentPatch,
 ): Promise<unknown> {
   return getClient().command("config.edit", {
-    op: { kind: "playbook.player.set", playbookId, role, patch },
+    op: { kind: "player.set", playerId, patch },
+  });
+}
+
+/** Bind a role to a lane, with that role's own tuning. `false` picks
+ * the provider default; null clears the override so the role inherits
+ * the player's (DR-032). */
+export function bindRole(
+  playbookId: string,
+  role: string,
+  next: {
+    playerId: string;
+    model?: string | false | null;
+    effort?: string | false | null;
+  },
+): Promise<unknown> {
+  // An untouched tuning is absent, not `undefined`: the op means
+  // "inherit the player" only when the key does not appear.
+  const tuning = Object.fromEntries(
+    Object.entries({ model: next.model, effort: next.effort }).filter(
+      ([, value]) => value !== undefined,
+    ),
+  );
+  return getClient().command("config.edit", {
+    op: {
+      kind: "playbook.role.bind",
+      playbookId,
+      role,
+      playerId: next.playerId,
+      ...tuning,
+    },
   });
 }

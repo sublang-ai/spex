@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// DR-015/DR-019 Library coverage: configured roles carry inline agent
-// blocks edited in place as merge patches (PBLIB-4), unconfigured
-// built-ins render from the catalog with browsable sources and an add
-// flow that maps every role to a full agent block (PBLIB-34), and the
+// DR-015/DR-032 Library coverage: configured roles name the session
+// player that answers them and are rebound in place (PBLIB-4),
+// unconfigured built-ins render from the catalog with browsable
+// sources and an add flow that mints a lane per role (PBLIB-34), and the
 // slc demo example card stages the pipeline and prefills the compile
 // form with the normalized text and the neutral block (PBLIB-35).
 
@@ -55,21 +55,38 @@ const CONFIG_STATE: ConfigState = {
       effort: "high",
       permissions: { mode: "auto" },
     },
+    // The roster is flat and top-level; playbooks only bind to it.
+    players: [
+      {
+        id: "dev.coder",
+        agent: {
+          adapter: "claude",
+          model: "claude-opus-5",
+          effort: "high",
+          instruction: "Keep the diff small.",
+        },
+        display: "claude-opus-5 @ high",
+        boundBy: ["code.coder", "fix.coder"],
+      },
+      {
+        id: "dev.reviewer",
+        agent: { adapter: "codex", model: "gpt-5.6-sol" },
+        display: "gpt-5.6-sol",
+        boundBy: ["code.reviewer"],
+      },
+    ],
     playbooks: [
       {
         id: "code",
         from: "@sublang/playbook/code/registry",
         command: "code",
         intent: "software development workflow",
-        players: {
-          coder: {
-            agent: {
-              adapter: "claude",
-              model: "claude-opus-4-8",
-              effort: "high",
-              instruction: "Keep the diff small.",
-            },
-            display: "claude-opus-4-8",
+        roles: {
+          coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
+          reviewer: {
+            playerId: "dev.reviewer",
+            effort: "max",
+            display: "gpt-5.6-sol @ max",
           },
         },
       },
@@ -78,7 +95,7 @@ const CONFIG_STATE: ConfigState = {
 };
 
 const READINESS: ReadinessEntry[] = [
-  { adapter: "claude", ready: true, usedBy: ["captain", "code.coder"] },
+  { adapter: "claude", ready: true, usedBy: ["captain", "dev.coder (code.coder)"] },
   {
     adapter: "codex",
     ready: false,
@@ -141,50 +158,80 @@ beforeEach(() => {
   });
 });
 
-describe("PBLIB-4: configured roles carry editable inline agents", () => {
-  test("each role shows its agent chip with the adapter's readiness", () => {
+describe("PBLIB-4: configured roles name the player that answers them", () => {
+  test("a role prints its lane, its agent, and that the lane is shared", () => {
     renderLibrary();
-    const chip = screen.getByLabelText(
-      "coder: claude · claude-opus-4-8 @ high (ready)",
+    // The role's own line says which session player answers it, and
+    // the chip describes that lane's agent (DR-032).
+    expect(screen.getByTestId("role-binding-code-coder").textContent).toBe(
+      "dev.coder",
     );
-    expect(chip.textContent).toContain("claude · claude-opus-4-8 @ high");
-    expect(screen.getByTestId("player-gear-code-coder")).toBeTruthy();
+    expect(
+      screen.getByLabelText("dev.coder: claude · claude-opus-5 @ high (ready)"),
+    ).toBeTruthy();
+    // dev.coder answers a second position, so it is one conversation
+    // across both and the badge says so.
+    expect(screen.getByTestId("role-shared-code-coder").title).toContain(
+      "fix.coder",
+    );
+    // dev.reviewer answers this binding alone: no shared badge.
+    expect(screen.queryByTestId("role-shared-code-reviewer")).toBeNull();
   });
 
-  test("the gear edits the role's block in place as a merge patch", async () => {
+  test("the gear rebinds the role and pins its own effort", async () => {
     renderLibrary();
-    fireEvent.click(screen.getByTestId("player-gear-code-coder"));
-    const popover = screen.getByTestId("agent-popover");
-    expect(popover.getAttribute("aria-label")).toBe("coder agent");
+    fireEvent.click(screen.getByTestId("role-bind-code-coder"));
+    const editor = screen.getByTestId("binding-editor-coder");
+    // Every lane in the roster is offerable, none invented here.
+    expect(
+      Array.from(
+        within(editor).getByTestId("binding-player").querySelectorAll("option"),
+      ).map((option) => (option as HTMLOptionElement).value),
+    ).toEqual(["dev.coder", "dev.reviewer"]);
 
-    fireEvent.change(within(popover).getByTestId("agent-effort"), {
+    fireEvent.change(within(editor).getByTestId("binding-effort-mode"), {
+      target: { value: "pin" },
+    });
+    fireEvent.change(within(editor).getByTestId("binding-effort-value"), {
       target: { value: "ultracode" },
     });
-    fireEvent.click(within(popover).getByTestId("agent-save"));
+    fireEvent.click(within(editor).getByTestId("binding-save"));
     await vi.waitFor(() =>
+      // A binding carries a player and its own tuning only — adapter
+      // and permissions belong to the lane (DR-032).
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
         op: {
-          kind: "playbook.player.set",
+          kind: "playbook.role.bind",
           playbookId: "code",
           role: "coder",
-          // Surfaced keys only: the hand-written instruction survives
-          // by never appearing in the patch (DR-019).
-          patch: {
-            adapter: "claude",
-            model: "claude-opus-4-8",
-            effort: "ultracode",
-          },
+          playerId: "dev.coder",
+          effort: "ultracode",
         },
       }),
     );
     await vi.waitFor(() =>
-      expect(screen.queryByTestId("agent-popover")).toBeNull(),
+      expect(screen.queryByTestId("binding-editor-coder")).toBeNull(),
     );
   });
 
-  test("a refused player edit surfaces inline and keeps the editor open", async () => {
+  test("choosing a busy lane warns that the conversation is shared", () => {
+    renderLibrary();
+    fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
+    const editor = screen.getByTestId("binding-editor-reviewer");
+    // On its own lane the reviewer holds the only position.
+    expect(within(editor).queryByTestId("binding-shared-note")).toBeNull();
+
+    fireEvent.change(within(editor).getByTestId("binding-player"), {
+      target: { value: "dev.coder" },
+    });
+    expect(
+      within(editor).getByTestId("binding-shared-note").textContent,
+    ).toContain("code.coder, fix.coder");
+  });
+
+  test("a refused rebind surfaces inline and keeps the editor open", async () => {
     commandMock.mockImplementation(async (type: string) => {
-      if (type === "config.edit") throw new Error("coder would be unresolved");
+      if (type === "config.edit") throw new Error("dev.ghost is not a player");
       if (type === "compile.check") {
         return {
           node: { ok: true, version: "v23.6.0", command: "node" },
@@ -194,15 +241,12 @@ describe("PBLIB-4: configured roles carry editable inline agents", () => {
       return null;
     });
     renderLibrary();
-    fireEvent.click(screen.getByTestId("player-gear-code-coder"));
-    fireEvent.change(screen.getByTestId("agent-effort"), {
-      target: { value: "max" },
-    });
-    fireEvent.click(screen.getByTestId("agent-save"));
+    fireEvent.click(screen.getByTestId("role-bind-code-coder"));
+    fireEvent.click(screen.getByTestId("binding-save"));
     await vi.waitFor(() =>
       expect(
-        screen.getByTestId("agent-popover").textContent,
-      ).toContain("coder would be unresolved"),
+        screen.getByTestId("binding-editor-coder").textContent,
+      ).toContain("dev.ghost is not a player"),
     );
   });
 });
@@ -232,7 +276,7 @@ describe("DR-015: built-ins section from the catalog", () => {
     expect(screen.queryByText("structured")).toBeNull();
   });
 
-  test("the add flow applies playbook.add with a block per role", async () => {
+  test("the add flow mints a lane per role, then binds to it", async () => {
     renderLibrary();
     const card = screen.getByTestId("builtin-review");
     fireEvent.click(within(card).getByTestId("builtin-player-host"));
@@ -250,38 +294,40 @@ describe("DR-015: built-ins section from the catalog", () => {
     );
 
     fireEvent.click(screen.getByTestId("builtin-add-review"));
+    // The lane the roster lacks is minted first, carrying the whole
+    // agent block, so the binding that follows never dangles (DR-032).
     await vi.waitFor(() =>
-      // Every role maps to a whole agent block, keyed by role — never
-      // a profile reference (DR-019).
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: {
+          kind: "player.set",
+          playerId: "dev.host",
+          patch: {
+            adapter: "codex",
+            model: "gpt-5.5-codex",
+            effort: "ultra",
+            permissions: { mode: "auto" },
+          },
+        },
+      }),
+    );
+    await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
         op: {
           kind: "playbook.add",
           playbookId: "review",
           from: "@sublang/playbook/review/registry",
-          players: {
-            host: {
-              adapter: "codex",
-              model: "gpt-5.5-codex",
-              effort: "ultra",
-              permissions: { mode: "auto" },
-            },
-          },
+          roles: { host: "dev.host" },
         },
       }),
     );
   });
 
-  test("an untouched role is added on the neutral block", async () => {
+  test("an untouched role mints its lane on the neutral block", async () => {
     renderLibrary();
     fireEvent.click(screen.getByTestId("builtin-add-review"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
-        op: {
-          kind: "playbook.add",
-          playbookId: "review",
-          from: "@sublang/playbook/review/registry",
-          players: { host: NEUTRAL_BLOCK },
-        },
+        op: { kind: "player.set", playerId: "dev.host", patch: NEUTRAL_BLOCK },
       }),
     );
   });

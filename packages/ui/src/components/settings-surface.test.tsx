@@ -32,21 +32,29 @@ const CONFIG: ConfigState = {
       effort: "high",
       permissions: { mode: "auto" },
     },
+    players: [
+      {
+        id: "dev.coder",
+        agent: { adapter: "claude", model: "claude-opus-5[1m]" },
+        display: "claude-opus-5[1m]",
+        boundBy: ["code.coder"],
+      },
+      {
+        id: "dev.reviewer",
+        agent: { adapter: "codex", model: "gpt-5.6-sol" },
+        display: "gpt-5.6-sol",
+        boundBy: ["code.reviewer"],
+      },
+    ],
     playbooks: [
       {
         id: "code",
         from: "@sublang/playbook/code/registry",
         command: "code",
         intent: "software development workflow",
-        players: {
-          coder: {
-            agent: { adapter: "claude", model: "claude-opus-4-8[1m]" },
-            display: "claude-opus-4-8[1m]",
-          },
-          reviewer: {
-            agent: { adapter: "codex", model: "gpt-5.5" },
-            display: "gpt-5.5",
-          },
+        roles: {
+          coder: { playerId: "dev.coder", display: "claude-opus-5[1m]" },
+          reviewer: { playerId: "dev.reviewer", display: "gpt-5.6-sol" },
         },
       },
     ],
@@ -54,12 +62,16 @@ const CONFIG: ConfigState = {
 };
 
 const READINESS: ReadinessEntry[] = [
-  { adapter: "claude", ready: true, usedBy: ["captain", "code.coder"] },
+  {
+    adapter: "claude",
+    ready: true,
+    usedBy: ["captain", "dev.coder (code.coder)"],
+  },
   {
     adapter: "codex",
     ready: false,
     requirement: "set OPENAI_API_KEY or sign in with the Codex CLI",
-    usedBy: ["code.reviewer"],
+    usedBy: ["dev.reviewer (code.reviewer)"],
   },
 ];
 
@@ -131,5 +143,80 @@ describe("SET: adapter readiness panel", () => {
     render(<SettingsSurface />);
     fireEvent.click(screen.getByRole("button", { name: /Re-check readiness/i }));
     expect(refreshReadiness).toHaveBeenCalled();
+  });
+});
+
+describe("SET: the session-player roster", () => {
+  test("each lane prints its id, its agent, and the roles it answers", () => {
+    renderSettings();
+    const row = screen.getByTestId("player-row-dev.coder");
+    expect(row.textContent).toContain("dev.coder");
+    // The lane's own agent, with the adapter's readiness (DR-032).
+    expect(
+      within(row).getByLabelText(
+        "dev.coder: claude · claude-opus-5[1m] (ready)",
+      ),
+    ).toBeTruthy();
+    expect(within(row).getByTestId("player-bound-dev.coder").textContent).toBe(
+      "code.coder",
+    );
+  });
+
+  test("editing a lane writes a player.set merge patch", async () => {
+    renderSettings();
+    fireEvent.click(screen.getByTestId("player-edit-dev.coder"));
+    const row = screen.getByTestId("player-row-dev.coder");
+    fireEvent.change(within(row).getByTestId("agent-model"), {
+      target: { value: "claude-opus-5" },
+    });
+    fireEvent.click(within(row).getByTestId("agent-save"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: {
+          kind: "player.set",
+          playerId: "dev.coder",
+          // Identity keys only: a lane's adapter and permissions live
+          // here, never in a role binding (DR-032).
+          patch: expect.objectContaining({ model: "claude-opus-5" }),
+        },
+      }),
+    );
+  });
+
+  test("removing a bound lane is refused in the core's own words", async () => {
+    commandMock.mockImplementation(async (_type: string, payload: unknown) => {
+      const op = (payload as { op: { kind: string } }).op;
+      if (op.kind === "player.delete") {
+        throw new Error("dev.coder still answers code.coder");
+      }
+      return CONFIG;
+    });
+    renderSettings();
+    fireEvent.click(screen.getByTestId("player-delete-dev.coder"));
+    fireEvent.click(screen.getByText("remove"));
+    await vi.waitFor(() =>
+      expect(
+        screen.getByTestId("player-error-dev.coder").textContent,
+      ).toContain("dev.coder still answers code.coder"),
+    );
+  });
+
+  test("adding a lane names it and gives it a whole block", async () => {
+    renderSettings();
+    fireEvent.click(screen.getByTestId("player-add"));
+    fireEvent.change(screen.getByTestId("player-add-id"), {
+      target: { value: "dev.docs" },
+    });
+    const form = screen.getByTestId("player-add-form");
+    fireEvent.click(within(form).getByTestId("agent-save"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: {
+          kind: "player.set",
+          playerId: "dev.docs",
+          patch: expect.objectContaining({ adapter: "claude" }),
+        },
+      }),
+    );
   });
 });

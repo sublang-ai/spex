@@ -12,6 +12,7 @@ function entry(id: string, roles: string[]) {
     id,
     command: id,
     intent: `${id} intent`,
+    artifactSchema: 2,
     requiredRoleIds: roles,
     validateOptions: () => ({}),
     createRuntime: () => ({}),

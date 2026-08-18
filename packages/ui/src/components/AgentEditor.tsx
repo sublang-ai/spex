@@ -70,6 +70,9 @@ export interface AgentEditorProps {
    * adapter, model, effort, and permissions into the draft. */
   captain?: AgentBlockInput;
   saveLabel?: string;
+  /** Creation forms save an untouched draft: the seeded block is
+   * already a deliberate choice, so there is nothing to dirty. */
+  allowUnchanged?: boolean;
   onSave: (patch: AgentPatch) => Promise<unknown> | void;
   onCancel?: () => void;
 }
@@ -266,7 +269,7 @@ export function AgentEditor(props: AgentEditorProps) {
         <button
           type="button"
           data-testid="agent-save"
-          disabled={busy || !dirty}
+          disabled={busy || (!dirty && !props.allowUnchanged)}
           onClick={save}
           className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >

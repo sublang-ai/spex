@@ -31,6 +31,7 @@ function registryEntry(overrides: Record<string, unknown> = {}) {
     id: "code",
     command: "code",
     intent: "software development / SDLC coding workflow",
+    artifactSchema: 2,
     requiredRoleIds: ["coder"],
     summaryPolicy: {
       stateCountLabels: {},

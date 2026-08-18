@@ -23,6 +23,7 @@ function registryEntry() {
     id: "code",
     command: "code",
     intent: "coding",
+    artifactSchema: 2,
     requiredRoleIds: ["coder", "reviewer"],
     idleStateId: "ready",
     finalStateId: "done",
@@ -68,7 +69,7 @@ async function setup(
   const captain = createScriptedCaptain(overrides?.script ?? (async (turn, context, session) => {
     await session.emitStatus("◇ /code started");
     await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
-    await context.callPlayer("coder", `do: ${turn.prompt}`);
+    await context.callPlayer("dev.coder", `do: ${turn.prompt}`);
     await session.emitTelemetry({
       topic: "playbook.fsm.state",
       payload: { to: "ready" },
@@ -225,3 +226,65 @@ async function waitFor(check: () => boolean, timeoutMs = 5000): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+
+test("DR-032: a shared lane's records carry the role each call served", async () => {
+  const records: RecordEnvelope[] = [];
+  // One lane, two calls, two roles: /code's coder then /review's
+  // reviewer, both landing on dev.coder. Without the bracket the pane
+  // would read as one voice talking to itself.
+  const trace = (
+    session: { emitTelemetry(t: { topic: string; payload: unknown }): Promise<void> },
+    type: string,
+    roleId: string,
+  ) =>
+    session.emitTelemetry({
+      topic: "playbook.trace",
+      payload: {
+        schemaVersion: 3,
+        type,
+        payload: { roleId, playerId: "dev.coder" },
+      },
+    });
+  const { manager, store, project, composed } = await setup(records, {
+    script: async (turn, context, session) => {
+      await trace(session, "player.call.started", "coder");
+      await context.callPlayer("dev.coder", `code: ${turn.prompt}`);
+      await trace(session, "player.call.finished", "coder");
+      await trace(session, "player.call.started", "reviewer");
+      await context.callPlayer("dev.coder", `review: ${turn.prompt}`);
+      await trace(session, "player.call.finished", "reviewer");
+    },
+  });
+
+  const info = await manager.createSession(project, composed);
+  manager.submitTurn(info.id, "fix the bug");
+  await waitFor(() => records.some((r) => r.record.type === "turn_finished"));
+
+  const prompts = records.filter((r) => r.record.type === "player_prompt");
+  assert.deepEqual(
+    prompts.map((r) => r.role),
+    ["coder", "reviewer"],
+  );
+  // The finish belongs to the call it ends, so the bracket closes
+  // after the last record it covers.
+  assert.deepEqual(
+    records
+      .filter((r) => r.record.type === "player_finished")
+      .map((r) => r.role),
+    ["coder", "reviewer"],
+  );
+  // A replay reads exactly as the live stream did: the role is stored
+  // beside the record, not recomputed by the renderer.
+  assert.deepEqual(
+    store
+      .getRecords(info.id, { includeHidden: true })
+      .filter((entry) => entry.record.type === "player_prompt")
+      .map((entry) => entry.role),
+    ["coder", "reviewer"],
+  );
+  // The trace record itself is not a player record and takes no role.
+  assert.equal(
+    records.find((r) => r.record.type === "captain_telemetry")?.role,
+    undefined,
+  );
+});

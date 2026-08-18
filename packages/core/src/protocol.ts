@@ -179,6 +179,11 @@ export interface ReadinessEntry {
 export interface StoredRecord {
   seq: number;
   record: TmuxPlayRecord;
+  /** For a player record inside a resolved call, the role that call
+   * served (DR-032). One lane answers several roles over a session,
+   * so without this a shared player reads as one voice talking to
+   * itself. Absent where the trace named no resolved player. */
+  role?: string;
 }
 
 export interface RepoStatusInfo {
@@ -257,6 +262,11 @@ export const agentPatchSchema = z.object({
     .optional(),
 });
 
+/** A session player id: lowercase segments, dots by convention. */
+export const playerIdSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/);
+
 export const configEditOpSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("captain.set"), patch: agentPatchSchema }),
   z.object({
@@ -265,10 +275,20 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("theme.set"), theme: z.string().nullable() }),
   z.object({
-    kind: z.literal("playbook.player.set"),
+    kind: z.literal("player.set"),
+    playerId: playerIdSchema,
+    patch: agentPatchSchema,
+  }),
+  z.object({ kind: z.literal("player.delete"), playerId: playerIdSchema }),
+  z.object({
+    kind: z.literal("playbook.role.bind"),
     playbookId: z.string().min(1),
     role: z.string().min(1),
-    patch: agentPatchSchema,
+    playerId: playerIdSchema,
+    // A concrete value pins, false selects the provider default, null
+    // clears the override so the role inherits the player (DR-032).
+    model: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+    effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
   }),
   z.object({
     kind: z.literal("playbook.option.set"),
@@ -281,7 +301,7 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
     kind: z.literal("playbook.add"),
     playbookId: z.string().min(1),
     from: z.string().min(1),
-    players: z.record(z.string(), agentBlockSchema),
+    roles: z.record(z.string(), playerIdSchema),
     options: z.record(z.string(), z.unknown()).optional(),
   }),
 ]);
@@ -350,8 +370,11 @@ export const commandSchema = z.discriminatedUnion("type", [
     roles: z.array(z.string().min(1)).min(1),
     command: z.string().min(1),
     intent: z.string().min(1),
-    /** role -> inline agent block, written to the config (DR-019). */
-    players: z.record(z.string(), agentBlockSchema),
+    /** role -> the session player that answers it (DR-032). */
+    bindings: z.record(z.string(), playerIdSchema),
+    /** Lanes to create for bindings naming a player not yet in the
+     * roster — the Playbooks surface may mint one in place. */
+    newPlayers: z.record(playerIdSchema, agentBlockSchema).optional(),
   }),
   z.object({
     type: z.literal("compile.abort"),
@@ -545,6 +568,8 @@ export interface RecordMessage {
   sessionId: string;
   seq: number;
   record: TmuxPlayRecord;
+  /** The role this player record's call served — see StoredRecord. */
+  role?: string;
 }
 
 export interface ConfigStateMessage {

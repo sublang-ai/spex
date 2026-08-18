@@ -15,11 +15,13 @@ import type {
   ConfigEditOpInput,
   PlaybookArtifacts,
   ReadinessEntry,
+  SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
-import { patchPlayer, type AgentPatch } from "../lib/config-ops.js";
+import { bindRole, type AgentPatch } from "../lib/config-ops.js";
+import { BindingEditorPopover } from "./BindingEditor.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
@@ -163,12 +165,18 @@ function BuiltinCard({
   info,
   captain,
   readiness,
+  summaryPlayers,
 }: {
   info: BuiltinPlaybookInfo;
   captain?: AgentSummary;
   readiness: ReadinessEntry[];
+  /** The session roster, so a binding can name a lane that exists. */
+  summaryPlayers: SessionPlayerSummary[];
 }) {
   const [showSource, setShowSource] = useState(false);
+  // role -> lane id, and the lane blocks to mint for ids the roster
+  // does not yet hold (DR-032).
+  const [bindings, setBindings] = useState<Record<string, string>>({});
   const [players, setPlayers] = useState<Record<string, AgentBlockInput>>({});
   const [openRole, setOpenRole] = useState<string>();
   // Anchor for the open popover: without it the gear's own mousedown
@@ -183,17 +191,43 @@ function BuiltinCard({
   function add(): void {
     setBusy(true);
     setError(undefined);
-    getClient()
-      .command("config.edit", {
-        op: {
-          kind: "playbook.add",
-          playbookId: info.id,
-          from: info.from,
-          players: Object.fromEntries(
-            info.roles.map((role) => [role, players[role] ?? NEUTRAL_BLOCK]),
+    // Each role binds to a lane; a lane the roster lacks is minted
+    // first, so the binding never dangles (DR-032). The proposed id is
+    // dev.<role>, which is what makes two playbooks share a coder.
+    const laneFor = (role: string): string => bindings[role] ?? `dev.${role}`;
+    const existing = new Set(summaryPlayers.map((player) => player.id));
+    // A lane carries the block chosen for the role it was minted for;
+    // two roles landing on one lane mint it once, from the first.
+    const mint = info.roles
+      .map((role) => [laneFor(role), role] as const)
+      .filter(([id], index, all) => all.findIndex(([other]) => other === id) === index)
+      .filter(([id]) => !existing.has(id));
+    void mint
+      .reduce(
+        (chain, [playerId, role]) =>
+          chain.then(() =>
+            getClient().command("config.edit", {
+              op: {
+                kind: "player.set",
+                playerId,
+                patch: players[role] ?? NEUTRAL_BLOCK,
+              },
+            }),
           ),
-        },
-      })
+        Promise.resolve() as Promise<unknown>,
+      )
+      .then(() =>
+        getClient().command("config.edit", {
+          op: {
+            kind: "playbook.add",
+            playbookId: info.id,
+            from: info.from,
+            roles: Object.fromEntries(
+              info.roles.map((role) => [role, laneFor(role)]),
+            ),
+          },
+        }),
+      )
       // Success arrives as a config.state broadcast: the entry moves
       // to the configured list and this card unmounts.
       .catch((cause: Error) => setError(cause.message))
@@ -504,8 +538,11 @@ export function LibrarySurface({
       roles,
       command: command.trim() || playbookId.trim(),
       intent: intent.trim(),
-      players: Object.fromEntries(
-        roles.map((role) => [role, playerBlocks[role] ?? NEUTRAL_BLOCK]),
+      // Each derived role binds to a proposed lane; the lane blocks
+      // the form collected are what mints them (DR-032).
+      bindings: Object.fromEntries(roles.map((role) => [role, `dev.${role}`])),
+      newPlayers: Object.fromEntries(
+        roles.map((role) => [`dev.${role}`, playerBlocks[role] ?? NEUTRAL_BLOCK]),
       ),
     })
       .then(() => {
@@ -616,59 +653,83 @@ export function LibrarySurface({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
-              {Object.entries(playbook.players).map(([role, player]) => (
-                <span key={role} className="relative flex items-center gap-1">
-                  <span className="font-mono">{role}:</span>
-                  <AgentChip
-                    agent={player.agent}
-                    readiness={readinessByAdapter.get(player.agent.adapter)}
-                    label={role}
-                  />
-                  <button
-                    type="button"
-                    ref={
-                      rolePopover?.playbookId === playbook.id &&
-                      rolePopover.role === role
-                        ? playerGearRef
-                        : undefined
-                    }
-                    data-testid={`player-gear-${playbook.id}-${role}`}
-                    title={`Tweak the ${role} agent in place`}
-                    aria-label={`Configure ${role}`}
-                    onClick={() =>
-                      setRolePopover((current) =>
-                        current?.playbookId === playbook.id &&
-                        current.role === role
-                          ? undefined
-                          : { playbookId: playbook.id, role },
-                      )
-                    }
-                    className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                  >
-                    <Icon name="gear" />
-                  </button>
-                  {rolePopover?.playbookId === playbook.id &&
-                  rolePopover.role === role ? (
-                    <AgentEditorPopover
-                      title={`${role} agent`}
-                      direction="down"
-                      initial={player.agent}
-                      readiness={readiness}
-                      captain={summary.captain}
-                      anchorRef={playerGearRef}
-                      onSave={(patch) =>
-                        patchPlayer(playbook.id, role, patch).then(
-                          (result) => {
-                            setRolePopover(undefined);
-                            return result;
-                          },
+              {Object.entries(playbook.roles).map(([role, binding]) => {
+                const lane = summary.players.find(
+                  (player) => player.id === binding.playerId,
+                );
+                // A lane bound by more than one playbook is a shared
+                // conversation, and the binding says so (DR-032).
+                const sharedWith = (lane?.boundBy ?? []).filter(
+                  (position) => !position.startsWith(`${playbook.id}.`),
+                );
+                return (
+                  <span key={role} className="relative flex items-center gap-1">
+                    <span className="font-mono">{role}:</span>
+                    <span
+                      data-testid={`role-binding-${playbook.id}-${role}`}
+                      className="font-mono text-neutral-700 dark:text-neutral-200"
+                    >
+                      {binding.playerId}
+                    </span>
+                    {lane ? (
+                      <AgentChip
+                        agent={lane.agent}
+                        readiness={readinessByAdapter.get(lane.agent.adapter)}
+                        label={binding.playerId}
+                      />
+                    ) : null}
+                    {sharedWith.length > 0 ? (
+                      <span
+                        data-testid={`role-shared-${playbook.id}-${role}`}
+                        title={`This lane also answers ${sharedWith.join(", ")} — one conversation across them`}
+                        className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[11px] text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                      >
+                        shared
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      ref={
+                        rolePopover?.playbookId === playbook.id &&
+                        rolePopover.role === role
+                          ? playerGearRef
+                          : undefined
+                      }
+                      data-testid={`role-bind-${playbook.id}-${role}`}
+                      title={`Choose which session player answers ${role}`}
+                      aria-label={`Bind ${role}`}
+                      onClick={() =>
+                        setRolePopover((current) =>
+                          current?.playbookId === playbook.id &&
+                          current.role === role
+                            ? undefined
+                            : { playbookId: playbook.id, role },
                         )
                       }
-                      onClose={() => setRolePopover(undefined)}
-                    />
-                  ) : null}
-                </span>
-              ))}
+                      className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                    >
+                      <Icon name="gear" />
+                    </button>
+                    {rolePopover?.playbookId === playbook.id &&
+                    rolePopover.role === role ? (
+                      <BindingEditorPopover
+                        role={role}
+                        position={`${playbook.id}.${role}`}
+                        binding={binding}
+                        players={summary.players}
+                        anchorRef={playerGearRef}
+                        onSave={(next) =>
+                          bindRole(playbook.id, role, next).then((result) => {
+                            setRolePopover(undefined);
+                            return result;
+                          })
+                        }
+                        onClose={() => setRolePopover(undefined)}
+                      />
+                    ) : null}
+                  </span>
+                );
+              })}
               <span
                 className="ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-400"
                 title={`Source this playbook was loaded from: ${playbook.from}`}
@@ -705,6 +766,7 @@ export function LibrarySurface({
               info={entry}
               captain={summary.captain}
               readiness={readiness}
+              summaryPlayers={summary.players}
             />
           ))}
         </section>

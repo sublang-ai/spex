@@ -25,7 +25,7 @@ import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 // A live clock: the rows print ages relative to now.
 const NOW = Date.now();
-const PLAYERS = [{ id: "code-coder", adapter: "claude" as const }];
+const PLAYERS = [{ id: "dev.coder", adapter: "claude" as const }];
 
 function session(over: Partial<SessionInfo> & { id: string }): SessionInfo {
   return {
@@ -35,7 +35,7 @@ function session(over: Partial<SessionInfo> & { id: string }): SessionInfo {
     live: false,
     endedAt: NOW - 30_000,
     players: PLAYERS,
-    initialVisible: ["code-coder"],
+    initialVisible: ["dev.coder"],
     turns: 1,
     failed: false,
     ...over,
@@ -44,7 +44,7 @@ function session(over: Partial<SessionInfo> & { id: string }): SessionInfo {
 
 /** A loaded transcript; `question` parks it awaiting a Boss reply. */
 function view(question?: string): SessionView {
-  const loaded = initialSessionView(PLAYERS, ["code-coder"]);
+  const loaded = initialSessionView(PLAYERS, ["dev.coder"]);
   loaded.loading = false;
   if (question) loaded.pendingQuestion = question;
   return loaded;

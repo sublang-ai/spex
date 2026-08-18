@@ -75,8 +75,8 @@ describe("RUN-19: pane structure from the fixture stream", () => {
   test("captain pane and both player panes render with content", () => {
     renderRun(TURN_ONE);
     expect(screen.getByTestId("captain-pane")).toBeTruthy();
-    expect(screen.getByTestId("player-pane-code-coder")).toBeTruthy();
-    expect(screen.getByTestId("player-pane-code-reviewer")).toBeTruthy();
+    expect(screen.getByTestId("player-pane-dev.coder")).toBeTruthy();
+    expect(screen.getByTestId("player-pane-dev.reviewer")).toBeTruthy();
     expect(screen.getByText("◇ /code started")).toBeTruthy();
     // Markdown rendered: **auth** becomes a <strong>.
     expect(screen.getByText("auth").tagName).toBe("STRONG");
@@ -95,7 +95,7 @@ describe("RUN-21: awaitBossReply as a first-class chat moment", () => {
   test("the question renders as an incoming bubble from the player", () => {
     renderRun([...TURN_ONE, ...TURN_TWO_QUESTION]);
     const bubble = screen.getByTestId("question-bubble");
-    expect(bubble.textContent).toContain("code-reviewer");
+    expect(bubble.textContent).toContain("dev.reviewer");
     expect(bubble.textContent).toContain(
       "Which auth flow should I prioritize?",
     );
@@ -110,7 +110,7 @@ describe("RUN-21: awaitBossReply as a first-class chat moment", () => {
     renderRun([...TURN_ONE, ...TURN_TWO_QUESTION]);
     const banner = screen.getByTestId("boss-reply-banner");
     expect(banner.textContent).toContain(
-      "code-reviewer is waiting for your reply",
+      "dev.reviewer is waiting for your reply",
     );
   });
 

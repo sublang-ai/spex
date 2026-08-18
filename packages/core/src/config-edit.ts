@@ -40,11 +40,18 @@ export type ConfigEditOp =
   | { kind: "captain.set"; patch: AgentPatch }
   | { kind: "notifications.set"; prefs: Record<string, string> }
   | { kind: "theme.set"; theme: string | null }
+  /** Edit a session player's envelope: identity and defaults. */
+  | { kind: "player.set"; playerId: string; patch: AgentPatch }
+  | { kind: "player.delete"; playerId: string }
+  /** Bind a role to a player, with that role's own tuning. Adapter and
+   * permissions are the player's and are not settable here (DR-032). */
   | {
-      kind: "playbook.player.set";
+      kind: "playbook.role.bind";
       playbookId: string;
       role: string;
-      patch: AgentPatch;
+      playerId: string;
+      model?: string | false | null;
+      effort?: string | false | null;
     }
   | { kind: "playbook.option.set"; playbookId: string; key: string; value: unknown }
   | { kind: "playbook.delete"; playbookId: string }
@@ -52,7 +59,7 @@ export type ConfigEditOp =
       kind: "playbook.add";
       playbookId: string;
       from: string;
-      players: Record<string, AgentBlock>;
+      roles: Record<string, string>;
       options?: Record<string, unknown>;
     };
 
@@ -119,11 +126,40 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
       else doc.setIn(["theme"], op.theme);
       break;
     }
-    case "playbook.player.set": {
-      patchAgent(
-        ["playbooks", op.playbookId, "players", op.role],
-        op.patch as Record<string, unknown>,
-      );
+    case "player.set": {
+      patchAgent(["players", op.playerId], op.patch as Record<string, unknown>);
+      break;
+    }
+    case "player.delete": {
+      doc.deleteIn(["players", op.playerId]);
+      break;
+    }
+    case "playbook.role.bind": {
+      const path = ["playbooks", op.playbookId, "roles", op.role];
+      const tuned = op.model !== undefined || op.effort !== undefined;
+      if (!tuned) {
+        // No role tuning: the binding is just the lane, written as the
+        // scalar the launcher's own template uses.
+        doc.setIn(path, op.playerId);
+        break;
+      }
+      const existing = doc.getIn(path);
+      const block: Record<string, unknown> = { player: op.playerId };
+      // A block already there keeps its other tuning key.
+      if (existing && typeof existing === "object" && "toJSON" in existing) {
+        const prior = (existing as { toJSON(): Record<string, unknown> }).toJSON();
+        if (prior.model !== undefined) block.model = prior.model;
+        if (prior.effort !== undefined) block.effort = prior.effort;
+      }
+      for (const key of ["model", "effort"] as const) {
+        const value = op[key];
+        if (value === undefined) continue;
+        // null clears the override, so the role inherits the player's
+        // default again; false selects the provider's (DR-032).
+        if (value === null) delete block[key];
+        else block[key] = value;
+      }
+      doc.setIn(path, doc.createNode(block));
       break;
     }
     case "playbook.option.set": {
@@ -142,15 +178,11 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
       break;
     }
     case "playbook.add": {
-      const players = Object.fromEntries(
-        Object.entries(op.players).map(([role, block]) => [
-          role,
-          prune(block as unknown as Record<string, unknown>),
-        ]),
-      );
+      // Enabling a playbook binds its roles to existing lanes; the
+      // players themselves are edited in their own map (DR-032).
       const node = doc.createNode({
         from: op.from,
-        players,
+        roles: { ...op.roles },
         ...(op.options ?? {}),
       }) as YAMLMap;
       doc.setIn(["playbooks", op.playbookId], node);

@@ -48,6 +48,7 @@ const MIGRATIONS: string[] = [
     hidden INTEGER NOT NULL DEFAULT 0,
     timestamp INTEGER NOT NULL,
     payload_json TEXT NOT NULL,
+    role TEXT,
     PRIMARY KEY (session_id, seq)
   );
   CREATE INDEX records_by_session ON records (session_id, seq);
@@ -55,10 +56,11 @@ const MIGRATIONS: string[] = [
     session_id TEXT NOT NULL,
     turn_id INTEGER,
     actor_id TEXT NOT NULL,
-    input_tokens INTEGER NOT NULL,
-    output_tokens INTEGER NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
     tool_uses INTEGER NOT NULL,
     total_cost_usd REAL,
+    cost_source TEXT,
     duration_ms INTEGER,
     at INTEGER NOT NULL
   );
@@ -69,11 +71,17 @@ const MIGRATIONS: string[] = [
 export interface UsageEntry {
   sessionId: string;
   turnId: number | null;
+  /** The session player that spent it, or "captain" (DR-032). */
   actorId: string;
-  inputTokens: number;
-  outputTokens: number;
+  /** Absent when the runtime reported no token accounting — which is
+   * not the same as measuring zero (cligent 0.22). */
+  inputTokens?: number;
+  outputTokens?: number;
   toolUses: number;
   totalCostUsd?: number;
+  /** How the runtime knew the cost: provider-reported, or an
+   * estimate. An estimate is never presented as a bill. */
+  costSource?: string;
   durationMs?: number;
   at: number;
 }
@@ -352,11 +360,19 @@ export class Store {
 
   // -- records --------------------------------------------------------------
 
-  appendRecord(sessionId: string, seq: number, record: TmuxPlayRecord): void {
+  /** `role` is the resolved role a player record's call served, kept
+   * beside the record so a replay reads exactly as the live stream did
+   * (DR-032). */
+  appendRecord(
+    sessionId: string,
+    seq: number,
+    record: TmuxPlayRecord,
+    role?: string,
+  ): void {
     this.db
       .prepare(
-        "INSERT INTO records (session_id, seq, turn_id, type, hidden, timestamp, payload_json) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO records (session_id, seq, turn_id, type, hidden, timestamp, payload_json, role) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         sessionId,
@@ -366,6 +382,7 @@ export class Store {
         isHidden(record) ? 1 : 0,
         record.timestamp,
         JSON.stringify(record),
+        role ?? null,
       );
   }
 
@@ -375,19 +392,21 @@ export class Store {
   ): StoredRecord[] {
     const rows = this.db
       .prepare(
-        "SELECT seq, hidden, payload_json FROM records " +
+        "SELECT seq, hidden, payload_json, role FROM records " +
           "WHERE session_id = ? AND seq > ? ORDER BY seq",
       )
       .all(sessionId, options.afterSeq ?? 0) as {
       seq: number;
       hidden: number;
       payload_json: string;
+      role: string | null;
     }[];
     return rows
       .filter((row) => options.includeHidden || row.hidden === 0)
       .map((row) => ({
         seq: row.seq,
         record: JSON.parse(row.payload_json) as TmuxPlayRecord,
+        ...(row.role !== null ? { role: row.role } : {}),
       }));
   }
 
@@ -404,16 +423,18 @@ export class Store {
     this.db
       .prepare(
         "INSERT INTO usage (session_id, turn_id, actor_id, input_tokens, output_tokens, " +
-          "tool_uses, total_cost_usd, duration_ms, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "tool_uses, total_cost_usd, cost_source, duration_ms, at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         entry.sessionId,
         entry.turnId,
         entry.actorId,
-        entry.inputTokens,
-        entry.outputTokens,
+        entry.inputTokens ?? null,
+        entry.outputTokens ?? null,
         entry.toolUses,
         entry.totalCostUsd ?? null,
+        entry.costSource ?? null,
         entry.durationMs ?? null,
         entry.at,
       );

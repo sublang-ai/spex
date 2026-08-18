@@ -62,25 +62,20 @@ fs.writeFileSync(
     "}",
   ].join("\\n"),
 );
-// The slc 0.1.0 entry module: emitted beside the artifact dir, role
-// ids verbatim from the gears (capitalized here on purpose), options
-// allowlist with cwd, and the canonicalizing role bind at callPlayer.
+// The slc entry module: emitted beside the artifact dir, role ids
+// verbatim from the gears (capitalized here on purpose, which schema 2
+// preserves), an options allowlist with cwd, and the schema the shared
+// runtime factory checks.
 fs.writeFileSync(
   path.join(path.dirname(src), base + ".ts"),
   [
     "import createPlaybookRuntime from './" + base + ".playbook/" + base + ".playbook.ts';",
     "const REQUIRED_ROLE_IDS = ${rolesLiteral};",
-    "const BY_LOWER = new Map(REQUIRED_ROLE_IDS.map((id) => [id.toLowerCase(), id]));",
-    "function bindRoleIds(session) {",
-    "  const ports = session && session.ports;",
-    "  if (!ports || typeof ports.callPlayer !== 'function') return session;",
-    "  return { ...session, ports: { ...ports, callPlayer: (playerId, ...rest) =>",
-    "    ports.callPlayer(BY_LOWER.get(playerId) ?? playerId, ...rest) } };",
-    "}",
     "const entry = {",
     "  id: '" + base + "',",
     "  command: '" + base + "',",
     "  intent: 'Stub Demo - a one-player workflow.',",
+    "  artifactSchema: 2,",
     "  requiredRoleIds: [...REQUIRED_ROLE_IDS],",
     "  validateOptions(value) {",
     "    if (value === undefined) return {};",
@@ -94,14 +89,7 @@ fs.writeFileSync(
     "  },",
     "  createRuntime(options) {",
     "    const validated = entry.validateOptions(options.captainOptions);",
-    "    const runtime = createPlaybookRuntime({ ...validated });",
-    "    return new Proxy(runtime, { get(target, property, receiver) {",
-    "      const value = Reflect.get(target, property, receiver);",
-    "      if (property === 'init' && typeof value === 'function') {",
-    "        return (session, ...rest) => value.call(target, bindRoleIds(session), ...rest);",
-    "      }",
-    "      return value;",
-    "    } });",
+    "    return createPlaybookRuntime({ ...validated });",
     "  },",
     "};",
     "export default entry;",
@@ -160,29 +148,32 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
   assert.equal(result.idleStateId, "ready");
   assert.equal(result.finalStateId, "done");
   assert.deepEqual(result.parkStateIds, ["failed", "awaitBossReply"]);
-  // Derived from the slc-emitted entry ('Helper'), lowercased for the
-  // host boundary — the user's typed roles are not the source.
-  assert.deepEqual(result.roles, ["helper"]);
+  // Derived from the slc-emitted entry verbatim: under artifact schema
+  // 2 a role is a playbook-local slot a user binds to a player, not a
+  // host player id, so its casing survives (DR-032).
+  assert.deepEqual(result.roles, ["Helper"]);
   assert.ok(progress.some((line) => line.includes("stub slc: compiled demo")));
 
   const moduleValue = (await import(pathToFileURL(result.from).href)) as {
     default: RegistryEntryLike;
     spexRegistryContract?: number;
   };
-  assert.equal(moduleValue.spexRegistryContract, 2);
+  assert.equal(moduleValue.spexRegistryContract, 3);
   const entry = moduleValue.default;
   assert.equal(entry.id, "demo");
   assert.equal(entry.command, "demo");
   assert.equal(entry.intent, "demo workflow for tests");
-  assert.deepEqual(entry.requiredRoleIds, ["helper"]);
+  assert.deepEqual(entry.requiredRoleIds, ["Helper"]);
+  // The manifest advertises the artifact format the shared factory
+  // checks; a wrapper that dropped it would fail at construction.
+  assert.equal(entry.artifactSchema, 2);
 
   // The wrapper hands captainOptions through the entry's own
-  // validateOptions and re-cases role ids at the port seam: the
-  // runtime sees the entry's canonical 'Helper', the host port gets
-  // back the lowercase host role.
+  // validateOptions and interposes on nothing else: what the host
+  // passes reaches the runtime untouched.
   const runtime = entry.createRuntime({
     captainOptions: { cwd: "/tmp/project" },
-    players: [{ id: "helper", adapter: "claude", model: "claude-test" }],
+    players: [{ id: "dev.helper", adapter: "claude", model: "claude-test" }],
   }) as {
     options: Record<string, unknown>;
     init(session: unknown): Promise<void>;
@@ -200,11 +191,10 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
       },
     },
   });
-  // The stub runtime saved the (doubly shimmed) session; a call with
-  // the entry's canonical id must reach the host port lowercased.
+  // No seam rewrites the id any more: the runtime's own call is what
+  // the host port sees.
   runtime.session?.ports.callPlayer("Helper");
-  runtime.session?.ports.callPlayer("helper");
-  assert.deepEqual(seenIds, ["helper", "helper"]);
+  assert.deepEqual(seenIds, ["Helper"]);
 
   assert.throws(
     () => entry.validateOptions({ mystery: 1 }),

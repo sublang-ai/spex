@@ -19,11 +19,11 @@ function rec(seq: number, record: Record<string, unknown>): FixtureEntry {
 }
 
 export const PLAYERS = [
-  { id: "code-coder", adapter: "claude" as const, model: "claude-test" },
-  { id: "code-reviewer", adapter: "codex" as const },
+  { id: "dev.coder", adapter: "claude" as const, model: "claude-test" },
+  { id: "dev.reviewer", adapter: "codex" as const },
 ];
 
-export const INITIAL_VISIBLE = ["code-coder", "code-reviewer"];
+export const INITIAL_VISIBLE = ["dev.coder", "dev.reviewer"];
 
 /** Turn 1: dispatch to the coder, tool use, success. */
 export const TURN_ONE: FixtureEntry[] = [
@@ -43,20 +43,20 @@ export const TURN_ONE: FixtureEntry[] = [
     type: "player_view_changed",
     turnId: 1,
     timestamp: t + 2,
-    visiblePlayerIds: ["code-coder", "code-reviewer"],
+    visiblePlayerIds: ["dev.coder", "dev.reviewer"],
   }),
   rec(4, {
     type: "player_prompt",
     turnId: 1,
     timestamp: t + 3,
-    playerId: "code-coder",
+    playerId: "dev.coder",
     prompt: "Fix the bug in auth.ts",
   }),
   rec(5, {
     type: "player_event",
     turnId: 1,
     timestamp: t + 4,
-    playerId: "code-coder",
+    playerId: "dev.coder",
     event: {
       type: "text_delta",
       agent: "fake",
@@ -69,7 +69,7 @@ export const TURN_ONE: FixtureEntry[] = [
     type: "player_event",
     turnId: 1,
     timestamp: t + 5,
-    playerId: "code-coder",
+    playerId: "dev.coder",
     event: {
       type: "text_delta",
       agent: "fake",
@@ -82,7 +82,7 @@ export const TURN_ONE: FixtureEntry[] = [
     type: "player_event",
     turnId: 1,
     timestamp: t + 6,
-    playerId: "code-coder",
+    playerId: "dev.coder",
     event: {
       type: "tool_use",
       agent: "fake",
@@ -95,7 +95,7 @@ export const TURN_ONE: FixtureEntry[] = [
     type: "player_event",
     turnId: 1,
     timestamp: t + 7,
-    playerId: "code-coder",
+    playerId: "dev.coder",
     event: {
       type: "tool_result",
       agent: "fake",
@@ -108,7 +108,7 @@ export const TURN_ONE: FixtureEntry[] = [
     type: "player_event",
     turnId: 1,
     timestamp: t + 8,
-    playerId: "code-coder",
+    playerId: "dev.coder",
     event: {
       type: "thinking",
       agent: "fake",
@@ -121,7 +121,7 @@ export const TURN_ONE: FixtureEntry[] = [
     type: "player_event",
     turnId: 1,
     timestamp: t + 9,
-    playerId: "code-coder",
+    playerId: "dev.coder",
     event: {
       type: "done",
       agent: "fake",
@@ -139,8 +139,8 @@ export const TURN_ONE: FixtureEntry[] = [
     type: "player_finished",
     turnId: 1,
     timestamp: t + 10,
-    playerId: "code-coder",
-    result: { status: "ok", playerId: "code-coder", turnId: 1, finalText: "Fixed." },
+    playerId: "dev.coder",
+    result: { status: "ok", playerId: "dev.coder", turnId: 1, finalText: "Fixed." },
   }),
   rec(12, {
     type: "captain_telemetry",
@@ -164,17 +164,17 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
     type: "player_prompt",
     turnId: 2,
     timestamp: t + 21,
-    playerId: "code-reviewer",
+    playerId: "dev.reviewer",
     prompt: "Review the change",
   }),
   rec(16, {
     type: "player_finished",
     turnId: 2,
     timestamp: t + 22,
-    playerId: "code-reviewer",
+    playerId: "dev.reviewer",
     result: {
       status: "ok",
-      playerId: "code-reviewer",
+      playerId: "dev.reviewer",
       turnId: 2,
       finalText: "Which auth flow should I prioritize?",
     },
@@ -183,7 +183,7 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
     type: "captain_status",
     turnId: 2,
     timestamp: t + 23,
-    message: "◆ code-reviewer asks: Which auth flow should I prioritize?",
+    message: "◆ dev.reviewer asks: Which auth flow should I prioritize?",
   }),
   rec(18, {
     type: "captain_telemetry",
@@ -195,7 +195,7 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
       to: "awaitBossReply",
       event: "NEEDS_BOSS",
       pendingBossQuestion: {
-        player: "code-reviewer",
+        player: "dev.reviewer",
         question: "Which auth flow should I prioritize?",
         resumeStateId: "review",
       },
@@ -327,7 +327,7 @@ export const MACHINE_RUN: FixtureEntry[] = [
   trace(406, 9_004, "t-code", "code", "player.call.started", {
     stateId: "runFirstPhase",
     roleId: "coder",
-    playerId: "code-coder",
+    playerId: "dev.coder",
   }),
   trace(407, 9_010, "t-code", "code", "player.call.finished", {
     stateId: "runFirstPhase",
