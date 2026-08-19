@@ -6,8 +6,6 @@ import remarkGfm from "remark-gfm";
 
 // Remote images are stripped (only data: URIs render): transcripts can
 // carry untrusted markdown, and remote fetches would leak activity.
-// Links stay clickable — the desktop shell routes them to the system
-// browser and the CSP blocks in-place navigation.
 const components: Components = {
   img: ({ src, alt }) =>
     typeof src === "string" && src.startsWith("data:") ? (
@@ -19,10 +17,39 @@ const components: Components = {
     ),
 };
 
-export function Markdown({ text }: { text: string }) {
+/** Transcript rendering: an agent cites a repo path or a spec anchor
+ * as freely as it cites a URL, and the shell opens only `http(s)` —
+ * everything else it drops. A target nothing can open therefore reads
+ * as text rather than as a promise the app cannot keep (run-view-83).
+ * Authored surfaces (the spec view's own citations) keep their links,
+ * because there the app does route them. */
+const transcriptComponents: Components = {
+  ...components,
+  a: ({ href, children }) =>
+    typeof href === "string" && /^https?:\/\//i.test(href) ? (
+      <a href={href}>{children}</a>
+    ) : (
+      <span title={typeof href === "string" ? href : undefined}>
+        {children}
+      </span>
+    ),
+};
+
+export function Markdown({
+  text,
+  links = "routed",
+}: {
+  text: string;
+  /** "routed" — the surface handles every link it renders; "web-only"
+   * — agent text, where only an openable target is a link. */
+  links?: "routed" | "web-only";
+}) {
   return (
     <div className="markdown text-sm leading-relaxed">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={links === "web-only" ? transcriptComponents : components}
+      >
         {text}
       </ReactMarkdown>
     </div>

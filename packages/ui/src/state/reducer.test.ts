@@ -14,7 +14,6 @@ import {
 import {
   FULL_RUN,
   HIDDEN_LEAK,
-  INITIAL_VISIBLE,
   PLAYERS,
   TURN_ONE,
   TURN_TWO_QUESTION,
@@ -22,7 +21,7 @@ import {
 import type { TmuxPlayRecord } from "@sublang/spex-core/protocol";
 
 function fresh() {
-  return initialSessionView(PLAYERS, INITIAL_VISIBLE);
+  return initialSessionView(PLAYERS);
 }
 
 describe("RUN-19: fixture stream renders expected pane structure", () => {
@@ -33,16 +32,18 @@ describe("RUN-19: fixture stream renders expected pane structure", () => {
       "prompt",
       "text",
       "tool",
+      "tool",
       "thinking",
       "result",
     ]);
     const text = coder.segments[1];
     expect(text.kind === "text" && text.text).toBe(
-      "Looking at the **auth** module.",
+      "Looking at the **auth** module — see [auth.md](specs/packages/auth.md#auth-3)" +
+        " and [the SDK docs](https://example.com/sdk).",
     );
     const tool = coder.segments[2];
     expect(tool.kind === "tool" && tool.status).toBe("success");
-    const result = coder.segments[4];
+    const result = coder.segments[5];
     // The cligent 0.22 shape is read as sent: inclusive totals and a
     // cost that carries its provenance (DR-032).
     expect(result.kind === "result" && result.usage).toMatchObject({
@@ -57,7 +58,9 @@ describe("RUN-19: fixture stream renders expected pane structure", () => {
     );
     expect(view.fsmState).toBe("ready");
     expect(view.turnActive).toBe(false);
-    expect(view.visible).toEqual(["dev.coder", "dev.reviewer"]);
+    // A lane belongs to the session, not to the call in flight: the
+    // roster's players both hold one (run-view-7).
+    expect(Object.keys(view.players)).toEqual(["dev.coder", "dev.reviewer"]);
   });
 });
 

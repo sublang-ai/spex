@@ -38,10 +38,21 @@ While a project session is live, when the session record stream delivers text or
 
 #### run-view-4
 
-When the session record stream delivers a tool-use event for a visible player, that player's pane shall render it as a collapsed card labeled with the tool name:
+When the session record stream delivers a tool-use event for a visible player, that player's pane shall render it as a collapsed card labeled with the tool name and the subject read from the tool's own input, expanding on demand to the full input and, once delivered, the paired tool result:
 
-- while collapsed, the card shows only its label, not the tool payload;
-- when the card is expanded, it reveals the tool input and, once delivered, the paired tool result.
+| The tool input is | The card's subject is |
+| --- | --- |
+| a string | that string |
+| an object holding a string at one of `command`, `file_path`, `path`, `pattern`, `url`, `query`, `prompt`, `description` | the first such value in that key order |
+| anything else | nothing — the label is the tool name alone, never a guessed field |
+
+- a subject is presented as one line — outer whitespace trimmed, inner whitespace runs collapsed to single spaces, elided where the card's width ends — so the collapsed card carries what the call acts on and never its payload.
+
+#### run-view-83
+
+Where a rendered agent message carries a Markdown link — in a player pane [[run-view-3](#run-view-3)] or the Captain thread [[run-view-1](#run-view-1)] — the run view shall present it as a link only where the shell can open it [[app-shell-21](app-shell.md#app-shell-21)], presenting every other target as its own text with the target named in its tooltip:
+
+- an agent cites a repo path or a spec item as freely as it cites a URL, and a citation nothing can open must not wear the affordance of one.
 
 #### run-view-5
 
@@ -61,7 +72,11 @@ When a player turn completes, that player's pane shall report the turn's usage b
 
 #### run-view-7
 
-While a project session is live, the run view shall show exactly one player pane per player marked visible by the session's current visibility state — adding and removing panes as visibility changes arrive — and shall not display the content of hidden records (for example, judge or router traffic) in any pane.
+The run view shall show exactly one player pane per player in the session's bound roster, standing for the session's whole life ([DR-032](../decisions/032-session-players.md)):
+
+- a pane is a player's lane, so it stands whether or not that player is engaged in the call now running, and a finished call's transcript stays where the reader last read it;
+- the runtime's report of which players a call engages adds no pane and removes none — a lane the reader is following never leaves under them;
+- a roster with no players renders no player pane.
 
 #### run-view-79
 
@@ -466,7 +481,7 @@ When the session record stream delivers a captain record whose kind is outside t
 
 #### run-view-18
 
-When a `player_view_changed` record arrives, the pane manager shall recompute the pane set to exactly the players the record marks visible — creating panes for newly visible players and removing panes for players no longer visible — and route no record carrying `hidden` visibility to any pane.
+The pane manager shall key each pane by its player id [[run-view-7](#run-view-7)] and route no record carrying `hidden` visibility to any pane, so judge and router traffic reaches no transcript.
 
 ### Session Start Rendering
 
@@ -480,7 +495,7 @@ The start view shall obtain projects, playbooks, captain identity, and readiness
 
 #### run-view-20
 
-Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per visible player, player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards [[run-view-4](#run-view-4)], every completed turn with usage data shows its usage [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
+Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per roster player and a record narrowing the engaged players removes none [[run-view-7](#run-view-7)], player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards labeled by tool name and input subject, with a subject-less input labeled by name alone [[run-view-4](#run-view-4)], a transcript's Markdown link to a target the shell cannot open renders as plain text while an `https` one stays a link [[run-view-83](#run-view-83)], every completed turn with usage data shows its usage [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
 
 #### run-view-66
 
@@ -515,7 +530,7 @@ Where the workspace renders with the sidebar expanded, the test suite shall asse
 
 #### run-view-21
 
-Where a fixture stream contains records marked hidden (judge or router traffic), when the fixture is replayed into the run view, the test suite shall assert that no rendered pane contains the hidden records' content [[run-view-18](#run-view-18)] and that no pane exists for a player appearing only in hidden records [[run-view-7](#run-view-7)].
+Where a fixture stream contains records marked hidden (judge or router traffic), when the fixture is replayed into the run view, the test suite shall assert that no rendered pane contains the hidden records' content [[run-view-18](#run-view-18)] and that a player named only by hidden records — being no roster player — has no pane [[run-view-7](#run-view-7)].
 
 ### Interaction Coverage
 

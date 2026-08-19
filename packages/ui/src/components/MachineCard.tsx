@@ -346,45 +346,6 @@ export function MachineCard({
               );
             })}
 
-            {/* Distance speaks in words (run-view-76): a transition
-                that is no layout neighbour is an exit label inside its
-                source, walked, fired and dashed like any edge. */}
-            {exits.map((edge) => {
-              const fired =
-                flash !== undefined &&
-                flash.from === edge.from &&
-                flash.to === edge.to &&
-                (flash.event === edge.event || edge.event === "");
-              const walked = frame.transitions.some(
-                (t) =>
-                  t.from === edge.from &&
-                  t.to === edge.to &&
-                  (t.event === edge.event || edge.event === ""),
-              );
-              return (
-                <text
-                  key={edge.id}
-                  data-testid={`machine-exit-${edge.id}`}
-                  x={edge.anchor!.x}
-                  y={edge.anchor!.y}
-                  fontSize={10}
-                  fontWeight={fired ? 600 : 400}
-                  className={`transition-[fill] duration-500 motion-reduce:transition-none ${
-                    fired
-                      ? "fill-emerald-600 dark:fill-emerald-400"
-                      : walked
-                        ? "fill-neutral-600 dark:fill-neutral-300"
-                        : "fill-neutral-400 dark:fill-neutral-500"
-                  }`}
-                >
-                  {`\u2192 ${humanizeId(edge.to)}`}
-                  <title>
-                    {edge.event ? humanizeId(edge.event) : "always"}
-                  </title>
-                </text>
-              );
-            })}
-
             {drawn.nodes.map((node) => {
               const place = layout.nodes.get(node.id);
               if (!place) return null;
@@ -496,6 +457,48 @@ export function MachineCard({
                 </g>
               );
             })}
+
+            {/* Distance speaks in words (run-view-76): a transition
+                that is no layout neighbour is an exit label inside its
+                source, walked, fired and dashed like any edge. The
+                labels paint after the boxes because a box carries an
+                opaque fill — drawn under one, the words are silent. */}
+            {exits.map((edge) => {
+              const fired =
+                flash !== undefined &&
+                flash.from === edge.from &&
+                flash.to === edge.to &&
+                (flash.event === edge.event || edge.event === "");
+              const walked = frame.transitions.some(
+                (t) =>
+                  t.from === edge.from &&
+                  t.to === edge.to &&
+                  (t.event === edge.event || edge.event === ""),
+              );
+              return (
+                <text
+                  key={edge.id}
+                  data-testid={`machine-exit-${edge.id}`}
+                  x={edge.anchor!.x}
+                  y={edge.anchor!.y}
+                  fontSize={10}
+                  fontWeight={fired ? 600 : 400}
+                  className={`transition-[fill] duration-500 motion-reduce:transition-none ${
+                    fired
+                      ? "fill-emerald-600 dark:fill-emerald-400"
+                      : walked
+                        ? "fill-neutral-600 dark:fill-neutral-300"
+                        : "fill-neutral-400 dark:fill-neutral-500"
+                  }`}
+                >
+                  {`\u2192 ${humanizeId(edge.to)}`}
+                  <title>
+                    {edge.event ? humanizeId(edge.event) : "always"}
+                  </title>
+                </text>
+              );
+            })}
+
           </svg>
         </div>
       ) : null}

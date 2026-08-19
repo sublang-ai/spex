@@ -137,9 +137,10 @@ export function RunView({
   const setCaptainSplit = useAppStore((state) => state.setCaptainSplit);
   const splitRef = useRef<HTMLDivElement>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const visible = view.visible.length
-    ? view.visible
-    : session.players.map((player) => player.id);
+  // A pane is a player lane, not a moment (DR-032): the session's
+  // bound roster is the pane set for the session's whole life, so a
+  // call that ends leaves its transcript where the reader last saw it.
+  const lanes = session.players.map((player) => player.id);
   const metaById = new Map(session.players.map((player) => [player.id, player]));
   const title = session.title ?? "new session";
   const queued = composer.queued.length;
@@ -260,7 +261,7 @@ export function RunView({
           data-testid="player-grid"
           className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"
         >
-          {visible.map((playerId) => (
+          {lanes.map((playerId) => (
             <PlayerPane
               key={playerId}
               view={

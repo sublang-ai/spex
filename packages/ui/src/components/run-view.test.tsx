@@ -46,7 +46,7 @@ const SESSION: SessionInfo = {
 
 function renderRun(entries: typeof FULL_RUN) {
   const view = applyRecords(
-    initialSessionView(PLAYERS, INITIAL_VISIBLE),
+    initialSessionView(PLAYERS),
     entries,
   );
   return render(
@@ -80,7 +80,38 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     expect(screen.getByText("◇ /code started")).toBeTruthy();
     // Markdown rendered: **auth** becomes a <strong>.
     expect(screen.getByText("auth").tagName).toBe("STRONG");
+    // A collapsed tool card says the tool and what it acts on; an
+    // input naming nothing recognizable stays the name alone.
     expect(screen.getByText("Edit", { exact: false })).toBeTruthy();
+    expect(screen.getByText("src/auth.ts")).toBeTruthy();
+    const todo = screen.getByText("TodoWrite").closest("summary");
+    expect(todo?.querySelector('[data-testid^="tool-subject-"]')).toBeNull();
+    // Only what the shell can open wears a link's affordance.
+    expect(screen.getByText("the SDK docs").tagName).toBe("A");
+    expect(screen.getByText("auth.md").tagName).toBe("SPAN");
+    expect(screen.getByText("auth.md").title).toBe(
+      "specs/packages/auth.md#auth-3",
+    );
+  });
+
+  test("a narrowing visibility record takes no pane away", () => {
+    // What a nested call does when it returns: the runtime reports
+    // only the players it still engages. The lanes are the session's,
+    // so both panes stand (run-view-7).
+    renderRun([
+      ...TURN_ONE,
+      {
+        seq: 99,
+        record: {
+          type: "player_view_changed",
+          turnId: 1,
+          timestamp: Date.now(),
+          visiblePlayerIds: ["dev.coder"],
+        },
+      } as (typeof TURN_ONE)[number],
+    ]);
+    expect(screen.getByTestId("player-pane-dev.coder")).toBeTruthy();
+    expect(screen.getByTestId("player-pane-dev.reviewer")).toBeTruthy();
   });
 });
 
@@ -144,7 +175,7 @@ describe("RUN-37: the thread stays alive while a turn runs", () => {
 describe("RUN-38: queued messages read as pending, not sent", () => {
   test("queue entries render full text with the delivery caption", () => {
     const view = applyRecords(
-      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      initialSessionView(PLAYERS),
       TURN_ONLY_STARTED,
     );
     render(
@@ -168,7 +199,7 @@ describe("RUN-38: queued messages read as pending, not sent", () => {
 describe("RUN-39: drafts come from the store", () => {
   test("the composer renders the stored draft and reports edits", () => {
     const view = applyRecords(
-      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      initialSessionView(PLAYERS),
       TURN_ONE,
     );
     const onDraftChange = vi.fn();
@@ -207,7 +238,7 @@ describe("RUN-40: abort acknowledges instantly", () => {
 describe("RUN-36: ended sessions render read-only", () => {
   test("readOnly hides the composer and shows the ended notice", () => {
     const view = applyRecords(
-      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      initialSessionView(PLAYERS),
       TURN_ONE,
     );
     render(

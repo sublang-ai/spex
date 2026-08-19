@@ -267,10 +267,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const session = state.sessions.find((s) => s.id === sessionId);
     let view = state.views[sessionId];
     if (!view) {
-      view = initialSessionView(
-        session?.players ?? [],
-        session?.initialVisible ?? [],
-      );
+      view = initialSessionView(session?.players ?? []);
       view.loading = true;
       set({ views: { ...state.views, [sessionId]: view } });
     }
@@ -362,10 +359,7 @@ export const useAppStore = create<AppState>((set, get) => {
         const session = state.sessions.find((s) => s.id === sessionId);
         const view =
           state.views[sessionId] ??
-          initialSessionView(
-            session?.players ?? [],
-            session?.initialVisible ?? [],
-          );
+          initialSessionView(session?.players ?? []);
         applyRecord(view, seq, record, role);
 
         const updates: Partial<AppState> = {

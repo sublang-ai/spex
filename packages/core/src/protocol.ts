@@ -150,7 +150,7 @@ export interface SessionInfo {
   createdAt: number;
   live: boolean;
   endedAt: number | null;
-  /** Player pane roster: namespaced `<playbook>-<role>` ids in config order. */
+  /** The session's bound player roster, in config order (DR-032). */
   players: { id: string; adapter: AdapterName; model?: string }[];
   /** Panes visible at session start, before any player_view_changed record. */
   initialVisible: string[];

@@ -44,7 +44,7 @@ function session(over: Partial<SessionInfo> & { id: string }): SessionInfo {
 
 /** A loaded transcript; `question` parks it awaiting a Boss reply. */
 function view(question?: string): SessionView {
-  const loaded = initialSessionView(PLAYERS, ["dev.coder"]);
+  const loaded = initialSessionView(PLAYERS);
   loaded.loading = false;
   if (question) loaded.pendingQuestion = question;
   return loaded;

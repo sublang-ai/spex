@@ -44,7 +44,7 @@ function liveSession(id: string, projectId: string): SessionInfo {
 
 /** A view parked on a Boss question (attention: question). */
 function parkedView(): SessionView {
-  return applyRecords(initialSessionView([], []), [
+  return applyRecords(initialSessionView([]), [
     {
       seq: 1,
       record: {

@@ -113,7 +113,6 @@ export interface SessionView {
   /** Streaming captain speech accumulated from visible deltas. */
   captainDraft: string;
   players: Record<string, PlayerView>;
-  visible: string[];
   turnActive: boolean;
   currentTurnId: number | null;
   /** True while a history replay is loading after (re)subscription. */
@@ -134,7 +133,6 @@ export interface SessionView {
 
 export function initialSessionView(
   players: readonly { id: string }[],
-  initialVisible: readonly string[],
 ): SessionView {
   return {
     captain: [],
@@ -145,7 +143,6 @@ export function initialSessionView(
         { id: player.id, running: false, segments: [] },
       ]),
     ),
-    visible: [...initialVisible],
     turnActive: false,
     currentTurnId: null,
     frames: [],
@@ -549,10 +546,11 @@ export function applyRecord(
       }
       break;
     }
-    case "player_view_changed": {
-      view.visible = [...(r.visiblePlayerIds as string[])];
+    case "player_view_changed":
+      // A lane is the session's, not the current call's: the runtime's
+      // narrowing tells the reducer nothing a pane should act on
+      // (run-view-7).
       break;
-    }
     case "runtime_error": {
       pushCaptain(view, {
         kind: "error",

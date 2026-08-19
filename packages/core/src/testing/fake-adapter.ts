@@ -15,9 +15,20 @@ export interface FakeUsage {
   totalCostUsd?: number;
 }
 
+/** One scripted tool call: emitted as a tool_use/tool_result pair, so
+ * a fake run exercises the same transcript path a real one takes. */
+export interface FakeToolCall {
+  toolName: string;
+  input: Record<string, unknown>;
+  output?: unknown;
+  durationMs?: number;
+}
+
 export interface FakeResponse {
   /** Streamed as text_delta events before the terminal done. */
   deltas?: string[];
+  /** Emitted after the deltas, in order. */
+  tools?: FakeToolCall[];
   thinking?: string;
   /** done.result — also the finalText the runtime reports. */
   result: string;
@@ -96,6 +107,29 @@ export function fakeAdapterImports(
       const base = { agent: this.agent, sessionId };
       for (const delta of response.deltas ?? []) {
         yield { ...base, type: "text_delta", timestamp: Date.now(), payload: { delta } };
+      }
+      for (const [index, tool] of (response.tools ?? []).entries()) {
+        const toolUseId = `fake-tool-${index}`;
+        yield {
+          ...base,
+          type: "tool_use",
+          timestamp: Date.now(),
+          payload: { toolName: tool.toolName, toolUseId, input: tool.input },
+        };
+        yield {
+          ...base,
+          type: "tool_result",
+          timestamp: Date.now(),
+          payload: {
+            toolUseId,
+            toolName: tool.toolName,
+            status: "success",
+            output: tool.output ?? "ok",
+            ...(tool.durationMs !== undefined
+              ? { durationMs: tool.durationMs }
+              : {}),
+          },
+        };
       }
       if (response.thinking !== undefined) {
         yield {

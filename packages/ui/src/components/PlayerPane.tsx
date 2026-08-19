@@ -46,6 +46,34 @@ function Usage({ usage }: { usage: UsageView }) {
   );
 }
 
+/** The keys a tool call names its subject with, in the order the
+ * card reads them (run-view-4). */
+const SUBJECT_KEYS = [
+  "command",
+  "file_path",
+  "path",
+  "pattern",
+  "url",
+  "query",
+  "prompt",
+  "description",
+] as const;
+
+/** What the call acts on, in one line: a collapsed card that says only
+ * "Bash" leaves the reader guessing at every step of a run. */
+function toolSubject(input: unknown): string | undefined {
+  const raw =
+    typeof input === "string"
+      ? input
+      : input && typeof input === "object"
+        ? SUBJECT_KEYS.map(
+            (key) => (input as Record<string, unknown>)[key],
+          ).find((value): value is string => typeof value === "string")
+        : undefined;
+  const line = raw?.trim().replace(/\s+/g, " ");
+  return line ? line : undefined;
+}
+
 function Segment({ segment }: { segment: TranscriptSegment }) {
   switch (segment.kind) {
     case "prompt":
@@ -78,7 +106,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
     case "text":
       return (
         <div>
-          <Markdown text={segment.text} />
+          <Markdown text={segment.text} links="web-only" />
           {segment.streaming ? (
             <span className="inline-block h-3 w-1.5 animate-pulse bg-neutral-400 align-baseline" />
           ) : null}
@@ -93,34 +121,51 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
           <div className="mt-1 whitespace-pre-wrap">{segment.summary}</div>
         </details>
       );
-    case "tool":
+    case "tool": {
+      const subject = toolSubject(segment.input);
       return (
         <details className="rounded border border-neutral-200 bg-white px-2 py-1 text-xs dark:border-neutral-800 dark:bg-neutral-900">
           <summary className="cursor-pointer select-none font-mono">
-            <span
-              className={
-                segment.status === "error" || segment.status === "denied"
-                  ? "text-red-600 dark:text-red-400"
-                  : segment.status === "success"
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-neutral-500"
-              }
-            >
-              ⚒
-            </span>{" "}
-            {segment.toolName}
-            {segment.durationMs !== undefined ? (
-              <span className="text-neutral-400"> · {segment.durationMs}ms</span>
-            ) : null}
+            {/* The row stays one line: the subject takes the rest of it
+                and elides, so a long command never widens the pane. */}
+            <span className="inline-flex w-[calc(100%-1.25rem)] items-baseline gap-1.5 align-middle">
+              <span
+                aria-hidden="true"
+                className={
+                  segment.status === "error" || segment.status === "denied"
+                    ? "text-red-600 dark:text-red-400"
+                    : segment.status === "success"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-neutral-500"
+                }
+              >
+                ⚒
+              </span>
+              <span className="shrink-0">{segment.toolName}</span>
+              {segment.durationMs !== undefined ? (
+                <span className="shrink-0 text-neutral-400">
+                  · {segment.durationMs}ms
+                </span>
+              ) : null}
+              {subject ? (
+                <span
+                  data-testid={`tool-subject-${segment.seq}`}
+                  className="min-w-0 flex-1 truncate text-neutral-500 dark:text-neutral-400"
+                >
+                  {subject}
+                </span>
+              ) : null}
+            </span>
           </summary>
           <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-neutral-600 dark:text-neutral-400">
             {JSON.stringify(segment.input, null, 2)}
             {segment.output !== undefined
-              ? `\n→ ${typeof segment.output === "string" ? segment.output : JSON.stringify(segment.output, null, 2)}`
+              ? `\n\u2192 ${typeof segment.output === "string" ? segment.output : JSON.stringify(segment.output, null, 2)}`
               : ""}
           </pre>
         </details>
       );
+    }
     case "error":
       return (
         <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
@@ -171,16 +216,24 @@ export function PlayerPane({
   return (
     <section
       data-testid={`player-pane-${view.id}`}
-      className="flex min-h-0 min-w-[280px] flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      className="@container flex min-h-0 min-w-[280px] flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
+      {/* One line at any pane width: the lane's name is never abridged,
+          a long model name elides, and the at-a-glance usage — which
+          the transcript's own result line repeats — gives way first. */}
       <header className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
-        <span className="font-mono text-sm font-semibold">{view.id}</span>
+        <span className="shrink-0 font-mono text-sm font-semibold">
+          {view.id}
+        </span>
         {meta ? (
-          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+          <span
+            title={meta.model ?? meta.adapter}
+            className="min-w-0 truncate rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+          >
             {meta.model ?? meta.adapter}
           </span>
         ) : null}
-        <span className="ml-auto">
+        <span className="ml-auto shrink-0">
           {view.running ? (
             <span
               data-testid="player-running"
@@ -188,7 +241,9 @@ export function PlayerPane({
               title="running"
             />
           ) : view.turnUsage ? (
-            <Usage usage={view.turnUsage} />
+            <span className="hidden whitespace-nowrap @[22rem]:inline">
+              <Usage usage={view.turnUsage} />
+            </span>
           ) : null}
         </span>
       </header>

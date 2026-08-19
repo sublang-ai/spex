@@ -55,7 +55,7 @@ function Line({
       return (
         <div className="flex justify-start" title={time}>
           <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800">
-            <Markdown text={line.text} />
+            <Markdown text={line.text} links="web-only" />
           </div>
         </div>
       );
@@ -74,7 +74,7 @@ function Line({
               </div>
             ) : null}
             <div className="text-sm">
-              <Markdown text={line.text} />
+              <Markdown text={line.text} links="web-only" />
             </div>
           </div>
         </div>
@@ -238,7 +238,7 @@ export function CaptainPane({
           {view.captainDraft ? (
             <div className="flex justify-start">
               <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800">
-                <Markdown text={view.captainDraft} />
+                <Markdown text={view.captainDraft} links="web-only" />
               </div>
             </div>
           ) : view.turnActive ? (

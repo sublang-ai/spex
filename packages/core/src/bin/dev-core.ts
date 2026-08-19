@@ -28,17 +28,23 @@ const FAKE_CONFIG = `
 captain:
   adapter: claude
   model: claude-opus-5
+players:
+  dev.coder:
+    adapter: claude
+    model: claude-opus-5
+  dev.reviewer:
+    adapter: codex
+    model: gpt-5.6-sol
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"
-    players:
-      coder:
-        adapter: claude
-        model: claude-opus-5
-      reviewer:
-        adapter: codex
-        model: gpt-5.6-sol
-    committer: coder
+    roles:
+      coder: dev.coder
+  review:
+    from: "@sublang/playbook/review/registry"
+    roles:
+      coder: dev.coder
+      reviewer: dev.reviewer
 `;
 
 function seedDemoSpecs(projectDir: string): void {
@@ -68,6 +74,10 @@ async function main(): Promise<void> {
         {
           match: "Review the change",
           response: {
+            tools: [
+              { toolName: "command_execution", input: { command: "git show --stat HEAD" } },
+              { toolName: "command_execution", input: { command: "npm test" } },
+            ],
             deltas: [
               "### Review\n\n",
               "- `auth.ts` — the token refresh looks **correct**\n",
@@ -81,6 +91,11 @@ async function main(): Promise<void> {
         },
       ],
       fallback: {
+        tools: [
+          { toolName: "Read", input: { file_path: "src/auth.ts" } },
+          { toolName: "Edit", input: { file_path: "src/auth.ts" } },
+          { toolName: "Bash", input: { command: "npm test -- auth" } },
+        ],
         deltas: [
           "Working on it. ",
           "Editing `auth.ts` to fix the refresh path…\n\n",
@@ -168,9 +183,9 @@ async function main(): Promise<void> {
       await trace("player.call.started", {
         stateId: "runFirstPhase",
         roleId: "coder",
-        playerId: "code-coder",
+        playerId: "dev.coder",
       });
-      await context.callPlayer("code-coder", `Implement: ${turn.prompt}`);
+      await context.callPlayer("dev.coder", `Implement: ${turn.prompt}`);
       await trace("player.call.finished", {
         stateId: "runFirstPhase",
         status: "ok",
@@ -226,9 +241,9 @@ async function main(): Promise<void> {
       await reviewTrace("player.call.started", {
         stateId: "reviewInitial",
         roleId: "reviewer",
-        playerId: "code-reviewer",
+        playerId: "dev.reviewer",
       });
-      await context.callPlayer("code-reviewer", "Review the change");
+      await context.callPlayer("dev.reviewer", "Review the change");
       await reviewTrace("player.call.finished", {
         stateId: "reviewInitial",
         status: "ok",

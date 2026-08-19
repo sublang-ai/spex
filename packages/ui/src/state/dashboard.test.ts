@@ -35,15 +35,15 @@ function session(id: string): SessionInfo {
 describe("DASH-15: attention derivation and ordering", () => {
   test("question outranks failure outranks idle", () => {
     const questionView = applyRecords(
-      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      initialSessionView(PLAYERS),
       [...TURN_ONE, ...TURN_TWO_QUESTION],
     );
     const idleView = applyRecords(
-      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      initialSessionView(PLAYERS),
       TURN_ONE,
     );
     const failedView = applyRecords(
-      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      initialSessionView(PLAYERS),
       TURN_ONE,
     );
     failedView.captain.push({
@@ -73,7 +73,7 @@ describe("DASH-15: attention derivation and ordering", () => {
 describe("DASH-16: answering clears the question item", () => {
   test("after the reply turn the session degrades to idle attention", () => {
     const view = applyRecords(
-      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      initialSessionView(PLAYERS),
       FULL_RUN,
     );
     const items = deriveAttention([session("s")], { s: view });
@@ -84,7 +84,7 @@ describe("DASH-16: answering clears the question item", () => {
 describe("dead sessions produce no attention", () => {
   test("non-live sessions are skipped", () => {
     const view = applyRecords(
-      initialSessionView(PLAYERS, INITIAL_VISIBLE),
+      initialSessionView(PLAYERS),
       [...TURN_ONE, ...TURN_TWO_QUESTION],
     );
     const ended = { ...session("s"), live: false };
