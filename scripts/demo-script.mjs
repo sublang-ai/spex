@@ -6,9 +6,10 @@
 
 const PROMPT =
   process.env.DEMO_PROMPT ??
-  // Says enough that the run has no reason to stop and ask: the repo
-  // carries no specs tree, and the coder should not invent one.
-  "/code slugify leaves a stray hyphen when a title ends in punctuation — fix it so the two failing tests pass. No specs tree in this repo; don't add one.";
+  // Short, and complete enough that the run has no reason to stop and
+  // ask: it names the file, the spec item the code breaks, and the
+  // evidence. The repo carries the spec, so nothing has to be invented.
+  "/code src/slugify.js leaves the edge separators as hyphens — three tests fail against slugify-2 and slugify-3. Fix it.";
 
 const setValue = (selector, value) => `
   const el = document.querySelector(${JSON.stringify(selector)});
@@ -22,6 +23,19 @@ const setValue = (selector, value) => `
 
 export default [
   // --- setup, before the first frame ------------------------------------
+  {
+    // The quick-start card is what a first run opens on, and its
+    // dismissal lives in localStorage — a previous take would hide it
+    // from this one. The flag is cleared and the app reloaded, since
+    // the card reads it once at mount.
+    label: "start from a first-run frame",
+    js: `
+      window.localStorage.removeItem("spex.quickStartDismissed");
+      window.location.reload();
+      return true;
+    `,
+    dwellMs: 2500,
+  },
   {
     label: "register the demo project",
     js: `
@@ -39,13 +53,16 @@ export default [
     `,
   },
   {
-    label: "dismiss the quick-start card so the frame is calm",
+    label: "settle after the reload",
     js: `
-      const hide = document.querySelector('[data-testid="quick-start-dismiss"]');
-      if (hide) hide.click();
-      return true;
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline) {
+        if (document.querySelector('[data-testid="quick-start"]')) return true;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return { abort: "quick start never rendered" };
     `,
-    dwellMs: 900,
+    dwellMs: 600,
   },
 
   // --- the recording ----------------------------------------------------
@@ -85,9 +102,10 @@ export default [
   {
     label: "widen the Captain pane so the whole machine is in frame",
     js: `
-      // The /code drawing is 564px wide and the default split gives it
-      // 377, so the divider is nudged the way a reader would nudge it
-      // (run-view-81). Seven steps of 2% take 34% to 48%.
+      // The /code drawing is 564px wide and the default split gives
+      // the column 413, so the divider is nudged the way a reader
+      // would nudge it (run-view-81). Eight steps of 2% take 34% to
+      // 50%, which is 608px — the drawing and its breathing room.
       const divider = document.querySelector('[data-testid="captain-divider"]');
       if (!divider) return { abort: "no divider" };
       // Home restores the default first, so a re-record starts from
@@ -96,7 +114,7 @@ export default [
         new KeyboardEvent("keydown", { key: "Home", bubbles: true }),
       );
       await new Promise((r) => setTimeout(r, 120));
-      for (let step = 0; step < 7; step += 1) {
+      for (let step = 0; step < 8; step += 1) {
         divider.dispatchEvent(
           new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
         );
@@ -104,7 +122,7 @@ export default [
       }
       return document.querySelector('[data-testid="captain-column"]').style.width;
     `,
-    dwellMs: 600,
+    dwellMs: 700,
   },
   {
     // A run that parks on a question waits for a human, so the demo
@@ -112,6 +130,8 @@ export default [
     // prompt makes this rare; leaving it unhandled would make the
     // recording hang on the one run that asks.
     label: "the run: /code opens, calls /review, and settles",
+    // The stretch where there is nothing for a reader to do but wait.
+    fast: true,
     waitForJs: `(() => {
       if (document.querySelector('[data-testid^="machine-card-"][data-settled="true"]')) {
         return true;
@@ -129,7 +149,7 @@ export default [
       }
       return false;
     })()`,
-    timeoutMs: 900_000,
+    timeoutMs: 1_800_000,
     dwellMs: 1200,
   },
   {
@@ -149,20 +169,27 @@ export default [
     dwellMs: 1400,
   },
   {
-    label: "land on the called machine — the point of the tree",
+    // The point of the tree is the machine /code called, so the demo
+    // opens it too: two settled drawings, one inside the other.
+    label: "open the called machine — the point of the tree",
     js: `
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const root = document.querySelector('[data-testid^="machine-card-"][data-settled="true"]');
       const child = root?.querySelector('[data-testid^="machine-card-"]');
       if (!child) return { abort: "no nested card" };
+      child.scrollIntoView({ block: "center" });
+      await wait(600);
+      const disclose = child.querySelector('[data-testid^="machine-disclose-"]');
+      if (disclose) disclose.click();
+      await wait(900);
       child.scrollIntoView({ block: "center", behavior: "smooth" });
       await wait(900);
       return child.getAttribute("data-playbook");
     `,
-    dwellMs: 2600,
+    dwellMs: 3200,
   },
   {
     label: "hold on the finished tree",
-    dwellMs: 1600,
+    dwellMs: 2200,
   },
 ];
