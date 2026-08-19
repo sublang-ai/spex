@@ -48,10 +48,21 @@
   }
 }
 
-/* One focus ring (DR-013): brand outline on :focus-visible. */
+/* Focus shows by control kind (DR-013). A control that is only
+   momentarily focused takes a thin brand outline. A text field does
+   not: a composer holds focus for a whole session, and a ring around
+   it all that time reads as a frame rather than as focus — so the
+   field's own border darkens instead, which is also what keeps the
+   composer box reading as one control. */
 :focus-visible {
-  outline: 2px solid var(--color-brand-600);
-  outline-offset: 2px;
+  outline: 1.5px solid var(--color-brand-500);
+  outline-offset: 1px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable]:focus-visible {
+  outline: none;
 }
 @media (prefers-color-scheme: dark) {
   :focus-visible {

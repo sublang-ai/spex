@@ -154,7 +154,7 @@ export function Composer({
           ))}
         </div>
       ) : null}
-      <div className="relative flex items-end gap-2">
+      <div className="relative">
         {slash ? (
           <SlashMenuList
             items={slash}
@@ -163,96 +163,102 @@ export function Composer({
             onCompileNew={onCompileNew}
           />
         ) : null}
-        <textarea
-          ref={textareaRef}
-          data-testid="boss-composer"
-          autoFocus
-          value={text}
-          aria-haspopup="listbox"
-          aria-expanded={Boolean(slash)}
-          aria-controls={slash ? "slash-listbox" : undefined}
-          aria-activedescendant={
-            slash
-              ? `slash-option-${Math.min(slashIndex, slash.length - 1)}`
-              : undefined
-          }
-          onChange={(event) => {
-            setText(event.target.value);
-            setSlashIndex(0);
-            setSlashDismissed(false);
-          }}
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-            if (slash) {
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                setSlashIndex((index) => (index + 1) % slash.length);
-                return;
-              }
-              if (event.key === "ArrowUp") {
-                event.preventDefault();
-                setSlashIndex(
-                  (index) => (index - 1 + slash.length) % slash.length,
-                );
-                return;
-              }
-              if (event.key === "Tab" || event.key === "Enter") {
-                event.preventDefault();
-                insertCommand(
-                  slash[Math.min(slashIndex, slash.length - 1)].command,
-                );
-                return;
-              }
-              if (event.key === "Escape") {
-                // Hide the menu, never the draft (DR-010 §4).
-                event.preventDefault();
-                setSlashDismissed(true);
-                return;
-              }
+        {/* One composer shape across the app (DR-010 §8): the box is
+            the control, the buttons sit inside it, and focus reads as
+            the box's own border rather than a ring around it. */}
+        <div className="flex items-end gap-2 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:focus-within:border-neutral-400">
+          <textarea
+            ref={textareaRef}
+            data-testid="boss-composer"
+            autoFocus
+            value={text}
+            aria-haspopup="listbox"
+            aria-expanded={Boolean(slash)}
+            aria-controls={slash ? "slash-listbox" : undefined}
+            aria-activedescendant={
+              slash
+                ? `slash-option-${Math.min(slashIndex, slash.length - 1)}`
+                : undefined
             }
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit();
+            onChange={(event) => {
+              setText(event.target.value);
+              setSlashIndex(0);
+              setSlashDismissed(false);
+            }}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing || event.keyCode === 229)
+                return;
+              if (slash) {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setSlashIndex((index) => (index + 1) % slash.length);
+                  return;
+                }
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setSlashIndex(
+                    (index) => (index - 1 + slash.length) % slash.length,
+                  );
+                  return;
+                }
+                if (event.key === "Tab" || event.key === "Enter") {
+                  event.preventDefault();
+                  insertCommand(
+                    slash[Math.min(slashIndex, slash.length - 1)].command,
+                  );
+                  return;
+                }
+                if (event.key === "Escape") {
+                  // Hide the menu, never the draft (DR-010 §4).
+                  event.preventDefault();
+                  setSlashDismissed(true);
+                  return;
+                }
+              }
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+            rows={2}
+            placeholder={
+              !connected
+                ? "Reconnecting to the Spex core…"
+                : awaiting
+                  ? "Answer the question (or give a new directive)…"
+                  : view.turnActive
+                    ? "A turn is running — your message is delivered when it finishes…"
+                    : "Message the Captain — free text or /command…"
             }
-          }}
-          rows={2}
-          placeholder={
-            !connected
-              ? "Reconnecting to the Spex core…"
-              : awaiting
-                ? "Answer the question (or give a new directive)…"
-                : view.turnActive
-                  ? "A turn is running — your message is delivered when it finishes…"
-                  : "Message the Captain — free text or /command…"
-          }
-          disabled={!connected}
-          className="max-h-[40vh] min-h-[3rem] flex-1 resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:focus:border-neutral-400"
-        />
-        <div className="flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={submit}
-            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
-            disabled={text.trim().length === 0 || sending || !connected}
-            title={!connected ? "not connected" : undefined}
-          >
-            {view.turnActive ? "Queue" : "Send"}
-          </button>
-          {view.turnActive ? (
+            disabled={!connected}
+            className="max-h-[40vh] min-h-[2.5rem] flex-1 resize-y border-0 bg-transparent px-1 py-1 text-sm outline-none disabled:opacity-60"
+          />
+          <div className="flex shrink-0 items-center gap-1.5">
+            {view.turnActive ? (
+              <button
+                type="button"
+                data-testid="abort-button"
+                onClick={() => {
+                  setAborting(true);
+                  onAbort();
+                }}
+                disabled={aborting || !connected}
+                title={!connected ? "not connected" : undefined}
+                className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+              >
+                {aborting ? "Aborting…" : "Abort"}
+              </button>
+            ) : null}
             <button
               type="button"
-              data-testid="abort-button"
-              onClick={() => {
-                setAborting(true);
-                onAbort();
-              }}
-              disabled={aborting || !connected}
+              onClick={submit}
+              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
+              disabled={text.trim().length === 0 || sending || !connected}
               title={!connected ? "not connected" : undefined}
-              className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
             >
-              {aborting ? "Aborting…" : "Abort"}
+              {view.turnActive ? "Queue" : "Send"}
             </button>
-          ) : null}
+          </div>
         </div>
       </div>
     </div>

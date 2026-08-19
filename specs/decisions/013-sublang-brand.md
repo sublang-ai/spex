@@ -30,7 +30,7 @@ Accepted; the logo recolor is reverted by owner decision (2026-07-23) — the Lo
   The owner-supplied SVG is the vector master; the in-app mark renders it directly, and the raster assets — 480px PNG, favicon, app icon — derive from it.
   The warm palette is artwork-only, like the bright wordmark purple: it never appears as UI text, border, or fill, and brand purple stays the sole interaction hue.
   The SubLang monogram and wordmarks remain the Lab's marks; those assets come from the design-system project unmodified — never redrawn or re-typeset.
-- **Interaction details.** One focus ring — a 2px brand outline at 2px offset on `:focus-visible`; native control accents and text selection ride the brand ramp.
+- **Interaction details.** Focus shows by control kind: a 1.5px mid-ramp brand outline at 1px offset on `:focus-visible` for momentary focus, and for a text field — which can hold focus for a whole session — the field's own border darkens instead of wearing a ring, both holding WCAG indicator contrast on either surface. Native control accents and text selection ride the brand ramp.
   Light-theme muted text darkens one step so warm paper holds WCAG AA (DR-010 §7); dark-theme steps stay stock.
 - Brand values live as Tailwind theme tokens in the UI stylesheet, one place to retune.
 
