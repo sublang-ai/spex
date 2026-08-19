@@ -7,4 +7,4 @@ packages/cli/scaffold/
 packages/core/assets/academy/
 
 # Recording output (scripts/record-demo.mjs).
-demo.mp4
+demo*.mp4
