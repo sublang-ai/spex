@@ -277,6 +277,7 @@ function WorkspaceSurface({
   const startView = (
     <CaptainHome
       hasProject={Boolean(project)}
+      hasProjects={projects.length > 0}
       projectName={project?.name}
       playbooks={summary?.playbooks ?? []}
       captain={summary?.captain}

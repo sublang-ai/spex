@@ -72,6 +72,7 @@ function renderHome({
   onNavigate = vi.fn(),
   onOpenPalette = vi.fn(),
   hasProject = true,
+  hasProjects = true,
   // null renders the no-captain state; undefined would fall back to
   // this default the way an omitted option does.
   captain = CAPTAIN as AgentSummary | null,
@@ -84,6 +85,7 @@ function renderHome({
   const view = render(
     <CaptainHome
       hasProject={hasProject}
+      hasProjects={hasProjects}
       projectName={hasProject ? PROJECT.name : undefined}
       playbooks={PLAYBOOKS}
       captain={captain ?? undefined}
@@ -140,6 +142,14 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     });
     fireEvent.click(screen.getByTestId("start-send"));
     await vi.waitFor(() => expect(onStart).toHaveBeenCalledWith("fix the bug"));
+  });
+
+  test("with no project registered, the greeting offers adding one", () => {
+    // The remedy the workspace actually has: with nothing registered,
+    // there is nothing in the sidebar to pick (run-view-25).
+    renderHome({ hasProject: false, hasProjects: false });
+    expect(screen.getByText(/Add a project/)).toBeTruthy();
+    expect(screen.queryByText(/Pick a project in the sidebar/)).toBeNull();
   });
 
   test("submitting without a project opens the palette, draft intact", () => {

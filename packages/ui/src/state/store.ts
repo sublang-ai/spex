@@ -447,7 +447,9 @@ export const useAppStore = create<AppState>((set, get) => {
         await ensureSubscribed(session.id).catch(() => {});
       }
       // Boot the project context (DR-011): the persisted project when
-      // it still exists, else the first live session's project.
+      // it still exists, else the first live session's project, else
+      // any project at all — a workspace holding projects never opens
+      // asking which one (run-view-57).
       let current = get().currentProjectId;
       if (!current) {
         const persisted = safeStorageGet(CURRENT_PROJECT_KEY);
@@ -455,6 +457,8 @@ export const useAppStore = create<AppState>((set, get) => {
           current = persisted;
         } else if (live.length > 0) {
           current = live[0].projectId;
+        } else {
+          current = projects[0]?.id;
         }
         if (current) set({ currentProjectId: current });
       }

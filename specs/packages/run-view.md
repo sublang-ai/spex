@@ -136,8 +136,10 @@ The run view shall provide light and dark color themes and size the Captain and 
 
 #### run-view-25
 
-Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting that names the current project (or points at the sidebar when none is chosen), a chat composer, and the captain's adapter and model with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
+Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter and model with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
 
+- the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place;
+- with no project current, the greeting names the remedy the workspace actually has — picking one where projects exist, adding one where none do — never sending the reader to a sidebar holding nothing;
 - Project choice lives in the sidebar and palette, not in the composer row.
 
 #### run-view-26
@@ -436,7 +438,8 @@ Each project shall keep its own working set — the sessions open as tabs and wh
 
 - a session activated again is focused rather than opened twice, and removing a project discards its working set with it;
 - when the user arrives via an attention affordance (a Dashboard row or a palette row with a needs-you signal), the workspace focuses the session that needs the human instead of the remembered tab;
-- a fresh launch opens the current project's live session if it has one and the start tab otherwise — the sidebar, not the working set, is what carries history across launches [[run-view-67](#run-view-67)].
+- a fresh launch opens the current project's live session if it has one and the start tab otherwise — the sidebar, not the working set, is what carries history across launches [[run-view-67](#run-view-67)];
+- a launch with no remembered project adopts one wherever the workspace holds any — a live session's project, else any registered one — so a workspace with projects never opens asking which.
 
 #### run-view-58
 
@@ -524,6 +527,10 @@ Where a fixture machine holds a neighbour edge, a same-rank pair, a rank-skippin
 Where a fixture store holds two projects — the current one with a live titled session awaiting a Boss reply, more ended sessions than the recent window holds (one of them having held a failure), and a session with no turns; the other with a live session awaiting a reply and an ended session — the test suite shall assert the sidebar contract: Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)], the current project's rows carry their titles, relative times, and attention-first marks with the turn counts in their accessible descriptions and the ended failure marked as history rather than attention [[run-view-73](#run-view-73)], and the other project's row carries its own attention signal [[run-view-67](#run-view-67)]; disclosing that project leaves the current project unchanged [[run-view-67](#run-view-67)]; activating its session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; ending the live session keeps its transcript on screen read-only and reveals its now-ended row [[run-view-69](#run-view-69)]; closing that tab leaves the session listed and running nothing [[run-view-68](#run-view-68)]; and the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)].
 
 
+#### run-view-84
+
+Where a fixture launch reports registered projects with nothing remembered and no live session, the test suite shall assert the workspace adopts one of them as current [[run-view-57](#run-view-57)].
+
 #### run-view-72
 
 Where the workspace renders with the sidebar expanded, the test suite shall assert the chrome contract of [[run-view-71](#run-view-71)]: the binding collapses the sidebar to icons that keep their accessible names and the Dashboard attention count, the state survives a remount, and the foot control restores the tree.
@@ -557,6 +564,7 @@ While a replayed fixture stream holds a turn active, the test suite shall assert
 Where no session is live, when the Workspace renders with a fixture config of one project and one playbook, the test suite shall assert the Captain home's one-motion start:
 
 - the Captain home shows the greeting naming the current project, the chat composer, and the captain identity [[run-view-25](#run-view-25)];
+- with no project current, the greeting offers picking one where the workspace holds projects and adding one where it holds none [[run-view-25](#run-view-25)];
 - when text is submitted with a current project, a session is created for that project and the text is dispatched as its first Boss turn [[run-view-26](#run-view-26)];
 - when text is submitted with no project chosen, the palette opens and the draft survives [[run-view-26](#run-view-26)].
 

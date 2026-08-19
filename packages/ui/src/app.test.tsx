@@ -359,3 +359,32 @@ describe("run-view-81: the reader sets the Captain/players split", () => {
     expect(screen.getByTestId("captain-column").style.width).toBe("70%");
   });
 });
+
+describe("run-view-57: a workspace holding projects opens inside one", () => {
+  test("a launch with nothing remembered adopts a registered project", async () => {
+    // Nothing persisted and no live session — the state a first launch
+    // after registering elsewhere lands in. The workspace still opens
+    // in a project rather than sending the reader to the sidebar.
+    // Ids no earlier run could have remembered, so the assertion can
+    // only be met by the fallback and not by a persisted choice.
+    useAppStore.setState({ currentProjectId: undefined, projects: [] });
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "project.list") {
+        return [
+          { id: "fresh-1", name: "alpha", path: "/tmp/alpha", registeredAt: 0 },
+          { id: "fresh-2", name: "beta", path: "/tmp/beta", registeredAt: 1 },
+        ];
+      }
+      if (type === "session.list") return [];
+      if (type === "readiness.get") return [];
+      if (type === "config.get") {
+        return { status: "valid", summary: { playbooks: [], captain: undefined } };
+      }
+      return {};
+    });
+
+    await useAppStore.getState().refresh();
+
+    expect(useAppStore.getState().currentProjectId).toBe("fresh-1");
+  });
+});

@@ -49,6 +49,9 @@ function safeWrite(
 export interface CaptainHomeProps {
   /** The workspace's project context (DR-011); the bar owns choice. */
   hasProject: boolean;
+  /** Whether the workspace holds any project at all: with none, the
+   * remedy is adding one, not picking one (run-view-25). */
+  hasProjects?: boolean;
   projectName?: string;
   playbooks: PlaybookSummary[];
   /** The Captain's inline agent block (DR-019); absent while the
@@ -179,14 +182,20 @@ export function CaptainHome(props: CaptainHomeProps) {
             {props.hasProject ? (
               <>
                 Hello! This is {props.projectName ?? "your project"} — tell
-                me what to do and I'll route it to a playbook and drive the
-                players.
+                me what to do with it and I'll route it to a playbook and
+                drive the players.
+              </>
+            ) : props.hasProjects ? (
+              <>
+                Hello! I'm your Captain. Pick a project in the sidebar,
+                then tell me what to do with it and I'll route it to a
+                playbook and drive the players.
               </>
             ) : (
               <>
-                Hello! I'm your Captain. Pick a project in the sidebar
-                to get started — then tell me what to do and I'll route
-                it to a playbook and drive the players.
+                Hello! I'm your Captain. Add a project — any local git
+                repo — and tell me what to do with it; I'll route it to a
+                playbook and drive the players.
               </>
             )}
           </p>
@@ -426,7 +435,13 @@ export function CaptainHome(props: CaptainHomeProps) {
               data-testid="start-send"
               disabled={busy || !connected || text.trim().length === 0}
               onClick={() => void start()}
-              title={props.hasProject ? undefined : "Pick a project first (⌘P)"}
+              title={
+                props.hasProject
+                  ? undefined
+                  : props.hasProjects
+                    ? "Pick a project first (⌘P)"
+                    : "Add a project first (⌘P)"
+              }
               className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
               {busy ? "Starting…" : "Send"}
