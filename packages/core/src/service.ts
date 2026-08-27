@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The core service: config lifecycle (load/seed/watch, CORE-2/3),
-// loopback WebSocket endpoint with hello/version handshake (CORE-1),
-// command dispatch with schema validation (CORE-13), and record
-// channels filtered by visibility at this boundary (CORE-8/14).
+// WebSocket endpoint with hello/version handshake (CORE-1) — a
+// loopback socket by default, or attached to a shell-supplied HTTP
+// server (DR-033) — command dispatch with schema validation
+// (CORE-13), and record channels filtered by visibility at this
+// boundary (CORE-8/14).
 
 import { existsSync, readFileSync, statSync, watch, type FSWatcher } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -12,6 +14,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
+import type { Server as HttpServer } from "node:http";
+import type { Server as HttpsServer } from "node:https";
 
 import {
   checkAdapterReadiness,
@@ -68,6 +72,13 @@ export interface CoreServiceOptions {
   /** SQLite path; defaults to in-memory (callers should set it). */
   dbPath?: string;
   port?: number;
+  /**
+   * A shell-supplied HTTP(S) server to attach the WebSocket endpoint
+   * to (DR-033). The shell owns binding, TLS, and the server's
+   * lifecycle; `port` is ignored, and `port()` reports the attached
+   * server's bound port once the shell listens.
+   */
+  httpServer?: HttpServer | HttpsServer;
   loadModule?: LoadModule;
   adapterImports?: PlayerAdapterImports;
   /**
@@ -344,29 +355,31 @@ export class CoreService {
   }
 
   private async listen(port: number): Promise<void> {
-    this.wss = new WebSocketServer({
-      host: "127.0.0.1",
-      port,
-      verifyClient: (info: { origin?: string; req: { url?: string } }) => {
-        // Reject foreign browser origins outright: only the packaged
-        // file:// renderer (origin "file://" or "null") and
-        // non-browser clients (no Origin header) may connect.
-        const origin = info.origin;
-        if (
-          origin &&
-          origin !== "null" &&
-          !origin.startsWith("file://") &&
-          !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
-        ) {
-          return false;
-        }
-        const query = new URL(
-          info.req.url ?? "/",
-          "ws://127.0.0.1",
-        ).searchParams;
-        return query.get("token") === this.authToken;
-      },
-    });
+    const verifyClient = (info: {
+      origin?: string;
+      req: { url?: string; headers: { host?: string } };
+    }): boolean => {
+      // Reject foreign browser origins outright: only the packaged
+      // file:// renderer (origin "file://" or "null"), local dev
+      // pages, a page served from the host this handshake itself
+      // addressed (DR-033), and non-browser clients (no Origin
+      // header) may connect.
+      const origin = info.origin;
+      if (
+        origin &&
+        origin !== "null" &&
+        !origin.startsWith("file://") &&
+        !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) &&
+        !this.originMatchesRequestHost(origin, info.req.headers.host)
+      ) {
+        return false;
+      }
+      const query = new URL(info.req.url ?? "/", "ws://127.0.0.1").searchParams;
+      return query.get("token") === this.authToken;
+    };
+    this.wss = this.options.httpServer
+      ? new WebSocketServer({ server: this.options.httpServer, verifyClient })
+      : new WebSocketServer({ host: "127.0.0.1", port, verifyClient });
     this.wss.on("connection", (socket) => {
       const client: ClientState = { socket, channels: new Set() };
       this.clients.add(client);
@@ -380,10 +393,21 @@ export class CoreService {
         coreVersion: CORE_VERSION,
       });
     });
+    if (this.options.httpServer) return; // the shell listens
     await new Promise<void>((resolveListen, rejectListen) => {
       this.wss?.once("listening", resolveListen);
       this.wss?.once("error", rejectListen);
     });
+  }
+
+  /** A browser Origin naming the host the request itself addressed. */
+  private originMatchesRequestHost(origin: string, host?: string): boolean {
+    if (!host) return false;
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
+    }
   }
 
   private send(socket: WebSocket, message: ServerMessage): void {
