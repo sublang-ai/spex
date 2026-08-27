@@ -116,6 +116,7 @@ Where the app is packaged, the packaged app shall ship agent-SDK native binaries
 
 When a tag matching `app-v*` is pushed, the desktop release workflow shall build the macOS arm64 app with electron-builder [[3]] and attach the unsigned build artifacts to a GitHub release for that tag:
 
+- The desktop package names its Electron version exactly, never as a range: the packager downloads the platform binaries of one release and refuses a range outright, so a caret leaves the release with nothing to build against.
 - The desktop release workflow does not publish to npm and does not run for `v*` tags, keeping the app and CLI release channels disjoint ([DR-002](../decisions/002-desktop-app-architecture.md)).
 
 ### App Data

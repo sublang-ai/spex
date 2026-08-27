@@ -2,7 +2,7 @@
   "name": "spex-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Spex — the desktop app for running playbooks",
+  "description": "Spex \u2014 the desktop app for running playbooks",
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
@@ -28,7 +28,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
     "@types/node": "^26.4.0",
-    "electron": "^44.0.0",
+    "electron": "44.0.0",
     "electron-builder": "^26.15.3",
     "typescript": "^7.0.2"
   },
