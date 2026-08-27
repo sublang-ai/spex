@@ -12,7 +12,7 @@
     {
       "id": "reviewInitial",
       "kind": "state",
-      "role": "Reviewer",
+      "role": "reviewer",
       "description": "REVIEW-1: Reviewer examines the latest commit against the caller input.",
       "tags": [
         "playbook.busy"
@@ -21,7 +21,7 @@
     {
       "id": "addressFindings",
       "kind": "state",
-      "role": "Coder",
+      "role": "coder",
       "description": "REVIEW-2: Coder accepts or rejects every current review finding.",
       "tags": [
         "playbook.busy"
@@ -30,7 +30,7 @@
     {
       "id": "reviewAfterCommit",
       "kind": "state",
-      "role": "Reviewer",
+      "role": "reviewer",
       "description": "REVIEW-3: Reviewer examines the new review-fix commit and repository state.",
       "tags": [
         "playbook.busy"
@@ -39,7 +39,7 @@
     {
       "id": "reviewAfterRebuttal",
       "kind": "state",
-      "role": "Reviewer",
+      "role": "reviewer",
       "description": "REVIEW-4: Reviewer adjudicates an all-rejected Coder disposition.",
       "tags": [
         "playbook.busy"

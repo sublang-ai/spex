@@ -59,6 +59,7 @@ meta.md       The spec of specs
 | [DR-031](decisions/031-machine-call-tree.md) | 031-machine-call-tree.md | The run call tree: one card per run lifetime, calls drawn as containment with named call sites, cards breathing between drawing and strip, one aliveness grammar, neighbours-draw/distance-speaks edge law |
 | [DR-032](decisions/032-session-players.md) | 032-session-players.md | Session players: roles bind to explicit player lanes, a pane per player with per-call role labels, forked player/binding editors, guided legacy migration, playbook 8 / cligent 0.22 floors |
 | [DR-033](decisions/033-remote-gui-serving.md) | 033-remote-gui-serving.md | Remote GUI serving: server shell on one port, tokenized-URL auth, optional TLS, shell-attached core endpoint |
+| [DR-034](decisions/034-playbook-9-adoption.md) | 034-playbook-9-adoption.md | Playbook 9 adoption: floor to ^9.0.0, cligent unchanged, recaptured machine fixtures, no product code change |
 
 ## Packages
 

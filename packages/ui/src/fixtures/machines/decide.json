@@ -25,7 +25,7 @@
       "id": "independentProposals.coder.working",
       "parent": "independentProposals.coder",
       "kind": "state",
-      "role": "Coder",
+      "role": "coder",
       "description": "Coder independently proposes a spec design.",
       "tags": [
         "playbook.busy"
@@ -57,7 +57,7 @@
       "id": "independentProposals.reviewer.working",
       "parent": "independentProposals.reviewer",
       "kind": "state",
-      "role": "Reviewer",
+      "role": "reviewer",
       "description": "Reviewer independently proposes a spec design.",
       "tags": [
         "playbook.busy"
@@ -82,7 +82,7 @@
     {
       "id": "commitCoderProposal",
       "kind": "state",
-      "role": "Coder",
+      "role": "coder",
       "description": "Coder writes and commits Coder’s independent proposal.",
       "tags": [
         "playbook.busy"

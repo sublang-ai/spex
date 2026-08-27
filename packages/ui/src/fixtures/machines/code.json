@@ -12,7 +12,7 @@
     {
       "id": "runFirstPhase",
       "kind": "state",
-      "role": "Coder",
+      "role": "coder",
       "description": "Coder is implementing one direct phase or committing a new intent record.",
       "tags": [
         "playbook.busy"
@@ -29,7 +29,7 @@
     {
       "id": "runIrTask",
       "kind": "state",
-      "role": "Coder",
+      "role": "coder",
       "description": "Coder is implementing exactly one unfinished intent-record task.",
       "tags": [
         "playbook.busy"
@@ -58,6 +58,12 @@
       "tags": [
         "playbook.parked"
       ]
+    },
+    {
+      "id": "reportedReviewFailure",
+      "kind": "final",
+      "description": "The coding workflow reported a REVIEW failure and the last code-owned commit.",
+      "tags": []
     },
     {
       "id": "done",
@@ -118,13 +124,13 @@
     {
       "id": "reviewFirstCommit::done::2::0",
       "from": "reviewFirstCommit",
-      "to": "done",
+      "to": "reportedReviewFailure",
       "event": "done"
     },
     {
       "id": "reviewFirstCommit::error::0::0",
       "from": "reviewFirstCommit",
-      "to": "done",
+      "to": "reportedReviewFailure",
       "event": "error"
     },
     {
@@ -178,13 +184,13 @@
     {
       "id": "reviewIrTask::done::2::0",
       "from": "reviewIrTask",
-      "to": "done",
+      "to": "reportedReviewFailure",
       "event": "done"
     },
     {
       "id": "reviewIrTask::error::0::0",
       "from": "reviewIrTask",
-      "to": "done",
+      "to": "reportedReviewFailure",
       "event": "error"
     },
     {
