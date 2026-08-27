@@ -27,9 +27,8 @@
     "node-gyp": "^12.4.0"
   },
   "allowScripts": {
-    "better-sqlite3@12.11.1": true,
+    "better-sqlite3@13.0.3": true,
     "electron@33.4.11": true,
-    "esbuild@0.25.12": true,
-    "esbuild@0.24.2": true
+    "esbuild@0.28.2": true
   }
 }
