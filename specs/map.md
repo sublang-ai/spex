@@ -58,6 +58,7 @@ meta.md       The spec of specs
 | [DR-030](decisions/030-workspace-chrome.md) | 030-workspace-chrome.md | Workspace chrome: two-state rail collapse, the divider idiom as house law, chrome state as preference, collapse never hiding a duty |
 | [DR-031](decisions/031-machine-call-tree.md) | 031-machine-call-tree.md | The run call tree: one card per run lifetime, calls drawn as containment with named call sites, cards breathing between drawing and strip, one aliveness grammar, neighbours-draw/distance-speaks edge law |
 | [DR-032](decisions/032-session-players.md) | 032-session-players.md | Session players: roles bind to explicit player lanes, a pane per player with per-call role labels, forked player/binding editors, guided legacy migration, playbook 8 / cligent 0.22 floors |
+| [DR-033](decisions/033-remote-gui-serving.md) | 033-remote-gui-serving.md | Remote GUI serving: server shell on one port, tokenized-URL auth, optional TLS, shell-attached core endpoint |
 
 ## Packages
 
@@ -76,6 +77,7 @@ meta.md       The spec of specs
 | [release.md](packages/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene, end-user and live migration smokes |
 | [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, protocol-only rendering, fixture-stream coverage |
 | [scaffold.md](packages/scaffold.md) | Scaffold CLI: target resolution, idempotent seeding, LICENSE emission, language selection, agent instructions, and --update prompts for reconciliation or legacy migration |
+| [server-shell.md](packages/server-shell.md) | Server shell: the UI bundle and core WebSocket served from one port for a remote browser; token URL, TLS, bind safety, page connection |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |
 | [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader; specs.get/specs.read parse contract for the packages layout |

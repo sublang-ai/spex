@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; [DR-033](033-remote-gui-serving.md) extends the SDK-supply duty to the server shell.
 
 ## Context
 

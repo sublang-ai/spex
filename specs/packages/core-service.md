@@ -15,9 +15,22 @@ Every behavior in this package is observable over the WebSocket protocol; the se
 
 #### core-service-1
 
-Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on a loopback-only endpoint and report the endpoint address to the host:
+Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — and report the endpoint address to the host:
 
 - When a client connects, the core service sends a hello message carrying the protocol version before any other message, so clients can detect a protocol mismatch before issuing commands.
+
+#### core-service-24
+
+The core package shall reject WebSocket handshakes that do not present the service's session token, and handshakes whose Origin header names a foreign web origin, so that neither arbitrary local web pages nor remote pages can drive the control plane; embedding shells receive the token at startup and pass it to the UI:
+
+An Origin is not foreign only in these cases:
+
+| Origin | Admitted as |
+| --- | --- |
+| absent | a non-browser client |
+| `null`, or a `file://` origin | the packaged renderer |
+| `http(s)://localhost` or `http(s)://127.0.0.1`, any port | a local dev page |
+| the host the handshake request itself addressed | a page the embedding shell serves ([DR-033](../decisions/033-remote-gui-serving.md)) |
 
 ### Configuration
 
@@ -185,12 +198,6 @@ Where a configured playbook's registry entry accepts a `cwd` option and the conf
 
 The core contract test suite shall exercise the service end to end through the WebSocket protocol against a scripted fake adapter that replays a predetermined record script, using no network access and no real agent credentials, so protocol behavior is verified deterministically in CI.
 
-### Endpoint Hardening
-
-#### core-service-24
-
-The core package shall reject WebSocket handshakes that do not present the service's session token, and handshakes whose Origin header names a foreign web origin, so that neither arbitrary local web pages nor remote pages can drive the control plane; embedding shells receive the token at startup and pass it to the UI.
-
 ### Compile Lifecycle
 
 #### core-service-25
@@ -273,6 +280,17 @@ Where the core service runs with an injected compile spawner whose toolchain run
 - `compile.abort` for that id makes the pending `compile.run` reply with an `aborted` error, and the final progress line broadcast for the playbook is the canceled marker [[core-service-25](#core-service-25)];
 - `compile.abort` for a playbook id with no compile in flight is rejected with a `not_found` error;
 - after cancellation, a new `compile.run` for the same id is accepted.
+
+### Endpoint Coverage
+
+#### core-service-38
+
+Where the core service attaches to a test-supplied HTTP server [[core-service-1](#core-service-1)], the test suite shall connect real WebSocket clients to that server's port and assert the admissions and rejections of [[core-service-24](#core-service-24)]:
+
+- a token-bearing handshake whose Origin is the server's own host succeeds and receives the hello with the protocol version, with the endpoint address reported to the host [[core-service-1](#core-service-1)];
+- a handshake with a wrong or missing token is rejected;
+- a token-bearing handshake from a foreign web origin is rejected;
+- a token-bearing handshake with no Origin, and one from a `file://` origin, each succeed.
 
 ### Readiness Dedup Coverage
 
