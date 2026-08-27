@@ -103,8 +103,9 @@ export interface CoreServiceOptions {
   /** Compiled-playbook library directory (DR-005). */
   libraryDir?: string;
   /**
-   * Handshake token required on the WS URL (?token=). Defaults to a
-   * random value; embedding shells pass it to the UI. Foreign
+   * Handshake token required on the WS URL (?token=). Unset or empty
+   * defaults to a random value — a blank secret would disable the
+   * handshake — and embedding shells pass it to the UI. Foreign
    * browser origins are rejected regardless.
    */
   token?: string;
@@ -174,7 +175,7 @@ export class CoreService {
     if (!options.loadModule) {
       this.options = { ...options, loadModule: createModuleLoader(this.env) };
     }
-    this.authToken = options.token ?? randomUUID();
+    this.authToken = options.token || randomUUID();
     this.runCommand = options.runCommand ?? defaultRunCommand;
     this.forge =
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);

@@ -9,13 +9,7 @@
 // (SERVER-SHELL-2).
 
 import { randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import {
   createServer as createHttpServer,
   type IncomingMessage,
@@ -125,6 +119,11 @@ export function isLoopback(host: string): boolean {
   );
 }
 
+/** An IPv6 literal must be bracketed in URLs and ssh forwards. */
+export function formatHost(host: string): string {
+  return host.includes(":") ? `[${host}]` : host;
+}
+
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -176,12 +175,20 @@ function serveBundle(
     return;
   }
   const relative = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
-  const filePath = resolve(bundleDir, relative);
+  // Guard the lexical path, then the real one: a symlink staged into
+  // the bundle must not serve what it points at outside it.
+  let filePath = resolve(bundleDir, relative);
   if (!filePath.startsWith(bundleDir + sep)) {
     res.writeHead(404).end();
     return;
   }
-  if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+  try {
+    filePath = realpathSync(filePath);
+  } catch {
+    res.writeHead(404).end();
+    return;
+  }
+  if (!filePath.startsWith(bundleDir + sep) || !statSync(filePath).isFile()) {
     res.writeHead(404).end();
     return;
   }
@@ -199,6 +206,12 @@ function serveBundle(
 export async function startServer(
   options: ServerShellOptions,
 ): Promise<RunningServer> {
+  if (options.token === "") {
+    throw new Error(
+      "the token must not be empty — a blank secret would disable the " +
+        "handshake; unset SPEX_TOKEN/--token for a random one, or pass a secret",
+    );
+  }
   if ((options.tlsCert === undefined) !== (options.tlsKey === undefined)) {
     const missing = options.tlsCert === undefined ? "--tls-cert" : "--tls-key";
     throw new Error(`TLS needs both halves: ${missing} is missing`);
@@ -240,15 +253,17 @@ export async function startServer(
   }
   const port = (server.address() as AddressInfo).port;
   const scheme = tls ? "https" : "http";
-  const url = `${scheme}://${options.host}:${port}/?token=${encodeURIComponent(options.token)}`;
+  const url = `${scheme}://${formatHost(options.host)}:${port}/?token=${encodeURIComponent(options.token)}`;
   return {
     service,
     server,
     url,
     port,
     close: async () => {
-      await service.stop();
+      // Sever transports first: a vanished peer's WebSocket would
+      // otherwise hold the graceful stop until ws's close timeout.
       server.closeAllConnections();
+      await service.stop();
       await new Promise<void>((resolveClose) =>
         server.close(() => resolveClose()),
       );

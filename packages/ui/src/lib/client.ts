@@ -148,22 +148,27 @@ const TOKEN_STORAGE_KEY = "spex.core.token";
 
 // Adopt a served page's access token (DR-033): keep it for the page
 // session so a reload reconnects, and scrub it from the address bar
-// so the secret is not left on display or in shared links.
+// so the secret is not left on display or in shared links. The scrub
+// runs only once storage verifiably holds the copy — a storage-blocked
+// browser must keep the URL token or a reload would lose the endpoint.
 function adoptServedToken(params: URLSearchParams): string | null {
-  const storage = (() => {
+  const fromUrl = params.get("token");
+  if (!fromUrl) {
     try {
-      return window.sessionStorage;
+      return window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
     } catch {
-      return undefined; // storage can be blocked; the URL copy still works
+      return null;
+    }
+  }
+  const stored = (() => {
+    try {
+      window.sessionStorage.setItem(TOKEN_STORAGE_KEY, fromUrl);
+      return window.sessionStorage.getItem(TOKEN_STORAGE_KEY) === fromUrl;
+    } catch {
+      return false;
     }
   })();
-  const fromUrl = params.get("token");
-  if (fromUrl) {
-    try {
-      storage?.setItem(TOKEN_STORAGE_KEY, fromUrl);
-    } catch {
-      // Not stored: a reload needs the URL again, but this load works.
-    }
+  if (stored) {
     params.delete("token");
     const query = params.toString();
     try {
@@ -175,28 +180,25 @@ function adoptServedToken(params: URLSearchParams): string | null {
     } catch {
       // The address bar keeps the token; the connection still works.
     }
-    return fromUrl;
   }
-  try {
-    return storage?.getItem(TOKEN_STORAGE_KEY) ?? null;
-  } catch {
-    return null;
-  }
+  return fromUrl;
 }
 
 export function defaultCoreUrl(): string {
   const params = new URLSearchParams(window.location.search);
+  // A served page (DR-033): adopt the URL token first — even when an
+  // explicit ?core= URL wins the connection below, the token must
+  // reach the page session and leave the address bar.
+  const served = /^https?:$/.test(window.location.protocol);
+  const token = served ? adoptServedToken(params) : null;
   const fromQuery = params.get("core");
   if (fromQuery) return fromQuery;
-  // A served page (DR-033): the shell that delivered this page also
-  // carries the core endpoint, so the page's own origin is the core —
-  // ws: under http:, wss: under https:.
-  if (/^https?:$/.test(window.location.protocol)) {
-    const token = adoptServedToken(params);
-    if (token) {
-      const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-      return `${scheme}://${window.location.host}/?token=${encodeURIComponent(token)}`;
-    }
+  // The shell that delivered this page also carries the core endpoint,
+  // so the page's own origin is the core — ws: under http:, wss: under
+  // https:.
+  if (token) {
+    const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+    return `${scheme}://${window.location.host}/?token=${encodeURIComponent(token)}`;
   }
   const fromEnv = import.meta.env?.VITE_SPEX_CORE_URL as string | undefined;
   return fromEnv ?? "ws://127.0.0.1:8137/?token=dev";

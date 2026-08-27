@@ -98,3 +98,27 @@ test("attached endpoint admits the served page and rejects foreigners (CORE-38)"
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   }
 });
+
+test("an empty token option cannot disable the handshake (CORE-24)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-endpoint-empty-"));
+  const service = await CoreService.start({
+    configPath: join(dir, "playbook.config.yaml"),
+    dbPath: join(dir, "spex.db"),
+    watchConfig: false,
+    env: {},
+    home: dir,
+    token: "",
+  });
+  try {
+    // The blank secret is replaced, so a bare ?token= does not match.
+    assert.notEqual(service.token(), "");
+    const base = `ws://127.0.0.1:${service.port()}/`;
+    assert.equal((await handshake(`${base}?token=`)).outcome, "rejected");
+    assert.equal(
+      (await handshake(`${base}?token=${service.token()}`)).outcome,
+      "open",
+    );
+  } finally {
+    await service.stop();
+  }
+});

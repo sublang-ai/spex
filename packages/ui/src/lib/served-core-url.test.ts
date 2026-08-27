@@ -32,6 +32,20 @@ describe("served-page core-URL resolution over http", () => {
     window.history.replaceState(null, "", "/");
   });
 
+  it("adopts and scrubs the URL token even when ?core= wins", () => {
+    window.sessionStorage.removeItem("spex.core.token");
+    window.history.replaceState(
+      null,
+      "",
+      "/?core=ws://elsewhere:9/&token=combo",
+    );
+    expect(defaultCoreUrl()).toBe("ws://elsewhere:9/");
+    expect(window.sessionStorage.getItem("spex.core.token")).toBe("combo");
+    expect(window.location.search).toContain("core=");
+    expect(window.location.search).not.toContain("token");
+    window.history.replaceState(null, "", "/");
+  });
+
   it("falls back unchanged with neither token nor ?core=", () => {
     window.sessionStorage.removeItem("spex.core.token");
     expect(defaultCoreUrl()).toBe(

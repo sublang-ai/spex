@@ -6,7 +6,7 @@
 // (SERVER-SHELL-1), and stop the core before exiting on SIGINT or
 // SIGTERM so no agent process is orphaned (SERVER-SHELL-6).
 
-import { isLoopback, parseArgs, startServer } from "./server.js";
+import { formatHost, isLoopback, parseArgs, startServer } from "./server.js";
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2), process.env);
@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   console.log(`[spex-server] serving at ${running.url}`);
   if (isLoopback(options.host)) {
     console.log(
-      `[spex-server] remote access: ssh -N -L ${running.port}:${options.host}:${running.port} <user>@<server>`,
+      `[spex-server] remote access: ssh -N -L ${running.port}:${formatHost(options.host)}:${running.port} <user>@<server>`,
     );
   }
   console.log(
@@ -25,7 +25,13 @@ async function main(): Promise<void> {
   const shutdown = (): void => {
     if (stopping) return;
     stopping = true;
-    void running.close().then(() => process.exit(0));
+    running
+      .close()
+      .then(() => process.exit(0))
+      .catch((error) => {
+        console.error(error instanceof Error ? error.message : error);
+        process.exit(1);
+      });
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

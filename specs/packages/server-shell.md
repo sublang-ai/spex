@@ -26,6 +26,8 @@ When the server shell starts, it shall boot one core service attached to the she
 | `--tls-cert`, `--tls-key` | unset: plain HTTP |
 
 - A loopback bind is reached remotely over an SSH tunnel; the startup printout names that command.
+- An empty token is refused at startup, naming the mistake: a blank secret would disable the handshake.
+- An IPv6 bind host appears bracketed in the URL.
 
 #### server-shell-2
 
@@ -61,6 +63,9 @@ When the served page resolves its core endpoint, the UI shall connect to the pag
 | an explicit `?core=` URL | it wins unchanged, preserving the desktop and dev flows |
 | neither token nor `?core=` | resolution falls back to the build-time or localhost default unchanged |
 
+- The address bar is scrubbed only once the page session verifiably holds the copy; a storage-blocked browser keeps the URL token so a reload still connects.
+- The rows compose: a URL carrying both `?core=` and `?token=` connects per the `?core=` row while the token is still adopted and scrubbed.
+
 ### Shutdown
 
 #### server-shell-6
@@ -94,11 +99,11 @@ Where the server shell runs on a loopback port with a temporary config and store
 
 Where the server shell runs with fixture TLS material, the test suite shall assert that an HTTPS page fetch and a token-bearing `wss:` handshake succeed on the one port [[server-shell-3](#server-shell-3)] and that the access URL's scheme is `https` [[server-shell-1](#server-shell-1)].
 
-### Bind Safety Coverage
+### Startup Refusal Coverage
 
 #### server-shell-11
 
-Where a non-loopback bind is requested without TLS material, the test suite shall assert that startup is refused naming both remedies, that `--insecure` lifts the refusal [[server-shell-2](#server-shell-2)], and that a lone half of the TLS pair is refused naming the missing half [[server-shell-3](#server-shell-3)].
+Where a startup precondition is violated, the test suite shall assert each refusal: a plaintext public bind refused naming both remedies with `--insecure` lifting it [[server-shell-2](#server-shell-2)], a lone half of the TLS pair refused naming the missing half [[server-shell-3](#server-shell-3)], and an empty token refused [[server-shell-1](#server-shell-1)].
 
 ### Shutdown Coverage
 
@@ -110,4 +115,4 @@ Where the server shell runs as a real child process, the test suite shall assert
 
 #### server-shell-13
 
-Where a browser-document environment stands at a served page URL, the test suite shall drive the UI's endpoint resolution through the page-connection cases and assert each outcome of [[server-shell-5](#server-shell-5)]: the same-origin `ws:`/`wss:` endpoint carrying the token, the address bar scrubbed with the page-session copy surviving a reload, `?core=` precedence, and the unchanged fallback.
+Where a browser-document environment stands at a served page URL, the test suite shall drive the UI's endpoint resolution through the page-connection cases and assert each outcome of [[server-shell-5](#server-shell-5)]: the same-origin `ws:`/`wss:` endpoint carrying the token, the address bar scrubbed with the page-session copy surviving a reload, the URL token kept unscrubbed where storage is blocked, `?core=` precedence with the token still adopted, and the unchanged fallback.

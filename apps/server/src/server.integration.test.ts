@@ -120,10 +120,15 @@ test("TLS serves https and wss on the one port (SERVER-SHELL-10)", async () => {
   }
 });
 
-test("a plaintext public bind is refused, --insecure lifts it (SERVER-SHELL-11)", async () => {
+test("startup refusals: public plaintext, lone TLS half, empty token (SERVER-SHELL-11)", async () => {
   await assert.rejects(
     startServer(tempOptions({ host: "0.0.0.0" })),
     /--tls-cert\/--tls-key.*--insecure/,
+  );
+
+  await assert.rejects(
+    startServer(tempOptions({ token: "" })),
+    /token must not be empty/,
   );
 
   await assert.rejects(
