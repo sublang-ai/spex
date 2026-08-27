@@ -35,15 +35,15 @@
     "@sublang/cligent": "^0.22.0",
     "@sublang/playbook": "^9.0.0",
     "better-sqlite3": "^12.2.0",
-    "esbuild": "^0.24.2",
     "ws": "^8.18.0",
     "yaml": "^2.8.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.4.0",
     "@types/ws": "^8.18.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.8.0"
   }
 }

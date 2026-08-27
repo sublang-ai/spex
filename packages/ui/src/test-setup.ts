@@ -18,7 +18,9 @@ console.error = (...args: unknown[]) => {
       : typeof first === "string"
         ? first
         : "";
-  if (message.includes("Not implemented: HTMLCanvasElement.prototype.getContext")) {
+  // jsdom words this differently across majors ("…prototype.getContext"
+  // before 29, "…'s getContext() method" after), so match the pair.
+  if (message.includes("Not implemented:") && message.includes("getContext")) {
     return;
   }
   realError(...args);

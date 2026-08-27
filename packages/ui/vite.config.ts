@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-/// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+// vitest 4 no longer augments vite's config type: the test block
+// comes with defineConfig from vitest/config.
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
