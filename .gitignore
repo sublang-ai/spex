@@ -3,6 +3,7 @@ dist/
 node_modules/
 apps/desktop/ui-dist/
 apps/desktop/release/
+apps/server/ui-dist/
 packages/cli/scaffold/
 packages/core/assets/academy/
 

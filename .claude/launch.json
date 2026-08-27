@@ -18,6 +18,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "serve", "-l", "4173", "apps/desktop/ui-dist"],
       "port": 4173
+    },
+    {
+      "name": "spex-server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "-w", "apps/server", "--", "--token=dev"],
+      "port": 8137
     }
   ]
 }

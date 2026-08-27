@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress.
+Done
 
 ## Intent
 
@@ -13,10 +13,10 @@ Let a user run Spex headless on a machine they own and browse its GUI remotely t
 
 ## Deliverables
 
-- [ ] DR-033, the server-shell package, and the amended core-service endpoint items, lint-clean.
-- [ ] Core: shell-attached HTTP endpoint mode and same-host origin admission, covered by [[core-service-38](../packages/core-service.md#core-service-38)].
-- [ ] UI: served-page endpoint resolution — same-origin connect, token adoption and scrub — covered by [[server-shell-13](../packages/server-shell.md#server-shell-13)].
-- [ ] `apps/server`: the server shell CLI with staged UI, TLS, bind safety, and shutdown, covered by [[server-shell-9](../packages/server-shell.md#server-shell-9)]–[[server-shell-12](../packages/server-shell.md#server-shell-12)].
+- [x] DR-033, the server-shell package, and the amended core-service endpoint items, lint-clean.
+- [x] Core: shell-attached HTTP endpoint mode and same-host origin admission, covered by [[core-service-38](../packages/core-service.md#core-service-38)].
+- [x] UI: served-page endpoint resolution — same-origin connect, token adoption and scrub — covered by [[server-shell-13](../packages/server-shell.md#server-shell-13)].
+- [x] `apps/server`: the server shell CLI with staged UI, TLS, bind safety, and shutdown, covered by [[server-shell-9](../packages/server-shell.md#server-shell-9)]–[[server-shell-12](../packages/server-shell.md#server-shell-12)].
 
 ## Tasks
 
