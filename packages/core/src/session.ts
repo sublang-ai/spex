@@ -436,12 +436,22 @@ export class SessionManager {
 
   async disposeSession(sessionId: string): Promise<void> {
     const entry = this.requireLive(sessionId);
-    await entry.runtime.dispose();
+    // A runtime that failed to dispose is unusable either way, so the
+    // session ends regardless (CORE-4): holding its project would
+    // strand it until a restart. The failure still reaches the caller,
+    // reported after the session's end is recorded.
+    let failure: { error: unknown } | undefined;
+    try {
+      await entry.runtime.dispose();
+    } catch (error) {
+      failure = { error };
+    }
     this.live.delete(sessionId);
     this.liveByProject.delete(entry.info.projectId);
     const endedAt = this.now();
     this.store.endSession(sessionId, endedAt);
     this.broadcastState(sessionId, false, endedAt, entry.info);
+    if (failure) throw failure.error;
   }
 
   /** A session.state broadcast carries the conversation summary a
@@ -458,9 +468,26 @@ export class SessionManager {
     this.onSessionState({ ...(described ?? fallback), live, endedAt });
   }
 
+  /**
+   * Dispose every live session (CORE-39). One runtime's failure must
+   * not skip another's disposal — that would orphan its agent
+   * processes — so each is attempted and the failures are reported
+   * together once none is left.
+   */
   async disposeAll(): Promise<void> {
+    const failures: unknown[] = [];
     for (const sessionId of [...this.live.keys()]) {
-      await this.disposeSession(sessionId);
+      try {
+        await this.disposeSession(sessionId);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        `${failures.length} session runtime(s) failed to dispose`,
+      );
     }
   }
 

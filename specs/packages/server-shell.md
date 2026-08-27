@@ -70,7 +70,7 @@ When the served page resolves its core endpoint, the UI shall connect to the pag
 
 #### server-shell-6
 
-When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime — and exit only after the stop completes, leaving no orphan agent process.
+When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime [[core-service-39](core-service.md#core-service-39)] — and exit only after the stop completes, leaving no orphan agent process.
 
 ## Internal Behavior
 

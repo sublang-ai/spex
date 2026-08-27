@@ -239,12 +239,20 @@ export class CoreService {
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
     // Kill any in-flight compile child so shutdown never orphans slc.
     for (const controller of this.activeCompiles.values()) controller.abort();
-    await this.sessions.disposeAll();
+    // A disposal failure must not leave the endpoint or the store open
+    // (CORE-39): finish the shutdown, then report it to the host.
+    let failure: { error: unknown } | undefined;
+    try {
+      await this.sessions.disposeAll();
+    } catch (error) {
+      failure = { error };
+    }
     for (const client of this.clients) client.socket.close();
     await new Promise<void>((resolveClose) =>
       this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
     );
     this.store.close();
+    if (failure) throw failure.error;
   }
 
   // -- config ---------------------------------------------------------------

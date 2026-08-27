@@ -8,6 +8,18 @@
 
 import { formatHost, isLoopback, parseArgs, startServer } from "./server.js";
 
+/** A stop reports its disposal failures together; name each one, or
+ * the operator learns a count and never the cause. */
+function describeError(error: unknown): string {
+  if (error instanceof AggregateError) {
+    return [
+      error.message,
+      ...error.errors.map((cause) => `  - ${describeError(cause)}`),
+    ].join("\n");
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2), process.env);
   const running = await startServer(options);
@@ -29,7 +41,7 @@ async function main(): Promise<void> {
       .close()
       .then(() => process.exit(0))
       .catch((error) => {
-        console.error(error instanceof Error ? error.message : error);
+        console.error(describeError(error));
         process.exit(1);
       });
   };
@@ -38,6 +50,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(describeError(error));
   process.exit(1);
 });

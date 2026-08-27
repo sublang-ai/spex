@@ -61,6 +61,7 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 - While a live session exists for a project, a further session request for the same project is rejected and creates no session.
 - Live sessions for distinct projects run concurrently.
 - While a session is live, a client's disposal request disposes the session's runtime, reports the session as ended, and a subsequent session request for the same project is accepted.
+- Where the runtime's own disposal fails, the session is still reported as ended and its project still accepts a new session, with the failure reported to the requesting client — a runtime that failed to dispose is unusable, so holding its project would strand it until a restart.
 
 #### core-service-32
 
@@ -127,6 +128,15 @@ The core service shall persist sessions, boss turns, records (including hidden r
 
 - Where sessions have been persisted, a startup serves the stored sessions, turns, records, and usage over the protocol with the same content and record order as originally streamed, applying the same visibility filtering as live streaming [[core-service-8](#core-service-8)].
 - Where a session was live at shutdown, the next startup reports that session as no longer live.
+
+### Shutdown
+
+#### core-service-39
+
+When a host shell stops the core service, the core service shall attempt disposal of every live session's runtime, close its endpoint and its store, and report the disposal failures to the host once every session has been attempted:
+
+- One session's disposal failure neither skips another session's disposal nor leaves the endpoint or the store open, so no live runtime survives a stop because an earlier one failed.
+- Each attempted session is recorded as ended whether or not its runtime disposal succeeded [[core-service-4](#core-service-4)].
 
 ## Internal Behavior
 
@@ -243,6 +253,20 @@ Where a stored session held two turns and a failure record, and a second stored 
 #### core-service-35
 
 Where a client subscribes to a session that then runs a fake-adapter turn and is disposed, the test suite shall assert the broadcast contract of [[core-service-34](#core-service-34)]: the state reported at the turn's start already carries the session's title, and the states reported at the turn's end and the session's end each carry the title and turn count, not the zeros the session was created with.
+
+#### core-service-40
+
+Where a live session's runtime fails its disposal, the test suite shall request that session's disposal over the protocol and assert the failing-disposal case of [[core-service-4](#core-service-4)]: the request replies with an error carrying the runtime's failure, and a fresh session request for the same project is then accepted.
+
+### Shutdown Coverage
+
+#### core-service-41
+
+Where two sessions are live and the first one's runtime fails its disposal, the test suite shall stop the core service and assert the stop contract of [[core-service-39](#core-service-39)]:
+
+- the second session's runtime is disposed even though the first one's disposal failed;
+- the stop reports the first session's failure to the host after both sessions have been attempted;
+- the endpoint accepts no further connection once the stop has returned.
 
 ### Record Visibility Coverage
 
