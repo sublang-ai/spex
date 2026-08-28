@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { mergeEnv, parseEnvOutput } from "./shell-env.js";
-import { AttentionTracker, notificationFor } from "./notifications.js";
+import { notificationFor } from "./notifications.js";
 import type { RecordEnvelope } from "@sublang/spex-core";
 
 function envelope(record: Record<string, unknown>, hidden = false): RecordEnvelope {
@@ -140,38 +140,6 @@ test("boss questions and failures are always desktop notifications", () => {
   assert.equal(failure?.sink, "desktop");
 });
 
-test("attention tracker counts parked sessions and clears on end", () => {
-  const tracker = new AttentionTracker();
-  assert.equal(
-    tracker.apply(
-      envelope({
-        type: "captain_telemetry",
-        topic: "playbook.fsm.state",
-        payload: { to: "awaitBossReply" },
-      }),
-    ),
-    1,
-  );
-  assert.equal(
-    tracker.apply(
-      envelope({
-        type: "captain_telemetry",
-        topic: "playbook.fsm.state",
-        payload: { to: "review" },
-      }),
-    ),
-    0,
-  );
-  tracker.apply(
-    envelope({
-      type: "captain_telemetry",
-      topic: "playbook.fsm.state",
-      payload: { to: "awaitBossReply" },
-    }),
-  );
-  assert.equal(tracker.clear("s1"), 0);
-});
-
 test("notificationFor surfaces the 2.0 shell's failed state", () => {
   const failure = notificationFor(
     envelope({
@@ -183,82 +151,6 @@ test("notificationFor surfaces the 2.0 shell's failed state", () => {
   );
   assert.equal(failure?.event, "failure");
   assert.equal(failure?.sink, "desktop");
-});
-
-test("attention tracker folds object-shaped shell states", () => {
-  // The tracker shares notificationFor's normalizer: the production
-  // {stateId, value, …} records must badge exactly like the fake
-  // harness's bare strings (release-smoke manual gate).
-  const tracker = new AttentionTracker();
-  assert.equal(
-    tracker.apply(
-      envelope({
-        type: "captain_telemetry",
-        topic: "playbook.fsm.state",
-        payload: {
-          event: { type: "NEEDS_BOSS" },
-          to: {
-            value: "awaitBossReply",
-            activeStateIds: ["awaitBossReply"],
-            tags: ["playbook.parked"],
-            stateId: "awaitBossReply",
-          },
-        },
-      }),
-    ),
-    1,
-  );
-  assert.equal(
-    tracker.apply(
-      envelope({
-        type: "captain_telemetry",
-        topic: "playbook.fsm.state",
-        payload: { to: { stateId: "failed", value: "failed" } },
-      }),
-    ),
-    1,
-  );
-  // The failure latch survives leaving the question state...
-  assert.equal(
-    tracker.apply(
-      envelope({
-        type: "captain_telemetry",
-        topic: "playbook.fsm.state",
-        payload: { to: { stateId: "review", value: "review" } },
-      }),
-    ),
-    1,
-  );
-  // ...and clears when the next turn starts.
-  assert.equal(tracker.apply(envelope({ type: "turn_started", turnId: 3 })), 0);
-});
-
-test("attention tracker flags failures until the next turn starts", () => {
-  const tracker = new AttentionTracker();
-  assert.equal(tracker.apply(envelope({ type: "runtime_error", message: "boom" })), 1);
-  assert.equal(tracker.apply(envelope({ type: "turn_started", turnId: 2 })), 0);
-  assert.equal(
-    tracker.apply(
-      envelope({
-        type: "captain_telemetry",
-        topic: "playbook.fsm.state",
-        payload: { to: "failed" },
-      }),
-    ),
-    1,
-  );
-  // A failed session also awaiting a reply still counts once.
-  assert.equal(
-    tracker.apply(
-      envelope({
-        type: "captain_telemetry",
-        topic: "playbook.fsm.state",
-        payload: { to: "awaitBossReply" },
-      }),
-    ),
-    1,
-  );
-  assert.equal(tracker.clear("s1"), 0);
 });
 
 test("main process installs external-navigation guards", () => {

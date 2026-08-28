@@ -21,7 +21,7 @@ import {
 import { CoreService } from "@sublang/spex-core";
 
 import { captureLoginShellEnv, mergeEnv } from "./shell-env.js";
-import { AttentionTracker, notificationFor } from "./notifications.js";
+import { notificationFor } from "./notifications.js";
 
 let service: CoreService | undefined;
 let window: BrowserWindow | undefined;
@@ -118,10 +118,15 @@ async function main(): Promise<void> {
     renameSync(sidecar, smokeHandshake);
   }
 
-  const tracker = new AttentionTracker();
+  // The dock badge reads the one ledger fold (DR-035): the same count
+  // the Dashboard nav and the sidebar publish, so the three never
+  // disagree.
+  service.events.onLedgerChange = () => {
+    if (process.platform === "darwin") {
+      app.setBadgeCount(service?.ledger().badge ?? 0);
+    }
+  };
   service.events.onRecord = (envelope) => {
-    const badge = tracker.apply(envelope);
-    if (process.platform === "darwin") app.setBadgeCount(badge);
     const prefs = service?.notificationPrefs() ?? {};
     const notification = notificationFor(envelope, prefs);
     if (notification?.sink === "bell") {
@@ -136,12 +141,6 @@ async function main(): Promise<void> {
         window?.focus();
       });
       shown.show();
-    }
-  };
-  service.events.onSessionState = (session) => {
-    if (!session.live) {
-      const badge = tracker.clear(session.id);
-      if (process.platform === "darwin") app.setBadgeCount(badge);
     }
   };
 
