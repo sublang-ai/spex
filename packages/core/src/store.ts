@@ -778,7 +778,7 @@ export class Store {
    * ranges (DR-035). */
   listSessionDispatches(
     sessionId: string,
-  ): { intentId: string; turnId: number; open: boolean }[] {
+  ): { intentId: string; turnId: number; open: boolean; closedAt?: number }[] {
     return (
       this.db
         .prepare(
@@ -795,6 +795,7 @@ export class Store {
       intentId: row.id,
       turnId: row.dispatched_turn_id,
       open: row.closed_at === null,
+      ...(row.closed_at !== null ? { closedAt: row.closed_at } : {}),
     }));
   }
 

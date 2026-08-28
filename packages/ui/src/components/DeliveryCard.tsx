@@ -231,7 +231,7 @@ export function DeliveryCard({
     >
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-          Delivered
+          Finished
         </span>
         <SourceChip source={derived.intent.source} />
       </div>

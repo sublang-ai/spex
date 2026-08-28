@@ -135,6 +135,25 @@ function rangeOf(
   );
 }
 
+/** Whether a finished turn already received its ruling (DR-035): it
+ * sits in some dispatch's range whose intent is still open (the open
+ * intent carries the summons itself), or started before that intent's
+ * verdict — a ruled turn never re-summons as a review stand-in, while
+ * plain chat after a verdict is un-ledgered again. */
+function turnIsRuled(store: Store, sessionId: string, turn: Turn): boolean {
+  const dispatches = store.listSessionDispatches(sessionId);
+  for (let i = 0; i < dispatches.length; i += 1) {
+    const dispatch = dispatches[i];
+    const end = dispatches[i + 1]?.turnId ?? Number.POSITIVE_INFINITY;
+    if (turn.turnId < dispatch.turnId || turn.turnId >= end) continue;
+    if (dispatch.open) return true;
+    return (
+      dispatch.closedAt !== undefined && turn.startedAt <= dispatch.closedAt
+    );
+  }
+  return false;
+}
+
 export interface LedgerSources {
   store: Store;
   lanes: LiveLane[];
@@ -424,6 +443,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       lastTurn &&
       lastTurn.status === "finished" &&
       !owned.has(lastTurn.turnId) &&
+      !turnIsRuled(store, lane.sessionId, lastTurn) &&
       !lane.turnActive
     ) {
       // The un-ledgered finished turn clears on viewing, exactly as

@@ -467,6 +467,39 @@ test("DR-035: an aborted follow-up does not unseat a standing finish", () => {
 // Session stand-ins and the viewed marker (core-service-48/49/59)
 // ---------------------------------------------------------------------------
 
+
+test("DR-035: a ruled turn never re-summons — plain chat after the verdict does", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "A", "i");
+  store.stampIntentDispatch("A", "s1", 1, 1000);
+  store.startTurn("s1", 1, "Intent A", 1000);
+  finishTurn(store, "s1", 1, 2000);
+  const lanes = [lane("s1", projectId, false)];
+
+  // Finished intent: its own attention entry, no review stand-in.
+  const finished = fold(store, lanes);
+  assert.deepEqual(
+    finished.attention.map((entry) => entry.kind),
+    ["finish"],
+  );
+
+  // The verdict settles the turn: no stand-in resurrects it.
+  store.closeIntent("A", "done", 2500);
+  const ruled = fold(store, lanes);
+  assert.deepEqual(ruled.attention, []);
+  assert.equal(ruled.badge, 0);
+
+  // Plain chat after the verdict is un-ledgered again and summons.
+  store.startTurn("s1", 2, "just chatting", 3000);
+  finishTurn(store, "s1", 2, 4000);
+  const chat = fold(store, lanes);
+  assert.deepEqual(
+    chat.attention.map((entry) => [entry.kind, entry.turnId]),
+    [["review", 2]],
+  );
+});
+
 test("DR-035: an un-ledgered finished turn stands in for review until the viewed marker passes it, and hidden records feed nothing", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");

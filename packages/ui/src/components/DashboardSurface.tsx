@@ -372,9 +372,12 @@ function NowBand({
         (b.intent.dispatched?.at ?? 0) - (a.intent.dispatched?.at ?? 0),
     )[0];
   const bossTurns = view?.captain.filter((line) => line.kind === "boss") ?? [];
-  const title = served
-    ? firstLine(served.intent.text)
-    : (bossTurns[bossTurns.length - 1]?.text ?? session.title ?? "no messages yet");
+  const title = firstLine(
+    served?.intent.text ??
+      bossTurns[bossTurns.length - 1]?.text ??
+      session.title ??
+      "no messages yet",
+  );
   const playbook = view?.frames[0]?.playbookId;
   return (
     <div className="flex flex-col gap-1" data-testid={`now-${project.id}`}>
