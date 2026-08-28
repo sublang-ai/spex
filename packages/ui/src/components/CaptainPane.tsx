@@ -6,19 +6,36 @@
 // counterpart bubbles, player questions as first-class incoming
 // messages, shell status lines as compact system lines between them.
 
+import { useEffect, useState, type ReactNode } from "react";
+
 import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { Markdown } from "./Markdown.js";
 import { MachineCard } from "./MachineCard.js";
-import type { MachineGraph } from "@sublang/spex-core/protocol";
+import { SourceChip } from "./DeliveryCard.js";
+import type { IntentSource, MachineGraph } from "@sublang/spex-core/protocol";
+
+/** A node the thread hosts after a given line — the run view anchors
+ * an intent's delivery card at its final turn's end (run-view-87). */
+export interface ThreadExtra {
+  key: string;
+  afterIndex: number;
+  /** Focus/highlight identity for attention activation (run-view-91). */
+  focusKey?: string;
+  node: ReactNode;
+}
 
 function Line({
   line,
   graphs,
+  source,
 }: {
   line: CaptainLine;
   graphs?: Record<string, MachineGraph | null>;
+  /** The dispatched intent's provenance, worn by the bound turn's
+   * Boss bubble (run-view-89). */
+  source?: IntentSource;
 }) {
   const time = new Date(line.at).toLocaleString();
   switch (line.kind) {
@@ -47,6 +64,11 @@ function Line({
             data-testid="boss-bubble"
             className="max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3 py-1.5 text-sm text-white"
           >
+            {source ? (
+              <div className="mb-0.5 flex justify-end">
+                <SourceChip source={source} onDark />
+              </div>
+            ) : null}
             <span className="whitespace-pre-wrap">{line.text}</span>
           </div>
         </div>
@@ -145,15 +167,72 @@ const STATE_TONE_CLASSES: Record<string, string> = {
 export function CaptainPane({
   view,
   machineGraphs,
+  bossSources,
+  extras,
+  focusKey,
+  onFocusHandled,
 }: {
   view: SessionView;
   /** Served machine definitions by playbook id (run-view-64: absent
    * definitions degrade to the observed drawing). */
   machineGraphs?: Record<string, MachineGraph | null>;
+  /** Intent provenance by dispatched turn id (run-view-89). */
+  bossSources?: Map<number, IntentSource>;
+  /** Nodes anchored after specific lines (run-view-87). */
+  extras?: ThreadExtra[];
+  /** Scroll to and briefly highlight this line ("line-<index>") or
+   * extra (its focusKey) — attention activation lands at the intent's
+   * place (run-view-91). */
+  focusKey?: string;
+  onFocusHandled?: () => void;
 }) {
   const { scrollRef, onScroll, newBelow, jump } = useStickToBottom(
-    view.captain.length + view.captainDraft.length + (view.turnActive ? 1 : 0),
+    view.captain.length +
+      view.captainDraft.length +
+      (view.turnActive ? 1 : 0) +
+      (extras?.length ?? 0),
   );
+  const [highlightKey, setHighlightKey] = useState<string>();
+
+  // Attention focus (run-view-91): land at the intent's place and
+  // light it briefly, so the reader sees why they were summoned. The
+  // target may fold in a render later than the request (a delivery
+  // card mounts after the ledger settles), so an unfound key waits for
+  // more content instead of being consumed.
+  useEffect(() => {
+    if (!focusKey) return;
+    const target = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-focus-key="${focusKey}"]`,
+    );
+    if (!target) return;
+    target.scrollIntoView?.({ block: "center" });
+    setHighlightKey(focusKey);
+    onFocusHandled?.();
+    // The scroll ref and callback are stable for a mounted pane.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, view.captain.length, extras]);
+
+  useEffect(() => {
+    if (!highlightKey) return;
+    const timer = setTimeout(() => setHighlightKey(undefined), 2400);
+    return () => clearTimeout(timer);
+  }, [highlightKey]);
+
+  /** Focusable wrapper: identity plus the brief reveal highlight. */
+  function focusProps(key: string | undefined): {
+    "data-focus-key"?: string;
+    "data-focused"?: string;
+    className: string;
+  } {
+    const focused = key !== undefined && highlightKey === key;
+    return {
+      ...(key !== undefined ? { "data-focus-key": key } : {}),
+      ...(focused ? { "data-focused": "1" } : {}),
+      className: focused
+        ? "rounded-lg ring-2 ring-brand-400 dark:ring-brand-500"
+        : "",
+    };
+  }
 
   const anyPlayerRunning = Object.values(view.players).some(
     (playerView) => playerView.running,
@@ -194,6 +273,7 @@ export function CaptainPane({
               index > 0 ? view.captain[index - 1].at : undefined,
               line.at,
             );
+            const lineFocus = focusProps(`line-${index}`);
             return (
               <div key={index} className="flex flex-col gap-2">
                 {separator ? (
@@ -201,7 +281,36 @@ export function CaptainPane({
                     {separator}
                   </div>
                 ) : null}
-                <Line line={line} graphs={machineGraphs} />
+                <div
+                  data-focus-key={lineFocus["data-focus-key"]}
+                  data-focused={lineFocus["data-focused"]}
+                  className={lineFocus.className}
+                >
+                  <Line
+                    line={line}
+                    graphs={machineGraphs}
+                    source={
+                      line.kind === "boss" && line.turnId !== null
+                        ? bossSources?.get(line.turnId)
+                        : undefined
+                    }
+                  />
+                </div>
+                {extras
+                  ?.filter((extra) => extra.afterIndex === index)
+                  .map((extra) => {
+                    const extraFocus = focusProps(extra.focusKey);
+                    return (
+                      <div
+                        key={extra.key}
+                        data-focus-key={extraFocus["data-focus-key"]}
+                        data-focused={extraFocus["data-focused"]}
+                        className={extraFocus.className}
+                      >
+                        {extra.node}
+                      </div>
+                    );
+                  })}
               </div>
             );
           })}

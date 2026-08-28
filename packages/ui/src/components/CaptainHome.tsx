@@ -9,14 +9,17 @@
 import { useRef, useState } from "react";
 import type {
   AgentSummary,
+  IntentInfo,
   PlaybookSummary,
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
 import type { AgentPatch } from "../lib/config-ops.js";
+import type { StagedIntent } from "../state/store.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
+import { intentTitle } from "./DeliveryCard.js";
 import { Icon } from "./Icon.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
@@ -74,6 +77,18 @@ export interface CaptainHomeProps {
   /** Apply a merge patch to the Captain's block (captain.set). */
   onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
   onStart: (text: string) => Promise<void>;
+  /** The project's head unblocked queued intent with the count of the
+   * rest — the home's next card (run-view-88, DR-035). */
+  next?: { intent: IntentInfo; more: number };
+  /** Stage the next intent into this composer (run-view-86/88). */
+  onStartIntent?: (intent: IntentInfo) => Promise<void> | void;
+  /** The staged dispatch this composer wears (key "home"). */
+  staged?: StagedIntent;
+  /** Detach the staged chip without sending (DR-035). */
+  onDetachStaged?: () => void;
+  /** Queue the typed text as an intent instead of starting a session
+   * (DR-035); absent while no project is current — the control hides. */
+  onQueueInstead?: (text: string) => Promise<void>;
   /** Storage for the quick-start dismissal (tests inject a stub). */
   storage?: Pick<Storage, "getItem" | "setItem">;
 }
@@ -120,6 +135,10 @@ export function CaptainHome(props: CaptainHomeProps) {
   );
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [staging, setStaging] = useState(false);
+  const [queueing, setQueueing] = useState(false);
+  /** Transient queue-instead acknowledgment (run-view-85). */
+  const [queueNote, setQueueNote] = useState<string>();
   const [captainPopover, setCaptainPopover] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const gearRef = useRef<HTMLButtonElement>(null);
@@ -268,6 +287,52 @@ export function CaptainHome(props: CaptainHomeProps) {
           </CaptainBubble>
         ) : null}
 
+        {props.next ? (
+          // The project's plan, one Enter away (run-view-88): the head
+          // unblocked intent with Start, beside the quick start card.
+          <div
+            data-testid="next-card"
+            className="ml-8 flex max-w-[85%] flex-col gap-1 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
+          >
+            <span className="text-xs font-semibold text-neutral-500">
+              Up next
+            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className="min-w-0 flex-1 truncate text-sm"
+                title={props.next.intent.text}
+              >
+                {intentTitle(props.next.intent)}
+              </span>
+              <button
+                type="button"
+                data-testid="next-start"
+                disabled={staging || !connected}
+                title="Stage this intent into the composer — sending dispatches it"
+                onClick={() => {
+                  setStaging(true);
+                  void Promise.resolve(
+                    props.onStartIntent?.(props.next!.intent),
+                  )
+                    .catch(() => {})
+                    .finally(() => {
+                      setStaging(false);
+                      composerRef.current?.focus();
+                    });
+                }}
+                className="shrink-0 rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
+              >
+                {staging ? "Staging…" : "Start"}
+              </button>
+            </div>
+            {props.next.more > 0 ? (
+              <span className="text-[11px] text-neutral-400">
+                +{props.next.more} more queued
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         {!quickStartHidden && playbooks.length > 0 ? (
           <div
             data-testid="quick-start"
@@ -368,6 +433,34 @@ export function CaptainHome(props: CaptainHomeProps) {
           </span>
         </div>
 
+        {queueNote ? (
+          <div
+            data-testid="queued-intent-note"
+            role="status"
+            className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300"
+          >
+            {queueNote}
+          </div>
+        ) : null}
+        {props.staged ? (
+          <div
+            data-testid="staged-intent-chip"
+            className="flex items-center gap-2 self-start rounded-full border border-brand-300 bg-brand-50 py-0.5 pl-3 pr-1 text-xs font-medium text-brand-700 dark:border-brand-700 dark:bg-brand-950 dark:text-brand-300"
+          >
+            <span className="max-w-[24rem] truncate">
+              Dispatching: {props.staged.title}
+            </span>
+            <button
+              type="button"
+              title="Detach the intent — sending then stamps nothing"
+              aria-label="Detach the staged intent"
+              onClick={props.onDetachStaged}
+              className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-900"
+            >
+              <Icon name="close" className="h-3 w-3" />
+            </button>
+          </div>
+        ) : null}
         <div className="relative">
           {slash ? (
             <SlashMenuList
@@ -387,6 +480,12 @@ export function CaptainHome(props: CaptainHomeProps) {
                 setText(event.target.value);
                 setSlashIndex(0);
                 setSlashDismissed(false);
+                setQueueNote(undefined);
+                // Emptying the composer detaches the staged intent
+                // (run-view-86): sending something else stamps nothing.
+                if (props.staged && event.target.value.trim().length === 0) {
+                  props.onDetachStaged?.();
+                }
               }}
               onKeyDown={(event) => {
                 if (event.nativeEvent.isComposing || event.keyCode === 229)
@@ -430,6 +529,35 @@ export function CaptainHome(props: CaptainHomeProps) {
               disabled={!connected}
               className="max-h-[40vh] min-h-[2.5rem] flex-1 resize-y border-0 bg-transparent px-1 py-1 text-sm outline-none disabled:opacity-60"
             />
+            {props.onQueueInstead && !props.staged ? (
+              <button
+                type="button"
+                data-testid="queue-intent-button"
+                title="Queue as an intent instead of starting a session"
+                disabled={
+                  text.trim().length === 0 || busy || queueing || !connected
+                }
+                onClick={() => {
+                  const trimmed = text.trim();
+                  if (!trimmed || queueing) return;
+                  setQueueing(true);
+                  props
+                    .onQueueInstead!(trimmed)
+                    .then(() => {
+                      setText("");
+                      setQueueNote("Queued for later — see Up next.");
+                    })
+                    .catch((cause: Error) => setError(cause.message))
+                    .finally(() => {
+                      setQueueing(false);
+                      composerRef.current?.focus();
+                    });
+                }}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              >
+                Queue intent
+              </button>
+            ) : null}
             <button
               type="button"
               data-testid="start-send"

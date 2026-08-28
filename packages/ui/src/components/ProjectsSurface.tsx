@@ -6,13 +6,34 @@
 // lives in the project palette; removal lives here.
 
 import { useEffect, useState } from "react";
-import type { ForgeItem } from "@sublang/spex-core/protocol";
+import type { DerivedIntent, ForgeItem } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import {
+  ForgeItemRow,
+  forgeSeedText,
+  openSourceIntents,
+} from "./ForgeItemRow.js";
 
-function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
+function ForgeList({
+  label,
+  kind,
+  items,
+  projectId,
+  openSources,
+  onQueue,
+}: {
+  label: string;
+  kind: "issue" | "pr";
+  items: ForgeItem[];
+  projectId: string;
+  /** Open intents by `kind:ref` — the captured-artifact swap shared
+   * with the Dashboard's Sources rows (forge-work-lists-1). */
+  openSources: Map<string, DerivedIntent>;
+  onQueue: (kind: "issue" | "pr", item: ForgeItem) => Promise<void>;
+}) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? items : items.slice(0, 8);
   return (
@@ -22,20 +43,14 @@ function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
       </div>
       <ul className="flex flex-col gap-1">
         {shown.map((item) => (
-          <li key={item.url} className="truncate text-sm">
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-brand-600 hover:underline dark:text-brand-300"
-            >
-              #{item.number}
-            </a>{" "}
-            {item.title}
-            {item.author ? (
-              <span className="text-xs text-neutral-400"> · {item.author}</span>
-            ) : null}
-          </li>
+          <ForgeItemRow
+            key={item.url}
+            item={item}
+            kind={kind}
+            captured={openSources.get(`${kind}:${item.number}`)}
+            testId={`repo-${kind}-${projectId}-${item.number}`}
+            onQueue={() => onQueue(kind, item)}
+          />
         ))}
         {items.length > shown.length ? (
           <li>
@@ -56,7 +71,25 @@ function ForgeList({ label, items }: { label: string; items: ForgeItem[] }) {
   );
 }
 
-function ForgePanel({ meta }: { meta?: ProjectMeta }) {
+function ForgePanel({
+  projectId,
+  meta,
+}: {
+  projectId: string;
+  meta?: ProjectMeta;
+}) {
+  const ledger = useAppStore((state) => state.ledger);
+  const queueIntent = useAppStore((state) => state.queueIntent);
+  const openSources = openSourceIntents(ledger, projectId);
+  const onQueue = async (kind: "issue" | "pr", item: ForgeItem) => {
+    // One gesture from every source (DR-035): the seed text the spec
+    // table pins, the canonical URL kept as provenance (projects-6).
+    await queueIntent({
+      projectId,
+      text: forgeSeedText(kind, item),
+      source: { kind, ref: String(item.number), url: item.url },
+    });
+  };
   if (meta?.forgeError) {
     return (
       <div className="text-xs text-red-500">
@@ -89,8 +122,22 @@ function ForgePanel({ meta }: { meta?: ProjectMeta }) {
         </div>
       ) : null}
       <div className="flex gap-6">
-        <ForgeList label="Issues to do" items={forge.issues} />
-        <ForgeList label="PRs to review" items={forge.prs} />
+        <ForgeList
+          label="Issues to do"
+          kind="issue"
+          items={forge.issues}
+          projectId={projectId}
+          openSources={openSources}
+          onQueue={onQueue}
+        />
+        <ForgeList
+          label="PRs to review"
+          kind="pr"
+          items={forge.prs}
+          projectId={projectId}
+          openSources={openSources}
+          onQueue={onQueue}
+        />
       </div>
     </div>
   );
@@ -224,7 +271,7 @@ export function RepoTab({
         </div>
       ) : null}
       <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <ForgePanel meta={meta} />
+        <ForgePanel projectId={project.id} meta={meta} />
       </div>
     </div>
   );

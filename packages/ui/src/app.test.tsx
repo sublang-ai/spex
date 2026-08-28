@@ -91,6 +91,31 @@ const SESSIONS: SessionInfo[] = [
   }),
 ];
 
+// The one attention fold (DR-035): the badge and every dot re-source
+// from the core-derived ledger, so the fixture serves one.
+const LEDGER = {
+  intents: [],
+  attention: [
+    {
+      band: "interrupted",
+      kind: "question",
+      title: "Which migration should I run first?",
+      projectId: "p1",
+      sessionId: "a-live",
+      since: NOW - 60_000,
+    },
+    {
+      band: "interrupted",
+      kind: "question",
+      title: "Should I rebase?",
+      projectId: "p2",
+      sessionId: "b-live",
+      since: NOW - 30_000,
+    },
+  ],
+  badge: 2,
+} as never;
+
 function seed(): void {
   useAppStore.setState({
     connection: "open",
@@ -120,6 +145,9 @@ function seed(): void {
     homeDraft: "",
     readiness: [],
     machineGraphs: {},
+    ledger: LEDGER,
+    stagedIntents: {},
+    history: {},
     configState: {
       status: "valid",
       summary: { playbooks: [], captain: undefined },
@@ -132,7 +160,11 @@ Element.prototype.scrollIntoView = vi.fn();
 
 beforeEach(() => {
   commandMock.mockReset();
-  commandMock.mockResolvedValue({});
+  // The App re-pulls the ledger once connected (DR-035): the default
+  // reply must keep serving the seeded fold.
+  commandMock.mockImplementation(async (type: string) =>
+    type === "ledger.get" ? (LEDGER as object) : {},
+  );
   // Store actions resolve the module-local client, which the module
   // mock above cannot reach.
   setClientForTests({
@@ -234,6 +266,8 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     });
 
     // The core answers with the ended state; the tab must not move.
+    // Ending also clears the session's attention from the ledger fold
+    // (intents.changed re-pulls it in production).
     await act(async () => {
       useAppStore.setState({
         sessions: SESSIONS.map((entry) =>
@@ -241,6 +275,13 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
             ? { ...entry, live: false, endedAt: NOW }
             : entry,
         ),
+        ledger: {
+          ...(LEDGER as { attention: { sessionId: string }[] }),
+          attention: (
+            LEDGER as { attention: { sessionId: string }[] }
+          ).attention.filter((entry) => entry.sessionId !== "a-live"),
+          badge: 1,
+        } as never,
       });
     });
     expect(useAppStore.getState().openTabs.p1).toEqual(["a-live"]);

@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlaybookSummary } from "@sublang/spex-core/protocol";
 
-import type { ComposerState } from "../state/store.js";
+import type { ComposerState, StagedIntent } from "../state/store.js";
 import type { SessionView } from "../state/reducer.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { Icon } from "./Icon.js";
@@ -20,18 +20,23 @@ export function Composer({
   connected,
   error,
   playbooks = [],
+  staged,
   onCompileNew,
   onDraftChange,
   onSubmit,
   onAbort,
   onRemoveQueued,
   onDismissError,
+  onDetachStaged,
+  onQueueInstead,
 }: {
   view: SessionView;
   composer: ComposerState;
   connected: boolean;
   error?: string;
   playbooks?: PlaybookSummary[];
+  /** The staged dispatch this composer wears (DR-035). */
+  staged?: StagedIntent;
   onCompileNew?: () => void;
   /** Persist the draft in the store (DR-010: drafts survive). */
   onDraftChange?: (draft: string) => void;
@@ -39,12 +44,19 @@ export function Composer({
   onAbort: () => void;
   onRemoveQueued: (index: number) => void;
   onDismissError: () => void;
+  /** Detach the staged chip without sending (DR-035). */
+  onDetachStaged?: () => void;
+  /** Queue instead of send (DR-035): the typed text becomes a queued
+   * intent for this project; nothing is sent. */
+  onQueueInstead?: (text: string) => Promise<void>;
 }) {
   const [localText, setLocalText] = useState("");
   const text = onDraftChange ? (composer.draft ?? "") : localText;
   const setText = onDraftChange ?? setLocalText;
   const [sending, setSending] = useState(false);
   const [aborting, setAborting] = useState(false);
+  /** Transient queue-instead-of-send acknowledgment (run-view-85). */
+  const [queuedNote, setQueuedNote] = useState<string>();
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -127,6 +139,15 @@ export function Composer({
           )}
         </div>
       ) : null}
+      {queuedNote ? (
+        <div
+          data-testid="queued-intent-note"
+          role="status"
+          className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300"
+        >
+          {queuedNote}
+        </div>
+      ) : null}
       {composer.queued.length > 0 ? (
         <div
           data-testid="queue-indicator"
@@ -137,8 +158,16 @@ export function Composer({
               key={index}
               className="flex max-w-[85%] flex-col rounded-2xl rounded-br-md border border-brand-300 px-3 py-1.5 text-sm text-brand-700 dark:border-brand-700 dark:text-brand-300"
             >
-              <span className="whitespace-pre-wrap">{entry}</span>
+              <span className="whitespace-pre-wrap">{entry.text}</span>
               <span className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-400">
+                {entry.intentId !== undefined ? (
+                  <span
+                    data-testid="queued-intent-chip"
+                    className="rounded-full border border-brand-300 px-1.5 font-medium text-brand-600 dark:border-brand-700 dark:text-brand-300"
+                  >
+                    intent
+                  </span>
+                ) : null}
                 sends when this turn ends
                 <button
                   type="button"
@@ -152,6 +181,25 @@ export function Composer({
               </span>
             </div>
           ))}
+        </div>
+      ) : null}
+      {staged ? (
+        <div
+          data-testid="staged-intent-chip"
+          className="flex items-center gap-2 self-start rounded-full border border-brand-300 bg-brand-50 py-0.5 pl-3 pr-1 text-xs font-medium text-brand-700 dark:border-brand-700 dark:bg-brand-950 dark:text-brand-300"
+        >
+          <span className="max-w-[24rem] truncate">
+            Dispatching: {staged.title}
+          </span>
+          <button
+            type="button"
+            title="Detach the intent — sending then stamps nothing"
+            aria-label="Detach the staged intent"
+            onClick={onDetachStaged}
+            className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-900"
+          >
+            <Icon name="close" className="h-3 w-3" />
+          </button>
         </div>
       ) : null}
       <div className="relative">
@@ -184,6 +232,12 @@ export function Composer({
               setText(event.target.value);
               setSlashIndex(0);
               setSlashDismissed(false);
+              setQueuedNote(undefined);
+              // Emptying the composer detaches the staged intent
+              // (DR-035): sending something else stamps nothing.
+              if (staged && event.target.value.trim().length === 0) {
+                onDetachStaged?.();
+              }
             }}
             onKeyDown={(event) => {
               if (event.nativeEvent.isComposing || event.keyCode === 229)
@@ -234,6 +288,34 @@ export function Composer({
             className="max-h-[40vh] min-h-[2.5rem] flex-1 resize-y border-0 bg-transparent px-1 py-1 text-sm outline-none disabled:opacity-60"
           />
           <div className="flex shrink-0 items-center gap-1.5">
+            {onQueueInstead && !staged ? (
+              <button
+                type="button"
+                data-testid="queue-intent-button"
+                title="Queue as an intent instead of sending"
+                onClick={() => {
+                  const trimmed = text.trim();
+                  if (!trimmed || sending) return;
+                  setSending(true);
+                  onQueueInstead(trimmed)
+                    .then(() => {
+                      setText("");
+                      setQueuedNote("Queued for later — see Up next.");
+                    })
+                    .catch(() => {
+                      // Draft kept; the error strip explains.
+                    })
+                    .finally(() => {
+                      setSending(false);
+                      textareaRef.current?.focus();
+                    });
+                }}
+                disabled={text.trim().length === 0 || sending || !connected}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              >
+                Queue intent
+              </button>
+            ) : null}
             {view.turnActive ? (
               <button
                 type="button"

@@ -22,10 +22,12 @@ const PROJECT = { id: "p1", path: "/tmp/demo", name: "demo", registeredAt: 0 };
 
 import type {
   AgentSummary,
+  IntentInfo,
   PlaybookSummary,
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 import type { AgentPatch } from "../lib/config-ops.js";
+import type { StagedIntent } from "../state/store.js";
 
 // A hand-written `instruction` rides along in the summary: the editor
 // never surfaces it, so a merge patch must leave it out (DR-019).
@@ -81,6 +83,13 @@ function renderHome({
   configStatus = undefined as "valid" | "invalid" | "missing" | undefined,
   configErrors = undefined as string[] | undefined,
   storage = memoryStorage(),
+  next = undefined as { intent: IntentInfo; more: number } | undefined,
+  onStartIntent = undefined as
+    | ((intent: IntentInfo) => Promise<void>)
+    | undefined,
+  staged = undefined as StagedIntent | undefined,
+  onDetachStaged = undefined as (() => void) | undefined,
+  onQueueInstead = undefined as ((text: string) => Promise<void>) | undefined,
 } = {}) {
   const view = render(
     <CaptainHome
@@ -99,6 +108,11 @@ function renderHome({
       onSaveCaptain={onSaveCaptain}
       onStart={onStart}
       storage={storage}
+      next={next}
+      onStartIntent={onStartIntent}
+      staged={staged}
+      onDetachStaged={onDetachStaged}
+      onQueueInstead={onQueueInstead}
     />,
   );
   return {
@@ -324,5 +338,101 @@ describe("RUN-45: readiness heals at hand", () => {
     expect(bubble.textContent).toContain("ANTHROPIC_API_KEY");
     fireEvent.click(screen.getByTestId("recheck-readiness"));
     await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalled());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intent ledger coverage (run-view-95/88, DR-035): the next card and
+// the home composer's staging and queue-instead wiring.
+// ---------------------------------------------------------------------------
+
+const NEXT_INTENT: IntentInfo = {
+  id: "i-next",
+  projectId: "p1",
+  text: "Address #12: harden the auth flow\nwith the full context below",
+  rank: "m",
+  createdAt: 0,
+};
+
+describe("run-view-88: the Captain home names the queue's head", () => {
+  test("the next card shows the head intent, the count, and Start", async () => {
+    const onStartIntent = vi.fn(async () => {});
+    renderHome({ next: { intent: NEXT_INTENT, more: 2 }, onStartIntent });
+
+    const card = screen.getByTestId("next-card");
+    expect(card.textContent).toContain("Up next");
+    expect(card.textContent).toContain("Address #12: harden the auth flow");
+    expect(card.textContent).toContain("+2 more queued");
+    // Coexists with the quick start card (run-view-88).
+    expect(screen.getByTestId("quick-start")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("next-start"));
+    await vi.waitFor(() =>
+      expect(onStartIntent).toHaveBeenCalledWith(NEXT_INTENT),
+    );
+  });
+
+  test("no queued intent, no card — the quick start stands alone", () => {
+    renderHome();
+    expect(screen.queryByTestId("next-card")).toBeNull();
+    expect(screen.getByTestId("quick-start")).toBeTruthy();
+  });
+});
+
+describe("run-view-86: the home composer wears the staged chip", () => {
+  test("the chip names the intent and detaches on demand", () => {
+    const onDetachStaged = vi.fn();
+    renderHome({
+      staged: { intentId: "i-next", title: "Address #12: harden the auth flow" },
+      onDetachStaged,
+    });
+    const chip = screen.getByTestId("staged-intent-chip");
+    expect(chip.textContent).toContain("Address #12: harden the auth flow");
+    fireEvent.click(
+      screen.getByLabelText("Detach the staged intent"),
+    );
+    expect(onDetachStaged).toHaveBeenCalled();
+  });
+
+  test("emptying the composer detaches the staged intent", () => {
+    const onDetachStaged = vi.fn();
+    renderHome({
+      staged: { intentId: "i-next", title: "Address #12: harden the auth flow" },
+      onDetachStaged,
+    });
+    const composer = screen.getByTestId(
+      "start-composer",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "some context" } });
+    expect(onDetachStaged).not.toHaveBeenCalled();
+    fireEvent.change(composer, { target: { value: "" } });
+    expect(onDetachStaged).toHaveBeenCalled();
+  });
+});
+
+describe("run-view-85: queue instead of send, from the home", () => {
+  test("the control queues the text and acknowledges in place", async () => {
+    const onQueueInstead = vi.fn(async () => {});
+    const { onStart } = renderHome({ onQueueInstead });
+    const composer = screen.getByTestId(
+      "start-composer",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "later: tidy the docs" } });
+    fireEvent.click(screen.getByTestId("queue-intent-button"));
+    await vi.waitFor(() =>
+      expect(onQueueInstead).toHaveBeenCalledWith("later: tidy the docs"),
+    );
+    // Shelved, not sent: no session starts, the draft clears, and the
+    // acknowledgment names where the row landed.
+    expect(onStart).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(composer.value).toBe(""));
+    expect(
+      screen.getByTestId("queued-intent-note").textContent,
+    ).toContain("Up next");
+  });
+
+  test("without a current project the control hides", () => {
+    renderHome({ hasProject: false });
+    expect(screen.queryByTestId("queue-intent-button")).toBeNull();
   });
 });

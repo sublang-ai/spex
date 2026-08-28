@@ -11,8 +11,12 @@ import { create } from "zustand";
 import type {
   AgentBlockInput,
   BuiltinPlaybookInfo,
+  ClosedIntent,
   ConfigState,
   ForgeState,
+  IntentInfo,
+  IntentSource,
+  LedgerState,
   ProjectInfo,
   ReadinessEntry,
   RepoStatusInfo,
@@ -30,7 +34,10 @@ import {
 } from "./reducer.js";
 
 export interface ComposerState {
-  queued: string[];
+  /** Submissions waiting for the turn to end (RUN-8). A staged
+   * intent's id rides its entry, so the chip follows the pending
+   * bubble and the dispatch stamps when the turn starts (DR-035). */
+  queued: { text: string; intentId?: string }[];
   /** Unsent composer text — survives tab and surface switches. */
   draft?: string;
 }
@@ -47,6 +54,22 @@ export interface CompileTracker {
   playbookId: string;
   running: boolean;
   ok?: boolean;
+}
+
+/** One project's History page state (DR-035): closed intents newest
+ * first, extended in place as the reader scrolls. */
+export interface HistoryState {
+  intents: ClosedIntent[];
+  more: boolean;
+  loading?: boolean;
+}
+
+/** A staged dispatch's chip (DR-035): the composer wears the intent
+ * until the text is sent or the chip is detached. Keyed by session id,
+ * or "home" for the Captain home composer. */
+export interface StagedIntent {
+  intentId: string;
+  title: string;
 }
 
 export interface AppState {
@@ -95,6 +118,13 @@ export interface AppState {
   specErrors: Record<string, string>;
   /** Draft for the Captain-home start composer. */
   homeDraft: string;
+  /** The one ledger fold, as ledger.get last served it (DR-035). */
+  ledger?: LedgerState;
+  ledgerError?: string;
+  /** Per-project History pages (DR-035). */
+  history: Record<string, HistoryState>;
+  /** Staged dispatches by composer key (session id or "home"). */
+  stagedIntents: Record<string, StagedIntent>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
 
@@ -134,6 +164,29 @@ export interface AppState {
   loadPastSession(sessionId: string, force?: boolean): Promise<void>;
   disposeSession(sessionId: string): Promise<void>;
   submitBossText(sessionId: string, text: string): Promise<void>;
+  /** Re-pull the one ledger fold (DR-035). */
+  loadLedger(): Promise<void>;
+  /** Load (or extend, with `more`) a project's History page. */
+  loadHistory(projectId: string, more?: boolean): Promise<void>;
+  /** Capture an intent (DR-035): one gesture, any source. */
+  queueIntent(input: {
+    projectId: string;
+    text: string;
+    source?: IntentSource;
+    at?: "head" | "tail";
+  }): Promise<IntentInfo>;
+  moveIntent(intentId: string, afterIntentId: string | null): Promise<void>;
+  /** Edit a queued intent's text (DR-035: from dispatch on, history). */
+  editIntent(intentId: string, text: string): Promise<void>;
+  closeIntent(intentId: string, as: "done" | "dropped"): Promise<void>;
+  /** Stage an intent's text into its project's composer (DR-035):
+   * the live session's, else the Captain home's. Returns the staged
+   * composer key ("home" or the session id). */
+  stageDispatch(intent: IntentInfo): Promise<string>;
+  /** Detach a staged chip without sending (DR-035). */
+  clearStagedIntent(key: string): void;
+  /** Persist the viewed marker so the review summons clears (DR-035). */
+  markViewed(sessionId: string): void;
   removeQueued(sessionId: string, index: number): void;
   abortTurn(sessionId: string): Promise<void>;
   clearRunError(sessionId: string): void;
@@ -241,7 +294,7 @@ export const useAppStore = create<AppState>((set, get) => {
         composers: { ...state.composers, [sessionId]: { queued: [] } },
         runErrors: {
           ...state.runErrors,
-          [sessionId]: `queued message was not sent — the session ended: "${next}"`,
+          [sessionId]: `queued message was not sent — the session ended: "${next.text}"`,
         },
       });
       return;
@@ -253,7 +306,11 @@ export const useAppStore = create<AppState>((set, get) => {
       },
     });
     void getClient()
-      .command("turn.submit", { sessionId, text: next })
+      .command("turn.submit", {
+        sessionId,
+        text: next.text,
+        ...(next.intentId !== undefined ? { intentId: next.intentId } : {}),
+      })
       .catch((cause: Error) =>
         setRunError(sessionId, `queued submission failed: ${cause.message}`),
       );
@@ -348,6 +405,21 @@ export const useAppStore = create<AppState>((set, get) => {
         set({ sessions });
         break;
       }
+      case "intents.changed": {
+        // The one fold moved (DR-035): re-pull it, and refresh any
+        // loaded History first page for the named projects.
+        void get()
+          .loadLedger()
+          .catch(() => {});
+        for (const projectId of message.projectIds) {
+          if (get().history[projectId]) {
+            void get()
+              .loadHistory(projectId)
+              .catch(() => {});
+          }
+        }
+        break;
+      }
       case "record": {
         const { sessionId, seq, record, role } = message;
         const buffer = backfilling.get(sessionId);
@@ -374,6 +446,14 @@ export const useAppStore = create<AppState>((set, get) => {
           // any loaded tree for this project (DR-011 freshness).
           if (session && get().specTrees[session.projectId]) {
             void get().loadSpecs(session.projectId);
+          }
+          // The reader is looking at this session: the finish is seen
+          // the moment it lands, so the review summons clears (DR-035).
+          if (
+            record.type === "turn_finished" &&
+            sessionId === get().activeSessionId
+          ) {
+            get().markViewed(sessionId);
           }
         }
         break;
@@ -403,6 +483,8 @@ export const useAppStore = create<AppState>((set, get) => {
     specTrees: {},
     specErrors: {},
     homeDraft: "",
+    history: {},
+    stagedIntents: {},
 
     connect(url?: string): void {
       client = new SpexClient({
@@ -436,6 +518,7 @@ export const useAppStore = create<AppState>((set, get) => {
         getClient().command("session.list", {}),
       ]);
       set({ configState, readiness, projects, sessions });
+      void get().loadLedger();
       void get().loadMachineGraphs();
       for (const project of projects) {
         void get().loadProjectMeta(project.id);
@@ -755,21 +838,40 @@ export const useAppStore = create<AppState>((set, get) => {
     async submitBossText(sessionId: string, text: string): Promise<void> {
       const state = get();
       const view = state.views[sessionId];
+      // A staged intent dispatches with the text that carries it
+      // (DR-035); the chip leaves the composer either way — riding
+      // the queued entry, or consumed by the submission.
+      const staged = state.stagedIntents[sessionId];
+      const intentId = staged?.intentId;
+      const consumeStaged = () => {
+        if (staged) get().clearStagedIntent(sessionId);
+      };
       const enqueue = () => {
         const composer = get().composers[sessionId] ?? { queued: [] };
         set({
           composers: {
             ...get().composers,
-            [sessionId]: { queued: [...composer.queued, text] },
+            [sessionId]: {
+              queued: [
+                ...composer.queued,
+                { text, ...(intentId !== undefined ? { intentId } : {}) },
+              ],
+            },
           },
         });
+        consumeStaged();
       };
       if (view?.turnActive) {
         enqueue();
         return;
       }
       try {
-        await getClient().command("turn.submit", { sessionId, text });
+        await getClient().command("turn.submit", {
+          sessionId,
+          text,
+          ...(intentId !== undefined ? { intentId } : {}),
+        });
+        consumeStaged();
       } catch (cause) {
         const error = cause as { code?: string; message: string };
         if (error.code === "busy") {
@@ -781,6 +883,135 @@ export const useAppStore = create<AppState>((set, get) => {
         setRunError(sessionId, error.message);
         throw cause;
       }
+    },
+
+    async loadLedger(): Promise<void> {
+      try {
+        const ledger = await getClient().command("ledger.get", {});
+        set({ ledger, ledgerError: undefined });
+      } catch (cause) {
+        set({ ledgerError: (cause as Error).message });
+      }
+    },
+
+    async loadHistory(projectId: string, more = false): Promise<void> {
+      const current = get().history[projectId];
+      const cursorRow = more
+        ? current?.intents[current.intents.length - 1]
+        : undefined;
+      set({
+        history: {
+          ...get().history,
+          [projectId]: {
+            intents: current?.intents ?? [],
+            more: current?.more ?? false,
+            loading: true,
+          },
+        },
+      });
+      try {
+        const page = await getClient().command("ledger.history", {
+          projectId,
+          ...(cursorRow?.intent.closedAt !== undefined
+            ? {
+                before: {
+                  closedAt: cursorRow.intent.closedAt,
+                  intentId: cursorRow.intent.id,
+                },
+              }
+            : {}),
+        });
+        const kept = more ? (get().history[projectId]?.intents ?? []) : [];
+        set({
+          history: {
+            ...get().history,
+            [projectId]: {
+              intents: [...kept, ...page.intents],
+              more: page.more,
+            },
+          },
+        });
+      } catch {
+        const stale = get().history[projectId];
+        if (stale) {
+          set({
+            history: {
+              ...get().history,
+              [projectId]: { ...stale, loading: false },
+            },
+          });
+        }
+      }
+    },
+
+    async queueIntent(input): Promise<IntentInfo> {
+      const intent = await getClient().command("intent.queue", input);
+      await get().loadLedger();
+      return intent;
+    },
+
+    async moveIntent(intentId, afterIntentId): Promise<void> {
+      await getClient().command("intent.move", { intentId, afterIntentId });
+      await get().loadLedger();
+    },
+
+    async editIntent(intentId, text): Promise<void> {
+      await getClient().command("intent.edit", { intentId, text });
+      await get().loadLedger();
+    },
+
+    async closeIntent(intentId, as): Promise<void> {
+      await getClient().command("intent.close", { intentId, as });
+      await get().loadLedger();
+    },
+
+    async stageDispatch(intent: IntentInfo): Promise<string> {
+      const title = intent.text.split(/\r?\n/, 1)[0] ?? intent.text;
+      const liveSession = get().sessions.find(
+        (session) => session.live && session.projectId === intent.projectId,
+      );
+      if (liveSession) {
+        await get().focusSession(liveSession.id);
+        get().setDraft(liveSession.id, intent.text);
+        set({
+          stagedIntents: {
+            ...get().stagedIntents,
+            [liveSession.id]: { intentId: intent.id, title },
+          },
+        });
+        return liveSession.id;
+      }
+      // No live lane: stage the Captain home, where sending creates
+      // the session in the same motion (run-view-26).
+      get().setCurrentProject(intent.projectId);
+      get().setWorkspaceTab(intent.projectId, "start");
+      get().setHomeDraft(intent.text);
+      set({
+        stagedIntents: {
+          ...get().stagedIntents,
+          home: { intentId: intent.id, title },
+        },
+      });
+      return "home";
+    },
+
+    clearStagedIntent(key: string): void {
+      const { [key]: _, ...rest } = get().stagedIntents;
+      set({ stagedIntents: rest });
+    },
+
+    markViewed(sessionId: string): void {
+      const view = get().views[sessionId];
+      const turnId = view?.currentTurnId;
+      const session = get().sessions.find((s) => s.id === sessionId);
+      const latest =
+        typeof turnId === "number" && turnId >= 0
+          ? turnId
+          : (session?.turns ?? 0) - 1;
+      if (latest < 0) return;
+      void getClient()
+        .command("session.viewed", { sessionId, turnId: latest })
+        .catch(() => {});
     },
 
     removeQueued(sessionId: string, index: number): void {

@@ -4,7 +4,7 @@
 // RUN-19/20/21 component coverage: the run view rendered from the
 // fixture stream shows the expected panes and never hidden content.
 
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen,
   within,
 } from "@testing-library/react";
@@ -13,6 +13,12 @@ afterEach(cleanup);
 
 import { RunView } from "./RunView.js";
 import { applyRecords, initialSessionView } from "../state/reducer.js";
+import { setClientForTests, useAppStore } from "../state/store.js";
+import type {
+  DerivedIntent,
+  IntentInfo,
+  LedgerState,
+} from "@sublang/spex-core/protocol";
 import {
   FULL_RUN,
   HIDDEN_LEAK,
@@ -182,7 +188,7 @@ describe("RUN-38: queued messages read as pending, not sent", () => {
       <RunView
         session={SESSION}
         view={view}
-        composer={{ queued: ["also update the changelog please"] }}
+        composer={{ queued: [{ text: "also update the changelog please" }] }}
         connected
         onSubmit={async () => {}}
         onAbort={() => {}}
@@ -399,3 +405,460 @@ describe("run-view-66: the machine call tree from the trace", () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// Intent ledger coverage (run-view-92..96, DR-035): the composer's
+// queue-instead capture, the staged chip, the delivery card with
+// confirm-pulls-next, and attention activation landing at the
+// intent's place.
+// ---------------------------------------------------------------------------
+
+function makeIntent(over: Partial<IntentInfo> & { id: string }): IntentInfo {
+  return {
+    projectId: "p1",
+    text: "Address #7: fix the login bug\nfull context for the run",
+    rank: "m",
+    createdAt: 0,
+    ...over,
+  };
+}
+
+const EMPTY_LEDGER: LedgerState = { intents: [], attention: [], badge: 0 };
+
+/** The turn-1 intent, finished and awaiting its verdict. */
+const FINISHED: DerivedIntent = {
+  intent: makeIntent({
+    id: "i1",
+    source: {
+      kind: "issue",
+      ref: "7",
+      url: "https://github.com/acme/demo/issues/7",
+    },
+    dispatched: { sessionId: "s1", turnId: 1, at: 1000 },
+  }),
+  state: "finished",
+  stats: { reviewRounds: 2, turns: 1, elapsedMs: 12 * 60_000 },
+};
+
+const QUEUED_NEXT: DerivedIntent = {
+  intent: makeIntent({ id: "i2", text: "Review PR 45: tighten the docs" }),
+  state: "queued",
+};
+
+function seedLedger(ledger: LedgerState): void {
+  useAppStore.setState({ ledger });
+}
+
+function renderRunWith(
+  entries: typeof FULL_RUN,
+  over: Partial<Parameters<typeof RunView>[0]> = {},
+) {
+  const view = applyRecords(initialSessionView(PLAYERS), entries);
+  return render(
+    <RunView
+      session={SESSION}
+      view={view}
+      composer={{ queued: [] }}
+      connected
+      onSubmit={async () => {}}
+      onAbort={() => {}}
+      onRemoveQueued={() => {}}
+      onDismissError={() => {}}
+      {...over}
+    />,
+  );
+}
+
+describe("run-view-92: queue instead of send captures a chat intent", () => {
+  const command = vi.fn();
+
+  beforeEach(() => {
+    command.mockReset();
+    command.mockImplementation(async (type: string) => {
+      if (type === "intent.queue") return makeIntent({ id: "chat-1" });
+      if (type === "ledger.get") return EMPTY_LEDGER;
+      return {};
+    });
+    setClientForTests({ command } as never);
+  });
+
+  afterEach(() => {
+    useAppStore.setState({ ledger: undefined, stagedIntents: {} });
+    setClientForTests(undefined);
+  });
+
+  test("the typed text queues with chat provenance, nothing sends", async () => {
+    const onSubmit = vi.fn(async () => {});
+    renderRunWith(TURN_ONE, { onSubmit });
+
+    fireEvent.change(screen.getByTestId("boss-composer"), {
+      target: { value: "also fix the logout flow later" },
+    });
+    fireEvent.click(screen.getByTestId("queue-intent-button"));
+
+    await vi.waitFor(() =>
+      expect(command).toHaveBeenCalledWith("intent.queue", {
+        projectId: "p1",
+        text: "also fix the logout flow later",
+        source: { kind: "chat", ref: "s1" },
+      }),
+    );
+    // Shelved, not sent (run-view-85): no dispatch, no queued bubble.
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(command).not.toHaveBeenCalledWith(
+      "turn.submit",
+      expect.anything(),
+    );
+    expect(screen.queryByTestId("queue-indicator")).toBeNull();
+    // The inline acknowledgment names where the row landed.
+    await vi.waitFor(() =>
+      expect(
+        screen.getByTestId("queued-intent-note").textContent,
+      ).toContain("Up next"),
+    );
+    // The draft cleared: the text lives in the queue now.
+    expect(
+      (screen.getByTestId("boss-composer") as HTMLTextAreaElement).value,
+    ).toBe("");
+  });
+});
+
+describe("run-view-93: the staged chip governs what a send stamps", () => {
+  afterEach(() => {
+    useAppStore.setState({ ledger: undefined, stagedIntents: {} });
+    setClientForTests(undefined);
+  });
+
+  test("the composer wears the staged chip; emptying detaches it", () => {
+    useAppStore.setState({
+      stagedIntents: {
+        s1: { intentId: "i1", title: "Address #7: fix the login bug" },
+      },
+    });
+    renderRunWith(TURN_ONE);
+    const chip = screen.getByTestId("staged-intent-chip");
+    expect(chip.textContent).toContain("Address #7: fix the login bug");
+
+    const composer = screen.getByTestId("boss-composer");
+    fireEvent.change(composer, { target: { value: "extra context" } });
+    expect(screen.getByTestId("staged-intent-chip")).toBeTruthy();
+    fireEvent.change(composer, { target: { value: "" } });
+    // Emptying the composer detaches the intent (run-view-86): the
+    // chip leaves and the store drops the staging.
+    expect(useAppStore.getState().stagedIntents.s1).toBeUndefined();
+    expect(screen.queryByTestId("staged-intent-chip")).toBeNull();
+  });
+
+  test("a queued submission carries the chip on its pending bubble", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), [
+      {
+        seq: 1,
+        record: {
+          type: "turn_started",
+          turnId: 9,
+          timestamp: 1,
+          turn: { id: 9, prompt: "go", timestamp: 1 },
+        },
+      } as (typeof TURN_ONE)[number],
+    ]);
+    render(
+      <RunView
+        session={SESSION}
+        view={view}
+        composer={{ queued: [{ text: "start the next one", intentId: "i1" }] }}
+        connected
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    const queue = screen.getByTestId("queue-indicator");
+    expect(within(queue).getByTestId("queued-intent-chip")).toBeTruthy();
+    expect(queue.textContent).toContain("sends when this turn ends");
+  });
+});
+
+describe("run-view-90/89: the working line and the bound turn's chip", () => {
+  afterEach(() => {
+    useAppStore.setState({ ledger: undefined, stagedIntents: {} });
+  });
+
+  test("an open dispatched intent names itself above the composer", () => {
+    seedLedger({
+      intents: [
+        {
+          intent: makeIntent({
+            id: "i1",
+            dispatched: { sessionId: "s1", turnId: 9, at: 1 },
+          }),
+          state: "working",
+        },
+      ],
+      attention: [],
+      badge: 0,
+    });
+    renderRunWith(TURN_ONLY_STARTED as typeof FULL_RUN);
+    const line = screen.getByTestId("working-line");
+    expect(line.textContent).toContain("Working:");
+    expect(line.textContent).toContain("Address #7: fix the login bug");
+    // Hover is never the only channel, but the raw text rides along.
+    expect(line.title).toContain("full context for the run");
+  });
+
+  test("the newest open intent owns the line; the bubble wears the chip", () => {
+    seedLedger({
+      intents: [
+        {
+          intent: makeIntent({
+            id: "i-old",
+            text: "the older intent",
+            dispatched: { sessionId: "s1", turnId: 1, at: 1 },
+          }),
+          state: "interrupted",
+          reason: "question",
+        },
+        {
+          intent: makeIntent({
+            id: "i-new",
+            text: "the newest intent",
+            source: { kind: "chat", ref: "s1" },
+            dispatched: { sessionId: "s1", turnId: 2, at: 2 },
+          }),
+          state: "working",
+        },
+      ],
+      attention: [],
+      badge: 0,
+    });
+    renderRunWith([...TURN_ONE, ...TURN_TWO_QUESTION]);
+    expect(screen.getByTestId("working-line").textContent).toContain(
+      "the newest intent",
+    );
+    // The bound turn's Boss bubble wears the source chip (run-view-89);
+    // an unsourced intent's bubble wears none.
+    const bubbles = screen.getAllByTestId("boss-bubble");
+    expect(within(bubbles[1]).getByTestId("intent-source-chip").textContent)
+      .toBe("chat");
+    expect(within(bubbles[0]).queryByTestId("intent-source-chip")).toBeNull();
+  });
+});
+
+describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
+  const command = vi.fn();
+  let servedLedger: LedgerState;
+
+  beforeEach(() => {
+    servedLedger = { intents: [FINISHED, QUEUED_NEXT], attention: [], badge: 1 };
+    command.mockReset();
+    command.mockImplementation(async (type: string) => {
+      if (type === "ledger.get") return servedLedger;
+      if (type === "intent.queue") return makeIntent({ id: "i3" });
+      return {};
+    });
+    setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
+    useAppStore.setState({
+      ledger: { intents: [FINISHED, QUEUED_NEXT], attention: [], badge: 1 },
+      sessions: [],
+      stagedIntents: {},
+    });
+  });
+
+  afterEach(() => {
+    useAppStore.setState({
+      ledger: undefined,
+      stagedIntents: {},
+      sessions: [],
+      homeDraft: "",
+    });
+    setClientForTests(undefined);
+  });
+
+  test("the bound bubble wears the source chip as a canonical link", () => {
+    renderRunWith(TURN_ONE);
+    const bubble = screen.getByTestId("boss-bubble");
+    const chip = within(bubble).getByTestId("intent-source-chip");
+    expect(chip.textContent).toBe("#7");
+    expect(chip.tagName).toBe("A");
+    expect(chip.getAttribute("href")).toBe(
+      "https://github.com/acme/demo/issues/7",
+    );
+    // Raw provenance lives in the tooltip (DR-010 §2).
+    expect(chip.getAttribute("title")).toContain("issue 7");
+  });
+
+  test("the card carries title, chip, stats, verdicts, and the note", () => {
+    renderRunWith(TURN_ONE);
+    const card = screen.getByTestId("delivery-card-i1");
+    expect(card.getAttribute("data-settled")).toBe("0");
+    expect(card.textContent).toContain("Address #7: fix the login bug");
+    expect(within(card).getByTestId("intent-source-chip").textContent).toBe(
+      "#7",
+    );
+    // Review rounds foremost, then turns, then elapsed (run-view-87).
+    expect(within(card).getByTestId("delivery-stats").textContent).toBe(
+      "2 review rounds · 1 turn · 12m",
+    );
+    expect(within(card).getByTestId("delivery-confirm").textContent).toBe(
+      "Confirm",
+    );
+    expect(within(card).getByTestId("delivery-drop").textContent).toBe(
+      "Drop",
+    );
+    expect(card.textContent).toContain(
+      "A follow-up message continues this intent.",
+    );
+  });
+
+  test("a verdict closes over the protocol and resolves into Up next", async () => {
+    renderRunWith(TURN_ONE);
+    // The verdict re-derives the fold without the closed intent.
+    servedLedger = { intents: [QUEUED_NEXT], attention: [], badge: 0 };
+
+    const confirm = screen.getByTestId(
+      "delivery-confirm",
+    ) as HTMLButtonElement;
+    fireEvent.click(confirm);
+    // The action acknowledges in place (DR-010): busy until it lands.
+    expect(confirm.disabled).toBe(true);
+    expect(confirm.textContent).toContain("Confirming…");
+
+    await vi.waitFor(() =>
+      expect(command).toHaveBeenCalledWith("intent.close", {
+        intentId: "i1",
+        as: "done",
+      }),
+    );
+    // The card resolves in place into the project's next queued
+    // unblocked intent with Start (run-view-87).
+    await vi.waitFor(() => {
+      const card = screen.getByTestId("delivery-card-i1");
+      expect(card.getAttribute("data-settled")).toBe("1");
+      expect(card.textContent).toContain("Review PR 45: tighten the docs");
+    });
+
+    // Start stages the dispatch — no live session here, so it stages
+    // the Captain home (run-view-86).
+    fireEvent.click(screen.getByTestId("upnext-start"));
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().stagedIntents.home?.intentId).toBe("i2");
+      expect(useAppStore.getState().homeDraft).toBe(
+        "Review PR 45: tighten the docs",
+      );
+    });
+  });
+
+  test("an empty queue resolves into the inline add affordance", async () => {
+    useAppStore.setState({
+      ledger: { intents: [FINISHED], attention: [], badge: 1 },
+    });
+    servedLedger = EMPTY_LEDGER;
+    renderRunWith(TURN_ONE);
+
+    fireEvent.click(screen.getByTestId("delivery-drop"));
+    await vi.waitFor(() =>
+      expect(command).toHaveBeenCalledWith("intent.close", {
+        intentId: "i1",
+        as: "dropped",
+      }),
+    );
+    const input = await vi.waitFor(() =>
+      screen.getByTestId("upnext-add-input"),
+    );
+    fireEvent.change(input, { target: { value: "polish the changelog" } });
+    fireEvent.click(screen.getByTestId("upnext-add"));
+    await vi.waitFor(() =>
+      expect(command).toHaveBeenCalledWith("intent.queue", {
+        projectId: "p1",
+        text: "polish the changelog",
+      }),
+    );
+  });
+
+  test("an ended session's replay renders the card inert", () => {
+    renderRunWith(TURN_ONE, {
+      session: { ...SESSION, live: false, endedAt: 5 },
+      readOnly: true,
+      onStartNew: () => {},
+    });
+    const card = screen.getByTestId("delivery-card-i1");
+    expect(card.textContent).toContain("Address #7: fix the login bug");
+    expect(
+      (within(card).getByTestId("delivery-confirm") as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (within(card).getByTestId("delivery-drop") as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    // And an ended lane shows no working line.
+    expect(screen.queryByTestId("working-line")).toBeNull();
+  });
+});
+
+describe("run-view-96/91: attention activation lands at the place", () => {
+  afterEach(() => {
+    useAppStore.setState({ ledger: undefined, stagedIntents: {} });
+  });
+
+  test("a pending question focuses the question bubble", () => {
+    const onFocusHandled = vi.fn();
+    renderRunWith([...TURN_ONE, ...TURN_TWO_QUESTION], {
+      focusTurn: 2,
+      onFocusHandled,
+    });
+    const wrapper = screen
+      .getByTestId("question-bubble")
+      .closest("[data-focus-key]");
+    expect(wrapper?.getAttribute("data-focused")).toBe("1");
+    expect(onFocusHandled).toHaveBeenCalled();
+  });
+
+  test("an unacknowledged failure focuses the failure line", () => {
+    const TURN_FAILED = [
+      {
+        seq: 1,
+        record: {
+          type: "turn_started",
+          turnId: 5,
+          timestamp: 1,
+          turn: { id: 5, prompt: "go", timestamp: 1 },
+        },
+      },
+      {
+        seq: 2,
+        record: {
+          type: "runtime_error",
+          turnId: 5,
+          timestamp: 2,
+          message: "the coder crashed",
+        },
+      },
+      {
+        seq: 3,
+        record: { type: "turn_finished", turnId: 5, timestamp: 3 },
+      },
+    ] as typeof FULL_RUN;
+    renderRunWith(TURN_FAILED, { focusTurn: 5 });
+    const wrapper = screen
+      .getByText("the coder crashed")
+      .closest("[data-focus-key]");
+    expect(wrapper?.getAttribute("data-focused")).toBe("1");
+  });
+
+  test("a finish awaiting its verdict focuses the delivery card", async () => {
+    useAppStore.setState({
+      ledger: { intents: [FINISHED], attention: [], badge: 1 },
+    });
+    const onFocusHandled = vi.fn();
+    const { container } = renderRunWith(TURN_ONE, {
+      focusTurn: 1,
+      onFocusHandled,
+    });
+    await vi.waitFor(() => {
+      const wrapper = container.querySelector('[data-focus-key="card-i1"]');
+      expect(wrapper?.getAttribute("data-focused")).toBe("1");
+    });
+    expect(onFocusHandled).toHaveBeenCalled();
+  });
+});

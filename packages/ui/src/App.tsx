@@ -7,10 +7,10 @@
 // renderer-side so the UI runs unmodified in a browser (SHELL-10).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SessionInfo } from "@sublang/spex-core/protocol";
+import type { IntentInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "./state/store.js";
-import { deriveAttention } from "./state/dashboard.js";
+import type { AttentionItem } from "./state/dashboard.js";
 import { setCaptain } from "./lib/config-ops.js";
 import type { SessionView } from "./state/reducer.js";
 import { RunView } from "./components/RunView.js";
@@ -34,6 +34,33 @@ declare global {
   interface Window {
     spexNative?: { pickDirectory(): Promise<string | null> };
   }
+}
+
+/** The one attention fold (DR-035, dashboard-10): every dot and badge
+ * re-sources from the core-derived ledger, grouped by session — never
+ * from a client-side derivation of its own. Failure is the most
+ * severe voice and wins a session's dot. */
+function useLedgerAttention(): Map<string, AttentionItem> {
+  const ledger = useAppStore((state) => state.ledger);
+  const sessions = useAppStore((state) => state.sessions);
+  return useMemo(() => {
+    const map = new Map<string, AttentionItem>();
+    for (const entry of ledger?.attention ?? []) {
+      const kind = entry.kind === "failure" ? "failure" : "question";
+      const existing = map.get(entry.sessionId);
+      if (existing && (existing.kind === "failure" || kind !== "failure")) {
+        continue;
+      }
+      const session = sessions.find((s) => s.id === entry.sessionId);
+      map.set(entry.sessionId, {
+        kind,
+        sessionId: entry.sessionId,
+        projectPath: session?.projectPath ?? "",
+        text: entry.title,
+      });
+    }
+    return map;
+  }, [ledger, sessions]);
 }
 
 function ConnectionBanner() {
@@ -89,17 +116,14 @@ function RefreshErrorBanner() {
 /** One persistent polite live region (DR-010 §7): announces the
  * moments the product is built around without spamming. */
 function Announcer() {
-  const sessions = useAppStore((state) => state.sessions);
-  const views = useAppStore((state) => state.views);
+  const ledger = useAppStore((state) => state.ledger);
   const connection = useAppStore((state) => state.connection);
   const everConnected = useAppStore((state) => state.everConnected);
   const [message, setMessage] = useState("");
-  const blocking = deriveAttention(sessions, views).filter(
-    (item) => item.kind !== "idle",
-  );
-  const blockingCount = blocking.length;
-  const latestDetail =
-    blocking[0]?.kind === "question" ? blocking[0]?.text : undefined;
+  // The core-derived attention queue is the one derivation (DR-035).
+  const blockingCount = ledger?.badge ?? 0;
+  const first = ledger?.attention?.[0];
+  const latestDetail = first?.kind === "question" ? first.title : undefined;
   const lastCount = useRef(0);
   const lastConnection = useRef(connection);
 
@@ -159,11 +183,19 @@ function WorkspaceSurface({
   onNavigate,
   onOpenPalette,
   onEnded,
+  attentionBySession,
+  pendingFocus,
+  onFocusHandled,
 }: {
   onNavigate: (surface: Surface) => void;
   onOpenPalette: () => void;
   /** A session just ended: the sidebar reveals where it landed. */
   onEnded: (sessionId: string) => void;
+  /** The ledger-fed attention map the nav shares (DR-035). */
+  attentionBySession: Map<string, AttentionItem>;
+  /** An attention activation still owed its landing (run-view-91). */
+  pendingFocus?: { sessionId: string; turnId: number };
+  onFocusHandled: () => void;
 }) {
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
@@ -199,6 +231,11 @@ function WorkspaceSurface({
   const openAcademyExample = useAppStore(
     (state) => state.openAcademyExample,
   );
+  const ledger = useAppStore((state) => state.ledger);
+  const stagedIntents = useAppStore((state) => state.stagedIntents);
+  const clearStagedIntent = useAppStore((state) => state.clearStagedIntent);
+  const queueIntent = useAppStore((state) => state.queueIntent);
+  const stageDispatch = useAppStore((state) => state.stageDispatch);
 
   const [ending, setEnding] = useState<Record<string, boolean>>({});
   const [specViewStates, setSpecViewStates] = useState<
@@ -232,18 +269,6 @@ function WorkspaceSurface({
           open[0]?.id ??
           "start");
 
-  // Attention dots on background tabs (DR-009/DR-011): the same
-  // derivation as the nav badge, so the signals never disagree.
-  const attention = useMemo(
-    () => deriveAttention(sessions, views),
-    [sessions, views],
-  );
-  const attentionBySession = new Map(
-    attention
-      .filter((item) => item.kind !== "idle")
-      .map((item) => [item.sessionId, item]),
-  );
-
   // Keep the active tab reachable when the strip scrolls.
   useEffect(() => {
     tabRefs.current
@@ -274,6 +299,14 @@ function WorkspaceSurface({
     }
   }
 
+  // The current project's queue (run-view-88): the head unblocked
+  // intent is the next card; the rest is the "+N more" count.
+  const projectQueue = (ledger?.intents ?? []).filter(
+    (entry) =>
+      entry.intent.projectId === currentProjectId && entry.state === "queued",
+  );
+  const nextIntent = projectQueue.find((entry) => !entry.blockedBy);
+
   const startView = (
     <CaptainHome
       hasProject={Boolean(project)}
@@ -295,9 +328,36 @@ function WorkspaceSurface({
       onOpenPalette={onOpenPalette}
       onNavigate={(surface) => onNavigate(surface)}
       onSaveCaptain={setCaptain}
+      next={
+        nextIntent
+          ? { intent: nextIntent.intent, more: projectQueue.length - 1 }
+          : undefined
+      }
+      onStartIntent={async (intent) => {
+        await stageDispatch(intent);
+      }}
+      staged={stagedIntents.home}
+      onDetachStaged={() => clearStagedIntent("home")}
+      onQueueInstead={
+        currentProjectId
+          ? async (text) => {
+              await queueIntent({ projectId: currentProjectId, text });
+            }
+          : undefined
+      }
       onStart={async (text) => {
         if (!currentProjectId) return;
         const session = await openSession(currentProjectId);
+        // A dispatch staged on the home follows the text into the new
+        // session, so the send stamps the intent (run-view-86/88).
+        const state = useAppStore.getState();
+        const homeStaged = state.stagedIntents.home;
+        if (homeStaged) {
+          const { home: _home, ...rest } = state.stagedIntents;
+          useAppStore.setState({
+            stagedIntents: { ...rest, [session.id]: homeStaged },
+          });
+        }
         await submitBossText(session.id, text);
       }}
     />
@@ -518,6 +578,12 @@ function WorkspaceSurface({
             onAbort={() => void abortTurn(activeSession.id)}
             onRemoveQueued={(index) => removeQueued(activeSession.id, index)}
             onDismissError={() => clearRunError(activeSession.id)}
+            focusTurn={
+              pendingFocus?.sessionId === activeSession.id
+                ? pendingFocus.turnId
+                : undefined
+            }
+            onFocusHandled={onFocusHandled}
           />
         )
       ) : null}
@@ -541,20 +607,28 @@ export function App() {
     (state) => state.toggleProjectExpanded,
   );
   const workspaceTabs = useAppStore((state) => state.workspaceTabs);
-  const attention = useMemo(
-    () => deriveAttention(sessions, views),
-    [sessions, views],
-  );
-  const attentionBySession = useMemo(
-    () =>
-      new Map(
-        attention
-          .filter((item) => item.kind !== "idle")
-          .map((item) => [item.sessionId, item]),
-      ),
-    [attention],
-  );
-  const attentionCount = attentionBySession.size;
+  const connection = useAppStore((state) => state.connection);
+  // The badge and every dot re-source from the one core-side ledger
+  // fold (DR-035, dashboard-9/10).
+  const attentionCount = useAppStore((state) => state.ledger?.badge ?? 0);
+  const attentionBySession = useLedgerAttention();
+  // An attention activation owed its landing in the thread
+  // (run-view-91): held until the session's run view takes it.
+  const [pendingFocus, setPendingFocus] = useState<{
+    sessionId: string;
+    turnId: number;
+  }>();
+
+  // The ledger loads with the connection; intents.changed keeps it
+  // fresh from there (DR-035).
+  useEffect(() => {
+    if (connection === "open") {
+      void useAppStore
+        .getState()
+        .loadLedger()
+        .catch(() => {});
+    }
+  }, [connection]);
   // A just-ended session: its sidebar row lights up so the reader sees
   // where the conversation landed (run-view-69).
   const [revealSessionId, setRevealSessionId] = useState<string>();
@@ -567,8 +641,20 @@ export function App() {
     return () => clearTimeout(timer);
   }, [revealSessionId]);
 
-  const openSessionAndShow = (sessionId: string) => {
+  // Opening with a turn id lands at that turn's place in the thread
+  // (run-view-91): the question bubble, failure line, or delivery card.
+  const openSessionAndShow = (sessionId: string, turnId?: number) => {
     void focusSession(sessionId);
+    setPendingFocus(
+      turnId !== undefined ? { sessionId, turnId } : undefined,
+    );
+    setSurface("Workspace");
+  };
+
+  // Start on an intent stages its dispatch (run-view-86): the store
+  // picks the lane — the live session's composer, or the Captain home.
+  const startIntent = async (intent: IntentInfo) => {
+    await useAppStore.getState().stageDispatch(intent);
     setSurface("Workspace");
   };
 
@@ -587,14 +673,13 @@ export function App() {
   };
 
   // Picking a project with parked attention lands on the session that
-  // needs the human (DR-011), not the last-active tab.
+  // needs the human (DR-011), not the last-active tab — read from the
+  // one ledger fold (DR-035).
   const pickProject = (projectId: string) => {
     const state = useAppStore.getState();
-    const needy = deriveAttention(state.sessions, state.views).find((item) => {
-      if (item.kind === "idle") return false;
-      const session = state.sessions.find((s) => s.id === item.sessionId);
-      return session?.projectId === projectId;
-    });
+    const needy = state.ledger?.attention.find(
+      (entry) => entry.projectId === projectId,
+    );
     if (needy) {
       void state.focusSession(needy.sessionId);
     } else {
@@ -831,14 +916,18 @@ export function App() {
           ) : surface === "Dashboard" ? (
             <DashboardSurface
               onOpenSession={openSessionAndShow}
-              onNavigate={setSurface}
               onOpenIntent={openIntent}
+              onStartIntent={startIntent}
+              onNavigate={setSurface}
             />
           ) : (
             <WorkspaceSurface
               onNavigate={setSurface}
               onOpenPalette={() => setPaletteOpen(true)}
               onEnded={setRevealSessionId}
+              attentionBySession={attentionBySession}
+              pendingFocus={pendingFocus}
+              onFocusHandled={() => setPendingFocus(undefined)}
             />
           )}
         </main>
