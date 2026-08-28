@@ -104,6 +104,24 @@ panels use an authenticated `gh` CLI. Compiling new playbooks requires
 Packaged macOS builds are published on
 [GitHub Releases](https://github.com/sublang-ai/spex/releases) when available.
 
+## Remote access
+
+Run Spex on a machine you own and browse it from another: the server shell
+serves the UI and the core over one port, behind a token in the URL
+([server-shell-1](specs/packages/server-shell.md#server-shell-1)).
+
+```sh
+npm ci
+npm run build
+npm start -w apps/server     # prints http://127.0.0.1:8137/?token=...
+```
+
+Open the printed URL. The server binds loopback by default; to reach it from
+another machine, use the SSH tunnel the startup line prints. To bind a public
+address, pass `--tls-cert`/`--tls-key` — a plaintext public bind is refused
+unless you also pass `--insecure`
+([server-shell-2](specs/packages/server-shell.md#server-shell-2)).
+
 ## Repository
 
 | Path | Purpose |
@@ -112,6 +130,7 @@ Packaged macOS builds are published on
 | [`scaffold/`](scaffold), [`packages/cli`](packages/cli) | Shipped templates and the npm CLI |
 | [`packages/core`](packages/core), [`packages/ui`](packages/ui) | Headless service and protocol-only web UI |
 | [`apps/desktop`](apps/desktop) | Electron shell |
+| [`apps/server`](apps/server) | Server shell for remote browser access |
 | [`demo/`](demo) | Academy example and spec-package case study |
 
 For development, run `npm ci`, `npm run build`, and `npm test`. Maintainers
