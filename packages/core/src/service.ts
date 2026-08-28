@@ -41,6 +41,8 @@ import {
   type ServerMessage,
 } from "./protocol.js";
 import { CoreError, SessionManager, type CaptainFactory, type RecordEnvelope } from "./session.js";
+import { closedStats, foldLedger, intentTitle } from "./ledger.js";
+import { rankBetween } from "./rank.js";
 import { Store } from "./store.js";
 import {
   GitHubForgeAdapter,
@@ -136,6 +138,9 @@ export interface CoreServiceEvents {
   /** Local hook for an embedding shell (notifications, badges). */
   onRecord?: (envelope: RecordEnvelope) => void;
   onSessionState?: (session: import("./protocol.js").SessionInfo) => void;
+  /** The ledger fold moved (DR-035): the shell re-reads `ledger()`
+   * for its badge, so the dock and the app never disagree. */
+  onLedgerChange?: () => void;
 }
 
 export class CoreService {
@@ -163,6 +168,9 @@ export class CoreService {
   >();
   /** One in-flight compile per playbook id; abort via compile.abort. */
   private readonly activeCompiles = new Map<string, AbortController>();
+  /** Projects whose ledger changed since the last broadcast (DR-035). */
+  private readonly ledgerChanged = new Set<string>();
+  private ledgerTimer?: NodeJS.Timeout;
   /** Monotonic reload identity; a superseded reload commits nothing. */
   private reloadGeneration = 0;
 
@@ -195,6 +203,35 @@ export class CoreService {
       this.broadcast({ type: "session.state", session });
       this.events.onSessionState?.(session);
     };
+    this.sessions.onLedgerChange = (projectId) => {
+      this.queueLedgerChange([projectId]);
+    };
+  }
+
+  /** Announce ledger changes debounced (DR-035): session records land
+   * in bursts, and every consumer re-pulls the one fold on receipt, so
+   * a trailing edge per burst is all the truth costs. */
+  private queueLedgerChange(projectIds: string[]): void {
+    for (const projectId of projectIds) this.ledgerChanged.add(projectId);
+    if (this.ledgerTimer) return;
+    this.ledgerTimer = setTimeout(() => {
+      this.ledgerTimer = undefined;
+      const projects = [...this.ledgerChanged];
+      this.ledgerChanged.clear();
+      if (projects.length > 0) {
+        this.broadcast({ type: "intents.changed", projectIds: projects });
+        this.events.onLedgerChange?.();
+      }
+    }, 200);
+  }
+
+  /** The one ledger fold (DR-035), for the embedding shell's badge. */
+  ledger(): import("./protocol.js").LedgerState {
+    return foldLedger({
+      store: this.store,
+      lanes: this.sessions.listLanes(),
+      now: Date.now,
+    });
   }
 
   static async start(options: CoreServiceOptions = {}): Promise<CoreService> {
@@ -237,6 +274,7 @@ export class CoreService {
   async stop(): Promise<void> {
     this.watcher?.close();
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
+    if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
     // Kill any in-flight compile child so shutdown never orphans slc.
     for (const controller of this.activeCompiles.values()) controller.abort();
     // A disposal failure must not leave the endpoint or the store open
@@ -587,9 +625,39 @@ export class CoreService {
       case "session.dispose":
         await this.sessions.disposeSession(command.sessionId);
         return null;
-      case "turn.submit":
-        this.sessions.submitTurn(command.sessionId, command.text);
+      case "turn.submit": {
+        if (command.intentId !== undefined) {
+          const intent = this.requireOpenIntent(command.intentId);
+          const session = this.store.describeSession(command.sessionId);
+          if (!session || session.projectId !== intent.projectId) {
+            throw new CoreError(
+              "invalid_request",
+              "the intent belongs to another project",
+            );
+          }
+          if (this.deriveIntentState(intent.id) !== "queued") {
+            throw new CoreError(
+              "conflict",
+              "the intent is already dispatched",
+            );
+          }
+          const predecessor = intent.afterId
+            ? this.store.getIntent(intent.afterId)
+            : undefined;
+          if (predecessor && predecessor.closedAt === undefined) {
+            throw new CoreError(
+              "conflict",
+              `the intent waits on "${intentTitle(predecessor)}"`,
+            );
+          }
+        }
+        this.sessions.submitTurn(
+          command.sessionId,
+          command.text,
+          command.intentId,
+        );
         return { accepted: true };
+      }
       case "turn.abort":
         return { aborted: this.sessions.abortTurn(command.sessionId) };
       case "subscribe": {
@@ -819,7 +887,201 @@ export class CoreService {
         if (!resolved.ok) throw new CoreError(resolved.code, resolved.message);
         return { markdown: readFileSync(resolved.path, "utf8") };
       }
+      case "intent.queue": {
+        const project = this.store.getProject(command.projectId);
+        if (!project) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        if (command.source && command.source.kind !== "chat") {
+          const holder = this.store.openIntentBySource(
+            project.id,
+            command.source.kind,
+            command.source.ref,
+          );
+          if (holder) {
+            throw new CoreError(
+              "conflict",
+              `an open intent already holds this source: "${intentTitle(holder)}"`,
+            );
+          }
+        }
+        if (command.afterIntentId !== undefined) {
+          this.requireOpenIntent(command.afterIntentId);
+        }
+        const ranks = this.projectRanks(project.id);
+        const rank =
+          command.at === "head"
+            ? rankBetween(null, ranks[0] ?? null)
+            : rankBetween(ranks[ranks.length - 1] ?? null, null);
+        const intent = {
+          id: randomUUID(),
+          projectId: project.id,
+          text: command.text,
+          ...(command.source ? { source: command.source } : {}),
+          rank,
+          ...(command.afterIntentId !== undefined
+            ? { afterId: command.afterIntentId }
+            : {}),
+          createdAt: Date.now(),
+        };
+        this.store.addIntent(intent);
+        this.queueLedgerChange([project.id]);
+        return this.store.getIntent(intent.id);
+      }
+      case "intent.edit": {
+        const intent = this.requireOpenIntent(command.intentId);
+        if (this.deriveIntentState(intent.id) !== "queued") {
+          throw new CoreError(
+            "conflict",
+            "a dispatched intent's text is history",
+          );
+        }
+        this.store.setIntentText(intent.id, command.text);
+        this.queueLedgerChange([intent.projectId]);
+        return this.store.getIntent(intent.id);
+      }
+      case "intent.move": {
+        const intent = this.requireOpenIntent(command.intentId);
+        let rank: string;
+        if (command.afterIntentId === null) {
+          const ranks = this.projectRanks(intent.projectId, intent.id);
+          rank = rankBetween(null, ranks[0] ?? null);
+        } else {
+          const target = this.requireOpenIntent(command.afterIntentId);
+          if (target.projectId !== intent.projectId) {
+            throw new CoreError(
+              "invalid_request",
+              "an intent reorders only within its own project",
+            );
+          }
+          const ranks = this.projectRanks(intent.projectId, intent.id);
+          const index = ranks.indexOf(target.rank);
+          rank = rankBetween(target.rank, ranks[index + 1] ?? null);
+        }
+        this.store.setIntentRank(intent.id, rank);
+        this.queueLedgerChange([intent.projectId]);
+        return this.store.getIntent(intent.id);
+      }
+      case "intent.link": {
+        const intent = this.requireOpenIntent(command.intentId);
+        if (command.afterIntentId !== null) {
+          if (command.afterIntentId === intent.id) {
+            throw new CoreError("invalid_request", "an intent cannot wait on itself");
+          }
+          const target = this.requireOpenIntent(command.afterIntentId);
+          // Cycles are refused fail-closed (DR-035): walk the chain
+          // from the target; reaching this intent would close a loop.
+          let cursor: string | undefined = target.afterId;
+          while (cursor !== undefined) {
+            if (cursor === intent.id) {
+              throw new CoreError(
+                "conflict",
+                "that link would close a waiting cycle",
+              );
+            }
+            const next = this.store.getIntent(cursor);
+            cursor =
+              next && next.closedAt === undefined ? next.afterId : undefined;
+          }
+        }
+        this.store.setIntentLink(intent.id, command.afterIntentId);
+        this.queueLedgerChange([intent.projectId]);
+        return this.store.getIntent(intent.id);
+      }
+      case "intent.close": {
+        const intent = this.requireOpenIntent(command.intentId);
+        if (
+          command.as === "done" &&
+          this.deriveIntentState(intent.id) !== "finished"
+        ) {
+          throw new CoreError(
+            "conflict",
+            "only a finished intent confirms done",
+          );
+        }
+        this.store.closeIntent(intent.id, command.as, Date.now());
+        // Closing may release blocked intents in any project.
+        const affected = new Set<string>([intent.projectId]);
+        for (const open of this.store.listOpenIntents()) {
+          if (open.afterId === intent.id) affected.add(open.projectId);
+        }
+        this.queueLedgerChange([...affected]);
+        return this.store.getIntent(intent.id);
+      }
+      case "ledger.get":
+        return foldLedger({
+          store: this.store,
+          lanes: this.sessions.listLanes(),
+          now: Date.now,
+        });
+      case "ledger.history": {
+        const project = this.store.getProject(command.projectId);
+        if (!project) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        const page = this.store.listClosedIntents(
+          project.id,
+          21,
+          command.before
+            ? {
+                closedAt: command.before.closedAt,
+                intentId: command.before.intentId,
+              }
+            : undefined,
+        );
+        const more = page.length > 20;
+        return {
+          intents: page.slice(0, 20).map((intent) => {
+            const stats = closedStats(this.store, intent);
+            return { intent, ...(stats ? { stats } : {}) };
+          }),
+          more,
+        };
+      }
+      case "session.viewed": {
+        this.requireKnownSession(command.sessionId);
+        const key = `viewed:${command.sessionId}`;
+        const previous = this.store.getPref<number>(key) ?? -1;
+        if (command.turnId > previous) {
+          this.store.setPref(key, command.turnId);
+          const session = this.store.describeSession(command.sessionId);
+          if (session) this.queueLedgerChange([session.projectId]);
+        }
+        return null;
+      }
     }
+  }
+
+  /** The intent named must exist and still be open (DR-035). */
+  private requireOpenIntent(intentId: string) {
+    const intent = this.store.getIntent(intentId);
+    if (!intent) throw new CoreError("not_found", `no intent ${intentId}`);
+    if (intent.closedAt !== undefined) {
+      throw new CoreError("conflict", "the intent is already closed");
+    }
+    return intent;
+  }
+
+  /** One intent's derived state, read from the one fold (DR-035). */
+  private deriveIntentState(intentId: string) {
+    const ledger = foldLedger({
+      store: this.store,
+      lanes: this.sessions.listLanes(),
+      now: Date.now,
+    });
+    return ledger.intents.find((entry) => entry.intent.id === intentId)?.state;
+  }
+
+  /** The project's open-intent ranks in order, optionally without the
+   * row being moved. */
+  private projectRanks(projectId: string, excludeId?: string): string[] {
+    return this.store
+      .listOpenIntents()
+      .filter(
+        (intent) =>
+          intent.projectId === projectId && intent.id !== excludeId,
+      )
+      .map((intent) => intent.rank);
   }
 
   private requireKnownSession(sessionId: string): void {

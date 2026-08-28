@@ -73,6 +73,10 @@ interface LiveSession {
   seq: number;
   turnActive: boolean;
   openCalls: OpenCalls;
+  /** The staged intent the next started turn dispatches (DR-035):
+   * held from submission, stamped at turn_started, and never stamped
+   * by a submission that starts no turn. */
+  pendingIntentId?: string;
 }
 
 /** Resolves the role a player record's call is serving, by folding the
@@ -176,6 +180,9 @@ export class SessionManager {
 
   onRecord: (envelope: RecordEnvelope) => void = () => {};
   onSessionState: (session: SessionInfo) => void = () => {};
+  /** A session event moved ledger-derived state (DR-035): the fold's
+   * consumers re-pull. Fired per project, debounced by the service. */
+  onLedgerChange: (projectId: string) => void = () => {};
 
   constructor(options: SessionManagerOptions) {
     this.store = options.store;
@@ -189,6 +196,15 @@ export class SessionManager {
     return this.store.listSessions().map((session) => ({
       ...session,
       live: this.live.has(session.id),
+    }));
+  }
+
+  /** The live lanes as the ledger fold consumes them (DR-035). */
+  listLanes(): { sessionId: string; projectId: string; turnActive: boolean }[] {
+    return [...this.live.values()].map((entry) => ({
+      sessionId: entry.info.id,
+      projectId: entry.info.projectId,
+      turnActive: entry.turnActive,
     }));
   }
 
@@ -323,14 +339,31 @@ export class SessionManager {
   }
 
   private trackRecord(sessionId: string, record: TmuxPlayRecord): void {
+    const entry = this.live.get(sessionId);
+    const ledgerChanged = (): void => {
+      if (entry) this.onLedgerChange(entry.info.projectId);
+    };
     switch (record.type) {
       case "turn_started": {
         const turn = (record as { turn: { id: number; prompt: string } }).turn;
         this.store.startTurn(sessionId, turn.id, turn.prompt, record.timestamp);
+        // The staged intent binds the moment its turn starts (DR-035);
+        // a submission the runtime never turned into a turn stamps
+        // nothing.
+        if (entry?.pendingIntentId !== undefined) {
+          this.store.stampIntentDispatch(
+            entry.pendingIntentId,
+            sessionId,
+            turn.id,
+            record.timestamp,
+          );
+          entry.pendingIntentId = undefined;
+        }
         // A session earns its name the moment it is asked for something
         // (core-service-32): waiting for the turn to end would leave the
         // rail saying "no messages yet" about a session already at work.
         this.refreshLiveState(sessionId);
+        ledgerChanged();
         break;
       }
       case "turn_finished":
@@ -338,12 +371,25 @@ export class SessionManager {
           this.store.endTurn(sessionId, record.turnId, "finished", record.timestamp);
         }
         this.refreshLiveState(sessionId);
+        ledgerChanged();
         break;
       case "turn_aborted":
         if (record.turnId !== null) {
           this.store.endTurn(sessionId, record.turnId, "aborted", record.timestamp);
         }
         this.refreshLiveState(sessionId);
+        ledgerChanged();
+        break;
+      case "runtime_error":
+      case "player_finished":
+        ledgerChanged();
+        break;
+      case "captain_telemetry":
+        if (
+          (record as { topic?: string }).topic === "playbook.fsm.state"
+        ) {
+          ledgerChanged();
+        }
         break;
       case "player_event":
       case "captain_event": {
@@ -406,9 +452,11 @@ export class SessionManager {
 
   /**
    * Start a boss turn (CORE-5). Rejects with busy while a turn is
-   * active; otherwise resolves as soon as the turn is accepted.
+   * active; otherwise resolves as soon as the turn is accepted. An
+   * `intentId` rides along staged (DR-035): the dispatch stamps only
+   * when the turn actually starts.
    */
-  submitTurn(sessionId: string, text: string): void {
+  submitTurn(sessionId: string, text: string, intentId?: string): void {
     const entry = this.requireLive(sessionId);
     if (entry.turnActive) {
       throw new CoreError(
@@ -417,6 +465,7 @@ export class SessionManager {
       );
     }
     entry.turnActive = true;
+    entry.pendingIntentId = intentId;
     void entry.runtime
       .runBossTurn(text)
       .catch(() => {
@@ -424,6 +473,9 @@ export class SessionManager {
       })
       .finally(() => {
         entry.turnActive = false;
+        // A submission that never became a turn stamps nothing.
+        entry.pendingIntentId = undefined;
+        this.onLedgerChange(entry.info.projectId);
       });
   }
 
@@ -451,6 +503,9 @@ export class SessionManager {
     const endedAt = this.now();
     this.store.endSession(sessionId, endedAt);
     this.broadcastState(sessionId, false, endedAt, entry.info);
+    // A session's death releases its unfinished dispatch by
+    // derivation (DR-035): the fold's consumers re-pull.
+    this.onLedgerChange(entry.info.projectId);
     if (failure) throw failure.error;
   }
 

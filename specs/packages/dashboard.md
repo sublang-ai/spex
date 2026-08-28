@@ -180,6 +180,7 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 | Done / Dropped | its close verdict is recorded, done requiring a Finished intent and dropped legal on any open one |
 
 - the fold produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md));
+- where several rows hold at once, the fold ranks failure, then permission, then working, then question, then finished — a standing summons is never masked by the running mark;
 - the per-project next is the first queued, unblocked intent in rank order.
 
 #### dashboard-33

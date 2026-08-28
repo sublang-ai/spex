@@ -446,6 +446,21 @@ function parseIntentRecords(
   return noticeDuplicateRecordIds(merged, notices);
 }
 
+/** The first non-empty line of a record's `## Status` section,
+ * verbatim (DR-035): the Dashboard treats a line starting with "Done"
+ * as a finished record, so only unfinished ones list as work. */
+function recordStatusLine(content: string): string | undefined {
+  const lines = content.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^##\s+Status\s*$/.test(line));
+  if (start < 0) return undefined;
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,6}\s/.test(line)) return undefined;
+    const trimmed = line.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return undefined;
+}
+
 function parseRecords(
   specsDir: string,
   sub: "decisions" | "intents" | "iterations",
@@ -473,9 +488,12 @@ function parseRecords(
       continue;
     }
     let title = entry.name.replace(/\.md$/, "");
+    let status: string | undefined;
     try {
-      const heading = /^#\s+(.+?)\s*$/m.exec(readFileSync(abs, "utf8"));
+      const content = readFileSync(abs, "utf8");
+      const heading = /^#\s+(.+?)\s*$/m.exec(content);
       if (heading) title = heading[1].replace(/^(?:DR|IR)-\d+\s*:\s*/, "");
+      status = recordStatusLine(content);
     } catch {
       // Keep the filename fallback; the reader will surface the error.
     }
@@ -483,6 +501,7 @@ function parseRecords(
       id: `${idPrefix}-${numbered[1]}`,
       title,
       path: `${sub}/${entry.name}`,
+      ...(status !== undefined ? { status } : {}),
     });
   }
   return out;

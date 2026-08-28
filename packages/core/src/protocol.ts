@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export type { TmuxPlayRecord };
 
@@ -227,6 +227,104 @@ export interface ForgeState {
 }
 
 // ---------------------------------------------------------------------------
+// The intent ledger (DR-035)
+// ---------------------------------------------------------------------------
+
+export type IntentSourceKind = "issue" | "pr" | "record" | "chat";
+
+/** Where an intent came from — provenance, never mirrored state. */
+export interface IntentSource {
+  kind: IntentSourceKind;
+  /** Issue/PR number as text, a record id like "IR-21", or a session
+   * id for chat capture. */
+  ref: string;
+  url?: string;
+}
+
+/** One stored intent: a staged Boss turn plus its acts (DR-035).
+ * There is no stored state — everything visible derives. */
+export interface IntentInfo {
+  id: string;
+  projectId: string;
+  /** The future Boss turn; its first line is the display title. */
+  text: string;
+  source?: IntentSource;
+  /** Lexicographic order key; position is priority. */
+  rank: string;
+  /** Single optional predecessor, any project. */
+  afterId?: string;
+  createdAt: number;
+  /** Stamped when the dispatched turn starts; re-written by a later
+   * dispatch. An aborted dispatch releases by derivation — the stamp
+   * stays as history. */
+  dispatched?: { sessionId: string; turnId: number; at: number };
+  closedAt?: number;
+  closedAs?: "done" | "dropped";
+}
+
+export type IntentState =
+  | "queued"
+  | "working"
+  | "interrupted"
+  | "finished"
+  | "done"
+  | "dropped";
+
+/** Basic run stats folded from the intent's turn range (DR-035). */
+export interface IntentStats {
+  /** Reviewer-role player calls the range held; absent when zero. */
+  reviewRounds?: number;
+  turns: number;
+  elapsedMs?: number;
+}
+
+/** An open intent with its derived state (DR-035). */
+export interface DerivedIntent {
+  intent: IntentInfo;
+  state: IntentState;
+  /** Present once dispatched (working/interrupted/finished). */
+  stats?: IntentStats;
+  /** Present while the after-link's target is still open. */
+  blockedBy?: { intentId: string; title: string; projectId: string };
+  /** Why an interrupted intent stands stopped on the Boss. */
+  reason?: "question" | "permission" | "failure";
+}
+
+/** One attention entry: an interrupted or finished intent, or a
+ * session standing in where no intent is bound (DR-035). */
+export interface AttentionEntry {
+  band: "interrupted" | "finished";
+  /** Interruption reason, or "finish" / "review" for band two —
+   * "review" names the un-ledgered turn that clears on viewing. */
+  kind: "question" | "permission" | "failure" | "finish" | "review";
+  /** Absent for session stand-in entries. */
+  intentId?: string;
+  /** The intent's title, or the session's latest turn text. */
+  title: string;
+  projectId: string;
+  sessionId: string;
+  /** The turn the entry points at, when one is known. */
+  turnId?: number;
+  /** When the condition began, ms epoch — longest waiting first. */
+  since: number;
+  stats?: IntentStats;
+}
+
+/** The one cross-project ledger fold (DR-035): every open intent with
+ * its derived state, the two-band attention queue, and the badge. */
+export interface LedgerState {
+  intents: DerivedIntent[];
+  attention: AttentionEntry[];
+  badge: number;
+}
+
+/** One closed intent, as History pages serve it (DR-035). */
+export interface ClosedIntent {
+  intent: IntentInfo;
+  stats?: IntentStats;
+}
+
+// ---------------------------------------------------------------------------
 // Client → core commands (validated per CORE-13)
 // ---------------------------------------------------------------------------
 
@@ -353,6 +451,10 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     sessionId: z.string().min(1),
     text: z.string().min(1),
+    /** The staged intent this turn dispatches (DR-035): validated,
+     * then stamped when the turn starts — never on a submission that
+     * starts no turn. */
+    intentId: z.string().min(1).optional(),
   }),
   z.object({ type: z.literal("turn.abort"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("subscribe"), id, channel: channelSchema }),
@@ -401,6 +503,63 @@ export const commandSchema = z.discriminatedUnion("type", [
     /** Path relative to the project's specs/ directory. */
     path: z.string().min(1),
   }),
+  z.object({
+    type: z.literal("intent.queue"),
+    id,
+    projectId: z.string().min(1),
+    text: z.string().min(1),
+    source: z
+      .object({
+        kind: z.enum(["issue", "pr", "record", "chat"]),
+        ref: z.string().min(1),
+        url: z.string().min(1).optional(),
+      })
+      .optional(),
+    afterIntentId: z.string().min(1).optional(),
+    at: z.enum(["head", "tail"]).optional(),
+  }),
+  z.object({
+    type: z.literal("intent.edit"),
+    id,
+    intentId: z.string().min(1),
+    text: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("intent.move"),
+    id,
+    intentId: z.string().min(1),
+    /** The open intent to sit after; null moves to the head. */
+    afterIntentId: z.string().min(1).nullable(),
+  }),
+  z.object({
+    type: z.literal("intent.link"),
+    id,
+    intentId: z.string().min(1),
+    /** The open predecessor to wait behind; null clears the link. */
+    afterIntentId: z.string().min(1).nullable(),
+  }),
+  z.object({
+    type: z.literal("intent.close"),
+    id,
+    intentId: z.string().min(1),
+    as: z.enum(["done", "dropped"]),
+  }),
+  z.object({ type: z.literal("ledger.get"), id }),
+  z.object({
+    type: z.literal("ledger.history"),
+    id,
+    projectId: z.string().min(1),
+    /** Page cursor: the last served row's closedAt and id. */
+    before: z
+      .object({ closedAt: z.number().int(), intentId: z.string().min(1) })
+      .optional(),
+  }),
+  z.object({
+    type: z.literal("session.viewed"),
+    id,
+    sessionId: z.string().min(1),
+    turnId: z.number().int().nonnegative(),
+  }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -437,6 +596,14 @@ export interface CommandResults {
   "library.builtins": { builtins: BuiltinPlaybookInfo[] };
   "specs.get": SpecTreeState;
   "specs.read": { markdown: string };
+  "intent.queue": IntentInfo;
+  "intent.edit": IntentInfo;
+  "intent.move": IntentInfo;
+  "intent.link": IntentInfo;
+  "intent.close": IntentInfo;
+  "ledger.get": LedgerState;
+  "ledger.history": { intents: ClosedIntent[]; more: boolean };
+  "session.viewed": null;
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +659,10 @@ export interface SpecRecordInfo {
   title: string;
   /** Path relative to the project's specs/ directory. */
   path: string;
+  /** The first non-empty line of the record's `## Status` section,
+   * verbatim; absent when the file has none. A line starting with
+   * "Done" (case-insensitive) marks a finished record (DR-035). */
+  status?: string;
 }
 
 export interface SpecTreeState {
@@ -591,6 +762,15 @@ export interface CompileProgressMessage {
   line: string;
 }
 
+/** The ledger changed for these projects: an intents write landed, or
+ * a session event moved a derived state (DR-035). Clients re-pull
+ * ledger.get; the payload names the projects so a narrow view may
+ * skip a foreign change. */
+export interface IntentsChangedMessage {
+  type: "intents.changed";
+  projectIds: string[];
+}
+
 export type ServerMessage =
   | HelloMessage
   | ReplyMessage
@@ -598,7 +778,8 @@ export type ServerMessage =
   | ConfigStateMessage
   | ReadinessStateMessage
   | SessionStateMessage
-  | CompileProgressMessage;
+  | CompileProgressMessage
+  | IntentsChangedMessage;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers
