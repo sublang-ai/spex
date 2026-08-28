@@ -8,6 +8,7 @@
 Accepted; the spec view's data layout and group model are amended by [DR-015](015-reference-content.md) — packages-layout parsing with section-kind groups replaces the user/dev/test triple.
 The Settings surface's profile inventory is amended by [DR-019](019-inline-agent-configuration.md).
 The project bar, the Captain home's session list, and the live-sessions-only tab strip are amended by [DR-029](029-session-history-home.md) — the sidebar became the navigator; the text below is rewritten where it named them.
+The Dashboard content row is amended by [DR-035](035-intent-ledger.md) — the intent ledger replaced running sessions, work lists, and usage; the taxonomy row below is rewritten.
 
 ## Context
 
@@ -22,7 +23,7 @@ The project bar, the Captain home's session list, and the live-sessions-only tab
 | Nav | Scope | Content |
 | --- | --- | --- |
 | Workspace | current project | open session tabs + "+"; pinned Specs and Repo tabs (project identity moved to the sidebar, [DR-029](029-session-history-home.md)) |
-| Dashboard | all projects | attention queue, running sessions, work lists, usage (unchanged) |
+| Dashboard | all projects | attention queue (interrupted, then finished intents) and per-project ledger groups — history, now, up next, sources ([DR-035](035-intent-ledger.md)) |
 | Playbooks | global | configured playbooks + compile (unchanged) |
 | Settings | global | profiles, captain, notifications, theme (unchanged) |
 

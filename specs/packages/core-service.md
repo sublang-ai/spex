@@ -6,7 +6,7 @@
 ## Intent
 
 This spec covers the Spex core service — the headless Node service in `packages/core` (the private workspace package `@sublang/spex-core`): its observable behavior, its implementation requirements, and its end-to-end integration coverage.
-The service owns config, project sessions, the embedded playbook runtime, and persistence behind one WebSocket API: it embeds the headless cligent runtime and the playbook captain shell, and it shares the playbook launcher's config file, persistence split, and adapter readiness rules.
+The service owns config, project sessions, the intent ledger, the embedded playbook runtime, and persistence behind one WebSocket API: it embeds the headless cligent runtime and the playbook captain shell, and it shares the playbook launcher's config file, persistence split, and adapter readiness rules.
 Every behavior in this package is observable over the WebSocket protocol; the service serves no HTML, and integration coverage runs end to end against a scripted fake adapter.
 
 ## External Behavior
@@ -88,6 +88,81 @@ While a session is live and no boss turn is active on it, when a client submits 
 #### core-service-6
 
 While a boss turn is active on a session, when a client requests an abort for that session, the core service shall abort the active turn, stream the turn-aborted record to subscribed clients, and accept a new Boss submission for that session afterwards.
+
+### Intent Ledger
+
+#### core-service-42
+
+When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent — the request's text, its optional source (kind, reference, and URL), its optional after-link, and its queue position — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
+
+- the request places the intent at the head or the tail of the project's queue as it asks, tail when it says nothing;
+- where the source kind is issue, PR, or record and the project already holds an open intent with the same source kind and reference, the request is rejected with a `conflict` error naming that intent and stores nothing — at most one open intent per source artifact per project;
+- a chat-sourced or unsourced intent is never deduplicated.
+
+#### core-service-43
+
+While an intent is queued [[core-service-47](#core-service-47)], when a client sends `intent.edit` for it, the core service shall replace the intent's text and announce the write [[core-service-51](#core-service-51)]:
+
+- an edit of a dispatched or closed intent is rejected: from its dispatch binding on, the text is history ([DR-035](../decisions/035-intent-ledger.md)).
+
+#### core-service-44
+
+When a client sends `intent.move` for an intent, the core service shall reorder the intent within its own project's queue — to the position after a named intent of that project, or to the head when none is named — and announce the write [[core-service-51](#core-service-51)]:
+
+- a move naming an intent of another project is rejected: only a project's own order has dispatch meaning ([DR-035](../decisions/035-intent-ledger.md)).
+
+#### core-service-45
+
+When a client sends `intent.link` for an intent, the core service shall set the intent's single after-link to the named open intent — of any project — or clear it when the request names none, and announce the write [[core-service-51](#core-service-51)]:
+
+- a link to a closed intent is rejected;
+- a link that would close a cycle of after-links is rejected fail-closed;
+- while its after-link names a still-open intent, the intent is blocked — ineligible for dispatch [[core-service-47](#core-service-47)] — and the block lifts by derivation when that predecessor closes, with nothing written.
+
+#### core-service-46
+
+When a client sends `intent.close` for an open intent with a verdict of `done` or `dropped`, the core service shall record the verdict and its time on the intent — the row kept, never deleted [[core-service-52](#core-service-52)] — and announce the write [[core-service-51](#core-service-51)]:
+
+- `done` is accepted only while a turn the intent attributes [[core-service-47](#core-service-47)] ended finished with none later active, and is otherwise rejected — confirming work that never ran would falsify the ledger ([DR-035](../decisions/035-intent-ledger.md));
+- `dropped` is legal on any open intent;
+- a close of an already-closed intent is rejected.
+
+#### core-service-47
+
+While a session is live, when a client's Boss submission for it [[core-service-5](#core-service-5)] carries an intent id, the core service shall validate the intent at submission — open, of the session's project, queued, and unblocked [[core-service-45](#core-service-45)] — and stamp the dispatch (session, turn, and time) onto the intent when and only when the submitted turn starts, announcing the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
+
+- a submission whose intent fails validation is rejected and starts no turn;
+- a submission that never starts a turn stamps nothing, and the intent stays queued;
+- a later dispatch of the same intent re-writes the stamps;
+- the stamp attributes turns: an intent's turns run from its dispatch turn up to, not including, the next turn in the session that is another intent's dispatch turn, so the newest dispatched open intent owns follow-up turns;
+- an intent is queued while it is open and holds no standing dispatch — never dispatched, its dispatch turn ended aborted, or its dispatching session ended before that turn finished — the release derived, never written: the stamps remain and the queue position keeps its rank.
+
+#### core-service-48
+
+When a client sends `session.viewed` naming a session and a turn, the core service shall persist that turn as the session's last-viewed marker in the app-local store [[core-service-15](#core-service-15)], so review state derives from stored data alone [[core-service-49](#core-service-49)] and survives a restart.
+
+#### core-service-49
+
+When a client sends `ledger.get`, the core service shall reply with the cross-project ledger read model, derived solely from the stored intents, turns, records, and viewed markers — the same stored data yielding an identical reply after a restart [[core-service-10](#core-service-10)] ([DR-035](../decisions/035-intent-ledger.md)):
+
+| Part | Content |
+| --- | --- |
+| Attention entries | two bands — intents standing interrupted on the Boss (a pending question, a permission request, or an unacknowledged failure among their turns), then intents finished and awaiting a verdict — each band ordered longest waiting first by condition onset |
+| Run stats | each finished entry carries stats folded from its intent's attributed turns [[core-service-47](#core-service-47)]: turn count, elapsed time, and the review rounds when any |
+| Session stand-ins | a session bound to no intent enters the same bands for its own question, permission request, failure, or finished turn past the viewed marker [[core-service-48](#core-service-48)] |
+| Project groups | per project: the live session's state, the queue in rank order with each blocked intent marked [[core-service-45](#core-service-45)], and the open intents' source-artifact references [[core-service-42](#core-service-42)] |
+| Badge | the count of all attention entries |
+
+#### core-service-50
+
+When a client sends `ledger.history` for a project, the core service shall reply with one page of that project's closed intents, newest-closed first, the same stored data yielding identical pages after a restart [[core-service-10](#core-service-10)]:
+
+- a page holds at most twenty rows and carries a cursor naming its last row's close time and id;
+- a request carrying a prior page's cursor returns the page after it, overlapping nothing.
+
+#### core-service-51
+
+When the intents table is written [[core-service-52](#core-service-52)], or a session event lands that can change a derived intent state — a turn's start, finish, or abort, a session's end, or an interruption-condition record — the core service shall broadcast an `intents.changed` message naming the affected project to subscribed clients, so every consumer re-reads the one core-side fold [[core-service-49](#core-service-49)] instead of deriving its own ([DR-035](../decisions/035-intent-ledger.md)).
 
 ### Record Streaming
 
@@ -175,6 +250,26 @@ The core package shall own the app-local SQLite store defined by [DR-004](../dec
 - When a migration fails, the core package stops serving and reports the failure, so a partially migrated store is never served.
 - The core package is the store's only writer, exposing stored data solely over the protocol.
 - A released migration is never edited: a schema change is a new migration, so a store written by an earlier release opens rather than failing on a column it has never seen.
+
+### Intent Storage
+
+#### core-service-52
+
+The core package shall hold intents in one app-local store table of acts and provenance only — no state or status column, every visible state derived at read time [[core-service-49](#core-service-49)] — added by a forward migration [[core-service-15](#core-service-15)] and written solely by the intent commands ([[core-service-42](#core-service-42)] [[core-service-43](#core-service-43)] [[core-service-44](#core-service-44)] [[core-service-45](#core-service-45)] [[core-service-46](#core-service-46)]) and the dispatch stamp [[core-service-47](#core-service-47)] ([DR-035](../decisions/035-intent-ledger.md)):
+
+| Column(s) | Content |
+| --- | --- |
+| `id` | the intent's identifier |
+| `project_id` | the owning project |
+| `text` | the staged Boss turn text; its first line is the display title |
+| `source_kind`, `source_ref`, `source_url` | provenance — issue, PR, record, or chat, with reference and URL — null when unsourced |
+| `rank` | the per-project lexicographic order key |
+| `after_id` | the single optional predecessor intent, of any project |
+| `created_at` | the capture time |
+| `dispatched_session_id`, `dispatched_turn_id`, `dispatched_at` | the dispatch stamp, re-written by a later dispatch |
+| `closed_at`, `closed_as` | the close time and verdict — `done` or `dropped` |
+
+- A row is never deleted: a dropped intent keeps its struck row, and permanent deletion waits for its own decision ([DR-035](../decisions/035-intent-ledger.md)).
 
 ### Runtime Composition
 
@@ -287,6 +382,47 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 Where a session has completed a Boss turn, the test suite shall stop the core service, start it again on the same app-local store file [[core-service-15](#core-service-15)], and assert that the session, its turns, its records (content and order), and its usage totals are served identically after restart [[core-service-10](#core-service-10)], and that a session live at shutdown is reported as no longer live:
 
 - Where a store carries an earlier release's schema and rows, the suite shall assert it opens, keeps every row, reads the columns that release lacked as unknown, and accepts writes to them [[core-service-15](#core-service-15)].
+
+### Intent Ledger Coverage
+
+#### core-service-53
+
+Where the core service runs with a valid config and the scripted fake adapter [[core-service-18](#core-service-18)], the test suite shall drive intents through their lives over the protocol — queue, edit, reorder, dispatch on a session's turn, finish, and close — and assert that:
+
+- a queued intent comes back from `ledger.get` in its project's queue at the requested position [[core-service-42](#core-service-42)] [[core-service-49](#core-service-49)];
+- an edit lands while the intent is queued, and the same edit after dispatch is rejected [[core-service-43](#core-service-43)];
+- a move reorders the queue within the project, and a move naming another project's intent is rejected [[core-service-44](#core-service-44)];
+- closing the dispatched intent as `done` before its turn finishes is rejected, succeeds after the finish, and `dropped` is accepted on a second, still-queued intent [[core-service-46](#core-service-46)];
+- an `intents.changed` broadcast naming the project arrives for each write and for the turn's start and finish [[core-service-51](#core-service-51)].
+
+#### core-service-54
+
+Where a store holds queued, dispatched, finished, and closed intents from a completed run, the test suite shall stop the core service, start it again on the same store file [[core-service-15](#core-service-15)], and assert that `ledger.get` replies identically to its pre-restart reply [[core-service-49](#core-service-49)] and that the store's intents table carries no state column [[core-service-52](#core-service-52)].
+
+#### core-service-55
+
+Where a project holds an open issue-sourced intent, the test suite shall send a second `intent.queue` with the same source kind and reference and assert the dedup contract of [[core-service-42](#core-service-42)]: the reply is a `conflict` error naming the existing intent, no intent is stored, and once the existing intent closes [[core-service-46](#core-service-46)] the same request is accepted.
+
+#### core-service-56
+
+Where two open intents are linked one after the other, the test suite shall assert the link guards of [[core-service-45](#core-service-45)]: a reverse link closing the cycle is rejected fail-closed, a link to a closed intent is rejected, and closing the predecessor [[core-service-46](#core-service-46)] lifts the successor's blocked mark in the next `ledger.get` reply [[core-service-49](#core-service-49)].
+
+#### core-service-57
+
+Where a session is live on the fake adapter, the test suite shall submit Boss text carrying an intent id and assert the stamping contract of [[core-service-47](#core-service-47)]:
+
+- when the submitted turn starts, the intent carries that session, that turn, and a dispatch time;
+- a submission carrying the id of a blocked intent, or of another project's intent, is rejected and starts no turn;
+- a submission rejected busy while a turn is active [[core-service-5](#core-service-5)] stamps nothing and leaves the intent queued;
+- a dispatch turn that is aborted [[core-service-6](#core-service-6)] keeps its stamps while the next `ledger.get` re-derives the intent as queued at its kept rank [[core-service-49](#core-service-49)].
+
+#### core-service-58
+
+Where a project's store holds twenty-five closed intents, the test suite shall page through `ledger.history` and assert the paging contract of [[core-service-50](#core-service-50)]: the first page holds the twenty newest-closed intents newest-first, the second page — requested with the first page's cursor — holds the remaining five with no overlap, and both pages reply identically after a restart on the same store [[core-service-15](#core-service-15)].
+
+#### core-service-59
+
+Where a session finishes a turn bound to no intent, the test suite shall assert the review-state contract of [[core-service-48](#core-service-48)]: `ledger.get` lists a finished-band stand-in entry for the unviewed turn [[core-service-49](#core-service-49)], a `session.viewed` naming that turn clears the entry from the next reply, and the entry stays cleared after a restart on the same store.
 
 ### Readiness Coverage
 

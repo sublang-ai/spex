@@ -60,6 +60,7 @@ meta.md       The spec of specs
 | [DR-032](decisions/032-session-players.md) | 032-session-players.md | Session players: roles bind to explicit player lanes, a pane per player with per-call role labels, forked player/binding editors, guided legacy migration, playbook 8 / cligent 0.22 floors |
 | [DR-033](decisions/033-remote-gui-serving.md) | 033-remote-gui-serving.md | Remote GUI serving: server shell on one port, tokenized-URL auth, optional TLS, shell-attached core endpoint |
 | [DR-034](decisions/034-playbook-9-adoption.md) | 034-playbook-9-adoption.md | Playbook 9 adoption: floor to ^9.0.0, cligent unchanged, recaptured machine fixtures, no product code change |
+| [DR-035](decisions/035-intent-ledger.md) | 035-intent-ledger.md | The intent ledger: intents as staged Boss turns, one-gesture capture from issues/PRs/records/chat, per-project queues with one after-link, verdict-owed deliveries, confirm-pulls-next Dashboard |
 
 ## Packages
 
@@ -67,7 +68,7 @@ meta.md       The spec of specs
 | --- | --- |
 | [app-shell.md](packages/app-shell.md) | Desktop shell: single-instance window, notifications, dock badge, core-in-main over WebSocket, packaging; packaged-app acceptance |
 | [core-service.md](packages/core-service.md) | Headless core service: WebSocket protocol, config load/seed/reload, session lifecycle, record streaming, persistence, readiness — with fake-adapter end-to-end coverage |
-| [dashboard.md](packages/dashboard.md) | Dashboard: ranked attention queue, running sessions, forge and intent work lists, usage rollups; deterministic derivation from the record stream and store |
+| [dashboard.md](packages/dashboard.md) | Dashboard as the intent ledger: two-band attention queue, per-project History/Now/Up next/Sources groups, one-gesture capture; one deterministic core fold |
 | [desktop-session.md](packages/desktop-session.md) | A Boss session in the packaged app: shell process topology, core streaming, and run-view rendering over one protocol |
 | [forge-work-lists.md](packages/forge-work-lists.md) | Repo tab and Dashboard render the same forge-adapter data |
 | [git.md](packages/git.md) | Commit message format and AI co-authorship trailers |

@@ -447,6 +447,59 @@ The tab strip shall end with pinned Specs and Repo tabs — one spec view and on
 
 - Switching projects swaps the whole strip; sessions of other projects keep running and stay reachable through the sidebar [[run-view-67](#run-view-67)], the palette's live-state rows, and the Dashboard.
 
+### Intent Ledger (DR-035)
+
+#### run-view-85
+
+When the composer's queue-instead-of-send action is activated, the Boss composer shall capture the typed text as a queued intent for the session's project with chat provenance and acknowledge the capture in place, sending nothing ([DR-035](../decisions/035-intent-ledger.md)):
+
+- the capture starts no turn and queues no submission [[run-view-8](#run-view-8)] — the text is shelved, not sent;
+- the acknowledgment is an inline note naming where the row landed in the project's queue, the run view's form of the shelf reveal;
+- the action stands beside send as the composer's one secondary action.
+
+#### run-view-86
+
+When Start is activated on a queued intent, the run view shall stage the intent's text into the project's composer, focused — the live session's, or the Captain home's where none is live — under a visible chip carrying the intent's title, and the chip governs what a send stamps ([DR-035](../decisions/035-intent-ledger.md)):
+
+- emptying the composer or dismissing the chip detaches the intent, and a send then stamps nothing — the intent simply stays queued;
+- sending with the chip attached passes the intent's id with the Boss submission [[core-service-5](core-service.md#core-service-5)];
+- while the submission waits in the composer queue [[run-view-8](#run-view-8)], the chip rides the pending bubble [[run-view-38](#run-view-38)] and the intent stays queued until its turn starts.
+
+#### run-view-87
+
+When a dispatched intent's final turn ends finished, the run view shall render the intent's delivery card at that turn's end in the Captain thread — a first-class settled card carrying the intent's title, its provenance chip where the intent carries a source, a run-stats line, and a primary Confirm control with Drop beside it ([DR-035](../decisions/035-intent-ledger.md)):
+
+- the run-stats line folds from the intent's own turns — its review rounds foremost, omitted when zero, then its turn count and its elapsed time from dispatch to the last turn's end — so the verdict is informed before the click;
+- the card says visibly that a follow-up message continues the intent;
+- when a verdict is given, the card resolves in place into the project's next queued intent with Start, or into an inline add affordance when the queue holds none;
+- in an ended session the card replays identically from the stored fold [[run-view-14](#run-view-14)], its controls inert.
+
+#### run-view-88
+
+While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the queue's head unblocked intent with Start and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md)):
+
+- Start stages the intent into the home composer under its chip [[run-view-86](#run-view-86)], where sending creates the session and dispatches the text in one motion [[run-view-26](#run-view-26)].
+
+#### run-view-89
+
+While a Boss turn is bound to an intent, that turn's outgoing bubble [[run-view-30](#run-view-30)] shall wear the intent's source chip, so the thread shows the provenance of what it dispatched ([DR-035](../decisions/035-intent-ledger.md)):
+
+- the chip names the intent's source — issue, PR, record, or chat — and an unsourced intent's bubble wears none.
+
+#### run-view-90
+
+While a session's lane holds an open dispatched intent, the run view shall show a slim working line above the Boss composer naming that intent — the newest open intent, which owns the conversation — so re-entry is answered where the eye lands ([DR-035](../decisions/035-intent-ledger.md)).
+
+#### run-view-91
+
+When the workspace opens a session from an attention entry [[dashboard-1](dashboard.md#dashboard-1)] bound to an intent [[run-view-57](#run-view-57)], the run view shall focus the intent's place in the thread ([DR-035](../decisions/035-intent-ledger.md)):
+
+| The entry stands on | The focused place |
+| --- | --- |
+| a pending question | the question's incoming bubble [[run-view-9](#run-view-9)] |
+| an unacknowledged failure | the failure's ◆ line [[run-view-2](#run-view-2)] |
+| a finish awaiting its verdict | the delivery card at the intent's final turn [[run-view-87](#run-view-87)] |
+
 ## Internal Behavior
 
 ### Protocol Boundary
@@ -610,6 +663,40 @@ The test suite shall assert first-hour failures surface at hand:
 
 - where a fixture config is invalid, the Captain home thread lists the errors with a Settings link [[run-view-44](#run-view-44)];
 - where a fixture readiness entry is not ready, the heads-up bubble offers a re-check that invokes the readiness refresh [[run-view-45](#run-view-45)].
+
+### Intent Ledger Coverage
+
+#### run-view-92
+
+While a replayed fixture stream holds a live session, when text is typed and the composer's queue-instead-of-send action is activated, the test suite shall assert the capture flow: a queue-intent command carrying the typed text and chat provenance for the session's project is sent over the protocol, no Boss turn is dispatched and no submission queues [[run-view-85](#run-view-85)], and an inline acknowledgment names where the row landed in the project's queue [[run-view-85](#run-view-85)].
+
+#### run-view-93
+
+Where a fixture project holds a queued intent and a live session, the test suite shall assert the staging flow:
+
+- activating Start stages the intent's text into the session's composer, focused, under a chip carrying the intent's title [[run-view-86](#run-view-86)];
+- emptying the composer detaches the chip, and a subsequent send carries no intent id [[run-view-86](#run-view-86)];
+- staging again and sending passes the intent's id with the submission [[run-view-86](#run-view-86)];
+- while a fixture turn is active, a staged send queues with the chip riding the pending bubble [[run-view-86](#run-view-86)] [[run-view-38](#run-view-38)].
+
+#### run-view-94
+
+Where a replayed fixture stream dispatches a queued intent whose turn then ends finished, the test suite shall assert the delivery flow:
+
+- the bound turn's bubble wears the intent's source chip [[run-view-89](#run-view-89)];
+- while the intent is open, the working line above the composer names it [[run-view-90](#run-view-90)];
+- the delivery card at the final turn's end carries the intent's title, its provenance chip, its review rounds, turn count, and elapsed time, a primary Confirm with Drop beside, and the visible follow-up note [[run-view-87](#run-view-87)];
+- giving a verdict sends a close command over the protocol and resolves the card in place into the project's next queued intent with Start [[run-view-87](#run-view-87)];
+- with an empty fixture queue, the card resolves into the inline add affordance instead [[run-view-87](#run-view-87)];
+- replaying the same stream as an ended session renders the identical card with its controls inert [[run-view-87](#run-view-87)] [[run-view-14](#run-view-14)].
+
+#### run-view-95
+
+Where a fixture project holds a queue whose unblocked head intent has more intents behind it, when the Captain home renders, the test suite shall assert the next card names the head intent with Start and counts the rest while the quick start card stands beside it [[run-view-88](#run-view-88)], and that activating Start stages the intent into the home composer under its chip [[run-view-88](#run-view-88)] [[run-view-86](#run-view-86)].
+
+#### run-view-96
+
+Where fixture streams hold one intent standing on a pending question, one holding an unacknowledged failure, and one finished awaiting its verdict, when each session is opened from its attention entry, the test suite shall assert the run view focuses the question's bubble, the failure's line, and the delivery card respectively [[run-view-91](#run-view-91)].
 
 ### Protocol Boundary Coverage
 

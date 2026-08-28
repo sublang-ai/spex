@@ -5,9 +5,9 @@
 
 ## Intent
 
-This spec defines the observable behavior, implementation constraints, and integration coverage of the Dashboard, the Spex workspace surface that aggregates what needs the Boss's attention across projects.
-Attention state is derived deterministically from the session record stream and review state persisted in the app-local store, and forge data flows only through the forge adapter.
-Integration coverage drives fixture record streams, persisted app-store state, and stubbed forge adapters through the core and asserts the derived Dashboard state, so that attention derivation, clearing, usage rollups, and forge lists are verified end to end rather than per unit.
+This spec defines the observable behavior, implementation constraints, and integration coverage of the Dashboard, the one cross-project surface carrying the intent ledger ([DR-035](../decisions/035-intent-ledger.md)): a two-band attention queue over per-project ledger groups.
+Every visible state derives deterministically from stored intent rows, the session record stream, and review state persisted in the app-local store, and forge data flows only through the forge adapter.
+Integration coverage drives fixture intent rows, record streams, persisted store state, and stubbed forge adapters through the core and asserts the derived Dashboard state, so that attention bands, intent-state derivation, capture, sources, history paging, and empty states are verified end to end rather than per unit.
 
 ## External Behavior
 
@@ -15,154 +15,210 @@ Integration coverage drives fixture record streams, persisted app-store state, a
 
 #### dashboard-1
 
-While at least one of the attention conditions below holds across the registered projects' sessions, the Dashboard shall display an attention queue as its topmost section, with exactly one entry per holding condition:
+While at least one attention entry derives across the registered projects' intents and sessions [[dashboard-10](#dashboard-10)], the Dashboard shall display an attention queue as its topmost section, in two bands:
 
-| Kind | Attention condition |
+| Band | Entries |
 | --- | --- |
-| Pending Boss question | the captain awaits a Boss reply (`awaitBossReply`) |
-| Permission request | a player awaits a permission decision |
-| Failure | an engagement failure or runtime error is unacknowledged |
-| Turn awaiting review | a Boss turn finished and its session has not been viewed since |
+| Interrupted | one entry per interrupted intent, leading with the intent's title and showing its project, session, and interruption reason — question, permission, or failure — with a one-line summary, the unacknowledged failure in the red chase tone ([DR-029](../decisions/029-session-history-home.md)) |
+| Finished | one entry per finished intent awaiting a verdict, leading with the intent's title and showing its project, session, and the run's stats [[dashboard-35](#dashboard-35)] with review rounds foremost |
 
-- Each entry shows its kind, its project and session, and a one-line summary of the condition.
+- A live session serving no intent stands in with session-level entries: its question, permission, and failure conditions — the same conditions, holding outside any intent's turn range — join the interrupted band, and at most one turn-to-review entry per session, for a finished Boss turn later than the session's persisted last-viewed marker, joins the finished band.
 
 #### dashboard-2
 
-While the attention queue contains two or more entries, the Dashboard shall order them by kind precedence, and by longest waiting time first within a kind:
-
-| Precedence | Kind |
-| --- | --- |
-| 1 | Permission request |
-| 2 | Pending Boss question |
-| 3 | Failure |
-| 4 | Turn awaiting review |
+While the attention queue contains two or more entries, the Dashboard shall order the interrupted band entirely before the finished band, and order entries within each band longest waiting first, by the onset time of the condition each entry derives from.
 
 #### dashboard-3
 
-When the user activates an attention entry, the Dashboard shall open the entry's project session and focus the surface the entry originates from: the Captain pane for pending Boss questions and failures, the originating player pane for permission requests, and the session view for turns awaiting review.
+When the user activates an attention entry, the Dashboard shall open the entry's session focused at the entry's place:
+
+| Entry | Place |
+| --- | --- |
+| Interrupted — question | the pending question bubble |
+| Interrupted — permission | the originating player's pending request |
+| Interrupted — failure | the failure record |
+| Finished intent | the end of the intent's final turn |
+| Session turn to review | the end of the finished turn |
 
 #### dashboard-4
 
-While an attention entry is displayed, when its underlying condition resolves — the question is answered by a new Boss turn, the permission request is decided or its turn ends, the failure is acknowledged, or the awaiting-review session is viewed — the Dashboard shall remove that entry without any user action on the Dashboard itself:
+While an attention entry is displayed, when its clearing condition arrives, the Dashboard shall remove that entry without any user action on the Dashboard itself — and viewing alone never clears an intent entry:
+
+| Entry | Clears on |
+| --- | --- |
+| Interrupted intent | its interruption resolving [[dashboard-10](#dashboard-10)], or a verdict closing the intent |
+| Finished intent | a verdict — Confirm or Drop — closing the intent |
+| Session question | the next Boss turn starting in the session |
+| Session permission | the request being decided, or its turn ending |
+| Session failure | the next Boss turn starting in the session, or the session ending |
+| Session turn to review | the session's persisted last-viewed marker advancing past the turn |
 
 - Resolving one entry removes no other entry.
-
-### Running Sessions
-
-#### dashboard-5
-
-While one or more project sessions are live, the Dashboard shall display a running-sessions overview listing, per session: the project name, the active playbook id (or an idle indicator when no engagement is active), a human-readable state label for the engagement's current state — tinted by the state's tone, with the raw state id in the tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and the elapsed time since the session started:
-
-- The overview updates as session records arrive, without a manual refresh.
-
-### Next Work
-
-#### dashboard-6
-
-Where a project is bound to a forge repository and the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)) reports ready, the Dashboard shall display next-work lists for that project: open issues to do and open pull requests to review:
-
-- Each list entry shows its title and number; activating it opens its canonical forge URL in the external browser.
-- Each list shows the age of its data and refreshes when the user triggers a manual refresh [[dashboard-14](#dashboard-14)].
-
-#### dashboard-24
-
-Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.md#spec-view-14)], the Dashboard shall carry the project's intents in its next-work lists beside the forge lists [[dashboard-6](#dashboard-6)], because an intent record is work to finish, not spec law ([DR-027](../decisions/027-linked-views-contract.md)):
-
-- each entry names the record's ID and title; activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)];
-- the list shows the age of its data and refreshes when the user triggers a manual refresh;
-- a project whose tree lists no intents contributes no intents list.
-
-### Usage
-
-#### dashboard-7
-
-Where completed turns have reported usage, the Dashboard shall display token usage rollups aggregated per calendar day, with per-day totals spanning all projects:
-
-- The rollups reflect only usage reported by adapter done payloads [[dashboard-13](#dashboard-13)]; the Dashboard displays no estimated figures for turns that reported none.
-- A day's cost is shown only where a done payload reported one, labelled with the provenance the payload carried ([DR-032](../decisions/032-session-players.md)); where any contributing report is an estimate, the day's figure reads as an estimate, because a total is only as trustworthy as its weakest source.
-
-### Empty States
-
-#### dashboard-8
-
-While a Dashboard section has no content, the Dashboard shall display guidance in place of that section's content, and shall not render the section blank:
-
-| Section | Empty condition | Guidance |
-| --- | --- | --- |
-| Attention queue | no attention condition holds | an all-clear indication |
-| Running sessions | no live session | how to start a session, with a navigation control to the Workspace |
-| Next work | no bound project, or forge adapter not ready | a plain-language note with a navigation control to the Workspace, whose Repo tab is where GitHub is connected ([DR-006](../decisions/006-projects-and-forge.md)) |
-| Usage | no recorded usage | a statement that no usage has been recorded yet |
 
 ### Attention Badge
 
 #### dashboard-9
 
-The Dashboard shall publish an attention count equal to the number of entries in the attention queue, for consumers such as the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md)):
+The Dashboard shall publish an attention count equal to the number of entries in the attention queue, from the one ledger fold [[dashboard-10](#dashboard-10)], for consumers such as the sidebar's Dashboard badge and the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md)):
 
 - When the queue changes, the published count updates to the new queue size.
 
-### Work-List Organization
+### Project Groups
+
+#### dashboard-26
+
+While projects are registered, the Dashboard shall display one ledger group per project below the attention queue, in the projects' fixed sidebar order, each group carrying four bands in order: History [[dashboard-27](#dashboard-27)], Now [[dashboard-28](#dashboard-28)], Up next [[dashboard-29](#dashboard-29)], and Sources [[dashboard-20](#dashboard-20)].
+
+#### dashboard-27
+
+Where a project has closed intents, the group's History band shall list them newest first in a compact scroll, each row showing the intent's title and verdict, fetching older pages on demand as the reader scrolls back.
+
+#### dashboard-28
+
+While the project's one live session [[core-service-4](core-service.md#core-service-4)] runs, the group's Now band shall show that session's status mark, active playbook (or an idle indicator when no engagement is active), human-readable engagement state label — tinted by the state's tone, with the raw state id in the tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and elapsed time since the session started, together with the open intent the session serves, or the latest Boss turn's text for a session serving no intent:
+
+- the band updates as session records arrive, without a manual refresh;
+- while no session is live, the band stays quiet with its empty-state note [[dashboard-8](#dashboard-8)].
+
+#### dashboard-29
+
+The group's Up next band shall list the project's queued intents in rank order, ending in an inline add row that captures a new queued intent, with the head unblocked intent emphasized as the project's next and carrying Start:
+
+- a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with "after ⟨title⟩", the predecessor's project named when it lives in another project, its Start disabled with the reason ([DR-026](../decisions/026-data-graphics-craft.md) §2), and is never presented as next;
+- reorder works by drag and by keyboard alike, and changes only the queue's rank order.
+
+### Capture
+
+#### dashboard-30
+
+Where a Sources row names an issue, pull request, or open intent record with no open intent sourced from that artifact, the row shall carry a Queue control that captures a queued intent for the project with editable seeded text and the source's URL kept as provenance:
+
+| Source | Seeded text |
+| --- | --- |
+| Issue #N | `Address #N: <title>` |
+| Pull request #N | `Review PR #N: <title>` |
+| Intent record IR-N | `Resume IR-<N>: <title>` |
+
+- a row whose source artifact already has an open intent shows that intent's derived state in place of the control, and regains the control when that intent closes.
+
+#### dashboard-31
+
+When an intent is captured from any Dashboard gesture — a Queue control or the inline add row — the Up next band shall reveal the new row and briefly highlight it where it landed.
+
+### Sources
 
 #### dashboard-20
 
-When the next-work lists render with items from more than one project, the Dashboard shall group issues and pull requests by project with per-project counts, order items within each group by update recency, and show each item's labels:
+While a project group renders, the group's Sources band shall present as a collapsed one-line summary — issue, pull-request, and open-record counts with the age of the data — expanding in place to three tabs, Issues [[dashboard-6](#dashboard-6)], PRs [[dashboard-6](#dashboard-6)], and Open records [[dashboard-24](#dashboard-24)], each paginated in place:
 
-- When the user selects a project filter, the Dashboard shows only that project's items until the filter is cleared.
+- issue and pull-request rows carry their forge labels as tags;
+- expanding, switching tabs, and paging are visibility-only and change no ledger state.
+
+#### dashboard-6
+
+Where a project is bound to a forge repository and the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)) reports ready, the group's Sources band shall carry the project's open issues and open pull requests in the one selection and representation the Repo tab shares [[forge-work-lists-1](forge-work-lists.md#forge-work-lists-1)]:
+
+- each row shows its title and number, and activating the title opens its canonical forge URL in the external browser;
+- the band shows the age of its data and refreshes when the user triggers a manual refresh [[dashboard-14](#dashboard-14)].
+
+#### dashboard-24
+
+Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.md#spec-view-14)], the group's Sources band shall carry the project's open records — an intent record is work to finish, not spec law ([DR-027](../decisions/027-linked-views-contract.md)) — listing only unfinished records, read from each record's listed status [[spec-view-14](spec-view.md#spec-view-14)]:
+
+- each row names the record's ID and title, and activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)];
+- a record whose status reads Done is finished and does not list;
+- a project whose tree lists no unfinished records counts zero open records in the collapsed line.
+
+### Project Filter
+
+#### dashboard-32
+
+When the user selects a project filter, the Dashboard shall show only that project's attention entries and ledger group until the filter is cleared, as pure visibility in the linked-views ghost grammar ([DR-027](../decisions/027-linked-views-contract.md)):
+
+- no derived state, rank, or persisted data changes, and the published attention count [[dashboard-9](#dashboard-9)] stays the unfiltered queue's size.
+
+### Empty States
+
+#### dashboard-8
+
+While a Dashboard section or band has no content, the Dashboard shall display guidance in place of that content, and shall not render it blank:
+
+| Section | Empty condition | Guidance |
+| --- | --- | --- |
+| Attention queue | no entry | all-clear copy naming the globally next unblocked queue head — first by sidebar order — with Start, or plain all-clear copy when no unblocked head exists |
+| Project groups | no registered project | how to register a project, with a navigation control to the Workspace |
+| History | no closed intent | a note that no intent has closed yet |
+| Now | no live session | a quiet idle note |
+| Up next | no queued intent | the inline add row [[dashboard-29](#dashboard-29)] with capture guidance |
+| Sources | no forge binding, or forge adapter not ready | a plain-language note with a navigation control to the Workspace, whose Repo tab is where GitHub is connected ([DR-006](../decisions/006-projects-and-forge.md)) |
 
 ### No Takeover
 
 #### dashboard-21
 
-While no project is registered, the Dashboard shall still render its sections with their per-section empty states [[dashboard-8](#dashboard-8)] and shall not replace the surface with a welcome takeover; first-run onboarding belongs to the Captain home as the single onboarding narrative ([DR-010](../decisions/010-interface-craft.md) §1).
+While no project is registered, the Dashboard shall still render the attention queue and the projects area with their empty-state guidance [[dashboard-8](#dashboard-8)] and shall not replace the surface with a welcome takeover; first-run onboarding belongs to the Captain home as the single onboarding narrative ([DR-010](../decisions/010-interface-craft.md) §1).
 
 ## Internal Behavior
 
-### Attention Derivation
+### Ledger Derivation
 
 #### dashboard-10
 
-Where the core derives attention state, the attention derivation shall be a deterministic function of the session record stream and the review state persisted in the app store: identical record history and review state yield an identical attention set, independent of record arrival timing.
+Where the core derives ledger and attention state, the derivation shall be one deterministic fold over the stored intent rows, the session record stream, and the review state persisted in the app store — the per-session last-viewed turn markers — with no stored state column: identical inputs yield identical derived states and an identical attention set, independent of record arrival order, and every consumer reads this one fold.
 
-Attention entries enter and clear exactly as follows:
+Each intent's state derives exactly as follows, over its turn range [[dashboard-33](#dashboard-33)]:
 
-| Kind | Enters on | Clears on |
-| --- | --- | --- |
-| Pending Boss question | a captain record signaling `awaitBossReply` | the next Boss turn starting (`turn_started`) in the same session |
-| Permission request | a player event carrying `permission_request` | a later record for the same player in the same turn, or the turn finishing or aborting |
-| Failure | a `runtime_error` record or a captain failure status | a persisted acknowledgement of that failure, or the session ending |
-| Turn awaiting review | a `turn_finished` record later than the session's persisted last-viewed marker | the last-viewed marker advancing past that turn |
+| State | Holds while |
+| --- | --- |
+| Queued | not closed and not bound: never dispatched, or released [[dashboard-34](#dashboard-34)] |
+| Blocked (a Queued sub-condition) | its after-link names an intent that is still open; the block lifts by derivation when the predecessor closes |
+| Working | bound, and the latest turn in its range is active |
+| Interrupted — question | bound, not closed, captain telemetry `playbook.fsm.state` reached `awaitBossReply` in its range, and no later Boss turn has started in the session |
+| Interrupted — permission | bound, not closed, a player event in its range carried `permission_request` with no later record for that player in the same turn, and the turn has not ended |
+| Interrupted — failure | bound, not closed, a `runtime_error` record — or a turn whose engagement settled failed — lies in its range, and no later Boss turn has started in the session; the Boss's next turn acknowledges it, and a verdict also clears it |
+| Finished | bound, not closed, not interrupted, no turn in its range active, and a turn in its range ended finished — an aborted follow-up does not unseat a standing finish |
+| Done / Dropped | its close verdict is recorded, done requiring a Finished intent and dropped legal on any open one |
 
-- The attention derivation produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md)).
-- A session carries at most one turn-awaiting-review entry: the one for its latest finished turn.
+- the fold produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md));
+- the per-project next is the first queued, unblocked intent in rank order.
+
+#### dashboard-33
+
+Where turns attribute to intents, an intent's turn range shall run from its dispatch turn, inclusive, up to but not including the next turn in that session that is another intent's dispatch turn:
+
+- the newest open dispatched intent owns subsequent turns in its session, so a follow-up Boss turn returns it to Working while elder intents keep their own outcomes;
+- an intent is bound while its dispatch turn has started and stands unreleased [[dashboard-34](#dashboard-34)].
+
+#### dashboard-34
+
+While an intent's dispatch turn ended aborted, or its session died before the dispatch turn finished, the fold shall derive that intent released — Queued again — with nothing written:
+
+- the dispatch stamps remain as history, and a later dispatch re-writes them;
+- the row keeps its rank, and its text is editable again.
+
+#### dashboard-35
+
+Where an intent's attention entry carries run stats, the fold shall compute them from the intent's turn range [[dashboard-33](#dashboard-33)] alone: review rounds as the count of player prompts whose stored role stamp is reviewer ([DR-032](../decisions/032-session-players.md)), the turn count of the range, and the elapsed time from dispatch to the range's last turn end:
+
+- review rounds are omitted when zero.
 
 #### dashboard-11
 
-While the app store's record history and review state are intact, when the core restarts, the attention derivation shall produce, from persisted state alone, the same attention set that was live before the restart.
+While the app store's intent rows, record history, and review state are intact, when the core restarts, the fold shall produce, from persisted state alone, the same derived intent states and the same attention set that were live before the restart.
 
 ### Data Sources
 
 #### dashboard-12
 
-Where Dashboard state is assembled, the dashboard read model shall source live-session state — attention conditions, running sessions, current engagement state ids — from the in-process record bus, and historical state — finished sessions, usage rollups, review markers — from the app-local store ([DR-004](../decisions/004-config-and-persistence.md)):
+Where Dashboard state is assembled, the dashboard read model shall source live-session state — attention conditions, engagement state ids, the Now band's session facts — from the in-process record bus, and durable state — intent rows, closed-intent history, review markers — from the app-local store ([DR-004](../decisions/004-config-and-persistence.md)):
 
 - It does not query the embedded runtime directly, and it does not reach a forge except through the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)).
-
-### Usage Rollups
-
-#### dashboard-13
-
-Where usage rollups are computed, the dashboard read model shall aggregate exactly the usage figures carried by player `done` events, keyed per session and per calendar day of the record timestamp in the local timezone:
-
-- Usage carried by `hidden`-visibility records is included, since hidden traffic still consumes tokens ([DR-003](../decisions/003-runtime-reuse.md)).
-- A `done` event carrying no usage contributes nothing, and one carrying no token report contributes no tokens; the read model substitutes neither estimates nor zeros for silence ([DR-032](../decisions/032-session-players.md)).
-- Spend attributes to the session player that incurred it, so a player several playbooks share rolls up across them; a rollup carries every cost provenance summed into it.
 
 ### Forge List Caching
 
 #### dashboard-14
 
-Where next-work lists are served, the dashboard read model shall serve issue and pull-request lists from a per-project cache persisted in the app store and refreshed through the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)):
+Where the Sources band's issue and pull-request tabs are served, the dashboard read model shall serve them from a per-project cache persisted in the app store and refreshed through the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)):
 
 - While the Dashboard is displayed, a cache entry older than 10 minutes triggers a background refresh; a fresher entry triggers no adapter call.
 - When the user triggers a manual refresh, the read model calls the forge adapter regardless of cache age.
@@ -174,42 +230,56 @@ Where next-work lists are served, the dashboard read model shall serve issue and
 
 #### dashboard-15
 
-Where a fixture record stream spans two project sessions and contains a player `permission_request`, a captain `awaitBossReply` question, a `runtime_error`, a `turn_finished`, and a `hidden`-visibility record, when Dashboard state is derived, the test suite shall assert that the attention queue contains exactly one entry per non-hidden condition [[dashboard-1](#dashboard-1)], that each entry identifies its source project and session, that entries follow the kind precedence of [[dashboard-2](#dashboard-2)], and that the hidden record produced no entry [[dashboard-10](#dashboard-10)].
+Where fixture intent rows and a fixture record stream span two projects — one intent standing interrupted on a question, one on a `runtime_error`, one finished with reviewer-stamped prompt records, plus an un-ledgered session holding a `permission_request` and a finished turn past its viewed marker, and a `hidden`-visibility record — when Dashboard state is derived, the test suite shall assert that the interrupted band holds the question, failure, and session permission entries while the finished band holds the finished intent and the turn-to-review stand-in [[dashboard-1](#dashboard-1)], that the interrupted band precedes the finished band with longest waiting first within each [[dashboard-2](#dashboard-2)], that the finished entry carries stats whose review rounds equal the reviewer-stamped prompt count [[dashboard-1](#dashboard-1)] [[dashboard-35](#dashboard-35)], that activating the question entry opens its session at the pending question [[dashboard-3](#dashboard-3)], that the hidden record produced no entry [[dashboard-10](#dashboard-10)], that project groups render in sidebar order with the four bands [[dashboard-26](#dashboard-26)], and that selecting a project filter leaves only that project's entries and group visible with the published count unchanged [[dashboard-32](#dashboard-32)].
 
 #### dashboard-16
 
-While the attention queue contains a pending Boss question among other entries, when the fixture stream continues with a Boss turn starting in that question's session, the test suite shall assert that the question entry is removed [[dashboard-4](#dashboard-4)], that all other entries remain [[dashboard-10](#dashboard-10)], and that the published attention count decreases by exactly one [[dashboard-9](#dashboard-9)].
+While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, a viewed-marker advance past the un-ledgered finished turn, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry [[dashboard-4](#dashboard-4)], that the marker advance cleared the turn-to-review stand-in and no intent entry [[dashboard-4](#dashboard-4)], that the verdict cleared the finished entry [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
 
 #### dashboard-17
 
-Where a fixture record stream and review state are persisted to the app store, when attention derivation is re-run from persisted state alone, as after a core restart, the test suite shall assert that the resulting attention set equals the set derived live from the same stream [[dashboard-11](#dashboard-11)].
+Where fixture intent rows, records, and review state are persisted to the app store, when the fold is re-run from persisted state alone, as after a core restart, the test suite shall assert that the derived intent states and attention set equal those derived live from the same inputs [[dashboard-11](#dashboard-11)], with the fold reading only the store and the record bus [[dashboard-12](#dashboard-12)].
 
-### Usage Coverage
+### Ledger Coverage
 
-#### dashboard-18
+#### dashboard-36
 
-Where fixture player `done` events carry usage payloads across two sessions and two calendar days, including one on a `hidden`-visibility record, one `done` event without usage, one reporting no tokens, and one reporting a cost as an estimate, when rollups are computed, the test suite shall assert that per-session and per-day totals equal hand-computed sums of the fixture payloads [[dashboard-7](#dashboard-7)], that the hidden record's usage is included [[dashboard-13](#dashboard-13)], that the usage-less event and the token-less report contribute nothing rather than zero [[dashboard-13](#dashboard-13)], and that the mixed total carries both provenances so it reads as an estimate [[dashboard-7](#dashboard-7)].
+Where a fixture project holds a queue of three intents, the second after-linked to the first, when the fixture stream dispatches the first, runs a follow-up Boss turn, dispatches the third into a turn that aborts, then finishes the first and closes it done, the test suite shall assert each derived state in sequence: Working on dispatch and again on the follow-up owned by the newest open intent [[dashboard-10](#dashboard-10)] [[dashboard-33](#dashboard-33)], the aborted dispatch releasing the third to Queued at its kept rank with its stamps intact and text editable [[dashboard-34](#dashboard-34)], Finished when its last turn ends finished [[dashboard-10](#dashboard-10)], the after-linked second blocked and never offered as next until the first closes, then unblocked as the project's next [[dashboard-10](#dashboard-10)] [[dashboard-29](#dashboard-29)], and a reorder yielding the new rank order [[dashboard-29](#dashboard-29)].
 
-### Forge Coverage
+### Capture Coverage
+
+#### dashboard-37
+
+Where a fixture Sources row lists issue #7, when the user activates its Queue control, the test suite shall assert that a queued intent is captured with the editable seed `Address #7: <title>` and the issue URL as provenance [[dashboard-30](#dashboard-30)], that the Up next band reveals and briefly highlights the new row [[dashboard-31](#dashboard-31)], that the issue row shows the open intent's derived state in place of its Queue control [[dashboard-30](#dashboard-30)], and that the row regains the control when the intent closes [[dashboard-30](#dashboard-30)].
+
+### Sources Coverage
 
 #### dashboard-19
 
-Where a stubbed forge adapter returns fixture open issues and pull requests for a bound project, when the Dashboard is displayed, the test suite shall assert that the next-work lists render the fixture entries with titles and numbers [[dashboard-6](#dashboard-6)], that a manual refresh invokes the stub again, and that a stub failure on refresh leaves the previously served lists in place with the failure and data age surfaced [[dashboard-14](#dashboard-14)].
-
-### Intents Coverage
+Where a stubbed forge adapter returns fixture open issues and pull requests with labels for a bound project, when the group's Sources band is displayed, the test suite shall assert that the collapsed line shows the counts and data age [[dashboard-20](#dashboard-20)], that expanding shows paginated Issues and PRs tabs whose rows render titles, numbers, and forge labels [[dashboard-20](#dashboard-20)] [[dashboard-6](#dashboard-6)], that a manual refresh invokes the stub again [[dashboard-14](#dashboard-14)], and that a stub failure on refresh leaves the previously served lists in place with the failure and data age surfaced [[dashboard-14](#dashboard-14)].
 
 #### dashboard-25
 
-Where a fixture project's `specs/` tree lists intent records and a second project's tree lists none, the test suite shall assert the intents next-work lists of [[dashboard-24](#dashboard-24)]: the first project's entries render with record IDs and titles, activating one requests that record in the project's Specs surface [[dashboard-24](#dashboard-24)], and the second project shows no intents list [[dashboard-24](#dashboard-24)].
+Where a fixture project's `specs/` tree lists one intent record whose status reads Done and one unfinished record, the test suite shall assert that the Open records tab lists only the unfinished record with its ID and title [[dashboard-24](#dashboard-24)], that activating it opens the record in the Specs surface's records reader [[dashboard-24](#dashboard-24)], and that its Queue control seeds `Resume IR-<N>: <title>` [[dashboard-30](#dashboard-30)].
+
+### History Coverage
+
+#### dashboard-38
+
+Where a fixture project holds more closed intents than one history page, the test suite shall assert that the History band lists closed intents newest first with title and verdict [[dashboard-27](#dashboard-27)], and that scrolling back fetches and appends the older page [[dashboard-27](#dashboard-27)].
 
 ### Empty-State Coverage
 
 #### dashboard-22
 
-Where Dashboard state is derived with no registered project, the test suite shall assert that the Dashboard renders its sections with their empty-state guidance [[dashboard-8](#dashboard-8)] rather than a welcome takeover [[dashboard-21](#dashboard-21)], and that the next-work empty state offers an activatable navigation control to the Workspace [[dashboard-8](#dashboard-8)].
+Where Dashboard state is derived across the empty conditions, the test suite shall assert the guidance of [[dashboard-8](#dashboard-8)] case by case:
 
-### Label Coverage
+- with no registered project, the attention queue and projects area render their empty-state guidance with an activatable navigation control to the Workspace [[dashboard-8](#dashboard-8)], and no welcome takeover replaces the surface [[dashboard-21](#dashboard-21)];
+- with a registered project whose ledger is empty, each band renders its guidance in place [[dashboard-8](#dashboard-8)];
+- with one queued unblocked intent and no attention entry, the all-clear names that intent with Start [[dashboard-8](#dashboard-8)].
+
+### Now-Band Coverage
 
 #### dashboard-23
 
-Where a live session's view carries an engagement state id, the test suite shall assert that the running-sessions row renders the human-readable state label with the raw state id available in the tooltip [[dashboard-5](#dashboard-5)].
+Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook, human-readable state label with the raw state id in the tooltip, elapsed time, and the open intent's title [[dashboard-28](#dashboard-28)], and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].

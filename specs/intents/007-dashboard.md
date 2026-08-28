@@ -22,10 +22,10 @@ Implement the Dashboard surface per the dashboard spec package: ranked attention
 
 ## Tasks
 
-1. **Core usage rollup** — store.usageByDay [[dashboard-13](../packages/dashboard.md#dashboard-13)] + `usage.days` protocol command ([[dashboard-7](../packages/dashboard.md#dashboard-7)]).
+1. **Core usage rollup** — store.usageByDay + `usage.days` protocol command (usage items since retired by DR-035).
 2. **Attention derivation** — pure UI selector over sessions and views, ranked question > failure > idle review ([[dashboard-1](../packages/dashboard.md#dashboard-1)]..[[dashboard-3](../packages/dashboard.md#dashboard-3)], [[dashboard-11](../packages/dashboard.md#dashboard-11)]).
 3. **Dashboard surface** — attention queue linking into sessions, running overview, next-work lists, usage cards ([[dashboard-4](../packages/dashboard.md#dashboard-4)]..[[dashboard-9](../packages/dashboard.md#dashboard-9)]).
-4. **Tests** — attention fixtures incl. ordering and clearing; day-rollup store test ([[dashboard-15](../packages/dashboard.md#dashboard-15)]..[[dashboard-18](../packages/dashboard.md#dashboard-18)]).
+4. **Tests** — attention fixtures incl. ordering and clearing; day-rollup store test ([[dashboard-15](../packages/dashboard.md#dashboard-15)]..dashboard-18, the last since retired by DR-035).
 
 ## Verification
 

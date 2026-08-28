@@ -67,9 +67,10 @@ Where a project's `origin` remote resolves to a GitHub repository, the forge pan
 
 #### projects-6
 
-Where a project is bound to a GitHub repository, while the gh CLI is installed and authenticated, the forge panel shall show the repository's open issues and open pull requests, each entry with its number and title:
+Where a project is bound to a GitHub repository, while the gh CLI is installed and authenticated, the forge panel shall show the repository's open issues and open pull requests in the row representation shared with the Dashboard's Sources rows [[forge-work-lists-1](forge-work-lists.md#forge-work-lists-1)] — each entry with its number, its title, its forge labels as tags, and a Queue control capturing the entry as an intent:
 
-- Activating an issue or pull-request entry opens that entry's GitHub page in the default browser.
+- Activating an entry's title opens that entry's GitHub page in the default browser.
+- An entry whose issue or pull request already has an open intent shows that intent's state in place of the Queue control, and regains the control when that intent closes.
 
 #### projects-7
 
@@ -178,7 +179,7 @@ Where a temporary parent directory exists, when the create-project flow complete
 
 #### projects-19
 
-Where a registered fixture repository's `origin` remote points at a GitHub repository, and a stub `gh` executable on `PATH` reports an authenticated account and returns fixture JSON for issue and pull-request listings [[projects-15](#projects-15)], when the project's forge panel is loaded, the test suite shall assert that the panel shows the bound `owner/repo` derived from the remote [[projects-5](#projects-5)] [[projects-13](#projects-13)], the authenticated account, and the fixture issues and pull requests with their numbers and titles [[projects-6](#projects-6)], and that activating an entry passes that entry's GitHub URL to the stubbed browser opener.
+Where a registered fixture repository's `origin` remote points at a GitHub repository, and a stub `gh` executable on `PATH` reports an authenticated account and returns fixture JSON for issue and pull-request listings [[projects-15](#projects-15)], when the project's forge panel is loaded, the test suite shall assert that the panel shows the bound `owner/repo` derived from the remote [[projects-5](#projects-5)] [[projects-13](#projects-13)], the authenticated account, and the fixture issues and pull requests with their numbers, titles, forge labels as tags, and Queue controls [[projects-6](#projects-6)], and that activating an entry's title passes that entry's GitHub URL to the stubbed browser opener [[projects-6](#projects-6)].
 
 #### projects-20
 
