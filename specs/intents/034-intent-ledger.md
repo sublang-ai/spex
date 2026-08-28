@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress
+Done
 
 ## Intent
 
@@ -13,12 +13,12 @@ Realize [DR-035](../decisions/035-intent-ledger.md): intents as staged Boss turn
 
 ## Deliverables
 
-- [ ] DR-035 accepted with the DR-011 amendment applied; the dashboard package rewritten and the peer packages amended, lint-clean.
-- [ ] Core: intents table and commands, dispatch binding on submit, the ledger fold (states, two-band attention, run stats), broadcasts, and fixture-stream coverage.
-- [ ] UI: the two-section Dashboard (attention bands; project groups with history scroller, now, up next, tabbed paged sources with labels), capture controls on Repo tab and Sources.
-- [ ] UI: composer queue-instead-of-send and staged-intent chip, delivery cards with confirm-pulls-next, Captain home next card, attention activation focusing the intent's place.
-- [ ] One attention derivation: Dashboard badge, sidebar marks, and dock badge sourced from the core fold.
-- [ ] Workspace suites green; the DR-026 §9 design check recorded in both themes.
+- [x] DR-035 accepted with the DR-011 amendment applied; the dashboard package rewritten and the peer packages amended, lint-clean.
+- [x] Core: intents table and commands, dispatch binding on submit, the ledger fold (states, two-band attention, run stats), broadcasts, and fixture-stream coverage.
+- [x] UI: the two-section Dashboard (attention bands; project groups with history scroller, now, up next, tabbed paged sources with labels), capture controls on Repo tab and Sources.
+- [x] UI: composer queue-instead-of-send and staged-intent chip, delivery cards with confirm-pulls-next, Captain home next card, attention activation focusing the intent's place.
+- [x] One attention derivation: Dashboard badge, sidebar marks, and dock badge sourced from the core fold.
+- [x] Workspace suites green; the DR-026 §9 design check recorded in both themes.
 
 ## Tasks
 
@@ -32,4 +32,6 @@ Realize [DR-035](../decisions/035-intent-ledger.md): intents as staged Boss turn
 
 ## Verification
 
-`spex lint` clean; every workspace test suite green including the new ledger fold and Dashboard coverage; a live check of capture → queue → dispatch → interrupt/finish → confirm → pull in the running app, both themes rendered and inspected.
+`spex lint` clean; every workspace suite green (cli 133, core 153, ui 245, desktop shell suites) including the new ledger fold, dashboard, run-view, and Captain-home coverage.
+Design check (DR-026 §9, 2026-08-28): a real core on the fake-agent harness seeded three projects with queued, blocked-cross-project, interrupted-question, and finished intents; every new surface inspected rendered in light and dark — attention bands and tones, project groups (history strike-through, now, blocked "after ⟨title⟩ (⟨project⟩)" with disabled Start, sources tabs with the record-status filter and captured-row swap), delivery card, staged chip, home next card — and the flows driven live: capture, stage, send, click-to-place, confirm-pulls-next in the thread, confirm-from-Dashboard with the badge dropping.
+The check surfaced and fixed one fold defect (a confirmed intent's final turn re-summoning as a review stand-in) and two copy defects (the card's Finished label; the Now band's first-line title).
