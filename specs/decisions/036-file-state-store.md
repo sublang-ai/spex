@@ -23,7 +23,7 @@ Amends [DR-004](004-config-and-persistence.md) (the app-local SQLite store retir
 ### Sessions live in the shared playbook session store
 
 - One sessions directory, shared with the playbook CLI: the shared config gains an optional `sessions` path key both hosts honor, defaulting to the CLI's existing sessions directory — so terminal and app sessions land in one place by construction.
-- Per session, three files: the captain-session record in the CLI's own schema — projections, working directory, and the snapshot carrying the Boss journal and provider resume tokens — written through the one session-store module `@sublang/playbook` exports; a records file appending every runtime record as one JSON line, teed by whichever host runs the session; and a Spex sidecar binding the session to its project and end time.
+- Per session, three files: the captain-session record in the CLI's own schema — projections, working directory, and the snapshot carrying the Boss journal and provider resume tokens — written through the one session-store module `@sublang/playbook` exports; a records file appending every runtime record as one JSON line — a token-free replay projection, teed by whichever host runs the session; and a Spex sidecar binding the session to its project and end time.
 - The store's lease discipline stands unchanged: per-session single-writer, lease-free reads, same-host takeover of settled or crashed sessions, foreign-host leases never broken.
 - Spex watches the sessions directory: a session run anywhere lists in Spex, bound to the registered project whose path is the session's working directory; a session matching no registered project stays unlisted.
 - Spex's synthesized visible failure record enters the stream, so replay equals what live subscribers saw.
@@ -34,7 +34,7 @@ Amends [DR-004](004-config-and-persistence.md) (the app-local SQLite store retir
 - The Spex state root is `${SPEX_HOME:-~/.spex}`: the project registry file, per-project intent act logs (queue, edit, move, link, dispatch, and close as appended acts — [DR-035](035-intent-ledger.md)'s no-state-column law kept, every state folded at read), the core-side preferences file with the per-session viewed markers among its keys, the forge work-list cache, and the compiled playbook library relocated from the app-data directory ([DR-005](005-compilation-integration.md)).
 - Every shell shares this one root; a root lease admits one core at a time, a second core refused fail-closed — replacing the each-shell-one-store rule of [DR-033](033-remote-gui-serving.md).
 - Writes are atomic whole-file replaces or line appends; each file kind carries a version; forward migration at startup stands, now including a one-time import of an existing SQLite store, the old file left in place.
-- No secrets, unchanged: agent credentials and forge auth stay with their own tools; provider resume tokens in session manifests are continuation handles the CLI already persists, not credentials.
+- No secrets, unchanged: agent credentials and forge auth stay with their own tools; provider resume tokens live only in the session manifest, under the playbook store's own credential posture — the record stream is written token-free, so syncing streams shares content, never continuation credentials.
 
 ### Files are the truth; any index is disposable
 
@@ -59,6 +59,8 @@ Amends [DR-004](004-config-and-persistence.md) (the app-local SQLite store retir
 
 - The core-service persistence items are rewritten around the file store — the stream-persistence contract, the state-root ownership with the SQLite import, the intent act log, foreign-session surfacing, the cross-host write prohibition, and the root lease, each with coverage — and the app-shell, server-shell, projects, and dashboard packages repoint their store references.
 - Delivery is phased: the state root, file stores, and import land Spex-side first, with sessions written manifest-less; adopting the shared session-store module, the directory watch, and the `sessions` key waits on the playbook release that exports the module, tees the records file from both CLI paths, and accepts the key — the playbook floor pins to that release at adoption.
+- The shared format and module API are playbook's to define: a playbook decision record precedes their implementation, and this record binds only Spex's adoption of them.
+- Stream files are unbounded in v1: retention and deletion ride the session-deletion decision already deferred ([DR-029](029-session-history-home.md)), for both stores together.
 - The upstream work — the exports entry, the record tee, the `sessions` key — is recorded and tracked in the playbook project, not here.
 - The desktop's Electron `userData` keeps only the renderer profile the browser engine writes; renderer localStorage chrome preferences are untouched by this decision.
 - Project removal keeps deleting registry entries only: orphaned session and intent files persist unlisted, and no referential constraint replaces the incidental SQLite one.

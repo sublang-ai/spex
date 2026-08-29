@@ -19,7 +19,7 @@ import type {
 import { PLAYBOOK_CAPTAIN_MODULE, type ComposedConfig, type LoadModule } from "./config.js";
 import type { ProjectInfo, SessionInfo } from "./protocol.js";
 import { Store } from "./store.js";
-import { foldUsage } from "./stream-fold.js";
+import { foldUsage, sanitizeRecord } from "./stream-fold.js";
 
 export class CoreError extends Error {
   constructor(
@@ -256,7 +256,10 @@ export class SessionManager {
       openCalls: new Map(),
     };
 
-    const append = (record: TmuxPlayRecord): void => {
+    const append = (rawRecord: TmuxPlayRecord): void => {
+      // One truth for live and replay: what subscribers see is what
+      // the stream persists, and neither carries resume tokens.
+      const record = sanitizeRecord(rawRecord);
       entry.seq += 1;
       const seq = entry.seq;
       // A player record is stamped with the role whose call is open on

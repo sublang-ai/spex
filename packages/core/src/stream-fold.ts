@@ -39,6 +39,32 @@ export interface UsageTotals {
   costSources: string[];
 }
 
+/**
+ * Strip provider resume tokens from a record before it is served or
+ * persisted (DR-036): the playbook store classifies resume tokens as
+ * opaque credentials for backend conversations, and the session
+ * manifest is their only durable home — the record stream is a
+ * token-free replay projection. Tokens ride as `resumeToken` fields
+ * (player/captain results, playbook.trace payloads) and as the
+ * string-valued `resume` selection in trace payloads; `resume: false`
+ * is semantics, not a token, and survives.
+ */
+export function sanitizeRecord(record: TmuxPlayRecord): TmuxPlayRecord {
+  return sanitizeValue(record) as TmuxPlayRecord;
+}
+
+function sanitizeValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeValue);
+  if (value === null || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === "resumeToken") continue;
+    if (key === "resume" && typeof entry === "string") continue;
+    out[key] = sanitizeValue(entry);
+  }
+  return out;
+}
+
 export type TurnEvent =
   | { kind: "start"; turnId: number; prompt: string; at: number }
   | { kind: "end"; turnId: number; status: "finished" | "aborted"; at: number };

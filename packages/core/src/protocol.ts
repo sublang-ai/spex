@@ -163,6 +163,10 @@ export interface SessionInfo {
   failed: boolean;
   /** Recorded cost, when any usage carried one. */
   costUsd?: number;
+  /** Set when a record could not be durably appended: the persisted
+   * stream is complete only up to this sequence, so served history is
+   * never presented as complete when it is not (DR-036). */
+  streamIncompleteAfterSeq?: number;
 }
 
 export interface ReadinessEntry {

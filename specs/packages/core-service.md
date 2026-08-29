@@ -204,6 +204,8 @@ The core service shall persist each session as files in the shared session store
 - Where sessions have been persisted, a startup serves the stored sessions, turns, records, and usage over the protocol with the same content and record order as originally streamed, applying the same visibility filtering as live streaming [[core-service-8](#core-service-8)] — turns, titles, and usage totals folded from the stored stream, never separately stored.
 - Where a session was live at shutdown, the next startup reports that session as no longer live.
 - The synthesized visible failure record [[core-service-30](#core-service-30)] is persisted in the stream, so replay carries what live subscribers saw.
+- The stream is a token-free replay projection: provider resume tokens are stripped before a record is served or persisted, the session manifest being their only durable home ([DR-036](../decisions/036-file-state-store.md)).
+- When a record cannot be durably appended, the record is still delivered and served from memory, no further stream write is attempted for that session, and the session's listing marks the stream incomplete after its last durable sequence — truncated history is never presented as complete.
 
 #### core-service-60
 
@@ -404,6 +406,8 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 Where a session has completed a Boss turn, the test suite shall stop the core service, start it again on the same state root and sessions directory [[core-service-15](#core-service-15)], and assert that the session, its turns, its records (content and order), and its usage totals are served identically after restart [[core-service-10](#core-service-10)], and that a session live at shutdown is reported as no longer live:
 
 - Where the root carries an earlier release's file versions, the suite shall assert startup migrates forward, keeps every row, and serves the migrated data identically [[core-service-15](#core-service-15)].
+- Where records carry provider resume tokens — in a result and in a `playbook.trace` payload — the suite shall assert the persisted and replayed stream carries none of them [[core-service-10](#core-service-10)].
+- Where the stream file becomes unappendable mid-session, the suite shall assert the fail-soft contract of [[core-service-10](#core-service-10)]: the record is still served from memory, the listing marks the stream incomplete after the last durable sequence, and the mark survives a restart.
 - Where the shell names a legacy SQLite store holding sessions and intents, beside a legacy library directory the shared config's `from` paths point into, the suite shall assert the one-time import of [[core-service-64](#core-service-64)]: the rows serve identically from the file state, the library relocates with its `from` paths rewritten and comments kept, the legacy store file is untouched, and a second startup imports nothing twice.
 
 #### core-service-62

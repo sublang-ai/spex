@@ -41,6 +41,7 @@ import type {
 import {
   foldTurnEvent,
   foldUsage,
+  sanitizeRecord,
   type UsageEntry,
   type UsageTotals,
 } from "./stream-fold.js";
@@ -80,6 +81,9 @@ interface SessionMeta {
   live: boolean;
   players: SessionInfo["players"];
   initialVisible: string[];
+  /** Set when an append failed: the file is a complete prefix only up
+   * to this sequence; later records lived in memory only (DR-036). */
+  streamIncompleteAfterSeq?: number;
 }
 
 interface TurnRow {
@@ -133,6 +137,9 @@ function sessionInfo(
     turns,
     failed,
     ...(costUsd !== undefined ? { costUsd } : {}),
+    ...(meta.streamIncompleteAfterSeq !== undefined
+      ? { streamIncompleteAfterSeq: meta.streamIncompleteAfterSeq }
+      : {}),
   };
 }
 
@@ -149,10 +156,35 @@ function readJson<T>(file: string): T | undefined {
 }
 
 /**
- * JSONL lines, healing crash damage in place: a torn trailing line is
- * dropped and the file rewritten to its recovered content, and a file
- * missing its final newline is completed — so a later append can never
- * glue onto damage and turn a tolerated tail into permanent corruption.
+ * JSONL as a reader that owns nothing: the complete newline-terminated
+ * prefix is the readable content, damage is tolerated by stopping at
+ * it, and the file is never mutated — the contract a lease-free reader
+ * of another host's stream must honor (DR-036).
+ */
+function readLinesPrefix<T>(file: string): T[] {
+  if (!existsSync(file)) return [];
+  const lines = readFileSync(file, "utf8").split("\n");
+  const out: T[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      out.push(JSON.parse(trimmed) as T);
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * JSONL lines of a file this store owns and appends, healing crash
+ * damage in place: a torn trailing line is dropped and the file
+ * rewritten to its recovered content, and a file missing its final
+ * newline is completed — so a later append can never glue onto damage
+ * and turn a tolerated tail into permanent corruption. Only lawful
+ * under the root lease: a reader without the lease uses
+ * `readLinesPrefix` and mutates nothing.
  */
 function readLinesHealing<T>(file: string): T[] {
   if (!existsSync(file)) return [];
@@ -397,7 +429,7 @@ export class Store {
       const meta = readJson<SessionMeta>(join(sessionsDir, file));
       if (!meta) continue;
       this.sessions.set(meta.id, meta);
-      const stored = readLinesHealing<StoredRecord & { v?: number }>(
+      const stored = readLinesPrefix<StoredRecord & { v?: number }>(
         this.recordsFile(meta.id),
       ).map(({ v: _v, ...rest }) => rest as StoredRecord);
       this.records.set(meta.id, stored);
@@ -600,7 +632,11 @@ export class Store {
         for (const rec of recordRows) {
           const stored: StoredRecord = {
             seq: rec.seq as number,
-            record: JSON.parse(rec.payload_json as string) as TmuxPlayRecord,
+            // Legacy payloads carry resume tokens (results and
+            // playbook.trace); the projection strips them on import.
+            record: sanitizeRecord(
+              JSON.parse(rec.payload_json as string) as TmuxPlayRecord,
+            ),
             ...(rec.role != null ? { role: rec.role as string } : {}),
           };
           lines.push(JSON.stringify({ v: 1, ...stored }));
@@ -848,15 +884,40 @@ export class Store {
   ): void {
     const stored: StoredRecord = {
       seq,
-      record,
+      // The stream is a token-free replay projection (DR-036): resume
+      // tokens never reach memory or disk through this door.
+      record: sanitizeRecord(record),
       ...(role !== undefined ? { role } : {}),
     };
     this.recordsOf(sessionId).push(stored);
-    if (this.sessionsDir) {
+    if (!this.sessionsDir) return;
+    const meta = this.sessions.get(sessionId);
+    // Once latched, the file stays a clean durable prefix: memory-only
+    // records after the latch are served live but never claimed stored.
+    if (meta?.streamIncompleteAfterSeq !== undefined) return;
+    try {
       appendFileSync(
         this.recordsFile(sessionId),
         `${JSON.stringify({ v: 1, ...stored })}\n`,
       );
+    } catch (error) {
+      // Fail soft (DR-036): record I/O must not kill the turn, and
+      // truncated history must not be presented as complete — latch
+      // the incompleteness at the last durable sequence.
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `spex: session ${sessionId} record stream write failed (${message}); ` +
+          `stream is complete only up to seq ${seq - 1}`,
+      );
+      if (meta) {
+        meta.streamIncompleteAfterSeq = seq - 1;
+        try {
+          this.saveSidecar(meta);
+        } catch {
+          // The latch still holds in memory; the sidecar write shares
+          // whatever ails the disk.
+        }
+      }
     }
   }
 

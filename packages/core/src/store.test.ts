@@ -455,3 +455,113 @@ test("an unreadable root lock fails closed rather than letting a second core in"
   const store = new Store({ dir });
   store.close();
 });
+
+test("the stream is a token-free projection: resume tokens never reach memory or disk", () => {
+  const dir = tempRoot();
+  const store = new Store({ dir });
+  sampleSession(store);
+  store.appendRecord("s1", 1, {
+    type: "player_finished",
+    turnId: 1,
+    timestamp: 10,
+    playerId: "dev.coder",
+    result: { status: "ok", finalText: "done", resumeToken: "sess-abc" },
+  } as unknown as TmuxPlayRecord);
+  store.appendRecord("s1", 2, {
+    type: "captain_telemetry",
+    turnId: 1,
+    timestamp: 11,
+    topic: "playbook.trace",
+    payload: {
+      type: "player.call.finished",
+      playerId: "dev.coder",
+      resume: "sess-abc",
+      resumeToken: "sess-def",
+      status: "ok",
+    },
+  } as unknown as TmuxPlayRecord);
+  store.appendRecord("s1", 3, {
+    type: "captain_telemetry",
+    turnId: 1,
+    timestamp: 12,
+    topic: "playbook.trace",
+    payload: { type: "player.call.started", resume: false },
+  } as unknown as TmuxPlayRecord);
+  store.close();
+
+  const reopened = new Store({ dir });
+  const text = readFileSync(join(dir, "sessions", "s1.records.jsonl"), "utf8");
+  assert.ok(!text.includes("sess-abc") && !text.includes("sess-def"));
+  const serialized = JSON.stringify(reopened.getRecords("s1"));
+  assert.ok(!serialized.includes("resumeToken") && !serialized.includes("sess-abc"));
+  // `resume: false` is semantics, not a token, and survives the strip.
+  const trace = reopened.getRecords("s1")[2].record as unknown as {
+    payload: { resume?: unknown };
+  };
+  assert.equal(trace.payload.resume, false);
+  reopened.close();
+});
+
+test("a lease-free records read serves the newline-terminated prefix and mutates nothing", () => {
+  const dir = tempRoot();
+  const store = new Store({ dir });
+  sampleSession(store);
+  store.appendRecord("s1", 1, {
+    type: "captain_status",
+    turnId: 1,
+    timestamp: 10,
+    message: "ok",
+  } as TmuxPlayRecord);
+  store.close();
+
+  // A torn tail, as a crashed writer leaves it.
+  const file = join(dir, "sessions", "s1.records.jsonl");
+  const damaged = readFileSync(file, "utf8") + '{"v":1,"seq":2,"rec';
+  writeFileSync(file, damaged);
+
+  const reopened = new Store({ dir });
+  assert.deepEqual(
+    reopened.getRecords("s1").map((r) => r.seq),
+    [1],
+  );
+  assert.equal(readFileSync(file, "utf8"), damaged, "the reader rewrites nothing");
+  reopened.close();
+});
+
+test("a failed stream append latches incomplete instead of killing the turn", () => {
+  const dir = tempRoot();
+  const store = new Store({ dir });
+  sampleSession(store);
+  store.appendRecord("s1", 1, {
+    type: "captain_status",
+    turnId: 1,
+    timestamp: 10,
+    message: "durable",
+  } as TmuxPlayRecord);
+  // Make the records file unappendable: a directory in its place.
+  const file = join(dir, "sessions", "s1.records.jsonl");
+  rmSync(file);
+  mkdirSync(file);
+  store.appendRecord("s1", 2, {
+    type: "captain_status",
+    turnId: 1,
+    timestamp: 11,
+    message: "memory-only",
+  } as TmuxPlayRecord);
+  // Live serving stays complete; the listing says the stream is not.
+  assert.deepEqual(
+    store.getRecords("s1").map((r) => r.seq),
+    [1, 2],
+  );
+  assert.equal(store.describeSession("s1")?.streamIncompleteAfterSeq, 1);
+  store.close();
+
+  rmSync(file, { recursive: true, force: true });
+  const reopened = new Store({ dir });
+  assert.equal(
+    reopened.describeSession("s1")?.streamIncompleteAfterSeq,
+    1,
+    "the latch survives a restart on the sidecar",
+  );
+  reopened.close();
+});
