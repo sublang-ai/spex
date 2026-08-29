@@ -293,6 +293,28 @@ test("core-service-64: a legacy SQLite store imports once, rows served from file
     null,
   );
   insert.run("s1", 2, 1, "player_event", 0, 30, JSON.stringify(doneEvent), "coder");
+  // The pre-0.22 flat usage shape lives in real stored streams; the
+  // fold must read it too.
+  insert.run(
+    "s1",
+    4,
+    1,
+    "captain_event",
+    0,
+    40,
+    JSON.stringify({
+      type: "captain_event",
+      turnId: 1,
+      timestamp: 40,
+      event: {
+        type: "done",
+        payload: {
+          usage: { tokenAvailability: "reported", inputTokens: 60, outputTokens: 5, toolUses: 1 },
+        },
+      },
+    }),
+    null,
+  );
   insert.run(
     "s1",
     3,
@@ -312,11 +334,12 @@ test("core-service-64: a legacy SQLite store imports once, rows served from file
   assert.equal(session?.live, false);
   assert.equal(session?.title, "ship the import");
   assert.equal(session?.turns, 1);
-  // Usage folds from the imported stream (core-service-10).
+  // Usage folds from the imported stream (core-service-10), across
+  // both payload generations.
   assert.deepEqual(store.sessionUsage("s1"), {
-    inputTokens: 40,
-    outputTokens: 10,
-    toolUses: 2,
+    inputTokens: 100,
+    outputTokens: 15,
+    toolUses: 3,
     totalCostUsd: 0.25,
     costSources: ["provider-reported"],
   });

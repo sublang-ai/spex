@@ -86,10 +86,24 @@ export function foldUsage(
         };
       };
       cost?: { amount?: number; currency?: string; source?: string };
+      // The pre-0.22 flat shape, alive in stored streams: a released
+      // stream is never rewritten, so the fold reads both generations
+      // (core-service-15).
+      inputTokens?: number;
+      outputTokens?: number;
     };
     durationMs?: number;
   };
   const tokens = payload.usage?.tokens;
+  const legacyTokens =
+    !tokens?.totals &&
+    (typeof payload.usage?.inputTokens === "number" ||
+      typeof payload.usage?.outputTokens === "number")
+      ? {
+          inputTokens: payload.usage?.inputTokens ?? 0,
+          outputTokens: payload.usage?.outputTokens ?? 0,
+        }
+      : undefined;
   const cost = payload.usage?.cost;
   return {
     sessionId,
@@ -106,7 +120,7 @@ export function foldUsage(
           inputTokens: tokens.totals.input?.total ?? 0,
           outputTokens: tokens.totals.output?.total ?? 0,
         }
-      : {}),
+      : (legacyTokens ?? {})),
     toolUses: payload.usage?.toolUses ?? 0,
     ...(typeof cost?.amount === "number"
       ? {
