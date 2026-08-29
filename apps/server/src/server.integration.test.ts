@@ -194,7 +194,11 @@ test("the printed URL matches the endpoint and SIGTERM stops it (SERVER-SHELL-12
       child.once("exit", (code) => resolveExit(code)),
     );
     child.kill("SIGTERM");
-    assert.equal(await exited, 0);
+    const exitCode = await exited;
+    // Windows cannot deliver SIGTERM — kill() force-terminates before
+    // any handler runs — so the clean exit code is observable only on
+    // POSIX; the port closing is asserted everywhere.
+    if (process.platform !== "win32") assert.equal(exitCode, 0);
     await assert.rejects(fetch(`http://127.0.0.1:${parsed.port}/`));
   } finally {
     child.kill("SIGKILL");
