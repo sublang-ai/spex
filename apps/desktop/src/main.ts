@@ -7,6 +7,7 @@
 // any browser (no Electron IPC for app features, SHELL-10).
 
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { renameSync, writeFileSync } from "node:fs";
 import {
   app,
@@ -102,8 +103,18 @@ async function main(): Promise<void> {
   const captured = await captureLoginShellEnv();
   mergeEnv(process.env, captured);
 
+  // The shared state root (DR-036, SHELL-15): plain files under
+  // ${SPEX_HOME:-~/.spex}; userData keeps only the renderer profile.
+  // Smoke mode redirects the root beside the redirected user-data so
+  // a driven run touches no real state (SHELL-24). The legacy
+  // userData store rides along for the core's one-time import.
+  const dataDir =
+    smokeHandshake && process.env.SPEX_SMOKE_USERDATA
+      ? join(process.env.SPEX_SMOKE_USERDATA, "spex-home")
+      : process.env.SPEX_HOME || join(homedir(), ".spex");
   service = await CoreService.start({
-    dbPath: join(app.getPath("userData"), "spex.db"),
+    dataDir,
+    legacyDbPath: join(app.getPath("userData"), "spex.db"),
     port: 0,
   });
 

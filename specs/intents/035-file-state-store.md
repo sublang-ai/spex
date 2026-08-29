@@ -13,11 +13,11 @@ Realize [DR-036](../decisions/036-file-state-store.md): retire the app-local SQL
 
 ## Deliverables
 
-- [ ] DR-036 accepted with the DR-004, DR-033, and DR-035 amendments applied; core-service, app-shell, server-shell, and projects packages amended, lint-clean.
-- [ ] Core phase 1: state root with the root lease, registry/act-log/preferences/forge-cache file stores behind the unchanged protocol, session record-stream files with sidecars, folded replay, and the one-time SQLite import with the library relocation; better-sqlite3 confined to the import path.
-- [ ] Shells: desktop state-root start with the legacy `userData` path handed for import; server `--data-dir` replacing `--db`; smoke redirect covering the root.
+- [x] DR-036 accepted with the DR-004, DR-033, and DR-035 amendments applied; core-service, app-shell, server-shell, and projects packages amended, lint-clean.
+- [x] Core phase 1: state root with the root lease, registry/act-log/preferences/forge-cache file stores behind the unchanged protocol, session record-stream files with sidecars, folded replay, and the one-time SQLite import with the library relocation; better-sqlite3 confined to the import path.
+- [x] Shells: desktop state-root start with the legacy `userData` path handed for import; server `--data-dir` replacing `--db`; smoke redirect covering the root.
 - [ ] Core phase 2 (on the playbook floor bump): shared session-store module for manifests, sessions-directory watch with foreign-session listing, and the `sessions` config key honored.
-- [ ] Workspace suites green, including restart, import, root-contention, and foreign-session coverage.
+- [ ] Workspace suites green, including restart, import, root-contention, and foreign-session coverage — the packaged app-shell-25 assertion and the phase-2 foreign-session coverage outstanding.
 
 ## Tasks
 
@@ -34,3 +34,4 @@ Realize [DR-036](../decisions/036-file-state-store.md): retire the app-local SQL
 ## Verification
 
 Planned: `spex lint` clean; every workspace suite green including the new restart-on-files, import, root-contention, and foreign-session coverage; the live check of task 9 recorded here with the observed listing and record replay.
+Phase 1 (2026-08-29): `spex lint` clean; suites green on the file store — core 154 (root-contention and one-time-import tests added; every restart/replay/ledger test running on files), cli 133, ui 245, desktop 9, server 4 (`--data-dir` exercised).

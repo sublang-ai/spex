@@ -9,7 +9,7 @@
 // (SERVER-SHELL-2).
 
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import {
   createServer as createHttpServer,
   type IncomingMessage,
@@ -32,7 +32,9 @@ export interface ServerShellOptions {
   port: number;
   token: string;
   configPath?: string;
-  dbPath: string;
+  dataDir: string;
+  /** The pre-DR-036 store to hand over for the one-time import. */
+  legacyDb: string;
   tlsCert?: string;
   tlsKey?: string;
   insecure: boolean;
@@ -48,7 +50,13 @@ export interface RunningServer {
   close(): Promise<void>;
 }
 
-export function defaultDbPath(env: NodeJS.ProcessEnv): string {
+export function defaultDataDir(env: NodeJS.ProcessEnv): string {
+  return env.SPEX_HOME || join(env.HOME ?? homedir(), ".spex");
+}
+
+/** The pre-DR-036 store this shell used, handed over for the one-time
+ * import (core-service-64) when it exists. */
+export function legacyDbPath(env: NodeJS.ProcessEnv): string {
   const dataHome =
     env.XDG_DATA_HOME || join(env.HOME ?? homedir(), ".local", "share");
   return join(dataHome, "spex", "server.db");
@@ -66,7 +74,8 @@ export function parseArgs(
     host: "127.0.0.1",
     port: 8137,
     token: env.SPEX_TOKEN ?? randomUUID(),
-    dbPath: defaultDbPath(env),
+    dataDir: defaultDataDir(env),
+    legacyDb: legacyDbPath(env),
     insecure: false,
     uiDist: defaultUiDist(),
   };
@@ -95,8 +104,8 @@ export function parseArgs(
       case "config":
         options.configPath = value;
         break;
-      case "db":
-        options.dbPath = value;
+      case "data-dir":
+        options.dataDir = value;
         break;
       case "tls-cert":
         options.tlsCert = value;
@@ -235,11 +244,13 @@ export async function startServer(
         handler,
       )
     : createHttpServer(handler);
-  mkdirSync(dirname(options.dbPath), { recursive: true });
+  mkdirSync(options.dataDir, { recursive: true });
+  const legacy = options.legacyDb;
   const service = await CoreService.start({
     httpServer: server,
     token: options.token,
-    dbPath: options.dbPath,
+    dataDir: options.dataDir,
+    ...(existsSync(legacy) ? { legacyDbPath: legacy } : {}),
     ...(options.configPath ? { configPath: options.configPath } : {}),
   });
   try {

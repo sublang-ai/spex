@@ -30,7 +30,7 @@ function tempOptions(
       "--port=0",
       "--token=secret",
       `--config=${join(dir, "playbook.config.yaml")}`,
-      `--db=${join(dir, "server.db")}`,
+      `--data-dir=${join(dir, "state")}`,
     ],
     {},
   );
@@ -160,7 +160,7 @@ test("the printed URL matches the endpoint and SIGTERM stops it (SERVER-SHELL-12
       "--port=0",
       "--token=t12",
       `--config=${join(dir, "playbook.config.yaml")}`,
-      `--db=${join(dir, "server.db")}`,
+      `--data-dir=${join(dir, "state")}`,
     ],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
