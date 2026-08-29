@@ -39,7 +39,15 @@ if (!singleInstance) {
     }
   });
 
-  void main();
+  // A startup refusal must reach the user, not vanish as an unhandled
+  // rejection with no window: another core holding the state root
+  // (core-service-61) or a failed migration (core-service-15) surfaces
+  // as a dialog naming the cause.
+  void main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    dialog.showErrorBox("Spex could not start", message);
+    app.exit(1);
+  });
 }
 
 function installApplicationMenu(): void {

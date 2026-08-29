@@ -500,10 +500,9 @@ test("CORE-22: records, order, and usage survive a service restart", async () =>
   const after = await client2.expectOk("history.get", {
     sessionId: session.id,
   });
-  assert.deepEqual(
-    after.records.map((r: StoredRecord) => [r.seq, r.record.type]),
-    before.records.map((r: StoredRecord) => [r.seq, r.record.type]),
-  );
+  // Content and order, whole (core-service-22): payloads, roles, and
+  // timestamps replay byte-identical, not just seq and type.
+  assert.deepEqual(after.records, before.records);
   assert.deepEqual(
     await client2.expectOk("usage.get", { sessionId: session.id }),
     usageBefore,
@@ -1024,4 +1023,72 @@ test("CORE: handshake without the token is rejected before hello", async () => {
   });
   assert.equal(outcome, "closed");
   await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// CORE-63: one core per state root
+// ---------------------------------------------------------------------------
+
+test("core-service-63: a second core service on a held root refuses naming the holder, and a fresh start succeeds after stop", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-root-"));
+  const options = {
+    token: "test",
+    configPath: join(dir, "playbook.config.yaml"),
+    dataDir: join(dir, "state"),
+    env: {},
+    home: join(dir, "home"),
+    watchConfig: false,
+  };
+  const first = await CoreService.start(options);
+  await assert.rejects(
+    CoreService.start(options),
+    (error: Error) => {
+      assert.match(error.message, /held by pid/);
+      assert.match(error.message, new RegExp(String(process.pid)));
+      return true;
+    },
+  );
+  await first.stop();
+  const third = await CoreService.start(options);
+  await third.stop();
+});
+
+// ---------------------------------------------------------------------------
+// CORE-64: the legacy library relocation riding the import
+// ---------------------------------------------------------------------------
+
+test("core-service-64: a legacy library relocates into the root with config from paths rewritten and comments kept", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-lib-"));
+  const legacyLib = join(dir, "legacy-lib");
+  mkdirSync(join(legacyLib, "demo"), { recursive: true });
+  writeFileSync(join(legacyLib, "demo", "demo.registry.mjs"), "export default {};\n");
+  const configPath = join(dir, "playbook.config.yaml");
+  writeFileSync(
+    configPath,
+    "# hand-written comment that must survive\n" +
+      "playbooks:\n" +
+      "  demo:\n" +
+      `    from: ${join(legacyLib, "demo", "demo.registry.mjs")}\n` +
+      "    roles: {}\n",
+  );
+  const dataDir = join(dir, "state");
+  const service = await CoreService.start({
+    token: "test",
+    configPath,
+    dataDir,
+    legacyLibraryDir: legacyLib,
+    env: {},
+    home: join(dir, "home"),
+    watchConfig: false,
+  });
+  const relocated = join(dataDir, "playbooks", "demo", "demo.registry.mjs");
+  assert.ok(existsSync(relocated), "the library file relocated into the root");
+  assert.ok(!existsSync(legacyLib), "the legacy directory is gone after the move");
+  const rewritten = readFileSync(configPath, "utf8");
+  assert.ok(rewritten.includes(relocated), "the from path follows the library");
+  assert.ok(
+    rewritten.includes("# hand-written comment that must survive"),
+    "comments survive the rewrite",
+  );
+  await service.stop();
 });

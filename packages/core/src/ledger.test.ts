@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1289,4 +1289,60 @@ test("core-service-59: session.viewed clears the un-ledgered turn's review stand
 
   client.close();
   await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// core-service-54: restart identity over the protocol, and the act log
+// ---------------------------------------------------------------------------
+
+test("core-service-54: ledger.get replies identically after a service restart, and the act log holds acts only", async () => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  await client.open();
+  const project = await client.expectOk("project.register", {
+    path: harness.projectDir,
+  });
+  const kept = await client.expectOk("intent.queue", {
+    projectId: project.id,
+    text: "Keep me queued",
+  });
+  await client.expectOk("intent.edit", { intentId: kept.id, text: "Kept, edited" });
+  const closed = await client.expectOk("intent.queue", {
+    projectId: project.id,
+    text: "Close me",
+  });
+  await client.expectOk("intent.close", { intentId: closed.id, as: "dropped" });
+  const before = await client.expectOk("ledger.get", {});
+  client.close();
+  await harness.service.stop();
+
+  const restarted = await CoreService.start({
+    token: "test",
+    configPath: join(harness.dir, "playbook.config.yaml"),
+    dataDir: harness.dataDir,
+    env: {},
+    home: join(harness.dir, "home"),
+    watchConfig: false,
+  });
+  const client2 = new Client(restarted.port());
+  await client2.open();
+  assert.deepEqual(await client2.expectOk("ledger.get", {}), before);
+
+  // The persisted act log is acts and provenance only: no state or
+  // status field anywhere (core-service-52).
+  const acts = readFileSync(
+    join(harness.dataDir, "intents", `${project.id}.jsonl`),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  assert.ok(acts.length >= 4, "queue, edit, queue, close all appended");
+  for (const act of acts) {
+    assert.ok(!("state" in act) && !("status" in act));
+    const intent = act.intent as Record<string, unknown> | undefined;
+    if (intent) assert.ok(!("state" in intent) && !("status" in intent));
+  }
+  client2.close();
+  await restarted.stop();
 });

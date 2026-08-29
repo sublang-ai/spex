@@ -282,14 +282,14 @@ The core package shall hold intents in one per-project append-only act log of ac
 | Field(s) | Content |
 | --- | --- |
 | `id` | the intent's identifier |
-| `project_id` | the owning project |
+| `projectId` | the owning project |
 | `text` | the staged Boss turn text; its first line is the display title |
-| `source_kind`, `source_ref`, `source_url` | provenance — issue, PR, record, or chat, with reference and URL — null when unsourced |
+| `source` (`kind`, `ref`, `url`) | provenance — issue, PR, record, or chat, with reference and URL — absent when unsourced |
 | `rank` | the per-project lexicographic order key |
-| `after_id` | the single optional predecessor intent, of any project |
-| `created_at` | the capture time |
-| `dispatched_session_id`, `dispatched_turn_id`, `dispatched_at` | the dispatch stamp, re-written by a later dispatch |
-| `closed_at`, `closed_as` | the close time and verdict — `done` or `dropped` |
+| `afterId` | the single optional predecessor intent, of any project |
+| `createdAt` | the capture time |
+| `dispatched` (`sessionId`, `turnId`, `at`) | the dispatch stamp, re-written by a later dispatch |
+| `closedAt`, `closedAs` | the close time and verdict — `done` or `dropped` |
 
 - An act is never deleted or rewritten: an edit, move, link, dispatch, or close appends, the fold takes each field's latest act, and a dropped intent keeps its struck fold — permanent deletion waits for its own decision ([DR-035](../decisions/035-intent-ledger.md)).
 

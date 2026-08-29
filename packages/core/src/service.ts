@@ -294,9 +294,11 @@ export class CoreService {
       );
     const target = this.libraryDir();
     if (legacy === target || !existsSync(legacy) || existsSync(target)) return;
+    // Copy, repoint, then delete: a crash at any point leaves every
+    // `from` path aimed at a directory that still exists.
     cpSync(legacy, target, { recursive: true });
-    rmSync(legacy, { recursive: true, force: true });
     rewriteLibraryPaths(this.configPath, legacy, target);
+    rmSync(legacy, { recursive: true, force: true });
   }
 
   port(): number {

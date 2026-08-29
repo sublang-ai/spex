@@ -148,20 +148,35 @@ function readJson<T>(file: string): T | undefined {
   return JSON.parse(readFileSync(file, "utf8")) as T;
 }
 
-/** JSONL lines, tolerating one torn trailing line from a crash. */
-function readLines<T>(file: string): T[] {
+/**
+ * JSONL lines, healing crash damage in place: a torn trailing line is
+ * dropped and the file rewritten to its recovered content, and a file
+ * missing its final newline is completed — so a later append can never
+ * glue onto damage and turn a tolerated tail into permanent corruption.
+ */
+function readLinesHealing<T>(file: string): T[] {
   if (!existsSync(file)) return [];
-  const lines = readFileSync(file, "utf8").split("\n");
+  const text = readFileSync(file, "utf8");
+  const lines = text.split("\n");
   const out: T[] = [];
+  const good: string[] = [];
+  let torn = false;
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i].trim();
     if (!line) continue;
     try {
       out.push(JSON.parse(line) as T);
+      good.push(line);
     } catch (error) {
-      if (i === lines.length - 1) break;
+      if (i === lines.length - 1) {
+        torn = true;
+        break;
+      }
       throw error;
     }
+  }
+  if (torn || !text.endsWith("\n")) {
+    writeAtomic(file, good.length > 0 ? `${good.join("\n")}\n` : "");
   }
   return out;
 }
@@ -183,6 +198,7 @@ export class Store {
   private readonly dir?: string;
   private readonly sessionsDir?: string;
   private lockDir?: string;
+  private leaseToken = "";
 
   private meta: StoreMeta = { version: META_VERSION };
   private readonly projects = new Map<string, ProjectInfo>();
@@ -216,40 +232,77 @@ export class Store {
 
   // -- root lease (CORE-61) -------------------------------------------------
 
+  /** The lock's owner file, or undefined when absent or unparsable —
+   * the lease paths must classify damage, never crash on it. */
+  private readLeaseOwner(
+    lock: string,
+  ): { pid: number; hostname: string; acquiredAt: number; token?: string } | undefined {
+    try {
+      return readJson(join(lock, "owner.json"));
+    } catch {
+      return undefined;
+    }
+  }
+
   private acquireRootLease(): void {
     const dir = this.dir as string;
     const lock = join(dir, ".lock");
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    this.leaseToken = randomUUID();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      // Stage-then-rename: the lock is published atomically with its
+      // owner file inside, so a reader never sees an ownerless lock.
+      const stage = join(dir, `.lock.stage.${this.leaseToken}`);
       try {
-        mkdirSync(lock);
-        writeAtomic(
-          join(lock, "owner.json"),
-          JSON.stringify({ pid: process.pid, hostname: hostname(), acquiredAt: Date.now() }),
+        mkdirSync(stage);
+        writeFileSync(
+          join(stage, "owner.json"),
+          JSON.stringify({
+            pid: process.pid,
+            hostname: hostname(),
+            acquiredAt: Date.now(),
+            token: this.leaseToken,
+          }),
         );
+        renameSync(stage, lock);
         this.lockDir = lock;
         return;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-        const owner = readJson<{ pid: number; hostname: string; acquiredAt: number }>(
-          join(lock, "owner.json"),
-        );
+      } catch {
+        rmSync(stage, { recursive: true, force: true });
+        const owner = this.readLeaseOwner(lock);
+        if (!owner) {
+          // A published lock always carries its owner; an unreadable
+          // one is fail-closed — deleting it is the operator's call.
+          throw new Error(
+            `state root ${dir} holds an unreadable lock at ${lock}; ` +
+              "delete it if no other Spex core is running (DR-036)",
+          );
+        }
         // A foreign host's lease is never broken (DR-036): liveness
         // cannot be probed across machines.
-        if (owner && owner.hostname !== hostname()) {
-          throw new StateRootHeldError(owner, dir);
+        if (owner.hostname !== hostname()) throw new StateRootHeldError(owner, dir);
+        if (processAlive(owner.pid)) throw new StateRootHeldError(owner, dir);
+        // Same host, dead pid: retire by rename-aside, which only one
+        // contender can win — the loser just loops and re-reads.
+        const retired = join(dir, `.lock.retired.${owner.token ?? randomUUID()}`);
+        try {
+          renameSync(lock, retired);
+          rmSync(retired, { recursive: true, force: true });
+        } catch {
+          // Another contender retired it first.
         }
-        if (owner && processAlive(owner.pid)) {
-          throw new StateRootHeldError(owner, dir);
-        }
-        // Same host, dead pid (or an unreadable lock): retire and retry.
-        rmSync(lock, { recursive: true, force: true });
       }
     }
     throw new Error(`state root ${dir} lease could not be acquired`);
   }
 
   private releaseRootLease(): void {
-    if (this.lockDir) rmSync(this.lockDir, { recursive: true, force: true });
+    if (!this.lockDir) return;
+    // Release only a lease this instance still owns: a stale loser
+    // must never delete the winner's lock.
+    const owner = this.readLeaseOwner(this.lockDir);
+    if (owner?.token === this.leaseToken) {
+      rmSync(this.lockDir, { recursive: true, force: true });
+    }
     this.lockDir = undefined;
   }
 
@@ -271,11 +324,13 @@ export class Store {
     return join(this.dir as string, "intents", `${projectId}.jsonl`);
   }
 
+  // Every file kind carries its version marker (core-service-15):
+  // whole files as a `v` wrapper, JSONL files as a `v` on each line.
   private saveProjects(): void {
     if (!this.dir) return;
     writeAtomic(
       join(this.dir, "projects.json"),
-      JSON.stringify([...this.projects.values()]),
+      JSON.stringify({ v: 1, projects: [...this.projects.values()] }),
     );
   }
 
@@ -283,7 +338,7 @@ export class Store {
     if (!this.dir) return;
     writeAtomic(
       join(this.dir, "prefs.json"),
-      JSON.stringify(Object.fromEntries(this.prefs)),
+      JSON.stringify({ v: 1, prefs: Object.fromEntries(this.prefs) }),
     );
   }
 
@@ -291,42 +346,48 @@ export class Store {
     if (!this.dir) return;
     writeAtomic(
       join(this.dir, "forge-cache.json"),
-      JSON.stringify(Object.fromEntries(this.forgeCache)),
+      JSON.stringify({ v: 1, entries: Object.fromEntries(this.forgeCache) }),
     );
   }
 
   private saveSidecar(meta: SessionMeta): void {
     if (!this.sessionsDir) return;
-    writeAtomic(this.sidecarFile(meta.id), JSON.stringify(meta));
+    writeAtomic(this.sidecarFile(meta.id), JSON.stringify({ v: 1, ...meta }));
   }
 
   private appendIntentAct(projectId: string, act: IntentAct): void {
     if (!this.dir) return;
-    appendFileSync(this.intentsFile(projectId), `${JSON.stringify(act)}\n`);
+    appendFileSync(
+      this.intentsFile(projectId),
+      `${JSON.stringify({ v: 1, ...act })}\n`,
+    );
   }
 
   // -- load (the restart fold, CORE-10/52) ----------------------------------
 
   private load(): void {
     const dir = this.dir as string;
-    for (const project of readJson<ProjectInfo[]>(join(dir, "projects.json")) ?? []) {
+    for (const project of readJson<{ projects: ProjectInfo[] }>(
+      join(dir, "projects.json"),
+    )?.projects ?? []) {
       this.projects.set(project.id, project);
     }
     for (const [key, value] of Object.entries(
-      readJson<Record<string, unknown>>(join(dir, "prefs.json")) ?? {},
+      readJson<{ prefs: Record<string, unknown> }>(join(dir, "prefs.json"))
+        ?.prefs ?? {},
     )) {
       this.prefs.set(key, value);
     }
     for (const [projectId, entry] of Object.entries(
-      readJson<Record<string, { at: number; state: ForgeState }>>(
+      readJson<{ entries: Record<string, { at: number; state: ForgeState }> }>(
         join(dir, "forge-cache.json"),
-      ) ?? {},
+      )?.entries ?? {},
     )) {
       this.forgeCache.set(projectId, entry);
     }
     for (const file of readdirSync(join(dir, "intents"))) {
       if (!file.endsWith(".jsonl")) continue;
-      for (const act of readLines<IntentAct>(join(dir, "intents", file))) {
+      for (const act of readLinesHealing<IntentAct>(join(dir, "intents", file))) {
         this.foldIntentAct(act);
       }
     }
@@ -336,7 +397,9 @@ export class Store {
       const meta = readJson<SessionMeta>(join(sessionsDir, file));
       if (!meta) continue;
       this.sessions.set(meta.id, meta);
-      const stored = readLines<StoredRecord>(this.recordsFile(meta.id));
+      const stored = readLinesHealing<StoredRecord & { v?: number }>(
+        this.recordsFile(meta.id),
+      ).map(({ v: _v, ...rest }) => rest as StoredRecord);
       this.records.set(meta.id, stored);
       // Turns, titles, and usage are never separately stored: the
       // stream is the truth and the restart folds it (core-service-10).
@@ -392,6 +455,27 @@ export class Store {
   private importLegacy(legacyDbPath: string | undefined): void {
     if (!legacyDbPath || !existsSync(legacyDbPath)) return;
     if (this.meta.importedLegacy?.includes(legacyDbPath)) return;
+    try {
+      this.runLegacyImport(legacyDbPath);
+      this.meta.importedLegacy = [
+        ...(this.meta.importedLegacy ?? []),
+        legacyDbPath,
+      ];
+    } catch (error) {
+      // An unreadable legacy store must not brick every startup: the
+      // import stays unmarked (a repaired file imports on a later
+      // start), the failure is reported, and serving proceeds. Every
+      // write in the import is idempotent, so a retry re-clobbers
+      // nothing.
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `spex: legacy store ${legacyDbPath} could not be imported (${message}); ` +
+          "continuing without it",
+      );
+    }
+  }
+
+  private runLegacyImport(legacyDbPath: string): void {
     // better-sqlite3's only remaining use: reading the store a
     // pre-DR-036 release left behind, which stays in place untouched.
     const require = createRequire(import.meta.url);
@@ -404,9 +488,6 @@ export class Store {
     };
     const db = new Database(legacyDbPath, { readonly: true });
     try {
-      const projects = db
-        .prepare("SELECT id, path, name, registered_at FROM projects")
-        .all() as { id: string; path: string; name: string; registered_at: number }[];
       const rows = (sql: string): Record<string, unknown>[] => {
         try {
           return db.prepare(sql).all();
@@ -416,22 +497,44 @@ export class Store {
         }
       };
       const dir = this.dir as string;
+      // The import merges into whatever the root already holds — a
+      // second shell's legacy store must never clobber the first's
+      // imported state or anything written since.
+      const existingProjects =
+        readJson<{ projects: ProjectInfo[] }>(join(dir, "projects.json"))
+          ?.projects ?? [];
+      const takenIds = new Set(existingProjects.map((project) => project.id));
+      const takenPaths = new Set(existingProjects.map((project) => project.path));
+      const mergedProjects = [...existingProjects];
+      for (const row of rows("SELECT id, path, name, registered_at FROM projects")) {
+        if (takenIds.has(row.id as string) || takenPaths.has(row.path as string)) {
+          continue;
+        }
+        mergedProjects.push({
+          id: row.id as string,
+          path: row.path as string,
+          name: row.name as string,
+          registeredAt: row.registered_at as number,
+        });
+      }
       writeAtomic(
         join(dir, "projects.json"),
-        JSON.stringify(
-          projects.map((row) => ({
-            id: row.id,
-            path: row.path,
-            name: row.name,
-            registeredAt: row.registered_at,
-          })),
-        ),
+        JSON.stringify({ v: 1, projects: mergedProjects }),
       );
       const prefs: Record<string, unknown> = {};
       for (const row of rows("SELECT key, value_json FROM prefs")) {
         prefs[row.key as string] = JSON.parse(row.value_json as string);
       }
-      writeAtomic(join(dir, "prefs.json"), JSON.stringify(prefs));
+      // Existing preferences win over imported ones: they are newer.
+      Object.assign(
+        prefs,
+        readJson<{ prefs: Record<string, unknown> }>(join(dir, "prefs.json"))
+          ?.prefs ?? {},
+      );
+      writeAtomic(
+        join(dir, "prefs.json"),
+        JSON.stringify({ v: 1, prefs }),
+      );
       for (const row of rows("SELECT * FROM intents ORDER BY created_at, id")) {
         const source: IntentSource | undefined =
           row.source_kind != null && row.source_ref != null
@@ -468,6 +571,9 @@ export class Store {
       for (const row of rows(
         "SELECT id, project_id, created_at, ended_at, players_json, initial_visible_json FROM sessions",
       )) {
+        // A session the root already holds is never overwritten: the
+        // file state is newer than any legacy copy of it.
+        if (existsSync(this.sidecarFile(row.id as string))) continue;
         const meta: SessionMeta = {
           id: row.id as string,
           projectId: row.project_id as string,
@@ -497,7 +603,7 @@ export class Store {
             record: JSON.parse(rec.payload_json as string) as TmuxPlayRecord,
             ...(rec.role != null ? { role: rec.role as string } : {}),
           };
-          lines.push(JSON.stringify(stored));
+          lines.push(JSON.stringify({ v: 1, ...stored }));
         }
         if (lines.length > 0) {
           writeAtomic(this.recordsFile(meta.id), `${lines.join("\n")}\n`);
@@ -506,7 +612,6 @@ export class Store {
     } finally {
       db.close();
     }
-    this.meta.importedLegacy = [...(this.meta.importedLegacy ?? []), legacyDbPath];
   }
 
   close(): void {
@@ -702,8 +807,11 @@ export class Store {
     for (const entry of this.records.get(sessionId) ?? []) {
       if (entry.record.type !== "runtime_error") continue;
       const turnId = entry.record.turnId;
-      if (turnId !== null && turnId < fromTurnId) continue;
-      if (toTurnId !== null && turnId !== null && turnId >= toTurnId) continue;
+      // A null-turn error belongs to no turn range, exactly as the
+      // SQL `turn_id >= ?` excluded it — returning it for every
+      // intent's range would flip ledger verdicts.
+      if (turnId === null || turnId < fromTurnId) continue;
+      if (toTurnId !== null && turnId >= toTurnId) continue;
       out.push({ turnId, timestamp: entry.record.timestamp });
     }
     return out;
@@ -745,7 +853,10 @@ export class Store {
     };
     this.recordsOf(sessionId).push(stored);
     if (this.sessionsDir) {
-      appendFileSync(this.recordsFile(sessionId), `${JSON.stringify(stored)}\n`);
+      appendFileSync(
+        this.recordsFile(sessionId),
+        `${JSON.stringify({ v: 1, ...stored })}\n`,
+      );
     }
   }
 

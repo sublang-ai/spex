@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -358,4 +358,100 @@ test("core-service-64: a legacy SQLite store imports once, rows served from file
   assert.equal(third.getPref("viewed:s1"), 4);
   assert.ok(existsSync(legacyDbPath));
   third.close();
+});
+
+test("a second shell's legacy import merges into the root, clobbering nothing", () => {
+  // Both shells share one root: the server's first launch imports its
+  // own legacy store and must not erase what the desktop imported or
+  // what was registered since (DR-036).
+  const dir = mkdtempSync(join(tmpdir(), "spex-merge-"));
+  const root = join(dir, "state");
+  const seed = (path: string, projectId: string, projectPath: string): void => {
+    const db = new Database(path);
+    db.exec(`
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+        registered_at INTEGER NOT NULL
+      );
+      CREATE TABLE prefs (key TEXT PRIMARY KEY, value_json TEXT NOT NULL);
+      INSERT INTO projects VALUES ('${projectId}', '${projectPath}', 'p', 1);
+      INSERT INTO prefs VALUES ('shared', '"${projectId}"');
+    `);
+    db.close();
+  };
+  seed(join(dir, "desktop.db"), "p-desktop", "/tmp/desktop-proj");
+  seed(join(dir, "server.db"), "p-server", "/tmp/server-proj");
+
+  const first = new Store({ dir: root, legacyDbPath: join(dir, "desktop.db") });
+  first.registerProject("/tmp/new-work", "new-work", 2);
+  first.setPref("shared", "live");
+  first.close();
+
+  const second = new Store({ dir: root, legacyDbPath: join(dir, "server.db") });
+  assert.deepEqual(
+    second.listProjects().map((project) => project.path).sort(),
+    ["/tmp/desktop-proj", "/tmp/new-work", "/tmp/server-proj"],
+  );
+  // Existing preferences win over imported ones: they are newer.
+  assert.equal(second.getPref("shared"), "live");
+  second.close();
+});
+
+test("a torn intent-log tail heals on load, so a later append cannot brick startup", () => {
+  const dir = tempRoot();
+  const store = new Store({ dir });
+  const project = store.registerProject("/tmp/heal", "heal", 1);
+  store.addIntent({
+    id: "i1",
+    projectId: project.id,
+    text: "First",
+    rank: "i",
+    createdAt: 1,
+  });
+  store.close();
+
+  // A crash mid-append leaves a torn tail with no trailing newline.
+  const log = join(dir, "intents", `${project.id}.jsonl`);
+  writeFileSync(log, readFileSync(log, "utf8") + '{"v":1,"act":"edit","id":"i1","te');
+
+  const healed = new Store({ dir });
+  healed.addIntent({
+    id: "i2",
+    projectId: project.id,
+    text: "Second",
+    rank: "r",
+    createdAt: 2,
+  });
+  healed.close();
+
+  const reopened = new Store({ dir });
+  assert.deepEqual(
+    reopened.listOpenIntents().map((intent) => intent.id),
+    ["i1", "i2"],
+  );
+  reopened.close();
+});
+
+test("an unreadable legacy store skips its import and never blocks startup", () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-badlegacy-"));
+  const legacyDbPath = join(dir, "spex.db");
+  // What better-sqlite3 leaves when the old app died before its first
+  // migration: a zero-byte file.
+  writeFileSync(legacyDbPath, "");
+  const store = new Store({ dir: join(dir, "state"), legacyDbPath });
+  store.registerProject("/tmp/after", "after", 1);
+  store.close();
+  const reopened = new Store({ dir: join(dir, "state"), legacyDbPath });
+  assert.equal(reopened.listProjects().length, 1);
+  reopened.close();
+});
+
+test("an unreadable root lock fails closed rather than letting a second core in", () => {
+  const dir = tempRoot();
+  mkdirSync(join(dir, ".lock"), { recursive: true });
+  writeFileSync(join(dir, ".lock", "owner.json"), "not json");
+  assert.throws(() => new Store({ dir }), /unreadable lock/);
+  rmSync(join(dir, ".lock"), { recursive: true, force: true });
+  const store = new Store({ dir });
+  store.close();
 });
