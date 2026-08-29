@@ -123,9 +123,10 @@ When a tag matching `app-v*` is pushed, the desktop release workflow shall build
 
 #### app-shell-15
 
-The shell shall place all app-local state, including the SQLite store, under the platform app-data directory (Electron `userData` [[4]]):
+The shell shall start the core against the shared state root of [DR-036](../decisions/036-file-state-store.md), keeping under Electron `userData` [[4]] only the renderer profile the browser engine itself writes:
 
 - The shell writes no app-only state to the shared config file or into project working trees ([DR-004](../decisions/004-config-and-persistence.md)).
+- The shell hands the core the legacy `userData` store path, so the core's one-time import [[core-service-64](core-service.md#core-service-64)] finds a store an earlier release left there.
 
 ### Native Bridge
 
@@ -141,7 +142,7 @@ The renderer shall enforce a content security policy that denies remote script, 
 
 #### app-shell-24
 
-Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-desktop-live-smoke.md)), when the desktop app starts, the desktop package shall redirect its user-data directory to the smoke-provided location before opening any store, start the core as usual, and write the core's socket address to the named file only after the core is listening:
+Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-desktop-live-smoke.md)), when the desktop app starts, the desktop package shall redirect its user-data directory and its state root to the smoke-provided location before opening any store, start the core as usual, and write the core's socket address to the named file only after the core is listening:
 
 - Where the acceptance variable is also set, the app refuses to launch naming the conflict.
 - Where neither variable is set, the behavior is unchanged.
@@ -167,6 +168,12 @@ Where a fixture playbook that raises an `awaitBossReply` question is enabled and
 - While the question awaits a reply, the test suite asserts that the dock or taskbar badge displays the attention count [[app-shell-4](#app-shell-4)].
 - When the question is then answered, the test suite asserts that the badge is removed [[app-shell-4](#app-shell-4)].
 - Where the shared config disables that notification kind, the test suite asserts that the same fixture run posts no notification [[app-shell-3](#app-shell-3)].
+
+### App Data Coverage
+
+#### app-shell-25
+
+Where a packaged build launches with its user-data directory and state root redirected [[app-shell-24](#app-shell-24)] and a legacy store seeded at the redirected user-data path, the test suite shall assert the state-root contract of [[app-shell-15](#app-shell-15)]: the app's durable state lands under the redirected root, nothing but the renderer profile is written under user-data, and the seeded store's sessions appear in the app's session list.
 
 ### Environment Coverage
 

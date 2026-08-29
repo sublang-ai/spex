@@ -6,7 +6,7 @@
 ## Intent
 
 This spec covers the Spex core service — the headless Node service in `packages/core` (the private workspace package `@sublang/spex-core`): its observable behavior, its implementation requirements, and its end-to-end integration coverage.
-The service owns config, project sessions, the intent ledger, the embedded playbook runtime, and persistence behind one WebSocket API: it embeds the headless cligent runtime and the playbook captain shell, and it shares the playbook launcher's config file, persistence split, and adapter readiness rules.
+The service owns config, project sessions, the intent ledger, the embedded playbook runtime, and persistence behind one WebSocket API: it embeds the headless cligent runtime and the playbook captain shell, and it shares the playbook launcher's config file, its session store ([DR-036](../decisions/036-file-state-store.md)), and its adapter readiness rules.
 Every behavior in this package is observable over the WebSocket protocol; the service serves no HTML, and integration coverage runs end to end against a scripted fake adapter.
 
 ## External Behavior
@@ -139,7 +139,7 @@ While a session is live, when a client's Boss submission for it [[core-service-5
 
 #### core-service-48
 
-When a client sends `session.viewed` naming a session and a turn, the core service shall persist that turn as the session's last-viewed marker in the app-local store [[core-service-15](#core-service-15)], so review state derives from stored data alone [[core-service-49](#core-service-49)] and survives a restart.
+When a client sends `session.viewed` naming a session and a turn, the core service shall persist that turn as the session's last-viewed marker in the state root's preferences file [[core-service-15](#core-service-15)], so review state derives from stored data alone [[core-service-49](#core-service-49)] and survives a restart.
 
 #### core-service-49
 
@@ -199,10 +199,32 @@ When a client requests adapter readiness, the core service shall report one dedu
 
 #### core-service-10
 
-The core service shall persist sessions, boss turns, records (including hidden records), and usage totals to the app-local store as they occur:
+The core service shall persist each session as files in the shared session store as records occur — the session's record stream appended one record per line (hidden records included), beside its manifest and its project-binding sidecar ([DR-036](../decisions/036-file-state-store.md)):
 
-- Where sessions have been persisted, a startup serves the stored sessions, turns, records, and usage over the protocol with the same content and record order as originally streamed, applying the same visibility filtering as live streaming [[core-service-8](#core-service-8)].
+- Where sessions have been persisted, a startup serves the stored sessions, turns, records, and usage over the protocol with the same content and record order as originally streamed, applying the same visibility filtering as live streaming [[core-service-8](#core-service-8)] — turns, titles, and usage totals folded from the stored stream, never separately stored.
 - Where a session was live at shutdown, the next startup reports that session as no longer live.
+- The synthesized visible failure record [[core-service-30](#core-service-30)] is persisted in the stream, so replay carries what live subscribers saw.
+
+#### core-service-60
+
+The core service shall serve every session present in the shared session store's directory — the directory the shared config's `sessions` key names, defaulting to the playbook CLI's own sessions directory ([DR-036](../decisions/036-file-state-store.md)) — whether found there at startup or written by another host while the service runs:
+
+- such a session binds to the registered project whose path is the session's recorded working directory, and lists non-live [[core-service-32](#core-service-32)] with its records served per [[core-service-10](#core-service-10)]; a session matching no registered project is not listed;
+- an arrival or change while the service runs is announced to subscribed clients as a session-state report, with `intents.changed` where a derived intent state can change [[core-service-51](#core-service-51)].
+
+#### core-service-65
+
+While another host's lease holds a session in the shared session store, the core service shall write none of that session's files, so per-session single-writer holds across hosts ([DR-036](../decisions/036-file-state-store.md)).
+
+#### core-service-61
+
+When the core service starts against a state root that another core instance holds, the core service shall refuse to serve, reporting the holding instance to the host — one core per state root at a time ([DR-036](../decisions/036-file-state-store.md)).
+
+#### core-service-64
+
+Where the host shell names a legacy SQLite store, when the core service starts on a state root that has not yet imported it, the core service shall import the store's rows into the file state once, before serving — the imported data served identically to data written natively [[core-service-10](#core-service-10)], and the legacy file left in place ([DR-036](../decisions/036-file-state-store.md)):
+
+- The same import relocates a legacy library directory into the state root, rewriting the shared config's `from` paths that point into it with the comment-preserving targeted edit ([DR-005](../decisions/005-compilation-integration.md)).
 
 ### Shutdown
 
@@ -245,19 +267,19 @@ The core package shall filter records by visibility [[core-service-8](#core-serv
 
 #### core-service-15
 
-The core package shall own the app-local SQLite store defined by [DR-004](../decisions/004-config-and-persistence.md): it shall define the schema, record a schema version in the store, and apply forward migrations at startup before accepting client connections:
+The core package shall own the file state of [DR-036](../decisions/036-file-state-store.md) — the state root's registry, intent-act-log, preferences, and forge-cache files, and the per-session files it writes into the shared session store — defining each file kind with a version marker and applying forward migrations at startup before accepting client connections:
 
-- When a migration fails, the core package stops serving and reports the failure, so a partially migrated store is never served.
-- The core package is the store's only writer, exposing stored data solely over the protocol.
-- A released migration is never edited: a schema change is a new migration, so a store written by an earlier release opens rather than failing on a column it has never seen.
+- When a migration fails, the core package stops serving and reports the failure, so a partially migrated root is never served.
+- The core package is the only writer of the Spex-owned files, exposing stored data solely over the protocol; session manifests are written through the shared session-store module.
+- A released migration is never edited: a format change is a new migration, so files written by an earlier release open rather than failing on a field they have never seen.
 
 ### Intent Storage
 
 #### core-service-52
 
-The core package shall hold intents in one app-local store table of acts and provenance only — no state or status column, every visible state derived at read time [[core-service-49](#core-service-49)] — added by a forward migration [[core-service-15](#core-service-15)] and written solely by the intent commands ([[core-service-42](#core-service-42)] [[core-service-43](#core-service-43)] [[core-service-44](#core-service-44)] [[core-service-45](#core-service-45)] [[core-service-46](#core-service-46)]) and the dispatch stamp [[core-service-47](#core-service-47)] ([DR-035](../decisions/035-intent-ledger.md)):
+The core package shall hold intents in one per-project append-only act log of acts and provenance only — no state or status field, every visible state derived at read time by folding the acts [[core-service-49](#core-service-49)] — kept in the state root [[core-service-15](#core-service-15)] and appended solely by the intent commands ([[core-service-42](#core-service-42)] [[core-service-43](#core-service-43)] [[core-service-44](#core-service-44)] [[core-service-45](#core-service-45)] [[core-service-46](#core-service-46)]) and the dispatch stamp [[core-service-47](#core-service-47)] ([DR-035](../decisions/035-intent-ledger.md), [DR-036](../decisions/036-file-state-store.md)):
 
-| Column(s) | Content |
+| Field(s) | Content |
 | --- | --- |
 | `id` | the intent's identifier |
 | `project_id` | the owning project |
@@ -269,7 +291,7 @@ The core package shall hold intents in one app-local store table of acts and pro
 | `dispatched_session_id`, `dispatched_turn_id`, `dispatched_at` | the dispatch stamp, re-written by a later dispatch |
 | `closed_at`, `closed_as` | the close time and verdict — `done` or `dropped` |
 
-- A row is never deleted: a dropped intent keeps its struck row, and permanent deletion waits for its own decision ([DR-035](../decisions/035-intent-ledger.md)).
+- An act is never deleted or rewritten: an edit, move, link, dispatch, or close appends, the fold takes each field's latest act, and a dropped intent keeps its struck fold — permanent deletion waits for its own decision ([DR-035](../decisions/035-intent-ledger.md)).
 
 ### Runtime Composition
 
@@ -379,9 +401,24 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 
 #### core-service-22
 
-Where a session has completed a Boss turn, the test suite shall stop the core service, start it again on the same app-local store file [[core-service-15](#core-service-15)], and assert that the session, its turns, its records (content and order), and its usage totals are served identically after restart [[core-service-10](#core-service-10)], and that a session live at shutdown is reported as no longer live:
+Where a session has completed a Boss turn, the test suite shall stop the core service, start it again on the same state root and sessions directory [[core-service-15](#core-service-15)], and assert that the session, its turns, its records (content and order), and its usage totals are served identically after restart [[core-service-10](#core-service-10)], and that a session live at shutdown is reported as no longer live:
 
-- Where a store carries an earlier release's schema and rows, the suite shall assert it opens, keeps every row, reads the columns that release lacked as unknown, and accepts writes to them [[core-service-15](#core-service-15)].
+- Where the root carries an earlier release's file versions, the suite shall assert startup migrates forward, keeps every row, and serves the migrated data identically [[core-service-15](#core-service-15)].
+- Where the shell names a legacy SQLite store holding sessions and intents, beside a legacy library directory the shared config's `from` paths point into, the suite shall assert the one-time import of [[core-service-64](#core-service-64)]: the rows serve identically from the file state, the library relocates with its `from` paths rewritten and comments kept, the legacy store file is untouched, and a second startup imports nothing twice.
+
+#### core-service-62
+
+Where a fixture session — manifest naming a registered project's directory as its working directory, record-stream file, and no Spex sidecar — sits in the sessions directory before the core service starts, and the test suite writes a second such fixture session while the service runs, the test suite shall assert the foreign-session contract of [[core-service-60](#core-service-60)]:
+
+- both sessions appear in the listing bound to that project, non-live, with titles and turn counts folded from their streams [[core-service-32](#core-service-32)];
+- their records are served with hidden records filtered from the session subscription [[core-service-10](#core-service-10)];
+- a session-state report announcing the second session reaches a subscribed client [[core-service-60](#core-service-60)];
+- a fixture session whose working directory matches no registered project is absent from the listing [[core-service-60](#core-service-60)];
+- a fixture session held by a live foreign lease serves read-only, its files byte-identical afterwards [[core-service-65](#core-service-65)].
+
+#### core-service-63
+
+While a core service is serving a state root, the test suite shall start a second core service against the same root and assert the admission contract of [[core-service-61](#core-service-61)]: the second start refuses to serve reporting the holder, and after the first service stops [[core-service-39](#core-service-39)], a fresh start on that root succeeds.
 
 ### Intent Ledger Coverage
 
@@ -397,7 +434,7 @@ Where the core service runs with a valid config and the scripted fake adapter [[
 
 #### core-service-54
 
-Where a store holds queued, dispatched, finished, and closed intents from a completed run, the test suite shall stop the core service, start it again on the same store file [[core-service-15](#core-service-15)], and assert that `ledger.get` replies identically to its pre-restart reply [[core-service-49](#core-service-49)] and that the store's intents table carries no state column [[core-service-52](#core-service-52)].
+Where a store holds queued, dispatched, finished, and closed intents from a completed run, the test suite shall stop the core service, start it again on the same state root [[core-service-15](#core-service-15)], and assert that `ledger.get` replies identically to its pre-restart reply [[core-service-49](#core-service-49)] and that the intent act log carries no state or status field [[core-service-52](#core-service-52)].
 
 #### core-service-55
 

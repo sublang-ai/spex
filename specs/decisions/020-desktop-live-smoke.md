@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; amended by [DR-036](036-file-state-store.md): the smoke redirect covers the state root as well as the user-data directory.
 
 ## Context
 

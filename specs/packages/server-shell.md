@@ -22,12 +22,13 @@ When the server shell starts, it shall boot one core service attached to the she
 | `--port` | `8137` |
 | `--token` | the `SPEX_TOKEN` environment variable, else a random value per launch |
 | `--config` | unset: the core resolves its own shared config path |
-| `--db` | `${XDG_DATA_HOME:-~/.local/share}/spex/server.db`, created as needed |
+| `--data-dir` | the shared state root of [DR-036](../decisions/036-file-state-store.md), created as needed |
 | `--tls-cert`, `--tls-key` | unset: plain HTTP |
 
 - A loopback bind is reached remotely over an SSH tunnel; the startup printout names that command.
 - An empty token is refused at startup, naming the mistake: a blank secret would disable the handshake.
 - An IPv6 bind host appears bracketed in the URL.
+- A store an earlier release left at the retired `--db` default is handed to the core for its one-time import [[core-service-64](core-service.md#core-service-64)].
 
 #### server-shell-2
 

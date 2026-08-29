@@ -6,7 +6,7 @@
 ## Intent
 
 This spec defines the observable behavior, implementation constraints, and integration coverage of the Dashboard, the one cross-project surface carrying the intent ledger ([DR-035](../decisions/035-intent-ledger.md)): a two-band attention queue over per-project ledger groups.
-Every visible state derives deterministically from stored intent rows, the session record stream, and review state persisted in the app-local store, and forge data flows only through the forge adapter.
+Every visible state derives deterministically from stored intent rows, the session record stream, and review state persisted in the app store, and forge data flows only through the forge adapter.
 Integration coverage drives fixture intent rows, record streams, persisted store state, and stubbed forge adapters through the core and asserts the derived Dashboard state, so that attention bands, intent-state derivation, capture, sources, history paging, and empty states are verified end to end rather than per unit.
 
 ## External Behavior
@@ -211,7 +211,7 @@ While the app store's intent rows, record history, and review state are intact, 
 
 #### dashboard-12
 
-Where Dashboard state is assembled, the dashboard read model shall source live-session state — attention conditions, engagement state ids, the Now band's session facts — from the in-process record bus, and durable state — intent rows, closed-intent history, review markers — from the app-local store ([DR-004](../decisions/004-config-and-persistence.md)):
+Where Dashboard state is assembled, the dashboard read model shall source live-session state — attention conditions, engagement state ids, the Now band's session facts — from the in-process record bus, and durable state — intent rows, closed-intent history, review markers — from the app store ([DR-036](../decisions/036-file-state-store.md)):
 
 - It does not query the embedded runtime directly, and it does not reach a forge except through the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)).
 

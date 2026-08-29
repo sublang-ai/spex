@@ -6,6 +6,7 @@
 ## Status
 
 Accepted; registry generation amended by [DR-014](014-released-toolchain.md) — slc now emits the registry entry, and Spex wraps it instead of synthesizing one.
+Amended by [DR-036](036-file-state-store.md): the library directory lives under the shared state root, relocated by the one-time import with `from` paths rewritten in place.
 
 ## Context
 

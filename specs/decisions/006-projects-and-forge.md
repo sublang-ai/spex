@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted
+Accepted; amended by [DR-036](036-file-state-store.md): the project registry lives in the state root's registry file, not the app-local SQLite store.
 
 ## Context
 

@@ -29,7 +29,7 @@ meta.md       The spec of specs
 | [DR-001](decisions/001-scaffold-localization.md) | 001-scaffold-localization.md | Scaffold localization via per-language overlays |
 | [DR-002](decisions/002-desktop-app-architecture.md) | 002-desktop-app-architecture.md | Spex desktop app: web-first three-layer architecture, monorepo, release preservation |
 | [DR-003](decisions/003-runtime-reuse.md) | 003-runtime-reuse.md | Embedded headless runtime + captain shell; record-driven read-only panes |
-| [DR-004](decisions/004-config-and-persistence.md) | 004-config-and-persistence.md | Shared playbook config ownership, app-local SQLite store, readiness |
+| [DR-004](decisions/004-config-and-persistence.md) | 004-config-and-persistence.md | Shared playbook config ownership, app-local SQLite store (superseded by DR-036), readiness |
 | [DR-005](decisions/005-compilation-integration.md) | 005-compilation-integration.md | slc as external toolchain; in-app registry generation |
 | [DR-006](decisions/006-projects-and-forge.md) | 006-projects-and-forge.md | Projects as local git repos; gh-CLI GitHub forge adapter |
 | [DR-007](decisions/007-conversational-session-start.md) | 007-conversational-session-start.md | Sessions lands on a Captain-first start view; one motion to the first turn |
@@ -61,6 +61,7 @@ meta.md       The spec of specs
 | [DR-033](decisions/033-remote-gui-serving.md) | 033-remote-gui-serving.md | Remote GUI serving: server shell on one port, tokenized-URL auth, optional TLS, shell-attached core endpoint |
 | [DR-034](decisions/034-playbook-9-adoption.md) | 034-playbook-9-adoption.md | Playbook 9 adoption: floor to ^9.0.0, cligent unchanged, recaptured machine fixtures, no product code change |
 | [DR-035](decisions/035-intent-ledger.md) | 035-intent-ledger.md | The intent ledger: intents as staged Boss turns, one-gesture capture from issues/PRs/records/chat, per-project queues with one after-link, verdict-owed deliveries, confirm-pulls-next Dashboard |
+| [DR-036](decisions/036-file-state-store.md) | 036-file-state-store.md | File state and the shared session store: SQLite retires for plain files under one state root, sessions shared with the playbook CLI, intents as an act log, file-sync-safe backup |
 
 ## Packages
 

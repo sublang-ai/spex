@@ -6,7 +6,7 @@
 ## Intent
 
 This spec covers project management in the Spex desktop app — its palette and Repo-tab behavior, the core-service implementation behind it, and the integration coverage that verifies both.
-Users register and create local git projects in the project palette, and the workspace's Repo tab shows repository and GitHub state: a project is a local git repository, with registry persistence in the app-local SQLite store, repository state collected from local git only, and forge access exclusively through the forge adapter interface.
+Users register and create local git projects in the project palette, and the workspace's Repo tab shows repository and GitHub state: a project is a local git repository, with registry persistence in the app state root, repository state collected from local git only, and forge access exclusively through the forge adapter interface.
 Integration coverage exercises registration and card state against fixture repositories, the create-project flow, forge panels against a stubbed gh CLI, and removal without touching the repository on disk.
 
 ## External Behavior
@@ -114,7 +114,7 @@ User-facing copy in the palette and the Repo tab shall say "GitHub" and shall no
 
 #### projects-10
 
-Where the core service manages projects, the project registry shall persist one entry per project — identifier, display name, absolute repository path, and creation time — in the app-local SQLite store ([DR-004](../decisions/004-config-and-persistence.md)), and shall restore all entries on core startup so registered projects survive app restarts:
+Where the core service manages projects, the project registry shall persist one entry per project — identifier, display name, absolute repository path, and creation time — in the state root's registry file ([DR-036](../decisions/036-file-state-store.md)), and shall restore all entries on core startup so registered projects survive app restarts:
 
 - Removing a project deletes only that project's registry entries; no file under the repository path is deleted or modified.
 
