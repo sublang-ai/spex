@@ -28,7 +28,7 @@ Realize [DR-036](../decisions/036-file-state-store.md): retire the app-local SQL
 5. Core: session record-stream files and sidecars replacing the session tables; turns, titles, and usage folded from the stream; restart coverage on the file store.
 6. Core: the one-time SQLite import migration — rows, library relocation, `from`-path rewrite — with its coverage; better-sqlite3 confined to the import path.
 7. Shells: desktop state-root start and legacy-path handoff; server `--data-dir`; smoke redirect update; packaged-app suites green.
-8. Phase 2: adopt the playbook session-store exports and record tee, the sessions-directory watch with foreign-session coverage, and the `sessions` key; pin the playbook floor.
+8. Phase 2: adopt the playbook session-store exports and record tee, the sessions-directory watch with foreign-session coverage, and the `sessions` key; pin the playbook floor (upstream work tracked in [sublang-ai/playbook#45](https://github.com/sublang-ai/playbook/issues/45)).
 9. Full-suite verification and a live same-machine check: a `playbook run` session in a registered project's directory appearing in the app.
 
 ## Verification
