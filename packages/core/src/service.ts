@@ -8,7 +8,15 @@
 // (CORE-13), and record channels filtered by visibility at this
 // boundary (CORE-8/14).
 
-import { existsSync, readFileSync, statSync, watch, type FSWatcher } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  watch,
+  type FSWatcher,
+} from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
@@ -56,6 +64,7 @@ import {
 } from "./forge.js";
 import {
   editConfigFile,
+  rewriteLibraryPaths,
   type AgentBlock,
   type ConfigEditOp,
 } from "./config-edit.js";
@@ -63,7 +72,6 @@ import { resolveArtifacts } from "./artifacts.js";
 import { loadBuiltinCatalog } from "./builtins.js";
 import { parseSpecTree, resolveSpecPath } from "./specs.js";
 import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
-import type { ForgeState } from "./protocol.js";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
 const CORE_VERSION = "0.1.0";
@@ -71,8 +79,19 @@ const CORE_VERSION = "0.1.0";
 export interface CoreServiceOptions {
   /** Shared config path; defaults to the XDG playbook location. */
   configPath?: string;
-  /** SQLite path; defaults to in-memory (callers should set it). */
-  dbPath?: string;
+  /**
+   * State root directory (DR-036); defaults to in-memory (callers
+   * should set it). Shells resolve `${SPEX_HOME:-~/.spex}`.
+   */
+  dataDir?: string;
+  /** Sessions directory; defaults to `<dataDir>/sessions`. */
+  sessionsDir?: string;
+  /** A legacy SQLite store the shell hands over for the one-time
+   * import (core-service-64); the file is left in place. */
+  legacyDbPath?: string;
+  /** A legacy compiled-playbook library to relocate into the root,
+   * with config `from` paths rewritten (core-service-64). */
+  legacyLibraryDir?: string;
   port?: number;
   /**
    * A shell-supplied HTTP(S) server to attach the WebSocket endpoint
@@ -115,7 +134,8 @@ export interface CoreServiceOptions {
   compileSpawner?: LineSpawner;
 }
 
-const FORGE_CACHE_MS = 60_000;
+// The Sources cache ages out at ten minutes (dashboard-14).
+const FORGE_CACHE_MS = 600_000;
 
 interface ClientState {
   socket: WebSocket;
@@ -162,10 +182,6 @@ export class CoreService {
   private seeded = false;
   private readonly runCommand: RunCommand;
   private readonly forge: ForgeAdapter;
-  private readonly forgeCache = new Map<
-    string,
-    { at: number; state: ForgeState }
-  >();
   /** One in-flight compile per playbook id; abort via compile.abort. */
   private readonly activeCompiles = new Map<string, AbortController>();
   /** Projects whose ledger changed since the last broadcast (DR-035). */
@@ -187,7 +203,11 @@ export class CoreService {
     this.runCommand = options.runCommand ?? defaultRunCommand;
     this.forge =
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
-    this.store = new Store(options.dbPath ?? ":memory:");
+    this.store = new Store({
+      ...(options.dataDir ? { dir: options.dataDir } : {}),
+      ...(options.sessionsDir ? { sessionsDir: options.sessionsDir } : {}),
+      ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
+    });
     this.configState = { status: "missing", path: this.configPath };
     this.sessions = new SessionManager({
       store: this.store,
@@ -237,11 +257,46 @@ export class CoreService {
   static async start(options: CoreServiceOptions = {}): Promise<CoreService> {
     const service = new CoreService(options);
     service.store.markAllSessionsNotLive();
+    service.relocateLegacyLibrary();
     service.seeded = seedConfig(service.configPath);
     await service.reloadConfig();
     if (options.watchConfig !== false) service.watchConfigFile();
     await service.listen(options.port ?? 0);
     return service;
+  }
+
+  /** The compiled-playbook library home (DR-005, DR-036): under the
+   * state root when one is set, the pre-DR-036 XDG default otherwise. */
+  private libraryDir(): string {
+    return (
+      this.options.libraryDir ??
+      (this.options.dataDir
+        ? join(this.options.dataDir, "playbooks")
+        : join(
+            this.env.XDG_DATA_HOME || join(this.home, ".local", "share"),
+            "spex",
+            "playbooks",
+          ))
+    );
+  }
+
+  /** The one-time library relocation riding the import (CORE-64): a
+   * legacy library moves into the root and the config's `from` paths
+   * follow, comment-preservingly. */
+  private relocateLegacyLibrary(): void {
+    if (!this.options.dataDir) return;
+    const legacy =
+      this.options.legacyLibraryDir ??
+      join(
+        this.env.XDG_DATA_HOME || join(this.home, ".local", "share"),
+        "spex",
+        "playbooks",
+      );
+    const target = this.libraryDir();
+    if (legacy === target || !existsSync(legacy) || existsSync(target)) return;
+    cpSync(legacy, target, { recursive: true });
+    rmSync(legacy, { recursive: true, force: true });
+    rewriteLibraryPaths(this.configPath, legacy, target);
   }
 
   port(): number {
@@ -586,7 +641,9 @@ export class CoreService {
         if (!project) {
           throw new CoreError("not_found", `no project ${command.projectId}`);
         }
-        const cached = this.forgeCache.get(project.id);
+        // The cache is persisted in the app store (dashboard-14), so a
+        // restart serves the last lists rather than a blank.
+        const cached = this.store.getForgeCache(project.id);
         if (
           !command.refresh &&
           cached &&
@@ -596,7 +653,7 @@ export class CoreService {
         }
         const status = await repoStatus(project.path, this.runCommand);
         const state = await this.forge.state(project.path, status.originUrl);
-        this.forgeCache.set(project.id, { at: Date.now(), state });
+        this.store.setForgeCache(project.id, { at: Date.now(), state });
         return state;
       }
       case "project.remove": {
@@ -745,13 +802,7 @@ export class CoreService {
         const controller = new AbortController();
         this.activeCompiles.set(command.playbookId, controller);
         try {
-          const libraryDir =
-            this.options.libraryDir ??
-            join(
-              this.env.XDG_DATA_HOME || join(this.home, ".local", "share"),
-              "spex",
-              "playbooks",
-            );
+          const libraryDir = this.libraryDir();
           let result;
           try {
             result = await compilePlaybook({

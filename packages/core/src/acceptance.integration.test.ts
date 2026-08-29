@@ -157,7 +157,7 @@ test("ACCEPT: a real session starts over the real shell and CODE registry", asyn
   const service = await CoreService.start({
     token: "test",
     configPath,
-    dbPath: join(dir, "spex.db"),
+    dataDir: join(dir, "state"),
     adapterImports: imports,
     env: {},
     home: join(dir, "home"),
@@ -229,7 +229,7 @@ test("ACCEPT: a dev task divides into dev.coder and dev.reviewer calls over a re
   const service = await CoreService.start({
     token: "test",
     configPath,
-    dbPath: join(dir, "spex.db"),
+    dataDir: join(dir, "state"),
     adapterImports: imports,
     captainFactory: async () => captain,
     env: {},

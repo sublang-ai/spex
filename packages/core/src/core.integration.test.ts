@@ -144,14 +144,14 @@ interface Harness {
   service: CoreService;
   stats: FakeAdapterStats;
   dir: string;
-  dbPath: string;
+  dataDir: string;
   projectDir: string;
 }
 
 async function startHarness(
   configText: string = VALID_CONFIG,
   options: {
-    dbPath?: string;
+    dataDir?: string;
     env?: NodeJS.ProcessEnv;
     runCommand?: import("./forge.js").RunCommand;
     compileSpawner?: import("./compile.js").LineSpawner;
@@ -164,7 +164,7 @@ async function startHarness(
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
-  const dbPath = options.dbPath ?? join(dir, "spex.db");
+  const dataDir = options.dataDir ?? join(dir, "state");
 
   const { imports, stats } = fakeAdapterImports({
     rules: [
@@ -190,7 +190,7 @@ async function startHarness(
   const service = await CoreService.start({
     token: "test",
     configPath,
-    dbPath,
+    dataDir,
     adapterImports: imports,
     // DR-024: the fake-adapter harness fakes the readiness runtime half
     // too, so verdicts never depend on the host's installed runtimes.
@@ -204,7 +204,7 @@ async function startHarness(
       ? { compileSpawner: options.compileSpawner }
       : {}),
   });
-  return { service, stats, dir, dbPath, projectDir };
+  return { service, stats, dir, dataDir, projectDir };
 }
 
 // ---------------------------------------------------------------------------
@@ -484,7 +484,7 @@ test("CORE-22: records, order, and usage survive a service restart", async () =>
   const restarted = await CoreService.start({
     token: "test",
     configPath: join(harness.dir, "playbook.config.yaml"),
-    dbPath: harness.dbPath,
+    dataDir: harness.dataDir,
     env: {},
     home: join(harness.dir, "home"),
     watchConfig: false,
@@ -944,7 +944,7 @@ test("real captain shell: a Boss turn round-trips the captain reply", async () =
   const service = await CoreService.start({
     token: "test",
     configPath,
-    dbPath: join(dir, "spex.db"),
+    dataDir: join(dir, "state"),
     adapterImports: imports,
     env: {},
     home: join(dir, "home"),

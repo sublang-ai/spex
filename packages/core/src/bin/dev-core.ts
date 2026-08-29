@@ -266,7 +266,7 @@ async function main(): Promise<void> {
     });
 
     options.configPath = configPath;
-    options.dbPath = join(dir, "spex.db");
+    options.dataDir = join(dir, "state");
     options.adapterImports = imports;
     options.captainFactory = async () => captain;
     options.env = {};

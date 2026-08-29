@@ -159,7 +159,7 @@ async function startHarness(captains: Captain[]): Promise<Harness> {
   const service = await CoreService.start({
     token: "test",
     configPath,
-    dbPath: join(dir, "spex.db"),
+    dataDir: join(dir, "state"),
     adapterImports: imports,
     adapterRuntime: () => ({ usable: true }),
     captainFactory: async () => {

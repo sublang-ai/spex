@@ -1,17 +1,35 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// App-local SQLite store (DR-004, CORE-15): the core package is the
-// only writer; schema is versioned with forward migrations applied at
-// startup before any client is served. Hidden records are persisted
-// with a flag so replay can filter identically to live streaming.
+// The file state (DR-036, CORE-15): plain files under one state root
+// are the durable truth, and every in-memory index rebuilds from them
+// at startup. The core package is the only writer of the Spex-owned
+// files. Sessions persist as one record-stream JSONL plus a project-
+// binding sidecar per session; turns, titles, and usage fold from the
+// stream and are never separately stored (CORE-10). Intents persist
+// as per-project append-only act logs (CORE-52). Hidden records ride
+// the stream with their visibility, so replay filters identically to
+// live streaming. A root lease admits one core per root (CORE-61),
+// and a legacy SQLite store imports once (CORE-64) through
+// better-sqlite3 — the import path's only remaining use.
 
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { hostname } from "node:os";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import Database from "better-sqlite3";
+import { createRequire } from "node:module";
 
 import type {
+  ForgeState,
   IntentInfo,
   IntentSource,
   IntentSourceKind,
@@ -20,235 +38,70 @@ import type {
   StoredRecord,
   TmuxPlayRecord,
 } from "./protocol.js";
+import {
+  foldTurnEvent,
+  foldUsage,
+  type UsageEntry,
+  type UsageTotals,
+} from "./stream-fold.js";
 
-const MIGRATIONS: string[] = [
-  `
-  CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-  CREATE TABLE projects (
-    id TEXT PRIMARY KEY,
-    path TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    registered_at INTEGER NOT NULL
-  );
-  CREATE TABLE sessions (
-    id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL REFERENCES projects(id),
-    created_at INTEGER NOT NULL,
-    ended_at INTEGER,
-    live INTEGER NOT NULL DEFAULT 0,
-    players_json TEXT NOT NULL,
-    initial_visible_json TEXT NOT NULL DEFAULT '[]'
-  );
-  CREATE TABLE turns (
-    session_id TEXT NOT NULL,
-    turn_id INTEGER NOT NULL,
-    prompt TEXT NOT NULL,
-    started_at INTEGER NOT NULL,
-    ended_at INTEGER,
-    status TEXT,
-    PRIMARY KEY (session_id, turn_id)
-  );
-  CREATE TABLE records (
-    session_id TEXT NOT NULL,
-    seq INTEGER NOT NULL,
-    turn_id INTEGER,
-    type TEXT NOT NULL,
-    hidden INTEGER NOT NULL DEFAULT 0,
-    timestamp INTEGER NOT NULL,
-    payload_json TEXT NOT NULL,
-    PRIMARY KEY (session_id, seq)
-  );
-  CREATE INDEX records_by_session ON records (session_id, seq);
-  CREATE TABLE usage (
-    session_id TEXT NOT NULL,
-    turn_id INTEGER,
-    actor_id TEXT NOT NULL,
-    input_tokens INTEGER NOT NULL,
-    output_tokens INTEGER NOT NULL,
-    tool_uses INTEGER NOT NULL,
-    total_cost_usd REAL,
-    duration_ms INTEGER,
-    at INTEGER NOT NULL
-  );
-  CREATE TABLE prefs (key TEXT PRIMARY KEY, value_json TEXT NOT NULL);
-  `,
-  // Session players (DR-032). A player record carries the role of the
-  // call it belongs to, and a cost carries the provenance cligent 0.22
-  // reports. Both are nullable because both are genuinely unknown for
-  // everything written before this migration — and because an absent
-  // report is not a zero. SQLite cannot drop a NOT NULL, so the token
-  // columns are rebuilt to admit the silence the new runtime reports.
-  `
-  ALTER TABLE records ADD COLUMN role TEXT;
-  ALTER TABLE usage ADD COLUMN cost_source TEXT;
-  CREATE TABLE usage_next (
-    session_id TEXT NOT NULL,
-    turn_id INTEGER,
-    actor_id TEXT NOT NULL,
-    input_tokens INTEGER,
-    output_tokens INTEGER,
-    tool_uses INTEGER NOT NULL,
-    total_cost_usd REAL,
-    cost_source TEXT,
-    duration_ms INTEGER,
-    at INTEGER NOT NULL
-  );
-  INSERT INTO usage_next SELECT session_id, turn_id, actor_id, input_tokens,
-    output_tokens, tool_uses, total_cost_usd, cost_source, duration_ms, at
-    FROM usage;
-  DROP TABLE usage;
-  ALTER TABLE usage_next RENAME TO usage;
-  `,
-  // The intent ledger (DR-035): acts and provenance only, no state
-  // column — everything visible derives from these rows plus the
-  // record stream. The partial unique index holds the one-open-intent-
-  // per-source-artifact invariant; chat and unsourced intents are
-  // unconstrained, and a closed intent releases its hold.
-  `
-  CREATE TABLE intents (
-    id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL REFERENCES projects(id),
-    text TEXT NOT NULL,
-    source_kind TEXT,
-    source_ref TEXT,
-    source_url TEXT,
-    rank TEXT NOT NULL,
-    after_id TEXT,
-    created_at INTEGER NOT NULL,
-    dispatched_session_id TEXT,
-    dispatched_turn_id INTEGER,
-    dispatched_at INTEGER,
-    closed_at INTEGER,
-    closed_as TEXT
-  );
-  CREATE INDEX intents_by_project ON intents (project_id, rank);
-  CREATE UNIQUE INDEX intents_open_source ON intents (project_id, source_kind, source_ref)
-    WHERE closed_at IS NULL AND source_kind IN ('issue','pr','record');
-  `,
-];
+export type { UsageEntry, UsageTotals } from "./stream-fold.js";
 
-export interface UsageEntry {
-  sessionId: string;
-  turnId: number | null;
-  /** The session player that spent it, or "captain" (DR-032). */
-  actorId: string;
-  /** Absent when the runtime reported no token accounting — which is
-   * not the same as measuring zero (cligent 0.22). */
-  inputTokens?: number;
-  outputTokens?: number;
-  toolUses: number;
-  totalCostUsd?: number;
-  /** How the runtime knew the cost: provider-reported, or an
-   * estimate. An estimate is never presented as a bill. */
-  costSource?: string;
-  durationMs?: number;
-  at: number;
+const META_VERSION = 1;
+
+/** Another core instance holds the state root (CORE-61). */
+export class StateRootHeldError extends Error {
+  constructor(
+    readonly holder: { pid: number; hostname: string; acquiredAt: number },
+    dir: string,
+  ) {
+    super(
+      `state root ${dir} is held by pid ${holder.pid} on ${holder.hostname}; ` +
+        "one core serves a root at a time (DR-036)",
+    );
+    this.name = "StateRootHeldError";
+  }
 }
 
-export interface UsageTotals {
-  inputTokens: number;
-  outputTokens: number;
-  toolUses: number;
-  totalCostUsd: number;
-  /** Every provenance the summed cost came from, sorted. A cost is
-   * only as good as its weakest source, so the reader gets the labels
-   * rather than a number that hides them (DR-032). Empty when no
-   * entry reported a cost at all. */
-  costSources: string[];
+export interface StoreOptions {
+  /** State root directory; unset runs the store in memory only. */
+  dir?: string;
+  /** Sessions directory; defaults to `<dir>/sessions`. */
+  sessionsDir?: string;
+  /** A legacy SQLite store to import once (CORE-64). */
+  legacyDbPath?: string;
 }
 
-interface SessionRow {
+interface SessionMeta {
   id: string;
-  project_id: string;
-  created_at: number;
-  ended_at: number | null;
-  live: number;
-  players_json: string;
-  initial_visible_json: string;
-  path: string;
+  projectId: string;
+  createdAt: number;
+  endedAt: number | null;
+  live: boolean;
+  players: SessionInfo["players"];
+  initialVisible: string[];
 }
 
-/** One session row plus its gathered summary, in the single shape
- * every listing and broadcast shares (core-service-32). */
-function sessionInfo(
-  row: SessionRow,
-  title: string | undefined,
-  turns: number,
-  failed: boolean,
-  costUsd: number | undefined,
-): SessionInfo {
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    projectPath: row.path,
-    createdAt: row.created_at,
-    live: row.live === 1,
-    endedAt: row.ended_at,
-    players: JSON.parse(row.players_json) as SessionInfo["players"],
-    initialVisible: JSON.parse(row.initial_visible_json) as string[],
-    ...(title !== undefined ? { title } : {}),
-    turns,
-    failed,
-    ...(costUsd !== undefined ? { costUsd } : {}),
-  };
+interface TurnRow {
+  turnId: number;
+  prompt: string;
+  startedAt: number;
+  endedAt: number | null;
+  status: string | null;
 }
 
-interface IntentRow {
-  id: string;
-  project_id: string;
-  text: string;
-  source_kind: string | null;
-  source_ref: string | null;
-  source_url: string | null;
-  rank: string;
-  after_id: string | null;
-  created_at: number;
-  dispatched_session_id: string | null;
-  dispatched_turn_id: number | null;
-  dispatched_at: number | null;
-  closed_at: number | null;
-  closed_as: string | null;
+interface StoreMeta {
+  version: number;
+  importedLegacy?: string[];
 }
 
-function intentInfo(row: IntentRow): IntentInfo {
-  const source: IntentSource | undefined =
-    row.source_kind !== null && row.source_ref !== null
-      ? {
-          kind: row.source_kind as IntentSource["kind"],
-          ref: row.source_ref,
-          ...(row.source_url !== null ? { url: row.source_url } : {}),
-        }
-      : undefined;
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    text: row.text,
-    ...(source ? { source } : {}),
-    rank: row.rank,
-    ...(row.after_id !== null ? { afterId: row.after_id } : {}),
-    createdAt: row.created_at,
-    ...(row.dispatched_session_id !== null &&
-    row.dispatched_turn_id !== null &&
-    row.dispatched_at !== null
-      ? {
-          dispatched: {
-            sessionId: row.dispatched_session_id,
-            turnId: row.dispatched_turn_id,
-            at: row.dispatched_at,
-          },
-        }
-      : {}),
-    ...(row.closed_at !== null ? { closedAt: row.closed_at } : {}),
-    ...(row.closed_as !== null
-      ? { closedAs: row.closed_as as "done" | "dropped" }
-      : {}),
-  };
-}
-
-/** SQLite's GROUP_CONCAT gives a comma-joined list or null. */
-function splitSources(joined: string | null): string[] {
-  return joined ? [...new Set(joined.split(","))].filter(Boolean).sort() : [];
-}
+type IntentAct =
+  | { act: "queue"; intent: IntentInfo }
+  | { act: "edit"; id: string; text: string }
+  | { act: "move"; id: string; rank: string }
+  | { act: "link"; id: string; afterId: string | null }
+  | { act: "dispatch"; id: string; sessionId: string; turnId: number; at: number }
+  | { act: "close"; id: string; as: "done" | "dropped"; at: number };
 
 function isHidden(record: TmuxPlayRecord): boolean {
   return (
@@ -257,46 +110,407 @@ function isHidden(record: TmuxPlayRecord): boolean {
   );
 }
 
-export class Store {
-  private readonly db: Database.Database;
+/** One session's listing row plus its folded summary, in the single
+ * shape every listing and broadcast shares (core-service-32). */
+function sessionInfo(
+  meta: SessionMeta,
+  path: string,
+  title: string | undefined,
+  turns: number,
+  failed: boolean,
+  costUsd: number | undefined,
+): SessionInfo {
+  return {
+    id: meta.id,
+    projectId: meta.projectId,
+    projectPath: path,
+    createdAt: meta.createdAt,
+    live: meta.live,
+    endedAt: meta.endedAt,
+    players: meta.players,
+    initialVisible: meta.initialVisible,
+    ...(title !== undefined ? { title } : {}),
+    turns,
+    failed,
+    ...(costUsd !== undefined ? { costUsd } : {}),
+  };
+}
 
-  constructor(path: string) {
-    if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
-    this.db = new Database(path);
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("foreign_keys = ON");
-    this.migrate();
+/** Atomic whole-file replace: a reader never sees a torn file. */
+function writeAtomic(file: string, text: string): void {
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, text);
+  renameSync(tmp, file);
+}
+
+function readJson<T>(file: string): T | undefined {
+  if (!existsSync(file)) return undefined;
+  return JSON.parse(readFileSync(file, "utf8")) as T;
+}
+
+/** JSONL lines, tolerating one torn trailing line from a crash. */
+function readLines<T>(file: string): T[] {
+  if (!existsSync(file)) return [];
+  const lines = readFileSync(file, "utf8").split("\n");
+  const out: T[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    try {
+      out.push(JSON.parse(line) as T);
+    } catch (error) {
+      if (i === lines.length - 1) break;
+      throw error;
+    }
+  }
+  return out;
+}
+
+function usageTotals(entries: UsageEntry[]): UsageTotals {
+  const sources = new Set<string>();
+  const totals = { inputTokens: 0, outputTokens: 0, toolUses: 0, totalCostUsd: 0 };
+  for (const entry of entries) {
+    totals.inputTokens += entry.inputTokens ?? 0;
+    totals.outputTokens += entry.outputTokens ?? 0;
+    totals.toolUses += entry.toolUses;
+    totals.totalCostUsd += entry.totalCostUsd ?? 0;
+    if (entry.costSource) sources.add(entry.costSource);
+  }
+  return { ...totals, costSources: [...sources].sort() };
+}
+
+export class Store {
+  private readonly dir?: string;
+  private readonly sessionsDir?: string;
+  private lockDir?: string;
+
+  private meta: StoreMeta = { version: META_VERSION };
+  private readonly projects = new Map<string, ProjectInfo>();
+  private readonly prefs = new Map<string, unknown>();
+  private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
+  private readonly intents = new Map<string, IntentInfo>();
+  private readonly sessions = new Map<string, SessionMeta>();
+  private readonly records = new Map<string, StoredRecord[]>();
+  private readonly turns = new Map<string, Map<number, TurnRow>>();
+  private readonly usage = new Map<string, UsageEntry[]>();
+
+  constructor(options: StoreOptions = {}) {
+    this.dir = options.dir;
+    if (!this.dir) return;
+    mkdirSync(this.dir, { recursive: true });
+    this.sessionsDir = options.sessionsDir ?? join(this.dir, "sessions");
+    mkdirSync(this.sessionsDir, { recursive: true });
+    mkdirSync(join(this.dir, "intents"), { recursive: true });
+    this.acquireRootLease();
+    try {
+      this.meta = readJson<StoreMeta>(this.metaFile()) ?? { version: 0 };
+      this.importLegacy(options.legacyDbPath);
+      this.meta.version = META_VERSION;
+      writeAtomic(this.metaFile(), JSON.stringify(this.meta));
+      this.load();
+    } catch (error) {
+      this.releaseRootLease();
+      throw error;
+    }
   }
 
-  private migrate(): void {
-    const migrateAll = this.db.transaction(() => {
-      const hasMeta = this.db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'",
-        )
-        .get();
-      let version = 0;
-      if (hasMeta) {
-        const row = this.db
-          .prepare("SELECT value FROM meta WHERE key = 'schema_version'")
-          .get() as { value: string } | undefined;
-        version = row ? Number(row.value) : 0;
+  // -- root lease (CORE-61) -------------------------------------------------
+
+  private acquireRootLease(): void {
+    const dir = this.dir as string;
+    const lock = join(dir, ".lock");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        mkdirSync(lock);
+        writeAtomic(
+          join(lock, "owner.json"),
+          JSON.stringify({ pid: process.pid, hostname: hostname(), acquiredAt: Date.now() }),
+        );
+        this.lockDir = lock;
+        return;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        const owner = readJson<{ pid: number; hostname: string; acquiredAt: number }>(
+          join(lock, "owner.json"),
+        );
+        // A foreign host's lease is never broken (DR-036): liveness
+        // cannot be probed across machines.
+        if (owner && owner.hostname !== hostname()) {
+          throw new StateRootHeldError(owner, dir);
+        }
+        if (owner && processAlive(owner.pid)) {
+          throw new StateRootHeldError(owner, dir);
+        }
+        // Same host, dead pid (or an unreadable lock): retire and retry.
+        rmSync(lock, { recursive: true, force: true });
       }
-      for (let next = version; next < MIGRATIONS.length; next += 1) {
-        this.db.exec(MIGRATIONS[next]);
+    }
+    throw new Error(`state root ${dir} lease could not be acquired`);
+  }
+
+  private releaseRootLease(): void {
+    if (this.lockDir) rmSync(this.lockDir, { recursive: true, force: true });
+    this.lockDir = undefined;
+  }
+
+  // -- files ----------------------------------------------------------------
+
+  private metaFile(): string {
+    return join(this.dir as string, "meta.json");
+  }
+
+  private sidecarFile(sessionId: string): string {
+    return join(this.sessionsDir as string, `${sessionId}.spex.json`);
+  }
+
+  private recordsFile(sessionId: string): string {
+    return join(this.sessionsDir as string, `${sessionId}.records.jsonl`);
+  }
+
+  private intentsFile(projectId: string): string {
+    return join(this.dir as string, "intents", `${projectId}.jsonl`);
+  }
+
+  private saveProjects(): void {
+    if (!this.dir) return;
+    writeAtomic(
+      join(this.dir, "projects.json"),
+      JSON.stringify([...this.projects.values()]),
+    );
+  }
+
+  private savePrefs(): void {
+    if (!this.dir) return;
+    writeAtomic(
+      join(this.dir, "prefs.json"),
+      JSON.stringify(Object.fromEntries(this.prefs)),
+    );
+  }
+
+  private saveForgeCache(): void {
+    if (!this.dir) return;
+    writeAtomic(
+      join(this.dir, "forge-cache.json"),
+      JSON.stringify(Object.fromEntries(this.forgeCache)),
+    );
+  }
+
+  private saveSidecar(meta: SessionMeta): void {
+    if (!this.sessionsDir) return;
+    writeAtomic(this.sidecarFile(meta.id), JSON.stringify(meta));
+  }
+
+  private appendIntentAct(projectId: string, act: IntentAct): void {
+    if (!this.dir) return;
+    appendFileSync(this.intentsFile(projectId), `${JSON.stringify(act)}\n`);
+  }
+
+  // -- load (the restart fold, CORE-10/52) ----------------------------------
+
+  private load(): void {
+    const dir = this.dir as string;
+    for (const project of readJson<ProjectInfo[]>(join(dir, "projects.json")) ?? []) {
+      this.projects.set(project.id, project);
+    }
+    for (const [key, value] of Object.entries(
+      readJson<Record<string, unknown>>(join(dir, "prefs.json")) ?? {},
+    )) {
+      this.prefs.set(key, value);
+    }
+    for (const [projectId, entry] of Object.entries(
+      readJson<Record<string, { at: number; state: ForgeState }>>(
+        join(dir, "forge-cache.json"),
+      ) ?? {},
+    )) {
+      this.forgeCache.set(projectId, entry);
+    }
+    for (const file of readdirSync(join(dir, "intents"))) {
+      if (!file.endsWith(".jsonl")) continue;
+      for (const act of readLines<IntentAct>(join(dir, "intents", file))) {
+        this.foldIntentAct(act);
       }
-      this.db
-        .prepare(
-          "INSERT INTO meta (key, value) VALUES ('schema_version', ?) " +
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        )
-        .run(String(MIGRATIONS.length));
-    });
-    migrateAll();
+    }
+    const sessionsDir = this.sessionsDir as string;
+    for (const file of readdirSync(sessionsDir)) {
+      if (!file.endsWith(".spex.json")) continue;
+      const meta = readJson<SessionMeta>(join(sessionsDir, file));
+      if (!meta) continue;
+      this.sessions.set(meta.id, meta);
+      const stored = readLines<StoredRecord>(this.recordsFile(meta.id));
+      this.records.set(meta.id, stored);
+      // Turns, titles, and usage are never separately stored: the
+      // stream is the truth and the restart folds it (core-service-10).
+      for (const entry of stored) {
+        this.foldRecord(meta.id, entry.record);
+      }
+    }
+  }
+
+  private foldIntentAct(act: IntentAct): void {
+    if (act.act === "queue") {
+      this.intents.set(act.intent.id, { ...act.intent });
+      return;
+    }
+    const intent = this.intents.get(act.id);
+    if (!intent) return;
+    switch (act.act) {
+      case "edit":
+        intent.text = act.text;
+        break;
+      case "move":
+        intent.rank = act.rank;
+        break;
+      case "link":
+        if (act.afterId === null) delete intent.afterId;
+        else intent.afterId = act.afterId;
+        break;
+      case "dispatch":
+        intent.dispatched = { sessionId: act.sessionId, turnId: act.turnId, at: act.at };
+        break;
+      case "close":
+        intent.closedAt = act.at;
+        intent.closedAs = act.as;
+        break;
+    }
+  }
+
+  private foldRecord(sessionId: string, record: TmuxPlayRecord): void {
+    const turnEvent = foldTurnEvent(record);
+    if (turnEvent) {
+      if (turnEvent.kind === "start") {
+        this.startTurnInMemory(sessionId, turnEvent.turnId, turnEvent.prompt, turnEvent.at);
+      } else {
+        this.endTurnInMemory(sessionId, turnEvent.turnId, turnEvent.status, turnEvent.at);
+      }
+    }
+    const usage = foldUsage(sessionId, record);
+    if (usage) this.usageOf(sessionId).push(usage);
+  }
+
+  // -- legacy import (CORE-64) ----------------------------------------------
+
+  private importLegacy(legacyDbPath: string | undefined): void {
+    if (!legacyDbPath || !existsSync(legacyDbPath)) return;
+    if (this.meta.importedLegacy?.includes(legacyDbPath)) return;
+    // better-sqlite3's only remaining use: reading the store a
+    // pre-DR-036 release left behind, which stays in place untouched.
+    const require = createRequire(import.meta.url);
+    const Database = require("better-sqlite3") as new (
+      path: string,
+      options?: { readonly?: boolean },
+    ) => {
+      prepare(sql: string): { all(...args: unknown[]): Record<string, unknown>[] };
+      close(): void;
+    };
+    const db = new Database(legacyDbPath, { readonly: true });
+    try {
+      const projects = db
+        .prepare("SELECT id, path, name, registered_at FROM projects")
+        .all() as { id: string; path: string; name: string; registered_at: number }[];
+      const rows = (sql: string): Record<string, unknown>[] => {
+        try {
+          return db.prepare(sql).all();
+        } catch {
+          // A table an older release never created imports as empty.
+          return [];
+        }
+      };
+      const dir = this.dir as string;
+      writeAtomic(
+        join(dir, "projects.json"),
+        JSON.stringify(
+          projects.map((row) => ({
+            id: row.id,
+            path: row.path,
+            name: row.name,
+            registeredAt: row.registered_at,
+          })),
+        ),
+      );
+      const prefs: Record<string, unknown> = {};
+      for (const row of rows("SELECT key, value_json FROM prefs")) {
+        prefs[row.key as string] = JSON.parse(row.value_json as string);
+      }
+      writeAtomic(join(dir, "prefs.json"), JSON.stringify(prefs));
+      for (const row of rows("SELECT * FROM intents ORDER BY created_at, id")) {
+        const source: IntentSource | undefined =
+          row.source_kind != null && row.source_ref != null
+            ? {
+                kind: row.source_kind as IntentSource["kind"],
+                ref: row.source_ref as string,
+                ...(row.source_url != null ? { url: row.source_url as string } : {}),
+              }
+            : undefined;
+        const intent: IntentInfo = {
+          id: row.id as string,
+          projectId: row.project_id as string,
+          text: row.text as string,
+          ...(source ? { source } : {}),
+          rank: row.rank as string,
+          ...(row.after_id != null ? { afterId: row.after_id as string } : {}),
+          createdAt: row.created_at as number,
+          ...(row.dispatched_session_id != null && row.dispatched_turn_id != null
+            ? {
+                dispatched: {
+                  sessionId: row.dispatched_session_id as string,
+                  turnId: row.dispatched_turn_id as number,
+                  at: row.dispatched_at as number,
+                },
+              }
+            : {}),
+          ...(row.closed_at != null ? { closedAt: row.closed_at as number } : {}),
+          ...(row.closed_as != null
+            ? { closedAs: row.closed_as as "done" | "dropped" }
+            : {}),
+        };
+        this.appendIntentAct(intent.projectId, { act: "queue", intent });
+      }
+      for (const row of rows(
+        "SELECT id, project_id, created_at, ended_at, players_json, initial_visible_json FROM sessions",
+      )) {
+        const meta: SessionMeta = {
+          id: row.id as string,
+          projectId: row.project_id as string,
+          createdAt: row.created_at as number,
+          endedAt: (row.ended_at as number | null) ?? null,
+          // A session live when the legacy store last closed is not
+          // live now (core-service-10).
+          live: false,
+          players: JSON.parse(row.players_json as string) as SessionInfo["players"],
+          initialVisible: JSON.parse(row.initial_visible_json as string) as string[],
+        };
+        this.saveSidecar(meta);
+        const lines: string[] = [];
+        let recordRows: Record<string, unknown>[];
+        try {
+          recordRows = db
+            .prepare("SELECT seq, payload_json, role FROM records WHERE session_id = ? ORDER BY seq")
+            .all(meta.id);
+        } catch {
+          recordRows = db
+            .prepare("SELECT seq, payload_json FROM records WHERE session_id = ? ORDER BY seq")
+            .all(meta.id);
+        }
+        for (const rec of recordRows) {
+          const stored: StoredRecord = {
+            seq: rec.seq as number,
+            record: JSON.parse(rec.payload_json as string) as TmuxPlayRecord,
+            ...(rec.role != null ? { role: rec.role as string } : {}),
+          };
+          lines.push(JSON.stringify(stored));
+        }
+        if (lines.length > 0) {
+          writeAtomic(this.recordsFile(meta.id), `${lines.join("\n")}\n`);
+        }
+      }
+    } finally {
+      db.close();
+    }
+    this.meta.importedLegacy = [...(this.meta.importedLegacy ?? []), legacyDbPath];
   }
 
   close(): void {
-    this.db.close();
+    this.releaseRootLease();
   }
 
   // -- projects -------------------------------------------------------------
@@ -304,37 +518,18 @@ export class Store {
   registerProject(path: string, name: string, at: number): ProjectInfo {
     const existing = this.getProjectByPath(path);
     if (existing) return existing;
-    const project: ProjectInfo = {
-      id: randomUUID(),
-      path,
-      name,
-      registeredAt: at,
-    };
-    this.db
-      .prepare(
-        "INSERT INTO projects (id, path, name, registered_at) VALUES (?, ?, ?, ?)",
-      )
-      .run(project.id, project.path, project.name, project.registeredAt);
+    const project: ProjectInfo = { id: randomUUID(), path, name, registeredAt: at };
+    this.projects.set(project.id, project);
+    this.saveProjects();
     return project;
   }
 
   listProjects(): ProjectInfo[] {
-    return (
-      this.db
-        .prepare(
-          "SELECT id, path, name, registered_at FROM projects ORDER BY registered_at",
-        )
-        .all() as { id: string; path: string; name: string; registered_at: number }[]
-    ).map((row) => ({
-      id: row.id,
-      path: row.path,
-      name: row.name,
-      registeredAt: row.registered_at,
-    }));
+    return [...this.projects.values()].sort((a, b) => a.registeredAt - b.registeredAt);
   }
 
   getProject(id: string): ProjectInfo | undefined {
-    return this.listProjects().find((project) => project.id === id);
+    return this.projects.get(id);
   }
 
   getProjectByPath(path: string): ProjectInfo | undefined {
@@ -342,174 +537,138 @@ export class Store {
   }
 
   removeProject(id: string): boolean {
-    return this.db.prepare("DELETE FROM projects WHERE id = ?").run(id).changes > 0;
+    const removed = this.projects.delete(id);
+    if (removed) this.saveProjects();
+    return removed;
   }
 
   // -- sessions -------------------------------------------------------------
 
   createSession(session: SessionInfo): void {
-    this.db
-      .prepare(
-        "INSERT INTO sessions (id, project_id, created_at, ended_at, live, players_json, initial_visible_json) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        session.id,
-        session.projectId,
-        session.createdAt,
-        session.endedAt,
-        session.live ? 1 : 0,
-        JSON.stringify(session.players),
-        JSON.stringify(session.initialVisible),
-      );
+    const meta: SessionMeta = {
+      id: session.id,
+      projectId: session.projectId,
+      createdAt: session.createdAt,
+      endedAt: session.endedAt,
+      live: session.live,
+      players: session.players,
+      initialVisible: session.initialVisible,
+    };
+    this.sessions.set(meta.id, meta);
+    this.saveSidecar(meta);
   }
 
   endSession(id: string, endedAt: number): void {
-    this.db
-      .prepare("UPDATE sessions SET live = 0, ended_at = ? WHERE id = ?")
-      .run(endedAt, id);
+    const meta = this.sessions.get(id);
+    if (!meta) return;
+    meta.live = false;
+    meta.endedAt = endedAt;
+    this.saveSidecar(meta);
   }
 
   /** Startup recovery (CORE-10): a session live at shutdown is no longer live. */
   markAllSessionsNotLive(): void {
-    this.db.prepare("UPDATE sessions SET live = 0 WHERE live = 1").run();
+    for (const meta of this.sessions.values()) {
+      if (!meta.live) continue;
+      meta.live = false;
+      this.saveSidecar(meta);
+    }
   }
 
   /** One session's listing row, carrying the same conversation
    * summary a listing carries (core-service-32) — what the broadcasts
    * that must stay truthful between listings send (core-service-34). */
   describeSession(id: string): SessionInfo | undefined {
-    const row = this.db
-      .prepare(
-        "SELECT s.id, s.project_id, s.created_at, s.ended_at, s.live, s.players_json, s.initial_visible_json, p.path " +
-          "FROM sessions s JOIN projects p ON p.id = s.project_id WHERE s.id = ?",
-      )
-      .get(id) as SessionRow | undefined;
-    if (!row) return undefined;
-    const title = (
-      this.db
-        .prepare(
-          "SELECT prompt FROM turns WHERE session_id = ? ORDER BY turn_id LIMIT 1",
-        )
-        .get(id) as { prompt: string } | undefined
-    )?.prompt;
-    const { turns } = this.db
-      .prepare("SELECT COUNT(*) AS turns FROM turns WHERE session_id = ?")
-      .get(id) as { turns: number };
-    const failed = Boolean(
-      this.db
-        .prepare(
-          "SELECT 1 FROM records WHERE session_id = ? AND type = 'runtime_error' LIMIT 1",
-        )
-        .get(id),
+    const meta = this.sessions.get(id);
+    if (!meta) return undefined;
+    const project = this.projects.get(meta.projectId);
+    if (!project) return undefined;
+    return this.summarize(meta, project.path);
+  }
+
+  private summarize(meta: SessionMeta, path: string): SessionInfo {
+    const turns = [...(this.turns.get(meta.id)?.values() ?? [])].sort(
+      (a, b) => a.turnId - b.turnId,
     );
-    const { cost } = this.db
-      .prepare("SELECT SUM(total_cost_usd) AS cost FROM usage WHERE session_id = ?")
-      .get(id) as { cost: number | null };
-    return sessionInfo(row, title, turns, failed, cost ?? undefined);
+    const failed = (this.records.get(meta.id) ?? []).some(
+      (entry) => entry.record.type === "runtime_error",
+    );
+    const costed = (this.usage.get(meta.id) ?? []).filter(
+      (entry) => entry.totalCostUsd !== undefined,
+    );
+    const cost =
+      costed.length > 0
+        ? costed.reduce((sum, entry) => sum + (entry.totalCostUsd ?? 0), 0)
+        : undefined;
+    return sessionInfo(meta, path, turns[0]?.prompt, turns.length, failed, cost);
   }
 
   listSessions(): SessionInfo[] {
-    const rows = this.db
-      .prepare(
-        "SELECT s.id, s.project_id, s.created_at, s.ended_at, s.live, s.players_json, s.initial_visible_json, p.path " +
-          "FROM sessions s JOIN projects p ON p.id = s.project_id ORDER BY s.created_at",
-      )
-      .all() as SessionRow[];
-    // The conversation summary each session carries (core-service-32),
-    // gathered set-wise: one query per field class, never one per
-    // session.
-    const titles = new Map<string, string>();
-    for (const row of this.db
-      .prepare(
-        "SELECT session_id, prompt FROM turns WHERE turn_id = " +
-          "(SELECT MIN(turn_id) FROM turns t2 WHERE t2.session_id = turns.session_id)",
-      )
-      .all() as { session_id: string; prompt: string }[]) {
-      titles.set(row.session_id, row.prompt);
+    const out: SessionInfo[] = [];
+    for (const meta of [...this.sessions.values()].sort(
+      (a, b) => a.createdAt - b.createdAt,
+    )) {
+      const project = this.projects.get(meta.projectId);
+      // A session whose project left the registry stays on disk but
+      // out of the listing (DR-036).
+      if (!project) continue;
+      out.push(this.summarize(meta, project.path));
     }
-    const counts = new Map<string, number>();
-    for (const row of this.db
-      .prepare("SELECT session_id, COUNT(*) AS turns FROM turns GROUP BY session_id")
-      .all() as { session_id: string; turns: number }[]) {
-      counts.set(row.session_id, row.turns);
-    }
-    const failures = new Set<string>();
-    for (const row of this.db
-      .prepare(
-        "SELECT DISTINCT session_id FROM records WHERE type = 'runtime_error'",
-      )
-      .all() as { session_id: string }[]) {
-      failures.add(row.session_id);
-    }
-    const costs = new Map<string, number>();
-    for (const row of this.db
-      .prepare(
-        "SELECT session_id, SUM(total_cost_usd) AS cost FROM usage GROUP BY session_id",
-      )
-      .all() as { session_id: string; cost: number | null }[]) {
-      if (row.cost) costs.set(row.session_id, row.cost);
-    }
-    return rows.map((row) =>
-      sessionInfo(
-        row,
-        titles.get(row.id),
-        counts.get(row.id) ?? 0,
-        failures.has(row.id),
-        costs.get(row.id),
-      ),
-    );
+    return out;
   }
 
   // -- turns ----------------------------------------------------------------
 
+  private turnsOf(sessionId: string): Map<number, TurnRow> {
+    let map = this.turns.get(sessionId);
+    if (!map) {
+      map = new Map();
+      this.turns.set(sessionId, map);
+    }
+    return map;
+  }
+
+  private startTurnInMemory(
+    sessionId: string,
+    turnId: number,
+    prompt: string,
+    at: number,
+  ): void {
+    this.turnsOf(sessionId).set(turnId, {
+      turnId,
+      prompt,
+      startedAt: at,
+      endedAt: null,
+      status: null,
+    });
+  }
+
+  private endTurnInMemory(
+    sessionId: string,
+    turnId: number,
+    status: string,
+    at: number,
+  ): void {
+    const turn = this.turnsOf(sessionId).get(turnId);
+    if (!turn) return;
+    turn.status = status;
+    turn.endedAt = at;
+  }
+
   startTurn(sessionId: string, turnId: number, prompt: string, at: number): void {
-    this.db
-      .prepare(
-        "INSERT OR REPLACE INTO turns (session_id, turn_id, prompt, started_at) VALUES (?, ?, ?, ?)",
-      )
-      .run(sessionId, turnId, prompt, at);
+    this.startTurnInMemory(sessionId, turnId, prompt, at);
   }
 
   endTurn(sessionId: string, turnId: number, status: string, at: number): void {
-    this.db
-      .prepare(
-        "UPDATE turns SET status = ?, ended_at = ? WHERE session_id = ? AND turn_id = ?",
-      )
-      .run(status, at, sessionId, turnId);
+    this.endTurnInMemory(sessionId, turnId, status, at);
   }
 
   /** Every turn a session held, in order — the ledger fold's turn
    * ranges and statuses come from here (DR-035). */
-  listTurns(
-    sessionId: string,
-  ): {
-    turnId: number;
-    prompt: string;
-    startedAt: number;
-    endedAt: number | null;
-    status: string | null;
-  }[] {
-    return (
-      this.db
-        .prepare(
-          "SELECT turn_id, prompt, started_at, ended_at, status FROM turns " +
-            "WHERE session_id = ? ORDER BY turn_id",
-        )
-        .all(sessionId) as {
-        turn_id: number;
-        prompt: string;
-        started_at: number;
-        ended_at: number | null;
-        status: string | null;
-      }[]
-    ).map((row) => ({
-      turnId: row.turn_id,
-      prompt: row.prompt,
-      startedAt: row.started_at,
-      endedAt: row.ended_at,
-      status: row.status,
-    }));
+  listTurns(sessionId: string): TurnRow[] {
+    return [...(this.turns.get(sessionId)?.values() ?? [])].sort(
+      (a, b) => a.turnId - b.turnId,
+    );
   }
 
   /** Reviewer-role player calls inside a turn range — the review
@@ -521,13 +680,15 @@ export class Store {
     fromTurnId: number,
     toTurnId: number | null,
   ): number {
-    const row = this.db
-      .prepare(
-        "SELECT COUNT(*) AS n FROM records WHERE session_id = ? AND role = ? " +
-          "AND type = 'player_prompt' AND turn_id >= ? AND (? IS NULL OR turn_id < ?)",
-      )
-      .get(sessionId, role, fromTurnId, toTurnId, toTurnId) as { n: number };
-    return row.n;
+    let count = 0;
+    for (const entry of this.records.get(sessionId) ?? []) {
+      const turnId = entry.record.turnId;
+      if (entry.role !== role || entry.record.type !== "player_prompt") continue;
+      if (turnId === null || turnId < fromTurnId) continue;
+      if (toTurnId !== null && turnId >= toTurnId) continue;
+      count += 1;
+    }
+    return count;
   }
 
   /** Runtime-error records inside a turn range, oldest first — the
@@ -537,21 +698,36 @@ export class Store {
     fromTurnId: number,
     toTurnId: number | null,
   ): { turnId: number | null; timestamp: number }[] {
-    return (
-      this.db
-        .prepare(
-          "SELECT turn_id, timestamp FROM records WHERE session_id = ? " +
-            "AND type = 'runtime_error' AND turn_id >= ? AND (? IS NULL OR turn_id < ?) " +
-            "ORDER BY seq",
-        )
-        .all(sessionId, fromTurnId, toTurnId, toTurnId) as {
-        turn_id: number | null;
-        timestamp: number;
-      }[]
-    ).map((row) => ({ turnId: row.turn_id, timestamp: row.timestamp }));
+    const out: { turnId: number | null; timestamp: number }[] = [];
+    for (const entry of this.records.get(sessionId) ?? []) {
+      if (entry.record.type !== "runtime_error") continue;
+      const turnId = entry.record.turnId;
+      if (turnId !== null && turnId < fromTurnId) continue;
+      if (toTurnId !== null && turnId !== null && turnId >= toTurnId) continue;
+      out.push({ turnId, timestamp: entry.record.timestamp });
+    }
+    return out;
   }
 
   // -- records --------------------------------------------------------------
+
+  private recordsOf(sessionId: string): StoredRecord[] {
+    let list = this.records.get(sessionId);
+    if (!list) {
+      list = [];
+      this.records.set(sessionId, list);
+    }
+    return list;
+  }
+
+  private usageOf(sessionId: string): UsageEntry[] {
+    let list = this.usage.get(sessionId);
+    if (!list) {
+      list = [];
+      this.usage.set(sessionId, list);
+    }
+    return list;
+  }
 
   /** `role` is the resolved role a player record's call served, kept
    * beside the record so a replay reads exactly as the live stream did
@@ -562,160 +738,70 @@ export class Store {
     record: TmuxPlayRecord,
     role?: string,
   ): void {
-    this.db
-      .prepare(
-        "INSERT INTO records (session_id, seq, turn_id, type, hidden, timestamp, payload_json, role) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        sessionId,
-        seq,
-        record.turnId,
-        record.type,
-        isHidden(record) ? 1 : 0,
-        record.timestamp,
-        JSON.stringify(record),
-        role ?? null,
-      );
+    const stored: StoredRecord = {
+      seq,
+      record,
+      ...(role !== undefined ? { role } : {}),
+    };
+    this.recordsOf(sessionId).push(stored);
+    if (this.sessionsDir) {
+      appendFileSync(this.recordsFile(sessionId), `${JSON.stringify(stored)}\n`);
+    }
   }
 
   getRecords(
     sessionId: string,
     options: { afterSeq?: number; includeHidden?: boolean } = {},
   ): StoredRecord[] {
-    const rows = this.db
-      .prepare(
-        "SELECT seq, hidden, payload_json, role FROM records " +
-          "WHERE session_id = ? AND seq > ? ORDER BY seq",
-      )
-      .all(sessionId, options.afterSeq ?? 0) as {
-      seq: number;
-      hidden: number;
-      payload_json: string;
-      role: string | null;
-    }[];
-    return rows
-      .filter((row) => options.includeHidden || row.hidden === 0)
-      .map((row) => ({
-        seq: row.seq,
-        record: JSON.parse(row.payload_json) as TmuxPlayRecord,
-        ...(row.role !== null ? { role: row.role } : {}),
-      }));
+    const after = options.afterSeq ?? 0;
+    return (this.records.get(sessionId) ?? []).filter(
+      (entry) =>
+        entry.seq > after && (options.includeHidden || !isHidden(entry.record)),
+    );
   }
 
   maxSeq(sessionId: string): number {
-    const row = this.db
-      .prepare("SELECT MAX(seq) AS max FROM records WHERE session_id = ?")
-      .get(sessionId) as { max: number | null };
-    return row.max ?? 0;
+    const list = this.records.get(sessionId);
+    return list && list.length > 0 ? list[list.length - 1].seq : 0;
   }
 
   // -- usage ----------------------------------------------------------------
 
   addUsage(entry: UsageEntry): void {
-    this.db
-      .prepare(
-        "INSERT INTO usage (session_id, turn_id, actor_id, input_tokens, output_tokens, " +
-          "tool_uses, total_cost_usd, cost_source, duration_ms, at) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        entry.sessionId,
-        entry.turnId,
-        entry.actorId,
-        entry.inputTokens ?? null,
-        entry.outputTokens ?? null,
-        entry.toolUses,
-        entry.totalCostUsd ?? null,
-        entry.costSource ?? null,
-        entry.durationMs ?? null,
-        entry.at,
-      );
+    this.usageOf(entry.sessionId).push(entry);
   }
 
   usageByDay(): { day: string; totals: UsageTotals }[] {
-    const rows = this.db
-      .prepare(
-        "SELECT date(at / 1000, 'unixepoch') AS day, " +
-          "COALESCE(SUM(input_tokens),0) AS input_tokens, " +
-          "COALESCE(SUM(output_tokens),0) AS output_tokens, " +
-          "COALESCE(SUM(tool_uses),0) AS tool_uses, " +
-          "COALESCE(SUM(total_cost_usd),0) AS total_cost_usd, " +
-          "GROUP_CONCAT(DISTINCT cost_source) AS cost_sources " +
-          "FROM usage GROUP BY day ORDER BY day DESC LIMIT 30",
-      )
-      .all() as {
-      day: string;
-      input_tokens: number;
-      output_tokens: number;
-      tool_uses: number;
-      total_cost_usd: number;
-      cost_sources: string | null;
-    }[];
-    return rows.map((row) => ({
-      day: row.day,
-      totals: {
-        inputTokens: row.input_tokens,
-        outputTokens: row.output_tokens,
-        toolUses: row.tool_uses,
-        totalCostUsd: row.total_cost_usd,
-        costSources: splitSources(row.cost_sources),
-      },
-    }));
+    const byDay = new Map<string, UsageEntry[]>();
+    for (const entries of this.usage.values()) {
+      for (const entry of entries) {
+        // UTC day bucketing, as the SQLite rollup bucketed it.
+        const day = new Date(entry.at).toISOString().slice(0, 10);
+        const list = byDay.get(day);
+        if (list) list.push(entry);
+        else byDay.set(day, [entry]);
+      }
+    }
+    return [...byDay.entries()]
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .slice(0, 30)
+      .map(([day, entries]) => ({ day, totals: usageTotals(entries) }));
   }
 
   sessionUsage(sessionId: string): UsageTotals {
-    const row = this.db
-      .prepare(
-        "SELECT COALESCE(SUM(input_tokens),0) AS input_tokens, " +
-          "COALESCE(SUM(output_tokens),0) AS output_tokens, " +
-          "COALESCE(SUM(tool_uses),0) AS tool_uses, " +
-          "COALESCE(SUM(total_cost_usd),0) AS total_cost_usd, " +
-          "GROUP_CONCAT(DISTINCT cost_source) AS cost_sources " +
-          "FROM usage WHERE session_id = ?",
-      )
-      .get(sessionId) as {
-      input_tokens: number;
-      output_tokens: number;
-      tool_uses: number;
-      total_cost_usd: number;
-      cost_sources: string | null;
-    };
-    return {
-      inputTokens: row.input_tokens,
-      outputTokens: row.output_tokens,
-      toolUses: row.tool_uses,
-      totalCostUsd: row.total_cost_usd,
-      costSources: splitSources(row.cost_sources),
-    };
+    return usageTotals(this.usage.get(sessionId) ?? []);
   }
 
-  // -- intents (DR-035) -----------------------------------------------------
+  // -- intents (DR-035, the act log of CORE-52) -----------------------------
 
   addIntent(intent: IntentInfo): void {
-    this.db
-      .prepare(
-        "INSERT INTO intents (id, project_id, text, source_kind, source_ref, source_url, " +
-          "rank, after_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        intent.id,
-        intent.projectId,
-        intent.text,
-        intent.source?.kind ?? null,
-        intent.source?.ref ?? null,
-        intent.source?.url ?? null,
-        intent.rank,
-        intent.afterId ?? null,
-        intent.createdAt,
-      );
+    this.intents.set(intent.id, { ...intent });
+    this.appendIntentAct(intent.projectId, { act: "queue", intent });
   }
 
   getIntent(id: string): IntentInfo | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM intents WHERE id = ?")
-      .get(id) as IntentRow | undefined;
-    return row ? intentInfo(row) : undefined;
+    const intent = this.intents.get(id);
+    return intent ? { ...intent } : undefined;
   }
 
   /** The open intent holding a source artifact, if any (DR-035). */
@@ -724,24 +810,33 @@ export class Store {
     kind: IntentSourceKind,
     ref: string,
   ): IntentInfo | undefined {
-    const row = this.db
-      .prepare(
-        "SELECT * FROM intents WHERE project_id = ? AND source_kind = ? " +
-          "AND source_ref = ? AND closed_at IS NULL",
-      )
-      .get(projectId, kind, ref) as IntentRow | undefined;
-    return row ? intentInfo(row) : undefined;
+    for (const intent of this.intents.values()) {
+      if (
+        intent.projectId === projectId &&
+        intent.closedAt === undefined &&
+        intent.source?.kind === kind &&
+        intent.source.ref === ref
+      ) {
+        return { ...intent };
+      }
+    }
+    return undefined;
   }
 
   /** Every open intent across projects, in project rank order. */
   listOpenIntents(): IntentInfo[] {
-    return (
-      this.db
-        .prepare(
-          "SELECT * FROM intents WHERE closed_at IS NULL ORDER BY project_id, rank",
-        )
-        .all() as IntentRow[]
-    ).map(intentInfo);
+    return [...this.intents.values()]
+      .filter((intent) => intent.closedAt === undefined)
+      .sort((a, b) =>
+        a.projectId === b.projectId
+          ? a.rank < b.rank
+            ? -1
+            : 1
+          : a.projectId < b.projectId
+            ? -1
+            : 1,
+      )
+      .map((intent) => ({ ...intent }));
   }
 
   /** One History page: closed intents newest first (DR-035). */
@@ -750,27 +845,26 @@ export class Store {
     limit: number,
     before?: { closedAt: number; intentId: string },
   ): IntentInfo[] {
-    const rows = before
-      ? (this.db
-          .prepare(
-            "SELECT * FROM intents WHERE project_id = ? AND closed_at IS NOT NULL " +
-              "AND (closed_at < ? OR (closed_at = ? AND id < ?)) " +
-              "ORDER BY closed_at DESC, id DESC LIMIT ?",
-          )
-          .all(
-            projectId,
-            before.closedAt,
-            before.closedAt,
-            before.intentId,
-            limit,
-          ) as IntentRow[])
-      : (this.db
-          .prepare(
-            "SELECT * FROM intents WHERE project_id = ? AND closed_at IS NOT NULL " +
-              "ORDER BY closed_at DESC, id DESC LIMIT ?",
-          )
-          .all(projectId, limit) as IntentRow[]);
-    return rows.map(intentInfo);
+    return [...this.intents.values()]
+      .filter(
+        (intent): intent is IntentInfo & { closedAt: number } =>
+          intent.projectId === projectId && intent.closedAt !== undefined,
+      )
+      .filter(
+        (intent) =>
+          !before ||
+          intent.closedAt < before.closedAt ||
+          (intent.closedAt === before.closedAt && intent.id < before.intentId),
+      )
+      .sort((a, b) =>
+        a.closedAt === b.closedAt
+          ? a.id < b.id
+            ? 1
+            : -1
+          : b.closedAt - a.closedAt,
+      )
+      .slice(0, limit)
+      .map((intent) => ({ ...intent }));
   }
 
   /** Every dispatch stamped into a session — open and closed intents
@@ -779,38 +873,41 @@ export class Store {
   listSessionDispatches(
     sessionId: string,
   ): { intentId: string; turnId: number; open: boolean; closedAt?: number }[] {
-    return (
-      this.db
-        .prepare(
-          "SELECT id, dispatched_turn_id, closed_at FROM intents " +
-            "WHERE dispatched_session_id = ? AND dispatched_turn_id IS NOT NULL " +
-            "ORDER BY dispatched_turn_id",
-        )
-        .all(sessionId) as {
-        id: string;
-        dispatched_turn_id: number;
-        closed_at: number | null;
-      }[]
-    ).map((row) => ({
-      intentId: row.id,
-      turnId: row.dispatched_turn_id,
-      open: row.closed_at === null,
-      ...(row.closed_at !== null ? { closedAt: row.closed_at } : {}),
-    }));
+    return [...this.intents.values()]
+      .filter((intent) => intent.dispatched?.sessionId === sessionId)
+      .sort(
+        (a, b) =>
+          (a.dispatched as { turnId: number }).turnId -
+          (b.dispatched as { turnId: number }).turnId,
+      )
+      .map((intent) => ({
+        intentId: intent.id,
+        turnId: (intent.dispatched as { turnId: number }).turnId,
+        open: intent.closedAt === undefined,
+        ...(intent.closedAt !== undefined ? { closedAt: intent.closedAt } : {}),
+      }));
   }
 
   setIntentText(id: string, text: string): void {
-    this.db.prepare("UPDATE intents SET text = ? WHERE id = ?").run(text, id);
+    const intent = this.intents.get(id);
+    if (!intent) return;
+    intent.text = text;
+    this.appendIntentAct(intent.projectId, { act: "edit", id, text });
   }
 
   setIntentRank(id: string, rank: string): void {
-    this.db.prepare("UPDATE intents SET rank = ? WHERE id = ?").run(rank, id);
+    const intent = this.intents.get(id);
+    if (!intent) return;
+    intent.rank = rank;
+    this.appendIntentAct(intent.projectId, { act: "move", id, rank });
   }
 
   setIntentLink(id: string, afterId: string | null): void {
-    this.db
-      .prepare("UPDATE intents SET after_id = ? WHERE id = ?")
-      .run(afterId, id);
+    const intent = this.intents.get(id);
+    if (!intent) return;
+    if (afterId === null) delete intent.afterId;
+    else intent.afterId = afterId;
+    this.appendIntentAct(intent.projectId, { act: "link", id, afterId });
   }
 
   /** The dispatch binding, stamped when the turn starts and re-written
@@ -821,35 +918,49 @@ export class Store {
     turnId: number,
     at: number,
   ): void {
-    this.db
-      .prepare(
-        "UPDATE intents SET dispatched_session_id = ?, dispatched_turn_id = ?, " +
-          "dispatched_at = ? WHERE id = ?",
-      )
-      .run(sessionId, turnId, at, id);
+    const intent = this.intents.get(id);
+    if (!intent) return;
+    intent.dispatched = { sessionId, turnId, at };
+    this.appendIntentAct(intent.projectId, { act: "dispatch", id, sessionId, turnId, at });
   }
 
   closeIntent(id: string, as: "done" | "dropped", at: number): void {
-    this.db
-      .prepare("UPDATE intents SET closed_at = ?, closed_as = ? WHERE id = ?")
-      .run(at, as, id);
+    const intent = this.intents.get(id);
+    if (!intent) return;
+    intent.closedAt = at;
+    intent.closedAs = as;
+    this.appendIntentAct(intent.projectId, { act: "close", id, as, at });
   }
 
   // -- prefs ----------------------------------------------------------------
 
   setPref(key: string, value: unknown): void {
-    this.db
-      .prepare(
-        "INSERT INTO prefs (key, value_json) VALUES (?, ?) " +
-          "ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
-      )
-      .run(key, JSON.stringify(value));
+    this.prefs.set(key, value);
+    this.savePrefs();
   }
 
   getPref<T>(key: string): T | undefined {
-    const row = this.db
-      .prepare("SELECT value_json FROM prefs WHERE key = ?")
-      .get(key) as { value_json: string } | undefined;
-    return row ? (JSON.parse(row.value_json) as T) : undefined;
+    return this.prefs.has(key) ? (this.prefs.get(key) as T) : undefined;
+  }
+
+  // -- forge cache (dashboard-14) -------------------------------------------
+
+  getForgeCache(projectId: string): { at: number; state: ForgeState } | undefined {
+    return this.forgeCache.get(projectId);
+  }
+
+  setForgeCache(projectId: string, entry: { at: number; state: ForgeState }): void {
+    this.forgeCache.set(projectId, entry);
+    this.saveForgeCache();
+  }
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM answers "alive but not ours"; only ESRCH proves death.
+    return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 }

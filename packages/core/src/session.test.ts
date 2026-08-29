@@ -56,7 +56,7 @@ async function setup(
     }
     return { default: forId("code", ["coder"]) };
   });
-  const store = new Store(join(mkdtempSync(join(tmpdir(), "spex-sess-")), "s.db"));
+  const store = new Store({ dir: mkdtempSync(join(tmpdir(), "spex-sess-")) });
   const { imports, stats } = fakeAdapterImports({
     rules: overrides?.rules ?? [
       {

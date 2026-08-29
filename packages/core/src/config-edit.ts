@@ -7,8 +7,8 @@
 // same fail-closed validation as loading — an edit the playbook
 // launcher would reject never reaches the file.
 
-import { readFileSync, writeFileSync } from "node:fs";
-import { parseDocument, YAMLMap } from "yaml";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { parseDocument, YAMLMap, isMap, isScalar } from "yaml";
 
 import { composeConfig, type LoadModule } from "./config.js";
 
@@ -220,4 +220,33 @@ export async function editConfigFile(
   }
   writeFileSync(path, candidate);
   return { ok: true };
+}
+
+/**
+ * The one-time library relocation's config half (CORE-64, DR-036):
+ * every `playbooks.<id>.from` path inside the legacy library prefix
+ * moves to the new one, comments and formatting kept. A mechanical
+ * migration edit, like the profiles migration before it: it does not
+ * fail closed on unrelated config invalidity.
+ */
+export function rewriteLibraryPaths(
+  configPath: string,
+  fromPrefix: string,
+  toPrefix: string,
+): void {
+  if (!existsSync(configPath)) return;
+  const doc = parseDocument(readFileSync(configPath, "utf8"));
+  const playbooks = doc.get("playbooks");
+  if (!isMap(playbooks)) return;
+  let changed = false;
+  for (const item of playbooks.items) {
+    const entry = item.value;
+    if (!isMap(entry)) continue;
+    const from = entry.get("from", true);
+    if (!isScalar(from) || typeof from.value !== "string") continue;
+    if (!from.value.startsWith(fromPrefix)) continue;
+    from.value = toPrefix + from.value.slice(fromPrefix.length);
+    changed = true;
+  }
+  if (changed) writeFileSync(configPath, doc.toString());
 }

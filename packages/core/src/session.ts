@@ -19,6 +19,7 @@ import type {
 import { PLAYBOOK_CAPTAIN_MODULE, type ComposedConfig, type LoadModule } from "./config.js";
 import type { ProjectInfo, SessionInfo } from "./protocol.js";
 import { Store } from "./store.js";
+import { foldUsage } from "./stream-fold.js";
 
 export class CoreError extends Error {
   constructor(
@@ -393,56 +394,10 @@ export class SessionManager {
         break;
       case "player_event":
       case "captain_event": {
-        const event = (record as { event: { type: string; payload?: unknown } })
-          .event;
-        if (event.type === "done") {
-          const payload = event.payload as {
-            usage?: {
-              toolUses?: number;
-              // cligent 0.22: an absent report means the runtime told
-              // us nothing, which is not the same as measuring zero.
-              tokens?: {
-                coverage?: string;
-                totals?: {
-                  input?: { total?: number };
-                  output?: { total?: number };
-                };
-              };
-              cost?: { amount?: number; currency?: string; source?: string };
-            };
-            durationMs?: number;
-          };
-          const tokens = payload.usage?.tokens;
-          const cost = payload.usage?.cost;
-          this.store.addUsage({
-            sessionId,
-            turnId: record.turnId,
-            // Usage attributes to the lane that spent it, so a shared
-            // player's rollup spans the playbooks sharing it (DR-032).
-            actorId:
-              record.type === "player_event"
-                ? (record as { playerId: string }).playerId
-                : "captain",
-            // Totals are inclusive of cached reads: never re-added.
-            ...(tokens?.totals
-              ? {
-                  inputTokens: tokens.totals.input?.total ?? 0,
-                  outputTokens: tokens.totals.output?.total ?? 0,
-                }
-              : {}),
-            toolUses: payload.usage?.toolUses ?? 0,
-            ...(typeof cost?.amount === "number"
-              ? {
-                  totalCostUsd: cost.amount,
-                  ...(cost.source ? { costSource: cost.source } : {}),
-                }
-              : {}),
-            ...(payload.durationMs !== undefined
-              ? { durationMs: payload.durationMs }
-              : {}),
-            at: record.timestamp,
-          });
-        }
+        // One extraction shared with the store's restart fold
+        // (DR-036): live tracking and replay derive the same usage.
+        const usage = foldUsage(sessionId, record);
+        if (usage) this.store.addUsage(usage);
         break;
       }
       default:

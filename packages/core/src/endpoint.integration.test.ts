@@ -46,7 +46,7 @@ test("attached endpoint admits the served page and rejects foreigners (CORE-38)"
   const httpServer = createServer();
   const service = await CoreService.start({
     configPath: join(dir, "playbook.config.yaml"),
-    dbPath: join(dir, "spex.db"),
+    dataDir: join(dir, "state"),
     watchConfig: false,
     env: {},
     home: dir,
@@ -103,7 +103,7 @@ test("an empty token option cannot disable the handshake (CORE-24)", async () =>
   const dir = mkdtempSync(join(tmpdir(), "spex-endpoint-empty-"));
   const service = await CoreService.start({
     configPath: join(dir, "playbook.config.yaml"),
-    dbPath: join(dir, "spex.db"),
+    dataDir: join(dir, "state"),
     watchConfig: false,
     env: {},
     home: dir,

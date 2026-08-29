@@ -22,7 +22,7 @@ const dir = mkdtempSync(join(tmpdir(), "spex-demo-core-"));
 const service = await CoreService.start({
   port: Number(process.env.PORT ?? 8138),
   token: process.env.SPEX_TOKEN ?? "demo",
-  dbPath: join(dir, "spex.db"),
+  dataDir: join(dir, "state"),
 });
 
 console.log(`[demo-core] project: ${project}`);

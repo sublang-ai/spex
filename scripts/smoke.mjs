@@ -42,7 +42,6 @@ async function coreRoundTrip() {
   const service = await CoreService.start({
     token: "smoke",
     configPath: join(home, "playbook.config.yaml"),
-    dbPath: ":memory:",
     env: {},
     home,
     watchConfig: false,

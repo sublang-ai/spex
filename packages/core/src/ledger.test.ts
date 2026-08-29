@@ -39,8 +39,8 @@ import type {
 
 const NOW = 10_000_000;
 
-function newProjectStore(path = ":memory:"): { store: Store; projectId: string } {
-  const store = new Store(path);
+function newProjectStore(path?: string): { store: Store; projectId: string } {
+  const store = new Store(path ? { dir: path } : {});
   const project = store.registerProject("/tmp/ledger-proj", "ledger-proj", 1);
   return { store, projectId: project.id };
 }
@@ -93,6 +93,22 @@ function append(
   );
 }
 
+function beginTurn(
+  store: Store,
+  sessionId: string,
+  turnId: number,
+  prompt: string,
+  at: number,
+): void {
+  store.startTurn(sessionId, turnId, prompt, at);
+  append(store, sessionId, {
+    type: "turn_started",
+    turnId,
+    turn: { id: turnId, prompt },
+    timestamp: at,
+  });
+}
+
 function finishTurn(store: Store, sessionId: string, turnId: number, at: number): void {
   store.endTurn(sessionId, turnId, "finished", at);
   append(store, sessionId, { type: "turn_finished", turnId, timestamp: at });
@@ -132,7 +148,7 @@ test("DR-035: dispatch derives working, a finish delivers, a follow-up reopens w
   queueIntent(store, projectId, "A", "i");
 
   // The dispatch stamp binds when the submitted turn starts.
-  store.startTurn("s1", 1, "ship the ledger", 1000);
+  beginTurn(store, "s1", 1, "ship the ledger", 1000);
   store.stampIntentDispatch("A", "s1", 1, 1000);
   const busy = [lane("s1", projectId, true)];
   const idle = [lane("s1", projectId, false)];
@@ -165,7 +181,7 @@ test("DR-035: dispatch derives working, a finish delivers, a follow-up reopens w
 
   // A follow-up turn belongs to the newest dispatched open intent:
   // working again, and the finish entry stands down while it runs.
-  store.startTurn("s1", 2, "polish it", 4000);
+  beginTurn(store, "s1", 2, "polish it", 4000);
   a = stateOf(fold(store, busy), "A");
   assert.equal(a.state, "working");
   assert.equal(a.stats?.turns, 2);
@@ -186,13 +202,13 @@ test("DR-035: an aborted dispatch turn or a dead session releases the intent, st
 
   // Dispatch turn ends aborted: released by derivation.
   queueIntent(store, projectId, "A", "i");
-  store.startTurn("s1", 1, "go", 1000);
+  beginTurn(store, "s1", 1, "go", 1000);
   store.stampIntentDispatch("A", "s1", 1, 1000);
   abortStoredTurn(store, "s1", 1, 2000);
 
   // Session died before the dispatch turn finished: released too.
   queueIntent(store, projectId, "B", "r");
-  store.startTurn("s2", 1, "go", 3000);
+  beginTurn(store, "s2", 1, "go", 3000);
   store.stampIntentDispatch("B", "s2", 1, 3000);
 
   const ledger = fold(store, [lane("s1", projectId, false)]);
@@ -216,7 +232,7 @@ test("DR-035: a parked awaitBossReply derives interrupted question in band one",
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
   queueIntent(store, projectId, "Q", "i");
-  store.startTurn("s1", 1, "ask around", 1000);
+  beginTurn(store, "s1", 1, "ask around", 1000);
   store.stampIntentDispatch("Q", "s1", 1, 1000);
   append(store, "s1", {
     type: "captain_telemetry",
@@ -242,7 +258,7 @@ test("DR-035: a standing permission interrupts even while its turn is open, and 
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
   queueIntent(store, projectId, "P", "i");
-  store.startTurn("s1", 1, "build it", 1000);
+  beginTurn(store, "s1", 1, "build it", 1000);
   store.stampIntentDispatch("P", "s1", 1, 1000);
   append(store, "s1", {
     type: "player_event",
@@ -282,7 +298,7 @@ test("DR-035: a runtime_error derives interrupted failure, cleared by a later tu
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
   queueIntent(store, projectId, "F", "i");
-  store.startTurn("s1", 1, "try it", 1000);
+  beginTurn(store, "s1", 1, "try it", 1000);
   store.stampIntentDispatch("F", "s1", 1, 1000);
   append(store, "s1", {
     type: "runtime_error",
@@ -302,7 +318,7 @@ test("DR-035: a runtime_error derives interrupted failure, cleared by a later tu
   );
 
   // The Boss's next turn in the session acknowledges the failure.
-  store.startTurn("s1", 2, "retry", 3000);
+  beginTurn(store, "s1", 2, "retry", 3000);
   const acknowledged = fold(store, [lane("s1", projectId, true)]);
   assert.equal(stateOf(acknowledged, "F").state, "working");
   assert.equal(acknowledged.badge, 0);
@@ -313,7 +329,7 @@ test("DR-035: failure outranks the question and the permission", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
   queueIntent(store, projectId, "X", "i");
-  store.startTurn("s1", 1, "everything at once", 1000);
+  beginTurn(store, "s1", 1, "everything at once", 1000);
   store.stampIntentDispatch("X", "s1", 1, 1000);
   append(store, "s1", {
     type: "captain_telemetry",
@@ -352,13 +368,13 @@ test("DR-035: interrupted precedes finished, longest waiting first within each b
 
   // Finished earliest of all — still band two.
   queueIntent(store, projectId, "A", "3");
-  store.startTurn("s1", 1, "done early", 400);
+  beginTurn(store, "s1", 1, "done early", 400);
   store.stampIntentDispatch("A", "s1", 1, 400);
   finishTurn(store, "s1", 1, 500);
 
   // Interrupted question since 800.
   queueIntent(store, projectId, "B", "5");
-  store.startTurn("s2", 1, "ask", 600);
+  beginTurn(store, "s2", 1, "ask", 600);
   store.stampIntentDispatch("B", "s2", 1, 600);
   append(store, "s2", {
     type: "captain_telemetry",
@@ -371,7 +387,7 @@ test("DR-035: interrupted precedes finished, longest waiting first within each b
 
   // Interrupted failure since 1500 — later onset, same band.
   queueIntent(store, projectId, "C", "i");
-  store.startTurn("s3", 1, "fail", 1000);
+  beginTurn(store, "s3", 1, "fail", 1000);
   store.stampIntentDispatch("C", "s3", 1, 1000);
   append(store, "s3", {
     type: "runtime_error",
@@ -408,13 +424,13 @@ test("DR-035: a later dispatch bounds the earlier intent's turn range, and each 
 
   // A owns turns 1-2; B's dispatch at turn 3 ends A's range.
   queueIntent(store, projectId, "A", "i");
-  store.startTurn("s1", 1, "first", 1000);
+  beginTurn(store, "s1", 1, "first", 1000);
   store.stampIntentDispatch("A", "s1", 1, 1000);
   finishTurn(store, "s1", 1, 2000);
-  store.startTurn("s1", 2, "follow-up", 3000);
+  beginTurn(store, "s1", 2, "follow-up", 3000);
   finishTurn(store, "s1", 2, 4000);
   queueIntent(store, projectId, "B", "r");
-  store.startTurn("s1", 3, "second", 5000);
+  beginTurn(store, "s1", 3, "second", 5000);
   store.stampIntentDispatch("B", "s1", 3, 5000);
   finishTurn(store, "s1", 3, 6000);
 
@@ -448,10 +464,10 @@ test("DR-035: an aborted follow-up does not unseat a standing finish", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
   queueIntent(store, projectId, "C", "i");
-  store.startTurn("s1", 1, "deliver", 1000);
+  beginTurn(store, "s1", 1, "deliver", 1000);
   store.stampIntentDispatch("C", "s1", 1, 1000);
   finishTurn(store, "s1", 1, 2000);
-  store.startTurn("s1", 2, "never mind", 3000);
+  beginTurn(store, "s1", 2, "never mind", 3000);
   abortStoredTurn(store, "s1", 2, 3500);
 
   const ledger = fold(store, [lane("s1", projectId, false)]);
@@ -473,7 +489,7 @@ test("DR-035: a ruled turn never re-summons — plain chat after the verdict doe
   addSession(store, projectId, "s1");
   queueIntent(store, projectId, "A", "i");
   store.stampIntentDispatch("A", "s1", 1, 1000);
-  store.startTurn("s1", 1, "Intent A", 1000);
+  beginTurn(store, "s1", 1, "Intent A", 1000);
   finishTurn(store, "s1", 1, 2000);
   const lanes = [lane("s1", projectId, false)];
 
@@ -491,7 +507,7 @@ test("DR-035: a ruled turn never re-summons — plain chat after the verdict doe
   assert.equal(ruled.badge, 0);
 
   // Plain chat after the verdict is un-ledgered again and summons.
-  store.startTurn("s1", 2, "just chatting", 3000);
+  beginTurn(store, "s1", 2, "just chatting", 3000);
   finishTurn(store, "s1", 2, 4000);
   const chat = fold(store, lanes);
   assert.deepEqual(
@@ -503,13 +519,13 @@ test("DR-035: a ruled turn never re-summons — plain chat after the verdict doe
 test("DR-035: an un-ledgered finished turn stands in for review until the viewed marker passes it, and hidden records feed nothing", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  store.startTurn("s1", 1, "review me", 1000);
+  beginTurn(store, "s1", 1, "review me", 1000);
   finishTurn(store, "s1", 1, 2000);
 
   // A live session holding a hidden permission request: hidden records
   // never reach the fold's conditions (core-service-8).
   addSession(store, projectId, "s2");
-  store.startTurn("s2", 1, "secret work", 1000);
+  beginTurn(store, "s2", 1, "secret work", 1000);
   append(store, "s2", {
     type: "player_event",
     playerId: "dev.coder",
@@ -549,7 +565,7 @@ test("DR-035: an un-ledgered finished turn stands in for review until the viewed
 
 test("DR-035: reopening the store reproduces closed, queued, and finished; a dead session's dispatch releases", () => {
   const dir = mkdtempSync(join(tmpdir(), "spex-ledger-"));
-  const path = join(dir, "spex.db");
+  const path = join(dir, "state");
   const { store, projectId } = newProjectStore(path);
   addSession(store, projectId, "s1");
   addSession(store, projectId, "s2");
@@ -558,11 +574,11 @@ test("DR-035: reopening the store reproduces closed, queued, and finished; a dea
   store.closeIntent("closed", "dropped", 500);
   queueIntent(store, projectId, "queued", "5");
   queueIntent(store, projectId, "finished", "i");
-  store.startTurn("s1", 1, "deliver", 1000);
+  beginTurn(store, "s1", 1, "deliver", 1000);
   store.stampIntentDispatch("finished", "s1", 1, 1000);
   finishTurn(store, "s1", 1, 2000);
   queueIntent(store, projectId, "working", "r");
-  store.startTurn("s2", 1, "mid-flight", 3000);
+  beginTurn(store, "s2", 1, "mid-flight", 3000);
   store.stampIntentDispatch("working", "s2", 1, 3000);
 
   const before = fold(store, [lane("s1", projectId, false), lane("s2", projectId, true)]);
@@ -576,7 +592,7 @@ test("DR-035: reopening the store reproduces closed, queued, and finished; a dea
   store.close();
 
   // Restart: same file, no live lanes.
-  const reopened = new Store(path);
+  const reopened = new Store({ dir: path });
   const after = fold(reopened, []);
   const queued = stateOf(after, "queued");
   assert.equal(queued.state, "queued");
@@ -755,7 +771,7 @@ class Client {
 interface Harness {
   service: CoreService;
   dir: string;
-  dbPath: string;
+  dataDir: string;
   projectDir: string;
 }
 
@@ -776,14 +792,14 @@ const FAKE_REGISTRY_MODULE = {
   },
 };
 
-async function startHarness(options: { dbPath?: string } = {}): Promise<Harness> {
+async function startHarness(options: { dataDir?: string } = {}): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "spex-ledger-it-"));
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, VALID_CONFIG);
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
-  const dbPath = options.dbPath ?? join(dir, "spex.db");
+  const dataDir = options.dataDir ?? join(dir, "state");
 
   const { imports } = fakeAdapterImports({
     rules: [
@@ -804,7 +820,7 @@ async function startHarness(options: { dbPath?: string } = {}): Promise<Harness>
   const service = await CoreService.start({
     token: "test",
     configPath,
-    dbPath,
+    dataDir,
     adapterImports: imports,
     adapterRuntime: () => ({ usable: true }),
     captainFactory: async () => captain,
@@ -816,7 +832,7 @@ async function startHarness(options: { dbPath?: string } = {}): Promise<Harness>
     home: join(dir, "home"),
     watchConfig: false,
   });
-  return { service, dir, dbPath, projectDir };
+  return { service, dir, dataDir, projectDir };
 }
 
 /** The one project's queue, in rank order, as intent ids. */
@@ -1155,8 +1171,8 @@ test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest fi
   // Seed the store first, then serve it: paging is a pure read over
   // closed rows, wherever they came from.
   const dir = mkdtempSync(join(tmpdir(), "spex-ledger-hist-"));
-  const dbPath = join(dir, "spex.db");
-  const seeded = new Store(dbPath);
+  const dataDir = join(dir, "state");
+  const seeded = new Store({ dir: dataDir });
   const project = seeded.registerProject("/tmp/ledger-hist-proj", "hist", 1);
   for (let i = 1; i <= 45; i += 1) {
     const id = `closed-${String(i).padStart(2, "0")}`;
@@ -1171,7 +1187,7 @@ test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest fi
   }
   seeded.close();
 
-  const harness = await startHarness({ dbPath });
+  const harness = await startHarness({ dataDir });
   const client = new Client(harness.service.port());
   await client.open();
 

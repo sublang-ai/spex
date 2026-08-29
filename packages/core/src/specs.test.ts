@@ -730,7 +730,6 @@ test("specs.get and specs.read serve over the protocol", async () => {
     token: "test",
     watchConfig: false,
     configPath: join(home, "playbook.config.yaml"),
-    dbPath: ":memory:",
     home,
     env: {},
   });
