@@ -25,6 +25,7 @@ import { runDesktop } from "./desktop-runner.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const desktopDir = join(root, "apps", "desktop");
 const TEST_TIMEOUT = 60_000;
+const FIXTURE_WATCHDOG_TIMEOUT = TEST_TIMEOUT * 2;
 
 function integrationTest(name, options, callback) {
   if (typeof options === "function") {
@@ -35,6 +36,25 @@ function integrationTest(name, options, callback) {
 
 function tempDirectory(t, prefix) {
   const directory = mkdtempSync(join(tmpdir(), prefix));
+  const watchdog = join(directory, "watchdog.cjs");
+  writeFileSync(
+    watchdog,
+    `const { rmSync } = require("node:fs");
+setTimeout(() => {
+  try {
+    rmSync(__dirname, { recursive: true, force: true });
+  } finally {
+    process.exit(1);
+  }
+}, ${FIXTURE_WATCHDOG_TIMEOUT}).unref();
+`,
+  );
+  const nodeOptions = [
+    process.env.NODE_OPTIONS,
+    `--require ${JSON.stringify(watchdog)}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const cleanupCallbacks = [];
   t.after(() => {
     try {
@@ -46,6 +66,11 @@ function tempDirectory(t, prefix) {
   return {
     beforeRemove: (cleanup) => cleanupCallbacks.push(cleanup),
     directory,
+    environment: (overrides = {}) => ({
+      ...process.env,
+      ...overrides,
+      NODE_OPTIONS: nodeOptions,
+    }),
   };
 }
 
@@ -202,6 +227,7 @@ setInterval(() => {}, 1000);
     beforeRemove: temporary.beforeRemove,
     directory,
     electronBinary,
+    environment: temporary.environment,
     events: () => readEvents(log),
     npmCommand,
     releaseRestore: () => rmSync(restoreHold, { force: true }),
@@ -237,6 +263,7 @@ process.exitCode = await runDesktop({
 `,
   );
   const child = spawn(process.execPath, [path], {
+    env: fixture.environment(),
     stdio: ["ignore", "pipe", "pipe"],
   });
   let complete = false;
@@ -485,10 +512,9 @@ appendFileSync(${JSON.stringify(log)}, JSON.stringify({
       {
         cwd: root,
         detached: true,
-        env: {
-          ...process.env,
+        env: temporary.environment({
           PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
-        },
+        }),
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
