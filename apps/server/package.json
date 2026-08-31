@@ -16,7 +16,7 @@
   },
   "scripts": {
     "build": "tsc && node scripts/stage-ui.mjs",
-    "start": "npm run build && node dist/main.js",
+    "start": "node ../../scripts/start-server.mjs",
     "test": "node --test dist/*.test.js"
   },
   "dependencies": {

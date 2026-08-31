@@ -42,7 +42,7 @@ recorded beside the tag; app-side failures block.
 
 ## 2. Manual pass — desktop app
 
-Launch: `npm run rebuild:electron -w apps/desktop && npm start -w apps/desktop`.
+Launch: `npm start`.
 
 | Step | Expect |
 | --- | --- |

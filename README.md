@@ -93,10 +93,11 @@ Run the desktop app from source:
 git clone https://github.com/sublang-ai/spex.git
 cd spex
 npm ci
-npm run build
-npm run rebuild:electron -w apps/desktop
-npm start -w apps/desktop
+npm start
 ```
+
+`npm start` builds the workspaces, launches Electron, and restores the native
+module ABI for system Node when the app exits.
 
 Real playbook runs require a ready coding-agent adapter. GitHub issue and PR
 panels use an authenticated `gh` CLI. Compiling new playbooks requires
@@ -112,8 +113,7 @@ serves the UI and the core over one port, behind a token in the URL
 
 ```sh
 npm ci
-npm run build
-npm start -w apps/server     # prints http://127.0.0.1:8137/?token=...
+npm run start:server     # prints http://127.0.0.1:8137/?token=...
 ```
 
 Open the printed URL. The server binds loopback by default; to reach it from

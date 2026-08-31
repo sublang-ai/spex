@@ -5,7 +5,7 @@
 
 ## Intent
 
-This spec covers the Spex server shell — the headless CLI in `apps/server` that serves the Spex GUI to a remote browser: one TCP port carrying both the built UI bundle and the core service's WebSocket endpoint, guarded by the core's handshake token, with optional TLS ([DR-033](../decisions/033-remote-gui-serving.md)).
+This spec covers the Spex server shell — the headless CLI in `apps/server` that serves the Spex GUI to a remote browser: one TCP port carrying both the built UI bundle and the core service's WebSocket endpoint, guarded by the core's handshake token, with optional TLS ([DR-033](../decisions/033-remote-gui-serving.md)) — including its source-development launch.
 It is a single-user deployment of the same core and UI the desktop app embeds ([DR-002](../decisions/002-desktop-app-architecture.md)), not a hosted multi-tenant service.
 
 ## External Behavior
@@ -73,6 +73,12 @@ When the served page resolves its core endpoint, the UI shall connect to the pag
 
 When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime [[core-service-39](core-service.md#core-service-39)] — and exit only after the stop completes, leaving no orphan agent process.
 
+### Source Development
+
+#### server-shell-14
+
+Where `npm ci` has installed the repository dependencies, when a contributor invokes root `npm run start:server`, the command shall build every workspace and start the server shell attached to the command's lifecycle with its command-line arguments forwarded unchanged.
+
 ## Internal Behavior
 
 ### Package Layout
@@ -117,3 +123,9 @@ Where the server shell runs as a real child process, the test suite shall assert
 #### server-shell-13
 
 Where a browser-document environment stands at a served page URL, the test suite shall drive the UI's endpoint resolution through the page-connection cases and assert each outcome of [[server-shell-5](#server-shell-5)]: the same-origin `ws:`/`wss:` endpoint carrying the token, the address bar scrubbed with the page-session copy surviving a reload, the URL token kept unscrubbed where storage is blocked, `?core=` precedence with the token still adopted, and the unchanged fallback.
+
+### Source-Run Coverage
+
+#### server-shell-15
+
+Where `npm ci` has installed the repository dependencies, when the source-run acceptance suite invokes root `npm run start:server` with explicit token, config, state-root, and loopback ephemeral-port arguments, the suite shall assert that every workspace build completes, the forwarded arguments govern the printed reachable access URL and shell state [[server-shell-14](#server-shell-14)] [[server-shell-1](#server-shell-1)], and SIGTERM shuts the lifecycle process down cleanly [[server-shell-6](#server-shell-6)].

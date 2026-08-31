@@ -5,7 +5,7 @@
 
 ## Intent
 
-This spec covers the Spex desktop shell (`apps/desktop`) — the single-window Electron app with OS notifications, dock badge, native dialogs, and app lifecycle — its implementation requirements (process topology over the core's WebSocket protocol, login-shell environment capture, packaging that keeps spawned agent binaries executable), and its packaged-app verification coverage.
+This spec covers the Spex desktop shell (`apps/desktop`) — the single-window Electron app with OS notifications, dock badge, native dialogs, and app lifecycle — its guarded source-development launch, its implementation requirements (process topology over the core's WebSocket protocol, login-shell environment capture, packaging that keeps spawned agent binaries executable), and its source-run and packaged-app verification coverage.
 
 ## External Behavior
 
@@ -77,6 +77,17 @@ When the user activates an external link anywhere in the app, the shell shall op
 #### app-shell-23
 
 Where the app is built for distribution, the packaged app shall carry the Spex product logo ([DR-013](../decisions/013-sublang-brand.md)) as its application icon, so the dock, app switcher, and installer show the brand mark.
+
+### Source Development
+
+#### app-shell-26
+
+Where `npm ci` has installed the repository dependencies and built `better-sqlite3` for system Node, when a contributor invokes root `npm start`, the command shall build every workspace, rebuild `better-sqlite3` for Electron, launch the desktop app, and rebuild `better-sqlite3` for system Node before returning:
+
+1. A build failure returns non-zero without changing the native ABI.
+2. Once the Electron rebuild is attempted, normal app exit, command failure, SIGINT, and SIGTERM each lead through the Node rebuild before the command returns.
+3. An interrupted or failed build, Electron rebuild, or app launch returns non-zero after any required restore.
+4. A failed Node rebuild prints an actionable warning that the ABI restore failed and makes the command return non-zero rather than reporting success.
 
 ### Process Topology
 
@@ -180,6 +191,14 @@ Where a packaged build launches with its user-data directory and state root redi
 #### app-shell-19
 
 Where an environment variable consulted by an adapter readiness check (for example, `ANTHROPIC_API_KEY`) is exported only in the user's login-shell profile and absent from the app's launch environment, when the test suite starts the app and queries adapter readiness, the test suite shall assert that the check reports the adapter ready, proving the captured login-shell environment reached the core before readiness checks ran [[app-shell-12](#app-shell-12)].
+
+### Source-Run Coverage
+
+#### app-shell-27
+
+Where `npm ci` has installed the repository dependencies on macOS arm64, when the source-run acceptance suite invokes root `npm start` and causes the real Electron app to exit, the suite shall assert that the app rendered, the command returned, and then a system-Node process loads `better-sqlite3` and `npm test` passes without another rebuild [[app-shell-26](#app-shell-26)]:
+
+- The suite also exercises build, Electron-rebuild, launch, and restore failures plus SIGINT and SIGTERM, asserting the exceptional outcomes of [[app-shell-26](#app-shell-26)].
 
 ## References
 

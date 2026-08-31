@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "Spex \u2014 the desktop app for running playbooks",
+  "author": {
+    "name": "SubLang International"
+  },
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
@@ -13,8 +16,8 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc && node scripts/stage-ui.mjs",
-    "start": "npm run build && electron .",
-    "test": "node --test dist/*.test.js",
+    "start": "node ../../scripts/start-desktop.mjs",
+    "test": "node --test dist/*.test.js ../../scripts/desktop-runner.test.mjs",
     "package": "npm run build && npm run rebuild:electron && electron-builder --mac zip --arm64",
     "rebuild:electron": "node scripts/rebuild-native.mjs electron",
     "rebuild:node": "node scripts/rebuild-native.mjs node"

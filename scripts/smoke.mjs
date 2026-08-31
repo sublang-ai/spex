@@ -10,11 +10,13 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = dirname(fileURLToPath(new URL(".", import.meta.url)));
+const require = createRequire(import.meta.url);
 const desktop = process.argv.includes("--desktop");
 let stage = "";
 
@@ -130,7 +132,8 @@ try {
     try {
       run("desktop-abi", "npm", ["run", "rebuild:electron", "-w", "apps/desktop"]);
       const shot = join(tmpdir(), `spex-smoke-${Date.now()}.png`);
-      run("desktop-render", "npm", ["start", "-w", "apps/desktop"], {
+      run("desktop-render", require("electron"), ["."], {
+        cwd: join(root, "apps", "desktop"),
         env: { ...process.env, SPEX_ACCEPTANCE: shot },
       });
       if (!existsSync(shot)) {
