@@ -77,7 +77,7 @@ When the server shell receives SIGINT or SIGTERM, it shall stop the core service
 
 #### server-shell-14
 
-Where `npm ci` has installed the repository dependencies, when a contributor invokes root `npm run start:server`, the command shall build every workspace and start the server shell attached to the command's lifecycle with its command-line arguments forwarded unchanged.
+Where `npm ci` has installed the repository dependencies, when a contributor invokes root `npm run start:server`, the command shall invoke root `npm run build` and, after it succeeds, start the compiled server shell in the launcher's lifecycle with every command-line argument forwarded unchanged.
 
 ## Internal Behavior
 
@@ -128,4 +128,8 @@ Where a browser-document environment stands at a served page URL, the test suite
 
 #### server-shell-15
 
-Where `npm ci` has installed the repository dependencies, when the source-run acceptance suite invokes root `npm run start:server` with explicit token, config, state-root, and loopback ephemeral-port arguments, the suite shall assert that every workspace build completes, the forwarded arguments govern the printed reachable access URL and shell state [[server-shell-14](#server-shell-14)] [[server-shell-1](#server-shell-1)], and SIGTERM shuts the lifecycle process down cleanly [[server-shell-6](#server-shell-6)].
+Where built server artifacts and a controlled npm executable are available on a POSIX host, when the source-run integration suite invokes root `npm run start:server` with explicit host, ephemeral port, token, config, and data-directory arguments, the suite shall assert the source-launch flow:
+
+- the launcher invokes `npm run build` at the repository root before starting the real compiled server [[server-shell-14](#server-shell-14)];
+- the forwarded arguments govern the printed reachable access URL, config status, and created state root [[server-shell-14](#server-shell-14)] [[server-shell-1](#server-shell-1)];
+- SIGTERM delivered to the launcher lifecycle process shuts the core down cleanly, makes the root command return 0, and closes the bound port [[server-shell-6](#server-shell-6)].

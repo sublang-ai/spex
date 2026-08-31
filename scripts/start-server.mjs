@@ -44,6 +44,7 @@ const result = await new Promise((resolveResult) => {
       cwd: root,
       stdio: "inherit",
       detached: process.platform !== "win32",
+      shell: process.platform === "win32",
     });
   } catch (error) {
     resolveResult({ code: null, signal: null, error });

@@ -82,12 +82,12 @@ Where the app is built for distribution, the packaged app shall carry the Spex p
 
 #### app-shell-26
 
-Where `npm ci` has installed the repository dependencies and built `better-sqlite3` for system Node, when a contributor invokes root `npm start`, the command shall build every workspace, rebuild `better-sqlite3` for Electron, launch the desktop app, and rebuild `better-sqlite3` for system Node before returning:
+Where `npm ci` has installed the repository dependencies and built `better-sqlite3` for system Node, when a contributor invokes root `npm start`, the command shall invoke root `npm run build` and, after it succeeds, rebuild `better-sqlite3` for Electron, launch the desktop app with the contributor's command-line arguments forwarded unchanged to Electron, and rebuild `better-sqlite3` for system Node before returning:
 
 1. A build failure returns non-zero without changing the native ABI.
 2. Once the Electron rebuild is attempted, normal app exit, command failure, SIGINT, and SIGTERM each lead through the Node rebuild before the command returns.
 3. An interrupted or failed build, Electron rebuild, or app launch returns non-zero after any required restore.
-4. A failed Node rebuild prints an actionable warning that the ABI restore failed and makes the command return non-zero rather than reporting success.
+4. A failed Node rebuild prints an actionable warning and any preceding stage failure, then preserves the outcome established before restoration: a stage failure keeps its status, a signal that interrupted an active stage keeps 130 or 143, a signal first received during restoration governs only where no stage had failed, and a restore-only failure returns 1 rather than reporting success.
 
 ### Process Topology
 
@@ -196,9 +196,12 @@ Where an environment variable consulted by an adapter readiness check (for examp
 
 #### app-shell-27
 
-Where `npm ci` has installed the repository dependencies on macOS arm64, when the source-run acceptance suite invokes root `npm start` and causes the real Electron app to exit, the suite shall assert that the app rendered, the command returned, and then a system-Node process loads `better-sqlite3` and `npm test` passes without another rebuild [[app-shell-26](#app-shell-26)]:
+Where executable npm and Electron fixtures stand in for their external effects, when the source-run integration suite drives the desktop runner through its real process executor, the suite shall assert the guarded launch behavior of [[app-shell-26](#app-shell-26)]:
 
-- The suite also exercises build, Electron-rebuild, launch, and restore failures plus SIGINT and SIGTERM, asserting the exceptional outcomes of [[app-shell-26](#app-shell-26)].
+- a normal run invokes the repository-root build, Electron rebuild, app launch, and Node restore in order, forwarding the launch arguments unchanged [[app-shell-26](#app-shell-26)];
+- build, Electron-rebuild, launch, and restore failures take the required restore path, report both a stage and restore failure when they coincide, and return the required status [[app-shell-26](#app-shell-26)];
+- on a POSIX host, real SIGINT and SIGTERM delivery during launch terminates the detached fixture app and its grandchild, leaves neither orphaned, runs the Node restore, and returns 130 and 143 respectively [[app-shell-26](#app-shell-26)];
+- a signal first delivered during a failing restore after an app-launch failure waits for the restore, reports both failures, and preserves the app-launch status [[app-shell-26](#app-shell-26)].
 
 ## References
 

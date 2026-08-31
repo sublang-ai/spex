@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { runDesktop } from "./desktop-runner.mjs";
 
-function harness(outcomes = {}) {
+function harness(outcomes = {}, options = {}) {
   const calls = [];
   const killed = [];
   const signalSource = new EventEmitter();
@@ -40,10 +40,11 @@ function harness(outcomes = {}) {
         desktopDir: "/repo/apps/desktop",
         electronBinary: "/electron",
         execute,
-        platform: "win32",
+        platform: options.platform ?? "win32",
         signalSource,
         stdout: { write: (text) => (stdout += text) },
         stderr: { write: (text) => (stderr += text) },
+        killProcess: options.killProcess,
       }),
   };
 }
@@ -79,6 +80,17 @@ test("a restore failure warns loudly and overrides a green launch", async () => 
   assert.match(run.stderr(), /npm run rebuild:node/);
 });
 
+test("a restore failure preserves and reports an earlier failure", async () => {
+  const run = harness({
+    launch: { code: 4, signal: null },
+    "node-abi": { code: 5, signal: null },
+  });
+  assert.equal(await run.run(), 4);
+  assert.match(run.stderr(), /Electron launch exited 4/);
+  assert.match(run.stderr(), /Node ABI restore exited 5/);
+  assert.match(run.stderr(), /WARNING: ABI restore failed/);
+});
+
 for (const [signal, exitCode, stage] of [
   ["SIGINT", 130, "electron-abi"],
   ["SIGTERM", 143, "launch"],
@@ -106,5 +118,52 @@ test("an interrupt cannot cancel a restore already in progress", async () => {
   assert.equal(await run.run(), 130);
   assert.deepEqual(run.calls.at(-1), "node-abi");
   assert.deepEqual(run.killed, []);
+  assert.match(run.stderr(), /waiting for the mandatory Node ABI restore/);
+});
+
+test("a restore failure does not replace an interrupt status", async () => {
+  const run = harness({
+    launch: ({ signalSource }) => {
+      signalSource.emit("SIGTERM");
+      return { code: null, signal: "SIGTERM" };
+    },
+    "node-abi": { code: 5, signal: null },
+  });
+  assert.equal(await run.run(), 143);
+  assert.match(run.stderr(), /WARNING: ABI restore failed/);
+  assert.match(run.stderr(), /Node ABI restore exited 5/);
+});
+
+test("a vanished POSIX process group is tolerated", async () => {
+  const error = Object.assign(new Error("already exited"), { code: "ESRCH" });
+  const run = harness(
+    {
+      launch: ({ signalSource }) => {
+        signalSource.emit("SIGTERM");
+        return { code: null, signal: "SIGTERM" };
+      },
+    },
+    {
+      platform: "darwin",
+      killProcess: () => {
+        throw error;
+      },
+    },
+  );
+  assert.equal(await run.run(), 143);
+  assert.doesNotMatch(run.stderr(), /could not signal/);
+});
+
+test("a signal during restore does not replace an earlier failure", async () => {
+  const run = harness({
+    launch: { code: 4, signal: null },
+    "node-abi": ({ signalSource }) => {
+      signalSource.emit("SIGINT");
+      return { code: 5, signal: null };
+    },
+  });
+  assert.equal(await run.run(), 4);
+  assert.match(run.stderr(), /Electron launch exited 4/);
+  assert.match(run.stderr(), /Node ABI restore exited 5/);
   assert.match(run.stderr(), /waiting for the mandatory Node ABI restore/);
 });

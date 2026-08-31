@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc && node scripts/stage-ui.mjs",
     "start": "node ../../scripts/start-desktop.mjs",
-    "test": "node --test dist/*.test.js ../../scripts/desktop-runner.test.mjs",
+    "test": "node --test dist/*.test.js",
     "package": "npm run build && npm run rebuild:electron && electron-builder --mac zip --arm64",
     "rebuild:electron": "node scripts/rebuild-native.mjs electron",
     "rebuild:node": "node scripts/rebuild-native.mjs node"

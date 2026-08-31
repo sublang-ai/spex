@@ -30,6 +30,7 @@ function executeProcess(step, onChild, platform) {
         cwd: step.cwd,
         stdio: "inherit",
         detached: platform !== "win32",
+        shell: platform === "win32" && /\.cmd$/i.test(step.command),
       });
     } catch (error) {
       resolveResult({ code: null, signal: null, error });
@@ -117,6 +118,7 @@ export async function runDesktop(options = {}) {
   let restoreRequired = false;
   let restoring = false;
   let requestedSignal;
+  let interruptionSignal;
   let restoreSignalReported = false;
 
   const signalHandlers = new Map();
@@ -132,6 +134,7 @@ export async function runDesktop(options = {}) {
         }
         return;
       }
+      interruptionSignal ??= signal;
       stderr.write(`desktop: ${signal} received; stopping the active stage\n`);
       const stopError = stopChild(activeChild, signal, platform, killProcess);
       if (stopError) {
@@ -184,17 +187,20 @@ export async function runDesktop(options = {}) {
     }
   }
 
+  if (failure && !interruptionSignal) {
+    stderr.write(`desktop: ${failure.message}\n`);
+  }
   if (restoreFailure) {
     stderr.write(
       "WARNING: ABI restore failed — run `npm run rebuild:node -w apps/desktop` before using system-Node tooling\n",
     );
     stderr.write(`desktop: ${restoreFailure.message}\n`);
-    return 1;
   }
+  if (interruptionSignal) {
+    return SIGNAL_EXIT_CODES[interruptionSignal] ?? 1;
+  }
+  if (failure) return failure.exitCode ?? 1;
   if (requestedSignal) return SIGNAL_EXIT_CODES[requestedSignal] ?? 1;
-  if (failure) {
-    stderr.write(`desktop: ${failure.message}\n`);
-    return failure.exitCode ?? 1;
-  }
+  if (restoreFailure) return 1;
   return 0;
 }
