@@ -135,15 +135,17 @@ function desktopFixture(
   t,
   outcomes = {},
   hangLaunch = false,
-  delayedRestore = false,
+  gatedRestore = false,
 ) {
   const temporary = tempDirectory(t, "spex-desktop-source-");
   const { directory } = temporary;
   const log = join(directory, "events.jsonl");
+  const restoreHold = join(directory, "node-abi.hold");
+  if (gatedRestore) writeFileSync(restoreHold, "");
   const npmCommand = executable(
     directory,
     "npm-stub",
-    `import { appendFileSync } from "node:fs";
+    `import { appendFileSync, existsSync } from "node:fs";
 const append = (event) => appendFileSync(${JSON.stringify(log)}, JSON.stringify(event) + "\\n");
 const args = process.argv.slice(2);
 const stage = args[1] === "build"
@@ -153,12 +155,13 @@ const stage = args[1] === "build"
     : "node-abi";
 append({ stage, args, cwd: process.cwd(), pid: process.pid });
 const code = ${JSON.stringify(outcomes)}[stage] ?? 0;
-if (stage === "node-abi" && ${JSON.stringify(delayedRestore)}) {
+if (stage === "node-abi" && ${JSON.stringify(gatedRestore)}) {
   append({ stage: "node-abi-ready", pid: process.pid });
-  setTimeout(() => process.exit(code), 250);
-} else {
-  process.exit(code);
+  while (existsSync(${JSON.stringify(restoreHold)})) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
 }
+process.exit(code);
 `,
   );
   const electronBinary = executable(
@@ -201,6 +204,7 @@ setInterval(() => {}, 1000);
     electronBinary,
     events: () => readEvents(log),
     npmCommand,
+    releaseRestore: () => rmSync(restoreHold, { force: true }),
   };
 }
 
@@ -238,8 +242,13 @@ process.exitCode = await runDesktop({
   let complete = false;
   fixture.beforeRemove(() => {
     if (complete) return;
-    const launch = fixture.events().find(({ stage }) => stage === "launch");
-    if (launch) stopProcess(launch.pid, "SIGKILL", true);
+    const active = fixture
+      .events()
+      .filter(({ stage }) =>
+        ["build", "electron-abi", "launch", "node-abi"].includes(stage),
+      )
+      .at(-1);
+    if (active) stopProcess(active.pid, "SIGKILL", true);
     if (child.exitCode == null && child.signalCode == null) child.kill("SIGKILL");
   });
   return {
@@ -410,17 +419,26 @@ integrationTest(
         "the mandatory Node restore",
       );
 
-      harness.child.kill("SIGINT");
+      try {
+        harness.child.kill("SIGINT");
+        await waitFor(
+          () =>
+            harness
+              .output.stderr()
+              .includes(
+                "desktop: SIGINT received; waiting for the mandatory Node ABI restore\n",
+              ),
+          "the runner to acknowledge SIGINT during restoration",
+        );
+      } finally {
+        fixture.releaseRestore();
+      }
       assert.deepEqual(await harness.output.exited, {
         code: expected.code,
         signal: null,
       });
       assert.match(harness.output.stderr(), /WARNING: ABI restore failed/);
       assert.match(harness.output.stderr(), /Node ABI restore exited 5/);
-      assert.match(
-        harness.output.stderr(),
-        /waiting for the mandatory Node ABI restore/,
-      );
       if (expected.priorFailure) {
         assert.match(harness.output.stderr(), expected.priorFailure);
       }

@@ -25,9 +25,12 @@ Where a commit message includes a body, when writing the body, the commit body s
 
 ### git-4
 
-When AI assists in coding or authoring, the commit message shall include a `Co-authored-by` trailer in the format `<model> (<role>) <email>`, where `<role>` is one of `coder|reviewer|maintainer` and `<email>` is `cligent@sublang.ai`:
+When AI assists in coding or authoring, the commit message shall include one or more `Co-authored-by` trailers in the final contiguous trailer block recognized by Git, with no blank lines between trailers and each trailer using the format `<model> (<role>) <email>`, where `<role>` is one of `coder|reviewer|maintainer` and `<email>` is `cligent@sublang.ai`:
 
-Example: `Co-authored-by: GPT-5.2-Codex (coder) <cligent@sublang.ai>`
+```text
+Co-authored-by: GPT-5.2-Codex (coder) <cligent@sublang.ai>
+Co-authored-by: Claude Opus 4.1 (reviewer) <cligent@sublang.ai>
+```
 
 ### git-5
 
@@ -42,5 +45,5 @@ When a prepared commit is audited, the audit shall assert the commit follows thi
 - the commit records the configured `user.name` and `user.email` [[git-1](#git-1)];
 - the subject line follows the `<type>(<scope>)<!>: <subject>` format [[git-2](#git-2)];
 - any body explains what and why, wrapped at 72 chars [[git-3](#git-3)];
-- an AI-assisted commit carries the `Co-authored-by` attribution trailer [[git-4](#git-4)];
+- an AI-assisted commit's required `Co-authored-by` trailer or trailers appear in Git's parsed trailer block and use the prescribed format [[git-4](#git-4)];
 - a commit realizing a recorded intent references the intent record's ID [[git-5](#git-5)].

@@ -39,7 +39,8 @@
   "specs/packages/git.md": [
     "sha256-1b194304866d05580de8b2d0caa3454aa772e876fb3dee1f6c5d637c9e9a42b2",
     "sha256-77625a315ac14eb6fd5f3c0697f121646ba8c0d976a98c3b51f27f3422cd1afb",
-    "sha256-648eb12f6dd2dd5b9c9cebc14708de1a6d2184b698dfeacce93102995878e14a"
+    "sha256-648eb12f6dd2dd5b9c9cebc14708de1a6d2184b698dfeacce93102995878e14a",
+    "sha256-35ef90a345aedff9dc715e8341d204bc58479e0f6ec5ecb6435ee357fa912739"
   ],
   "specs/packages/licensing.md": [
     "sha256-ff6ce317bf51fb2f4a20dde8790a79f2a1237f6b5835c74e619f6e3d1647ab50",
