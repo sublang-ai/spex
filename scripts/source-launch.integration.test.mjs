@@ -4,7 +4,9 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import {
+  accessSync,
   chmodSync,
+  constants,
   existsSync,
   mkdtempSync,
   readFileSync,
@@ -22,11 +24,29 @@ import { runDesktop } from "./desktop-runner.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const desktopDir = join(root, "apps", "desktop");
+const TEST_TIMEOUT = 60_000;
+
+function integrationTest(name, options, callback) {
+  if (typeof options === "function") {
+    return test(name, { timeout: TEST_TIMEOUT }, options);
+  }
+  return test(name, { ...options, timeout: TEST_TIMEOUT }, callback);
+}
 
 function tempDirectory(t, prefix) {
   const directory = mkdtempSync(join(tmpdir(), prefix));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  return directory;
+  const cleanupCallbacks = [];
+  t.after(() => {
+    try {
+      for (const cleanup of cleanupCallbacks) cleanup();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  return {
+    beforeRemove: (cleanup) => cleanupCallbacks.push(cleanup),
+    directory,
+  };
 }
 
 function executable(directory, name, source) {
@@ -44,6 +64,17 @@ function executable(directory, name, source) {
   const command = join(directory, name);
   symlinkSync(script, command);
   return command;
+}
+
+function findExecutable(name) {
+  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
+    const candidate = resolve(directory || ".", name);
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {}
+  }
+  throw new Error(`${name} was not found on PATH`);
 }
 
 function readEvents(path) {
@@ -106,7 +137,8 @@ function desktopFixture(
   hangLaunch = false,
   delayedRestore = false,
 ) {
-  const directory = tempDirectory(t, "spex-desktop-source-");
+  const temporary = tempDirectory(t, "spex-desktop-source-");
+  const { directory } = temporary;
   const log = join(directory, "events.jsonl");
   const npmCommand = executable(
     directory,
@@ -164,6 +196,7 @@ setInterval(() => {}, 1000);
 `,
   );
   return {
+    beforeRemove: temporary.beforeRemove,
     directory,
     electronBinary,
     events: () => readEvents(log),
@@ -186,7 +219,7 @@ async function runDesktopFixture(fixture, launchArgs = []) {
   return { code, stdout, stderr };
 }
 
-function startDesktopHarness(t, fixture) {
+function startDesktopHarness(fixture) {
   const path = join(fixture.directory, "run-desktop.mjs");
   writeFileSync(
     path,
@@ -203,7 +236,7 @@ process.exitCode = await runDesktop({
     stdio: ["ignore", "pipe", "pipe"],
   });
   let complete = false;
-  t.after(() => {
+  fixture.beforeRemove(() => {
     if (complete) return;
     const launch = fixture.events().find(({ stage }) => stage === "launch");
     if (launch) stopProcess(launch.pid, "SIGKILL", true);
@@ -216,7 +249,7 @@ process.exitCode = await runDesktop({
   };
 }
 
-test("desktop source launch uses real stage processes (APP-SHELL-27)", async (t) => {
+integrationTest("desktop source launch uses real stage processes (APP-SHELL-27)", async (t) => {
   const fixture = desktopFixture(t);
   const result = await runDesktopFixture(fixture, ["--inspect=0", "--trace-warnings"]);
   const events = fixture.events();
@@ -239,7 +272,7 @@ test("desktop source launch uses real stage processes (APP-SHELL-27)", async (t)
   assert.equal(events[2].cwd, desktopDir);
 });
 
-test("desktop source launch preserves failure and restore outcomes (APP-SHELL-27)", async (t) => {
+integrationTest("desktop source launch preserves failure and restore outcomes (APP-SHELL-27)", async (t) => {
   const cases = [
     {
       outcomes: { build: 2 },
@@ -285,7 +318,9 @@ test("desktop source launch preserves failure and restore outcomes (APP-SHELL-27
       fixture.events().map(({ stage }) => stage),
       expected.stages,
     );
-    for (const pattern of expected.errors) assert.match(result.stderr, pattern);
+    for (const pattern of expected.errors) {
+      assert.match(result.stderr, pattern);
+    }
   }
 });
 
@@ -293,7 +328,7 @@ for (const [signal, exitCode, restoreFails] of [
   ["SIGINT", 130, false],
   ["SIGTERM", 143, true],
 ]) {
-  test(
+  integrationTest(
     `desktop ${signal} stops the real process group and restores Node (APP-SHELL-27)`,
     { skip: process.platform === "win32" },
     async (t) => {
@@ -302,7 +337,7 @@ for (const [signal, exitCode, restoreFails] of [
         restoreFails ? { "node-abi": 5 } : {},
         true,
       );
-      const harness = startDesktopHarness(t, fixture);
+      const harness = startDesktopHarness(fixture);
       let ready;
       ready = await waitFor(() => {
         const events = fixture.events();
@@ -354,39 +389,52 @@ for (const [signal, exitCode, restoreFails] of [
   );
 }
 
-test(
-  "a restore-time signal preserves an earlier desktop failure (APP-SHELL-27)",
+integrationTest(
+  "restore-time signals obey desktop failure precedence (APP-SHELL-27)",
   { skip: process.platform === "win32" },
   async (t) => {
-    const fixture = desktopFixture(
-      t,
-      { launch: 4, "node-abi": 5 },
-      false,
-      true,
-    );
-    const harness = startDesktopHarness(t, fixture);
-    await waitFor(
-      () => fixture.events().find(({ stage }) => stage === "node-abi-ready"),
-      "the mandatory Node restore",
-    );
+    const cases = [
+      { outcomes: { "node-abi": 5 }, code: 130 },
+      {
+        outcomes: { launch: 4, "node-abi": 5 },
+        code: 4,
+        priorFailure: /Electron launch exited 4/,
+      },
+    ];
 
-    harness.child.kill("SIGINT");
-    assert.deepEqual(await harness.output.exited, { code: 4, signal: null });
-    assert.match(harness.output.stderr(), /Electron launch exited 4/);
-    assert.match(harness.output.stderr(), /Node ABI restore exited 5/);
-    assert.match(
-      harness.output.stderr(),
-      /waiting for the mandatory Node ABI restore/,
-    );
-    harness.complete();
+    for (const expected of cases) {
+      const fixture = desktopFixture(t, expected.outcomes, false, true);
+      const harness = startDesktopHarness(fixture);
+      await waitFor(
+        () => fixture.events().find(({ stage }) => stage === "node-abi-ready"),
+        "the mandatory Node restore",
+      );
+
+      harness.child.kill("SIGINT");
+      assert.deepEqual(await harness.output.exited, {
+        code: expected.code,
+        signal: null,
+      });
+      assert.match(harness.output.stderr(), /WARNING: ABI restore failed/);
+      assert.match(harness.output.stderr(), /Node ABI restore exited 5/);
+      assert.match(
+        harness.output.stderr(),
+        /waiting for the mandatory Node ABI restore/,
+      );
+      if (expected.priorFailure) {
+        assert.match(harness.output.stderr(), expected.priorFailure);
+      }
+      harness.complete();
+    }
   },
 );
 
-test(
+integrationTest(
   "root server source launch builds, forwards args, and shuts down (SERVER-SHELL-15)",
   { skip: process.platform === "win32" },
   async (t) => {
-    const directory = tempDirectory(t, "spex-server-source-");
+    const temporary = tempDirectory(t, "spex-server-source-");
+    const { directory } = temporary;
     const log = join(directory, "npm.jsonl");
     const configPath = join(directory, "playbook.config.yaml");
     const dataDir = join(directory, "state");
@@ -403,11 +451,10 @@ appendFileSync(${JSON.stringify(log)}, JSON.stringify({
 `,
     );
 
-    assert.ok(process.env.npm_execpath, "npm_execpath identifies the real outer npm");
+    const npmCommand = findExecutable("npm");
     const child = spawn(
-      process.execPath,
+      npmCommand,
       [
-        process.env.npm_execpath,
         "run",
         "start:server",
         "--",
@@ -428,7 +475,7 @@ appendFileSync(${JSON.stringify(log)}, JSON.stringify({
       },
     );
     let launcherPid;
-    t.after(() => {
+    temporary.beforeRemove(() => {
       if (launcherPid) stopProcess(launcherPid, "SIGKILL");
       if (child.exitCode == null && child.signalCode == null) {
         stopProcess(child.pid, "SIGKILL", true);

@@ -87,7 +87,7 @@ Where `npm ci` has installed the repository dependencies and built `better-sqlit
 1. A build failure returns non-zero without changing the native ABI.
 2. Once the Electron rebuild is attempted, normal app exit, command failure, SIGINT, and SIGTERM each lead through the Node rebuild before the command returns.
 3. An interrupted or failed build, Electron rebuild, or app launch returns non-zero after any required restore.
-4. A failed Node rebuild prints an actionable warning and any preceding stage failure, then preserves the outcome established before restoration: a stage failure keeps its status, a signal that interrupted an active stage keeps 130 or 143, a signal first received during restoration governs only where no stage had failed, and a restore-only failure returns 1 rather than reporting success.
+4. A failed Node rebuild reports the restore failure with an actionable warning and any preceding stage failure, then selects the command outcome in this order: a signal that interrupted an active stage returns 130 or 143; otherwise, a preceding stage failure keeps its status; otherwise, a signal first received during restoration returns 130 or 143 even when restoration fails; otherwise, the restore failure returns 1.
 
 ### Process Topology
 
@@ -201,7 +201,7 @@ Where executable npm and Electron fixtures stand in for their external effects, 
 - a normal run invokes the repository-root build, Electron rebuild, app launch, and Node restore in order, forwarding the launch arguments unchanged [[app-shell-26](#app-shell-26)];
 - build, Electron-rebuild, launch, and restore failures take the required restore path, report both a stage and restore failure when they coincide, and return the required status [[app-shell-26](#app-shell-26)];
 - on a POSIX host, real SIGINT and SIGTERM delivery during launch terminates the detached fixture app and its grandchild, leaves neither orphaned, runs the Node restore, and returns 130 and 143 respectively [[app-shell-26](#app-shell-26)];
-- a signal first delivered during a failing restore after an app-launch failure waits for the restore, reports both failures, and preserves the app-launch status [[app-shell-26](#app-shell-26)].
+- on a POSIX host, a signal first delivered during a failing restore waits for the restore and reports its failure; after otherwise successful stages it returns the signal status, while after an app-launch failure it also reports that failure and preserves its status [[app-shell-26](#app-shell-26)].
 
 ## References
 
