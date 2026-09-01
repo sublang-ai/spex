@@ -131,6 +131,9 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
     const missing = await fetch(`${base}/missing.txt`);
     assert.equal(missing.status, 404);
     assert.equal((await missing.arrayBuffer()).byteLength, 0);
+    const directory = await rawRequest(`${base}/assets`);
+    assert.equal(directory.status, 404);
+    assert.equal(directory.body.byteLength, 0);
     const malformed = await rawRequest(`${base}/bad%`);
     assert.equal(malformed.status, 400);
     assert.equal(malformed.body.byteLength, 0);

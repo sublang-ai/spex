@@ -139,7 +139,7 @@ When the server shell serves bundle representations, it shall avoid repeated syn
 
 Where the server shell runs on a loopback port with a temporary config and store, the test suite shall assert over real HTTP and WebSocket connections that:
 
-- `GET /` serves the UI page with `Cache-Control: no-store` and its `connect-src` policy naming the serving origin, the 400 and 405 cases reject with empty bodies, and the 404 cases cover both lexical and realpath containment failures [[server-shell-4](#server-shell-4)];
+- `GET /` serves the UI page with `Cache-Control: no-store` and its `connect-src` policy naming the serving origin, the 400 and 405 cases reject with empty bodies, and the empty-body 404 cases cover a lexical escape, a missing path, a contained non-file path, and a real path outside the bundle [[server-shell-4](#server-shell-4)];
 - requested-path and real-path classification retain HTML index semantics [[server-shell-4](#server-shell-4)] through post-retarget content coding [[server-shell-16](#server-shell-16)], while a non-HTML index target retains its mapped content type and exact bytes [[server-shell-4](#server-shell-4)] under its type-selected coding [[server-shell-16](#server-shell-16)];
 - unreadable index, identity, and cold encoded representations each yield an empty 500 response and one standard-error diagnostic naming the resolved path and failure cause, after which successful HTTP and WebSocket requests prove that the failure stayed local [[server-shell-4](#server-shell-4)];
 - a temporary bundle fixture covers every content-type table row and the fallback with byte-identical identity bodies, and a successful HEAD response sends no body with any advertised length matching GET [[server-shell-4](#server-shell-4)];
