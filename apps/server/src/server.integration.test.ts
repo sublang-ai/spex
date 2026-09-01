@@ -562,6 +562,18 @@ test(
     const running = await startServer(tempOptions({ uiDist: bundleDir }));
     try {
       const base = `http://127.0.0.1:${running.port}`;
+      const resolvedUnreadablePaths = unreadablePaths.map((path) =>
+        realpathSync(path),
+      );
+      const diagnostics: string[] = [];
+      t.mock.method(console, "error", (...values: unknown[]) => {
+        diagnostics.push(values.map(String).join(" "));
+      });
+      const materializationDiagnostics = () =>
+        diagnostics.filter((diagnostic) =>
+          resolvedUnreadablePaths.some((path) => diagnostic.includes(path)),
+        );
+
       const response = await rawRequest(
         `${base}/unreadable.js`,
         {
@@ -573,11 +585,7 @@ test(
       assert.equal(response.headers["content-encoding"], "br");
       assert.equal(response.headers.vary, "Accept-Encoding");
       assert.equal(response.body.byteLength, 0);
-
-      const diagnostics: string[] = [];
-      t.mock.method(console, "error", (...values: unknown[]) => {
-        diagnostics.push(values.map(String).join(" "));
-      });
+      assert.equal(materializationDiagnostics().length, 0);
 
       const failures: Array<[string, string, Record<string, string>]> = [
         ["/", indexPath, {}],
@@ -589,10 +597,11 @@ test(
         assert.equal(failed.status, 500, path);
         assert.equal(failed.body.byteLength, 0, path);
       }
-      assert.equal(diagnostics.length, failures.length);
+      const failureDiagnostics = materializationDiagnostics();
+      assert.equal(failureDiagnostics.length, failures.length);
       for (const [, expectedPath] of failures) {
         const resolvedPath = realpathSync(expectedPath);
-        const matchingDiagnostics = diagnostics.filter((diagnostic) =>
+        const matchingDiagnostics = failureDiagnostics.filter((diagnostic) =>
           diagnostic.includes(resolvedPath),
         );
         assert.equal(matchingDiagnostics.length, 1, resolvedPath);
@@ -615,6 +624,7 @@ test(
       assert.equal(recovered.status, 200);
       assert.equal(recovered.headers["content-encoding"], "br");
       assert.deepEqual(brotliDecompressSync(recovered.body), encodedBody);
+      assert.equal(materializationDiagnostics().length, failures.length);
     } finally {
       for (const path of unreadablePaths) chmodSync(path, 0o600);
       await running.close();
