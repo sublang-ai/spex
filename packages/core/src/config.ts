@@ -59,6 +59,10 @@ const AGENT_FIELDS = new Set([
   "instruction",
   "permissions",
   "effort",
+  // Adapter-scoped fast mode (cligent 0.24). Spex accepts and preserves it
+  // so a config the launcher accepts is never rejected here
+  // (shared-config-roundtrip-1); cligent owns which adapters allow it.
+  "fastMode",
   // Read-only legacy alias for `effort` (cligent 0.14 rename, DR-014);
   // composition normalizes it and Spex never writes it back.
   "reasoningEffort",
@@ -87,6 +91,8 @@ export interface ResolvedAgent {
   permissions?: PermissionPolicyLike;
   /** Adapter-scoped vocabulary; validated during composition. */
   effort?: string;
+  /** Adapter-scoped fast mode; `false` is a literal request, not omission. */
+  fastMode?: boolean;
 }
 
 export interface ComposedPlayer extends ResolvedAgent {
@@ -121,6 +127,7 @@ export interface ResolvedBinding {
   playerId: string;
   model?: string | false;
   effort?: string | false;
+  fastMode?: boolean;
 }
 
 /** The binding as the shell takes it: the lane, plus this role's
@@ -394,6 +401,9 @@ function toResolvedAgent(
       );
     }
   }
+  if (rest.fastMode !== undefined && typeof rest.fastMode !== "boolean") {
+    throw new Error(`${path}.fastMode must be a boolean`);
+  }
   return rest as unknown as ResolvedAgent;
 }
 
@@ -461,7 +471,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
   if (!isPlainObject(value)) {
     throw new Error(`${path} must be a player id or a binding block`);
   }
-  const allowed = new Set(["player", "model", "effort"]);
+  const allowed = new Set(["player", "model", "effort", "fastMode"]);
   for (const key of Object.keys(value)) {
     if (allowed.has(key)) continue;
     throw new Error(
@@ -483,10 +493,17 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
       `${path}.${key} must be a string or false (the provider default)`,
     );
   };
+  const fastMode = value.fastMode;
+  if (fastMode !== undefined && typeof fastMode !== "boolean") {
+    // Unlike model and effort, fast mode carries no provider-default
+    // sentinel: omission inherits the player's, `false` is a literal request.
+    throw new Error(`${path}.fastMode must be a boolean`);
+  }
   return {
     playerId,
     ...(tuning("model") !== undefined ? { model: tuning("model") } : {}),
     ...(tuning("effort") !== undefined ? { effort: tuning("effort") } : {}),
+    ...(fastMode !== undefined ? { fastMode } : {}),
   };
 }
 

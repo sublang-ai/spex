@@ -313,6 +313,31 @@ test("scalar shorthands still compose as bare-adapter blocks", async () => {
   assert.deepEqual(reviewer, { id: "dev.reviewer", adapter: "claude" });
 });
 
+test("fast mode composes on agents and roles; a non-boolean is refused", async () => {
+  // The launcher that shares this file accepts adapter-scoped fast mode
+  // (cligent 0.24), so a config it accepts must never be rejected here
+  // (shared-config-roundtrip-1).
+  const top = baseConfig();
+  (top.captain as Record<string, unknown>).fastMode = true;
+  roster(top)["dev.reviewer"] = { adapter: "codex", fastMode: false };
+  const composed = await composeConfig(top, stubLoader);
+  assert.equal(
+    composed.captainAgent.fastMode,
+    true,
+    "an explicit true survives composition",
+  );
+  const reviewer = composed.players.find((p) => p.id === "dev.reviewer");
+  assert.equal(
+    reviewer?.fastMode,
+    false,
+    "an explicit false is a literal request, not omission",
+  );
+
+  const bad = baseConfig();
+  (bad.captain as Record<string, unknown>).fastMode = "yes";
+  await expectError(bad, /^captain\.fastMode must be a boolean$/);
+});
+
 test("unknown agent fields and adapters are rejected; kimi is known", async () => {
   const top = baseConfig();
   (top.captain as Record<string, unknown>).typo = true;
