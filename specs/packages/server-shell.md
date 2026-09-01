@@ -49,9 +49,36 @@ Where TLS certificate and key files are both configured, the server shell shall 
 
 When an HTTP request arrives, the server shell shall serve only the staged UI bundle, read-only:
 
-- `/` serves the bundle's `index.html`; another path serves the named bundle file with a content type derived from its extension;
-- a path resolving outside the bundle directory, a missing file, and a method other than GET or HEAD each yield an error status and serve nothing;
-- `index.html` is served with its `connect-src` policy retargeted to the serving origin, so the page may open WebSockets to this origin and to no other host; every other byte of the bundle is served as built.
+- a method other than GET or HEAD yields 405 and an empty body;
+- an undecodable URL path yields 400 and an empty body;
+- `/` resolves to the bundle's `index.html`, and another decoded path resolves relative to the bundle only after a lexical containment check;
+- a lexical escape, a missing path, a non-file path, or a real path outside the bundle, including through a symlink, yields 404 and an empty body;
+- `index.html` is served with `Cache-Control: no-store` and its `connect-src` policy retargeted to the serving origin, so the page may open WebSockets to this origin and to no other host;
+- apart from that policy substitution, every successful GET body is byte-identical to the corresponding staged bundle file after removal of any HTTP content coding;
+- a successful response maps the resolved file extension to its content type, with `application/octet-stream` as the fallback:
+
+| Extension | Content-Type |
+| --- | --- |
+| `.html` | `text/html; charset=utf-8` |
+| `.js` | `text/javascript; charset=utf-8` |
+| `.css` | `text/css; charset=utf-8` |
+| `.json`, `.map` | `application/json` |
+| `.png` | `image/png` |
+| `.svg` | `image/svg+xml` |
+| `.ico` | `image/x-icon` |
+| `.txt` | `text/plain; charset=utf-8` |
+| `.woff2` | `font/woff2` |
+
+#### server-shell-16
+
+When the server shell selects the representation for a successfully resolved bundle request, it shall apply content coding according to the file type and `Accept-Encoding`:
+
+- HTML, JavaScript, CSS, JSON, SVG, source maps, and plain text prefer Brotli when `br` is offered, then gzip when `gzip` is offered, and otherwise identity;
+- other formats, including PNG, ICO, and WOFF2, use identity coding and do not carry `Vary: Accept-Encoding`;
+- an explicitly listed coding with quality zero is not offered, and a nonzero wildcard offers a coding that is not explicitly listed;
+- a Brotli or gzip response carries the matching `Content-Encoding`, and every compressible response carries `Vary: Accept-Encoding`, including an identity response;
+- `index.html` is encoded only after its `connect-src` retargeting, so decoding yields the same retargeted bytes as an identity response;
+- HEAD selects the same representation headers as GET and sends no body, with any advertised length matching that GET representation.
 
 #### server-shell-5
 
@@ -99,7 +126,7 @@ The server shell build shall stage the built UI bundle into the shell package, s
 
 Where the server shell runs on a loopback port with a temporary config and store, the test suite shall assert over real HTTP and WebSocket connections that:
 
-- `GET /` serves the UI page with its `connect-src` policy naming the serving origin, an asset path serves with its content type, and a path escaping the bundle yields an error status [[server-shell-4](#server-shell-4)];
+- `GET /` serves the UI page with `Cache-Control: no-store` and its `connect-src` policy naming the serving origin, staged assets are byte-identical with their mapped content types, the 400 and 405 cases reject with empty bodies, and the 404 cases cover both lexical and realpath containment failures [[server-shell-4](#server-shell-4)];
 - a WebSocket handshake presenting the access URL's token from the page's own origin reaches the core's hello, on the same port that served the page [[server-shell-1](#server-shell-1)].
 
 #### server-shell-10
@@ -133,3 +160,9 @@ Where built server artifacts and a controlled npm executable are available on a 
 - the launcher invokes `npm run build` at the repository root before starting the real compiled server [[server-shell-14](#server-shell-14)];
 - the forwarded arguments govern the printed reachable access URL, config status, and created state root [[server-shell-14](#server-shell-14)] [[server-shell-1](#server-shell-1)];
 - SIGTERM delivered to the launcher lifecycle process shuts the core down cleanly, makes the root command return 0, and closes the bound port [[server-shell-6](#server-shell-6)].
+
+### Compression Coverage
+
+#### server-shell-17
+
+Where the server shell runs with the staged UI bundle, when the integration suite requests bundle files over real HTTP, it shall assert the negotiated representation cases of [[server-shell-16](#server-shell-16)]: Brotli preference, gzip fallback, identity without an offered coding, `Content-Encoding` and `Vary` headers, byte-identical decoded and identity bodies after the page's `connect-src` retargeting, an excluded already-compressed type left unchanged, and a bodyless HEAD response whose representation headers match GET.

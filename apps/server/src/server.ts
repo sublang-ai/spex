@@ -4,7 +4,7 @@
 // The server shell (DR-033): one TCP port serves the staged UI
 // bundle and the core's WebSocket endpoint to a remote browser,
 // behind the core's token handshake, with optional TLS
-// (SERVER-SHELL-1..4). A non-loopback bind without TLS is refused
+// (SERVER-SHELL-1..4, 16). A non-loopback bind without TLS is refused
 // unless --insecure makes the plaintext choice explicit
 // (SERVER-SHELL-2).
 
@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "nod
 import {
   createServer as createHttpServer,
   type IncomingMessage,
+  type OutgoingHttpHeaders,
   type Server as HttpServer,
   type ServerResponse,
 } from "node:http";
@@ -24,6 +25,11 @@ import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  brotliCompressSync,
+  constants as zlibConstants,
+  gzipSync,
+} from "node:zlib";
 
 import { CoreService } from "@sublang/spex-core";
 
@@ -146,6 +152,65 @@ const CONTENT_TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
+const COMPRESSIBLE_EXTENSIONS = new Set([
+  ".html",
+  ".js",
+  ".css",
+  ".json",
+  ".map",
+  ".svg",
+  ".txt",
+]);
+
+type ContentCoding = "br" | "gzip" | "identity";
+
+function acceptsContentCoding(
+  header: string | string[] | undefined,
+  coding: Exclude<ContentCoding, "identity">,
+): boolean {
+  if (header === undefined) return false;
+  const value = Array.isArray(header) ? header.join(",") : header;
+  let explicitQuality: number | undefined;
+  let wildcardQuality: number | undefined;
+  for (const entry of value.split(",")) {
+    const [namePart = "", ...parameters] = entry.split(";");
+    const name = namePart.trim().toLowerCase();
+    if (name !== coding && name !== "*") continue;
+    const qualityParameter = parameters.find((parameter) =>
+      /^\s*q\s*=/i.test(parameter),
+    );
+    const quality = qualityParameter
+      ? Number(qualityParameter.replace(/^\s*q\s*=\s*/i, ""))
+      : 1;
+    const normalizedQuality =
+      Number.isFinite(quality) && quality >= 0 && quality <= 1 ? quality : 0;
+    if (name === coding) {
+      explicitQuality = Math.max(explicitQuality ?? 0, normalizedQuality);
+    } else {
+      wildcardQuality = Math.max(wildcardQuality ?? 0, normalizedQuality);
+    }
+  }
+  return (explicitQuality ?? wildcardQuality ?? 0) > 0;
+}
+
+function negotiateContentCoding(
+  header: string | string[] | undefined,
+): ContentCoding {
+  if (acceptsContentCoding(header, "br")) return "br";
+  if (acceptsContentCoding(header, "gzip")) return "gzip";
+  return "identity";
+}
+
+function encodeBody(body: Buffer, coding: ContentCoding): Buffer {
+  if (coding === "br") {
+    return brotliCompressSync(body, {
+      params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 },
+    });
+  }
+  if (coding === "gzip") return gzipSync(body);
+  return body;
+}
+
 // The built page's CSP names only localhost connect targets — right
 // for the desktop's file:// copy, wrong here. Retarget connect-src to
 // the serving origin (SERVER-SHELL-4) so the page may open WebSockets
@@ -201,15 +266,26 @@ function serveBundle(
     res.writeHead(404).end();
     return;
   }
-  const type = CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream";
-  if (filePath === join(bundleDir, "index.html")) {
-    const page = retargetCsp(readFileSync(filePath, "utf8"), req.headers.host);
-    res.writeHead(200, { "content-type": type, "cache-control": "no-store" });
-    res.end(req.method === "HEAD" ? undefined : page);
-    return;
+  const extension = extname(filePath);
+  const type = CONTENT_TYPES[extension] ?? "application/octet-stream";
+  const isIndex = filePath === join(bundleDir, "index.html");
+  const body: Buffer = isIndex
+    ? Buffer.from(retargetCsp(readFileSync(filePath, "utf8"), req.headers.host))
+    : readFileSync(filePath);
+  const headers: OutgoingHttpHeaders = { "content-type": type };
+  if (isIndex) headers["cache-control"] = "no-store";
+  let responseBody: Buffer = body;
+  if (COMPRESSIBLE_EXTENSIONS.has(extension)) {
+    const coding = negotiateContentCoding(req.headers["accept-encoding"]);
+    headers.vary = "Accept-Encoding";
+    if (coding !== "identity") {
+      responseBody = encodeBody(body, coding);
+      headers["content-encoding"] = coding;
+    }
   }
-  res.writeHead(200, { "content-type": type });
-  res.end(req.method === "HEAD" ? undefined : readFileSync(filePath));
+  headers["content-length"] = responseBody.byteLength;
+  res.writeHead(200, headers);
+  res.end(req.method === "HEAD" ? undefined : responseBody);
 }
 
 export async function startServer(
