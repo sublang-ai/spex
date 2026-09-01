@@ -498,14 +498,20 @@ test("seedConfig creates once and never overwrites", () => {
   assert.equal(readFileSync(path, "utf8"), "captain: claude\n");
 });
 
-test("resolveConfigPath honors XDG_CONFIG_HOME", () => {
+test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
+  // The launcher resolves the same root, so both hosts open one file.
   assert.equal(
-    resolveConfigPath({ XDG_CONFIG_HOME: "/x" }, "/home/u"),
+    resolveConfigPath({ SPEX_HOME: "/x" }, "/home/u"),
     join("/x", "playbook", "playbook.config.yaml"),
   );
   assert.equal(
     resolveConfigPath({}, "/home/u"),
-    join("/home/u", ".config", "playbook", "playbook.config.yaml"),
+    join("/home/u", ".spex", "playbook", "playbook.config.yaml"),
+  );
+  // A blank override is not a root; the home fallback still applies.
+  assert.equal(
+    resolveConfigPath({ SPEX_HOME: "  " }, "/home/u"),
+    join("/home/u", ".spex", "playbook", "playbook.config.yaml"),
   );
 });
 

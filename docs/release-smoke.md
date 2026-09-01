@@ -46,7 +46,7 @@ Launch: `npm start`.
 
 | Step | Expect |
 | --- | --- |
-| First launch, fresh config (`XDG_CONFIG_HOME` unset or pointing at a home without `playbook/playbook.config.yaml`) | Captain home greets; quick start lists `/code`, `/review`, and `/decide`; readiness names any signed-out agents |
+| First launch, fresh config (`SPEX_HOME` unset or pointing at a root without `playbook/playbook.config.yaml`) | Captain home greets; quick start lists `/code`, `/review`, and `/decide`; readiness names any signed-out agents |
 | Palette (⌘P) → "Try the Academy example" | Project seeds, registers, and becomes current; repeat click reopens it without error |
 | Specs tab over Academy | The Packages branch renders its collection directories (the migrated corpus has no compositions, so no Compositions branch appears); filters and search work; an item with citations shows outbound citation rows, cited items show grouped inbound backlinks, and jumps land and flash |
 | Playbooks surface | `/code`, `/review`, and `/decide` pipelines show source, gears, and state machine; example card stages all four artifacts; prefill fills the compile form (roles pre-mapped) |

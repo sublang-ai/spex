@@ -10,7 +10,7 @@ Amended by [DR-036](036-file-state-store.md): the app-local SQLite store gives w
 
 ## Context
 
-- The playbook CLI owns a shared config file at `${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml` [[1]] with top-level maps: `profiles` (adapter, optional model, reasoning effort, permissions), `captain`, `playbooks.<id>` (`from`, optional `command`, `players.<role>`, plus a per-playbook option slice), and optional `layout`, `notifications`, `theme` [[3]].
+- The playbook CLI owns a shared config file, since moved to `${SPEX_HOME:-$HOME/.spex}/playbook/playbook.config.yaml` so it sits under this app's own root; it was originally at `${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml` [[1]] with top-level maps: `profiles` (adapter, optional model, reasoning effort, permissions), `captain`, `playbooks.<id>` (`from`, optional `command`, `players.<role>`, plus a per-playbook option slice), and optional `layout`, `notifications`, `theme` [[3]].
 - The playbook launcher validates that file fail-closed (missing `from`, import failure, key/manifest id mismatch, duplicate id or command, reserved captain role, unresolved required role, zero visible roles, profile-id vs adapter-shorthand collision) and composes it into runtime options with namespaced `<id>-<role>` player ids (`^[a-z][a-z0-9_-]*$`) [[3]].
 - Spex embeds the same runtime and captain shell ([DR-003](003-runtime-reuse.md)) and keeps tmux-play as a verification twin ([DR-002](002-desktop-app-architecture.md)), so both hosts must accept the same config.
 - Users hand-edit the config file for CLI use, including its comments; a Settings UI that rewrote the file wholesale would destroy them.
@@ -21,7 +21,7 @@ Amended by [DR-036](036-file-state-store.md): the app-local SQLite store gives w
 
 ### Shared config file remains the source of truth
 
-- `${XDG_CONFIG_HOME:-$HOME/.config}/playbook/playbook.config.yaml` [[1]] stays the single source of truth for `profiles`, `captain`, `playbooks`, `layout`, `notifications`, and `theme`.
+- `${SPEX_HOME:-$HOME/.spex}/playbook/playbook.config.yaml` stays the single source of truth for `profiles`, `captain`, `playbooks`, `layout`, `notifications`, and `theme`.
 - Spex reads and writes this file; the Settings UI is an editor over it, not a parallel store.
 - Writes are comment-preserving: targeted YAML edits keep comments, key order, and untouched formatting intact, so the file stays hand-editable for CLI use.
 

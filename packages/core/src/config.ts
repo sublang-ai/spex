@@ -252,12 +252,21 @@ export function createModuleLoader(
 // Paths and seeding
 // ---------------------------------------------------------------------------
 
+/**
+ * The shared config lives under this app's own root, resolved exactly as the
+ * shells resolve it, so Spex and the launcher open one file. The singular
+ * `playbook/` namespace holds it; the plural `playbooks/` library is ours.
+ */
 export function resolveConfigPath(
   env: NodeJS.ProcessEnv = process.env,
   home: string = env.HOME ?? homedir(),
 ): string {
-  const configHome = env.XDG_CONFIG_HOME || join(home, ".config");
-  return join(configHome, "playbook", "playbook.config.yaml");
+  const explicit = env.SPEX_HOME;
+  const root =
+    explicit !== undefined && explicit.trim().length > 0
+      ? explicit
+      : join(home, ".spex");
+  return join(root, "playbook", "playbook.config.yaml");
 }
 
 export function templatePath(): string {
