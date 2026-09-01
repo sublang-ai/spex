@@ -16,8 +16,8 @@ Realize [DR-036](../decisions/036-file-state-store.md): retire the app-local SQL
 - [x] DR-036 accepted with the DR-004, DR-033, and DR-035 amendments applied; core-service, app-shell, server-shell, and projects packages amended, lint-clean.
 - [x] Core phase 1: state root with the root lease, registry/act-log/preferences/forge-cache file stores behind the unchanged protocol, session record-stream files with sidecars, folded replay, and the one-time SQLite import with the library relocation; better-sqlite3 confined to the import path.
 - [x] Shells: desktop state-root start with the legacy `userData` path handed for import; server `--data-dir` replacing `--db`; smoke redirect covering the root.
-- [ ] Core phase 2 (on the playbook floor bump): shared session-store module for manifests, sessions-directory watch with foreign-session listing, and the `sessions` config key honored.
-- [ ] Workspace suites green, including restart, import, root-contention, and foreign-session coverage — the packaged app-shell-25 assertion and the phase-2 foreign-session coverage outstanding.
+- [x] Core phase 2: the `sessions` config key resolved as the launcher resolves it, the shared directory watched, and every session another host wrote served read-only, bound to its project by working directory.
+- [x] Workspace suites green, including restart, import, root-contention, and foreign-session coverage — the packaged app-shell-25 assertion outstanding.
 
 ## Tasks
 
@@ -28,7 +28,7 @@ Realize [DR-036](../decisions/036-file-state-store.md): retire the app-local SQL
 5. Core: session record-stream files and sidecars replacing the session tables; turns, titles, and usage folded from the stream; restart coverage on the file store.
 6. Core: the one-time SQLite import migration — rows, library relocation, `from`-path rewrite — with its coverage; better-sqlite3 confined to the import path.
 7. Shells: desktop state-root start and legacy-path handoff; server `--data-dir`; smoke redirect update; packaged-app suites green.
-8. Phase 2: adopt the playbook session-store exports and record tee, the sessions-directory watch with foreign-session coverage, and the `sessions` key; pin the playbook floor (upstream work tracked in [sublang-ai/playbook#45](https://github.com/sublang-ai/playbook/issues/45)).
+8. Phase 2: the `sessions` key, the sessions-directory watch, and foreign-session serving with coverage (the upstream tee shipped in playbook 11, tracked in [sublang-ai/playbook#45](https://github.com/sublang-ai/playbook/issues/45)).
 9. Full-suite verification and a live same-machine check: a `playbook run` session in a registered project's directory appearing in the app.
 
 ## Verification

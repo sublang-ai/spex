@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { composeConfig, templatePath } from "./config.js";
+import { ARTIFACT_SCHEMAS } from "./config.js";
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 import { SessionManager, CoreError, type RecordEnvelope } from "./session.js";
@@ -23,7 +24,7 @@ function registryEntry() {
     id: "code",
     command: "code",
     intent: "coding",
-    artifactSchema: 2,
+    artifactSchema: ARTIFACT_SCHEMAS[0],
     requiredRoleIds: ["coder", "reviewer"],
     idleStateId: "ready",
     finalStateId: "done",

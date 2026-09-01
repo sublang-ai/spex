@@ -216,7 +216,7 @@ The core service shall serve every session present in the shared session store's
 
 #### core-service-65
 
-While another host's lease holds a session in the shared session store, the core service shall write none of that session's files, so per-session single-writer holds across hosts ([DR-036](../decisions/036-file-state-store.md)).
+The core service shall write none of the files of a session another host wrote [[core-service-60](#core-service-60)], so per-session single-writer holds across hosts without coordination ([DR-036](../decisions/036-file-state-store.md)).
 
 #### core-service-61
 
@@ -272,7 +272,7 @@ The core package shall filter records by visibility [[core-service-8](#core-serv
 The core package shall own the file state of [DR-036](../decisions/036-file-state-store.md) — the state root's registry, intent-act-log, preferences, and forge-cache files, and the per-session files it writes into the shared session store — defining each file kind with a version marker and applying forward migrations at startup before accepting client connections:
 
 - When a migration fails, the core package stops serving and reports the failure, so a partially migrated root is never served.
-- The core package is the only writer of the Spex-owned files, exposing stored data solely over the protocol; session manifests are written through the shared session-store module.
+- The core package is the only writer of the Spex-owned files, exposing stored data solely over the protocol.
 - A released migration is never edited: a format change is a new migration, so files written by an earlier release open rather than failing on a field they have never seen.
 
 ### Intent Storage
@@ -418,7 +418,7 @@ Where a fixture session — manifest naming a registered project's directory as 
 - their records are served with hidden records filtered from the session subscription [[core-service-10](#core-service-10)];
 - a session-state report announcing the second session reaches a subscribed client [[core-service-60](#core-service-60)];
 - a fixture session whose working directory matches no registered project is absent from the listing [[core-service-60](#core-service-60)];
-- a fixture session held by a live foreign lease serves read-only, its files byte-identical afterwards [[core-service-65](#core-service-65)].
+- every fixture file is byte-identical once the service stops, and no sidecar joins them [[core-service-65](#core-service-65)].
 
 #### core-service-63
 

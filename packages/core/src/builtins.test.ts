@@ -6,13 +6,14 @@ import assert from "node:assert/strict";
 
 import { loadBuiltinCatalog } from "./builtins.js";
 import type { LoadModule } from "./config.js";
+import { ARTIFACT_SCHEMAS } from "./config.js";
 
 function entry(id: string, roles: string[]) {
   return {
     id,
     command: id,
     intent: `${id} intent`,
-    artifactSchema: 2,
+    artifactSchema: ARTIFACT_SCHEMAS[0],
     requiredRoleIds: roles,
     validateOptions: () => ({}),
     createRuntime: () => ({}),

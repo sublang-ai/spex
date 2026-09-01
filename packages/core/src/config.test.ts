@@ -11,6 +11,7 @@ import { parse as parseYaml } from "yaml";
 import { AGENT_RUNTIME_TARGETS, classifyRuntime } from "@sublang/cligent";
 
 import {
+  ARTIFACT_SCHEMAS,
   checkAdapterReadiness,
   checkAdapterRuntime,
   composeConfig,
@@ -31,7 +32,7 @@ function registryEntry(overrides: Record<string, unknown> = {}) {
     id: "code",
     command: "code",
     intent: "software development / SDLC coding workflow",
-    artifactSchema: 2,
+    artifactSchema: ARTIFACT_SCHEMAS[0],
     requiredRoleIds: ["coder"],
     summaryPolicy: {
       stateCountLabels: {},

@@ -21,6 +21,7 @@ import { CoreService } from "./service.js";
 import { parseSpecTree } from "./specs.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
+import { ARTIFACT_SCHEMAS } from "./config.js";
 import type {
   Command,
   CommandResults,
@@ -783,7 +784,7 @@ const FAKE_REGISTRY_MODULE = {
     id: "code",
     command: "code",
     intent: "scripted coverage playbook",
-    artifactSchema: 2,
+    artifactSchema: ARTIFACT_SCHEMAS[0],
     requiredRoleIds: ["coder"],
     validateOptions: (captainOptions: unknown) => captainOptions,
     createRuntime: () => {

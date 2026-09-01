@@ -84,6 +84,10 @@ interface SessionMeta {
   /** Set when an append failed: the file is a complete prefix only up
    * to this sequence; later records lived in memory only (DR-036). */
   streamIncompleteAfterSeq?: number;
+  /** Set on a session another host wrote into the shared store: this
+   * core serves it and writes none of its files (core-service-65).
+   * In memory only — we write no sidecar for it. */
+  foreign?: true;
 }
 
 interface TurnRow {
@@ -247,7 +251,10 @@ export class Store {
     if (!this.dir) return;
     mkdirSync(this.dir, { recursive: true });
     this.sessionsDir = options.sessionsDir ?? join(this.dir, "sessions");
-    mkdirSync(this.sessionsDir, { recursive: true });
+    // Sessions are private, and the playbook store refuses a sessions
+    // directory that is not 0700 — so a config pointing both hosts at
+    // this one works rather than failing at the CLI's first launch.
+    mkdirSync(this.sessionsDir, { recursive: true, mode: 0o700 });
     mkdirSync(join(this.dir, "intents"), { recursive: true });
     this.acquireRootLease();
     try {
@@ -383,7 +390,8 @@ export class Store {
   }
 
   private saveSidecar(meta: SessionMeta): void {
-    if (!this.sessionsDir) return;
+    // Another host owns its own session's files (core-service-65).
+    if (!this.sessionsDir || meta.foreign) return;
     writeAtomic(this.sidecarFile(meta.id), JSON.stringify({ v: 1, ...meta }));
   }
 
@@ -439,6 +447,69 @@ export class Store {
         this.foldRecord(meta.id, entry.record);
       }
     }
+  }
+
+  /**
+   * Adopt every session another host wrote into the shared session
+   * store's directory (core-service-60): a playbook captain-session
+   * record `<id>.json` names the working directory, and the replay
+   * stream `<id>.records.jsonl` beside it carries the history. A
+   * session is adopted once, bound to the registered project whose
+   * path is that working directory; one matching no project is left
+   * alone, and one this core already holds is never re-read. Returns
+   * the ids newly adopted.
+   */
+  adoptForeignSessions(sessionsDir: string): string[] {
+    if (!existsSync(sessionsDir)) return [];
+    const adopted: string[] = [];
+    for (const file of readdirSync(sessionsDir)) {
+      // Our own sidecars end `.spex.json`; a captain-session record is
+      // `<id>.json`, and every other file in the directory is theirs.
+      if (!file.endsWith(".json") || file.endsWith(".spex.json")) continue;
+      const id = file.slice(0, -".json".length);
+      if (this.sessions.has(id)) continue;
+      const record = readJson<{ sessionId?: unknown; cwd?: unknown }>(
+        join(sessionsDir, file),
+      );
+      if (
+        !record ||
+        typeof record.cwd !== "string" ||
+        record.sessionId !== id
+      ) {
+        continue;
+      }
+      const project = this.getProjectByPath(record.cwd);
+      if (!project) continue;
+      const stored = readLinesPrefix<StoredRecord & { v?: number }>(
+        join(sessionsDir, `${id}.records.jsonl`),
+      ).map(({ v: _v, ...rest }) => rest as StoredRecord);
+      if (stored.length === 0) continue;
+      const players = [
+        ...new Set(
+          stored
+            .map((entry) => (entry.record as { playerId?: unknown }).playerId)
+            .filter((playerId): playerId is string => typeof playerId === "string"),
+        ),
+      ];
+      this.sessions.set(id, {
+        id,
+        projectId: project.id,
+        createdAt: stored[0].record.timestamp,
+        endedAt: stored[stored.length - 1].record.timestamp,
+        // Liveness belongs to the core that runs a session; a session
+        // another host wrote is never live here (core-service-10).
+        live: false,
+        players: players.map((playerId) => ({ id: playerId })) as SessionInfo["players"],
+        initialVisible: players,
+        // Read-only: this core writes none of another host's files
+        // (core-service-65).
+        foreign: true,
+      });
+      this.records.set(id, stored);
+      for (const entry of stored) this.foldRecord(id, entry.record);
+      adopted.push(id);
+    }
+    return adopted;
   }
 
   private foldIntentAct(act: IntentAct): void {
@@ -890,8 +961,9 @@ export class Store {
       ...(role !== undefined ? { role } : {}),
     };
     this.recordsOf(sessionId).push(stored);
-    if (!this.sessionsDir) return;
     const meta = this.sessions.get(sessionId);
+    // Another host owns its own session's stream (core-service-65).
+    if (!this.sessionsDir || meta?.foreign) return;
     // Once latched, the file stays a clean durable prefix: memory-only
     // records after the latch are served live but never claimed stored.
     if (meta?.streamIncompleteAfterSeq !== undefined) return;

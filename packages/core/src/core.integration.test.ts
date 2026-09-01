@@ -1092,3 +1092,123 @@ test("core-service-64: a legacy library relocates into the root with config from
   );
   await service.stop();
 });
+
+// ---------------------------------------------------------------------------
+// CORE-60/65: sessions another host wrote into the shared session store
+// ---------------------------------------------------------------------------
+
+/** A captain-session record and replay stream as the playbook CLI writes
+ * them: `<id>.json` naming the working directory, `<id>.records.jsonl`
+ * carrying the history in the shared v1 envelope. */
+function writeForeignSession(
+  sessionsDir: string,
+  id: string,
+  cwd: string,
+  records: Record<string, unknown>[],
+): void {
+  mkdirSync(sessionsDir, { recursive: true });
+  writeFileSync(
+    join(sessionsDir, `${id}.json`),
+    JSON.stringify({ schemaVersion: 6, sessionId: id, state: "settled", cwd }),
+  );
+  writeFileSync(
+    join(sessionsDir, `${id}.records.jsonl`),
+    records
+      .map((record, index) =>
+        JSON.stringify({ v: 1, seq: index + 1, record }),
+      )
+      .join("\n") + "\n",
+  );
+}
+
+function foreignTurn(prompt: string): Record<string, unknown>[] {
+  return [
+    {
+      type: "turn_started",
+      turnId: 1,
+      turn: { id: 1, prompt },
+      timestamp: 1000,
+    },
+    {
+      type: "captain_prompt",
+      turnId: 1,
+      timestamp: 1500,
+      prompt: "routing",
+      visibility: "hidden",
+    },
+    { type: "turn_finished", turnId: 1, timestamp: 2000 },
+  ];
+}
+
+test("core-service-60: sessions another host wrote are served, bound to their project by working directory", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-foreign-"));
+  const sessionsDir = join(dir, "shared-sessions");
+  const projectDir = join(dir, "project");
+  mkdirSync(projectDir);
+  execFileSync("git", ["init", "-q", projectDir]);
+  const configPath = join(dir, "playbook.config.yaml");
+  writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+
+  // One session is already there when the service starts...
+  const atStartup = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+  writeForeignSession(sessionsDir, atStartup, projectDir, foreignTurn("from the terminal"));
+  // ...and one names a directory no project is registered for.
+  const unregistered = "ccccccc1-3333-4333-8333-cccccccccccc";
+  writeForeignSession(sessionsDir, unregistered, join(dir, "elsewhere"), foreignTurn("elsewhere"));
+
+  const service = await CoreService.start({
+    token: "test",
+    configPath,
+    dataDir: join(dir, "state"),
+    env: {},
+    home: join(dir, "home"),
+    // The sessions watcher rides the same option as the config watcher.
+    watchConfig: true,
+  });
+  const client = new Client(service.port());
+  await client.open();
+  await client.expectOk("project.register", { path: projectDir });
+
+  // Registration happens after startup, so the startup scan found no
+  // project for it: the next scan binds it.
+  const arrival = "bbbbbbb2-2222-4222-8222-bbbbbbbbbbbb";
+  writeForeignSession(sessionsDir, arrival, projectDir, foreignTurn("while running"));
+
+  const listed = await client.waitFor(
+    (m) =>
+      m.type === "session.state" &&
+      (m as { session: SessionInfo }).session.id === arrival,
+  );
+  assert.ok(listed, "an arrival while running is announced");
+
+  const sessions = await client.expectOk("session.list", {});
+  const ids = sessions.map((s: SessionInfo) => s.id);
+  assert.ok(ids.includes(atStartup), "the session present at startup is served");
+  assert.ok(ids.includes(arrival), "the session that arrived is served");
+  assert.ok(
+    !ids.includes(unregistered),
+    "a session matching no registered project is not listed",
+  );
+  const served = sessions.find((s: SessionInfo) => s.id === atStartup);
+  assert.equal(served?.live, false, "another host's session is never live here");
+  assert.equal(served?.title, "from the terminal", "the title folds from the stream");
+  assert.equal(served?.turns, 1);
+
+  // Hidden records stay off the session channel on replay (CORE-10).
+  const history = await client.expectOk("history.get", { sessionId: atStartup });
+  assert.deepEqual(
+    history.records.map((r: StoredRecord) => r.record.type),
+    ["turn_started", "turn_finished"],
+  );
+
+  // CORE-65: this core writes none of another host's files.
+  const before = readFileSync(join(sessionsDir, `${atStartup}.records.jsonl`), "utf8");
+  assert.ok(!existsSync(join(sessionsDir, `${atStartup}.spex.json`)));
+  client.close();
+  await service.stop();
+  assert.equal(
+    readFileSync(join(sessionsDir, `${atStartup}.records.jsonl`), "utf8"),
+    before,
+    "the foreign stream is byte-identical afterwards",
+  );
+});

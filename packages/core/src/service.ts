@@ -31,6 +31,7 @@ import {
   createModuleLoader,
   loadConfig,
   resolveConfigPath,
+  resolveSessionsDir,
   seedConfig,
   summarizeConfig,
   type ComposedConfig,
@@ -175,6 +176,8 @@ export class CoreService {
   readonly events: CoreServiceEvents = {};
   private wss?: WebSocketServer;
   private watcher?: FSWatcher;
+  private sessionsWatcher?: FSWatcher;
+  private adoptTimer?: NodeJS.Timeout;
   private reloadTimer?: NodeJS.Timeout;
 
   private configState: ConfigState;
@@ -260,9 +263,56 @@ export class CoreService {
     service.relocateLegacyLibrary();
     service.seeded = seedConfig(service.configPath);
     await service.reloadConfig();
-    if (options.watchConfig !== false) service.watchConfigFile();
+    service.adoptForeignSessions();
+    if (options.watchConfig !== false) {
+      service.watchConfigFile();
+      service.watchSessionsDir();
+    }
     await service.listen(options.port ?? 0);
     return service;
+  }
+
+  /**
+   * Serve the sessions another host wrote into the shared session
+   * store (core-service-60). Called once before serving and again
+   * whenever a captain-session record lands in that directory, so a
+   * session started in a terminal joins the app's listing.
+   */
+  private adoptForeignSessions(): void {
+    let adopted: string[];
+    try {
+      adopted = this.store.adoptForeignSessions(this.sessionsDir());
+    } catch {
+      // Another host's directory is not ours to depend on: an
+      // unreadable one costs its sessions, never this service.
+      return;
+    }
+    const projectIds = new Set<string>();
+    for (const sessionId of adopted) {
+      const session = this.store.describeSession(sessionId);
+      if (!session) continue;
+      this.broadcast({ type: "session.state", session });
+      projectIds.add(session.projectId);
+    }
+    if (projectIds.size > 0) this.queueLedgerChange([...projectIds]);
+  }
+
+  private sessionsDir(): string {
+    return resolveSessionsDir(this.configPath, this.options.env);
+  }
+
+  private watchSessionsDir(): void {
+    const dir = this.sessionsDir();
+    if (!existsSync(dir)) return;
+    this.sessionsWatcher = watch(dir, (_eventType, filename) => {
+      // Our own sidecars and streams never carry a bare `<id>.json`
+      // name, so this fires for another host's records alone.
+      if (!filename?.endsWith(".json") || filename.endsWith(".spex.json")) {
+        return;
+      }
+      if (this.adoptTimer) clearTimeout(this.adoptTimer);
+      this.adoptTimer = setTimeout(() => this.adoptForeignSessions(), 150);
+    });
   }
 
   /** The compiled-playbook library home (DR-005, DR-036): under the
@@ -330,7 +380,9 @@ export class CoreService {
 
   async stop(): Promise<void> {
     this.watcher?.close();
+    this.sessionsWatcher?.close();
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
+    if (this.adoptTimer) clearTimeout(this.adoptTimer);
     if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
     // Kill any in-flight compile child so shutdown never orphans slc.
     for (const controller of this.activeCompiles.values()) controller.abort();

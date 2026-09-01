@@ -21,6 +21,7 @@ import {
   type LineSpawner,
 } from "./compile.js";
 import type { RegistryEntryLike } from "./config.js";
+import { ARTIFACT_SCHEMAS } from "./config.js";
 
 const STUB_SLC = stubSlcSource();
 
@@ -75,7 +76,7 @@ fs.writeFileSync(
     "  id: '" + base + "',",
     "  command: '" + base + "',",
     "  intent: 'Stub Demo - a one-player workflow.',",
-    "  artifactSchema: 2,",
+    "  artifactSchema: ${ARTIFACT_SCHEMAS[0]},",
     "  requiredRoleIds: [...REQUIRED_ROLE_IDS],",
     "  validateOptions(value) {",
     "    if (value === undefined) return {};",
@@ -166,7 +167,7 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
   assert.deepEqual(entry.requiredRoleIds, ["Helper"]);
   // The manifest advertises the artifact format the shared factory
   // checks; a wrapper that dropped it would fail at construction.
-  assert.equal(entry.artifactSchema, 2);
+  assert.equal(entry.artifactSchema, ARTIFACT_SCHEMAS[0]);
 
   // The wrapper hands captainOptions through the entry's own
   // validateOptions and interposes on nothing else: what the host

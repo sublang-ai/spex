@@ -23,6 +23,7 @@ import {
   type RuntimeReadiness,
 } from "@sublang/cligent";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
+import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
 
 import type {
@@ -37,11 +38,13 @@ export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
  * (DR-014); composition refuses file-path registries without it. */
 export const REGISTRY_CONTRACT = 3;
 
-/** The artifact format a v8 registry manifest must advertise. The
- * shared runtime factory refuses a manifest that disagrees with the
- * module it loads, so Spex checks it at generation time rather than
- * letting a session fail at construction (DR-032). */
-export const ARTIFACT_SCHEMA = 2;
+/** The artifact formats a registry manifest may advertise, read from
+ * the installed playbook rather than restated here: the shared runtime
+ * factory refuses a manifest that disagrees with the module it loads,
+ * so Spex checks it at generation time rather than letting a session
+ * fail at construction (DR-032), and a playbook release that moves the
+ * schema moves this check with it. */
+export const ARTIFACT_SCHEMAS: readonly number[] = SUPPORTED_ARTIFACT_SCHEMAS;
 
 // The adapter set is the embedded runtime's own (DR-019): an id
 // outside it cannot start a session, so composition rejects it with
@@ -269,6 +272,43 @@ export function resolveConfigPath(
   return join(root, "playbook", "playbook.config.yaml");
 }
 
+/**
+ * The shared session store's directory: where the playbook CLI keeps
+ * its sessions, so a session run in a terminal is one Spex serves
+ * (core-service-60). The optional top-level `sessions` key names it
+ * for both hosts, resolved as the launcher resolves it — `~` expanded,
+ * an absolute path taken as given, anything else relative to the
+ * config's own directory — and defaulting to the launcher's own XDG
+ * state location when the key is absent.
+ */
+export function resolveSessionsDir(
+  configPath: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = env.HOME ?? homedir(),
+): string {
+  let raw: unknown;
+  try {
+    raw = parseYaml(readFileSync(configPath, "utf8"));
+  } catch {
+    // A missing or unparsable config names no directory; the default
+    // still holds, and config validity is reported elsewhere.
+    raw = undefined;
+  }
+  const configured = isPlainObject(raw) ? raw.sessions : undefined;
+  if (typeof configured === "string" && configured.trim().length > 0) {
+    const value = configured.trim();
+    if (value === "~" || value.startsWith("~/")) {
+      return join(home, value.slice(1));
+    }
+    // `~user` is another user's home, which this host never resolves.
+    if (!value.startsWith("~")) {
+      return isAbsolute(value) ? value : join(dirname(configPath), value);
+    }
+  }
+  const stateHome = env.XDG_STATE_HOME || join(home, ".local", "state");
+  return join(stateHome, "playbook", "sessions");
+}
+
 export function templatePath(): string {
   return fileURLToPath(
     new URL("../assets/playbook.config.template.yaml", import.meta.url),
@@ -434,7 +474,7 @@ export interface RegistryEntryLike {
   id: string;
   command: string;
   intent: string;
-  /** The artifact format this manifest advertises — 2 under v8. */
+  /** The artifact format this manifest advertises [[ARTIFACT_SCHEMAS]]. */
   artifactSchema: number;
   requiredRoleIds: readonly string[];
   /** Role groups the manifest may run at once (v8): each must bind to
@@ -456,7 +496,8 @@ export function isValidRegistryEntry(
     // A manifest that advertises no schema, or a different one, cannot
     // construct its runtime — the factory refuses it — so it is not a
     // valid entry here either (DR-032).
-    entry.artifactSchema === ARTIFACT_SCHEMA &&
+    typeof entry.artifactSchema === "number" &&
+    ARTIFACT_SCHEMAS.includes(entry.artifactSchema) &&
     Array.isArray(entry.requiredRoleIds) &&
     typeof entry.validateOptions === "function" &&
     typeof entry.createRuntime === "function"

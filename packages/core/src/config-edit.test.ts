@@ -18,13 +18,14 @@ import {
   type AgentPatch,
 } from "./config-edit.js";
 import { templatePath, type LoadModule } from "./config.js";
+import { ARTIFACT_SCHEMAS } from "./config.js";
 
 function stubEntry(id: string, roles: string[]) {
   return {
     id,
     command: id,
     intent: `${id} stub`,
-    artifactSchema: 2,
+    artifactSchema: ARTIFACT_SCHEMAS[0],
     requiredRoleIds: roles,
     validateOptions: () => ({}),
     createRuntime: () => ({}),
