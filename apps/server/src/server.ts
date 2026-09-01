@@ -353,7 +353,13 @@ function serveBundle(
         fileStat,
       );
     }
-  } catch {
+  } catch (error) {
+    console.error(
+      `[spex-server] bundle materialization failed: ${JSON.stringify({
+        path: filePath,
+        cause: error instanceof Error ? error.message : String(error),
+      })}`,
+    );
     res.writeHead(500).end();
     return;
   }

@@ -14,6 +14,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   symlinkSync,
   unlinkSync,
   utimesSync,
@@ -544,7 +545,7 @@ test("encoded asset cache reuses and refreshes bodies (SERVER-SHELL-19)", async 
 test(
   "bundle materialization failures stay local (SERVER-SHELL-9, SERVER-SHELL-19)",
   { skip: process.platform === "win32" },
-  async () => {
+  async (t) => {
     const bundleDir = mkdtempSync(join(tmpdir(), "spex-server-head-"));
     const encodedPath = join(bundleDir, "unreadable.js");
     const identityPath = join(bundleDir, "unreadable.png");
@@ -573,15 +574,32 @@ test(
       assert.equal(response.headers.vary, "Accept-Encoding");
       assert.equal(response.body.byteLength, 0);
 
-      const failures: Array<[string, Record<string, string>]> = [
-        ["/", {}],
-        ["/unreadable.png", {}],
-        ["/unreadable.js", { "accept-encoding": "br" }],
+      const diagnostics: string[] = [];
+      t.mock.method(console, "error", (...values: unknown[]) => {
+        diagnostics.push(values.map(String).join(" "));
+      });
+
+      const failures: Array<[string, string, Record<string, string>]> = [
+        ["/", indexPath, {}],
+        ["/unreadable.png", identityPath, {}],
+        ["/unreadable.js", encodedPath, { "accept-encoding": "br" }],
       ];
-      for (const [path, headers] of failures) {
+      for (const [path, , headers] of failures) {
         const failed = await rawRequest(`${base}${path}`, { headers });
         assert.equal(failed.status, 500, path);
         assert.equal(failed.body.byteLength, 0, path);
+      }
+      assert.equal(diagnostics.length, failures.length);
+      for (const [, expectedPath] of failures) {
+        const resolvedPath = realpathSync(expectedPath);
+        const matchingDiagnostics = diagnostics.filter((diagnostic) =>
+          diagnostic.includes(resolvedPath),
+        );
+        assert.equal(matchingDiagnostics.length, 1, resolvedPath);
+        assert.match(
+          matchingDiagnostics[0] ?? "",
+          /EACCES|permission denied/i,
+        );
       }
 
       const hello = await wsHello(

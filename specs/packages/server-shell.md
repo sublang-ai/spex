@@ -53,7 +53,7 @@ When an HTTP request arrives, the server shell shall serve only the staged UI bu
 - an undecodable URL path yields 400 and an empty body;
 - `/` resolves to the bundle's `index.html`, and another decoded path resolves relative to the bundle only after a lexical containment check;
 - a lexical escape, a missing path, a non-file path, or a real path outside the bundle, including through a symlink, yields 404 and an empty body;
-- if GET cannot materialize a successfully resolved response body because reading or encoding fails, it yields 500 with an empty body, and the failure remains isolated to that request, leaving the HTTP and core endpoints available;
+- if GET cannot materialize a successfully resolved response body because reading or encoding fails, it yields 500 with an empty body, writes one standard-error diagnostic naming the resolved path and failure cause, and remains isolated to that request, leaving the HTTP and core endpoints available;
 - after successful path resolution, HEAD neither reads nor encodes representation bytes, sends no body, and any advertised `Content-Length` matches the corresponding GET representation;
 - a successfully contained file has index semantics when either its lexically resolved requested path or its real path is the bundle's `index.html`: a successful index response carries `Cache-Control: no-store`, and, when its resolved extension is `.html`, its `connect-src` policy is retargeted to the serving origin so the page may open WebSockets to this origin and to no other host;
 - apart from that policy substitution, every successful GET body is byte-identical, after removal of any HTTP content coding, to the staged bundle bytes from which the selected representation was materialized [[server-shell-18](#server-shell-18)];
@@ -141,7 +141,7 @@ Where the server shell runs on a loopback port with a temporary config and store
 
 - `GET /` serves the UI page with `Cache-Control: no-store` and its `connect-src` policy naming the serving origin, the 400 and 405 cases reject with empty bodies, and the 404 cases cover both lexical and realpath containment failures [[server-shell-4](#server-shell-4)];
 - requested-path and real-path classification retain HTML index semantics [[server-shell-4](#server-shell-4)] through post-retarget content coding [[server-shell-16](#server-shell-16)], while a non-HTML index target retains its mapped content type and exact bytes [[server-shell-4](#server-shell-4)] under its type-selected coding [[server-shell-16](#server-shell-16)];
-- unreadable index, identity, and cold encoded representations each yield an empty 500 response, after which successful HTTP and WebSocket requests prove that the failure stayed local [[server-shell-4](#server-shell-4)];
+- unreadable index, identity, and cold encoded representations each yield an empty 500 response and one standard-error diagnostic naming the resolved path and failure cause, after which successful HTTP and WebSocket requests prove that the failure stayed local [[server-shell-4](#server-shell-4)];
 - a temporary bundle fixture covers every content-type table row and the fallback with byte-identical identity bodies, and a successful HEAD response sends no body with any advertised length matching GET [[server-shell-4](#server-shell-4)];
 - a WebSocket handshake presenting the access URL's token from the page's own origin reaches the core's hello, on the same port that served the page [[server-shell-1](#server-shell-1)].
 
