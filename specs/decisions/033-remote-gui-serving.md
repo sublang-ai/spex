@@ -43,6 +43,7 @@ Amended by [DR-036](036-file-state-store.md): the each-shell-one-store rule give
 - The server shell declares the `claude`, `codex`, and `opencode` SDKs as its own dependencies, extending the app-supply duty of [DR-024](024-app-supplied-agent-runtimes.md) to this shell.
 - It owns its app-local store default under the XDG data directory, separate from the desktop's Electron store — each shell one instance, one store, per [DR-004](004-config-and-persistence.md).
 - To reduce remote transfer size without another dependency or option, it uses Node's built-in compression to negotiate Brotli, then gzip, for text-based bundle responses while leaving already-compressed formats unchanged.
+- Because unauthenticated static requests share the core's event loop, non-index encoded assets are cached per launch and HEAD never materializes a body; the small Host-dependent index remains uncached.
 - It serves `index.html` with the CSP `connect-src` retargeted to the serving origin; after removal of any negotiated HTTP content coding, the bundle otherwise matches the build, keeping the desktop's `file://` copy byte-identical.
 - Launched from a terminal it inherits the shell environment, so the desktop's login-shell capture has no server counterpart; daemon supervisors supply environment their own way.
 - OS notifications and badges have no remote surface; the Dashboard attention queue ([DR-029](029-session-history-home.md)) is the attention surface.

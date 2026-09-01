@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Serving, TLS, bind-safety, and shutdown coverage
-// (SERVER-SHELL-9..12, 17): the real shell over real HTTP(S) and
+// (SERVER-SHELL-9..12, 17, 19): the real shell over real HTTP(S) and
 // WebSocket connections, and a real child process for the signal
 // path. The staged bundle is the real UI build.
 
@@ -10,10 +10,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   symlinkSync,
+  unlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import {
@@ -141,26 +144,112 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
   }
 });
 
-test("bundle realpaths stay contained (SERVER-SHELL-9)", { skip: process.platform === "win32" }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-server-path-"));
-  const bundleDir = join(dir, "bundle");
-  const outside = join(dir, "outside.txt");
-  mkdirSync(bundleDir);
-  writeFileSync(outside, "not in the bundle");
-  symlinkSync(outside, join(bundleDir, "leak.txt"));
+test(
+  "bundle realpaths stay contained (SERVER-SHELL-9, SERVER-SHELL-19)",
+  { skip: process.platform === "win32" },
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "spex-server-path-"));
+    const bundleDir = join(dir, "bundle");
+    const outside = join(dir, "outside.txt");
+    mkdirSync(bundleDir);
+    writeFileSync(join(bundleDir, "leak.txt"), "initial bundle bytes");
+    writeFileSync(
+      join(bundleDir, "page.html"),
+      '<meta content="connect-src http://localhost:8137"><p>index</p>',
+    );
+    symlinkSync("page.html", join(bundleDir, "index.html"));
+    writeFileSync(outside, "not in the bundle");
+    const running = await startServer(tempOptions({ uiDist: bundleDir }));
+    try {
+      const base = `http://127.0.0.1:${running.port}`;
+      const page = await rawRequest(`${base}/`, {
+        headers: { "accept-encoding": "br", host: "symlink.example" },
+      });
+      assert.equal(page.status, 200);
+      assert.equal(page.headers["cache-control"], "no-store");
+      assert.equal(page.headers["content-encoding"], "br");
+      assert.ok(
+        brotliDecompressSync(page.body).includes(
+          Buffer.from("ws://symlink.example"),
+        ),
+      );
+
+      const url = `${base}/leak.txt`;
+      const initial = await rawRequest(url, {
+        headers: { "accept-encoding": "br" },
+      });
+      assert.equal(initial.status, 200);
+      unlinkSync(join(bundleDir, "leak.txt"));
+      symlinkSync(outside, join(bundleDir, "leak.txt"));
+      const response = await rawRequest(url, {
+        headers: { "accept-encoding": "br" },
+      });
+      assert.equal(response.status, 404);
+      assert.equal(response.body.byteLength, 0);
+    } finally {
+      await running.close();
+    }
+  },
+);
+
+test("bundle type and coding matrix preserves bytes (SERVER-SHELL-9, SERVER-SHELL-17)", async () => {
+  const bundleDir = mkdtempSync(join(tmpdir(), "spex-server-types-"));
+  const cases = [
+    ["index.html", "text/html; charset=utf-8", true],
+    ["script.js", "text/javascript; charset=utf-8", true],
+    ["style.css", "text/css; charset=utf-8", true],
+    ["data.json", "application/json", true],
+    ["source.map", "application/json", true],
+    ["image.png", "image/png", false],
+    ["vector.svg", "image/svg+xml", true],
+    ["favicon.ico", "image/x-icon", false],
+    ["notes.txt", "text/plain; charset=utf-8", true],
+    ["font.woff2", "font/woff2", false],
+    ["fallback.bin", "application/octet-stream", false],
+  ] as const;
+  for (const [name] of cases) {
+    writeFileSync(join(bundleDir, name), `fixture bytes: ${name}`);
+  }
   const running = await startServer(tempOptions({ uiDist: bundleDir }));
   try {
-    const response = await rawRequest(
-      `http://127.0.0.1:${running.port}/leak.txt`,
-    );
-    assert.equal(response.status, 404);
-    assert.equal(response.body.byteLength, 0);
+    const base = `http://127.0.0.1:${running.port}`;
+    for (const [name, contentType, compressible] of cases) {
+      const response = await rawRequest(`${base}/${name}`);
+      assert.equal(response.status, 200, name);
+      assert.equal(response.headers["content-type"], contentType, name);
+      assert.deepEqual(
+        response.body,
+        readFileSync(join(bundleDir, name)),
+        name,
+      );
+      const encoded = await rawRequest(`${base}/${name}`, {
+        headers: { "accept-encoding": "br" },
+      });
+      assert.equal(encoded.headers["content-type"], contentType, name);
+      if (compressible) {
+        assert.equal(encoded.headers["content-encoding"], "br", name);
+        assert.equal(encoded.headers.vary, "Accept-Encoding", name);
+        assert.deepEqual(brotliDecompressSync(encoded.body), response.body, name);
+      } else {
+        assert.equal(encoded.headers["content-encoding"], undefined, name);
+        assert.equal(encoded.headers.vary, undefined, name);
+        assert.deepEqual(encoded.body, response.body, name);
+      }
+    }
+    const get = await rawRequest(`${base}/image.png`);
+    const head = await rawRequest(`${base}/image.png`, { method: "HEAD" });
+    assert.equal(head.status, 200);
+    assert.equal(head.headers["content-type"], "image/png");
+    if (head.headers["content-length"] !== undefined) {
+      assert.equal(head.headers["content-length"], String(get.body.byteLength));
+    }
+    assert.equal(head.body.byteLength, 0);
   } finally {
     await running.close();
   }
 });
 
-test("bundle responses negotiate compression (SERVER-SHELL-17)", async () => {
+test("bundle responses negotiate compression (SERVER-SHELL-9, SERVER-SHELL-17)", async () => {
   const options = tempOptions();
   const running = await startServer(options);
   try {
@@ -170,10 +259,6 @@ test("bundle responses negotiate compression (SERVER-SHELL-17)", async () => {
     assert.equal(identityPage.headers["content-encoding"], undefined);
     assert.equal(identityPage.headers.vary, "Accept-Encoding");
     assert.equal(identityPage.headers["cache-control"], "no-store");
-    assert.equal(
-      identityPage.headers["content-length"],
-      String(identityPage.body.byteLength),
-    );
     assert.deepEqual(
       identityPage.body,
       Buffer.from(
@@ -207,20 +292,12 @@ test("bundle responses negotiate compression (SERVER-SHELL-17)", async () => {
     const identityAsset = await rawRequest(`${base}/${assetPath}`);
     assert.equal(identityAsset.headers["content-encoding"], undefined);
     assert.equal(identityAsset.headers.vary, "Accept-Encoding");
-    assert.deepEqual(
-      identityAsset.body,
-      readFileSync(join(options.uiDist, assetPath)),
-    );
 
     const brotliAsset = await rawRequest(`${base}/${assetPath}`, {
       headers: { "accept-encoding": "gzip;q=1, br;q=0.5" },
     });
     assert.equal(brotliAsset.headers["content-encoding"], "br");
     assert.equal(brotliAsset.headers.vary, "Accept-Encoding");
-    assert.equal(
-      brotliAsset.headers["content-length"],
-      String(brotliAsset.body.byteLength),
-    );
     assert.ok(brotliAsset.body.byteLength < identityAsset.body.byteLength);
     assert.deepEqual(
       brotliDecompressSync(brotliAsset.body),
@@ -250,10 +327,6 @@ test("bundle responses negotiate compression (SERVER-SHELL-17)", async () => {
     assert.equal(png.headers["content-encoding"], undefined);
     assert.equal(png.headers.vary, undefined);
     assert.deepEqual(png.body, identityPng.body);
-    assert.deepEqual(
-      identityPng.body,
-      readFileSync(join(options.uiDist, "favicon.png")),
-    );
 
     const head = await rawRequest(`${base}/${assetPath}`, {
       method: "HEAD",
@@ -266,16 +339,173 @@ test("bundle responses negotiate compression (SERVER-SHELL-17)", async () => {
       "content-type",
       "content-encoding",
       "vary",
-      "content-length",
       "cache-control",
     ] as const) {
       assert.equal(head.headers[header], brotliAsset.headers[header]);
+    }
+    if (head.headers["content-length"] !== undefined) {
+      assert.equal(
+        head.headers["content-length"],
+        String(brotliAsset.body.byteLength),
+      );
     }
     assert.equal(head.body.byteLength, 0);
   } finally {
     await running.close();
   }
 });
+
+test("encoded asset cache reuses and refreshes bodies (SERVER-SHELL-19)", async () => {
+  const bundleDir = mkdtempSync(join(tmpdir(), "spex-server-cache-"));
+  const assetPath = join(bundleDir, "cached.js");
+  const otherPath = join(bundleDir, "other.js");
+  const indexPath = join(bundleDir, "index.html");
+  const stamp = new Date("2026-01-01T00:00:00.000Z");
+  const laterStamp = new Date("2026-01-01T00:00:02.000Z");
+  const bodies = {
+    beforeHead: Buffer.from("A".repeat(4096)),
+    afterHead: Buffer.from("B".repeat(4096)),
+    sameMetadata: Buffer.from("C".repeat(4096)),
+    newSize: Buffer.from("D".repeat(4097)),
+    newMtime: Buffer.from("E".repeat(4097)),
+    freshLaunch: Buffer.from("G".repeat(4097)),
+  };
+  const otherBody = Buffer.from("F".repeat(4096));
+  const indexBodies = {
+    before: '<meta content="connect-src http://localhost:8137"><p>A</p>',
+    after: '<meta content="connect-src http://localhost:8137"><p>B</p>',
+  };
+  assert.equal(
+    Buffer.byteLength(indexBodies.before),
+    Buffer.byteLength(indexBodies.after),
+  );
+  writeFileSync(assetPath, bodies.beforeHead);
+  writeFileSync(otherPath, otherBody);
+  writeFileSync(indexPath, indexBodies.before);
+  utimesSync(assetPath, stamp, stamp);
+  utimesSync(otherPath, stamp, stamp);
+  utimesSync(indexPath, stamp, stamp);
+  const running = await startServer(tempOptions({ uiDist: bundleDir }));
+  const url = `http://127.0.0.1:${running.port}/cached.js`;
+  const base = `http://127.0.0.1:${running.port}`;
+  const requestBrotli = () =>
+    rawRequest(url, { headers: { "accept-encoding": "br" } });
+  try {
+    const head = await rawRequest(url, {
+      method: "HEAD",
+      headers: { "accept-encoding": "br" },
+    });
+    assert.equal(head.status, 200);
+    assert.equal(head.headers["content-encoding"], "br");
+    assert.equal(head.body.byteLength, 0);
+
+    writeFileSync(assetPath, bodies.afterHead);
+    utimesSync(assetPath, stamp, stamp);
+    const first = await requestBrotli();
+    assert.equal(first.headers["content-encoding"], "br");
+    assert.deepEqual(brotliDecompressSync(first.body), bodies.afterHead);
+
+    const gzip = await rawRequest(url, {
+      headers: { "accept-encoding": "gzip" },
+    });
+    assert.equal(gzip.headers["content-encoding"], "gzip");
+    assert.deepEqual(gunzipSync(gzip.body), bodies.afterHead);
+
+    const other = await rawRequest(`${base}/other.js`, {
+      headers: { "accept-encoding": "br" },
+    });
+    assert.equal(other.headers["content-encoding"], "br");
+    assert.deepEqual(brotliDecompressSync(other.body), otherBody);
+
+    writeFileSync(assetPath, bodies.sameMetadata);
+    utimesSync(assetPath, stamp, stamp);
+    const cached = await requestBrotli();
+    assert.deepEqual(cached.body, first.body);
+    assert.deepEqual(brotliDecompressSync(cached.body), bodies.afterHead);
+
+    writeFileSync(assetPath, bodies.newSize);
+    utimesSync(assetPath, stamp, stamp);
+    const sizeRefresh = await requestBrotli();
+    assert.deepEqual(brotliDecompressSync(sizeRefresh.body), bodies.newSize);
+
+    writeFileSync(assetPath, bodies.newMtime);
+    utimesSync(assetPath, laterStamp, laterStamp);
+    const mtimeRefresh = await requestBrotli();
+    assert.deepEqual(brotliDecompressSync(mtimeRefresh.body), bodies.newMtime);
+
+    const firstPage = await rawRequest(`${base}/`, {
+      headers: { "accept-encoding": "br", host: "first.example" },
+    });
+    const firstPageBody = brotliDecompressSync(firstPage.body);
+    assert.equal(firstPage.headers["cache-control"], "no-store");
+    assert.ok(firstPageBody.includes(Buffer.from("ws://first.example")));
+    assert.ok(firstPageBody.includes(Buffer.from("<p>A</p>")));
+
+    writeFileSync(indexPath, indexBodies.after);
+    utimesSync(indexPath, stamp, stamp);
+    const changedPage = await rawRequest(`${base}/`, {
+      headers: { "accept-encoding": "br", host: "first.example" },
+    });
+    const changedPageBody = brotliDecompressSync(changedPage.body);
+    assert.ok(changedPageBody.includes(Buffer.from("ws://first.example")));
+    assert.ok(changedPageBody.includes(Buffer.from("<p>B</p>")));
+
+    const secondHostPage = await rawRequest(`${base}/`, {
+      headers: { "accept-encoding": "br", host: "second.example" },
+    });
+    assert.ok(
+      brotliDecompressSync(secondHostPage.body).includes(
+        Buffer.from("ws://second.example"),
+      ),
+    );
+  } finally {
+    await running.close();
+  }
+
+  writeFileSync(assetPath, bodies.freshLaunch);
+  utimesSync(assetPath, laterStamp, laterStamp);
+  const restarted = await startServer(tempOptions({ uiDist: bundleDir }));
+  try {
+    const response = await rawRequest(
+      `http://127.0.0.1:${restarted.port}/cached.js`,
+      { headers: { "accept-encoding": "br" } },
+    );
+    assert.deepEqual(
+      brotliDecompressSync(response.body),
+      bodies.freshLaunch,
+    );
+  } finally {
+    await restarted.close();
+  }
+});
+
+test(
+  "HEAD does not read a bundle body (SERVER-SHELL-19)",
+  { skip: process.platform === "win32" },
+  async () => {
+    const bundleDir = mkdtempSync(join(tmpdir(), "spex-server-head-"));
+    const assetPath = join(bundleDir, "unreadable.js");
+    writeFileSync(assetPath, "unreadable body");
+    chmodSync(assetPath, 0o000);
+    const running = await startServer(tempOptions({ uiDist: bundleDir }));
+    try {
+      const response = await rawRequest(
+        `http://127.0.0.1:${running.port}/unreadable.js`,
+        {
+          method: "HEAD",
+          headers: { "accept-encoding": "br" },
+        },
+      );
+      assert.equal(response.status, 200);
+      assert.equal(response.headers["content-encoding"], "br");
+      assert.equal(response.headers.vary, "Accept-Encoding");
+      assert.equal(response.body.byteLength, 0);
+    } finally {
+      chmodSync(assetPath, 0o600);
+      await running.close();
+    }
+  },
+);
 
 test("TLS serves https and wss on the one port (SERVER-SHELL-10)", async () => {
   const running = await startServer(

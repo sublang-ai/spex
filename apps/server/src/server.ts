@@ -9,7 +9,14 @@
 // (SERVER-SHELL-2).
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  type Stats,
+} from "node:fs";
 import {
   createServer as createHttpServer,
   type IncomingMessage,
@@ -164,6 +171,14 @@ const COMPRESSIBLE_EXTENSIONS = new Set([
 
 type ContentCoding = "br" | "gzip" | "identity";
 
+interface CachedEncodedBody {
+  body: Buffer;
+  mtimeMs: number;
+  size: number;
+}
+
+type EncodedBodyCache = Map<string, CachedEncodedBody>;
+
 function acceptsContentCoding(
   header: string | string[] | undefined,
   coding: Exclude<ContentCoding, "identity">,
@@ -211,6 +226,30 @@ function encodeBody(body: Buffer, coding: ContentCoding): Buffer {
   return body;
 }
 
+function cachedEncodedBody(
+  cache: EncodedBodyCache,
+  filePath: string,
+  coding: Exclude<ContentCoding, "identity">,
+  fileStat: Stats,
+): Buffer {
+  const key = `${coding}\0${filePath}`;
+  const cached = cache.get(key);
+  if (
+    cached &&
+    cached.mtimeMs === fileStat.mtimeMs &&
+    cached.size === fileStat.size
+  ) {
+    return cached.body;
+  }
+  const body = encodeBody(readFileSync(filePath), coding);
+  cache.set(key, {
+    body,
+    mtimeMs: fileStat.mtimeMs,
+    size: fileStat.size,
+  });
+  return body;
+}
+
 // The built page's CSP names only localhost connect targets — right
 // for the desktop's file:// copy, wrong here. Retarget connect-src to
 // the serving origin (SERVER-SHELL-4) so the page may open WebSockets
@@ -232,6 +271,7 @@ export function retargetCsp(
 
 function serveBundle(
   bundleDir: string,
+  encodedBodyCache: EncodedBodyCache,
   req: IncomingMessage,
   res: ServerResponse,
 ): void {
@@ -256,36 +296,61 @@ function serveBundle(
     res.writeHead(404).end();
     return;
   }
+  const requestedIndex = filePath === join(bundleDir, "index.html");
   try {
     filePath = realpathSync(filePath);
   } catch {
     res.writeHead(404).end();
     return;
   }
-  if (!filePath.startsWith(bundleDir + sep) || !statSync(filePath).isFile()) {
+  if (!filePath.startsWith(bundleDir + sep)) {
     res.writeHead(404).end();
     return;
   }
+  let fileStat: Stats;
+  try {
+    fileStat = statSync(filePath);
+  } catch {
+    res.writeHead(404).end();
+    return;
+  }
+  if (!fileStat.isFile()) {
+    res.writeHead(404).end();
+    return;
+  }
+  const isIndex = requestedIndex || filePath === join(bundleDir, "index.html");
   const extension = extname(filePath);
   const type = CONTENT_TYPES[extension] ?? "application/octet-stream";
-  const isIndex = filePath === join(bundleDir, "index.html");
-  const body: Buffer = isIndex
-    ? Buffer.from(retargetCsp(readFileSync(filePath, "utf8"), req.headers.host))
-    : readFileSync(filePath);
   const headers: OutgoingHttpHeaders = { "content-type": type };
   if (isIndex) headers["cache-control"] = "no-store";
-  let responseBody: Buffer = body;
+  let coding: ContentCoding = "identity";
   if (COMPRESSIBLE_EXTENSIONS.has(extension)) {
-    const coding = negotiateContentCoding(req.headers["accept-encoding"]);
+    coding = negotiateContentCoding(req.headers["accept-encoding"]);
     headers.vary = "Accept-Encoding";
-    if (coding !== "identity") {
-      responseBody = encodeBody(body, coding);
-      headers["content-encoding"] = coding;
-    }
+    if (coding !== "identity") headers["content-encoding"] = coding;
   }
-  headers["content-length"] = responseBody.byteLength;
+  if (req.method === "HEAD") {
+    res.writeHead(200, headers).end();
+    return;
+  }
+  let responseBody: Buffer;
+  if (isIndex) {
+    const body = Buffer.from(
+      retargetCsp(readFileSync(filePath, "utf8"), req.headers.host),
+    );
+    responseBody = encodeBody(body, coding);
+  } else if (coding === "identity") {
+    responseBody = readFileSync(filePath);
+  } else {
+    responseBody = cachedEncodedBody(
+      encodedBodyCache,
+      filePath,
+      coding,
+      fileStat,
+    );
+  }
   res.writeHead(200, headers);
-  res.end(req.method === "HEAD" ? undefined : responseBody);
+  res.end(responseBody);
 }
 
 export async function startServer(
@@ -309,8 +374,9 @@ export async function startServer(
     );
   }
   const bundleDir = realpathSync(options.uiDist);
+  const encodedBodyCache: EncodedBodyCache = new Map();
   const handler = (req: IncomingMessage, res: ServerResponse) =>
-    serveBundle(bundleDir, req, res);
+    serveBundle(bundleDir, encodedBodyCache, req, res);
   const server = tls
     ? createHttpsServer(
         {
