@@ -334,20 +334,28 @@ function serveBundle(
     return;
   }
   let responseBody: Buffer;
-  if (isIndex) {
-    const body = Buffer.from(
-      retargetCsp(readFileSync(filePath, "utf8"), req.headers.host),
-    );
-    responseBody = encodeBody(body, coding);
-  } else if (coding === "identity") {
-    responseBody = readFileSync(filePath);
-  } else {
-    responseBody = cachedEncodedBody(
-      encodedBodyCache,
-      filePath,
-      coding,
-      fileStat,
-    );
+  try {
+    if (isIndex) {
+      const body =
+        extension === ".html"
+          ? Buffer.from(
+              retargetCsp(readFileSync(filePath, "utf8"), req.headers.host),
+            )
+          : readFileSync(filePath);
+      responseBody = encodeBody(body, coding);
+    } else if (coding === "identity") {
+      responseBody = readFileSync(filePath);
+    } else {
+      responseBody = cachedEncodedBody(
+        encodedBodyCache,
+        filePath,
+        coding,
+        fileStat,
+      );
+    }
+  } catch {
+    res.writeHead(500).end();
+    return;
   }
   res.writeHead(200, headers);
   res.end(responseBody);

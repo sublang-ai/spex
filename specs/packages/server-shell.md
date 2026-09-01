@@ -53,9 +53,10 @@ When an HTTP request arrives, the server shell shall serve only the staged UI bu
 - an undecodable URL path yields 400 and an empty body;
 - `/` resolves to the bundle's `index.html`, and another decoded path resolves relative to the bundle only after a lexical containment check;
 - a lexical escape, a missing path, a non-file path, or a real path outside the bundle, including through a symlink, yields 404 and an empty body;
-- a successful HEAD response sends no body, and any advertised `Content-Length` matches the corresponding GET representation;
-- `index.html` is served with `Cache-Control: no-store` and its `connect-src` policy retargeted to the serving origin, so the page may open WebSockets to this origin and to no other host;
-- apart from that policy substitution, every successful GET body is byte-identical to the corresponding staged bundle file after removal of any HTTP content coding;
+- if GET cannot materialize a successfully resolved response body because reading or encoding fails, it yields 500 with an empty body, and the failure remains isolated to that request, leaving the HTTP and core endpoints available;
+- after successful path resolution, HEAD neither reads nor encodes representation bytes, sends no body, and any advertised `Content-Length` matches the corresponding GET representation;
+- a successfully contained file has index semantics when either its lexically resolved requested path or its real path is the bundle's `index.html`: a successful index response carries `Cache-Control: no-store`, and, when its resolved extension is `.html`, its `connect-src` policy is retargeted to the serving origin so the page may open WebSockets to this origin and to no other host;
+- apart from that policy substitution, every successful GET body is byte-identical, after removal of any HTTP content coding, to the staged bundle bytes from which the selected representation was materialized [[server-shell-18](#server-shell-18)];
 - a successful response maps the resolved file extension to its content type, with `application/octet-stream` as the fallback:
 
 | Extension | Content-Type |
@@ -78,8 +79,8 @@ When the server shell selects the representation for a successfully resolved bun
 - other formats, including PNG, ICO, and WOFF2, use identity coding and do not carry `Vary: Accept-Encoding`;
 - an explicitly listed coding with quality zero is not offered, and a nonzero wildcard offers a coding that is not explicitly listed;
 - a Brotli or gzip response carries the matching `Content-Encoding`, and every compressible response carries `Vary: Accept-Encoding`, including an identity response;
-- `index.html` is encoded only after its `connect-src` retargeting, so decoding yields the same retargeted bytes as an identity response;
-- HEAD selects the same content coding and coding-dependent headers as GET.
+- an index response whose resolved extension is `.html` is encoded only after its `connect-src` retargeting, so decoding yields the same retargeted bytes as an identity response;
+- HEAD selects the same content coding and coding-dependent headers that a successful GET of the resolved file would use.
 
 #### server-shell-5
 
@@ -127,8 +128,8 @@ When the server shell serves bundle representations, it shall avoid repeated syn
 
 - a non-index Brotli or gzip GET stores and reuses its encoded body by resolved real path and content coding;
 - a cached body remains valid only while the file's size and modification time match the values observed after the traversal guards, and a mismatch replaces it from the current file;
-- `index.html` remains uncached because its retargeted body depends on the request's Host header;
-- HEAD neither reads nor encodes a response body.
+- a materialization failure stores no cache entry;
+- every request with index semantics [[server-shell-4](#server-shell-4)] remains uncached; for an HTML index, this prevents reuse of retargeted bytes that depend on the request's Host header.
 
 ## Verification
 
@@ -139,6 +140,8 @@ When the server shell serves bundle representations, it shall avoid repeated syn
 Where the server shell runs on a loopback port with a temporary config and store, the test suite shall assert over real HTTP and WebSocket connections that:
 
 - `GET /` serves the UI page with `Cache-Control: no-store` and its `connect-src` policy naming the serving origin, the 400 and 405 cases reject with empty bodies, and the 404 cases cover both lexical and realpath containment failures [[server-shell-4](#server-shell-4)];
+- requested-path and real-path classification retain HTML index semantics [[server-shell-4](#server-shell-4)] through post-retarget content coding [[server-shell-16](#server-shell-16)], while a non-HTML index target retains its mapped content type and exact bytes [[server-shell-4](#server-shell-4)] under its type-selected coding [[server-shell-16](#server-shell-16)];
+- unreadable index, identity, and cold encoded representations each yield an empty 500 response, after which successful HTTP and WebSocket requests prove that the failure stayed local [[server-shell-4](#server-shell-4)];
 - a temporary bundle fixture covers every content-type table row and the fallback with byte-identical identity bodies, and a successful HEAD response sends no body with any advertised length matching GET [[server-shell-4](#server-shell-4)];
 - a WebSocket handshake presenting the access URL's token from the page's own origin reaches the core's hello, on the same port that served the page [[server-shell-1](#server-shell-1)].
 
@@ -178,7 +181,7 @@ Where built server artifacts and a controlled npm executable are available on a 
 
 #### server-shell-17
 
-Where the integration suite runs separate server-shell instances against the staged UI bundle and a type-complete temporary bundle, when it requests bundle files over real HTTP, it shall assert the negotiated representation cases of [[server-shell-16](#server-shell-16)]: Brotli preference across differing positive qualities, gzip fallback, identity without an offered coding, explicit quality-zero exclusion, nonzero wildcard offers, `Content-Encoding` and `Vary` headers, byte-identical decoded and identity bodies after the page's `connect-src` retargeting, every compressible and excluded file type, and HEAD coding headers matching GET.
+Where the integration suite runs separate server-shell instances against the staged UI bundle and a type-complete temporary bundle, when it requests bundle files over real HTTP, it shall assert the negotiated representation cases of [[server-shell-16](#server-shell-16)]: Brotli preference across differing positive qualities, gzip fallback, identity without an offered coding, explicit quality-zero exclusion, nonzero wildcard offers, `Content-Encoding` and `Vary` headers, a real staged asset's identity body matching the bundle bytes from which it was materialized [[server-shell-4](#server-shell-4)], byte-identical decoded and identity bodies after the page's `connect-src` retargeting, every compressible and excluded file type, and HEAD coding headers matching GET.
 
 ### Cache Coverage
 
@@ -186,8 +189,9 @@ Where the integration suite runs separate server-shell instances against the sta
 
 Where the server shell serves mutable fixture assets, when the integration suite exercises cached representations, it shall assert the cache cases:
 
-- a cold HEAD carries the GET-selected coding headers [[server-shell-16](#server-shell-16)] without a body [[server-shell-4](#server-shell-4)], does not require reading an unreadable representation, and does not seed the cache [[server-shell-18](#server-shell-18)];
-- separate resolved paths and content codings keep independent entries, and matching size and modification time reuse the encoded body [[server-shell-18](#server-shell-18)];
+- a cold HEAD carries the GET-selected coding headers [[server-shell-16](#server-shell-16)] without reading or sending a body [[server-shell-4](#server-shell-4)] and does not seed the cache [[server-shell-18](#server-shell-18)];
+- a failed cold GET stores no cache entry [[server-shell-18](#server-shell-18)], so a later successful request materializes the current bytes [[server-shell-4](#server-shell-4)];
+- separate resolved paths and content codings keep independent entries, and matching size and modification time reuse the encoded body whose decoded bytes remain those from which the selected representation was materialized [[server-shell-4](#server-shell-4)] [[server-shell-18](#server-shell-18)];
 - changing either size or modification time refreshes the decoded response from the current file [[server-shell-18](#server-shell-18)];
 - a fresh launch does not reuse an earlier launch's cache entry [[server-shell-18](#server-shell-18)];
 - an index edit that preserves size and modification time is still observed because the index remains uncached [[server-shell-18](#server-shell-18)], and distinct Host values produce independently retargeted bodies [[server-shell-4](#server-shell-4)] after content coding [[server-shell-16](#server-shell-16)];

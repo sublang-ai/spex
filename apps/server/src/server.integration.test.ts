@@ -153,27 +153,10 @@ test(
     const outside = join(dir, "outside.txt");
     mkdirSync(bundleDir);
     writeFileSync(join(bundleDir, "leak.txt"), "initial bundle bytes");
-    writeFileSync(
-      join(bundleDir, "page.html"),
-      '<meta content="connect-src http://localhost:8137"><p>index</p>',
-    );
-    symlinkSync("page.html", join(bundleDir, "index.html"));
     writeFileSync(outside, "not in the bundle");
     const running = await startServer(tempOptions({ uiDist: bundleDir }));
     try {
       const base = `http://127.0.0.1:${running.port}`;
-      const page = await rawRequest(`${base}/`, {
-        headers: { "accept-encoding": "br", host: "symlink.example" },
-      });
-      assert.equal(page.status, 200);
-      assert.equal(page.headers["cache-control"], "no-store");
-      assert.equal(page.headers["content-encoding"], "br");
-      assert.ok(
-        brotliDecompressSync(page.body).includes(
-          Buffer.from("ws://symlink.example"),
-        ),
-      );
-
       const url = `${base}/leak.txt`;
       const initial = await rawRequest(url, {
         headers: { "accept-encoding": "br" },
@@ -189,6 +172,81 @@ test(
     } finally {
       await running.close();
     }
+  },
+);
+
+test(
+  "index semantics follow requested and real paths (SERVER-SHELL-9)",
+  { skip: process.platform === "win32" },
+  async () => {
+    const requestBundle = async (
+      bundleDir: string,
+      path: string,
+      headers: Record<string, string>,
+    ): Promise<RawResponse> => {
+      const running = await startServer(tempOptions({ uiDist: bundleDir }));
+      try {
+        return await rawRequest(
+          `http://127.0.0.1:${running.port}${path}`,
+          { headers },
+        );
+      } finally {
+        await running.close();
+      }
+    };
+
+    const requestedBundle = mkdtempSync(join(tmpdir(), "spex-index-request-"));
+    writeFileSync(
+      join(requestedBundle, "page.html"),
+      '<meta content="connect-src http://localhost:8137"><p>requested</p>',
+    );
+    symlinkSync("page.html", join(requestedBundle, "index.html"));
+    const requested = await requestBundle(requestedBundle, "/", {
+      "accept-encoding": "br",
+      host: "requested.example",
+    });
+    assert.equal(requested.status, 200);
+    assert.equal(requested.headers["cache-control"], "no-store");
+    assert.equal(requested.headers["content-encoding"], "br");
+    assert.ok(
+      brotliDecompressSync(requested.body).includes(
+        Buffer.from("ws://requested.example"),
+      ),
+    );
+
+    const resolvedBundle = mkdtempSync(join(tmpdir(), "spex-index-real-"));
+    writeFileSync(
+      join(resolvedBundle, "index.html"),
+      '<meta content="connect-src http://localhost:8137"><p>resolved</p>',
+    );
+    symlinkSync("index.html", join(resolvedBundle, "alias.html"));
+    const resolved = await requestBundle(resolvedBundle, "/alias.html", {
+      "accept-encoding": "br",
+      host: "resolved.example",
+    });
+    assert.equal(resolved.status, 200);
+    assert.equal(resolved.headers["cache-control"], "no-store");
+    assert.equal(resolved.headers["content-encoding"], "br");
+    assert.ok(
+      brotliDecompressSync(resolved.body).includes(
+        Buffer.from("ws://resolved.example"),
+      ),
+    );
+
+    const binaryBundle = mkdtempSync(join(tmpdir(), "spex-index-binary-"));
+    const binaryBody = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xfe, 0xfd,
+    ]);
+    writeFileSync(join(binaryBundle, "image.png"), binaryBody);
+    symlinkSync("image.png", join(binaryBundle, "index.html"));
+    const binary = await requestBundle(binaryBundle, "/", {
+      "accept-encoding": "br",
+    });
+    assert.equal(binary.status, 200);
+    assert.equal(binary.headers["cache-control"], "no-store");
+    assert.equal(binary.headers["content-type"], "image/png");
+    assert.equal(binary.headers["content-encoding"], undefined);
+    assert.deepEqual(binary.body, binaryBody);
   },
 );
 
@@ -292,6 +350,10 @@ test("bundle responses negotiate compression (SERVER-SHELL-9, SERVER-SHELL-17)",
     const identityAsset = await rawRequest(`${base}/${assetPath}`);
     assert.equal(identityAsset.headers["content-encoding"], undefined);
     assert.equal(identityAsset.headers.vary, "Accept-Encoding");
+    assert.deepEqual(
+      identityAsset.body,
+      readFileSync(join(options.uiDist, assetPath)),
+    );
 
     const brotliAsset = await rawRequest(`${base}/${assetPath}`, {
       headers: { "accept-encoding": "gzip;q=1, br;q=0.5" },
@@ -480,17 +542,27 @@ test("encoded asset cache reuses and refreshes bodies (SERVER-SHELL-19)", async 
 });
 
 test(
-  "HEAD does not read a bundle body (SERVER-SHELL-19)",
+  "bundle materialization failures stay local (SERVER-SHELL-9, SERVER-SHELL-19)",
   { skip: process.platform === "win32" },
   async () => {
     const bundleDir = mkdtempSync(join(tmpdir(), "spex-server-head-"));
-    const assetPath = join(bundleDir, "unreadable.js");
-    writeFileSync(assetPath, "unreadable body");
-    chmodSync(assetPath, 0o000);
+    const encodedPath = join(bundleDir, "unreadable.js");
+    const identityPath = join(bundleDir, "unreadable.png");
+    const indexPath = join(bundleDir, "index.html");
+    const encodedBody = Buffer.from("recoverable body".repeat(256));
+    writeFileSync(encodedPath, encodedBody);
+    writeFileSync(identityPath, "unreadable identity body");
+    writeFileSync(
+      indexPath,
+      '<meta content="connect-src http://localhost:8137">',
+    );
+    const unreadablePaths = [encodedPath, identityPath, indexPath];
+    for (const path of unreadablePaths) chmodSync(path, 0o000);
     const running = await startServer(tempOptions({ uiDist: bundleDir }));
     try {
+      const base = `http://127.0.0.1:${running.port}`;
       const response = await rawRequest(
-        `http://127.0.0.1:${running.port}/unreadable.js`,
+        `${base}/unreadable.js`,
         {
           method: "HEAD",
           headers: { "accept-encoding": "br" },
@@ -500,8 +572,33 @@ test(
       assert.equal(response.headers["content-encoding"], "br");
       assert.equal(response.headers.vary, "Accept-Encoding");
       assert.equal(response.body.byteLength, 0);
+
+      const failures: Array<[string, Record<string, string>]> = [
+        ["/", {}],
+        ["/unreadable.png", {}],
+        ["/unreadable.js", { "accept-encoding": "br" }],
+      ];
+      for (const [path, headers] of failures) {
+        const failed = await rawRequest(`${base}${path}`, { headers });
+        assert.equal(failed.status, 500, path);
+        assert.equal(failed.body.byteLength, 0, path);
+      }
+
+      const hello = await wsHello(
+        `${base.replace("http", "ws")}/?token=secret`,
+        base,
+      );
+      assert.equal(hello.type, "hello");
+
+      chmodSync(encodedPath, 0o600);
+      const recovered = await rawRequest(`${base}/unreadable.js`, {
+        headers: { "accept-encoding": "br" },
+      });
+      assert.equal(recovered.status, 200);
+      assert.equal(recovered.headers["content-encoding"], "br");
+      assert.deepEqual(brotliDecompressSync(recovered.body), encodedBody);
     } finally {
-      chmodSync(assetPath, 0o600);
+      for (const path of unreadablePaths) chmodSync(path, 0o600);
       await running.close();
     }
   },
