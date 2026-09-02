@@ -137,10 +137,22 @@ try {
     try {
       run("desktop-abi", "npm", ["run", "rebuild:electron", "-w", "apps/desktop"]);
       const shot = join(tmpdir(), `spex-smoke-${Date.now()}.png`);
-      run("desktop-render", require("electron"), ["."], {
-        cwd: join(root, "apps", "desktop"),
-        env: { ...process.env, SPEX_ACCEPTANCE: shot },
-      });
+      // The render boots on a scratch state root: the developer's own
+      // ~/.spex may be held by a running Spex (one core per root,
+      // DR-036), and a hermetic gate touches nothing of theirs.
+      const renderHome = mkdtempSync(join(tmpdir(), "spex-smoke-home-"));
+      try {
+        run("desktop-render", require("electron"), ["."], {
+          cwd: join(root, "apps", "desktop"),
+          env: {
+            ...process.env,
+            SPEX_ACCEPTANCE: shot,
+            SPEX_HOME: join(renderHome, ".spex"),
+          },
+        });
+      } finally {
+        rmSync(renderHome, { recursive: true, force: true });
+      }
       if (!existsSync(shot)) {
         throw new Error("desktop render wrote no screenshot");
       }

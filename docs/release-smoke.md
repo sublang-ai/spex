@@ -26,7 +26,9 @@ seeds and its tree parses) → Electron render with screenshot
 (`--desktop` flips the native ABI to Electron and restores it, on
 every exit path).
 Omit `--desktop` for a quick mid-development pass.
-No provider or sign-in is involved; a failure names its stage.
+No provider or sign-in is involved, and the render boots on a scratch
+state root, so a running Spex desktop does not block it; a failure
+names its stage.
 
 ## 1b. Live desktop smoke (signed-in — the app-release gate)
 
