@@ -26,7 +26,10 @@ While a project session is live, when the session record stream delivers a capta
 
 #### run-view-2
 
-While a project session is live, when the session record stream delivers a failure, the Captain pane shall display one ◆ line carrying both the failure name and the failure message, never suppressing or collapsing failure lines, so no delivered failure is left without a visible line.
+While a project session is live, when the session record stream delivers a failure, the Captain pane shall display one ◆ line carrying both the failure name and the failure message, so no delivered failure is left without a visible line:
+
+- a failure identical to the line just before it, within the same turn, folds into that line as a visible count (×2, ×3, …) whose meaning is also in text — never suppressed, never merged with a different failure or across turns;
+- while the Captain agent's adapter readiness reports not ready [[core-service-9](core-service.md#core-service-9)], each failure line carries a "Check agent readiness" link that opens Settings in place, its tooltip naming the unmet requirement.
 
 ### Player Panes
 
@@ -52,7 +55,8 @@ When the session record stream delivers a tool-use event for a visible player, t
 
 Where a rendered agent message carries a Markdown link — in a player pane [[run-view-3](#run-view-3)] or the Captain thread [[run-view-1](#run-view-1)] — the run view shall present it as a link only where the shell can open it [[app-shell-21](app-shell.md#app-shell-21)], presenting every other target as its own text with the target named in its tooltip:
 
-- an agent cites a repo path or a spec item as freely as it cites a URL, and a citation nothing can open must not wear the affordance of one.
+- an agent cites a repo path or a spec item as freely as it cites a URL, and a citation nothing can open must not wear the affordance of one;
+- a link opens outside the page — a new browsing context, with no referrer — so the served page never navigates away from the session.
 
 #### run-view-5
 
@@ -90,9 +94,10 @@ While a player pane holds a call the core resolved to a role [[core-service-36](
 
 The Boss composer shall accept free text and `/`-prefixed command text, be the only input control in the run view, and dispatch or queue each Boss submission by turn state:
 
-- while no turn is active, a submission dispatches without queueing;
-- while a turn is active, a submission queues with a visible queued indicator until the queued submission is dispatched;
-- when the active turn ends, the queued submission dispatches.
+- while no turn is active, a submission dispatches without queueing, the primary control reading "Send";
+- while a turn is active, a submission queues with a visible queued indicator until the queued submission is dispatched, the primary control reading "Send after this turn";
+- when the active turn ends, the queued submission dispatches;
+- the primary control's tooltip names its keys — Enter sends, Shift+Enter adds a line.
 
 #### run-view-9
 
@@ -194,8 +199,8 @@ While a turn is active and the Captain is not streaming speech, the Captain thre
 
 A queued Boss submission shall never read as sent:
 
-- queued submissions render as pending outgoing bubbles in full, each captioned that it sends when the turn ends and each individually removable;
-- while a turn is active, the composer placeholder says the message is delivered when the turn finishes.
+- queued submissions render as pending outgoing bubbles in full, each captioned "sends when this turn ends" and each individually removable by a control of full hit size [[run-view-50](#run-view-50)];
+- while a turn is active, the composer placeholder says the message sends when this turn ends — the caption's words, and the primary control's [[run-view-8](#run-view-8)].
 
 #### run-view-39
 
@@ -388,9 +393,11 @@ The tab strip shall show the current project's open sessions, live and ended ali
 
 - the strip holds the sessions the reader has opened — the working set, not the archive, which the sidebar keeps [[run-view-67](#run-view-67)];
 - session tabs are titled by the session's first Boss turn (truncated; "new session" before the first turn) with the full prompt and start time in the tooltip — never by the project name, which the sidebar carries ([DR-011](../decisions/011-project-workspace.md));
-- tabs carry the shared attention signal: an amber dot for a waiting question and a red dot for a failure on background tabs (the active tab shows the banner instead), with the detail in the tab tooltip, and an ended session's tab says so;
+- tabs carry the shared attention signal: an amber dot for a waiting question and a red dot for a failure on background tabs (the active tab shows the banner instead), with the detail in the tab tooltip and the tab's accessible name ending in "needs your reply" or "failed" so the dot is never the only channel, and an ended session's tab says so;
 - each tab's close control files the session out of the working set without ending it or confirming [[run-view-47](#run-view-47)];
-- the strip scrolls horizontally when tabs overflow, keeps the new-session control reachable, exposes tab-list semantics, and keeps the active tab scrolled into view.
+- the strip scrolls horizontally when tabs overflow, keeps the new-session control reachable, exposes tab-list semantics, and keeps the active tab scrolled into view;
+- the strip has one Tab stop — the active tab — and Arrow Left, Arrow Right, Home, and End move focus between session tabs, the new-session control, and the pinned tabs without activating any;
+- a tab tooltip that names a shortcut prints it with the platform's own modifier (⌘ on a Mac, Ctrl elsewhere).
 
 #### run-view-49
 
@@ -416,7 +423,9 @@ The app shall fail loudly and stay accessible:
 - when the app is connected but its initial state failed to load, a banner says so and offers retry — never a silently empty app;
 - one persistent polite live region announces a player waiting for a reply, connection loss and restoration, and attention-count increases to assistive technology;
 - icon-only controls carry accessible names and at-least-24px hit targets, and the navigation exposes the current surface and badge meaning to assistive technology;
-- one glyph carries one meaning across the app ([DR-010](../decisions/010-interface-craft.md) §8): the gear names the Settings surface, and an in-place editor wears the pencil.
+- one glyph carries one meaning across the app ([DR-010](../decisions/010-interface-craft.md) §8): the gear names the Settings surface, and an in-place editor wears the pencil;
+- color is never the only channel: a player pane's running mark says "running" in text, a tool card's outcome is a mark with its word — ✓ ok, ✗ failed, ✗ denied — and a failure count and a tab's attention dot each carry their meaning in text;
+- no action strands focus on the document body: ending a session lands focus on the session's tab, backing out of the end confirm returns it to the end control, and aborting a turn keeps it in the composer.
 
 #### run-view-51
 
@@ -451,11 +460,11 @@ The tab strip shall end with pinned Specs and Overview tabs — one spec view an
 
 #### run-view-85
 
-When the composer's queue-instead-of-send action is activated, the Boss composer shall capture the typed text as a queued intent for the session's project with chat provenance and acknowledge the capture in place, sending nothing ([DR-035](../decisions/035-intent-ledger.md)):
+When the composer's add-to-Up-next action is activated, the Boss composer shall capture the typed text as a queued intent for the session's project with chat provenance and acknowledge the capture in place, sending nothing ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the capture starts no turn and queues no submission [[run-view-8](#run-view-8)] — the text is shelved, not sent;
-- the acknowledgment is an inline note naming where the row landed — the project's Up next, in its Overview tab, where the row's Remove waits [[dashboard-29](dashboard.md#dashboard-29)] — the run view's form of the shelf reveal;
-- the action stands beside send as the composer's one secondary action.
+- the acknowledgment is an inline note naming where the row landed — "Added to Up next — see the project's Overview.", the project's Up next in its Overview tab, where the row's Remove waits [[dashboard-29](dashboard.md#dashboard-29)] — the run view's form of the shelf reveal;
+- the action stands beside send as the composer's one secondary action, labeled "Add to Up next" — by where the text goes, never by a mechanism.
 
 #### run-view-86
 
@@ -469,7 +478,8 @@ When Start is activated on a queued intent, the run view shall stage the intent'
 
 When a dispatched intent's final turn ends finished, the run view shall render the intent's delivery card at that turn's end in the Captain thread — a first-class settled card carrying the intent's title, its provenance chip where the intent carries a source, a run-stats line, and a primary Confirm control with Drop beside it ([DR-035](../decisions/035-intent-ledger.md)):
 
-- the run-stats line folds from the intent's own turns — its review rounds foremost, omitted when zero, then its turn count and its elapsed time from dispatch to the last turn's end — so the verdict is informed before the click;
+- the run-stats line folds from the intent's own turns — its review rounds foremost, omitted when zero, then its turn count and its elapsed time from dispatch to the last turn's end, in the app's one duration vocabulary — so the verdict is informed before the click;
+- the provenance chip with a canonical URL is a link that opens outside the page — a new browsing context, with no referrer — so the session never navigates away, and the same chip is the one the bound turn's bubble wears [[run-view-89](#run-view-89)];
 - the card says visibly that a follow-up message continues the intent;
 - when a verdict is given, the card resolves in place into the project's next queued intent with Start, or into an inline add affordance when the queue holds none;
 - in an ended session the card replays identically from the stored fold [[run-view-14](#run-view-14)], its controls inert.
