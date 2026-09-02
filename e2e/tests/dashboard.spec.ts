@@ -84,3 +84,48 @@ test("dashboard-39: capture, start, confirm, and History through the page", asyn
   // The next queued intent moved up, and the all-clear names it.
   await expect(page.getByTestId("attention-all-clear")).toContainText(/IR-\d+|next up/i);
 });
+
+test("dashboard-39: the row menu moves, removes with Undo, and closes on Escape", async ({
+  page,
+  app,
+}) => {
+  await open(page, app);
+  await nav(page, "Dashboard").click();
+  const add = page.getByRole("textbox", { name: /add an intent to demo-project/i });
+  const rows = page.getByTestId(/^upnext-row-/);
+  await add.fill("First");
+  await add.press("Enter");
+  await expect(rows).toHaveCount(1);
+  await add.fill("Second");
+  await add.press("Enter");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("First");
+
+  // Move down from the menu: a single-pointer alternative to dragging.
+  const trigger = page.getByRole("button", { name: /actions for first/i });
+  await trigger.click();
+  const menu = page.getByRole("menu", { name: /actions for first/i });
+  await expect(menu).toBeVisible();
+  await menu.getByRole("menuitem", { name: "Move down" }).click();
+  await expect(rows.nth(0)).toContainText("Second");
+  await expect(rows.nth(1)).toContainText("First");
+
+  // Escape closes the menu and puts focus back on its trigger.
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  // Remove, then Undo brings the row back where it was.
+  await trigger.click();
+  await menu.getByRole("menuitem", { name: "Remove" }).click();
+  await expect(rows).toHaveCount(1);
+  const removed = page.getByTestId(`upnext-removed-${app.projectId}`);
+  await expect(removed).toContainText(/removed/i);
+  await expect(removed).toHaveAttribute("role", "status");
+  await removed.getByRole("button", { name: "Undo" }).click();
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1)).toContainText("First");
+  await expect(removed).toBeHidden();
+});
