@@ -1283,7 +1283,10 @@ test("core-service-66: a config at the previous location relocates once, bytes a
     watchConfig: false,
   });
   assert.equal(readFileSync(canonical, "utf8"), text, "bytes preserved");
-  assert.equal(statSync(canonical).mode & 0o777, 0o640, "mode preserved");
+  // Permission bits are POSIX; Windows reports its own fixed mode.
+  if (process.platform !== "win32") {
+    assert.equal(statSync(canonical).mode & 0o777, 0o640, "mode preserved");
+  }
   assert.equal(readFileSync(legacy, "utf8"), text, "the legacy file stays in place");
   const client = new Client(first.port());
   await client.open();
