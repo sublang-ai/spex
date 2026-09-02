@@ -888,8 +888,9 @@ function QueueRow({
       </span>
       {blocked ? (
         <span
-          className="shrink-0 truncate text-[11px] text-neutral-500"
+          className="min-w-0 max-w-[40%] truncate text-[11px] text-neutral-500"
           data-testid={`upnext-blocked-${intent.id}`}
+          title={`after ${blocked.title}${blockedForeign ? ` (${blockedForeign})` : ""}`}
         >
           after {blocked.title}
           {blockedForeign ? ` (${blockedForeign})` : ""}

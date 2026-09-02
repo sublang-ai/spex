@@ -22,7 +22,9 @@ export function InlineConfirm({
 }) {
   return (
     <span
-      className="flex items-center gap-1 text-xs"
+      // The controls wrap under the question in a narrow pane
+      // (DR-041), never past its edge.
+      className="flex flex-wrap items-center gap-1 text-xs"
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();

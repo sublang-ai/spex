@@ -622,8 +622,13 @@ export function SettingsSurface() {
           {NOTIFICATION_EVENTS.map((event) => {
             const key = `notifications:${event}`;
             return (
-              <div key={event} className="flex items-center gap-3 text-sm">
-                <span className="w-56 text-xs" title={event}>
+              <div
+                key={event}
+                // The select wraps under its label in a narrow pane
+                // (settings-22, DR-041).
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
+              >
+                <span className="min-w-0 shrink basis-56 text-xs" title={event}>
                   {NOTIFICATION_LABELS[event] ?? event}
                 </span>
                 <select

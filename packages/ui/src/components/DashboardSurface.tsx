@@ -149,7 +149,12 @@ function AttentionRow({
             </span>
           ) : null}
         </span>
-        <span className="shrink-0 text-[11px] opacity-70">{projectName}</span>
+        <span
+          className="min-w-0 max-w-40 truncate text-[11px] opacity-70"
+          title={projectName}
+        >
+          {projectName}
+        </span>
         <span
           className="shrink-0 text-[11px] opacity-70"
           title={absoluteTitle(entry.since)}

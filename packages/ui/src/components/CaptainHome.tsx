@@ -22,6 +22,7 @@ import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { NextCard } from "./NextCard.js";
+import { ComposerBox, ComposerCaption, ComposerField } from "./Composer.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
 
@@ -327,7 +328,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 }}
                 className="mt-1 text-xs font-medium text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-300"
               >
-                {rechecking ? "Checking…" : "I've set this up — re-check"}
+                {rechecking ? "Checking…" : "Re-check"}
               </button>
             ) : null}
           </CaptainBubble>
@@ -443,34 +444,6 @@ export function CaptainHome(props: CaptainHomeProps) {
           </span>
         </div>
 
-        {queueNote ? (
-          <div
-            data-testid="queued-intent-note"
-            role="status"
-            className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300"
-          >
-            {queueNote}
-          </div>
-        ) : null}
-        {props.staged ? (
-          <div
-            data-testid="staged-intent-chip"
-            className="flex items-center gap-2 self-start rounded-full border border-brand-300 bg-brand-50 py-0.5 pl-3 pr-1 text-xs font-medium text-brand-700 dark:border-brand-700 dark:bg-brand-950 dark:text-brand-300"
-          >
-            <span className="max-w-[24rem] truncate">
-              Starting: {props.staged.title}
-            </span>
-            <button
-              type="button"
-              title="Take the task out of the message"
-              aria-label="Take the task out of the message"
-              onClick={props.onDetachStaged}
-              className="-my-0.5 flex h-6 w-6 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-900"
-            >
-              <Icon name="close" className="h-3 w-3" />
-            </button>
-          </div>
-        ) : null}
         <div className="relative">
           {slash ? (
             <SlashMenuList
@@ -480,111 +453,121 @@ export function CaptainHome(props: CaptainHomeProps) {
               onCompileNew={() => props.onNavigate("Playbooks")}
             />
           ) : null}
-          <div className="flex items-end gap-2 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:focus-within:border-neutral-400">
-            <textarea
-              ref={composerRef}
-              data-testid="start-composer"
-              autoFocus
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value);
-                setSlashIndex(0);
-                setSlashDismissed(false);
-                setQueueNote(undefined);
-                // Emptying the composer detaches the staged intent
-                // (run-view-86): sending something else stamps nothing.
-                if (props.staged && event.target.value.trim().length === 0) {
-                  props.onDetachStaged?.();
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing || event.keyCode === 229)
-                  return;
-                if (slash) {
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setSlashIndex((index) => (index + 1) % slash.length);
-                    return;
+          {/* The one composer shape (run-view-106): the field on top,
+              the caption line the note and the staged chip share, and
+              the wrapping action row beneath. */}
+          <ComposerBox
+            field={
+              <ComposerField
+                fieldRef={composerRef}
+                data-testid="start-composer"
+                autoFocus
+                value={text}
+                onChange={(event) => {
+                  setText(event.target.value);
+                  setSlashIndex(0);
+                  setSlashDismissed(false);
+                  setQueueNote(undefined);
+                  // Emptying the composer detaches the staged intent
+                  // (run-view-86): sending something else stamps nothing.
+                  if (props.staged && event.target.value.trim().length === 0) {
+                    props.onDetachStaged?.();
                   }
-                  if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setSlashIndex(
-                      (index) => (index - 1 + slash.length) % slash.length,
-                    );
+                }}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing || event.keyCode === 229)
                     return;
+                  if (slash) {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setSlashIndex((index) => (index + 1) % slash.length);
+                      return;
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setSlashIndex(
+                        (index) => (index - 1 + slash.length) % slash.length,
+                      );
+                      return;
+                    }
+                    if (event.key === "Tab" || event.key === "Enter") {
+                      event.preventDefault();
+                      insertCommand(slash[Math.min(slashIndex, slash.length - 1)]);
+                      return;
+                    }
+                    if (event.key === "Escape") {
+                      // Hide the menu, never the draft (DR-010 §4).
+                      event.preventDefault();
+                      setSlashDismissed(true);
+                      return;
+                    }
                   }
-                  if (event.key === "Tab" || event.key === "Enter") {
+                  if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    insertCommand(slash[Math.min(slashIndex, slash.length - 1)]);
-                    return;
+                    void start();
                   }
-                  if (event.key === "Escape") {
-                    // Hide the menu, never the draft (DR-010 §4).
-                    event.preventDefault();
-                    setSlashDismissed(true);
-                    return;
+                }}
+                placeholder={connected ? "Message the Captain…" : "Connecting…"}
+                disabled={!connected}
+              />
+            }
+            caption={
+              <ComposerCaption
+                staged={props.staged}
+                onDetachStaged={props.onDetachStaged}
+                note={queueNote}
+              />
+            }
+            secondary={
+              props.onQueueInstead && !props.staged ? (
+                <button
+                  type="button"
+                  data-testid="queue-intent-button"
+                  title="Add this to the project's Up next without sending it"
+                  disabled={
+                    text.trim().length === 0 || busy || queueing || !connected
                   }
-                }
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void start();
-                }
-              }}
-              rows={2}
-              placeholder={
-                connected
-                  ? "Message the Captain…"
-                  : "Connecting to the Spex core…"
-              }
-              disabled={!connected}
-              className="max-h-[40vh] min-h-[2.5rem] flex-1 resize-y border-0 bg-transparent px-1 py-1 text-sm outline-none disabled:opacity-60"
-            />
-            {props.onQueueInstead && !props.staged ? (
+                  onClick={() => {
+                    const trimmed = text.trim();
+                    if (!trimmed || queueing) return;
+                    setQueueing(true);
+                    props
+                      .onQueueInstead!(trimmed)
+                      .then(() => {
+                        setText("");
+                        setQueueNote("Added to Up next — see the project's Overview.");
+                      })
+                      .catch((cause: Error) => setError(cause.message))
+                      .finally(() => {
+                        setQueueing(false);
+                        composerRef.current?.focus();
+                      });
+                  }}
+                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  Add to Up next
+                </button>
+              ) : null
+            }
+            actions={
               <button
                 type="button"
-                data-testid="queue-intent-button"
-                title="Add this to the project's Up next without sending it"
-                disabled={
-                  text.trim().length === 0 || busy || queueing || !connected
+                data-testid="start-send"
+                disabled={busy || !connected || text.trim().length === 0}
+                onClick={() => void start()}
+                title={
+                  props.hasProject
+                    ? "Enter to send · Shift+Enter for a new line"
+                    : props.hasProjects
+                      ? `Pick a project first (${keyLabel("P")})`
+                      : `Add a project first (${keyLabel("P")})`
                 }
-                onClick={() => {
-                  const trimmed = text.trim();
-                  if (!trimmed || queueing) return;
-                  setQueueing(true);
-                  props
-                    .onQueueInstead!(trimmed)
-                    .then(() => {
-                      setText("");
-                      setQueueNote("Added to Up next — see the project's Overview.");
-                    })
-                    .catch((cause: Error) => setError(cause.message))
-                    .finally(() => {
-                      setQueueing(false);
-                      composerRef.current?.focus();
-                    });
-                }}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
               >
-                Add to Up next
+                {busy ? "Starting…" : "Send"}
               </button>
-            ) : null}
-            <button
-              type="button"
-              data-testid="start-send"
-              disabled={busy || !connected || text.trim().length === 0}
-              onClick={() => void start()}
-              title={
-                props.hasProject
-                  ? "Enter to send · Shift+Enter for a new line"
-                  : props.hasProjects
-                    ? `Pick a project first (${keyLabel("P")})`
-                    : `Add a project first (${keyLabel("P")})`
-              }
-              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
-            >
-              {busy ? "Starting…" : "Send"}
-            </button>
-          </div>
+            }
+          />
         </div>
       </div>
     </div>

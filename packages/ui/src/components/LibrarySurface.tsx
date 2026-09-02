@@ -379,7 +379,7 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
           onClick={onPrefill}
           className="rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          Prefill compile form
+          Prefill form
         </button>
         <button
           type="button"
@@ -943,13 +943,11 @@ export function LibrarySurface({
               onClick={startCompile}
               className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
-              {compiling
-                ? "Compiling… (agent-driven, this takes a while)"
-                : "Compile & register"}
+              {compiling ? "Compiling…" : "Compile & register"}
             </button>
             <span className="text-xs text-neutral-500">
               {compiling
-                ? "progress streams below"
+                ? "agent-driven, this takes a while — progress streams below"
                 : (missingRequirement ??
                   "runs slc with your configured coding agent")}
             </span>

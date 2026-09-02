@@ -272,7 +272,7 @@ export function PlayerPane({
               title="Running"
             />
           ) : view.turnUsage ? (
-            <span className="hidden whitespace-nowrap @[22rem]:inline">
+            <span className="hidden whitespace-nowrap @md:inline">
               <Usage usage={view.turnUsage} />
             </span>
           ) : null}

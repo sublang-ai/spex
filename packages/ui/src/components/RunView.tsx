@@ -341,6 +341,10 @@ export function RunView({
   const metaById = new Map(session.players.map((player) => [player.id, player]));
   const title = session.title ?? "new session";
   const queued = composer.queued.length;
+  // Ended is the session's own state; read-only is the host's verdict
+  // on it — a continuable session is ended yet keeps its composer
+  // (run-view-33, DR-042).
+  const ended = readOnly || !session.live;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -350,7 +354,7 @@ export function RunView({
         <span className="min-w-0 truncate font-medium" title={title}>
           {title}
         </span>
-        {readOnly ? (
+        {ended ? (
           <span
             data-testid="session-ended-at"
             className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
@@ -362,7 +366,7 @@ export function RunView({
           <span className="ml-auto">
             <InlineConfirm
               question={
-                (view.turnActive ? "A turn is running — end?" : "End session?") +
+                "End this session? A message can continue it later." +
                 (queued > 0
                   ? ` ${queued} queued message${queued === 1 ? "" : "s"} will be discarded.`
                   : "")
@@ -393,11 +397,17 @@ export function RunView({
           </button>
         ) : null}
       </div>
-      <div ref={splitRef} className="flex min-h-0 flex-1 gap-3 p-3">
+      {/* The split is layout by its own width (run-view-107): panes
+          side by side with the divider from 42rem, stacked below it
+          with the divider hidden and the reader's split kept. */}
+      <div
+        ref={splitRef}
+        className="@container flex min-h-0 flex-1 flex-col gap-3 p-3 @2xl:flex-row"
+      >
         <div
           data-testid="captain-column"
-          style={{ width: `${captainSplit}%` }}
-          className="flex min-w-[280px] flex-col gap-2"
+          style={{ "--captain-split": `${captainSplit}%` } as React.CSSProperties}
+          className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 @2xl:w-(--captain-split) @2xl:min-w-[280px] @2xl:flex-none"
         >
           <CaptainPane
             view={view}
@@ -417,9 +427,9 @@ export function RunView({
               onDrop={(intent) => closeIntent(intent.id, "dropped")}
             />
           ) : null}
-          {readOnly ? (
+          {ended ? (
             <>
-              {error ? (
+              {readOnly && error ? (
                 // A failed history load must not read as an empty run
                 // (DR-010 §5): name it and offer the retry.
                 <div
@@ -438,23 +448,32 @@ export function RunView({
                   ) : null}
                 </div>
               ) : null}
+              {/* The ended notice (run-view-33): a paused conversation
+                  when a message can continue it, read-only otherwise;
+                  its control wraps under the words in a narrow pane. */}
               <div
                 data-testid="ended-notice"
-                className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900"
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900"
               >
-                This session has ended — transcript is read-only.
+                <span className="min-w-0 flex-1 basis-40">
+                  {readOnly
+                    ? "Ended — this session can't be continued"
+                    : "Ended · a message continues it"}
+                </span>
                 {onStartNew ? (
                   <button
                     type="button"
                     onClick={onStartNew}
-                    className="ml-auto rounded-md border border-brand-300 px-2.5 py-1 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+                    title="Start a new session in this project"
+                    className="ml-auto shrink-0 rounded-md border border-brand-300 px-2.5 py-1 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
                   >
-                    Start a new session
+                    New session
                   </button>
                 ) : null}
               </div>
             </>
-          ) : (
+          ) : null}
+          {readOnly ? null : (
             <Composer
               view={view}
               composer={composer}
@@ -481,11 +500,13 @@ export function RunView({
             />
           )}
         </div>
-        <SplitDivider
-          percent={captainSplit}
-          onChange={setCaptainSplit}
-          containerRef={splitRef}
-        />
+        <div className="hidden @2xl:contents">
+          <SplitDivider
+            percent={captainSplit}
+            onChange={setCaptainSplit}
+            containerRef={splitRef}
+          />
+        </div>
         <div
           data-testid="player-grid"
           className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"

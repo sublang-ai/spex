@@ -627,7 +627,7 @@ function WorkspaceSurface({
               : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
           }`}
         >
-          +
+          <Icon name="plus" className="h-4 w-4" />
         </button>
       </div>
       {(["specs", "overview"] as const).map((pinned) => (
@@ -735,7 +735,7 @@ function WorkspaceSurface({
             playbooks={summary?.playbooks ?? []}
             connected={connection === "open"}
             error={runErrors[activeSession.id]}
-            readOnly={!activeSession.live}
+            readOnly={!activeSession.live && !activeSession.continuable}
             ending={ending[activeSession.id]}
             readinessHint={readinessHint}
             onEnd={

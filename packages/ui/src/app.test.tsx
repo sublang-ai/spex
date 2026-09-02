@@ -199,6 +199,22 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     expect(entries[0]).toContain("Dashboard");
     expect(screen.getByTestId("nav-attention-badge").textContent).toBe("2");
 
+    // Past nine the badge prints "9+", the count in the entry's name
+    // and tooltip (run-view-108).
+    act(() => {
+      useAppStore.setState({
+        ledger: { ...(LEDGER as Record<string, unknown>), badge: 12 } as never,
+      });
+    });
+    expect(screen.getByTestId("nav-attention-badge").textContent).toBe("9+");
+    expect(screen.getByTestId("nav-attention-badge").title).toContain("12");
+    expect(
+      screen.getByRole("button", { name: "Dashboard — 12 need your attention" }),
+    ).toBeTruthy();
+    act(() => {
+      useAppStore.setState({ ledger: LEDGER });
+    });
+
     // The current project is disclosed; its live row wears amber for
     // the waiting question, not emerald for merely being alive.
     const liveRow = screen.getByTestId("sidebar-session-a-live");
@@ -393,22 +409,26 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
 });
 
 describe("run-view-81: the reader sets the Captain/players split", () => {
+  // The split rides a custom property the side-by-side form reads;
+  // stacked below 42rem the column is full width (run-view-107).
+  const split = () =>
+    screen.getByTestId("captain-column").style.getPropertyValue("--captain-split");
+
   test("keys move it, a double-click restores it, and it persists", () => {
     const { unmount } = render(<App />);
-    const column = screen.getByTestId("captain-column");
-    expect(column.style.width).toBe("34%");
+    expect(split()).toBe("34%");
 
     const divider = screen.getByTestId("captain-divider");
     fireEvent.keyDown(divider, { key: "ArrowRight" });
-    expect(screen.getByTestId("captain-column").style.width).toBe("36%");
+    expect(split()).toBe("36%");
 
     // Chrome state is a preference: it survives a remount (DR-030).
     unmount();
     render(<App />);
-    expect(screen.getByTestId("captain-column").style.width).toBe("36%");
+    expect(split()).toBe("36%");
 
     fireEvent.doubleClick(screen.getByTestId("captain-divider"));
-    expect(screen.getByTestId("captain-column").style.width).toBe("34%");
+    expect(split()).toBe("34%");
   });
 
   test("neither side can be squeezed away", () => {
@@ -417,11 +437,11 @@ describe("run-view-81: the reader sets the Captain/players split", () => {
     for (let nudge = 0; nudge < 40; nudge += 1) {
       fireEvent.keyDown(divider, { key: "ArrowLeft" });
     }
-    expect(screen.getByTestId("captain-column").style.width).toBe("22%");
+    expect(split()).toBe("22%");
     for (let nudge = 0; nudge < 60; nudge += 1) {
       fireEvent.keyDown(divider, { key: "ArrowRight" });
     }
-    expect(screen.getByTestId("captain-column").style.width).toBe("70%");
+    expect(split()).toBe("70%");
   });
 });
 

@@ -1004,8 +1004,13 @@ export function SpecView(props: SpecViewProps) {
       : undefined;
 
     return (
-      <li key={key} data-testid={`file-${key}`}>
+      // The row fits its own width (spec-view-1, DR-041): the intent
+      // yields first, the identifier chip then truncates, and below
+      // @md the counts print numbers alone with the rollup riding the
+      // row's title.
+      <li key={key} data-testid={`file-${key}`} className="@container">
         <div
+          title={rollup ? `Citations: ${rollup}` : undefined}
           className={`flex items-center gap-2 rounded px-1 py-1 ${
             dimmed ? "opacity-50" : ""
           } ${
@@ -1053,14 +1058,17 @@ export function SpecView(props: SpecViewProps) {
             className="flex min-w-0 flex-1 items-center gap-2 rounded text-left hover:bg-neutral-50 dark:hover:bg-neutral-900"
           >
             {/* The package identifier is the basename (META-10). */}
-            <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+            <span
+              className="min-w-0 truncate rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+              title={file.basename}
+            >
               {file.basename}
             </span>
             {/* Collapsed keeps the truncated intent; expanded yields
              * to the full prose block below. */}
             {file.intent && !expanded ? (
               <span
-                className="truncate text-xs text-neutral-500 dark:text-neutral-400"
+                className="min-w-0 flex-1 truncate text-xs text-neutral-500 dark:text-neutral-400"
                 title={file.intent}
               >
                 {file.intent}
@@ -1072,13 +1080,15 @@ export function SpecView(props: SpecViewProps) {
               <span
                 key={group}
                 aria-label={`${counts[group]} ${group} items`}
-                className={`rounded-full px-1.5 py-0.5 text-[11px] ${
+                title={`${counts[group]} ${group} items`}
+                className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] ${
                   counts[group] > 0 && viewState.filters[group]
                     ? GROUP_CHIP[group]
                     : MUTED_CHIP
                 }`}
               >
-                {counts[group]} {group}
+                {counts[group]}
+                <span className="hidden @md:inline"> {group}</span>
               </span>
             ))}
             {searching && !search.fileKeys.has(key) && selected ? (
@@ -1093,7 +1103,7 @@ export function SpecView(props: SpecViewProps) {
               <span
                 data-testid={`rollup-${key}`}
                 aria-label={`Citations: ${rollup}`}
-                className="ml-1 text-[11px] text-neutral-500"
+                className="ml-1 hidden whitespace-nowrap text-[11px] text-neutral-500 @md:inline"
               >
                 {rollup}
               </span>
@@ -1842,13 +1852,15 @@ function ItemRow({
             {item.firstLine}
           </span>
           {hint ? (
-            <span className="shrink-0 text-[11px] text-neutral-500">
+            // An at-a-glance extra (spec-view-55): the expanded row's
+            // citation rows carry the counts, so it hides first.
+            <span className="hidden shrink-0 text-[11px] text-neutral-500 @md:inline">
               {hint}
             </span>
           ) : null}
         </button>
         {despiteFilter ? (
-          <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
             shown despite filter
           </span>
         ) : null}

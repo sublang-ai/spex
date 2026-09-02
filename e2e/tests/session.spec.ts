@@ -55,11 +55,9 @@ test("run-view-98: the first task runs, queues, and ends", async ({ page, app })
   // A message during the turn queues — never reads as sent — and
   // goes out when the turn ends.
   const box = page.getByTestId("boss-composer");
-  await expect(box).toHaveAttribute("placeholder", /sends when this turn ends/);
+  await expect(box).toHaveAttribute("placeholder", /sends after this turn/i);
   await box.fill("Also add a test for expiry skew");
-  await page
-    .getByRole("button", { name: "Send after this turn", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Send next", exact: true }).click();
   await expect(page.getByTestId("queue-indicator")).toBeVisible();
   await expect(page.getByTestId("queue-indicator")).toContainText(/expiry skew/i);
   await expect(page.getByTestId("queue-indicator")).toContainText(
@@ -108,7 +106,7 @@ test("run-view-99: a player question parks the session until the Boss replies", 
   const chip = page.getByTestId("state-chip");
   await expect(chip).toContainText(/wait/i);
   const box = page.getByTestId("boss-composer");
-  await expect(box).toHaveAttribute("placeholder", /answer the question/i);
+  await expect(box).toHaveAttribute("placeholder", /reply to coder/i);
 
   await box.fill("Yes, migrate them too");
   await page.getByRole("button", { name: "Send", exact: true }).click();

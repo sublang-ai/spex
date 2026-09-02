@@ -262,10 +262,71 @@ describe("RUN-36: ended sessions render read-only", () => {
       />,
     );
     expect(screen.getByTestId("ended-notice").textContent).toContain(
-      "read-only",
+      "can't be continued",
     );
     expect(screen.queryByTestId("boss-composer")).toBeNull();
-    expect(screen.getByText("Start a new session")).toBeTruthy();
+    // The control is within the label budget (DR-041), its sentence
+    // in the tooltip.
+    const fresh = screen.getByRole("button", { name: "New session" });
+    expect(fresh.title).toBe("Start a new session in this project");
+    // The notice wraps its control under its words in a narrow pane.
+    expect(screen.getByTestId("ended-notice").className).toContain("flex-wrap");
+  });
+
+  // run-view-33 (DR-042): a continuable session is a paused
+  // conversation — the notice says so above the enabled composer.
+  test("a continuable session keeps its composer under the notice", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+    render(
+      <RunView
+        session={{ ...SESSION, live: false, endedAt: 5, continuable: true }}
+        view={view}
+        composer={{ queued: [] }}
+        connected
+        onStartNew={() => {}}
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("ended-notice").textContent).toContain(
+      "Ended · a message continues it",
+    );
+    expect(screen.getByRole("button", { name: "New session" })).toBeTruthy();
+    expect(screen.getByTestId("session-ended-at")).toBeTruthy();
+    const box = screen.getByTestId("boss-composer") as HTMLTextAreaElement;
+    expect(box.disabled).toBe(false);
+    expect(box.placeholder).toBe("Message the Captain…");
+  });
+});
+
+// run-view-47 (DR-042): ending pauses the conversation, and the
+// confirm says a message can continue it.
+describe("run-view-47: the End confirm says the session can continue", () => {
+  test("the question names continuation and the queued messages", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONLY_STARTED);
+    render(
+      <RunView
+        session={SESSION}
+        view={view}
+        composer={{ queued: [{ text: "later" }, { text: "and later" }] }}
+        connected
+        onEnd={() => {}}
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("end-session"));
+    const keep = screen.getByRole("button", { name: "Keep" });
+    expect(keep.parentElement?.textContent).toContain(
+      "End this session? A message can continue it later. 2 queued messages will be discarded.",
+    );
+    expect(screen.getByRole("button", { name: "End" })).toBeTruthy();
+    // The confirm wraps its controls under the question (DR-041).
+    expect(keep.parentElement?.className).toContain("flex-wrap");
   });
 });
 
@@ -999,14 +1060,22 @@ describe("run-view-8/38: the composer says what a send does mid-turn", () => {
         onDismissError={() => {}}
       />,
     );
-    const send = screen.getByRole("button", { name: "Send after this turn" });
-    expect(send.title).toBe("Enter to send · Shift+Enter for a new line");
+    // The busy form stays within the label budget (DR-041); the
+    // sentence rides the tooltip ahead of the keys.
+    const send = screen.getByRole("button", { name: "Send next" });
+    expect(send.title).toBe(
+      "Sends when this turn ends · Enter to send · Shift+Enter for a new line",
+    );
     expect(
       screen.getByTestId("boss-composer").getAttribute("placeholder"),
-    ).toContain("sends when this turn ends");
+    ).toBe("Sends after this turn…");
     expect(screen.getByTestId("queue-indicator").textContent).toContain(
       "sends when this turn ends",
     );
+    // Abort stands beside the primary in the action row, which wraps.
+    const row = screen.getByTestId("abort-button").parentElement!;
+    expect(row.textContent).toBe("AbortSend next");
+    expect(row.parentElement?.className).toContain("flex-wrap");
     // The remove control is a real hit target (run-view-50).
     const remove = screen.getByRole("button", {
       name: "Remove this queued message",
@@ -1020,6 +1089,38 @@ describe("run-view-8/38: the composer says what a send does mid-turn", () => {
     expect(screen.getByRole("button", { name: "Send" }).title).toBe(
       "Enter to send · Shift+Enter for a new line",
     );
+  });
+
+  // run-view-106 (DR-041): the composer's shape — a one-row field
+  // with no native grip, the caption line under it, placeholders
+  // within 24 characters.
+  test("the field is one growing row and the caption carries the hint", () => {
+    renderRun(TURN_ONE);
+    const box = screen.getByTestId("boss-composer") as HTMLTextAreaElement;
+    expect(box.rows).toBe(1);
+    expect(box.className).toContain("resize-none");
+    expect(box.placeholder.length).toBeLessThanOrEqual(24);
+    expect(screen.getByTestId("composer-caption").textContent).toBe(
+      "/ for playbooks · Enter sends",
+    );
+  });
+
+  test("a waiting question names the player in the placeholder", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONLY_STARTED);
+    render(
+      <RunView
+        session={SESSION}
+        view={{ ...view, pendingQuestion: "Migrate?", pendingQuestionPlayer: "coder" }}
+        composer={{ queued: [] }}
+        connected
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    const box = screen.getByTestId("boss-composer") as HTMLTextAreaElement;
+    expect(box.placeholder).toBe("Reply to coder…");
   });
 
   test("the staged chip names the task and its control speaks plainly", () => {

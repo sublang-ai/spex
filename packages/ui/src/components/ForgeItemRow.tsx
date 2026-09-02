@@ -142,14 +142,27 @@ export function ForgeItemRow({
         </span>{" "}
         {item.title}
       </a>
-      {item.labels?.map((label) => (
+      {/* At most two labels show (DR-041); the rest fold into one
+          "+N" tag whose title lists every label. */}
+      {item.labels?.slice(0, 2).map((label) => (
         <span
           key={label}
-          className="shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+          title={label}
+          className="max-w-24 shrink-0 truncate rounded-full bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
         >
           {label}
         </span>
       ))}
+      {item.labels && item.labels.length > 2 ? (
+        <span
+          data-testid={testId ? `${testId}-more-labels` : undefined}
+          title={item.labels.join(", ")}
+          aria-label={`${item.labels.length - 2} more labels: ${item.labels.slice(2).join(", ")}`}
+          className="shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+        >
+          +{item.labels.length - 2}
+        </span>
+      ) : null}
       {captured ? (
         <CapturedState
           derived={captured}

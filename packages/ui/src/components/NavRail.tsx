@@ -369,10 +369,16 @@ export function NavRail(props: NavRailProps) {
             aria-hidden
             title={`${attentionCount} session${attentionCount === 1 ? "" : "s"} need${attentionCount === 1 ? "s" : ""} your reply`}
             className={`rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-200 ${
-              collapsed ? "absolute right-1 top-0.5" : ""
+              // Positioned at the entry's corner, beside the glyph,
+              // never over it (run-view-108).
+              collapsed
+                ? "absolute -top-1 right-0 px-1 py-0 text-[10px] leading-4"
+                : ""
             }`}
           >
-            {attentionCount}
+            {/* The count prints "9+" past nine; the exact count rides
+                the entry's accessible name and tooltip (run-view-108). */}
+            {attentionCount > 9 ? "9+" : attentionCount}
           </span>
         ) : null}
       </button>
@@ -520,7 +526,7 @@ export function NavRail(props: NavRailProps) {
                           data-testid={`sidebar-delete-confirm-${session.id}`}
                           onClick={stop}
                           onKeyDown={stop}
-                          className="min-w-0 flex-1 [&>span]:flex-wrap"
+                          className="min-w-0 flex-1"
                         >
                           <InlineConfirm
                             question={

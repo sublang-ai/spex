@@ -403,6 +403,9 @@ describe("RUN-45: readiness heals at hand", () => {
     const bubble = screen.getByText(/aren't ready yet/).closest("div")!;
     expect(bubble.textContent).toContain("claude");
     expect(bubble.textContent).toContain("ANTHROPIC_API_KEY");
+    // Within the label budget (DR-041): the bubble's prose says what
+    // to set up, the control just re-checks.
+    expect(screen.getByTestId("recheck-readiness").textContent).toBe("Re-check");
     fireEvent.click(screen.getByTestId("recheck-readiness"));
     await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalled());
   });
