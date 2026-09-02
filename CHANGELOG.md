@@ -14,6 +14,38 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Added
+
+- **Sessions continue.** An ended session is a paused conversation: a
+  message continues it, after the app restarts too, from a token-free
+  Captain snapshot kept beside the session; the End confirm says so.
+- **Every session can be deleted**, sessions run from the playbook
+  terminal included, behind a lease check that refuses while a
+  terminal still writes them.
+- **Spec editing.** Packages, decision records, and intent records
+  open in a plain-text editor with a markdown preview from the Specs
+  tab; saves are atomic and refuse to clobber a file an agent changed
+  meanwhile.
+- **Intent controls.** A working intent can be dropped from the
+  session's working line and the Dashboard's Now band; the Captain
+  home's next card can remove its intent.
+
+### Changed
+
+- **Chrome that fits.** The composer is rebuilt — field on top, actions
+  beneath, "Send" and "Send next", no native grip — and every row,
+  toolbar, and header yields at narrow widths instead of overlapping;
+  a browser journey now measures overlap at widths from 320px.
+- Record rows look and act alike everywhere — Specs decisions, History,
+  Sources — and open the record in the records reader.
+
+### Fixed
+
+- History and Sources record rows opened nothing; they now land in the
+  records reader.
+- A stale ledger reply could outlive a fresh one, leaving a started
+  intent shown as still queued.
+
 ## [0.1.0] - 2026-09-02
 
 ### Added

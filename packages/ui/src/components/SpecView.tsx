@@ -1483,12 +1483,15 @@ export function SpecView(props: SpecViewProps) {
         };
 
         return graphful ? (
+          // The split answers its own pane's width, not the window's
+          // (DR-041): side by side from the @2xl step, stacked below it.
+          <div className="@container flex min-h-0 flex-1">
           <div
             ref={splitRef}
-            className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-0"
+            className="flex min-h-0 flex-1 flex-col gap-4 @2xl:flex-row @2xl:gap-0"
           >
             <div
-              className="min-h-0 flex-1 lg:h-full lg:w-[var(--graph-share)] lg:flex-none"
+              className="min-h-0 flex-1 @2xl:h-full @2xl:w-[var(--graph-share)] @2xl:flex-none"
               style={{ ["--graph-share" as string]: `${share * 100}%` }}
             >
               <SpecGraph
@@ -1511,7 +1514,7 @@ export function SpecView(props: SpecViewProps) {
               aria-valuemax={Math.round(MAX_GRAPH_WIDTH * 100)}
               tabIndex={0}
               data-testid="graph-split"
-              className="group hidden shrink-0 cursor-col-resize items-stretch px-2 lg:flex"
+              className="group hidden shrink-0 cursor-col-resize items-stretch px-2 @2xl:flex"
               onPointerDown={(event) => {
                 (event.currentTarget as Element).setPointerCapture?.(
                   event.pointerId,
@@ -1547,6 +1550,7 @@ export function SpecView(props: SpecViewProps) {
                 {decisionsBranch}
               </ul>
             </div>
+          </div>
           </div>
         ) : (
           <div className="flex flex-col">
