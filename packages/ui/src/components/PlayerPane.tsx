@@ -90,7 +90,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
             {segment.role ? (
               <span
                 data-testid={`call-role-${segment.seq}`}
-                className="mr-2 rounded bg-brand-50 px-1.5 py-0.5 font-mono text-[11px] text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                className="mr-2 rounded bg-brand-50 px-1.5 py-0.5 font-mono text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
               >
                 {segment.role}
               </span>
@@ -100,7 +100,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
               {new Date(segment.at).toLocaleTimeString()}
             </span>
           </summary>
-          <pre className="mt-1 whitespace-pre-wrap font-mono text-[11px]">
+          <pre className="mt-1 whitespace-pre-wrap font-mono text-xs">
             {segment.text}
           </pre>
         </details>
@@ -174,7 +174,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
               ) : null}
             </span>
           </summary>
-          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-neutral-600 dark:text-neutral-400">
+          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-neutral-600 dark:text-neutral-400">
             {JSON.stringify(segment.input, null, 2)}
             {segment.output !== undefined
               ? `\n\u2192 ${typeof segment.output === "string" ? segment.output : JSON.stringify(segment.output, null, 2)}`
@@ -245,7 +245,7 @@ export function PlayerPane({
         {meta ? (
           <span
             title={meta.model ?? meta.adapter}
-            className="min-w-0 truncate rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+            className="min-w-0 truncate rounded bg-neutral-100 px-1.5 py-0.5 text-xs whitespace-nowrap text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
           >
             {meta.model ?? meta.adapter}
             {meta.fastMode ? (
@@ -291,7 +291,7 @@ export function PlayerPane({
                 stuckRef.current = false;
                 setWindowSize((size) => size + RENDER_WINDOW);
               }}
-              className="text-center text-[11px] text-neutral-500 hover:text-brand-500"
+              className="text-center text-xs text-neutral-500 hover:text-brand-500"
             >
               Show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)}{" "}
               of {view.segments.length - windowSize} earlier entries

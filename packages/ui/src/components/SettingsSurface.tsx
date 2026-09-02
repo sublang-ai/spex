@@ -84,7 +84,7 @@ function ReadinessBadge({ entry }: { entry?: ReadinessEntry }) {
   if (!entry) return null;
   if (entry.ready === true) {
     return (
-      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
         ready
       </span>
     );
@@ -92,7 +92,7 @@ function ReadinessBadge({ entry }: { entry?: ReadinessEntry }) {
   if (entry.ready === false) {
     return (
       <span
-        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] text-red-700 dark:bg-red-950 dark:text-red-300"
+        className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700 dark:bg-red-950 dark:text-red-300"
         title={entry.requirement}
       >
         not ready
@@ -101,7 +101,7 @@ function ReadinessBadge({ entry }: { entry?: ReadinessEntry }) {
   }
   return (
     <span
-      className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800"
+      className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800"
       title={
         entry.requirement ??
         "no automatic check for this adapter — verify sign-in yourself"
@@ -233,14 +233,14 @@ function PlayerRoster({
                 {player.boundBy.map((position) => (
                   <span
                     key={position}
-                    className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                    className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
                   >
                     {position}
                   </span>
                 ))}
               </span>
             ) : (
-              <span className="text-[11px] text-neutral-500">
+              <span className="text-xs text-neutral-500">
                 bound to no role yet
               </span>
             )}
@@ -441,7 +441,7 @@ export function SettingsSurface() {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1500);
               }}
-              className="rounded border border-red-300 px-1.5 py-0.5 text-[11px] hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
+              className="rounded border border-red-300 px-1.5 py-0.5 text-xs hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
             >
               {copied ? "Copied" : "Copy path"}
             </button>
@@ -457,7 +457,7 @@ export function SettingsSurface() {
                     .catch((cause: Error) => setError(cause.message))
                     .finally(() => setRetrying(false));
                 }}
-                className="rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-900"
+                className="rounded border border-red-300 px-1.5 py-0.5 text-xs font-medium hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-900"
               >
                 {retrying ? "Retrying…" : "Retry"}
               </button>
@@ -517,7 +517,7 @@ export function SettingsSurface() {
             <span className="font-mono">{summary.path}</span>
           </p>
         ) : null}
-        <p className="mt-0.5 text-[11px] text-neutral-500">
+        <p className="mt-0.5 text-xs text-neutral-500">
           Spex {new URLSearchParams(window.location.search).get("version") ?? "dev"}
           {" · protocol "}
           {PROTOCOL_VERSION}
@@ -582,7 +582,7 @@ export function SettingsSurface() {
             <span className="font-mono font-medium">{entry.adapter}</span>
             <ReadinessBadge entry={entry} />
             {entry.ready === false && entry.requirement ? (
-              <span className="min-w-0 flex-1 text-[11px] text-neutral-500">
+              <span className="min-w-0 flex-1 text-xs text-neutral-500">
                 {entry.requirement}
               </span>
             ) : null}
@@ -591,7 +591,7 @@ export function SettingsSurface() {
                 <span
                   key={position}
                   title={position}
-                  className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                  className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
                 >
                   {positionLabel(position)}
                 </span>

@@ -588,7 +588,7 @@ function WorkspaceSurface({
                 {session.live ? null : (
                   <span
                     data-testid={`tab-ended-${session.id}`}
-                    className="shrink-0 text-[11px] text-neutral-500 dark:text-neutral-400"
+                    className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
                   >
                     ended
                   </span>
@@ -1029,7 +1029,7 @@ export function App() {
         title="Open Settings to see what's wrong"
         aria-label={`Config ${configState.status} — open Settings`}
         className={`flex shrink-0 items-center justify-center rounded border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 ${
-          railCollapsed ? "h-6 w-6" : "px-1.5 py-0.5 text-[11px]"
+          railCollapsed ? "h-6 w-6" : "px-1.5 py-0.5 text-xs"
         }`}
       >
         {railCollapsed ? (
@@ -1039,7 +1039,7 @@ export function App() {
         )}
       </button>
     ) : railCollapsed || playbookCount === undefined ? null : (
-      <span className="px-1 text-[11px] text-neutral-500">
+      <span className="px-1 text-xs text-neutral-500">
         {playbookCount === 0
           ? "No playbooks yet"
           : `${playbookCount} playbook${playbookCount === 1 ? "" : "s"}`}

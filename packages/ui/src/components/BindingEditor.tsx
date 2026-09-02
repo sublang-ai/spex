@@ -130,7 +130,7 @@ export function BindingEditorPopover({
         {others.length > 0 ? (
           <span
             data-testid="binding-shared-note"
-            className="text-[11px] text-brand-700 dark:text-brand-300"
+            className="text-xs text-brand-700 dark:text-brand-300"
           >
             Also answers {others.join(", ")} — one conversation across them.
           </span>
@@ -150,7 +150,7 @@ export function BindingEditorPopover({
         onChange={(next) => setDraft((current) => ({ ...current, effort: next }))}
       />
 
-      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">
         Adapter and permissions belong to the player — edit them in
         Settings.
       </p>

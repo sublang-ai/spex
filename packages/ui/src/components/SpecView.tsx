@@ -1059,7 +1059,7 @@ export function SpecView(props: SpecViewProps) {
           >
             {/* The package identifier is the basename (META-10). */}
             <span
-              className="min-w-0 truncate rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+              className="min-w-0 truncate rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
               title={file.basename}
             >
               {file.basename}
@@ -1081,7 +1081,7 @@ export function SpecView(props: SpecViewProps) {
                 key={group}
                 aria-label={`${counts[group]} ${group} items`}
                 title={`${counts[group]} ${group} items`}
-                className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] ${
+                className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs ${
                   counts[group] > 0 && viewState.filters[group]
                     ? GROUP_CHIP[group]
                     : MUTED_CHIP
@@ -1094,7 +1094,7 @@ export function SpecView(props: SpecViewProps) {
             {searching && !search.fileKeys.has(key) && selected ? (
               <span
                 data-testid={`retained-${key}`}
-                className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-[11px] text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
               >
                 shown despite search
               </span>
@@ -1103,7 +1103,7 @@ export function SpecView(props: SpecViewProps) {
               <span
                 data-testid={`rollup-${key}`}
                 aria-label={`Citations: ${rollup}`}
-                className="ml-1 hidden whitespace-nowrap text-[11px] text-neutral-500 @md:inline"
+                className="ml-1 hidden whitespace-nowrap text-xs text-neutral-500 @md:inline"
               >
                 {rollup}
               </span>
@@ -1123,13 +1123,13 @@ export function SpecView(props: SpecViewProps) {
             {file.notices.map((notice) => (
               <div
                 key={notice}
-                className="text-[11px] text-amber-600 dark:text-amber-400"
+                className="text-xs text-amber-600 dark:text-amber-400"
               >
                 {notice}
               </div>
             ))}
             {file.error ? (
-              <div className="text-[11px] text-amber-600 dark:text-amber-400">
+              <div className="text-xs text-amber-600 dark:text-amber-400">
                 {file.path}: {file.error}
               </div>
             ) : null}
@@ -1141,7 +1141,7 @@ export function SpecView(props: SpecViewProps) {
                     data-testid={`expand-all-${key}`}
                     aria-label={`${allExpanded ? "Collapse" : "Expand"} all items in ${file.basename}`}
                     onClick={() => setAllItems(file, !allExpanded)}
-                    className={`text-[11px] ${LINK_CLASS}`}
+                    className={`text-xs ${LINK_CLASS}`}
                   >
                     {allExpanded ? "Collapse all" : "Expand all"}
                   </button>
@@ -1154,7 +1154,7 @@ export function SpecView(props: SpecViewProps) {
                     onClick={() =>
                       openEditor(`file:${key}`, `packages/${key}.md`)
                     }
-                    className={`text-[11px] ${LINK_CLASS}`}
+                    className={`text-xs ${LINK_CLASS}`}
                   >
                     Edit
                   </button>
@@ -1162,7 +1162,7 @@ export function SpecView(props: SpecViewProps) {
                 {openFailure?.anchor === `file:${key}` ? (
                   <span
                     role="alert"
-                    className="text-[11px] text-red-600 dark:text-red-400"
+                    className="text-xs text-red-600 dark:text-red-400"
                   >
                     {openFailure.message}
                   </span>
@@ -1682,7 +1682,7 @@ function FileItems({
       rows.push(
         <li
           key={`section-${item.id}`}
-          className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500"
+          className="mt-1 text-xs font-semibold uppercase tracking-wide text-neutral-500"
         >
           {item.section}
         </li>,
@@ -1694,7 +1694,7 @@ function FileItems({
       rows.push(
         <li
           key={`topic-${item.id}`}
-          className="ml-2 text-[11px] font-medium text-neutral-500"
+          className="ml-2 text-xs font-medium text-neutral-500"
         >
           {item.topic}
         </li>,
@@ -1802,7 +1802,7 @@ function ItemRow({
           {target}
         </button>
         {notFoundKey === linkKey ? (
-          <span className="text-[11px] text-neutral-500">not found</span>
+          <span className="text-xs text-neutral-500">not found</span>
         ) : null}
       </span>
     );
@@ -1824,26 +1824,26 @@ function ItemRow({
           aria-label={`Copy ${item.id}`}
           title={`Copy ${item.id}`}
           onClick={onCopy}
-          className={`shrink-0 cursor-pointer rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold hover:ring-1 hover:ring-neutral-400 dark:hover:ring-neutral-500 ${GROUP_CHIP[group]}`}
+          className={`shrink-0 cursor-pointer rounded px-1.5 py-0.5 font-mono text-xs font-semibold hover:ring-1 hover:ring-neutral-400 dark:hover:ring-neutral-500 ${GROUP_CHIP[group]}`}
         >
           {item.id}
         </button>
         {copied ? (
           <span
             data-testid={`copied-${item.id}`}
-            className="shrink-0 text-[11px] text-neutral-500 dark:text-neutral-400"
+            className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
           >
             copied
           </span>
         ) : null}
         {copyFailed ? (
-          <span className="shrink-0 text-[11px] text-red-600 dark:text-red-400">
+          <span className="shrink-0 text-xs text-red-600 dark:text-red-400">
             copy failed
           </span>
         ) : null}
         {/* The group word duplicates the chip's color and accessible
             name, so it hides first below @md (spec-view-55). */}
-        <span className={`hidden shrink-0 text-[11px] @md:inline ${GROUP_TEXT[group]}`}>
+        <span className={`hidden shrink-0 text-xs @md:inline ${GROUP_TEXT[group]}`}>
           {group}
         </span>
         <button
@@ -1860,13 +1860,13 @@ function ItemRow({
           {hint ? (
             // An at-a-glance extra (spec-view-55): the expanded row's
             // citation rows carry the counts, so it hides first.
-            <span className="hidden shrink-0 text-[11px] text-neutral-500 @md:inline">
+            <span className="hidden shrink-0 text-xs text-neutral-500 @md:inline">
               {hint}
             </span>
           ) : null}
         </button>
         {despiteFilter ? (
-          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
             shown despite filter
           </span>
         ) : null}
@@ -1884,7 +1884,7 @@ function ItemRow({
               <span className="font-mono text-neutral-500">
                 {notFoundKey.slice(`body:${item.id}:`.length)}
               </span>
-              <span className="text-[11px] text-neutral-500">not found</span>
+              <span className="text-xs text-neutral-500">not found</span>
             </div>
           ) : null}
           {item.cites.length > 0 || onEdit ? (
@@ -1904,7 +1904,7 @@ function ItemRow({
                   data-testid={`item-edit-${item.id}`}
                   aria-label={`Edit ${item.id} in its file`}
                   onClick={onEdit}
-                  className={`text-[11px] ${LINK_CLASS}`}
+                  className={`text-xs ${LINK_CLASS}`}
                 >
                   Edit
                 </button>
@@ -1912,7 +1912,7 @@ function ItemRow({
               {editFailure ? (
                 <span
                   role="alert"
-                  className="text-[11px] text-red-600 dark:text-red-400"
+                  className="text-xs text-red-600 dark:text-red-400"
                 >
                   {editFailure}
                 </span>

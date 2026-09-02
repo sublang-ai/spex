@@ -116,7 +116,7 @@ export function ComposerCaption({
   return (
     <div
       data-testid="composer-caption"
-      className="flex min-h-6 items-center px-1 text-[11px] text-neutral-500 dark:text-neutral-400"
+      className="flex min-h-6 items-center px-1 text-xs text-neutral-500 dark:text-neutral-400"
     >
       {staged ? (
         <span
@@ -296,7 +296,7 @@ export function Composer({
               className="flex max-w-[85%] flex-col rounded-2xl rounded-br-md border border-brand-300 px-3 py-1.5 text-sm text-brand-700 dark:border-brand-700 dark:text-brand-300"
             >
               <span className="whitespace-pre-wrap">{entry.text}</span>
-              <span className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-500">
+              <span className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
                 {entry.intentId !== undefined ? (
                   <span
                     data-testid="queued-intent-chip"

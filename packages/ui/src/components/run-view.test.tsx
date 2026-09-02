@@ -50,6 +50,18 @@ const SESSION: SessionInfo = {
   failed: false,
 };
 
+/** A system line's words, glyph and all (run-view-1): the glyph sits
+ * in its own icon slot, so the line is found by its whole text. */
+function systemLine(text: string | RegExp): HTMLElement | null {
+  return (
+    screen.queryAllByTestId("system-line").find((el) =>
+      typeof text === "string"
+        ? el.textContent === text
+        : text.test(el.textContent ?? ""),
+    ) ?? null
+  );
+}
+
 function renderRun(entries: typeof FULL_RUN) {
   const view = applyRecords(
     initialSessionView(PLAYERS),
@@ -83,7 +95,14 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     expect(screen.getByTestId("captain-pane")).toBeTruthy();
     expect(screen.getByTestId("player-pane-dev.coder")).toBeTruthy();
     expect(screen.getByTestId("player-pane-dev.reviewer")).toBeTruthy();
-    expect(screen.getByText("◇ /code started")).toBeTruthy();
+    // A status line is a left-aligned system line at the small step,
+    // its glyph in an icon slot — never centered mono (run-view-1).
+    const started = systemLine("◇ /code started");
+    expect(started).toBeTruthy();
+    expect(started!.className).toContain("text-xs");
+    expect(started!.className).not.toContain("text-center");
+    expect(started!.className).not.toContain("font-mono");
+    expect(started!.firstElementChild?.textContent).toBe("◇");
     // Markdown rendered: **auth** becomes a <strong>.
     expect(screen.getByText("auth").tagName).toBe("STRONG");
     // A collapsed tool card says the tool and what it acts on; an
@@ -384,10 +403,10 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // The card absorbs the run's progress while ◇ engagement lines
     // stay — including the bare event ids the runtime narrates with
     // no glyph, which used to reach the reader as raw jargon.
-    expect(screen.getByText("◇ /code started")).toBeTruthy();
-    expect(screen.queryByText(/⤷ Coder: implement/)).toBeNull();
-    expect(screen.queryByText("START_CODE")).toBeNull();
-    expect(screen.queryByText("→ directCommit")).toBeNull();
+    expect(systemLine("◇ /code started")).toBeTruthy();
+    expect(systemLine(/⤷ Coder: implement/)).toBeNull();
+    expect(systemLine("START_CODE")).toBeNull();
+    expect(systemLine("→ directCommit")).toBeNull();
   });
 
   test("expanding the caller is arrangement, and shows both drawings", () => {

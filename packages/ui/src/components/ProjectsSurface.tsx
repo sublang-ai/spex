@@ -25,7 +25,7 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
   if (meta?.statusError) {
     return (
       <span
-        className="text-[11px] text-red-500"
+        className="text-xs text-red-500"
         title={meta.statusError}
       >
         Repo unreadable — does the path still exist?
@@ -35,7 +35,7 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
   const status = meta?.status;
   if (!status) return null;
   return (
-    <span className="flex items-center gap-1.5 font-mono text-[11px] text-neutral-500">
+    <span className="flex items-center gap-1.5 font-mono text-xs text-neutral-500">
       <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">
         {status.branch}
       </span>

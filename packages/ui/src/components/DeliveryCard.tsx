@@ -48,7 +48,7 @@ export function SourceChip({
   const label = SOURCE_LABEL[source.kind](source.ref);
   const tooltip = `${source.kind} ${source.ref}${source.url ? ` — ${source.url}` : ""}`;
   const base =
-    "inline-flex max-w-full items-center truncate rounded-full border px-1.5 text-[11px] font-medium";
+    "inline-flex max-w-full items-center truncate rounded-full border px-1.5 text-xs font-medium";
   if (source.url) {
     // Interaction wears the brand hue (DR-013); on the Boss bubble the
     // bubble itself is brand, so the chip inverts.
@@ -224,7 +224,7 @@ export function DeliveryCard({
       className="mx-auto flex w-full max-w-[95%] flex-col gap-1.5 rounded-lg border border-neutral-200 border-l-4 border-l-amber-400 bg-white px-3 py-2 dark:border-neutral-800 dark:border-l-amber-500 dark:bg-neutral-900"
     >
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+        <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
           Finished
         </span>
         <SourceChip source={derived.intent.source} />
@@ -264,7 +264,7 @@ export function DeliveryCard({
         >
           {busy === "dropped" ? "Dropping…" : "Drop"}
         </button>
-        <span className="min-w-0 truncate text-[11px] text-neutral-500 dark:text-neutral-500">
+        <span className="min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-500">
           A follow-up message continues this intent.
         </span>
       </div>

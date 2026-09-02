@@ -123,13 +123,13 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
       </div>
       {artifacts.stateIds ? (
         <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
             states
           </span>
           {artifacts.stateIds.map((state) => (
             <span
               key={state}
-              className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+              className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
             >
               {state}
             </span>
@@ -137,7 +137,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
         </div>
       ) : null}
       {artifacts.missing.length > 0 ? (
-        <div className="text-[11px] text-amber-600 dark:text-amber-400">
+        <div className="text-xs text-amber-600 dark:text-amber-400">
           missing stages: {artifacts.missing.join(", ")}
         </div>
       ) : null}
@@ -147,7 +147,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
             this stage was not found for this playbook
           </div>
         ) : stage === "fsm" ? (
-          <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
+          <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
             {content}
           </pre>
         ) : (
@@ -247,7 +247,7 @@ function BuiltinCard({
         >
           {info.intent}
         </span>
-        <span className="ml-auto rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+        <span className="ml-auto rounded bg-neutral-100 px-1.5 py-0.5 text-xs whitespace-nowrap text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
           available built-in
         </span>
         {info.source ? (
@@ -423,7 +423,7 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
           </div>
           <div className="max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
             {stage === "fsm" || stage === "source" ? (
-              <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
+              <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
                 {content}
               </pre>
             ) : (
@@ -703,7 +703,7 @@ export function LibrarySurface({
                       <span
                         data-testid={`role-shared-${playbook.id}-${role}`}
                         title={`This lane also answers ${sharedWith.join(", ")} — one conversation across them`}
-                        className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[11px] text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                        className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                       >
                         shared
                       </span>
@@ -969,7 +969,7 @@ export function LibrarySurface({
               {progressLines.length > 0 ? (
                 <pre
                   data-testid="compile-progress"
-                  className="max-h-48 w-full overflow-y-auto rounded bg-neutral-100 p-2 font-mono text-[11px] text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400"
+                  className="max-h-48 w-full overflow-y-auto rounded bg-neutral-100 p-2 font-mono text-xs text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400"
                 >
                   {progressLines.join("\n")}
                 </pre>

@@ -16,7 +16,7 @@ import type { SpecRecordInfo } from "@sublang/spex-core/protocol";
 /** The identifier chip the package rows of the Specs outline wear
  * (spec-view-2): a record's ID wears the same one. */
 export const RECORD_CHIP =
-  "shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300";
+  "shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300";
 
 export type RecordRowProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,

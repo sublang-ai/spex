@@ -103,7 +103,7 @@ export function CapturedState({
     <span
       data-testid={testId}
       title={derived.state}
-      className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+      className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
     >
       {intentStateText(derived)}
     </span>
@@ -148,7 +148,7 @@ export function ForgeItemRow({
         <span
           key={label}
           title={label}
-          className="max-w-24 shrink-0 truncate rounded-full bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+          className="max-w-24 shrink-0 truncate rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
         >
           {label}
         </span>
@@ -158,7 +158,7 @@ export function ForgeItemRow({
           data-testid={testId ? `${testId}-more-labels` : undefined}
           title={item.labels.join(", ")}
           aria-label={`${item.labels.length - 2} more labels: ${item.labels.slice(2).join(", ")}`}
-          className="shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+          className="shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
         >
           +{item.labels.length - 2}
         </span>

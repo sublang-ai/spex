@@ -133,33 +133,33 @@ function AttentionRow({
         aria-label={`Open ${entry.title} — ${REASON_LABEL[entry.kind]}`}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        <span className="shrink-0 rounded-full border border-current px-2 py-0.5 text-[11px] font-medium">
+        <span className="shrink-0 rounded-full border border-current px-2 py-0.5 text-xs font-medium">
           {REASON_LABEL[entry.kind]}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate">{entry.title}</span>
           {entry.stats ? (
             <span
-              className="block truncate text-[11px] opacity-70"
+              className="block truncate text-xs opacity-70"
               data-testid={`attention-stats-${entry.intentId ?? entry.sessionId}`}
             >
               {statsLine(entry.stats)}
             </span>
           ) : null}
           {error ? (
-            <span className="block truncate text-[11px]" role="alert">
+            <span className="block truncate text-xs" role="alert">
               Couldn't record the verdict: {error}
             </span>
           ) : null}
         </span>
         <span
-          className="hidden min-w-0 max-w-40 truncate text-[11px] opacity-70 @xs:inline"
+          className="hidden min-w-0 max-w-40 truncate text-xs opacity-70 @xs:inline"
           title={projectName}
         >
           {projectName}
         </span>
         <span
-          className="hidden shrink-0 text-[11px] opacity-70 @md:inline"
+          className="hidden shrink-0 text-xs opacity-70 @md:inline"
           title={absoluteTitle(entry.since)}
         >
           {relativeAge(entry.since, now)}

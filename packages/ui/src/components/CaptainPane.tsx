@@ -66,9 +66,7 @@ function Line({
           />
         </div>
       ) : (
-        <div className="text-center font-mono text-xs text-neutral-500 dark:text-neutral-400">
-          {line.text}
-        </div>
+        <SystemLine text={line.text} title={time} />
       );
     case "boss":
       return (
@@ -104,7 +102,7 @@ function Line({
             className="max-w-[85%] rounded-2xl rounded-bl-md border-l-4 border-amber-400 bg-neutral-100 px-3 py-1.5 dark:border-amber-500 dark:bg-neutral-800"
           >
             {line.player ? (
-              <div className="font-mono text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+              <div className="text-xs font-semibold text-amber-700 dark:text-amber-300">
                 {line.player}
               </div>
             ) : null}
@@ -149,15 +147,39 @@ function Line({
         </div>
       );
     default:
-      return (
-        <div
-          title={time}
-          className="whitespace-pre-wrap text-center font-mono text-[11px] text-neutral-500 dark:text-neutral-500"
-        >
-          {line.text}
-        </div>
-      );
+      return <SystemLine text={line.text} title={time} />;
   }
+}
+
+/** The glyphs the captain shell narrates with (run-view-1). */
+const NARRATION_GLYPH = /^([\u25c7\u25c6\u25b8\u2b95\u2937\u2192])\s?/u;
+
+/** A shell status line as a system line (run-view-1, DR-010 §8): the
+ * small type step, left-aligned like the conversation it sits in, the
+ * glyph standing as an icon in a fixed slot — never a centered grey
+ * mono whisper the room cannot read. The text keeps its glyph, so the
+ * line reads the same to a screen reader and a test. */
+function SystemLine({ text, title }: { text: string; title: string }) {
+  const match = NARRATION_GLYPH.exec(text);
+  const glyph = match?.[1];
+  const body = glyph ? text.slice(glyph.length) : text;
+  return (
+    <div
+      title={title}
+      data-testid="system-line"
+      className="flex items-start text-xs leading-5 text-neutral-600 dark:text-neutral-400"
+    >
+      <span
+        aria-hidden={glyph ? undefined : true}
+        className="flex w-4 shrink-0 justify-center text-neutral-500 dark:text-neutral-500"
+      >
+        {glyph}
+      </span>
+      <span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+        {body}
+      </span>
+    </div>
+  );
 }
 
 const TEN_MINUTES = 10 * 60 * 1000;
@@ -290,7 +312,7 @@ export function CaptainPane({
       className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
       <header className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[11px] font-bold text-white">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
           C
         </span>
         <span className="text-sm font-semibold">Captain</span>
@@ -298,7 +320,7 @@ export function CaptainPane({
           <span
             data-testid="state-chip"
             title={view.fsmState ? `state: ${view.fsmState}` : undefined}
-            className={`ml-auto rounded px-1.5 py-0.5 text-[11px] ${STATE_TONE_CLASSES[status.tone]}`}
+            className={`ml-auto rounded px-1.5 py-0.5 text-xs ${STATE_TONE_CLASSES[status.tone]}`}
           >
             {status.text}
           </span>
@@ -319,7 +341,10 @@ export function CaptainPane({
             return (
               <div key={index} className="flex flex-col gap-2">
                 {separator ? (
-                  <div className="text-center text-[11px] text-neutral-500 dark:text-neutral-500">
+                  <div
+                    data-testid="time-separator"
+                    className="pl-4 text-xs leading-5 text-neutral-500 dark:text-neutral-500"
+                  >
                     {separator}
                   </div>
                 ) : null}

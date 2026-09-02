@@ -8,6 +8,7 @@
 Accepted.
 §8's interaction hue is amended by [DR-013](013-sublang-brand.md): brand purple replaces indigo.
 A ninth principle, chrome that fits, is added by [DR-041](041-chrome-that-fits.md).
+§8's type scale is sharpened on the owner's audience review (2026-09-02): the small step is 12px, and an arbitrary 10–11px size lives only inside a tooltip.
 
 ## Context
 
@@ -25,7 +26,7 @@ Eight principles govern the interface; every audit finding cluster traces to one
 5. **Truthful async.** Long operations never falsely fail (timeouts sized per command class), report progress, are cancelable, and reject concurrent duplicates fail-closed. Failures always land somewhere visible with a retry.
 6. **Keyboard-first.** Every critical path is operable without a mouse; menus follow one keyboard idiom (arrows/Enter/Escape, focus stays in the composer); closing or confirming never strands focus; standard app shortcuts exist. Implemented renderer-side so the UI runs unmodified in a browser [[app-shell-10](../packages/app-shell.md#app-shell-10)].
 7. **Accessible by construction.** Icon-only buttons carry aria-labels and ≥24px hit targets; one persistent polite live region announces the moments the product is built around; text and indicator colors meet WCAG contrast in both themes.
-8. **One visual grammar.** A single status palette — emerald running, amber needs-you, red failed, neutral idle, indigo reserved for interaction — one icon language (inline SVG, currentColor), a small type scale (no arbitrary 10px), and one button taxonomy (solid primary / bordered secondary / text link, sentence-case verbs).
+8. **One visual grammar.** A single status palette — emerald running, amber needs-you, red failed, neutral idle, indigo reserved for interaction — one icon language (inline SVG, currentColor), a small type scale whose smallest step is 12px — readable text, a chip, an age, a caption, or a badge, never wears an arbitrary 10–11px size, which only a tooltip may — and one button taxonomy (solid primary / bordered secondary / text link, sentence-case verbs).
 
 ## Consequences
 

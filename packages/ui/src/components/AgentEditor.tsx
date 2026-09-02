@@ -292,7 +292,7 @@ export function AgentEditor(props: AgentEditorProps) {
           </select>
           <span
             data-testid="agent-mode-help"
-            className="text-[11px] text-neutral-500"
+            className="text-xs text-neutral-500"
           >
             {MODE_HELP[mode]}
           </span>
@@ -308,7 +308,7 @@ export function AgentEditor(props: AgentEditorProps) {
             placeholder="e.g. .git, docs/generated"
             className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
           />
-          <span className="text-[11px] text-neutral-500">
+          <span className="text-xs text-neutral-500">
             Repo-relative paths the agent may write under auto mode beyond
             its usual set — e.g. <span className="font-mono">.git</span> for
             commits

@@ -240,7 +240,7 @@ export function MachineCard({
       </span>
       <span
         data-testid={`machine-outcome-${frame.traceSessionId}`}
-        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${
+        className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
           running
             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
             : frame.outcome === "failed"

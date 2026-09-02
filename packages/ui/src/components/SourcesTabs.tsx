@@ -65,7 +65,7 @@ function Paged<T>({
     <>
       <ul className="flex flex-col gap-1">{shown.map(render)}</ul>
       {pageCount > 1 ? (
-        <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-500">
+        <div className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
           <button
             type="button"
             aria-label="Previous page"
@@ -234,7 +234,7 @@ export function SourcesBand({
           // Keep-last-good (dashboard-14): the failure rides beside the
           // age; the served lists stay.
           <span
-            className="truncate text-[11px] text-red-600 dark:text-red-400"
+            className="truncate text-xs text-red-600 dark:text-red-400"
             title={meta.forgeError}
             data-testid={`sources-error-${project.id}`}
           >

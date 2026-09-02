@@ -166,7 +166,7 @@ export function NextCard({
         </div>
       ) : null}
       {next && next.more > 0 ? (
-        <span className="text-[11px] text-neutral-500">
+        <span className="text-xs text-neutral-500">
           +{next.more} more queued
         </span>
       ) : null}

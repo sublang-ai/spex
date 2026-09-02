@@ -24,6 +24,8 @@ While a project session is live, when the session record stream delivers a capta
 | ◆ | failure and await-Boss-reply notices |
 | ▸ ⮕ ⤷ | playbook state-machine progress stream — absorbed by the machine card while its run's frame is open [[run-view-60](#run-view-60)] |
 
+- a status line, a time separator [[run-view-41](#run-view-41)], and a question's sender line [[run-view-9](#run-view-9)] are system lines at the type scale's small step — 12px, left-aligned like the conversation, the glyph standing as an icon in a fixed slot before the words — never a smaller, centered, monospace whisper ([DR-010](../decisions/010-interface-craft.md) §8).
+
 #### run-view-2
 
 While a project session is live, when the session record stream delivers a failure, the Captain pane shall display one ◆ line carrying both the failure name and the failure message, so no delivered failure is left without a visible line:

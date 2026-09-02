@@ -368,11 +368,11 @@ export function NavRail(props: NavRailProps) {
             data-testid="nav-attention-badge"
             aria-hidden
             title={`${attentionCount} session${attentionCount === 1 ? "" : "s"} need${attentionCount === 1 ? "s" : ""} your reply`}
-            className={`rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-200 ${
+            className={`rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-200 ${
               // Positioned at the entry's corner, beside the glyph,
               // never over it (run-view-108).
               collapsed
-                ? "absolute -top-1 right-0 px-1 py-0 text-[10px] leading-4"
+                ? "absolute -top-1 right-0 px-1 py-0 text-xs leading-4"
                 : ""
             }`}
           >
@@ -555,7 +555,7 @@ export function NavRail(props: NavRailProps) {
                             <span
                               data-testid={`sidebar-delete-error-${session.id}`}
                               title={deleteErrors[session.id]}
-                              className="shrink-0 truncate text-[11px] text-red-600 dark:text-red-400"
+                              className="shrink-0 truncate text-xs text-red-600 dark:text-red-400"
                             >
                               not deleted
                             </span>
@@ -567,7 +567,7 @@ export function NavRail(props: NavRailProps) {
                               title={absoluteTitle(
                                 session.endedAt ?? session.createdAt,
                               )}
-                              className="shrink-0 text-[11px] tabular-nums text-neutral-500 dark:text-neutral-400"
+                              className="shrink-0 text-xs tabular-nums text-neutral-500 dark:text-neutral-400"
                             >
                               {deleting[session.id]
                                 ? "deleting…"
@@ -616,7 +616,7 @@ export function NavRail(props: NavRailProps) {
                       }))
                     }
                     aria-label={`Show all ${bucket.ended.length} sessions in ${project.name}`}
-                    className={`${rowClass(false)} pl-6 text-[11px] text-brand-600 dark:text-brand-300`}
+                    className={`${rowClass(false)} pl-6 text-xs text-brand-600 dark:text-brand-300`}
                   >
                     all {bucket.ended.length}…
                   </div>
@@ -679,7 +679,7 @@ export function NavRail(props: NavRailProps) {
               data-testid="sidebar-workspace"
               onClick={() => onSurface("Workspace")}
               aria-current={surface === "Workspace" ? "page" : undefined}
-              className={`min-w-0 flex-1 rounded px-1 py-0.5 text-left text-[11px] font-semibold uppercase tracking-wide ${
+              className={`min-w-0 flex-1 rounded px-1 py-0.5 text-left text-xs font-semibold uppercase tracking-wide ${
                 surface === "Workspace"
                   ? "text-brand-700 dark:text-brand-300"
                   : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"

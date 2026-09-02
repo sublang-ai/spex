@@ -104,7 +104,7 @@ function CaptainBubble({
 }) {
   return (
     <div className="flex items-start gap-2">
-      <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[11px] font-bold text-white">
+      <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
         C
       </span>
       <div
@@ -277,7 +277,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 : "Your config file has errors — playbooks are unavailable."}
             </p>
             {props.configErrors && props.configErrors.length > 0 ? (
-              <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[11px]">
+              <ul className="mt-1 flex flex-col gap-0.5 font-mono text-xs">
                 {props.configErrors.slice(0, 3).map((entry, index) => (
                   <li key={index}>{entry}</li>
                 ))}
@@ -311,7 +311,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 </li>
               ))}
             </ul>
-            <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Signing in from a terminal is picked up on re-check; a
               newly exported env var needs a Spex restart.
             </p>
@@ -384,7 +384,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               </button>
             ))}
             {playbooks.length > 4 ? (
-              <span className="px-2 text-[11px] text-neutral-500">
+              <span className="px-2 text-xs text-neutral-500">
                 +{playbooks.length - 4} more under{" "}
                 <span className="font-mono">/</span>
               </span>

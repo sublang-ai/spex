@@ -288,7 +288,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             >
               <Icon name="book" className="h-3.5 w-3.5" />
               {busy ? "Seeding…" : "Try the Academy example"}
-              <span className="text-[11px] text-neutral-500">{academyHint}</span>
+              <span className="text-xs text-neutral-500">{academyHint}</span>
             </button>
           ) : null}
           {filtered.map((project, i) => {
@@ -307,9 +307,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 <Icon name="folder" className="h-3.5 w-3.5 text-neutral-500" />
                 <span className="truncate">{project.name}</span>
                 {project.id === props.currentProjectId ? (
-                  <span className="text-[11px] text-neutral-500">current</span>
+                  <span className="text-xs text-neutral-500">current</span>
                 ) : null}
-                <span className="ml-auto flex items-center gap-2 text-[11px] text-neutral-500">
+                <span className="ml-auto flex items-center gap-2 text-xs text-neutral-500">
                   {row && row.attention > 0 ? (
                     <span
                       className={`flex items-center gap-1 font-medium ${
@@ -401,7 +401,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             </button>
           </div>
           {pathDraft.trim() ? (
-            <label className="flex items-center gap-1.5 px-0.5 text-[11px] text-neutral-500">
+            <label className="flex items-center gap-1.5 px-0.5 text-xs text-neutral-500">
               <input
                 type="checkbox"
                 checked={scaffold}
@@ -419,7 +419,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               className="flex items-center gap-1.5 rounded px-0.5 py-0.5 text-left text-xs text-brand-600 hover:underline disabled:opacity-40 dark:text-brand-300"
             >
               Try the Academy example
-              <span className="text-[11px] text-neutral-500">{academyHint}</span>
+              <span className="text-xs text-neutral-500">{academyHint}</span>
             </button>
           )}
           {error ? (

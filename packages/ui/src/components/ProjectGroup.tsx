@@ -68,7 +68,7 @@ const TONE_CHIP: Record<StatusTone, string> = {
     "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
 };
 
-const TAG = "shrink-0 rounded-full px-1.5 py-0.5 text-[11px]";
+const TAG = "shrink-0 rounded-full px-1.5 py-0.5 text-xs";
 const NEUTRAL_TAG = `${TAG} bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400`;
 /** The band's one red tag (DR-038): a fixed bug, gone. */
 const BUG_TAG = `${TAG} bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300`;
@@ -181,7 +181,7 @@ export function useCaptureReveal(): {
 
 function BandHeading({ children }: { children: ReactNode }) {
   return (
-    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+    <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
       {children}
     </h4>
   );
@@ -249,7 +249,7 @@ function Age({ at, now }: { at?: number; now: number }) {
   if (at === undefined) return null;
   return (
     <span
-      className="shrink-0 text-[11px] text-neutral-500"
+      className="shrink-0 text-xs text-neutral-500"
       title={absoluteTitle(at)}
     >
       {relativeAge(at, now)}
@@ -552,7 +552,7 @@ function NowBand({
             {playbook ?? "no playbook"}
           </span>
           <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] ${TONE_CHIP[label.tone]}`}
+            className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${TONE_CHIP[label.tone]}`}
             title={view?.fsmState}
           >
             {label.text}
@@ -561,7 +561,7 @@ function NowBand({
             {title}
           </span>
           <span
-            className="hidden shrink-0 text-[11px] text-neutral-500 @md:inline"
+            className="hidden shrink-0 text-xs text-neutral-500 @md:inline"
             title={absoluteTitle(session.createdAt)}
           >
             started {relativeAge(session.createdAt, now)}
@@ -890,7 +890,7 @@ function QueueRow({
       </span>
       {blocked ? (
         <span
-          className="min-w-0 max-w-[40%] truncate text-[11px] text-neutral-500"
+          className="min-w-0 max-w-[40%] truncate text-xs text-neutral-500"
           data-testid={`upnext-blocked-${intent.id}`}
           title={`after ${blocked.title}${blockedForeign ? ` (${blockedForeign})` : ""}`}
         >
