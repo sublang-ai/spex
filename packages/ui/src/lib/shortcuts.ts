@@ -39,7 +39,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { keys: ",", does: "Open Settings" },
   { keys: "B", does: "Collapse or show the sidebar" },
   { keys: "⇧S", does: "Open the project's Specs" },
-  { keys: "⇧[ / ⇧]", does: "Previous or next tab in the Workspace" },
+  { keys: "⇧[", does: "Previous tab in the Workspace" },
+  { keys: "⇧]", does: "Next tab in the Workspace" },
 ];
 
 /** Shortcuts that need no modifier. */
