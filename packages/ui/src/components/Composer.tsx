@@ -94,7 +94,7 @@ export function ComposerField({
       ref={fieldRef}
       value={value}
       rows={1}
-      className={`w-full resize-none border-0 bg-transparent px-1 py-1 text-sm outline-none [field-sizing:content] max-h-[40vh] disabled:opacity-60 ${
+      className={`w-full resize-none border-0 bg-transparent px-1 py-1 text-sm outline-none [field-sizing:content] max-h-[max(40vh,1.75rem)] disabled:opacity-60 ${
         className ?? ""
       }`}
       {...rest}

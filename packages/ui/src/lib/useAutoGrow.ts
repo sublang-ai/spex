@@ -4,8 +4,11 @@
 // A text field that grows with its text to a stated maximum and then
 // scrolls (DR-041 §9): no native resize grip, no scrollbar before the
 // maximum. The height follows the field's own scroll height on every
-// value change; `field-sizing: content` covers the first paint where
-// the browser knows it, and the explicit height wins where it does.
+// value change and every viewport resize; `field-sizing: content`
+// covers the first paint where the browser knows it, and the explicit
+// height wins where it does. The field is never shorter than one row,
+// whatever the viewport reports — a window laid out before it is
+// shown reports no height at all.
 
 import { useLayoutEffect, type RefObject } from "react";
 
@@ -13,6 +16,38 @@ import { useLayoutEffect, type RefObject } from "react";
 export const AUTO_GROW_MAX_LINES = 8;
 /** The viewport share the field never exceeds. */
 export const AUTO_GROW_MAX_VIEWPORT = 0.4;
+
+/** Size one field to its text within the stated maximum. */
+export function fitTextArea(
+  el: HTMLTextAreaElement,
+  maxLines = AUTO_GROW_MAX_LINES,
+): void {
+  // Measure from the collapsed height so a shortened text shrinks
+  // the field back rather than keeping its tallest size.
+  el.style.height = "auto";
+  const wanted = el.scrollHeight;
+  if (wanted === 0) {
+    // No layout (an unpainted or simulated document): leave the
+    // field to its rows.
+    el.style.height = "";
+    return;
+  }
+  const style = getComputedStyle(el);
+  const line = parseFloat(style.lineHeight) || 20;
+  const padding =
+    (parseFloat(style.paddingTop) || 0) +
+    (parseFloat(style.paddingBottom) || 0);
+  const oneRow = line + padding;
+  const max = Math.max(
+    oneRow,
+    Math.min(
+      line * maxLines + padding,
+      window.innerHeight * AUTO_GROW_MAX_VIEWPORT,
+    ),
+  );
+  el.style.height = `${Math.min(Math.max(wanted, oneRow), max)}px`;
+  el.style.overflowY = wanted > max ? "auto" : "hidden";
+}
 
 export function useAutoGrow(
   ref: RefObject<HTMLTextAreaElement | null>,
@@ -22,26 +57,9 @@ export function useAutoGrow(
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // Measure from the collapsed height so a shortened text shrinks
-    // the field back rather than keeping its tallest size.
-    el.style.height = "auto";
-    const wanted = el.scrollHeight;
-    if (wanted === 0) {
-      // No layout (an unpainted or simulated document): leave the
-      // field to its rows.
-      el.style.height = "";
-      return;
-    }
-    const style = getComputedStyle(el);
-    const line = parseFloat(style.lineHeight) || 20;
-    const padding =
-      (parseFloat(style.paddingTop) || 0) +
-      (parseFloat(style.paddingBottom) || 0);
-    const max = Math.min(
-      line * maxLines + padding,
-      window.innerHeight * AUTO_GROW_MAX_VIEWPORT,
-    );
-    el.style.height = `${Math.min(wanted, max)}px`;
-    el.style.overflowY = wanted > max ? "auto" : "hidden";
+    fitTextArea(el, maxLines);
+    const refit = (): void => fitTextArea(el, maxLines);
+    window.addEventListener("resize", refit);
+    return () => window.removeEventListener("resize", refit);
   }, [ref, value, maxLines]);
 }

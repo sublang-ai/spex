@@ -381,3 +381,25 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
 
   expect(defects, defects.join("\n")).toEqual([]);
 });
+
+// A window laid out before it is shown reports no viewport height; the
+// field keeps one row through that first paint and refits once the
+// viewport has a size (run-view-106).
+test("run-view-106: the field keeps one row without viewport height and refits on resize", async ({
+  page,
+  app,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 1 });
+  await open(page, app);
+  const field = page.getByTestId("start-composer");
+  const line = await field.evaluate((el) =>
+    parseFloat(getComputedStyle(el).lineHeight),
+  );
+  const height = async (): Promise<number> =>
+    (await field.boundingBox())?.height ?? 0;
+  expect(await height()).toBeGreaterThanOrEqual(line);
+  await field.fill("one\ntwo\nthree");
+  expect(await height()).toBeGreaterThanOrEqual(line);
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect.poll(height).toBeGreaterThanOrEqual(line * 3);
+});

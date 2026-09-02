@@ -113,7 +113,7 @@ The Boss composer — on the Captain home and in a session alike — shall take 
 
 | Part | Form |
 | --- | --- |
-| Field | on top at full width, one row when empty, growing with its text to eight lines or two fifths of the viewport and scrolling past that, with no native resize grip |
+| Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport and scrolling past that, refitted when the viewport resizes, with no native resize grip |
 | Caption | one line under the field reading "/ for playbooks · Enter sends", which an acknowledgment or the staged intent chip occupies instead of stacking above the box |
 | Action row | beneath, wrapping: the secondary action at the left, then Abort while a turn runs, and the primary control last at the right |
 | Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Sends after this turn…" while a turn runs, "Connecting…" without the core |
