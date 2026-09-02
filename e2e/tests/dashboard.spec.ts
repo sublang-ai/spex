@@ -5,9 +5,105 @@
 // sibling flows): capture, start, watch, confirm, and the History that
 // results — all through the Dashboard and the run view.
 
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { test, expect, open, nav } from "../src/harness";
 
 test.use({ appOptions: { project: true, agentDelayMs: 2500 } });
+
+test("run-view-115, dashboard-39: an intent dropped from the working line leaves Now and lists in History as dropped", async ({
+  page,
+  app,
+}) => {
+  await open(page, app);
+  await nav(page, "Dashboard").click();
+  const add = page.getByRole("textbox", { name: /add an intent to demo-project/i });
+  await add.fill("Drop me midway");
+  await add.press("Enter");
+  await expect(
+    page.getByTestId(/^upnext-row-/).filter({ hasText: "Drop me midway" }),
+  ).toBeVisible();
+  await page.getByTestId("all-clear-start").click();
+  await expect(page.getByTestId("start-composer")).toHaveValue("Drop me midway");
+  await page.getByTestId("start-send").click();
+  await expect(page.getByTestId("captain-pane")).toContainText("/code started");
+
+  // The working line names the intent; Drop sits behind the inline
+  // confirm, and Keep hands focus back to the control.
+  const line = page.getByTestId("working-line");
+  await expect(line).toContainText("Drop me midway");
+  await page.getByTestId("working-drop").click();
+  await expect(line).toContainText(/work is underway/i);
+  await page.getByRole("button", { name: "Keep", exact: true }).click();
+  await expect(page.getByTestId("working-drop")).toBeFocused();
+  await page.getByTestId("working-drop").click();
+  await page.getByRole("button", { name: "Drop", exact: true }).click();
+  await expect(line).toHaveCount(0);
+  const note = page.getByTestId("working-note");
+  await expect(note).toContainText(/dropped “drop me midway”/i);
+  await expect(note).toHaveAttribute("role", "status");
+  await expect(page.getByTestId("boss-composer")).toBeFocused();
+
+  // Now still shows the live session, but serves no intent: no Drop
+  // stands beside it, and the queue holds nothing.
+  await nav(page, "Dashboard").click();
+  const now = page.getByTestId(`now-session-${app.projectId}`);
+  await expect(now).toBeVisible();
+  await expect(now).not.toHaveAttribute("data-intent-id", /./);
+  await expect(page.getByTestId(`now-drop-${app.projectId}`)).toHaveCount(0);
+  await expect(page.getByTestId(/^upnext-row-/)).toHaveCount(0);
+
+  // The turn it was dropped from ends finished: worked, then dropped,
+  // so History lists it under the quiet tag, and no verdict is owed.
+  const history = page
+    .getByTestId(/^history-row-/)
+    .filter({ hasText: "Drop me midway" });
+  await expect(history).toBeVisible({ timeout: 20_000 });
+  await expect(history).toHaveAttribute("data-verdict", "dropped");
+  await expect(history).toContainText(/dropped/i);
+  await expect(page.getByTestId(/^attention-confirm-/)).toHaveCount(0);
+});
+
+// Depends on the pending record reaching the spec view — the
+// `openRecordPath` thread through App into SpecView — which lands
+// with the sibling change; until then the click switches to the Specs
+// tab but the reader does not open.
+test.fixme("dashboard-39: a History record row opens the record in the Specs tab's reader", async ({
+  page,
+  app,
+}) => {
+  // A finished record in the seeded tree: History lists it.
+  writeFileSync(
+    join(app.projectDir, "specs", "intents", "004-shipped.md"),
+    [
+      "# IR-004: Shipped already",
+      "",
+      "## Status",
+      "",
+      "Done",
+      "",
+      "## Intent",
+      "",
+      "This one shipped before the app met the project.",
+      "",
+    ].join("\n"),
+  );
+  await open(page, app);
+  await nav(page, "Dashboard").click();
+  const row = page.getByTestId("history-row-IR-004");
+  await expect(row).toContainText("Shipped already");
+  await row.getByRole("button", { name: /open IR-004/i }).click();
+
+  // The Specs tab, in the records reader, on that record.
+  await expect(page.getByRole("tab", { name: "Specs" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const reader = page.getByTestId("record-reader");
+  await expect(reader).toContainText("IR-004");
+  await expect(reader).toContainText(/shipped before the app met the project/i);
+});
 
 test("dashboard-39: capture, start, confirm, and History through the page", async ({
   page,
