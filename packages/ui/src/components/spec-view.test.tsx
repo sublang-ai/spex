@@ -28,6 +28,7 @@ import {
   initialSpecViewState,
   type SpecViewState,
 } from "./SpecView.js";
+import { editorDirty } from "../lib/spec-view-model.js";
 import type { SpecTreeState } from "@sublang/spex-core/protocol";
 
 // An Academy-shaped mini-corpus in the packages-only layout that
@@ -224,6 +225,7 @@ function Harness({
   error,
   onRefresh = () => {},
   onReadRecord = async () => "",
+  onWriteSpec,
   onSeedExample,
   seedError,
 }: {
@@ -231,7 +233,14 @@ function Harness({
   loading?: boolean;
   error?: string;
   onRefresh?: () => void;
-  onReadRecord?: (path: string) => Promise<string>;
+  onReadRecord?: (
+    path: string,
+  ) => Promise<string | { markdown: string; version?: string }>;
+  onWriteSpec?: (
+    path: string,
+    content: string,
+    baseVersion?: string,
+  ) => Promise<{ version: string }>;
   onSeedExample?: () => void;
   seedError?: string;
 }) {
@@ -243,6 +252,7 @@ function Harness({
       error={error}
       onRefresh={onRefresh}
       onReadRecord={onReadRecord}
+      onWriteSpec={onWriteSpec}
       onSeedExample={onSeedExample}
       seedError={seedError}
       viewState={viewState}
@@ -1707,5 +1717,317 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(node("billing").getAttribute("data-items")).toBe("3");
     expect(radiusOf("billing")).toBeGreaterThan(radiusOf("auth"));
     restore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// spec-view-53: the whole-file editor (DR-043)
+// ---------------------------------------------------------------------------
+
+describe("spec-view-53: the editor", () => {
+  const AUTH_PATH = "packages/identity/auth.md";
+  const DR_PATH = "decisions/011-project-workspace.md";
+  const AUTH_TEXT =
+    "# auth: GitHub Login\n\n## External Behavior\n\n### Sign-In\n\n#### AUTH-2\n\nThe form shall validate credentials.\n\n#### auth-1\n\nThe app shall render a sign-in form.\n";
+  const DR_TEXT = "# DR-011: Project workspace\n\n## Status\n\nAccepted\n";
+
+  /** Reads serving text with tokens (spec-view-16), by path. */
+  const reads = () =>
+    vi.fn(async (path: string) =>
+      path === AUTH_PATH
+        ? { markdown: AUTH_TEXT, version: "v-auth" }
+        : { markdown: DR_TEXT, version: "v-dr" },
+    );
+  const conflict = () =>
+    Object.assign(new Error("changed on disk"), { code: "conflict" });
+
+  const field = () =>
+    screen.getByRole("textbox", { name: /^Edit / }) as HTMLTextAreaElement;
+
+  async function openRecordEditor() {
+    fireEvent.click(screen.getByTestId("decisions-toggle"));
+    fireEvent.click(screen.getByTestId("record-DR-011"));
+    await screen.findByText("Accepted");
+    fireEvent.click(screen.getByTestId("reader-edit"));
+    return screen.getByTestId("spec-editor");
+  }
+
+  test("no Edit control shows where the host wires no write", async () => {
+    render(<Harness onReadRecord={reads()} />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    expect(screen.queryByTestId(`file-edit-${AUTH}`)).toBeNull();
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-2"));
+    expect(screen.queryByTestId("item-edit-AUTH-2")).toBeNull();
+    fireEvent.click(screen.getByTestId("decisions-toggle"));
+    fireEvent.click(screen.getByTestId("record-DR-011"));
+    await screen.findByText("Accepted");
+    expect(screen.queryByTestId("reader-edit")).toBeNull();
+  });
+
+  test("the reader's Edit opens the record with Save disabled; a clean Cancel returns to the reader", async () => {
+    const onWriteSpec = vi.fn();
+    render(<Harness onReadRecord={reads()} onWriteSpec={onWriteSpec} />);
+    await openRecordEditor();
+    // The editor holds the whole text as read, labeled by its path,
+    // and takes focus (spec-view-48).
+    expect(field().value).toBe(DR_TEXT);
+    expect(field().getAttribute("aria-label")).toBe(`Edit ${DR_PATH}`);
+    expect(field().getAttribute("spellcheck")).toBe("false");
+    expect(document.activeElement).toBe(field());
+    expect(screen.getByTestId("spec-editor").textContent).toContain(DR_PATH);
+    expect((screen.getByTestId("editor-save") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId("editor-dirty")).toBeNull();
+    expect(screen.getByTestId("editor-edit").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("editor-preview").getAttribute("aria-pressed")).toBe("false");
+    // A clean draft closes at once (spec-view-49), back into the
+    // reader with focus on Back.
+    fireEvent.click(screen.getByTestId("editor-cancel"));
+    expect(screen.queryByTestId("editor-confirm")).toBeNull();
+    expect(screen.getByTestId("record-reader")).toBeTruthy();
+    expect(screen.getByText("Accepted")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByText("← Back"));
+    expect(onWriteSpec).not.toHaveBeenCalled();
+  });
+
+  test("an expanded package's Edit opens its file; an item's Edit lands the caret on its heading", async () => {
+    const onReadRecord = reads();
+    render(<Harness onReadRecord={onReadRecord} onWriteSpec={vi.fn()} />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId(`file-edit-${AUTH}`));
+    await screen.findByTestId("spec-editor");
+    expect(onReadRecord).toHaveBeenCalledWith(AUTH_PATH);
+    expect(field().value).toBe(AUTH_TEXT);
+    expect(liveText()).toBe(`Editing ${AUTH_PATH}`);
+    // Cancel returns to the outline, focus on the package's Edit.
+    fireEvent.click(screen.getByTestId("editor-cancel"));
+    expect(screen.queryByTestId("spec-editor")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId(`file-edit-${AUTH}`));
+
+    // From an item: the caret sits at the start of the item's heading
+    // line — matched case-insensitively, as the file spells it.
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-1"));
+    fireEvent.click(screen.getByTestId("item-edit-AUTH-1"));
+    await screen.findByTestId("spec-editor");
+    const lines = AUTH_TEXT.split("\n");
+    const headingLine = lines.indexOf("#### auth-1");
+    const offset = lines
+      .slice(0, headingLine)
+      .reduce((sum, line) => sum + line.length + 1, 0);
+    expect(field().selectionStart).toBe(offset);
+    expect(field().value.slice(offset).split("\n")[0]).toBe("#### auth-1");
+  });
+
+  test("Preview renders the draft with links inert; Save writes under the token and closes into the reader", async () => {
+    const onWriteSpec = vi.fn(async () => ({ version: "v-dr-2" }));
+    const onRefresh = vi.fn();
+    render(
+      <Harness onReadRecord={reads()} onWriteSpec={onWriteSpec} onRefresh={onRefresh} />,
+    );
+    await openRecordEditor();
+    const edited = DR_TEXT.replace(
+      "Accepted",
+      "Accepted, see [DR-001](001-scaffold.md) and [AUTH-1](../packages/identity/auth.md#auth-1)",
+    );
+    fireEvent.change(field(), { target: { value: edited } });
+    // The unsaved mark and an enabled Save (spec-view-48).
+    expect(screen.getByTestId("editor-dirty")).toBeTruthy();
+    expect((screen.getByTestId("editor-save") as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByTestId("editor-preview"));
+    expect(screen.getByTestId("editor-preview").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("textbox", { name: /^Edit / })).toBeNull();
+    const pane = screen.getByTestId("editor-preview-pane");
+    expect(pane.textContent).toContain("Accepted, see DR-001 and AUTH-1");
+    // Links render but never navigate or jump: the click is cancelled
+    // and the view stays in the editor.
+    const link = within(pane).getByRole("link", { name: "AUTH-1" });
+    expect(fireEvent.click(link)).toBe(false);
+    expect(screen.getByTestId("spec-editor")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("editor-save"));
+    // The write carries the read's token (spec-view-50, spec-view-47).
+    expect(onWriteSpec).toHaveBeenCalledWith(DR_PATH, edited, "v-dr");
+    const reader = await screen.findByTestId("record-reader");
+    expect(reader.textContent).toContain("Accepted, see DR-001 and AUTH-1");
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(liveText()).toBe(`Saved ${DR_PATH}`);
+  });
+
+  test("Cmd/Ctrl+S saves and Escape asks first on a changed draft", async () => {
+    const onWriteSpec = vi.fn(async () => ({ version: "v-dr-2" }));
+    render(<Harness onReadRecord={reads()} onWriteSpec={onWriteSpec} />);
+    await openRecordEditor();
+    fireEvent.change(field(), { target: { value: `${DR_TEXT}\nMore.\n` } });
+    // Escape: the confirm's safe default keeps the draft (spec-view-49).
+    fireEvent.keyDown(field(), { key: "Escape" });
+    const confirm = screen.getByTestId("editor-confirm");
+    expect(confirm.textContent).toContain("Discard unsaved changes?");
+    expect(document.activeElement).toBe(within(confirm).getByText("Keep"));
+    fireEvent.click(within(confirm).getByText("Keep"));
+    expect(screen.queryByTestId("editor-confirm")).toBeNull();
+    expect(field().value).toBe(`${DR_TEXT}\nMore.\n`);
+    // Cmd+S writes the draft under the token.
+    fireEvent.keyDown(field(), { key: "s", metaKey: true });
+    expect(onWriteSpec).toHaveBeenCalledWith(DR_PATH, `${DR_TEXT}\nMore.\n`, "v-dr");
+    await screen.findByTestId("record-reader");
+  });
+
+  test("Discard closes a changed draft; Ctrl+S on a clean draft writes nothing", async () => {
+    const onWriteSpec = vi.fn(async () => ({ version: "v-dr-2" }));
+    render(<Harness onReadRecord={reads()} onWriteSpec={onWriteSpec} />);
+    await openRecordEditor();
+    fireEvent.keyDown(field(), { key: "s", ctrlKey: true });
+    expect(onWriteSpec).not.toHaveBeenCalled();
+    fireEvent.change(field(), { target: { value: "# DR-011: Changed\n" } });
+    fireEvent.click(screen.getByTestId("editor-cancel"));
+    fireEvent.click(within(screen.getByTestId("editor-confirm")).getByText("Discard"));
+    // Back in the reader, the text as read stands.
+    const reader = screen.getByTestId("record-reader");
+    expect(reader.textContent).toContain("Accepted");
+    expect(reader.textContent).not.toContain("Changed");
+    expect(onWriteSpec).not.toHaveBeenCalled();
+  });
+
+  test("a conflict keeps the draft: Overwrite writes without a token", async () => {
+    const onWriteSpec = vi
+      .fn<(path: string, content: string, baseVersion?: string) => Promise<{ version: string }>>()
+      .mockRejectedValueOnce(conflict())
+      .mockResolvedValueOnce({ version: "v-dr-3" });
+    render(<Harness onReadRecord={reads()} onWriteSpec={onWriteSpec} />);
+    await openRecordEditor();
+    const edited = `${DR_TEXT}\nMine.\n`;
+    fireEvent.change(field(), { target: { value: edited } });
+    fireEvent.click(screen.getByTestId("editor-save"));
+    const strip = await screen.findByTestId("editor-conflict");
+    expect(strip.textContent).toContain("This file changed on disk since you opened it");
+    expect(field().value).toBe(edited);
+    fireEvent.click(screen.getByTestId("editor-overwrite"));
+    expect(onWriteSpec).toHaveBeenLastCalledWith(DR_PATH, edited, undefined);
+    const reader = await screen.findByTestId("record-reader");
+    expect(reader.textContent).toContain("Mine.");
+  });
+
+  test("a conflict's Reload asks first, then replaces the draft with the file as it is", async () => {
+    const onReadRecord = vi
+      .fn<(path: string) => Promise<{ markdown: string; version: string }>>()
+      .mockResolvedValueOnce({ markdown: DR_TEXT, version: "v-dr" })
+      .mockResolvedValueOnce({ markdown: `${DR_TEXT}\nTheirs.\n`, version: "v-dr-2" });
+    const onWriteSpec = vi.fn(async () => {
+      throw conflict();
+    });
+    render(<Harness onReadRecord={onReadRecord} onWriteSpec={onWriteSpec} />);
+    await openRecordEditor();
+    fireEvent.change(field(), { target: { value: `${DR_TEXT}\nMine.\n` } });
+    fireEvent.click(screen.getByTestId("editor-save"));
+    await screen.findByTestId("editor-conflict");
+    fireEvent.click(screen.getByTestId("editor-reload"));
+    const confirm = screen.getByTestId("editor-confirm");
+    expect(confirm.textContent).toContain("Reload from disk");
+    fireEvent.click(within(confirm).getByText("Reload"));
+    await waitFor(() => expect(field().value).toBe(`${DR_TEXT}\nTheirs.\n`));
+    expect(onReadRecord).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId("editor-conflict")).toBeNull();
+    expect(screen.queryByTestId("editor-dirty")).toBeNull();
+    // The next save carries the reloaded token.
+    fireEvent.change(field(), { target: { value: `${DR_TEXT}\nTheirs. Mine.\n` } });
+    fireEvent.click(screen.getByTestId("editor-save"));
+    expect(onWriteSpec).toHaveBeenLastCalledWith(DR_PATH, `${DR_TEXT}\nTheirs. Mine.\n`, "v-dr-2");
+  });
+
+  test("any other failure keeps the draft with a retry", async () => {
+    const onWriteSpec = vi
+      .fn<(path: string, content: string, baseVersion?: string) => Promise<{ version: string }>>()
+      .mockRejectedValueOnce(new Error("disk full"))
+      .mockResolvedValueOnce({ version: "v-dr-2" });
+    render(<Harness onReadRecord={reads()} onWriteSpec={onWriteSpec} />);
+    await openRecordEditor();
+    fireEvent.change(field(), { target: { value: `${DR_TEXT}\nMore.\n` } });
+    fireEvent.click(screen.getByTestId("editor-save"));
+    const strip = await screen.findByTestId("editor-error");
+    expect(strip.textContent).toContain("disk full");
+    expect(field().value).toBe(`${DR_TEXT}\nMore.\n`);
+    fireEvent.click(within(strip).getByText("Retry"));
+    await screen.findByTestId("record-reader");
+    expect(onWriteSpec).toHaveBeenCalledTimes(2);
+  });
+
+  test("a remount restores the draft from the lifted view state, still unsaved", async () => {
+    function Lifted() {
+      const [viewState, setViewState] = useState<SpecViewState>(initialSpecViewState);
+      const [shown, setShown] = useState(true);
+      return (
+        <>
+          {shown ? (
+            <SpecView
+              tree={TREE}
+              onRefresh={() => {}}
+              onReadRecord={reads()}
+              onWriteSpec={vi.fn()}
+              viewState={viewState}
+              onViewState={setViewState}
+            />
+          ) : null}
+          <button type="button" onClick={() => setShown((s) => !s)}>
+            toggle
+          </button>
+          <span data-testid="dirty">{String(editorDirty(viewState))}</span>
+        </>
+      );
+    }
+    render(<Lifted />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId(`file-edit-${AUTH}`));
+    await screen.findByTestId("spec-editor");
+    fireEvent.change(field(), { target: { value: `${AUTH_TEXT}\nDraft.\n` } });
+    fireEvent.click(screen.getByTestId("editor-preview"));
+    expect(screen.getByTestId("dirty").textContent).toBe("true");
+    fireEvent.click(screen.getByText("toggle"));
+    expect(screen.queryByTestId("spec-editor")).toBeNull();
+    fireEvent.click(screen.getByText("toggle"));
+    // Back as it was: the draft, the mode, and the unsaved mark
+    // (spec-view-51).
+    expect(screen.getByTestId("spec-editor")).toBeTruthy();
+    expect(screen.getByTestId("editor-preview").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("editor-preview-pane").textContent).toContain("Draft.");
+    expect(screen.getByTestId("editor-dirty")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("editor-edit"));
+    expect(field().value).toBe(`${AUTH_TEXT}\nDraft.\n`);
+  });
+
+  test("a record requested while a draft stands opens beneath it, discarding nothing", async () => {
+    function Requested() {
+      const [viewState, setViewState] = useState<SpecViewState>(initialSpecViewState);
+      const [path, setPath] = useState<string>();
+      return (
+        <>
+          <SpecView
+            tree={TREE}
+            onRefresh={() => {}}
+            onReadRecord={reads()}
+            onWriteSpec={vi.fn()}
+            viewState={viewState}
+            onViewState={setViewState}
+            openRecordPath={path}
+            onRecordOpened={() => setPath(undefined)}
+          />
+          <button type="button" onClick={() => setPath(DR_PATH)}>
+            request
+          </button>
+        </>
+      );
+    }
+    render(<Requested />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId(`file-edit-${AUTH}`));
+    await screen.findByTestId("spec-editor");
+    fireEvent.change(field(), { target: { value: `${AUTH_TEXT}\nDraft.\n` } });
+    fireEvent.click(screen.getByText("request"));
+    expect(screen.getByTestId("spec-editor")).toBeTruthy();
+    expect(field().value).toBe(`${AUTH_TEXT}\nDraft.\n`);
+    // Once the draft is discarded, the requested record is there.
+    fireEvent.click(screen.getByTestId("editor-cancel"));
+    fireEvent.click(within(screen.getByTestId("editor-confirm")).getByText("Discard"));
+    const reader = await screen.findByTestId("record-reader");
+    expect(reader.textContent).toContain("Accepted");
   });
 });

@@ -154,7 +154,20 @@ export interface AppState {
   /** Fetch every configured playbook's machine graph, once per
    * config (run-view-64, playbook-library-36). */
   loadMachineGraphs(): Promise<void>;
-  readSpecRecord(projectId: string, path: string): Promise<string>;
+  /** One file's text with the token its save must carry
+   * (spec-view-16). */
+  readSpecRecord(
+    projectId: string,
+    path: string,
+  ): Promise<{ markdown: string; version: string }>;
+  /** Replace one file under the token its read handed out — none
+   * overwrites (spec-view-47). */
+  writeSpec(
+    projectId: string,
+    path: string,
+    content: string,
+    baseVersion?: string,
+  ): Promise<{ version: string }>;
   refreshReadiness(): Promise<void>;
   registerProject(path: string): Promise<ProjectInfo>;
   createProject(path: string, scaffold: boolean): Promise<ProjectInfo>;
@@ -745,12 +758,30 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    async readSpecRecord(projectId: string, path: string): Promise<string> {
+    async readSpecRecord(
+      projectId: string,
+      path: string,
+    ): Promise<{ markdown: string; version: string }> {
       const reply = await getClient().command("specs.read", {
         projectId,
         path,
       });
-      return reply.markdown;
+      return { markdown: reply.markdown, version: reply.version };
+    },
+
+    async writeSpec(
+      projectId: string,
+      path: string,
+      content: string,
+      baseVersion?: string,
+    ): Promise<{ version: string }> {
+      const reply = await getClient().command("specs.write", {
+        projectId,
+        path,
+        content,
+        ...(baseVersion !== undefined ? { baseVersion } : {}),
+      });
+      return { version: reply.version };
     },
 
     async refreshReadiness(): Promise<void> {

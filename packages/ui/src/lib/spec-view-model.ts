@@ -41,6 +41,27 @@ export interface SpecViewState {
   /** The graph pane's share of the split, as a fraction of the
    * surface's width (spec-view-20). */
   graphWidth: number;
+  /** The whole-file editor standing for this project, draft included
+   * (spec-view-51). */
+  editor?: SpecEditorState;
+}
+
+/** The editor's lifted state (spec-view-51): the draft lives here, not
+ * in the component, so it survives the workspace's own navigation. */
+export interface SpecEditorState {
+  /** specs/-relative path of the file under edit. */
+  path: string;
+  /** The text as specs.read served it; the draft compares to it. */
+  original: string;
+  draft: string;
+  /** The version token the read handed out (spec-view-47); absent
+   * when the read carried none, and the save then overwrites. */
+  version?: string;
+  preview: boolean;
+  /** Zero-based line the text field lands its caret on when it
+   * mounts — the item's heading when opened from an item
+   * (spec-view-48); consumed by that landing. */
+  caretLine?: number;
 }
 
 /** The split's bounds: neither pane may be squeezed past reading
@@ -72,6 +93,7 @@ export function normalizeSpecViewState(value: unknown): SpecViewState {
     expandedItems?: unknown;
     graph?: unknown;
     graphWidth?: unknown;
+    editor?: unknown;
   };
   const strings = (entry: unknown): entry is string[] =>
     Array.isArray(entry) && entry.every((e) => typeof e === "string");
@@ -96,10 +118,73 @@ export function normalizeSpecViewState(value: unknown): SpecViewState {
     state.graphWidth <= MAX_GRAPH_WIDTH
       ? state.graphWidth
       : initialSpecViewState.graphWidth;
-  if (graph !== state.graph || graphWidth !== state.graphWidth) {
-    return { ...(value as SpecViewState), graph, graphWidth };
+  // An editor of the wrong shape is dropped rather than rendered
+  // (spec-view-51): a draft is never worth a crash, and nothing
+  // persisted this shape before the editor existed.
+  const editor = validEditor(state.editor) ? state.editor : undefined;
+  if (
+    graph !== state.graph ||
+    graphWidth !== state.graphWidth ||
+    editor !== state.editor
+  ) {
+    const { editor: _dropped, ...rest } = value as SpecViewState;
+    return { ...rest, graph, graphWidth, ...(editor ? { editor } : {}) };
   }
   return value as SpecViewState;
+}
+
+function validEditor(value: unknown): value is SpecEditorState {
+  if (typeof value !== "object" || value === null) return false;
+  const editor = value as Record<string, unknown>;
+  return (
+    typeof editor.path === "string" &&
+    typeof editor.original === "string" &&
+    typeof editor.draft === "string" &&
+    (editor.version === undefined || typeof editor.version === "string") &&
+    typeof editor.preview === "boolean" &&
+    (editor.caretLine === undefined || typeof editor.caretLine === "number")
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The editor (spec-view-48 to spec-view-51)
+// ---------------------------------------------------------------------------
+
+/** Whether a project's editor holds unsaved text (spec-view-49). */
+export function editorDirty(state: SpecViewState | undefined): boolean {
+  return (
+    state?.editor !== undefined && state.editor.draft !== state.editor.original
+  );
+}
+
+/** A specs/-relative path the records reader serves — a record or one
+ * of the two tree-wide documents (spec-view-7) — so a saved or
+ * cancelled edit of it closes into the reader (spec-view-50). */
+export function isRecordPath(path: string): boolean {
+  return (
+    /^(decisions|intents|iterations)\//.test(path) ||
+    path === "meta.md" ||
+    path === "map.md"
+  );
+}
+
+/** The collection-relative file key of a package path, the way the
+ * outline keys its nodes (`packages/<key>.md` → `<key>`). */
+export function fileKeyOf(path: string): string | undefined {
+  return path.startsWith("packages/") && path.endsWith(".md")
+    ? path.slice("packages/".length, -".md".length)
+    : undefined;
+}
+
+/** The zero-based line of `id`'s item heading in a file's text, for
+ * the editor's caret (spec-view-48); undefined when absent. */
+export function headingLine(text: string, id: string): number | undefined {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^#{3,4}\\s+${escaped}\\s*$`, "i");
+  const index = text
+    .split("\n")
+    .findIndex((line) => pattern.test(line.replace(/\r$/, "")));
+  return index === -1 ? undefined : index;
 }
 
 // ---------------------------------------------------------------------------

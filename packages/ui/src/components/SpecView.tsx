@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Per-project spec view (SPECV; DR-011 as amended by DR-015): a
-// read-only, left-rooted collapsible outline of the project's specs/
+// Per-project spec view (SPECV; DR-011 as amended by DR-015 and
+// DR-043): a left-rooted collapsible outline of the project's specs/
 // packages collection — collection directories → file nodes → items in
 // document order under their section headings — with group filters,
 // filter-as-you-type search, plain citation rows and backlinks
 // (SPECV-19), citation jumps with a one-step return chip, a records
-// reader that also serves meta.md, and one polite live region for the
-// transient outcomes (DR-010 §5–§7). Pure props: the host wires
-// specs.get / specs.read and persists the lifted SpecViewState per
+// reader that also serves meta.md, a whole-file editor with a preview
+// (spec-view-48), and one polite live region for the transient
+// outcomes (DR-010 §5–§7). Pure props: the host wires specs.get /
+// specs.read / specs.write and persists the lifted SpecViewState per
 // project.
 
 import {
@@ -27,6 +28,7 @@ import type {
   SpecRecordInfo,
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
+import { SpecEditor } from "./SpecEditor.js";
 import { SpecGraph } from "./SpecGraph.js";
 
 import {
@@ -36,8 +38,11 @@ import {
   buildItemIndex,
   citationSummary,
   fileCounts,
+  fileKeyOf,
   groupOf,
+  headingLine,
   initialSpecViewState,
+  isRecordPath,
   itemMatches,
   linkItemTargets,
   normalizeSpecViewState,
@@ -137,6 +142,14 @@ function useTransient(
   return [value, set];
 }
 
+/** One file as specs.read serves it: its text with the version token
+ * a save must carry (spec-view-16); no token means the save
+ * overwrites. */
+export interface SpecRead {
+  markdown: string;
+  version?: string;
+}
+
 export interface SpecViewProps {
   /** The project whose tree this is; names the surface, since "Specs"
    * is already the tab's own word. */
@@ -148,8 +161,16 @@ export interface SpecViewProps {
   /** Load failure; rendered with a Retry (DR-010 §5). */
   error?: string;
   onRefresh: () => void;
-  /** Fetch one record's markdown (specs.read). */
-  onReadRecord: (path: string) => Promise<string>;
+  /** Fetch one file's text (specs.read) — a bare string is a read
+   * that carries no token. */
+  onReadRecord: (path: string) => Promise<string | SpecRead>;
+  /** Write one file's whole text under the token its read handed out
+   * (spec-view-47); absent, the view offers no Edit control. */
+  onWriteSpec?: (
+    path: string,
+    content: string,
+    baseVersion?: string,
+  ) => Promise<{ version: string }>;
   /** Seed the Academy example into this project (DR-015); the empty
    * state offers it only when wired. */
   onSeedExample?: () => void;
@@ -167,6 +188,8 @@ type ReaderState = {
   record: SpecRecordInfo;
   loading: boolean;
   markdown?: string;
+  /** The token the read handed out, carried into an edit. */
+  version?: string;
   error?: string;
 };
 
@@ -225,6 +248,20 @@ export function SpecView(props: SpecViewProps) {
   const readerBackRef = useRef<HTMLButtonElement | null>(null);
   // DOM id that takes focus back when the reader closes (§6).
   const readerReturnId = useRef<string | null>(null);
+
+  // The editor (spec-view-48): its draft is lifted state
+  // (spec-view-51); what is local here is a failed open, shown beside
+  // the control that asked, and where focus returns when it closes.
+  const canEdit = Boolean(props.onWriteSpec);
+  const editor = canEdit ? viewState.editor : undefined;
+  const viewStateRef = useRef(viewState);
+  viewStateRef.current = viewState;
+  const [openFailure, setOpenFailure] = useState<{
+    anchor: string;
+    message: string;
+  } | null>(null);
+  // "reader", or the file key whose Edit control takes focus back.
+  const editorReturn = useRef<string | null>(null);
 
   const outlineRoot = useMemo(() => buildDirTree(tree.files), [tree]);
   const itemIndex = useMemo(() => buildItemIndex(tree.files), [tree]);
@@ -476,12 +513,11 @@ export function SpecView(props: SpecViewProps) {
     if (returnFocusId) readerReturnId.current = returnFocusId;
     setLiveNote(`Opened ${record.id}`);
     setReader({ record, loading: true });
-    props
-      .onReadRecord(record.path)
-      .then((markdown) =>
+    readSpec(record.path)
+      .then(({ markdown, version }) =>
         setReader((current) =>
           current?.record.path === record.path
-            ? { record, loading: false, markdown }
+            ? { record, loading: false, markdown, version }
             : current,
         ),
       )
@@ -493,6 +529,99 @@ export function SpecView(props: SpecViewProps) {
         ),
       );
   }
+
+  /** One file's text with its token; a host serving bare strings
+   * yields no token (spec-view-16). */
+  function readSpec(path: string): Promise<SpecRead> {
+    return props
+      .onReadRecord(path)
+      .then((served) =>
+        typeof served === "string" ? { markdown: served } : served,
+      );
+  }
+
+  /** Stand the editor on a file's text (spec-view-48); `itemId` lands
+   * the caret on that item's heading. */
+  function standEditor(path: string, served: SpecRead, itemId?: string) {
+    onViewState({
+      ...viewStateRef.current,
+      editor: {
+        path,
+        original: served.markdown,
+        draft: served.markdown,
+        version: served.version,
+        preview: false,
+        caretLine: itemId ? headingLine(served.markdown, itemId) : undefined,
+      },
+    });
+    setLiveNote(`Editing ${path}`);
+  }
+
+  /** Open the editor from the outline: fetch the file first, and say
+   * so beside the control that asked when the fetch fails (§5). */
+  function openEditor(anchor: string, path: string, itemId?: string) {
+    setOpenFailure(null);
+    readSpec(path)
+      .then((served) => standEditor(path, served, itemId))
+      .catch((cause: Error) => {
+        setOpenFailure({
+          anchor,
+          message: cause.message || "could not read the file",
+        });
+        setLiveNote(`Could not open ${path}`);
+      });
+  }
+
+  /** Leave the editor (spec-view-50): a record closes into the reader
+   * — with the saved text when there is one — and a package into the
+   * outline; a save re-reads the tree and is announced. */
+  function closeEditor(
+    path: string,
+    saved?: { content: string; version: string },
+  ) {
+    const { editor: closed, ...rest } = viewStateRef.current;
+    onViewState(rest);
+    if (isRecordPath(path)) {
+      const record =
+        reader?.record.path === path
+          ? reader.record
+          : [...tree.decisions, ...tree.intents, META_RECORD, MAP_RECORD].find(
+              (entry) => entry.path === path,
+            );
+      if (record) {
+        setReader({
+          record,
+          loading: false,
+          markdown: saved?.content ?? closed?.original ?? "",
+          version: saved?.version ?? closed?.version,
+        });
+      }
+    }
+    editorReturn.current = isRecordPath(path)
+      ? "reader"
+      : (fileKeyOf(path) ?? null);
+    if (saved) {
+      setLiveNote(`Saved ${path}`);
+      props.onRefresh();
+    }
+  }
+
+  // Leaving the editor hands focus back (§6): to the reader's Back
+  // control, or to the package's Edit control in the outline.
+  const editorPath = editor?.path;
+  useEffect(() => {
+    if (editorPath) return;
+    const target = editorReturn.current;
+    if (!target) return;
+    editorReturn.current = null;
+    if (target === "reader") {
+      readerBackRef.current?.focus();
+      return;
+    }
+    document
+      .querySelector<HTMLElement>(`[data-testid="file-edit-${target}"]`)
+      ?.focus();
+  }, [editorPath]);
 
   /** Inline links in item bodies (META-20 citations): item IDs jump
    * in-view, DR/IR and meta.md links open the records reader, external
@@ -554,6 +683,34 @@ export function SpecView(props: SpecViewProps) {
   );
 
   // -------------------------------------------------------------------------
+  // The editor swaps the whole view, above the reader (spec-view-48).
+  // -------------------------------------------------------------------------
+
+  if (editor && props.onWriteSpec) {
+    const write = props.onWriteSpec;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {liveRegion}
+        <SpecEditor
+          key={editor.path}
+          state={editor}
+          onState={(next) =>
+            onViewState({ ...viewStateRef.current, editor: next })
+          }
+          onWrite={(content, baseVersion) =>
+            write(editor.path, content, baseVersion)
+          }
+          onRead={() => readSpec(editor.path)}
+          onSaved={(content, version) =>
+            closeEditor(editor.path, { content, version })
+          }
+          onCancel={() => closeEditor(editor.path)}
+        />
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // Records reader swaps the whole view (DR-011).
   // -------------------------------------------------------------------------
 
@@ -564,7 +721,7 @@ export function SpecView(props: SpecViewProps) {
         data-testid="record-reader"
       >
         {liveRegion}
-        <div>
+        <div className="flex items-center gap-2">
           <button
             ref={readerBackRef}
             type="button"
@@ -573,6 +730,21 @@ export function SpecView(props: SpecViewProps) {
           >
             ← Back
           </button>
+          {canEdit && !reader.loading && !reader.error ? (
+            <button
+              type="button"
+              data-testid="reader-edit"
+              onClick={() =>
+                standEditor(reader.record.path, {
+                  markdown: reader.markdown ?? "",
+                  version: reader.version,
+                })
+              }
+              className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              Edit
+            </button>
+          ) : null}
         </div>
         <h1 className="text-lg font-semibold">
           {reader.record.id}
@@ -951,21 +1123,55 @@ export function SpecView(props: SpecViewProps) {
                 {file.path}: {file.error}
               </div>
             ) : null}
-            {allIds.length > 0 && items.length > 0 ? (
-              <div>
-                <button
-                  type="button"
-                  data-testid={`expand-all-${key}`}
-                  aria-label={`${allExpanded ? "Collapse" : "Expand"} all items in ${file.basename}`}
-                  onClick={() => setAllItems(file, !allExpanded)}
-                  className={`text-[11px] ${LINK_CLASS}`}
-                >
-                  {allExpanded ? "Collapse all" : "Expand all"}
-                </button>
+            {(allIds.length > 0 && items.length > 0) || canEdit ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {allIds.length > 0 && items.length > 0 ? (
+                  <button
+                    type="button"
+                    data-testid={`expand-all-${key}`}
+                    aria-label={`${allExpanded ? "Collapse" : "Expand"} all items in ${file.basename}`}
+                    onClick={() => setAllItems(file, !allExpanded)}
+                    className={`text-[11px] ${LINK_CLASS}`}
+                  >
+                    {allExpanded ? "Collapse all" : "Expand all"}
+                  </button>
+                ) : null}
+                {canEdit ? (
+                  <button
+                    type="button"
+                    data-testid={`file-edit-${key}`}
+                    aria-label={`Edit ${file.basename}.md`}
+                    onClick={() =>
+                      openEditor(`file:${key}`, `packages/${key}.md`)
+                    }
+                    className={`text-[11px] ${LINK_CLASS}`}
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                {openFailure?.anchor === `file:${key}` ? (
+                  <span
+                    role="alert"
+                    className="text-[11px] text-red-600 dark:text-red-400"
+                  >
+                    {openFailure.message}
+                  </span>
+                ) : null}
               </div>
             ) : null}
             <FileItems
               items={items}
+              onEditItem={
+                canEdit
+                  ? (item) =>
+                      openEditor(
+                        `item:${item.id}`,
+                        `packages/${key}.md`,
+                        item.id,
+                      )
+                  : undefined
+              }
+              editFailure={openFailure}
               expandedItems={expandedItems}
               filters={viewState.filters}
               search={viewState.search}
@@ -1429,6 +1635,8 @@ function FileItems({
   onCopy,
   onJump,
   onBodyLinkClick,
+  onEditItem,
+  editFailure,
 }: {
   items: SpecItemInfo[];
   expandedItems: ReadonlySet<string>;
@@ -1445,6 +1653,10 @@ function FileItems({
   onCopy: (id: string) => void;
   onJump: (linkKey: string, targetId: string, originId: string) => void;
   onBodyLinkClick: (itemId: string, event: ReactMouseEvent) => void;
+  /** Open an item's file in the editor (spec-view-48). */
+  onEditItem?: (item: SpecItemInfo) => void;
+  /** The last failed open, keyed by the control that asked. */
+  editFailure?: { anchor: string; message: string } | null;
 }) {
   if (items.length === 0) return null;
   const searching = search.trim().length > 0;
@@ -1494,6 +1706,12 @@ function FileItems({
         onCopy={() => onCopy(item.id)}
         onJump={onJump}
         onBodyLinkClick={onBodyLinkClick}
+        onEdit={onEditItem ? () => onEditItem(item) : undefined}
+        editFailure={
+          editFailure?.anchor === `item:${item.id}`
+            ? editFailure.message
+            : undefined
+        }
       />,
     );
   }
@@ -1514,6 +1732,8 @@ function ItemRow({
   onCopy,
   onJump,
   onBodyLinkClick,
+  onEdit,
+  editFailure,
 }: {
   item: SpecItemInfo;
   expanded: boolean;
@@ -1529,6 +1749,11 @@ function ItemRow({
   onCopy: () => void;
   onJump: (linkKey: string, targetId: string, originId: string) => void;
   onBodyLinkClick: (itemId: string, event: ReactMouseEvent) => void;
+  /** Open the item's file in the editor with the caret on its heading
+   * (spec-view-48); absent where the host wires no write. */
+  onEdit?: () => void;
+  /** Why the last Edit from this row could not open (DR-010 §5). */
+  editFailure?: string;
 }) {
   const group = item.group;
   // The outbound row lists the item's citations in document order;
@@ -1644,13 +1869,36 @@ function ItemRow({
               <span className="text-[11px] text-neutral-500">not found</span>
             </div>
           ) : null}
-          {item.cites.length > 0 ? (
-            <div
-              data-testid={`cites-${item.id}`}
-              className="flex flex-wrap items-center gap-1.5 text-xs"
-            >
-              <span className="text-neutral-500">cites</span>
-              {item.cites.map(citation)}
+          {item.cites.length > 0 || onEdit ? (
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              {item.cites.length > 0 ? (
+                <div
+                  data-testid={`cites-${item.id}`}
+                  className="flex flex-wrap items-center gap-1.5 text-xs"
+                >
+                  <span className="text-neutral-500">cites</span>
+                  {item.cites.map(citation)}
+                </div>
+              ) : null}
+              {onEdit ? (
+                <button
+                  type="button"
+                  data-testid={`item-edit-${item.id}`}
+                  aria-label={`Edit ${item.id} in its file`}
+                  onClick={onEdit}
+                  className={`text-[11px] ${LINK_CLASS}`}
+                >
+                  Edit
+                </button>
+              ) : null}
+              {editFailure ? (
+                <span
+                  role="alert"
+                  className="text-[11px] text-red-600 dark:text-red-400"
+                >
+                  {editFailure}
+                </span>
+              ) : null}
             </div>
           ) : null}
           {inbound.length > 0 ? (

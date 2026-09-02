@@ -27,6 +27,7 @@ import {
   initialSpecViewState,
   type SpecViewState,
 } from "./components/SpecView.js";
+import { editorDirty } from "./lib/spec-view-model.js";
 import { Icon } from "./components/Icon.js";
 
 export type { Surface };
@@ -241,9 +242,15 @@ function WorkspaceSurface({
   onStartIntent,
   pendingRecord,
   onRecordOpened,
+  specViewStates,
+  onSpecViewState,
 }: {
   onNavigate: (surface: Surface) => void;
   onOpenPalette: () => void;
+  /** Per-project spec view state, held above the workspace so a
+   * draft under edit survives every surface (spec-view-51). */
+  specViewStates: Record<string, SpecViewState>;
+  onSpecViewState: (projectId: string, next: SpecViewState) => void;
   /** The Overview's ledger group actions, the Dashboard's own
    * (projects-4, DR-038). */
   onOpenSession: (sessionId: string, turnId?: number) => void;
@@ -292,6 +299,7 @@ function WorkspaceSurface({
   const specErrors = useAppStore((state) => state.specErrors);
   const loadSpecs = useAppStore((state) => state.loadSpecs);
   const readSpecRecord = useAppStore((state) => state.readSpecRecord);
+  const writeSpec = useAppStore((state) => state.writeSpec);
   const openAcademyExample = useAppStore(
     (state) => state.openAcademyExample,
   );
@@ -302,9 +310,6 @@ function WorkspaceSurface({
   const stageDispatch = useAppStore((state) => state.stageDispatch);
 
   const [ending, setEnding] = useState<Record<string, boolean>>({});
-  const [specViewStates, setSpecViewStates] = useState<
-    Record<string, SpecViewState>
-  >({});
   const [seedErrors, setSeedErrors] = useState<
     Record<string, string | undefined>
   >({});
@@ -650,7 +655,22 @@ function WorkspaceSurface({
               : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
           }`}
         >
-          {pinned === "specs" ? "Specs" : "Overview"}
+          {pinned === "specs" ? (
+            <>
+              Specs
+              {project && editorDirty(specViewStates[project.id]) ? (
+                <>
+                  <span className="sr-only">, unsaved changes</span>
+                  <span aria-hidden="true" data-testid="specs-tab-unsaved">
+                    {" "}
+                    •
+                  </span>
+                </>
+              ) : null}
+            </>
+          ) : (
+            "Overview"
+          )}
         </button>
       ))}
     </div>
@@ -670,6 +690,9 @@ function WorkspaceSurface({
           error={specErrors[project.id]}
           onRefresh={() => void loadSpecs(project.id)}
           onReadRecord={(path) => readSpecRecord(project.id, path)}
+          onWriteSpec={(path, content, baseVersion) =>
+            writeSpec(project.id, path, content, baseVersion)
+          }
           onSeedExample={() => {
             setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
             void openAcademyExample().catch((cause: Error) => {
@@ -681,12 +704,7 @@ function WorkspaceSurface({
           }}
           seedError={seedErrors[project.id]}
           viewState={specViewStates[project.id] ?? initialSpecViewState}
-          onViewState={(next) =>
-            setSpecViewStates((current) => ({
-              ...current,
-              [project.id]: next,
-            }))
-          }
+          onViewState={(next) => onSpecViewState(project.id, next)}
           openRecordPath={
             pendingRecord?.projectId === project.id
               ? pendingRecord.path
@@ -827,6 +845,24 @@ export function App() {
     setSurface("Workspace");
     setPendingRecord({ projectId, path });
   };
+
+  // Per-project spec view state lives here, above every surface, so
+  // a draft under edit survives the workspace's own navigation
+  // (spec-view-51); the page's leave guard covers closing the window
+  // while any draft is unsaved (spec-view-49).
+  const [specViewStates, setSpecViewStates] = useState<
+    Record<string, SpecViewState>
+  >({});
+  const unsavedSpecs = Object.values(specViewStates).some(editorDirty);
+  useEffect(() => {
+    if (!unsavedSpecs) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [unsavedSpecs]);
 
   // Picking a project with parked attention lands on the session that
   // needs the human (DR-011), not the last-active tab — read from the
@@ -1091,6 +1127,13 @@ export function App() {
               onStartIntent={startIntent}
               pendingRecord={pendingRecord}
               onRecordOpened={() => setPendingRecord(null)}
+              specViewStates={specViewStates}
+              onSpecViewState={(projectId, next) =>
+                setSpecViewStates((current) => ({
+                  ...current,
+                  [projectId]: next,
+                }))
+              }
             />
           )}
         </main>
