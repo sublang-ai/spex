@@ -97,6 +97,28 @@ test("sessions live at shutdown are recovered as not live", () => {
   reopened.close();
 });
 
+test("DR-042: an ended session with a snapshot and a whole stream lists continuable, across a restart", () => {
+  const dir = tempRoot();
+  const store = new Store({ dir });
+  const session = sampleSession(store);
+  assert.equal(store.listSessions()[0].continuable, undefined, "live: not continuable");
+  store.endSession("s1", 3000);
+  assert.equal(store.listSessions()[0].continuable, undefined, "no snapshot yet");
+  store.setSnapshot("s1", { v: 1 });
+  assert.equal(store.listSessions()[0].continuable, true);
+  store.reopenSession("s1", session.players);
+  assert.equal(store.listSessions()[0].live, true);
+  assert.equal(store.listSessions()[0].endedAt, null);
+  assert.equal(store.listSessions()[0].continuable, undefined, "live again");
+  store.close();
+
+  const reopened = new Store({ dir });
+  reopened.markAllSessionsNotLive();
+  assert.equal(reopened.getSnapshot("s1")?.v, 1, "the snapshot survives in the sidecar");
+  assert.equal(reopened.listSessions()[0].continuable, true);
+  reopened.close();
+});
+
 test("usage totals aggregate per session", () => {
   const store = new Store({ dir: tempRoot() });
   sampleSession(store);

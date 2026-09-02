@@ -277,7 +277,7 @@ export class CoreService {
     }
     service.seeded = seedConfig(service.configPath);
     await service.reloadConfig();
-    service.adoptForeignSessions();
+    service.syncForeignSessions();
     if (options.watchConfig !== false) {
       service.watchConfigFile();
       service.watchSessionsDir();
@@ -288,14 +288,18 @@ export class CoreService {
 
   /**
    * Serve the sessions another host wrote into the shared session
-   * store (core-service-60). Called once before serving and again
-   * whenever a captain-session record lands in that directory, so a
-   * session started in a terminal joins the app's listing.
+   * store (core-service-60), and forget the ones whose record left it
+   * (core-service-76). Called once before serving and again whenever
+   * a captain-session record lands in or leaves that directory, so a
+   * session started in a terminal joins the app's listing and one
+   * removed there leaves it.
    */
-  private adoptForeignSessions(): void {
+  private syncForeignSessions(): void {
     let adopted: string[];
+    let vanished: { id: string; projectId: string }[];
     try {
       adopted = this.store.adoptForeignSessions(this.sessionsDir());
+      vanished = this.store.forgetVanishedForeignSessions();
     } catch {
       // Another host's directory is not ours to depend on: an
       // unreadable one costs its sessions, never this service.
@@ -307,6 +311,10 @@ export class CoreService {
       if (!session) continue;
       this.broadcast({ type: "session.state", session });
       projectIds.add(session.projectId);
+    }
+    for (const { id, projectId } of vanished) {
+      this.broadcast({ type: "session.removed", sessionId: id, projectId });
+      projectIds.add(projectId);
     }
     if (projectIds.size > 0) this.queueLedgerChange([...projectIds]);
   }
@@ -320,12 +328,13 @@ export class CoreService {
     if (!existsSync(dir)) return;
     this.sessionsWatcher = watch(dir, (_eventType, filename) => {
       // Our own sidecars and streams never carry a bare `<id>.json`
-      // name, so this fires for another host's records alone.
+      // name, so this fires for another host's records alone —
+      // arriving or vanishing.
       if (!filename?.endsWith(".json") || filename.endsWith(".spex.json")) {
         return;
       }
       if (this.adoptTimer) clearTimeout(this.adoptTimer);
-      this.adoptTimer = setTimeout(() => this.adoptForeignSessions(), 150);
+      this.adoptTimer = setTimeout(() => this.syncForeignSessions(), 150);
     });
   }
 
@@ -671,7 +680,7 @@ export class CoreService {
         const registered = this.store.registerProject(path, basename(path), Date.now());
         // The shared session store may already hold this project's
         // history from the CLI; it lists from now on (core-service-60).
-        this.adoptForeignSessions();
+        this.syncForeignSessions();
         return registered;
       }
       case "project.create": {
@@ -767,12 +776,17 @@ export class CoreService {
         if (this.sessions.getLive(session.id)) {
           throw new CoreError("busy", "end the session before deleting it");
         }
-        // Another host's files are served, never written (core-service-65).
+        // Deleting is the one write that crosses hosts (DR-042): a
+        // session the CLI wrote goes only while no writer holds its
+        // lease (core-service-75).
         if (session.foreign) {
-          throw new CoreError(
-            "invalid_request",
-            "a session run by another host cannot be deleted here",
-          );
+          const holder = this.store.sessionLeaseHolder(session.id);
+          if (holder) {
+            throw new CoreError(
+              "busy",
+              `the session is held by pid ${holder.pid} on ${holder.hostname} — end it there before deleting it`,
+            );
+          }
         }
         this.store.deleteSession(session.id);
         this.broadcast({
@@ -809,6 +823,11 @@ export class CoreService {
               `the intent waits on "${intentTitle(predecessor)}"`,
             );
           }
+        }
+        // A message to an ended session continues it first (DR-042):
+        // the same id, live again, then the turn as usual.
+        if (!this.sessions.getLive(command.sessionId)) {
+          await this.continueSession(command.sessionId);
         }
         this.sessions.submitTurn(
           command.sessionId,
@@ -1207,6 +1226,49 @@ export class CoreService {
         return null;
       }
     }
+  }
+
+  /**
+   * Continue an ended session on a Boss message (core-service-73):
+   * only a session this core ran, whole, holding a snapshot, under a
+   * valid config. Each refusal says why and what to do instead — a
+   * session that cannot continue stays read-only.
+   */
+  private async continueSession(sessionId: string): Promise<void> {
+    const session = this.store.describeSession(sessionId);
+    if (!session) throw new CoreError("not_found", `no session ${sessionId}`);
+    if (session.foreign) {
+      throw new CoreError(
+        "invalid_request",
+        "this session was run from the terminal and is read-only here — start a new session",
+      );
+    }
+    if (session.streamIncompleteAfterSeq !== undefined) {
+      throw new CoreError(
+        "invalid_request",
+        "this session's stream is incomplete, so it cannot continue — start a new session",
+      );
+    }
+    const snapshot = this.store.getSnapshot(sessionId);
+    if (!snapshot) {
+      throw new CoreError(
+        "invalid_request",
+        "this session holds no Captain snapshot to continue from — start a new session",
+      );
+    }
+    const project = this.store.getProject(session.projectId);
+    if (!project) {
+      throw new CoreError("not_found", `no project ${session.projectId}`);
+    }
+    if (this.configState.status !== "valid" || !this.composed) {
+      throw new CoreError(
+        "invalid_config",
+        this.configState.status === "invalid"
+          ? `config is invalid: ${this.configState.errors.join("; ")}`
+          : "config file is missing",
+      );
+    }
+    await this.sessions.continueSession(project, this.composed, session, snapshot);
   }
 
   /** The intent named must exist and still be open (DR-035). */

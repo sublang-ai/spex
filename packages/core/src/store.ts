@@ -6,7 +6,9 @@
 // at startup. The core package is the only writer of the Spex-owned
 // files. Sessions persist as one record-stream JSONL plus a project-
 // binding sidecar per session; turns, titles, and usage fold from the
-// stream and are never separately stored (CORE-10). Intents persist
+// stream and are never separately stored (CORE-10). The sidecar also
+// carries the token-free Captain snapshot a message continues the
+// session from (DR-042). Intents persist
 // as per-project append-only act logs (CORE-52). Hidden records ride
 // the stream with their visibility, so replay filters identically to
 // live streaming. A root lease admits one core per root (CORE-61),
@@ -50,6 +52,24 @@ export type { UsageEntry, UsageTotals } from "./stream-fold.js";
 
 const META_VERSION = 1;
 
+/**
+ * The Captain's durable state at the session's last settled point
+ * (DR-042), persisted in the sidecar: the Captain shell's own export
+ * with every provider token stripped. `shell` is absent for a Captain
+ * that exports no state — continuation then starts it fresh, the
+ * stream still carrying the conversation.
+ */
+export interface CaptainSnapshot {
+  v: 1;
+  shell?: unknown;
+}
+
+/** Who holds a session's lease in the shared session store (DR-042). */
+export interface SessionLeaseHolder {
+  pid: number;
+  hostname: string;
+}
+
 /** Another core instance holds the state root (CORE-61). */
 export class StateRootHeldError extends Error {
   constructor(
@@ -85,9 +105,17 @@ interface SessionMeta {
    * to this sequence; later records lived in memory only (DR-036). */
   streamIncompleteAfterSeq?: number;
   /** Set on a session another host wrote into the shared store: this
-   * core serves it and writes none of its files (core-service-65).
-   * In memory only — we write no sidecar for it. */
+   * core serves it and writes none of its files (core-service-65),
+   * deleting them only on request (core-service-70). In memory only —
+   * we write no sidecar for it. */
   foreign?: true;
+  /** The directory a foreign session's files were found in — where a
+   * deletion reaches them and where their vanishing is noticed
+   * (DR-042). In memory only. */
+  originDir?: string;
+  /** The Captain snapshot a message continues the session from
+   * (DR-042); absent until a turn or the session's end persisted one. */
+  snapshot?: CaptainSnapshot;
 }
 
 interface TurnRow {
@@ -144,8 +172,16 @@ function sessionInfo(
     ...(meta.streamIncompleteAfterSeq !== undefined
       ? { streamIncompleteAfterSeq: meta.streamIncompleteAfterSeq }
       : {}),
-    // Served, never written or deleted here (core-service-32, DR-038).
+    // Served, never written or continued here (core-service-32, DR-042).
     ...(meta.foreign ? { foreign: true } : {}),
+    // Ended, this core's own, holding a snapshot, and whole: a Boss
+    // message continues it (core-service-32, core-service-73).
+    ...(!meta.live &&
+    !meta.foreign &&
+    meta.snapshot !== undefined &&
+    meta.streamIncompleteAfterSeq === undefined
+      ? { continuable: true }
+      : {}),
   };
 }
 
@@ -452,7 +488,8 @@ export class Store {
   private saveSidecar(meta: SessionMeta): void {
     // Another host owns its own session's files (core-service-65).
     if (!this.sessionsDir || meta.foreign) return;
-    writeAtomic(this.sidecarFile(meta.id), JSON.stringify({ v: 1, ...meta }));
+    const { originDir: _origin, ...persisted } = meta;
+    writeAtomic(this.sidecarFile(meta.id), JSON.stringify({ v: 1, ...persisted }));
   }
 
   private appendIntentAct(projectId: string, act: IntentAct): void {
@@ -570,14 +607,50 @@ export class Store {
         players: players.map((playerId) => ({ id: playerId })) as SessionInfo["players"],
         initialVisible: players,
         // Read-only: this core writes none of another host's files
-        // (core-service-65).
+        // (core-service-65); a deletion reaches them here (DR-042).
         foreign: true,
+        originDir: sessionsDir,
       });
       this.records.set(id, stored);
       for (const entry of stored) this.foldRecord(id, entry.record);
       adopted.push(id);
     }
     return adopted;
+  }
+
+  /**
+   * Forget every foreign session whose record left the shared session
+   * store while this core runs (core-service-76): the CLI's own
+   * removal, or a deletion from elsewhere. Returns what was dropped,
+   * with its project so the removal can be announced.
+   */
+  forgetVanishedForeignSessions(): { id: string; projectId: string }[] {
+    const gone: { id: string; projectId: string }[] = [];
+    for (const meta of [...this.sessions.values()]) {
+      if (!meta.foreign || !meta.originDir) continue;
+      if (existsSync(join(meta.originDir, `${meta.id}.json`))) continue;
+      this.dropSession(meta.id);
+      gone.push({ id: meta.id, projectId: meta.projectId });
+    }
+    return gone;
+  }
+
+  /**
+   * The live holder of a foreign session's lease, if any (DR-042): the
+   * CLI guards its writers with `.<id>.lock/owner.json` naming a pid
+   * and host. A lease on another host can never be probed, so it
+   * always counts as held; a lease on this host is held while its pid
+   * is alive. No lease, or a dead pid on this host, holds nothing.
+   */
+  sessionLeaseHolder(id: string): SessionLeaseHolder | undefined {
+    const meta = this.sessions.get(id);
+    if (!meta?.foreign || !meta.originDir) return undefined;
+    const owner = this.readLeaseOwner(join(meta.originDir, `.${id}.lock`));
+    if (!owner || typeof owner.pid !== "number") return undefined;
+    if (owner.hostname !== hostname() || processAlive(owner.pid)) {
+      return { pid: owner.pid, hostname: owner.hostname };
+    }
+    return undefined;
   }
 
   private foldIntentAct(act: IntentAct): void {
@@ -846,22 +919,54 @@ export class Store {
     this.saveSidecar(meta);
   }
 
+  /** A message continued the ended session (core-service-73): live
+   * again on the same id, its end time cleared, its roster the lanes
+   * now running. */
+  reopenSession(id: string, players: SessionInfo["players"]): void {
+    const meta = this.sessions.get(id);
+    if (!meta) return;
+    meta.live = true;
+    meta.endedAt = null;
+    meta.players = players;
+    this.saveSidecar(meta);
+  }
+
+  /** Persist the Captain's settled state (core-service-72). */
+  setSnapshot(id: string, snapshot: CaptainSnapshot): void {
+    const meta = this.sessions.get(id);
+    if (!meta || meta.foreign) return;
+    meta.snapshot = snapshot;
+    this.saveSidecar(meta);
+  }
+
+  getSnapshot(id: string): CaptainSnapshot | undefined {
+    return this.sessions.get(id)?.snapshot;
+  }
+
   /**
    * Delete a stored session (core-service-70): its files and every
    * in-memory trace — records, turns, usage, and the viewed marker.
-   * A session another host wrote is never deleted: this core writes
-   * none of its files (core-service-65).
+   * A session another host wrote loses its record and stream where
+   * they were found and nothing else — never a lease directory; the
+   * caller has checked the lease (core-service-75).
    */
   deleteSession(id: string): void {
     const meta = this.sessions.get(id);
     if (!meta) return;
     if (meta.foreign) {
-      throw new Error(`session ${id} was run by another host and is served, never deleted`);
-    }
-    if (this.sessionsDir) {
+      if (meta.originDir) {
+        rmSync(join(meta.originDir, `${id}.json`), { force: true });
+        rmSync(join(meta.originDir, `${id}.records.jsonl`), { force: true });
+      }
+    } else if (this.sessionsDir) {
       rmSync(this.sidecarFile(id), { force: true });
       rmSync(this.recordsFile(id), { force: true });
     }
+    this.dropSession(id);
+  }
+
+  /** Every in-memory trace of a session, gone. */
+  private dropSession(id: string): void {
     this.sessions.delete(id);
     this.records.delete(id);
     this.turns.delete(id);
@@ -869,7 +974,9 @@ export class Store {
     if (this.prefs.delete(`viewed:${id}`)) this.savePrefs();
   }
 
-  /** Startup recovery (CORE-10): a session live at shutdown is no longer live. */
+  /** Startup recovery (CORE-10): a session live at shutdown is no
+   * longer live. Its snapshot stays, so it lists continuable
+   * (DR-042). */
   markAllSessionsNotLive(): void {
     for (const meta of this.sessions.values()) {
       if (!meta.live) continue;
@@ -972,6 +1079,16 @@ export class Store {
     return [...(this.turns.get(sessionId)?.values() ?? [])].sort(
       (a, b) => a.turnId - b.turnId,
     );
+  }
+
+  /** The highest turn id the session's stream holds — a continued
+   * session's runtime numbers past it (core-service-74). */
+  maxTurnId(sessionId: string): number {
+    let max = 0;
+    for (const turnId of this.turns.get(sessionId)?.keys() ?? []) {
+      if (turnId > max) max = turnId;
+    }
+    return max;
   }
 
   /** Reviewer-role player calls inside a turn range — the review

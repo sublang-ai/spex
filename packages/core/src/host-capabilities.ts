@@ -10,9 +10,10 @@
 // map; Spex loads that module from the installed package rather than
 // restating three thousand lines of it. What Spex supplies itself is
 // the effect ledger's write-ahead: an in-memory, per-session ledger
-// with one attempt per Boss turn, because a Spex session never resumes
-// after a restart (core-service-10), so nothing would read a durable
-// ledger back.
+// with one attempt per Boss turn. The ledger's durable home is the
+// Captain snapshot in the session's sidecar (DR-042): a continued
+// session seeds its ledger from the snapshot it restores, since the
+// shell accepts a restore only when the two agree.
 //
 // Playbook 12.1 publishes `@sublang/playbook/host-capabilities`, but
 // that facade serves a standalone runtime, not the shell: its
@@ -112,10 +113,16 @@ function loadRepositoryEffects(env: NodeJS.ProcessEnv): Promise<RepositoryEffect
  * The effect ledger as a trusted in-process host keeps it: the four
  * command kinds applied in order, idempotent on a repeated start or
  * append, each batch one revision — the CLI's own reducer without its
- * defenses against a foreign writer, which no one here is.
+ * defenses against a foreign writer, which no one here is. `initial`
+ * seeds a continued session's ledger from its snapshot (DR-042).
  */
-export function createLedgerService(attempt: () => { attemptId: string; attemptNumber: number }): LedgerService {
-  let ledger: PlaybookEffectLedger = emptyPlaybookEffectLedger();
+export function createLedgerService(
+  attempt: () => { attemptId: string; attemptNumber: number },
+  initial?: PlaybookEffectLedger,
+): LedgerService {
+  let ledger: PlaybookEffectLedger = initial
+    ? assertPlaybookEffectLedger(initial)
+    : emptyPlaybookEffectLedger();
   return {
     snapshot: () => ledger,
     refresh: async () => ledger,
@@ -206,6 +213,8 @@ export async function createHostEffects(input: {
   sessionId: string;
   playbooks: readonly CatalogEntry[];
   env?: NodeJS.ProcessEnv;
+  /** The ledger a continued session restores with (DR-042). */
+  ledger?: PlaybookEffectLedger;
 }): Promise<HostEffects> {
   const effects = await loadRepositoryEffects(input.env ?? process.env);
   const catalog = Object.fromEntries(
@@ -222,7 +231,7 @@ export async function createHostEffects(input: {
       ]),
   );
   let attempt = { attemptId: randomUUID(), attemptNumber: 1 };
-  const ledger = createLedgerService(() => attempt);
+  const ledger = createLedgerService(() => attempt, input.ledger);
   const capabilities = await effects.createRepositoryEffectCapabilities({
     cwd: input.cwd,
     catalog,
