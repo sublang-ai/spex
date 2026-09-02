@@ -14,6 +14,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Changed
+
+- **Playbook 12.2 with slc 0.7.** The core runs on `@sublang/playbook`
+  12.2, the release whose runtime the `slc` 0.7 compiler links every
+  compiled playbook against; the Playbooks example card shows slc
+  0.7's own two-agent change-and-review demo, and the `dev` built-in's
+  machine drawing gives each transition its own port.
+
 ## [0.2.0] - 2026-09-02
 
 ### Added
