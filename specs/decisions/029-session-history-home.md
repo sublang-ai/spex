@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted; session deletion, declined below, is decided by [DR-038](038-history-is-done-work.md).
+Accepted; session deletion, declined below, is decided by [DR-038](038-history-is-done-work.md); an ended session becomes a paused conversation that a message continues by [DR-042](042-sessions-continue.md).
 Realizes [DR-009](009-at-hand-interaction.md)'s "nothing the user produced becomes unreachable" as first-class law; extends [DR-007](007-conversational-session-start.md)'s start view into the session home.
 
 ## Context

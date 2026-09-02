@@ -7,6 +7,7 @@
 
 Accepted.
 §8's interaction hue is amended by [DR-013](013-sublang-brand.md): brand purple replaces indigo.
+A ninth principle, chrome that fits, is added by [DR-041](041-chrome-that-fits.md).
 
 ## Context
 
@@ -29,5 +30,5 @@ Eight principles govern the interface; every audit finding cluster traces to one
 ## Consequences
 
 - Spec items under each surface package are amended so tests pin the behaviors as the principles land across the code.
-- New strings and controls are held to principles 2, 4, and 8 at review time; deviations need a recorded decision.
+- New strings and controls are held to principles 2, 4, 8, and 9 ([DR-041](041-chrome-that-fits.md)) at review time; deviations need a recorded decision.
 - The compile pipeline gains cancel/busy semantics in the core (principle 5) — a protocol addition, not just UI.

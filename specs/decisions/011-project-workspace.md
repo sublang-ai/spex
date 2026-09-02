@@ -7,6 +7,7 @@
 
 Accepted; the spec view's data layout and group model are amended by [DR-015](015-reference-content.md) — packages-layout parsing with section-kind groups replaces the user/dev/test triple.
 The Settings surface's profile inventory is amended by [DR-019](019-inline-agent-configuration.md).
+The spec view's read-only stance is amended by [DR-043](043-minimal-spec-editing.md): whole-file editing with a preview.
 The project bar, the Captain home's session list, and the live-sessions-only tab strip are amended by [DR-029](029-session-history-home.md) — the sidebar became the navigator; the text below is rewritten where it named them.
 The Dashboard content row is amended by [DR-035](035-intent-ledger.md) — the intent ledger replaced running sessions, work lists, and usage; the taxonomy row below is rewritten.
 The Repo tab is amended by [DR-038](038-history-is-done-work.md) — it becomes the project's Overview, the ledger group under the repository header.
@@ -45,7 +46,7 @@ The Repo tab is amended by [DR-038](038-history-is-done-work.md) — it becomes 
 
 ### The spec view
 
-One per project, from the project's `specs/` tree, read-only.
+One per project, from the project's `specs/` tree; read-only until [DR-043](043-minimal-spec-editing.md) added whole-file editing.
 
 - **Data.** A `specs.get { projectId }` core command parses the tree in one reply: packages keyed by relative path + basename [[meta-9](../meta.md#meta-9)]; per-group files with intent, items in document order, per-file parse errors as notices; decisions/iterations as id+title lists; a `specs.read` command returns one record's markdown (path confined to `specs/`). No symlink escape from the project; unknown top-level entries are ignored with a tree notice. Same basename at different paths renders as separate nodes with a consistency notice.
 - **Tree.** Left-rooted collapsible outline (directories → package nodes), not a radial mind map: same structure, denser, keyboard/screen-reader operable ([DR-010](010-interface-craft.md) §6/§7); connector lines keep the map feel. Packages sort by short form within their directory, like `map.md`.

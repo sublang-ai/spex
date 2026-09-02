@@ -7,6 +7,7 @@
 
 Accepted.
 Generalizes [DR-027](027-linked-views-contract.md)'s pane divider into house chrome law; [DR-029](029-session-history-home.md)'s sidebar tree rides on it.
+Clarified by [DR-041](041-chrome-that-fits.md): panes stacking under a container width is layout, not the auto-collapse declined below — the rail still moves only by the user's hand.
 
 ## Context
 
