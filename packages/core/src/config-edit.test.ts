@@ -42,6 +42,9 @@ const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/decide/registry") {
     return { default: stubEntry("decide", ["coder", "reviewer"]) };
   }
+  if (specifier === "@sublang/playbook/dev/registry") {
+    return { default: stubEntry("dev", ["analyst"]) };
+  }
   if (specifier === "@stub/other") {
     return { default: stubEntry("other", ["helper"]) };
   }
@@ -92,6 +95,7 @@ test("captain.set merge patch preserves comments and unrelated keys", async () =
 
 test("player.set merge patch swaps a lane's vendor in place", async () => {
   const path = templateFile();
+  const before = readFileSync(path, "utf8");
   const result = await editConfigFile(
     path,
     {
@@ -108,8 +112,13 @@ test("player.set merge patch swaps a lane's vendor in place", async () => {
     after,
     /dev\.reviewer:\n\s+adapter: codex[^\n]*\n\s+model: gpt-5\.5\n\s+effort: xhigh/,
   );
-  // Unrelated lanes and their comments survive.
-  assert.match(after, /dev\.coder:\n\s+adapter: claude\n\s+model: claude-opus-5/);
+  // Unrelated lanes and their comments survive, byte for byte: the
+  // coder's block as the installed template wrote it.
+  const coderBlock = before.slice(
+    before.indexOf("  dev.coder:"),
+    before.indexOf("\n\n", before.indexOf("  dev.coder:")),
+  );
+  assert.ok(after.includes(coderBlock), "the coder lane is untouched");
   const option = await editConfigFile(
     path,
     {

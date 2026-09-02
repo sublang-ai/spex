@@ -20,6 +20,7 @@ import { PLAYBOOK_CAPTAIN_MODULE, type ComposedConfig, type LoadModule } from ".
 import type { ProjectInfo, SessionInfo } from "./protocol.js";
 import { Store } from "./store.js";
 import { foldUsage, sanitizeRecord } from "./stream-fold.js";
+import { createHostEffects, type HostEffects } from "./host-capabilities.js";
 
 export class CoreError extends Error {
   constructor(
@@ -51,6 +52,7 @@ export interface SessionManagerOptions {
   /** Test injection: replaces the Playbook Captain shell. */
   captainFactory?: CaptainFactory;
   now?: () => number;
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface RecordEnvelope {
@@ -78,6 +80,11 @@ interface LiveSession {
    * held from submission, stamped at turn_started, and never stamped
    * by a submission that starts no turn. */
   pendingIntentId?: string;
+  /** The host facilities the real shell runs on (DR-037): absent
+   * under an injected captain. */
+  effects?: HostEffects;
+  /** Surfaces a failure before a turn as the runtime would have. */
+  emitError?: (message: string) => void;
 }
 
 /** Resolves the role a player record's call is serving, by folding the
@@ -151,6 +158,7 @@ function withProjectCwd(
 async function defaultCaptainFactory(
   composed: ComposedConfig,
   loadModule: LoadModule,
+  effects: HostEffects,
 ): Promise<Captain> {
   const moduleValue = (await loadModule(PLAYBOOK_CAPTAIN_MODULE)) as {
     default?: unknown;
@@ -165,14 +173,23 @@ async function defaultCaptainFactory(
   return (
     factory as (
       options: unknown,
-      deps?: { loadModule?: LoadModule },
+      deps?: {
+        loadModule?: LoadModule;
+        hostCapabilities?: HostEffects["capabilities"];
+        unresolvedEffectSettlement?: HostEffects["settlement"];
+      },
     ) => Captain
-  )(composed.captainOptions, { loadModule });
+  )(composed.captainOptions, {
+    loadModule,
+    hostCapabilities: effects.capabilities,
+    unresolvedEffectSettlement: effects.settlement,
+  });
 }
 
 export class SessionManager {
   private readonly store: Store;
   private readonly loadModule: LoadModule;
+  private readonly env: NodeJS.ProcessEnv;
   private readonly adapterImports?: PlayerAdapterImports;
   private readonly captainFactory?: CaptainFactory;
   private readonly now: () => number;
@@ -188,6 +205,7 @@ export class SessionManager {
   constructor(options: SessionManagerOptions) {
     this.store = options.store;
     this.loadModule = options.loadModule ?? ((specifier) => import(specifier));
+    this.env = options.env ?? process.env;
     this.adapterImports = options.adapterImports;
     this.captainFactory = options.captainFactory;
     this.now = options.now ?? Date.now;
@@ -225,12 +243,28 @@ export class SessionManager {
     }
 
     const sessionComposed = withProjectCwd(composed, project.path);
-    const captain = this.captainFactory
-      ? await this.captainFactory(sessionComposed)
-      : await defaultCaptainFactory(sessionComposed, this.loadModule);
+    const sessionId = randomUUID();
+    let captain: Captain;
+    let effects: HostEffects | undefined;
+    if (this.captainFactory) {
+      captain = await this.captainFactory(sessionComposed);
+    } else {
+      try {
+        effects = await createHostEffects({
+          cwd: project.path,
+          sessionId,
+          playbooks: sessionComposed.playbooks,
+          env: this.env,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new CoreError("invalid_config", `session failed to start: ${message}`);
+      }
+      captain = await defaultCaptainFactory(sessionComposed, this.loadModule, effects);
+    }
 
     const info: SessionInfo = {
-      id: randomUUID(),
+      id: sessionId,
       projectId: project.id,
       projectPath: project.path,
       createdAt: this.now(),
@@ -254,6 +288,7 @@ export class SessionManager {
       seq: 0,
       turnActive: false,
       openCalls: new Map(),
+      ...(effects ? { effects } : {}),
     };
 
     const append = (rawRecord: TmuxPlayRecord): void => {
@@ -278,6 +313,13 @@ export class SessionManager {
         ...(role !== undefined ? { role } : {}),
       });
     };
+    entry.emitError = (message: string): void =>
+      append({
+        type: "runtime_error",
+        turnId: null,
+        timestamp: this.now(),
+        message,
+      } as TmuxPlayRecord);
     const observer = {
       onRecord: (record: TmuxPlayRecord): void => {
         append(record);
@@ -424,11 +466,23 @@ export class SessionManager {
     }
     entry.turnActive = true;
     entry.pendingIntentId = intentId;
-    void entry.runtime
-      .runBossTurn(text)
-      .catch(() => {
+    void (async () => {
+      // As the CLI reconciles repository effects before each Boss
+      // input: a failure here is a failure before the turn, surfaced
+      // as the runtime would surface its own (DR-037).
+      try {
+        await entry.effects?.beginTurn();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        entry.emitError?.(`repository-effect reconciliation failed: ${message}`);
+        return;
+      }
+      try {
+        await entry.runtime.runBossTurn(text);
+      } catch {
         // Failures surface as runtime_error / turn_aborted records.
-      })
+      }
+    })()
       .finally(() => {
         entry.turnActive = false;
         // A submission that never became a turn stamps nothing.

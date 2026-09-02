@@ -155,7 +155,7 @@ export function migrateRetiredProfiles(text: string): string | undefined {
   }
   if (!changed) return undefined;
   doc.commentBefore = MIGRATION_NOTE;
-  return doc.toString();
+  return doc.toString({ flowCollectionPadding: false });
 }
 
 export interface MigrationResult {

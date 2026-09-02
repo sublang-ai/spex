@@ -230,6 +230,64 @@ function usageTotals(entries: UsageEntry[]): UsageTotals {
   return { ...totals, costSources: [...sources].sort() };
 }
 
+
+/**
+ * The Boss-level history a pre-stream captain-session record holds,
+ * as the records a stream would carry: each `boss` journal entry opens
+ * a turn with its prompt, each `reply` is the Captain's reply, and a
+ * turn closes when the next opens or the journal ends. Timestamps are
+ * the record's own — its creation for the first turn, its last update
+ * for the final close — since the journal carries none.
+ */
+function journalRecords(record: {
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  snapshot?: { journal?: unknown };
+}): StoredRecord[] {
+  const journal = record.snapshot?.journal;
+  if (!Array.isArray(journal)) return [];
+  const createdAt = Date.parse(String(record.createdAt)) || 0;
+  const updatedAt = Date.parse(String(record.updatedAt)) || createdAt;
+  const out: StoredRecord[] = [];
+  let openTurn: number | undefined;
+  const close = (timestamp: number): void => {
+    if (openTurn === undefined) return;
+    out.push({
+      seq: out.length + 1,
+      record: { type: "turn_finished", turnId: openTurn, timestamp } as TmuxPlayRecord,
+    });
+    openTurn = undefined;
+  };
+  for (const entry of journal as { turnId?: unknown; kind?: unknown; payload?: unknown }[]) {
+    if (typeof entry?.turnId !== "number" || typeof entry.payload !== "string") continue;
+    if (entry.kind === "boss") {
+      close(createdAt);
+      openTurn = entry.turnId;
+      out.push({
+        seq: out.length + 1,
+        record: {
+          type: "turn_started",
+          turnId: entry.turnId,
+          timestamp: createdAt,
+          turn: { id: entry.turnId, prompt: entry.payload },
+        } as TmuxPlayRecord,
+      });
+    } else if (entry.kind === "reply" && openTurn === entry.turnId) {
+      out.push({
+        seq: out.length + 1,
+        record: {
+          type: "captain_reply",
+          turnId: entry.turnId,
+          timestamp: createdAt,
+          text: entry.payload,
+        } as TmuxPlayRecord,
+      });
+    }
+  }
+  close(updatedAt);
+  return out;
+}
+
 export class Store {
   private readonly dir?: string;
   private readonly sessionsDir?: string;
@@ -468,9 +526,13 @@ export class Store {
       if (!file.endsWith(".json") || file.endsWith(".spex.json")) continue;
       const id = file.slice(0, -".json".length);
       if (this.sessions.has(id)) continue;
-      const record = readJson<{ sessionId?: unknown; cwd?: unknown }>(
-        join(sessionsDir, file),
-      );
+      const record = readJson<{
+        sessionId?: unknown;
+        cwd?: unknown;
+        createdAt?: unknown;
+        updatedAt?: unknown;
+        snapshot?: { journal?: unknown };
+      }>(join(sessionsDir, file));
       if (
         !record ||
         typeof record.cwd !== "string" ||
@@ -480,9 +542,13 @@ export class Store {
       }
       const project = this.getProjectByPath(record.cwd);
       if (!project) continue;
-      const stored = readLinesPrefix<StoredRecord & { v?: number }>(
+      let stored = readLinesPrefix<StoredRecord & { v?: number }>(
         join(sessionsDir, `${id}.records.jsonl`),
       ).map(({ v: _v, ...rest }) => rest as StoredRecord);
+      // A record written before the CLI teed its stream carries the
+      // Boss conversation in its journal: every prompt and reply, which
+      // is the history worth listing (core-service-60).
+      if (stored.length === 0) stored = journalRecords(record);
       if (stored.length === 0) continue;
       const players = [
         ...new Set(

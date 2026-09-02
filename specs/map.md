@@ -59,9 +59,10 @@ meta.md       The spec of specs
 | [DR-031](decisions/031-machine-call-tree.md) | 031-machine-call-tree.md | The run call tree: one card per run lifetime, calls drawn as containment with named call sites, cards breathing between drawing and strip, one aliveness grammar, neighbours-draw/distance-speaks edge law |
 | [DR-032](decisions/032-session-players.md) | 032-session-players.md | Session players: roles bind to explicit player lanes, a pane per player with per-call role labels, forked player/binding editors, guided legacy migration, playbook 8 / cligent 0.22 floors |
 | [DR-033](decisions/033-remote-gui-serving.md) | 033-remote-gui-serving.md | Remote GUI serving: server shell on one port, tokenized-URL auth, optional TLS, shell-attached core endpoint |
-| [DR-034](decisions/034-playbook-9-adoption.md) | 034-playbook-9-adoption.md | Playbook 9 adoption: floor to ^9.0.0, cligent unchanged, recaptured machine fixtures, no product code change |
+| [DR-034](decisions/034-playbook-9-adoption.md) | 034-playbook-9-adoption.md | Playbook 9 adoption: floor to ^9.0.0 (superseded by DR-037), cligent unchanged, recaptured machine fixtures, no product code change |
 | [DR-035](decisions/035-intent-ledger.md) | 035-intent-ledger.md | The intent ledger: intents as staged Boss turns, one-gesture capture from issues/PRs/records/chat, per-project queues with one after-link, verdict-owed deliveries, confirm-pulls-next Dashboard |
 | [DR-036](decisions/036-file-state-store.md) | 036-file-state-store.md | File state and the shared session store: SQLite retires for plain files under one state root, sessions shared with the playbook CLI, intents as an act log, file-sync-safe backup |
+| [DR-037](decisions/037-playbook-12-adoption.md) | 037-playbook-12-adoption.md | Playbook 12 adoption: floor ^12 / cligent ^0.24, host capabilities from the shipped builder with an in-memory effect ledger, installed template and `dev` built-in, one-time config relocation, journal-listed history |
 
 ## Packages
 

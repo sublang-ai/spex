@@ -83,6 +83,16 @@ const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/decide/registry") {
     return { default: decideEntry() };
   }
+  if (specifier === "@sublang/playbook/dev/registry") {
+    return {
+      default: registryEntry({
+        id: "dev",
+        command: "dev",
+        intent: "planning workflow: analyze before implementing",
+        requiredRoleIds: ["analyst"],
+      }),
+    };
+  }
   throw new Error(`no module ${specifier}`);
 };
 
@@ -114,43 +124,37 @@ function reviewRoles(top: Record<string, unknown>): Record<string, unknown> {
 }
 
 test("bundled template composes with launcher-equivalent output", async () => {
-  const composed = await composeConfig(baseConfig(), stubLoader);
-  // The seeded lineup is fully-inline single-vendor Claude (DR-019).
+  // The template is the installed playbook's own (core-service-3), so
+  // every expectation derives from it rather than restating a roster.
+  const top = baseConfig();
+  const captain = top.captain as Record<string, unknown>;
+  const players = roster(top) as Record<string, Record<string, unknown>>;
+  const ids = Object.keys(players);
+  const coder = players[String(codeRoles(top).coder)];
+  const composed = await composeConfig(top, stubLoader);
   assert.deepEqual(composed.captainAgent, {
-    adapter: "claude",
-    model: "claude-opus-5",
-    effort: "high",
-    permissions: { mode: "auto" },
+    adapter: captain.adapter,
+    model: captain.model,
+    effort: captain.effort,
+    permissions: captain.permissions,
   });
-  assert.equal(composed.captainOptions.captainAdapter, "claude");
-  assert.deepEqual(
-    composed.players.map((player) => player.id),
-    ["dev.coder", "dev.reviewer"],
-  );
-  assert.deepEqual(composed.initialVisible, ["dev.coder", "dev.reviewer"]);
-  assert.deepEqual(composed.captainOptions.playbooks.code, {
-    from: "@sublang/playbook/code/registry",
-    roles: {
-      coder: {
-        playerId: "dev.coder",
-        // Inheritance resolves in composition, so the shell is told
-        // the outcome rather than left to infer it (DR-032).
-        model: { kind: "value", value: "claude-opus-5" },
-        effort: { kind: "value", value: "xhigh" },
-      },
-    },
-    options: {},
-  });
+  assert.equal(composed.captainOptions.captainAdapter, captain.adapter);
+  assert.deepEqual(composed.players.map((player) => player.id), ids);
+  assert.deepEqual(composed.initialVisible, ids);
+  const binding = composed.captainOptions.playbooks.code.roles.coder;
+  assert.equal(binding.playerId, codeRoles(top).coder);
+  // Inheritance resolves in composition, so the shell is told the
+  // outcome rather than left to infer it (DR-032).
+  assert.deepEqual(binding.model, { kind: "value", value: coder.model });
+  assert.deepEqual(binding.effort, { kind: "value", value: coder.effort });
+  assert.equal(composed.captainOptions.playbooks.code.from, "@sublang/playbook/code/registry");
   // The session's agents travel as one block the shell reads.
   assert.deepEqual(
     Object.keys(composed.captainOptions.sessionAgents.players).sort(),
-    ["dev.coder", "dev.reviewer"],
+    [...ids].sort(),
   );
-  assert.equal(
-    composed.captainOptions.sessionAgents.captain.adapter,
-    "claude",
-  );
-  assert.equal(composed.players[0].model, "claude-opus-5");
+  assert.equal(composed.captainOptions.sessionAgents.captain.adapter, captain.adapter);
+  assert.equal(composed.players[0].model, players[ids[0]].model);
   assert.equal(composed.playbooks[0].command, "code");
 });
 
@@ -407,12 +411,13 @@ test("legacy reasoningEffort composes as effort; both keys are invalid", async (
   const top = baseConfig();
   const coder = roster(top)["dev.coder"] as Record<string, unknown>;
   // The template writes canonical `effort`; swap in the legacy alias.
-  assert.equal(coder.effort, "xhigh");
+  const original = coder.effort;
+  assert.equal(typeof original, "string");
   delete coder.effort;
-  coder.reasoningEffort = "xhigh";
+  coder.reasoningEffort = original;
   const composed = await composeConfig(top, stubLoader);
   const player = composed.players.find((p) => p.id === "dev.coder");
-  assert.equal(player?.effort, "xhigh");
+  assert.equal(player?.effort, original);
   assert.ok(!("reasoningEffort" in (player ?? {})));
 
   coder.effort = "high";
@@ -445,7 +450,7 @@ test("cwd acceptance probe marks entries that take a cwd option", async () => {
         }),
       };
     }
-    throw new Error(`no module ${specifier}`);
+    return stubLoader(specifier);
   };
   const accepting = await composeConfig(baseConfig(), cwdLoader);
   assert.equal(accepting.playbooks[0]?.acceptsCwdOption, true);

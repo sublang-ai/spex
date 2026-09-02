@@ -189,7 +189,7 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
       break;
     }
   }
-  return doc.toString();
+  return doc.toString({ flowCollectionPadding: false });
 }
 
 export interface EditResult {
@@ -248,5 +248,5 @@ export function rewriteLibraryPaths(
     from.value = toPrefix + from.value.slice(fromPrefix.length);
     changed = true;
   }
-  if (changed) writeFileSync(configPath, doc.toString());
+  if (changed) writeFileSync(configPath, doc.toString({ flowCollectionPadding: false }));
 }

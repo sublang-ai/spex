@@ -7,10 +7,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { WebSocket } from "ws";
 
 import { CoreService } from "./service.js";
@@ -639,27 +639,33 @@ test("a reload superseded while probing broadcasts no stale readiness", async ()
 // CORE-28: readiness deduplication across positions
 // ---------------------------------------------------------------------------
 
-test("CORE-28: the single-vendor template dedupes to one claude entry", async () => {
-  const harness = await startHarness(readFileSync(templatePath(), "utf8"), {
-    env: { ANTHROPIC_API_KEY: "test-key" },
+test("CORE-28: the starter template yields one readiness entry per adapter it names", async () => {
+  // The template is the installed playbook's own (core-service-3), so
+  // the expectation derives from it rather than restating a roster.
+  const template = readFileSync(templatePath(), "utf8");
+  const parsed = (await import("yaml")).parse(template) as {
+    captain: { adapter: string };
+    players: Record<string, { adapter: string }>;
+  };
+  const adapters = [
+    ...new Set([parsed.captain.adapter, ...Object.values(parsed.players).map((p) => p.adapter)]),
+  ].sort();
+  const harness = await startHarness(template, {
+    env: { ANTHROPIC_API_KEY: "test-key", OPENAI_API_KEY: "test-key" },
   });
   const client = new Client(harness.service.port());
   await client.open();
 
   const readiness = await client.expectOk("readiness.get", {});
-  assert.deepEqual(readiness, [
-    {
-      adapter: "claude",
-      ready: true,
-      // One entry per adapter; its positions are the captain and each
-      // referenced lane with the roles it serves (DR-032).
-      usedBy: [
-        "captain",
-        "dev.coder (code.coder, review.coder, decide.coder)",
-        "dev.reviewer (review.reviewer, decide.reviewer)",
-      ],
-    },
-  ]);
+  // One entry per adapter; its positions are the captain and each
+  // referenced lane with the roles it serves (DR-032).
+  assert.deepEqual(readiness.map((entry) => entry.adapter).sort(), adapters);
+  const captainEntry = readiness.find((entry) => entry.adapter === parsed.captain.adapter);
+  assert.ok(captainEntry?.usedBy.includes("captain"));
+  for (const [id, player] of Object.entries(parsed.players)) {
+    const entry = readiness.find((e) => e.adapter === player.adapter);
+    assert.ok(entry?.usedBy.some((position) => position.startsWith(`${id} (`)), `${id} listed`);
+  }
 
   // A config edit pushes readiness.state with the entries payload.
   await client.expectOk("config.edit", {
@@ -668,7 +674,7 @@ test("CORE-28: the single-vendor template dedupes to one claude entry", async ()
   const pushed = await client.waitFor((m) => m.type === "readiness.state");
   if (pushed.type === "readiness.state") {
     assert.ok(Array.isArray(pushed.entries));
-    assert.equal(pushed.entries[0]?.adapter, "claude");
+    assert.ok(adapters.includes(pushed.entries[0]?.adapter as string));
   }
 
   client.close();
@@ -1168,9 +1174,12 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   const client = new Client(service.port());
   await client.open();
   await client.expectOk("project.register", { path: projectDir });
+  // Registering the project lists the history the directory already
+  // holds for it, with no new record needed.
+  const afterRegister = await client.expectOk("session.list", {});
+  assert.ok(afterRegister.some((s: SessionInfo) => s.id === atStartup));
 
-  // Registration happens after startup, so the startup scan found no
-  // project for it: the next scan binds it.
+  // A record that lands while the service runs binds on arrival.
   const arrival = "bbbbbbb2-2222-4222-8222-bbbbbbbbbbbb";
   writeForeignSession(sessionsDir, arrival, projectDir, foreignTurn("while running"));
 
@@ -1181,8 +1190,45 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   );
   assert.ok(listed, "an arrival while running is announced");
 
+  // A record written before the CLI teed its stream carries only its
+  // Boss journal; it lists from that (core-service-60).
+  const journaled = "ddddddd4-4444-4444-8444-dddddddddddd";
+  writeFileSync(
+    join(sessionsDir, `${journaled}.json`),
+    JSON.stringify({
+      schemaVersion: 3,
+      sessionId: journaled,
+      state: "settled",
+      cwd: projectDir,
+      createdAt: "2026-08-29T01:35:22.228Z",
+      updatedAt: "2026-08-29T14:39:13.668Z",
+      snapshot: {
+        journal: [
+          { seq: 1, turnId: 1, kind: "boss", payload: "Resolve issue 42" },
+          { seq: 2, turnId: 1, kind: "action", payload: "{}" },
+          { seq: 3, turnId: 1, kind: "reply", payload: "Kicked off /code." },
+          { seq: 4, turnId: 2, kind: "boss", payload: "Continue with /review" },
+          { seq: 5, turnId: 2, kind: "reply", payload: "Review passed." },
+        ],
+      },
+    }),
+  );
+  await client.waitFor(
+    (m) =>
+      m.type === "session.state" &&
+      (m as { session: SessionInfo }).session.id === journaled,
+  );
+
   const sessions = await client.expectOk("session.list", {});
   const ids = sessions.map((s: SessionInfo) => s.id);
+  const fromJournal = sessions.find((s: SessionInfo) => s.id === journaled);
+  assert.equal(fromJournal?.title, "Resolve issue 42");
+  assert.equal(fromJournal?.turns, 2);
+  const journalHistory = await client.expectOk("history.get", { sessionId: journaled });
+  assert.deepEqual(
+    journalHistory.records.map((r: StoredRecord) => r.record.type),
+    ["turn_started", "captain_reply", "turn_finished", "turn_started", "captain_reply", "turn_finished"],
+  );
   assert.ok(ids.includes(atStartup), "the session present at startup is served");
   assert.ok(ids.includes(arrival), "the session that arrived is served");
   assert.ok(
@@ -1211,4 +1257,55 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
     before,
     "the foreign stream is byte-identical afterwards",
   );
+});
+
+
+// ---------------------------------------------------------------------------
+// CORE-66: the shared config relocates once from its previous location
+// ---------------------------------------------------------------------------
+
+test("core-service-66: a config at the previous location relocates once, bytes and mode kept, seeding nothing over it", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-relocate-"));
+  const home = join(dir, "home");
+  const xdg = join(dir, "xdg");
+  const legacy = join(xdg, "playbook", "playbook.config.yaml");
+  mkdirSync(dirname(legacy), { recursive: true });
+  const text = `# the user's own comment\n${VALID_CONFIG}`;
+  writeFileSync(legacy, text, { mode: 0o640 });
+  const env = { HOME: home, XDG_CONFIG_HOME: xdg };
+  const canonical = join(home, ".spex", "playbook", "playbook.config.yaml");
+
+  const first = await CoreService.start({
+    token: "test",
+    dataDir: join(dir, "state"),
+    env,
+    home,
+    watchConfig: false,
+  });
+  assert.equal(readFileSync(canonical, "utf8"), text, "bytes preserved");
+  assert.equal(statSync(canonical).mode & 0o777, 0o640, "mode preserved");
+  assert.equal(readFileSync(legacy, "utf8"), text, "the legacy file stays in place");
+  const client = new Client(first.port());
+  await client.open();
+  const state = await client.expectOk("config.get", {});
+  assert.equal(state.status, "valid");
+  assert.equal(
+    state.status === "valid" ? state.seeded : true,
+    false,
+    "the relocated config is the user's, not a seed",
+  );
+  client.close();
+  await first.stop();
+
+  // Editing the canonical copy afterwards never pulls the legacy one back.
+  writeFileSync(canonical, `${text}# edited after relocation\n`);
+  const second = await CoreService.start({
+    token: "test",
+    dataDir: join(dir, "state"),
+    env,
+    home,
+    watchConfig: false,
+  });
+  assert.ok(readFileSync(canonical, "utf8").endsWith("# edited after relocation\n"));
+  await second.stop();
 });

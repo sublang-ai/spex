@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted.
+Accepted; both floors since superseded by [DR-037](037-playbook-12-adoption.md).
 Raises the [DR-025](025-playbook-7-adoption.md) floors to playbook 8 and cligent 0.22, amending [DR-023](023-runtime-compatibility-from-cligent.md).
 Rewrites the per-role agent placement of [DR-019](019-inline-agent-configuration.md) — an agent block belongs to a player, and a role binds to one — and its null-unsets patch rule.
 Replaces [DR-003](003-runtime-reuse.md)'s pane roster: panes are player lanes, not the launch-time union of enabled playbooks' roles.

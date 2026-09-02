@@ -30,7 +30,9 @@ import {
   checkAdapterRuntime,
   createModuleLoader,
   loadConfig,
+  relocateLegacyConfig,
   resolveConfigPath,
+  resolveLegacyConfigPath,
   resolveSessionsDir,
   seedConfig,
   summarizeConfig,
@@ -217,6 +219,7 @@ export class CoreService {
       loadModule: options.loadModule,
       adapterImports: options.adapterImports,
       captainFactory: options.captainFactory,
+      env: this.env,
     });
     this.sessions.onRecord = (envelope) => {
       this.dispatchRecord(envelope);
@@ -261,6 +264,16 @@ export class CoreService {
     const service = new CoreService(options);
     service.store.markAllSessionsNotLive();
     service.relocateLegacyLibrary();
+    // The launcher moved the shared config under the Spex root
+    // (playbook DR-043); a config still at the previous location
+    // relocates once before seeding could shadow it (core-service-66).
+    // An explicit --config is the operator's path and moves nothing.
+    if (options.configPath === undefined) {
+      relocateLegacyConfig(
+        service.configPath,
+        resolveLegacyConfigPath(service.env, service.home),
+      );
+    }
     service.seeded = seedConfig(service.configPath);
     await service.reloadConfig();
     service.adoptForeignSessions();
@@ -651,7 +664,11 @@ export class CoreService {
             `${path} is not the root of a git work tree (run git init first, or use project.create)`,
           );
         }
-        return this.store.registerProject(path, basename(path), Date.now());
+        const registered = this.store.registerProject(path, basename(path), Date.now());
+        // The shared session store may already hold this project's
+        // history from the CLI; it lists from now on (core-service-60).
+        this.adoptForeignSessions();
+        return registered;
       }
       case "project.create": {
         const path = expandPath(command.path, this.home);

@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted.
+Accepted; floor superseded by [DR-037](037-playbook-12-adoption.md).
 Raises the [DR-032](032-session-players.md) playbook floor to 9, amending [DR-023](023-runtime-compatibility-from-cligent.md); the cligent floor is unchanged.
 
 ## Context

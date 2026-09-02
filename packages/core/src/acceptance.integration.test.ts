@@ -131,9 +131,10 @@ test("ACCEPT: the bundled template composes against the real CODE registry", asy
   const parsed = (await import("yaml")).parse(top) as Record<string, unknown>;
   const composed = await composeConfig(parsed, createModuleLoader());
 
+  // Every roster player the template binds, in config order.
   assert.deepEqual(
     composed.players.map((p) => p.id),
-    ["dev.coder", "dev.reviewer"],
+    Object.keys(parsed.players as Record<string, unknown>),
   );
   assert.equal(composed.captainAgent.adapter, "claude");
   assert.equal(composed.playbooks[0].id, "code");
@@ -172,11 +173,13 @@ test("ACCEPT: a real session starts over the real shell and CODE registry", asyn
   const session = await client.expectOk("session.create", {
     projectId: project.id,
   });
-  assert.deepEqual(
-    session.players.map((p) => p.id),
-    ["dev.coder", "dev.reviewer"],
+  const roster = Object.keys(
+    ((await import("yaml")).parse(readFileSync(templatePath(), "utf8")) as {
+      players: Record<string, unknown>;
+    }).players,
   );
-  assert.deepEqual(session.initialVisible, ["dev.coder", "dev.reviewer"]);
+  assert.deepEqual(session.players.map((p) => p.id), roster);
+  assert.deepEqual(session.initialVisible, roster);
 
   client.close();
   await service.stop();

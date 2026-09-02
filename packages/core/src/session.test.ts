@@ -19,6 +19,14 @@ import {
   type CaptainTurnScript,
 } from "./testing/scripted-captain.js";
 
+/** The roster the installed template binds, in config order. */
+function templateRoster(): string[] {
+  const top = parseYaml(readFileSync(templatePath(), "utf8")) as {
+    players: Record<string, unknown>;
+  };
+  return Object.keys(top.players);
+}
+
 function registryEntry() {
   return {
     id: "code",
@@ -54,6 +62,9 @@ async function setup(
     }
     if (specifier.includes("decide")) {
       return { default: forId("decide", ["coder", "reviewer"]) };
+    }
+    if (specifier.includes("/dev/")) {
+      return { default: forId("dev", ["analyst"]) };
     }
     return { default: forId("code", ["coder"]) };
   });
@@ -95,9 +106,9 @@ test("end-to-end turn produces ordered persisted records with visibility flags",
   // two — not one generated identity per role (DR-032).
   assert.deepEqual(
     info.players.map((p) => p.id),
-    ["dev.coder", "dev.reviewer"],
+    templateRoster(),
   );
-  assert.deepEqual(info.initialVisible, ["dev.coder", "dev.reviewer"]);
+  assert.deepEqual(info.initialVisible, templateRoster());
 
   manager.submitTurn(info.id, "fix the bug");
   assert.throws(

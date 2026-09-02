@@ -7,7 +7,18 @@
 // config the launcher accepts or rejects is treated identically here,
 // with the same error messages wherever the rule exists upstream.
 
-import { constants, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  chmodSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
@@ -146,6 +157,10 @@ export interface ComposedPlaybook {
   command: string;
   intent: string;
   requiredRoleIds: readonly string[];
+  /** Role groups the manifest may run at once; empty when it declares none. */
+  concurrentRoleSets: readonly (readonly string[])[];
+  /** The artifact format the manifest advertises [[ARTIFACT_SCHEMAS]]. */
+  artifactSchema: number;
   from: string;
   /** local role -> its binding (DR-032). */
   roles: Record<string, ResolvedBinding>;
@@ -309,10 +324,90 @@ export function resolveSessionsDir(
   return join(stateHome, "playbook", "sessions");
 }
 
-export function templatePath(): string {
-  return fileURLToPath(
-    new URL("../assets/playbook.config.template.yaml", import.meta.url),
+/**
+ * The installed playbook package's root: an exported entry resolves to
+ * `<root>/src/<file>.js`, and the files the package ships beside its
+ * exports — the starter template, the CLI's own modules — sit under it.
+ */
+export function playbookPackageRoot(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const entry = resolveModulePath("@sublang/playbook/runtime", env);
+  if (!entry) throw new Error("@sublang/playbook is not installed");
+  return dirname(dirname(entry));
+}
+
+/**
+ * The starter config is the playbook CLI's own (core-service-3): seeding
+ * from the installed package's template keeps both hosts' first-run
+ * config identical by construction, with nothing to keep in sync.
+ */
+export function templatePath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(
+    playbookPackageRoot(env),
+    "reference",
+    "sdlc",
+    "code.playbook",
+    "playbook.config.template.yaml",
   );
+}
+
+/** The pre-DR-036 shared config location, kept only to relocate a
+ * config written there (the launcher's `resolveLegacyUserConfigPath`). */
+export function resolveLegacyConfigPath(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = env.HOME ?? homedir(),
+): string {
+  const configHome = env.XDG_CONFIG_HOME || join(home, ".config");
+  return join(configHome, "playbook", "playbook.config.yaml");
+}
+
+/**
+ * Relocate a config the previous location holds into the canonical one,
+ * once, exactly as the launcher does (playbook DR-043): only when the
+ * canonical path is absent, preserving bytes and permission bits, and
+ * publishing with an exclusive link so a canonical file that appears
+ * concurrently wins. The legacy file stays in place untouched.
+ * Returns true when a relocation was published.
+ */
+export function relocateLegacyConfig(
+  configPath: string,
+  legacyPath: string,
+): boolean {
+  if (existsSync(configPath) || legacyPath === configPath) return false;
+  let source: ReturnType<typeof lstatSync>;
+  try {
+    source = lstatSync(legacyPath);
+  } catch {
+    return false;
+  }
+  if (!source.isFile()) return false;
+  // A relative locator resolves against the config's own directory, so
+  // moving the file would retarget it; the launcher refuses too.
+  const text = readFileSync(legacyPath, "utf8");
+  if (/^sessions:\s*(?!["']?(?:\/|~))/m.test(text)) {
+    console.error(
+      `spex: legacy config ${legacyPath} names a relative sessions directory; ` +
+        `move it to ${configPath} by hand`,
+    );
+    return false;
+  }
+  mkdirSync(dirname(configPath), { recursive: true });
+  const staging = mkdtempSync(join(dirname(configPath), ".spex-config-relocation-"));
+  const staged = join(staging, "playbook.config.yaml");
+  try {
+    copyFileSync(legacyPath, staged, constants.COPYFILE_EXCL);
+    chmodSync(staged, source.mode & 0o7777);
+    try {
+      linkSync(staged, configPath);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+      throw error;
+    }
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -834,6 +929,8 @@ export async function composeConfig(
       command,
       intent: entry.intent,
       requiredRoleIds: entry.requiredRoleIds,
+      concurrentRoleSets: entry.concurrentRoleSets ?? [],
+      artifactSchema: entry.artifactSchema,
       from,
       roles: roleBindings,
       acceptsCwdOption,

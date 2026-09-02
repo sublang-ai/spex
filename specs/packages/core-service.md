@@ -48,9 +48,17 @@ On every load and reload:
 
 #### core-service-3
 
-Where no config file exists at the shared config path, when the core service starts, the core service shall write a starter config file to that path, adopt it as the active config, and report the seeding to connected clients:
+Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own starter template to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md)):
 
 - When seeding, the core service does not overwrite an existing config file.
+- The template is read from the installed package, so both hosts' first-run config is identical by construction.
+
+#### core-service-66
+
+Where the shared config path is the default one and holds nothing, when the core service starts and a config file exists at the previous XDG location, the core service shall relocate it once into the shared config path before seeding — bytes and permission bits preserved, published with an exclusive link so a canonical file appearing concurrently wins, the previous file left in place ([DR-037](../decisions/037-playbook-12-adoption.md)):
+
+- An explicit config path given by the shell moves nothing.
+- A previous file naming a relative sessions directory is left where it is and reported, since moving it would retarget the locator.
 
 ### Sessions
 
@@ -212,7 +220,9 @@ The core service shall persist each session as files in the shared session store
 The core service shall serve every session present in the shared session store's directory — the directory the shared config's `sessions` key names, defaulting to the playbook CLI's own sessions directory ([DR-036](../decisions/036-file-state-store.md)) — whether found there at startup or written by another host while the service runs:
 
 - such a session binds to the registered project whose path is the session's recorded working directory, and lists non-live [[core-service-32](#core-service-32)] with its records served per [[core-service-10](#core-service-10)]; a session matching no registered project is not listed;
+- a record beside no replay stream lists from its Boss journal: each Boss entry opens a turn with its prompt, each Captain reply follows it, and the record's own timestamps bound them ([DR-037](../decisions/037-playbook-12-adoption.md));
 - an arrival or change while the service runs is announced to subscribed clients as a session-state report, with `intents.changed` where a derived intent state can change [[core-service-51](#core-service-51)].
+- registering a project [[core-service-4](#core-service-4)] lists the sessions the directory already holds for it, without waiting for a new record.
 
 #### core-service-65
 
@@ -313,7 +323,15 @@ The core package shall compose the session-player roster, the playbook registry,
 
 #### core-service-17
 
-When a session is created, the core package shall instantiate the engagement host through the playbook captain shell factory with a core-provided module loader injected via the shell's dependency options, keeping playbook module resolution under core control and the shell's coupling to the core type-only.
+When a session is created, the core package shall instantiate the engagement host through the playbook captain shell factory with a core-provided module loader, the session's host construction capabilities [[core-service-67](#core-service-67)], and its unresolved-effect settlement hooks injected via the shell's dependency options, keeping playbook module resolution under core control and the shell's coupling to the core type-only.
+
+#### core-service-67
+
+When a session is created for a project, the core package shall build one host construction capability per enabled schema-3 playbook over the project's git worktree — the repository operations loaded from the installed playbook package's own repository-effect module, the effect ledger kept in memory per session with one attempt per Boss turn, and the session's authority token under the root lease [[core-service-61](#core-service-61)] — and shall reconcile repository effects before each Boss turn ([DR-037](../decisions/037-playbook-12-adoption.md)):
+
+- A project directory that is no git worktree fails session creation, naming the cause.
+- A reconciliation failure before a turn is delivered as a runtime error record and starts no turn.
+- The settlement hooks settle nothing durable: a Spex session never resumes, so the shell's abandonment clears its stack and no record is written.
 
 #### core-service-29
 
@@ -418,11 +436,20 @@ Where a fixture session — manifest naming a registered project's directory as 
 - their records are served with hidden records filtered from the session subscription [[core-service-10](#core-service-10)];
 - a session-state report announcing the second session reaches a subscribed client [[core-service-60](#core-service-60)];
 - a fixture session whose working directory matches no registered project is absent from the listing [[core-service-60](#core-service-60)];
+- a fixture record with a Boss journal and no stream lists with the first Boss entry as its title, its Boss turns counted, and a history of turn starts, Captain replies, and turn finishes [[core-service-60](#core-service-60)];
 - every fixture file is byte-identical once the service stops, and no sidecar joins them [[core-service-65](#core-service-65)].
 
 #### core-service-63
 
 While a core service is serving a state root, the test suite shall start a second core service against the same root and assert the admission contract of [[core-service-61](#core-service-61)]: the second start refuses to serve reporting the holder, and after the first service stops [[core-service-39](#core-service-39)], a fresh start on that root succeeds.
+
+#### core-service-68
+
+Where a config file with a comment and a non-default mode sits at the previous XDG location and the shared config path is absent, the test suite shall start the core service with a default config path and assert the relocation contract of [[core-service-66](#core-service-66)]: the shared path holds the same bytes and mode, the previous file is untouched, the active config is reported valid and not seeded, and an edit to the shared file survives a second start.
+
+#### core-service-69
+
+Where the core service runs with the installed playbook's real captain shell and registries over a git-initialized project, the test suite shall create a session and assert the capability contract of [[core-service-67](#core-service-67)]: the session starts with a capability covering every enabled playbook [[core-service-17](#core-service-17)], and a Boss turn round-trips the Captain's reply after reconciliation.
 
 ### Intent Ledger Coverage
 
