@@ -22,6 +22,20 @@ and `npm start` (desktop) or `npm run start:server` (server).
   0.7's own two-agent change-and-review demo, and the `dev` built-in's
   machine drawing gives each transition its own port.
 
+### Fixed
+
+- **Compiled playbooks register.** Registering a compiled playbook
+  matched its bound roles case-sensitively against slc's capitalized
+  role ids, so every compile ended in "no player was bound"; the
+  bindings now match however the submission cased them.
+- **The composer keeps one row.** A window laid out before it was
+  shown pinned the Boss field to no height, clipping its placeholder
+  until a reload; the field never drops under one row and refits
+  when the viewport resizes.
+- **A session with no player lanes** — one the playbook terminal
+  wrote — shows the Captain column alone at the home's reading width
+  instead of a divider beside an empty half.
+
 ## [0.2.0] - 2026-09-02
 
 ### Added
