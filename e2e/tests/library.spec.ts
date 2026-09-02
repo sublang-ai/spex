@@ -21,10 +21,11 @@ test("playbook-library-41: list, enable a built-in, read a pipeline, remove", as
   await expect(page.getByText("/review", { exact: true }).first()).toBeVisible();
   await expect(page.getByTestId("role-binding-review-reviewer")).toContainText("dev.reviewer");
 
-  // A built-in absent from the config: adding it writes the config
+  // A built-in absent from the config: enabling it writes the config
   // and lists it; the home's slash menu then offers it.
   const builtins = page.getByTestId("builtins-section");
   await expect(builtins.getByTestId("builtin-decide")).toBeVisible();
+  await expect(builtins.getByTestId("builtin-add-decide")).toHaveText("Enable");
   await builtins.getByTestId("builtin-add-decide").click();
   await expect.poll(() => app.readConfig()).toContain("decide:");
   await expect(page.getByText("/decide", { exact: true }).first()).toBeVisible();
@@ -36,9 +37,11 @@ test("playbook-library-41: list, enable a built-in, read a pipeline, remove", as
   await expect(pipeline).toBeVisible();
   await expect(pipeline).toContainText("Source");
 
-  // Removing asks once, then the config no longer names it.
+  // Removing asks once — Remove or Keep — then the config no longer
+  // names it.
   await page.getByRole("button", { name: "Remove /review from the config" }).click();
-  await page.getByRole("button", { name: /^(yes|remove)$/i }).click();
+  await expect(page.getByRole("button", { name: "Keep", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
   await expect.poll(() => app.readConfig()).not.toContain("review:");
   await expect(
     page.getByRole("button", { name: "Remove /review from the config" }),

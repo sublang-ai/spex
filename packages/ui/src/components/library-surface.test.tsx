@@ -358,6 +358,46 @@ describe("DR-015: built-ins section from the catalog", () => {
   });
 });
 
+describe("playbook-library-34/26: plain words on the list", () => {
+  test("a built-in is enabled, not added to a config", () => {
+    renderLibrary();
+    expect(screen.getByTestId("builtin-add-review").textContent).toBe("Enable");
+  });
+
+  test("removal asks with Remove and Keep, and Keep writes nothing", () => {
+    renderLibrary();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove /code from the config" }),
+    );
+    expect(screen.getByText("Remove this playbook from the config?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Keep" }));
+    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+    expect(commandMock).not.toHaveBeenCalledWith(
+      "config.edit",
+      expect.objectContaining({ op: expect.objectContaining({ kind: "playbook.delete" }) }),
+    );
+  });
+
+  test("an empty list says how to get a playbook", () => {
+    useAppStore.setState({
+      connection: "open",
+      configState: {
+        ...CONFIG_STATE,
+        summary: { ...CONFIG_STATE.summary, playbooks: [] },
+      },
+      readiness: READINESS,
+      compileProgress: {},
+      activeCompile: undefined,
+      builtins: BUILTINS,
+      loadBuiltins: vi.fn(async () => {}),
+    });
+    render(<LibrarySurface />);
+    expect(screen.getByTestId("playbooks-empty").textContent).toBe(
+      "No playbooks enabled yet — enable a built-in below, or compile your own.",
+    );
+  });
+});
+
 describe("DR-015: the slc demo example card", () => {
   test("collapsed by default; opening stages all four artifacts", () => {
     renderLibrary();

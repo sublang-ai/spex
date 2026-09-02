@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress
+Done
 
 ## Intent
 
@@ -13,12 +13,12 @@ Close the first-run defects a heuristic audit found, so a new user is led from a
 
 ## Deliverables
 
-- [ ] The empty Captain home carries its two ways in — Add a project… and Try the Academy example — and its greeting says what a playbook is.
-- [ ] The palette with no project is an add flow: no filter, the path field focused, the Academy row leading; it is modal, Tab wraps inside it, and Escape closes from anywhere in it.
-- [ ] The collapsed sidebar keeps the palette control; row ages come from the shared time vocabulary with the exact moment on hover; every row control is a 24px target.
-- [ ] Tooltips and labels in plain verbs, the composer's secondary action reading "Add to Up next", and every shortcut label naming ⌘ or Ctrl by platform.
-- [ ] Settings acknowledges every edit (Saved ✓, disabled in flight), explains permission modes and writable paths, names the terminal theme for the CLI and stands it last, says when it created the starter config, offers Retry for a missing one, and lists the keyboard shortcuts.
-- [ ] Playbooks say "Enable", confirm removal with "Remove" and "Keep", and tell an empty list how to get a first playbook.
+- [x] The empty Captain home carries its two ways in — Add a project… and Try the Academy example — and its greeting says what a playbook is.
+- [x] The palette with no project is an add flow: no filter, the path field focused, the Academy row leading; it is modal, Tab wraps inside it, and Escape closes from anywhere in it.
+- [x] The collapsed sidebar keeps the palette control; row ages come from the shared time vocabulary with the exact moment on hover; every row control is a 24px target.
+- [x] Tooltips and labels in plain verbs, the composer's secondary action reading "Add to Up next", and every shortcut label naming ⌘ or Ctrl by platform.
+- [x] Settings acknowledges every edit (Saved ✓, disabled in flight), explains permission modes and writable paths, names the terminal theme for the CLI and stands it last, says when it created the starter config, offers Retry for a missing one, and lists the keyboard shortcuts.
+- [x] Playbooks say "Enable", confirm removal with "Remove" and "Keep", and tell an empty list how to get a first playbook.
 
 ## Tasks
 
@@ -30,4 +30,4 @@ Close the first-run defects a heuristic audit found, so a new user is led from a
 
 ## Verification
 
-ui 283 green; the journeys `run-view-97`, `projects-28`, `settings-29`, `playbook-library-41`, `run-view-101`, and `run-view-102` (light and dark) green.
+ui 283 green (20 added); the 16 journeys green, among them `run-view-97` with the new ways-in journey, `projects-28`, `settings-29`, `playbook-library-41`, `run-view-101`, and `run-view-102` (light and dark, no serious or critical axe violation).

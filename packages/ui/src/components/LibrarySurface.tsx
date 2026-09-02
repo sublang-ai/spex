@@ -313,9 +313,10 @@ function BuiltinCard({
           data-testid={`builtin-add-${info.id}`}
           disabled={busy}
           onClick={add}
+          title="Enable this playbook — it is written to the shared config"
           className="ml-auto rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          Add to config
+          {busy ? "Enabling…" : "Enable"}
         </button>
       </div>
       {error ? (
@@ -633,7 +634,9 @@ export function LibrarySurface({
               </button>
               {confirmDelete === playbook.id ? (
                 <InlineConfirm
-                  question="remove from config?"
+                  question="Remove this playbook from the config?"
+                  confirmLabel="Remove"
+                  cancelLabel="Keep"
                   onConfirm={() => {
                     setConfirmDelete(undefined);
                     edit({ kind: "playbook.delete", playbookId: playbook.id });
@@ -752,8 +755,12 @@ export function LibrarySurface({
           </div>
         ))}
         {summary.playbooks.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700">
-            No playbooks enabled — compile one below.
+          <div
+            data-testid="playbooks-empty"
+            className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
+          >
+            No playbooks enabled yet — enable a built-in below, or compile
+            your own.
           </div>
         ) : null}
       </section>
