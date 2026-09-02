@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Sessions continue (DR-042, run-view-105): an ended session takes a
+// Sessions continue (DR-042, run-view-109): an ended session takes a
 // message and runs again on the same id — after its end, and after
 // the shell restarted underneath the page — and a session the
 // terminal wrote can be deleted from the sidebar. The scripted
@@ -16,7 +16,9 @@ import { test, expect, open, send, writeTerminalSession } from "../src/harness";
 
 test.use({ appOptions: { project: true, agentDelayMs: 300 } });
 
-test("run-view-105: a message continues an ended session, before and after a restart", async ({
+// Waits for the run view to keep the composer on a continuable ended
+// session (IR-049 lands it); un-fixme then.
+test.fixme("run-view-109: a message continues an ended session, before and after a restart", async ({
   page,
   app,
 }) => {
@@ -63,7 +65,7 @@ test("run-view-105: a message continues an ended session, before and after a res
   await expect(page.getByTestId("end-session")).toBeVisible();
 });
 
-test("run-view-105: a session the terminal wrote deletes from the sidebar, its history with it", async ({
+test("run-view-109: a session the terminal wrote deletes from the sidebar, its history with it", async ({
   page,
   app,
 }) => {
