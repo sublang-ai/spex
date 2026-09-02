@@ -14,6 +14,32 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Added
+
+- **Records legible from a projector.** The type scale bottoms out at
+  12px: every chip, age, caption, and badge reads at the small step,
+  and the Captain thread's narration lines are left-aligned system
+  lines with their glyph in an icon slot.
+- **Machine cards that fit.** State names read at 13px in boxes as
+  wide as their column's longest label, a nested state goes by its
+  own segment with its parent as caption, unwalked exits into rest
+  states fold to a "+N" marker until walked or hovered, and a drawing
+  scales into a column it barely exceeds and scrolls behind a fade
+  past that; the Captain split defaults to 45% and holds still.
+- **Player panes tell the call.** Headers read "coder · dev.coder",
+  an untouched lane reads "Idle until the playbook calls ⟨lane⟩", a
+  running call ticks "coder working · 2m 13s" in the pane and the
+  thread, tool rows read as commands whichever runner made them, and
+  a finished call shows its span, tokens, and cost.
+- **Failures speak plain**, with the runtime's words in the tooltip;
+  agent text, prompts, bubbles, and code blocks wrap unbroken tokens.
+- **The Dashboard never reads empty while loading**: History says
+  "Loading…" until its first page and lists its newest eight rows
+  under "Older…", Sources says it is loading rather than not
+  connected, and the Now band reads "deciding" or "working" mid-turn.
+- **The served page carries the shell's version**, so Settings
+  never prints a dev placeholder over a remote connection.
+
 ### Changed
 
 - **Playbook 12.2 with slc 0.7.** The core runs on `@sublang/playbook`
@@ -27,7 +53,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - **Compiled playbooks register.** Registering a compiled playbook
   matched its bound roles case-sensitively against slc's capitalized
   role ids, so every compile ended in "no player was bound"; the
-  bindings now match however the submission cased them.
+  bindings now match however the submission cased them, and the
+  registry's absolute path imports as a file URL on Windows.
 - **The composer keeps one row.** A window laid out before it was
   shown pinned the Boss field to no height, clipping its placeholder
   until a reload; the field never drops under one row and refits
