@@ -90,4 +90,4 @@ meta.md       The spec of specs
 | [server-shell.md](packages/server-shell.md) | Server shell: one-command source launch; UI bundle with negotiated response compression and core WebSocket served from one port; token URL, TLS, bind safety, page connection |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |
-| [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader; specs.get/specs.read parse contract for the packages layout |
+| [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader, whole-file editor with digest-token saves; specs.get/specs.read/specs.write contract for the packages layout |

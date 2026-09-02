@@ -6,8 +6,8 @@
 ## Intent
 
 This spec covers the per-project spec view — its user-visible behavior, the implementation of its data plane, and the coverage that verifies that data plane.
-The view is a read-only, interactive outline of the current project's `specs/` tree, pinned as the workspace's Specs tab, spanning the outline's shape, package and item presentation, group filters and search, citation navigation, the records reader, freshness, and the empty state.
-Its data plane — the `specs.get` tree parse and the `specs.read` record fetch served by the core package — is exercised for coverage against fixture spec trees written to temporary project directories.
+The view is an interactive outline of the current project's `specs/` tree, pinned as the workspace's Specs tab, spanning the outline's shape, package and item presentation, group filters and search, citation navigation, the records reader, the whole-file editor, freshness, and the empty state.
+Its data plane — the `specs.get` tree parse, the `specs.read` file fetch, and the `specs.write` file replacement served by the core package — is exercised for coverage against fixture spec trees written to temporary project directories.
 
 ## External Behavior
 
@@ -29,7 +29,8 @@ While a file node is displayed, the spec view shall present the package's header
 
 - the header shows the package-identifier chip, the file's intent — truncated to one line only while the node is collapsed — and per-group item counts in the fixed group colors — external sky, internal fuchsia, test teal ([DR-015](../decisions/015-reference-content.md)) — where every count carries its group word and an aria-label, a zero count renders muted rather than absent, and color is never the only channel ([DR-010](../decisions/010-interface-craft.md) §7, §8);
 - expanded, the node shows the file's intent in full followed by its items in document order, with the file's `##` section values preserved as sub-headings wherever the section changes between consecutive items — never sorted by ID [[meta-12](../meta.md#meta-12)] — along with any file consistency notices;
-- expanded, the node offers a per-file control that expands or collapses every item body at once.
+- expanded, the node offers a per-file control that expands or collapses every item body at once;
+- expanded, the node offers an Edit control opening the file in the editor [[spec-view-48](#spec-view-48)].
 
 ### Items
 
@@ -39,7 +40,8 @@ While an item row is displayed, the spec view shall render the row by its expans
 
 - collapsed, the row shows the item's ID chip in its group color, its group tag, its first line, and a muted hint counting its outbound citations and inbound backlinks;
 - expanded, the row renders the item's full markdown body with horizontal overflow contained and its citations as outbound rows and grouped inbound backlinks per [[spec-view-19](#spec-view-19)], every entry an in-view link;
-- when the ID chip is activated, the view copies the item ID to the clipboard and acknowledges in words beside the chip ([DR-010](../decisions/010-interface-craft.md) §3).
+- when the ID chip is activated, the view copies the item ID to the clipboard and acknowledges in words beside the chip ([DR-010](../decisions/010-interface-craft.md) §3);
+- expanded, the row offers an Edit control opening its file in the editor with the caret on the item's heading [[spec-view-48](#spec-view-48)].
 
 ### Citation Rows
 
@@ -199,14 +201,51 @@ While the spec tree renders, the spec view shall serve the tree's records in the
 - each decisions row is the record row the Dashboard's bands share [[dashboard-40](dashboard.md#dashboard-40)] — identifier chip, title, hover, pointer — and the branch's label reads in the package rows' tone, not dimmed;
 - intent records do not appear anywhere in the view — they are work items, carried by the Dashboard's next-work lists [[dashboard-24](dashboard.md#dashboard-24)];
 - when a record is picked, the view replaces itself with that record's rendered markdown behind a Back control, and Back restores focus to the invoking row and the outline's scroll position;
+- the reader carries an Edit control opening the record in the editor [[spec-view-48](#spec-view-48)];
 - links inside the reader keep the view's semantics [[spec-view-6](#spec-view-6)]: a path resolving to a record, `meta.md`, or `map.md` opens in the reader, an item citation leaves the reader and jumps to the item, and any other local link stays inert;
 - the record fetch shows in progress, and any fetch failure shows with a retry.
+
+### Editor
+
+#### spec-view-48
+
+When an Edit control is activated — in the records reader, on an expanded package node, or in an expanded item — the spec view shall replace itself with an editor holding that file's whole text as `specs.read` served it ([DR-043](../decisions/043-minimal-spec-editing.md)):
+
+- the header names the file's `specs/`-relative path and carries Cancel, Save — disabled while the draft equals the text as read or a save is in flight — and an Edit/Preview toggle exposing its pressed state via aria-pressed;
+- Edit shows the draft in a labeled monospace text field with spell-checking off, taking focus on open; Preview renders the draft as the reader renders a record [[spec-view-7](#spec-view-7)], every link inert;
+- opened from an item, the field lands its caret on the item's heading line, scrolled into view;
+- Cmd/Ctrl+S saves [[spec-view-50](#spec-view-50)] and Escape cancels [[spec-view-49](#spec-view-49)];
+- while the draft differs from the text as read, the editor and the Specs tab carry an unsaved mark;
+- the view offers no Edit control where the host wires no write.
+
+#### spec-view-49
+
+While the editor's draft differs from the text as read, the spec view shall ask in place before discarding it ([DR-043](../decisions/043-minimal-spec-editing.md)):
+
+- Cancel, Escape, and a conflict's Reload [[spec-view-50](#spec-view-50)] each show an inline confirm whose safe default keeps the draft, so an accidental Enter loses nothing;
+- a draft equal to the text as read closes at once;
+- a record requested from another surface [[spec-view-7](#spec-view-7)] opens in the reader beneath the standing editor, discarding nothing;
+- the window's leave guard warns while any project's draft is unsaved.
+
+#### spec-view-50
+
+When Save is activated in the editor, the spec view shall write the draft under the token it read [[spec-view-47](#spec-view-47)] and act on the reply ([DR-043](../decisions/043-minimal-spec-editing.md)):
+
+| Reply | Outcome |
+| --- | --- |
+| success | the editor closes into the reader for a record or the outline for a package, showing the saved text; the tree is re-read; the live region announces the save |
+| `conflict` | the draft stays with a strip stating the file changed on disk since it was opened, offering Reload — re-fetch the file and replace the draft, asking first [[spec-view-49](#spec-view-49)] — and Overwrite — write again with no token |
+| any other failure | the draft stays with the failure shown and a retry |
+
+#### spec-view-51
+
+While an editor stands for a project, the spec view shall keep its path, text as read, draft, token, and preview mode in the project's lifted view state, so the draft survives the workspace's own navigation — another tab, another project, another surface — and the editor returns as it was when the view remounts ([DR-043](../decisions/043-minimal-spec-editing.md)).
 
 ### Freshness
 
 #### spec-view-8
 
-While the spec view renders a read tree, the spec view shall show a manual refresh control labeled with the last read time in relative terms (e.g. "just now", "2m ago"), requesting a re-read and acknowledging the read in flight when the control is activated ([DR-010](../decisions/010-interface-craft.md) §3, §5).
+While the spec view renders a read tree, the spec view shall show a manual refresh control labeled with the last read time in relative terms (e.g. "just now", "2m ago") — a save's re-read [[spec-view-50](#spec-view-50)] moving that label like any read — requesting a re-read and acknowledging the read in flight when the control is activated ([DR-010](../decisions/010-interface-craft.md) §3, §5).
 
 ### Empty and Degraded States
 
@@ -295,10 +334,21 @@ When the tree holds an unreadable or unparseable file or an entry outside the `s
 
 #### spec-view-16
 
-When `specs.get` walks the tree or `specs.read` names a file, the core package shall confine every filesystem access to the project:
+When `specs.get` walks the tree or `specs.read` or `specs.write` names a file, the core package shall confine every filesystem access to the project:
 
 - the tree walk never follows a symlink that escapes the project directory, skipping such entries with a tree notice;
-- `specs.read` resolves the requested path strictly inside the project's `specs/` directory — rejecting absolute paths, `..` segments, non-`.md` targets, and symlink escapes with an `invalid_request` error, and replying `not_found` for a missing file — and on success replies with the file's raw markdown.
+- `specs.read` and `specs.write` resolve the requested path strictly inside the project's `specs/` directory — rejecting absolute paths, `..` segments, non-`.md` targets, and symlink escapes with an `invalid_request` error, and replying `not_found` for a missing file, so a write never creates one — and on success `specs.read` replies with the file's raw markdown, its version token [[spec-view-47](#spec-view-47)], and its last-change time.
+
+### Write
+
+#### spec-view-47
+
+When `specs.write` names a file with content, the core package shall replace the file's bytes atomically under a version token — a digest of the file's bytes — and reply with the token and last-change time of the bytes it wrote ([DR-043](../decisions/043-minimal-spec-editing.md)):
+
+- `specs.read` hands out the file's current token beside its markdown; the token follows the bytes alone, so a checkout touching the file without changing it keeps the token;
+- a write carrying a `baseVersion` differing from the file's current token is refused as a `conflict` with the file unchanged, and a write carrying none is unconditional;
+- the content lands as sent — no trailing newline added or removed — through a staged sibling dotfile renamed over the original with its mode preserved, so no reader sees a partial file and no stage file outlives the write;
+- content identical to the file's bytes writes nothing and replies with the same token.
 
 ## Verification
 
@@ -379,14 +429,30 @@ Where a fixture tree renders with the graph on, the test suite shall assert the 
 
 Where a fixture tree carries decision records — once alongside package files and once with none — the test suite shall assert the records access of [[spec-view-7](#spec-view-7)]: the decisions branch renders in both fixtures with its count and stands last in the outline [[spec-view-1](#spec-view-1)], no intent record appears anywhere in the view [[spec-view-7](#spec-view-7)], a record row — the identifier chip, the title, named as an opener under a pointer — opens the reader and Back restores focus to that row [[spec-view-7](#spec-view-7)], a search matching a decision's ID narrows the branch to it [[spec-view-5](#spec-view-5)], the footer's `meta` and `map` links open the reader [[spec-view-7](#spec-view-7)], and a record-internal item citation leaves the reader and lands on the item [[spec-view-7](#spec-view-7)].
 
+### Editor Coverage
+
+#### spec-view-53
+
+Where a fixture tree renders with a write wired and fixture reads serving text with tokens, the test suite shall assert the editor: the reader's, an expanded package's, and an expanded item's Edit controls open the editor on their file [[spec-view-7](#spec-view-7)] [[spec-view-2](#spec-view-2)] [[spec-view-3](#spec-view-3)] [[spec-view-48](#spec-view-48)], the item's open lands the caret on its heading line [[spec-view-48](#spec-view-48)], Save is disabled until the draft changes and Preview renders the draft with links inert [[spec-view-48](#spec-view-48)], Save writes under the read's token, closes into the reader or the outline, re-reads the tree, and announces [[spec-view-50](#spec-view-50)], a `conflict` reply shows the strip whose Reload re-fetches after a confirm and whose Overwrite writes without a token [[spec-view-50](#spec-view-50)], Cancel on a changed draft asks first and a clean draft closes at once [[spec-view-49](#spec-view-49)], and a remount restores the draft from the lifted view state [[spec-view-51](#spec-view-51)].
+
 ### Confinement Coverage
 
 #### spec-view-36
 
-Where a fixture project contains a symlink escaping the project and `specs.read` requests carry `..` segments, absolute paths, non-`.md` targets, and missing files, the test suite shall assert the confinement of [[spec-view-16](#spec-view-16)]: the tree walk skips the escaping symlink with a notice, each malformed read is rejected as `invalid_request`, the missing-file read replies `not_found`, and a valid in-tree path returns the file's raw markdown over the protocol.
+Where a fixture project contains a symlink escaping the project and `specs.read` and `specs.write` requests carry `..` segments, absolute paths, non-`.md` targets, and missing files, the test suite shall assert the confinement of [[spec-view-16](#spec-view-16)]: the tree walk skips the escaping symlink with a notice, each malformed read or write is rejected as `invalid_request`, the missing-file read and write reply `not_found` with no file created, and a valid in-tree path returns the file's raw markdown with its token over the protocol.
+
+### Write Coverage
+
+#### spec-view-52
+
+Where a fixture project carries a package file read over the protocol, the test suite shall assert the write of [[spec-view-47](#spec-view-47)]: a write under the read's token replaces the bytes and a following read repeats the write's token; a write under a stale token is refused as `conflict` with the bytes unchanged; a write with no token lands; content identical to the file replies with the same token; a write without a trailing newline keeps the file without one; and no stage file remains beside the written file.
 
 ### Browser Journeys
 
 #### spec-view-46
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the Academy example seeded and current, when the journey opens the Specs tab, the test suite shall assert the spec view through the page: the outline lists the tree's packages and its decisions branch [[spec-view-1](#spec-view-1)] [[spec-view-7](#spec-view-7)]; expanding a package shows its items and an item's citation activates a jump that lands on the cited item [[spec-view-2](#spec-view-2)] [[spec-view-6](#spec-view-6)]; typing in the filter box narrows the outline to matching items with the match count shown, and clearing it restores the outline [[spec-view-5](#spec-view-5)]; the graph toggle adds the citation graph beside the outline and removes it again [[spec-view-20](#spec-view-20)].
+
+#### spec-view-54
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the Academy example seeded, when the journey opens a decision record from the Specs decisions branch and activates Edit, the test suite shall assert editing through the page: the editor opens on the record with its path named and Save disabled [[spec-view-48](#spec-view-48)]; a changed line shows under Preview [[spec-view-48](#spec-view-48)]; the editor carries no serious or critical accessibility violation in either mode; Save lands the change in the file on disk, the reader shows it, and the decisions branch's title follows the re-read [[spec-view-50](#spec-view-50)]; and Edit from an expanded item opens the package file with the caret on the item's heading line [[spec-view-3](#spec-view-3)] [[spec-view-48](#spec-view-48)].
