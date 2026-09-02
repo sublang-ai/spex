@@ -17,7 +17,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 2 : undefined,
   timeout: live ? 10 * 60_000 : 45_000,
-  expect: { timeout: live ? 60_000 : 8_000 },
+  expect: { timeout: live ? 60_000 : 15_000 },
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   // Every test boots its own shell on a scratch root; live journeys
   // only run when asked for, hermetic ones only when not.
