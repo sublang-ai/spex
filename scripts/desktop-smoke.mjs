@@ -191,17 +191,15 @@ try {
 
   at("dispatch");
   await command("turn.submit", { sessionId: session.id, text: PROMPT });
-  // Dispatch evidence: the coder's prompt record; live-agent
-  // evidence: its first streamed event. Real routing + first-token
-  // latency sit inside the budget (DR-020).
-  await waitFor(
+  // Dispatch evidence: the first player prompt of the turn — the
+  // coder, since /code opens on it; player ids are roster lanes
+  // ("dev.coder", DR-032), not playbook-prefixed names. Live-agent
+  // evidence: that player's first streamed event. Real routing +
+  // first-token latency sit inside the budget (DR-020).
+  const dispatched = await waitFor(
     () => {
-      const dispatched = records.find(
-        (m) =>
-          m.record?.type === "player_prompt" &&
-          String(m.record.playerId ?? "").startsWith("code-"),
-      );
-      if (dispatched) return dispatched;
+      const prompt = records.find((m) => m.record?.type === "player_prompt");
+      if (prompt) return prompt;
       // The Captain finishing alone is a verdict, not a delay: the
       // task never reached a player, so say so now.
       if (records.some((m) => m.record?.type === "turn_finished")) {
@@ -215,13 +213,14 @@ try {
     BUDGET_MS,
     "the coder dispatch prompt",
   );
-  say("coder dispatched");
+  const playerId = String(dispatched.record.playerId ?? "");
+  say(`coder dispatched: ${playerId}`);
   await waitFor(
     () =>
       records.find(
         (m) =>
           m.record?.type === "player_event" &&
-          String(m.record.playerId ?? "").startsWith("code-"),
+          String(m.record.playerId ?? "") === playerId,
       ),
     BUDGET_MS,
     "live agent output",
