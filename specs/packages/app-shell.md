@@ -155,9 +155,9 @@ The renderer shall enforce a content security policy that denies remote script, 
 
 #### app-shell-24
 
-Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-desktop-live-smoke.md)), when the desktop app starts, the desktop package shall redirect its user-data directory and its state root to the smoke-provided location before opening any store, start the core as usual, and write the core's socket address to the named file only after the core is listening:
+Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-desktop-live-smoke.md)) or the acceptance variable names a screenshot, and the smoke user-data variable names a directory, when the desktop app starts, the desktop package shall redirect its user-data directory and its state root to that directory before taking its single-instance lock and before opening any store — so a developer's own running Spex neither holds the run's lock nor shares its state — start the core as usual, and, in the handshake case, write the core's socket address to the named file only after the core is listening:
 
-- Where the acceptance variable is also set, the app refuses to launch naming the conflict.
+- Where the handshake and acceptance variables are both set, the app refuses to launch naming the conflict.
 - Where neither variable is set, the behavior is unchanged.
 
 ## Verification

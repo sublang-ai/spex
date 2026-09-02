@@ -137,9 +137,10 @@ try {
     try {
       run("desktop-abi", "npm", ["run", "rebuild:electron", "-w", "apps/desktop"]);
       const shot = join(tmpdir(), `spex-smoke-${Date.now()}.png`);
-      // The render boots on a scratch state root: the developer's own
-      // ~/.spex may be held by a running Spex (one core per root,
-      // DR-036), and a hermetic gate touches nothing of theirs.
+      // The render boots on scratch user data and a scratch state
+      // root: the developer's own Spex may be running — holding the
+      // single-instance lock and the ~/.spex root (DR-036) — and a
+      // hermetic gate touches nothing of theirs (app-shell-24).
       const renderHome = mkdtempSync(join(tmpdir(), "spex-smoke-home-"));
       try {
         run("desktop-render", require("electron"), ["."], {
@@ -147,7 +148,7 @@ try {
           env: {
             ...process.env,
             SPEX_ACCEPTANCE: shot,
-            SPEX_HOME: join(renderHome, ".spex"),
+            SPEX_SMOKE_USERDATA: join(renderHome, "userdata"),
           },
         });
       } finally {

@@ -28,6 +28,18 @@ let service: CoreService | undefined;
 let window: BrowserWindow | undefined;
 let quitting = false;
 
+// A driven or acceptance run keeps its own user-data directory
+// (app-shell-24, DR-020). The redirect comes before the single-instance
+// lock, which Electron keys on that directory: otherwise a developer's
+// own running Spex holds the lock and the run quits without a word.
+const isolatedUserData =
+  process.env.SPEX_SMOKE_HANDSHAKE || process.env.SPEX_ACCEPTANCE
+    ? process.env.SPEX_SMOKE_USERDATA
+    : undefined;
+if (isolatedUserData) {
+  app.setPath("userData", isolatedUserData);
+}
+
 const singleInstance = app.requestSingleInstanceLock();
 if (!singleInstance) {
   app.quit();
@@ -86,10 +98,6 @@ async function main(): Promise<void> {
     app.exit(2);
     return;
   }
-  if (smokeHandshake && process.env.SPEX_SMOKE_USERDATA) {
-    app.setPath("userData", process.env.SPEX_SMOKE_USERDATA);
-  }
-
   await app.whenReady();
 
   installApplicationMenu();
@@ -116,10 +124,9 @@ async function main(): Promise<void> {
   // Smoke mode redirects the root beside the redirected user-data so
   // a driven run touches no real state (SHELL-24). The legacy
   // userData store rides along for the core's one-time import.
-  const dataDir =
-    smokeHandshake && process.env.SPEX_SMOKE_USERDATA
-      ? join(process.env.SPEX_SMOKE_USERDATA, "spex-home")
-      : process.env.SPEX_HOME || join(homedir(), ".spex");
+  const dataDir = isolatedUserData
+    ? join(isolatedUserData, "spex-home")
+    : process.env.SPEX_HOME || join(homedir(), ".spex");
   service = await CoreService.start({
     dataDir,
     legacyDbPath: join(app.getPath("userData"), "spex.db"),
