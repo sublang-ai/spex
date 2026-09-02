@@ -63,8 +63,8 @@ export function Markdown({
   links?: "routed" | "web-only";
 }) {
   // An unbroken token — a long URL, a hash, a path — breaks anywhere
-  // rather than widening its pane sideways (run-view-3, DR-041); a
-  // code block stays a canvas that scrolls inside itself.
+  // rather than widening its pane sideways (run-view-3, DR-041), and a
+  // code block wraps its long lines the same way.
   return (
     <div className="markdown min-w-0 text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
       <ReactMarkdown

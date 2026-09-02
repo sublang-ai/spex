@@ -41,7 +41,7 @@ While a project session is live, when the session record stream delivers a failu
 While a project session is live, when the session record stream delivers text or text deltas for a visible player, that player's pane shall render the accumulating message as formatted Markdown, appending each delta as it arrives rather than waiting for turn completion:
 
 - A player pane is read-only — no text input, reply, or edit affordance — since Boss input happens only in the Boss composer [[run-view-8](#run-view-8)];
-- rendered text wraps inside its pane — an unbroken token such as a long URL breaks anywhere rather than scrolling the pane sideways, in a player pane, a call's prompt, and the Captain thread's bubbles alike ([DR-041](../decisions/041-chrome-that-fits.md)) — while a code block scrolls inside itself as a canvas.
+- rendered text wraps inside its pane — an unbroken token such as a long URL breaks anywhere rather than scrolling the pane sideways, in a player pane, a call's prompt, and the Captain thread's bubbles alike ([DR-041](../decisions/041-chrome-that-fits.md)) — and a code block wraps its long lines the same way, so nothing in a transcript scrolls sideways or traps the keyboard.
 
 #### run-view-4
 

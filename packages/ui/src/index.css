@@ -101,8 +101,12 @@ body {
 .markdown code {
   @apply rounded bg-neutral-200/70 px-1 py-0.5 font-mono text-[0.85em] dark:bg-neutral-800;
 }
+/* A code block wraps its long lines like the prose around it: a
+   transcript pane can be 280px wide, and a box that scrolls sideways
+   there would be a keyboard trap for the reader who cannot scroll it
+   (run-view-3, run-view-50). */
 .markdown pre {
-  @apply overflow-x-auto rounded-md bg-neutral-100 p-2 dark:bg-neutral-900;
+  @apply rounded-md bg-neutral-100 p-2 whitespace-pre-wrap [overflow-wrap:anywhere] dark:bg-neutral-900;
 }
 .markdown pre code {
   @apply bg-transparent p-0;
