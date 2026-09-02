@@ -98,6 +98,38 @@ function defaultUiDist(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "..", "ui-dist");
 }
 
+/** The shell's own version, from its package manifest — what the
+ * served page prints where the desktop prints its build's version
+ * (SERVER-SHELL-4). */
+export function shellVersion(): string {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(
+        resolve(dirname(fileURLToPath(import.meta.url)), "..", "package.json"),
+        "utf8",
+      ),
+    ) as { version?: unknown };
+    return typeof manifest.version === "string" && manifest.version
+      ? manifest.version
+      : "dev";
+  } catch {
+    return "dev";
+  }
+}
+
+/** Stamp the shell's version into a page's head as a
+ * `spex-version` meta element (SERVER-SHELL-4), so the served
+ * Settings surface never prints a dev placeholder. A page with no
+ * head element is left as it is. */
+export function stampVersion(page: string, version: string): string {
+  const safe = version.replace(/[^A-Za-z0-9.+-]/g, "");
+  if (!safe) return page;
+  return page.replace(
+    /<head(\s[^>]*)?>/i,
+    (head) => `${head}<meta name="spex-version" content="${safe}">`,
+  );
+}
+
 export function parseArgs(
   argv: string[],
   env: NodeJS.ProcessEnv,
@@ -358,7 +390,10 @@ function serveBundle(
       const body =
         extension === ".html"
           ? Buffer.from(
-              retargetCsp(readFileSync(filePath, "utf8"), req.headers.host),
+              stampVersion(
+                retargetCsp(readFileSync(filePath, "utf8"), req.headers.host),
+                shellVersion(),
+              ),
             )
           : readFileSync(filePath);
       responseBody = encodeBody(body, coding);

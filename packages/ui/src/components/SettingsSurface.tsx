@@ -33,6 +33,7 @@ import { AgentChip } from "./AgentChip.js";
 import { AgentEditor } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { appVersion } from "../lib/version.js";
 
 const NOTIFICATION_EVENTS = [
   "player_finished",
@@ -518,7 +519,7 @@ export function SettingsSurface() {
           </p>
         ) : null}
         <p className="mt-0.5 text-xs text-neutral-500">
-          Spex {new URLSearchParams(window.location.search).get("version") ?? "dev"}
+          Spex {appVersion()}
           {" · protocol "}
           {PROTOCOL_VERSION}
         </p>

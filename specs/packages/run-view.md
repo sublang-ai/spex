@@ -463,6 +463,7 @@ The not-ready heads-up shall offer an in-place re-check, with copy that is hones
 The app shall fail loudly and stay accessible:
 
 - when the app is connected but its initial state failed to load, a banner says so and offers retry — never a silently empty app;
+- when the page has never reached its core, a banner names the endpoint it keeps dialing with a Retry once eight seconds have passed since the page opened — a first connect is "Connecting", never "Reconnecting", and a slow core gets that long before the alarm;
 - one persistent polite live region announces a player waiting for a reply, connection loss and restoration, and attention-count increases to assistive technology;
 - icon-only controls carry accessible names and at-least-24px hit targets, and the navigation exposes the current surface and badge meaning to assistive technology;
 - one glyph carries one meaning across the app ([DR-010](../decisions/010-interface-craft.md) §8): the gear names the Settings surface, and an in-place editor wears the pencil;

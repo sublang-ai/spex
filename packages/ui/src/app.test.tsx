@@ -408,6 +408,33 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
   });
 });
 
+describe("run-view-50: a boot that never connects says so, after its grace", () => {
+  test("the banner waits eight seconds, then names the endpoint with Retry", () => {
+    vi.useFakeTimers();
+    try {
+      useAppStore.setState({
+        connection: "closed",
+        everConnected: false,
+        coreUrl: "ws://127.0.0.1:8137/?token=secret",
+      } as never);
+      render(<App />);
+      act(() => {
+        vi.advanceTimersByTime(7_900);
+      });
+      expect(screen.queryByRole("alert")).toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      const banner = screen.getByRole("alert");
+      expect(banner.textContent).toContain("Can't reach the Spex core");
+      expect(banner.textContent).toContain("ws://127.0.0.1:8137/?token=…");
+      expect(within(banner).getByRole("button", { name: "Retry" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("run-view-81: the reader sets the Captain/players split", () => {
   // The split rides a custom property the side-by-side form reads;
   // stacked below 42rem the column is full width (run-view-107).

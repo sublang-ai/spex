@@ -75,6 +75,11 @@ function useLedgerAttention(): Map<string, AttentionItem> {
   }, [ledger, sessions]);
 }
 
+/** How long a first boot may dial before the page raises the alarm:
+ * a served core over a slow link, or a desktop core still starting,
+ * needs longer than a flap (run-view-50). */
+export const NEVER_CONNECTED_GRACE_MS = 8_000;
+
 function ConnectionBanner() {
   const connection = useAppStore((state) => state.connection);
   const everConnected = useAppStore((state) => state.everConnected);
@@ -86,7 +91,7 @@ function ConnectionBanner() {
   const [stalled, setStalled] = useState(false);
   useEffect(() => {
     if (everConnected) return;
-    const timer = setTimeout(() => setStalled(true), 4000);
+    const timer = setTimeout(() => setStalled(true), NEVER_CONNECTED_GRACE_MS);
     return () => clearTimeout(timer);
   }, [everConnected]);
   if (connection === "open") return null;

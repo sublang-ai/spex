@@ -34,6 +34,8 @@ import { WebSocket } from "ws";
 import {
   parseArgs,
   retargetCsp,
+  shellVersion,
+  stampVersion,
   startServer,
   type ServerShellOptions,
 } from "./server.js";
@@ -118,6 +120,17 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
       ),
       "CSP names the serving origin",
     );
+    // The page carries the shell's version for the Settings surface
+    // (SERVER-SHELL-4): the manifest's, never a dev placeholder.
+    const manifest = JSON.parse(
+      readFileSync(resolve(here, "..", "package.json"), "utf8"),
+    ) as { version: string };
+    assert.match(manifest.version, /^\d+\.\d+\.\d+/);
+    assert.ok(
+      html.includes(`<meta name="spex-version" content="${manifest.version}">`),
+      "the page is stamped with the shell's version",
+    );
+    assert.equal(shellVersion(), manifest.version);
 
     const assetPath = /src="\.\/(assets\/[^"]+\.js)"/.exec(html)?.[1];
     assert.ok(assetPath, "index references a script asset");
@@ -324,9 +337,12 @@ test("bundle responses negotiate compression (SERVER-SHELL-9, SERVER-SHELL-17)",
     assert.deepEqual(
       identityPage.body,
       Buffer.from(
-        retargetCsp(
-          readFileSync(join(options.uiDist, "index.html"), "utf8"),
-          `127.0.0.1:${running.port}`,
+        stampVersion(
+          retargetCsp(
+            readFileSync(join(options.uiDist, "index.html"), "utf8"),
+            `127.0.0.1:${running.port}`,
+          ),
+          shellVersion(),
         ),
       ),
     );

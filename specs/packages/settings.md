@@ -124,6 +124,10 @@ While the shared config file is missing or invalid, the Settings surface shall s
 
 ### Validation
 
+#### settings-31
+
+Where the Settings surface is open, the Settings surface shall print the app's version beside the protocol version — the desktop's build version from the page's `?version=` query, else the served shell's version from the page's `spex-version` meta element [[server-shell-4](server-shell.md#server-shell-4)] — printing "dev" only where neither shell delivered the page.
+
 #### settings-11
 
 Where the core service validates the shared config — at load for session composition and on a Settings save command — the core service shall use a single validation module applying one launcher-parity rule set ([DR-019](../decisions/019-inline-agent-configuration.md)) with stable rule identifiers in both paths: inline agent blocks with scalar adapter ids normalizing to bare-adapter blocks, adapter ids bounded by the embedded runtime's known set, and reasoning efforts bounded by each adapter's vocabulary:
@@ -220,6 +224,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 - the Captain editor shows the config's captain block and saving a changed model writes the file with the comment and key order kept, the surface showing the new value and the Saved status beside Save [[settings-1](#settings-1)] [[settings-4](#settings-4)] [[settings-7](#settings-7)] [[settings-6](#settings-6)];
 - the shortcut sheet lists the palette binding with the platform's modifier [[settings-10](#settings-10)];
+- the surface prints the served shell's version, never "dev" [[settings-31](#settings-31)];
 - an edit the fail-closed rules reject is refused with its message shown and the file left unchanged [[settings-2](#settings-2)];
 - the readiness panel lists one entry per adapter the config names [[settings-5](#settings-5)];
 - an edit made to the file on disk from outside the app is reflected on the surface without a reload [[settings-8](#settings-8)].

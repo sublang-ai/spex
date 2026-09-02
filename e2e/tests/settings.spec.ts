@@ -33,6 +33,10 @@ test("settings-29: the Captain editor round-trips the shared config", async ({
   await expect.poll(() => app.readConfig()).toContain("claude-sonnet-5");
   const written = app.readConfig();
   expect(written.startsWith("# Spex demo config")).toBe(true);
+  // The served page prints the shell's version, never "dev"
+  // (settings-31, server-shell-4).
+  await expect(page.getByText(/^Spex \d+\.\d+\.\d+/)).toBeVisible();
+  await expect(page.getByText(/^Spex dev/)).toHaveCount(0);
   expect(written.indexOf("captain:")).toBeLessThan(written.indexOf("players:"));
   expect(written.indexOf("players:")).toBeLessThan(written.indexOf("playbooks:"));
 
