@@ -255,7 +255,11 @@ export function createModuleLoader(
     .filter(Boolean);
   return async (specifier: string): Promise<unknown> => {
     try {
-      return await import(specifier);
+      // A compiled registry names its bundle by absolute path; the
+      // ESM loader takes a path only as a file URL on Windows.
+      return await import(
+        isAbsolute(specifier) ? pathToFileURL(specifier).href : specifier,
+      );
     } catch (error) {
       for (const dir of extraDirs) {
         try {

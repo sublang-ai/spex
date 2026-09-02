@@ -492,7 +492,9 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       "Removed “Address #12: harden the auth flow”",
     );
     const undo = within(removed).getByRole("button", { name: "Undo" });
-    expect(document.activeElement).toBe(undo);
+    // The move lands in the commit's effect; a loaded runner reaches
+    // this line before it.
+    await vi.waitFor(() => expect(document.activeElement).toBe(undo));
     // The host's fold now serves no next: the card stays for its Undo
     // line alone.
     view.rerender(<CaptainHome {...props} next={undefined} />);
