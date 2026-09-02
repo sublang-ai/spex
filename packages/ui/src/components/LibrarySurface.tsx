@@ -86,7 +86,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
     return <div className="text-xs text-red-500">{error}</div>;
   }
   if (!artifacts) {
-    return <div className="text-xs text-neutral-400">loading pipeline…</div>;
+    return <div className="text-xs text-neutral-500">loading pipeline…</div>;
   }
 
   const content = artifacts[stage];
@@ -97,7 +97,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
         {STAGES.map((entry, index) => (
           <span key={entry.key} className="flex items-center gap-1">
             {index > 0 ? (
-              <span className="text-neutral-300 dark:text-neutral-600">→</span>
+              <span className="text-neutral-300 dark:text-neutral-500">→</span>
             ) : null}
             <button
               type="button"
@@ -112,7 +112,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
                 stage === entry.key
                   ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                   : artifacts[entry.key] === null
-                    ? "text-neutral-300 line-through dark:text-neutral-600"
+                    ? "text-neutral-300 line-through dark:text-neutral-500"
                     : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
               }`}
             >
@@ -123,7 +123,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
       </div>
       {artifacts.stateIds ? (
         <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
             states
           </span>
           {artifacts.stateIds.map((state) => (
@@ -143,7 +143,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
       ) : null}
       <div className="max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
         {content === null ? (
-          <div className="text-xs text-neutral-400">
+          <div className="text-xs text-neutral-500">
             this stage was not found for this playbook
           </div>
         ) : stage === "fsm" ? (
@@ -280,7 +280,7 @@ function BuiltinCard({
                     current === role ? undefined : role,
                   )
                 }
-                className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
                 <Icon name="edit" />
               </button>
@@ -368,7 +368,7 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
         <span className="text-sm font-semibold">
           Example: {SLC_DEMO.title}
         </span>
-        <span className="truncate text-xs text-neutral-400">
+        <span className="truncate text-xs text-neutral-500">
           from {SLC_DEMO.credit}
         </span>
         <span className="ml-auto" />
@@ -395,7 +395,7 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
             {EXAMPLE_STAGES.map((entry, index) => (
               <span key={entry.key} className="flex items-center gap-1">
                 {index > 0 ? (
-                  <span className="text-neutral-300 dark:text-neutral-600">
+                  <span className="text-neutral-300 dark:text-neutral-500">
                     →
                   </span>
                 ) : null}
@@ -646,7 +646,7 @@ export function LibrarySurface({
                   title="Remove from the config (compiled artifacts stay in the library)"
                   aria-label={`Remove /${playbook.command} from the config`}
                   onClick={() => setConfirmDelete(playbook.id)}
-                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
+                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
                 >
                   <Icon name="close" />
                 </button>
@@ -712,7 +712,7 @@ export function LibrarySurface({
                             : { playbookId: playbook.id, role },
                         )
                       }
-                      className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                      className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     >
                       <Icon name="edit" />
                     </button>
@@ -737,7 +737,7 @@ export function LibrarySurface({
                 );
               })}
               <span
-                className="ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-400"
+                className="ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500"
                 title={`Source this playbook was loaded from: ${playbook.from}`}
               >
                 <span>from</span>
@@ -873,7 +873,7 @@ export function LibrarySurface({
                           current === role ? undefined : role,
                         )
                       }
-                      className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                      className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                     >
                       <Icon name="edit" />
                     </button>
@@ -940,7 +940,7 @@ export function LibrarySurface({
                 ? "Compiling… (agent-driven, this takes a while)"
                 : "Compile & register"}
             </button>
-            <span className="text-xs text-neutral-400">
+            <span className="text-xs text-neutral-500">
               {compiling
                 ? "progress streams below"
                 : (missingRequirement ??

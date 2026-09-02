@@ -310,7 +310,7 @@ export function DashboardSurface({
                     <span className="font-medium text-neutral-700 dark:text-neutral-200">
                       {firstLine(nextHead.intent.text)}
                     </span>{" "}
-                    <span className="text-neutral-400">
+                    <span className="text-neutral-500">
                       ({projectName(nextHead.intent.projectId)})
                     </span>
                   </span>

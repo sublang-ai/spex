@@ -820,7 +820,7 @@ export function SpecGraph({
                     <span
                       className={
                         cardNode.groups[group] === 0
-                          ? "text-neutral-400 dark:text-neutral-500"
+                          ? "text-neutral-500 dark:text-neutral-500"
                           : "text-neutral-700 dark:text-neutral-200"
                       }
                     >

@@ -76,9 +76,41 @@ function useLedgerAttention(): Map<string, AttentionItem> {
 function ConnectionBanner() {
   const connection = useAppStore((state) => state.connection);
   const everConnected = useAppStore((state) => state.everConnected);
+  const coreUrl = useAppStore((state) => state.coreUrl);
+  // A boot that never connects must say so (run-view-50): after a
+  // grace period the page names the endpoint it keeps dialing.
+  // The clock runs from mount, untouched by the dial-close-dial flaps
+  // of a failing connection; the first open ends it for good.
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    if (everConnected) return;
+    const timer = setTimeout(() => setStalled(true), 4000);
+    return () => clearTimeout(timer);
+  }, [everConnected]);
   if (connection === "open") return null;
-  // The first connect is not a "reconnect" — don't alarm a fresh boot.
-  if (!everConnected && connection !== "mismatch") return null;
+  if (!everConnected && connection !== "mismatch") {
+    // The first connect is not a "reconnect" — a fresh boot gets a
+    // few seconds before the page raises the alarm.
+    if (!stalled) return null;
+    const scrubbed = coreUrl?.replace(/([?&]token=)[^&]*/, "$1…");
+    return (
+      <div
+        role="alert"
+        className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+      >
+        Can't reach the Spex core at {scrubbed ?? "its endpoint"} — retrying
+        every second. On a served page, check the link's token; on the
+        desktop, restart the app.
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="font-medium text-brand-700 hover:underline dark:text-brand-300"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
   if (connection === "mismatch") {
     return (
       <div className="border-b border-red-300 bg-red-50 px-4 py-1.5 text-center text-xs text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
@@ -136,6 +168,9 @@ function Announcer() {
   const latestDetail = first?.kind === "question" ? first.title : undefined;
   const lastCount = useRef(0);
   const lastConnection = useRef(connection);
+  // "Restored" is only true after a loss: the first open is a boot,
+  // not a recovery, and must not be announced as one.
+  const lost = useRef(false);
 
   useEffect(() => {
     if (blockingCount > lastCount.current) {
@@ -151,9 +186,13 @@ function Announcer() {
   useEffect(() => {
     if (!everConnected) return;
     if (connection !== lastConnection.current) {
-      if (connection === "open") setMessage("Connection restored.");
-      else if (connection === "closed")
+      if (connection === "open") {
+        if (lost.current) setMessage("Connection restored.");
+        lost.current = false;
+      } else if (connection === "closed") {
         setMessage("Connection to the Spex core lost — reconnecting.");
+        lost.current = true;
+      }
       lastConnection.current = connection;
     }
   }, [connection, everConnected]);
@@ -411,13 +450,17 @@ function WorkspaceSurface({
     ? (composers[activeSession.id] ?? { queued: [] })
     : { queued: [] };
 
+  // One tablist holds every tab — the sessions, the "+", and the
+  // pinned views — so assistive technology reads the strip whole
+  // (run-view-50). Each close control is a pointer affordance hidden
+  // from that tree; Delete on a focused tab closes it instead.
   const strip = (
-    <div className="flex items-center gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-neutral-800">
-      <div
-        role="tablist"
-        aria-label="Sessions and project views"
-        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-      >
+    <div
+      role="tablist"
+      aria-label="Sessions and project views"
+      className="flex items-center gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-neutral-800"
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         {open.map((session) => {
           const attentionItem = attentionBySession.get(session.id);
           const isActive = session.id === tab;
@@ -444,6 +487,13 @@ function WorkspaceSurface({
                     ? `${sessionTooltip(session, views[session.id])}\n${attentionItem.text}`
                     : sessionTooltip(session, views[session.id])
                 }
+                aria-keyshortcuts="Delete"
+                onKeyDown={(event) => {
+                  if (event.key === "Delete" || event.key === "Backspace") {
+                    event.preventDefault();
+                    closeTabAt(session);
+                  }
+                }}
                 onClick={() => pickTab(session.id)}
                 className="flex min-w-0 items-center gap-1.5 hover:text-neutral-900 dark:hover:text-neutral-100"
               >
@@ -472,9 +522,10 @@ function WorkspaceSurface({
                 type="button"
                 data-testid={`tab-close-${session.id}`}
                 title="Close this tab — the session stays in the sidebar"
-                aria-label={`Close tab ${title}`}
+                aria-hidden
+                tabIndex={-1}
                 onClick={() => closeTabAt(session)}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
                 <Icon name="close" className="h-3 w-3" />
               </button>
@@ -484,7 +535,7 @@ function WorkspaceSurface({
         <button
           type="button"
           role="tab"
-          aria-selected={tab === "start" && open.length > 0}
+          aria-selected={tab === "start"}
           title="Start another session"
           aria-label="Start another session"
           onClick={() => pickTab("start")}
@@ -569,7 +620,7 @@ function WorkspaceSurface({
         />
       ) : activeSession && view ? (
         view.loading ? (
-          <div className="m-auto text-sm text-neutral-400">
+          <div className="m-auto text-sm text-neutral-500">
             loading transcript…
           </div>
         ) : (
@@ -866,7 +917,7 @@ export function App() {
         )}
       </button>
     ) : railCollapsed || playbookCount === undefined ? null : (
-      <span className="px-1 text-[11px] text-neutral-400">
+      <span className="px-1 text-[11px] text-neutral-500">
         {playbookCount === 0
           ? "No playbooks yet"
           : `${playbookCount} playbook${playbookCount === 1 ? "" : "s"}`}

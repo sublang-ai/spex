@@ -270,7 +270,7 @@ export function DeliveryCard({
         >
           {busy === "dropped" ? "Dropping…" : "Drop"}
         </button>
-        <span className="min-w-0 truncate text-[11px] text-neutral-400 dark:text-neutral-500">
+        <span className="min-w-0 truncate text-[11px] text-neutral-500 dark:text-neutral-500">
           A follow-up message continues this intent.
         </span>
       </div>

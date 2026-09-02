@@ -57,13 +57,13 @@ function Paged<T>({
   const clamped = Math.min(page, pageCount - 1);
   const shown = items.slice(clamped * PAGE_SIZE, clamped * PAGE_SIZE + PAGE_SIZE);
   if (items.length === 0) {
-    return <div className="text-xs text-neutral-400">{empty}</div>;
+    return <div className="text-xs text-neutral-500">{empty}</div>;
   }
   return (
     <>
       <ul className="flex flex-col gap-1">{shown.map(render)}</ul>
       {pageCount > 1 ? (
-        <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-400">
+        <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-500">
           <button
             type="button"
             aria-label="Previous page"
@@ -193,11 +193,18 @@ export function SourcesBand({
             className="h-3.5 w-3.5 shrink-0"
           />
           <span className="truncate">
-            Sources: {plural(issues.length, "issue")} ·{" "}
-            {plural(prs.length, "PR")} ·{" "}
-            {plural(records.length, "open record")}
+            {/* Zero counts would read as "no issues" when GitHub is
+                simply not connected: the summary names the state
+                instead (dashboard-20, projects-7). */}
+            Sources:{" "}
+            {forgeReady
+              ? `${plural(issues.length, "issue")} · ${plural(prs.length, "PR")}`
+              : meta?.loading && !forge
+                ? "loading GitHub…"
+                : "GitHub not connected"}{" "}
+            · {plural(records.length, "open record")}
             {ageText ? (
-              <span className="text-neutral-400"> — {ageText}</span>
+              <span className="text-neutral-500"> — {ageText}</span>
             ) : null}
           </span>
         </button>

@@ -95,7 +95,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
               </span>
             ) : null}
             Prompt
-            <span className="ml-2 text-xs text-neutral-400">
+            <span className="ml-2 text-xs text-neutral-500">
               {new Date(segment.at).toLocaleTimeString()}
             </span>
           </summary>
@@ -136,7 +136,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
                   segment.status === "error" || segment.status === "denied"
                     ? "text-red-600 dark:text-red-400"
                     : segment.status === "success"
-                      ? "text-emerald-600 dark:text-emerald-400"
+                      ? "text-emerald-700 dark:text-emerald-400"
                       : "text-neutral-500"
                 }
               >
@@ -144,7 +144,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
               </span>
               <span className="shrink-0">{segment.toolName}</span>
               {segment.durationMs !== undefined ? (
-                <span className="shrink-0 text-neutral-400">
+                <span className="shrink-0 text-neutral-500">
                   · {segment.durationMs}ms
                 </span>
               ) : null}
@@ -182,7 +182,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
           <span
             className={
               segment.status === "ok"
-                ? "text-emerald-600 dark:text-emerald-400"
+                ? "text-emerald-700 dark:text-emerald-400"
                 : segment.status === "aborted"
                   ? "text-amber-600 dark:text-amber-400"
                   : "text-red-600 dark:text-red-400"
@@ -273,7 +273,7 @@ export function PlayerPane({
                 stuckRef.current = false;
                 setWindowSize((size) => size + RENDER_WINDOW);
               }}
-              className="text-center text-[11px] text-neutral-400 hover:text-brand-500"
+              className="text-center text-[11px] text-neutral-500 hover:text-brand-500"
             >
               show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)}{" "}
               of {view.segments.length - windowSize} earlier entries
@@ -283,7 +283,7 @@ export function PlayerPane({
             <Segment key={segment.seq} segment={segment} />
           ))}
           {view.segments.length === 0 ? (
-            <div className="m-auto text-xs text-neutral-400">
+            <div className="m-auto text-xs text-neutral-500">
               waiting for the first prompt
             </div>
           ) : null}

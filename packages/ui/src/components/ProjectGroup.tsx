@@ -180,7 +180,7 @@ export function useCaptureReveal(): {
 
 function BandHeading({ children }: { children: ReactNode }) {
   return (
-    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
       {children}
     </h4>
   );
@@ -235,7 +235,7 @@ function Check() {
   return (
     <span
       aria-hidden="true"
-      className="shrink-0 text-emerald-600 dark:text-emerald-400"
+      className="shrink-0 text-emerald-700 dark:text-emerald-400"
     >
       ✓
     </span>
@@ -245,7 +245,7 @@ function Check() {
 function Age({ at, now }: { at?: number; now: number }) {
   if (at === undefined) return null;
   return (
-    <span className="shrink-0 text-[11px] text-neutral-400">
+    <span className="shrink-0 text-[11px] text-neutral-500">
       {elapsed(at, now)}
     </span>
   );
@@ -274,7 +274,7 @@ function IntentHistoryRow({
       data-kind="intent"
       data-verdict={verdict}
       className={`flex items-center gap-2 text-sm ${
-        verdict === "dropped" ? "text-neutral-400" : ""
+        verdict === "dropped" ? "text-neutral-500" : ""
       }`}
     >
       {verdict === "done" ? <Check /> : null}
@@ -323,7 +323,7 @@ function RecordHistoryRow({
       data-kind="record"
       data-verdict={superseded ? "superseded" : "done"}
       className={`flex items-center gap-2 text-sm ${
-        superseded ? "text-neutral-400" : ""
+        superseded ? "text-neutral-500" : ""
       }`}
     >
       {superseded ? null : <Check />}
@@ -386,7 +386,7 @@ function HistoryBand({
     <div className="flex flex-col gap-1" data-testid={`history-${project.id}`}>
       <BandHeading>History</BandHeading>
       {rows.length === 0 ? (
-        <div className="text-xs text-neutral-400">
+        <div className="text-xs text-neutral-500">
           {history?.loading ? "loading…" : "Nothing done here yet."}
         </div>
       ) : (
@@ -454,7 +454,7 @@ function NowBand({
     return (
       <div className="flex flex-col gap-1" data-testid={`now-${project.id}`}>
         <BandHeading>Now</BandHeading>
-        <div className="text-xs text-neutral-400">Idle — no live session.</div>
+        <div className="text-xs text-neutral-500">Idle — no live session.</div>
       </div>
     );
   }
@@ -504,7 +504,7 @@ function NowBand({
         <span className="min-w-0 flex-1 truncate" title={title}>
           {title}
         </span>
-        <span className="shrink-0 text-[11px] text-neutral-400">
+        <span className="shrink-0 text-[11px] text-neutral-500">
           {elapsed(session.createdAt, now)}
         </span>
       </button>
@@ -698,7 +698,7 @@ function QueueRow({
     >
       <span
         className={`min-w-0 flex-1 truncate ${isNext ? "font-medium" : ""} ${
-          blocked ? "text-neutral-400" : ""
+          blocked ? "text-neutral-500" : ""
         }`}
         title={intent.text}
       >
@@ -706,7 +706,7 @@ function QueueRow({
       </span>
       {blocked ? (
         <span
-          className="shrink-0 truncate text-[11px] text-neutral-400"
+          className="shrink-0 truncate text-[11px] text-neutral-500"
           data-testid={`upnext-blocked-${intent.id}`}
         >
           after {blocked.title}
@@ -730,7 +730,7 @@ function QueueRow({
           disabled
           data-testid={`upnext-start-${intent.id}`}
           title={`Blocked — waiting on “${blocked.title}”`}
-          className="min-h-6 shrink-0 rounded bg-neutral-200 px-2 py-0.5 text-xs text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500"
+          className="min-h-6 shrink-0 rounded bg-neutral-200 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500"
         >
           Start
         </button>
@@ -740,7 +740,7 @@ function QueueRow({
         aria-label={`Actions for ${firstLine(intent.text)}`}
         data-testid={`upnext-menu-${intent.id}`}
         onClick={() => setMenuOpen((current) => !current)}
-        className="min-h-6 shrink-0 rounded px-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+        className="min-h-6 shrink-0 rounded px-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
       >
         ⋯
       </button>
@@ -826,7 +826,7 @@ function UpNextBand({
     <div className="flex flex-col gap-1" data-testid={`upnext-${project.id}`}>
       <BandHeading>Up next</BandHeading>
       {queue.length === 0 ? (
-        <div className="text-xs text-neutral-400">
+        <div className="text-xs text-neutral-500">
           Nothing queued — add an intent below, or Queue an issue, PR, or
           record from Sources.
         </div>
@@ -891,7 +891,7 @@ function UpNextBand({
         }}
         placeholder="Add intent…"
         aria-label={`Add an intent to ${project.name}`}
-        className="min-h-6 w-full rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-400 focus:border-solid focus:border-brand-400 focus:outline-none dark:border-neutral-700"
+        className="min-h-6 w-full rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none dark:border-neutral-700"
       />
     </div>
   );

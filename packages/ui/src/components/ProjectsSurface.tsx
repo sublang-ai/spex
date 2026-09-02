@@ -47,9 +47,35 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
       {status.ahead > 0 ? <span title="ahead of upstream">↑{status.ahead}</span> : null}
       {status.behind > 0 ? <span title="behind upstream">↓{status.behind}</span> : null}
       {meta?.forge?.repo ? (
-        <span className="text-neutral-400">{meta.forge.repo}</span>
+        <span className="text-neutral-500">{meta.forge.repo}</span>
       ) : null}
     </span>
+  );
+}
+
+/** The GitHub binding's state, named in the header (projects-7): the
+ * guidance for an unmet condition, or the load failure, so a user
+ * never has to open the Sources band to learn why it is empty. */
+function GitHubLine({ meta }: { meta?: ProjectMeta }) {
+  const forge = meta?.forge;
+  const ready =
+    forge !== undefined && !(forge.guidance && forge.authenticated !== true);
+  if (ready) return null;
+  const text = forge?.guidance
+    ? forge.guidance
+    : meta?.forgeError
+      ? `Couldn't load GitHub data: ${meta.forgeError}`
+      : meta?.loading
+        ? "loading GitHub state…"
+        : undefined;
+  if (!text) return null;
+  return (
+    <div
+      data-testid="overview-github"
+      className="text-xs text-neutral-500"
+    >
+      GitHub: {text}
+    </div>
   );
 }
 
@@ -95,7 +121,7 @@ export function OverviewTab({
 
   if (!project) {
     return (
-      <div className="m-auto text-sm text-neutral-400">
+      <div className="m-auto text-sm text-neutral-500">
         This project is no longer registered.
       </div>
     );
@@ -115,6 +141,7 @@ export function OverviewTab({
           <div className="truncate text-xs text-neutral-500">
             {project.path}
           </div>
+          <GitHubLine meta={meta} />
         </div>
         <button
           type="button"

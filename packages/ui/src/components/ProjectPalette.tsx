@@ -212,7 +212,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 <Icon name="folder" className="h-3.5 w-3.5 text-neutral-500" />
                 <span className="truncate">{project.name}</span>
                 {project.id === props.currentProjectId ? (
-                  <span className="text-[11px] text-neutral-400">current</span>
+                  <span className="text-[11px] text-neutral-500">current</span>
                 ) : null}
                 <span className="ml-auto flex items-center gap-2 text-[11px] text-neutral-500">
                   {row && row.attention > 0 ? (
@@ -252,7 +252,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             );
           })}
           {filtered.length === 0 && query ? (
-            <div className="px-4 py-2 text-sm text-neutral-400">
+            <div className="px-4 py-2 text-sm text-neutral-500">
               No project matches "{query}"
             </div>
           ) : null}
@@ -324,7 +324,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             className="flex items-center gap-1.5 rounded px-0.5 py-0.5 text-left text-xs text-brand-600 hover:underline disabled:opacity-40 dark:text-brand-300"
           >
             Try the Academy example
-            <span className="text-[11px] text-neutral-400">
+            <span className="text-[11px] text-neutral-500">
               {pathDraft.trim()
                 ? `— seeds ${pathDraft.trim()}`
                 : "— seeds a sample project"}

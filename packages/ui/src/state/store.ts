@@ -76,6 +76,9 @@ export interface AppState {
   connection: ConnectionStatus;
   /** True once a connection has ever opened (first-paint banner). */
   everConnected: boolean;
+  /** The core endpoint the client dials, named when it cannot be
+   * reached (run-view-50). */
+  coreUrl?: string;
   configState?: ConfigState;
   /** Served machine definitions by playbook id (run-view-64); null
    * records a fetch that found no machine. */
@@ -507,8 +510,10 @@ export const useAppStore = create<AppState>((set, get) => {
     stagedIntents: {},
 
     connect(url?: string): void {
+      const target = url ?? defaultCoreUrl();
+      set({ coreUrl: target });
       client = new SpexClient({
-        url: url ?? defaultCoreUrl(),
+        url: target,
         onMessage: handleMessage,
         onStatus: (connection) => {
           set({ connection });
@@ -639,18 +644,19 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async addProjectByPath(path: string): Promise<ProjectInfo> {
-      let project: ProjectInfo;
       try {
-        project = await get().registerProject(path);
+        return await get().registerProject(path);
       } catch (cause) {
+        // Add means an existing repository: a directory that is none
+        // is refused with the way forward, never initialized behind
+        // the user's back (projects-1, projects-22).
         if (/not the root of a git work tree/.test((cause as Error).message)) {
-          // Not a repo yet: initialize one, no questions asked (RUN-27).
-          project = await get().createProject(path, false);
-        } else {
-          throw cause;
+          throw new Error(
+            `${path} is not the root of a git work tree. To start a new repository there, use Create instead.`,
+          );
         }
+        throw cause;
       }
-      return project;
     },
 
     async loadBuiltins(): Promise<void> {

@@ -114,7 +114,7 @@ function Line({
       return (
         <div
           title={time}
-          className="whitespace-pre-wrap text-center font-mono text-[11px] text-neutral-400 dark:text-neutral-500"
+          className="whitespace-pre-wrap text-center font-mono text-[11px] text-neutral-500 dark:text-neutral-500"
         >
           {line.text}
         </div>
@@ -277,7 +277,7 @@ export function CaptainPane({
             return (
               <div key={index} className="flex flex-col gap-2">
                 {separator ? (
-                  <div className="text-center text-[11px] text-neutral-400 dark:text-neutral-600">
+                  <div className="text-center text-[11px] text-neutral-500 dark:text-neutral-500">
                     {separator}
                   </div>
                 ) : null}
@@ -374,7 +374,7 @@ export function CaptainPane({
           {view.captain.length === 0 &&
           !view.captainDraft &&
           !view.turnActive ? (
-            <div className="m-auto text-xs text-neutral-400">
+            <div className="m-auto text-xs text-neutral-500">
               The Captain will report here.
             </div>
           ) : null}

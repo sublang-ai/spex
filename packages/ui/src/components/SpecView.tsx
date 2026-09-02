@@ -85,7 +85,7 @@ const FILTER_LABEL: Record<SpecGroup, string> = {
 };
 
 const MUTED_CHIP =
-  "bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500";
+  "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500";
 
 const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";
 
@@ -575,7 +575,7 @@ export function SpecView(props: SpecViewProps) {
           </span>
         </h1>
         {reader.loading ? (
-          <div className="text-sm text-neutral-400">
+          <div className="text-sm text-neutral-500">
             reading {reader.record.id}…
           </div>
         ) : reader.error ? (
@@ -638,12 +638,12 @@ export function SpecView(props: SpecViewProps) {
         >
           <Icon
             name="caretDown"
-            className={`h-3 w-3 text-neutral-400 transition-transform ${
+            className={`h-3 w-3 text-neutral-500 transition-transform ${
               open ? "" : "-rotate-90"
             }`}
           />
           decisions
-          <span className="text-neutral-400">{tree.decisions.length}</span>
+          <span className="text-neutral-500">{tree.decisions.length}</span>
         </button>
         {open ? (
           <ul className="ml-[7px] flex flex-col border-l border-neutral-200 pl-3 dark:border-neutral-800">
@@ -698,7 +698,7 @@ export function SpecView(props: SpecViewProps) {
   if (!tree.present) {
     if (props.loading) {
       return (
-        <div className="m-auto p-6 text-sm text-neutral-400">
+        <div className="m-auto p-6 text-sm text-neutral-500">
           reading specs…
         </div>
       );
@@ -855,7 +855,7 @@ export function SpecView(props: SpecViewProps) {
           >
             <Icon
               name="caretDown"
-              className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform ${
+              className={`h-3.5 w-3.5 shrink-0 text-neutral-500 transition-transform ${
                 expanded ? "" : "-rotate-90"
               }`}
             />
@@ -920,7 +920,7 @@ export function SpecView(props: SpecViewProps) {
               <span
                 data-testid={`rollup-${key}`}
                 aria-label={`Citations: ${rollup}`}
-                className="ml-1 text-[11px] text-neutral-400"
+                className="ml-1 text-[11px] text-neutral-500"
               >
                 {rollup}
               </span>
@@ -981,7 +981,7 @@ export function SpecView(props: SpecViewProps) {
               onBodyLinkClick={onBodyLinkClick}
             />
             {items.length === 0 ? (
-              <div className="text-xs text-neutral-400">
+              <div className="text-xs text-neutral-500">
                 {searching
                   ? "no items match the search"
                   : "no items in active groups"}
@@ -1033,12 +1033,12 @@ export function SpecView(props: SpecViewProps) {
         >
           <Icon
             name="caretDown"
-            className={`h-3 w-3 text-neutral-400 transition-transform ${
+            className={`h-3 w-3 text-neutral-500 transition-transform ${
               open ? "" : "-rotate-90"
             }`}
           />
           {label ? null : (
-            <Icon name="folder" className="h-3.5 w-3.5 text-neutral-400" />
+            <Icon name="folder" className="h-3.5 w-3.5 text-neutral-500" />
           )}
           {label ?? `${dir.name}/`}
         </button>
@@ -1106,7 +1106,7 @@ export function SpecView(props: SpecViewProps) {
         <h1 className="text-lg font-semibold">
           {props.projectName ?? "Specs"}
         </h1>
-        <span className="text-xs text-neutral-400">
+        <span className="text-xs text-neutral-500">
           {totals.packages} package{totals.packages === 1 ? "" : "s"} ·{" "}
           {totals.items} items
         </span>
@@ -1135,11 +1135,11 @@ export function SpecView(props: SpecViewProps) {
             title="Re-read the specs/ tree"
             disabled={props.loading}
             onClick={props.onRefresh}
-            className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+            className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
             <Icon name="refresh" />
           </button>
-          <span className="text-xs text-neutral-400">
+          <span className="text-xs text-neutral-500">
             {props.loading
               ? "reading…"
               : `read ${relativeReadTime(tree.readAt, now)}`}
@@ -1152,7 +1152,7 @@ export function SpecView(props: SpecViewProps) {
       ) : null}
 
       {tree.notices.length > 0 ? (
-        <div className="text-xs text-neutral-400">
+        <div className="text-xs text-neutral-500">
           {tree.notices.join(" · ")}
         </div>
       ) : null}
@@ -1180,7 +1180,7 @@ export function SpecView(props: SpecViewProps) {
                   className={`rounded-full border px-2.5 py-0.5 text-xs ${
                     on
                       ? `border-transparent ${GROUP_CHIP[group]}`
-                      : "border-neutral-200 text-neutral-400 dark:border-neutral-700 dark:text-neutral-500"
+                      : "border-neutral-200 text-neutral-500 dark:border-neutral-700 dark:text-neutral-500"
                   }`}
                 >
                   {FILTER_LABEL[group]}{" "}
@@ -1289,6 +1289,9 @@ export function SpecView(props: SpecViewProps) {
               role="separator"
               aria-orientation="vertical"
               aria-label="Resize the graph pane"
+              aria-valuenow={Math.round((dragSplit ?? viewState.graphWidth) * 100)}
+              aria-valuemin={Math.round(MIN_GRAPH_WIDTH * 100)}
+              aria-valuemax={Math.round(MAX_GRAPH_WIDTH * 100)}
               tabIndex={0}
               data-testid="graph-split"
               className="group hidden shrink-0 cursor-col-resize items-stretch px-2 lg:flex"
@@ -1339,7 +1342,7 @@ export function SpecView(props: SpecViewProps) {
         );
       })()}
       {tree.files.length === 0 ? (
-        <div className="text-sm text-neutral-400">
+        <div className="text-sm text-neutral-500">
           specs/ is present but holds no spec files yet.
         </div>
       ) : null}
@@ -1452,7 +1455,7 @@ function FileItems({
       rows.push(
         <li
           key={`section-${item.id}`}
-          className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400"
+          className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500"
         >
           {item.section}
         </li>,
@@ -1464,7 +1467,7 @@ function FileItems({
       rows.push(
         <li
           key={`topic-${item.id}`}
-          className="ml-2 text-[11px] font-medium text-neutral-400"
+          className="ml-2 text-[11px] font-medium text-neutral-500"
         >
           {item.topic}
         </li>,
@@ -1559,7 +1562,7 @@ function ItemRow({
           {target}
         </button>
         {notFoundKey === linkKey ? (
-          <span className="text-[11px] text-neutral-400">not found</span>
+          <span className="text-[11px] text-neutral-500">not found</span>
         ) : null}
       </span>
     );
@@ -1613,7 +1616,7 @@ function ItemRow({
             {item.firstLine}
           </span>
           {hint ? (
-            <span className="shrink-0 text-[11px] text-neutral-400">
+            <span className="shrink-0 text-[11px] text-neutral-500">
               {hint}
             </span>
           ) : null}
@@ -1637,7 +1640,7 @@ function ItemRow({
               <span className="font-mono text-neutral-500">
                 {notFoundKey.slice(`body:${item.id}:`.length)}
               </span>
-              <span className="text-[11px] text-neutral-400">not found</span>
+              <span className="text-[11px] text-neutral-500">not found</span>
             </div>
           ) : null}
           {item.cites.length > 0 ? (
@@ -1645,7 +1648,7 @@ function ItemRow({
               data-testid={`cites-${item.id}`}
               className="flex flex-wrap items-center gap-1.5 text-xs"
             >
-              <span className="text-neutral-400">cites</span>
+              <span className="text-neutral-500">cites</span>
               {item.cites.map(citation)}
             </div>
           ) : null}
@@ -1656,7 +1659,7 @@ function ItemRow({
                 data-testid={`inbound-${item.id}`}
                 aria-expanded={inboundOpen}
                 onClick={() => setInboundOpen((open) => !open)}
-                className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                className="text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300"
               >
                 cited by {inbound.length}
               </button>

@@ -83,7 +83,7 @@ export function AgentChip({
         ) : (
           <span
             aria-hidden
-            className="text-neutral-400"
+            className="text-neutral-500"
             title={
               readiness.requirement ??
               "no automatic check for this adapter — verify sign-in yourself"

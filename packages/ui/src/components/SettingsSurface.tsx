@@ -149,7 +149,7 @@ function PlayerRoster({
         <h2 className="text-sm font-semibold text-neutral-500">
           Session players
         </h2>
-        <span className="text-xs text-neutral-400">
+        <span className="text-xs text-neutral-500">
           Each player is one conversation for the whole session; roles bind
           to them in the Library.
         </span>
@@ -183,7 +183,7 @@ function PlayerRoster({
                 ))}
               </span>
             ) : (
-              <span className="text-[11px] text-neutral-400">
+              <span className="text-[11px] text-neutral-500">
                 bound to no role yet
               </span>
             )}
@@ -198,7 +198,7 @@ function PlayerRoster({
                     current === player.id ? undefined : player.id,
                   )
                 }
-                className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
                 <Icon name="edit" />
               </button>
@@ -216,7 +216,7 @@ function PlayerRoster({
                   aria-label={`Remove ${player.id}`}
                   title="Remove this player from the roster"
                   onClick={() => setConfirmDelete(player.id)}
-                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
+                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
                 >
                   <Icon name="close" />
                 </button>
@@ -284,8 +284,22 @@ function PlayerRoster({
             captain={captain}
             saveLabel="Add player"
             allowUnchanged
-            onSave={(patch) =>
-              patchPlayer(newId.trim(), patch).then(
+            onSave={(patch) => {
+              // Adding never overwrites: an id already in the roster
+              // is turned back to its own editor (settings-27).
+              const id = newId.trim();
+              if (!id) {
+                setError({ playerId: "", message: "Give the player an id first." });
+                return Promise.reject(new Error("no id"));
+              }
+              if (players.some((player) => player.id === id)) {
+                setError({
+                  playerId: "",
+                  message: `A player named ${id} already exists — edit it above instead.`,
+                });
+                return Promise.reject(new Error("duplicate id"));
+              }
+              return patchPlayer(id, patch).then(
                 (result) => {
                   setAdding(false);
                   setNewId("");
@@ -296,8 +310,8 @@ function PlayerRoster({
                   setError({ playerId: "", message: cause.message });
                   throw cause;
                 },
-              )
-            }
+              );
+            }}
             onCancel={() => {
               setAdding(false);
               setError(undefined);
@@ -389,7 +403,7 @@ export function SettingsSurface() {
           <span className="font-mono">{summary.path}</span> — external edits
           appear here live.
         </p>
-        <p className="mt-0.5 text-[11px] text-neutral-400">
+        <p className="mt-0.5 text-[11px] text-neutral-500">
           Spex {new URLSearchParams(window.location.search).get("version") ?? "dev"}
           {" · protocol "}
           {PROTOCOL_VERSION}
@@ -448,7 +462,7 @@ export function SettingsSurface() {
             <span className="font-mono font-medium">{entry.adapter}</span>
             <ReadinessBadge entry={entry} />
             {entry.ready === false && entry.requirement ? (
-              <span className="min-w-0 flex-1 text-[11px] text-neutral-400">
+              <span className="min-w-0 flex-1 text-[11px] text-neutral-500">
                 {entry.requirement}
               </span>
             ) : null}
@@ -484,6 +498,7 @@ export function SettingsSurface() {
                 {NOTIFICATION_LABELS[event] ?? event}
               </span>
               <select
+                aria-label={`${NOTIFICATION_LABELS[event] ?? event} — where to notify`}
                 value={summary.notifications?.[event] ?? "off"}
                 onChange={(changeEvent) =>
                   edit({

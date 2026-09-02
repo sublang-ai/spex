@@ -564,7 +564,7 @@ export function NavRail(props: NavRailProps) {
                                 setConfirmDelete(session.id);
                               }}
                               onKeyDown={stop}
-                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-400 opacity-0 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:hover:text-red-400"
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 opacity-0 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:hover:text-red-400"
                             >
                               <Icon name="trash" className="h-3.5 w-3.5" />
                             </button>

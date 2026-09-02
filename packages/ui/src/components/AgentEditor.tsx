@@ -208,7 +208,7 @@ export function AgentEditor(props: AgentEditorProps) {
                   ) : (
                     <span
                       aria-hidden
-                      className="text-neutral-400"
+                      className="text-neutral-500"
                       title={
                         entry.requirement ??
                         "no automatic check for this adapter — verify sign-in yourself"

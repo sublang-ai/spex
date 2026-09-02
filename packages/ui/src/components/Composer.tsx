@@ -159,7 +159,7 @@ export function Composer({
               className="flex max-w-[85%] flex-col rounded-2xl rounded-br-md border border-brand-300 px-3 py-1.5 text-sm text-brand-700 dark:border-brand-700 dark:text-brand-300"
             >
               <span className="whitespace-pre-wrap">{entry.text}</span>
-              <span className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-400">
+              <span className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-500">
                 {entry.intentId !== undefined ? (
                   <span
                     data-testid="queued-intent-chip"
@@ -220,8 +220,6 @@ export function Composer({
             data-testid="boss-composer"
             autoFocus
             value={text}
-            aria-haspopup="listbox"
-            aria-expanded={Boolean(slash)}
             aria-controls={slash ? "slash-listbox" : undefined}
             aria-activedescendant={
               slash
@@ -277,7 +275,7 @@ export function Composer({
             rows={2}
             placeholder={
               !connected
-                ? "Reconnecting to the Spex core…"
+                ? "Connecting to the Spex core…"
                 : awaiting
                   ? "Answer the question (or give a new directive)…"
                   : view.turnActive

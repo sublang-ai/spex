@@ -218,7 +218,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               </>
             )}
           </p>
-          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+          <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
             Tip: type <span className="font-mono">/</span> to browse
             playbooks, or just describe the task in your own words.
           </p>
@@ -326,7 +326,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               </button>
             </div>
             {props.next.more > 0 ? (
-              <span className="text-[11px] text-neutral-400">
+              <span className="text-[11px] text-neutral-500">
                 +{props.next.more} more queued
               </span>
             ) : null}
@@ -373,7 +373,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               </button>
             ))}
             {playbooks.length > 4 ? (
-              <span className="px-2 text-[11px] text-neutral-400">
+              <span className="px-2 text-[11px] text-neutral-500">
                 +{playbooks.length - 4} more under{" "}
                 <span className="font-mono">/</span>
               </span>
@@ -524,7 +524,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               placeholder={
                 connected
                   ? "Message the Captain…"
-                  : "Reconnecting to the Spex core…"
+                  : "Connecting to the Spex core…"
               }
               disabled={!connected}
               className="max-h-[40vh] min-h-[2.5rem] flex-1 resize-y border-0 bg-transparent px-1 py-1 text-sm outline-none disabled:opacity-60"

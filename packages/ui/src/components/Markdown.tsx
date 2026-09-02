@@ -11,7 +11,7 @@ const components: Components = {
     typeof src === "string" && src.startsWith("data:") ? (
       <img src={src} alt={alt ?? ""} />
     ) : (
-      <span className="text-xs text-neutral-400">
+      <span className="text-xs text-neutral-500">
         [external image blocked: {alt || "image"}]
       </span>
     ),
