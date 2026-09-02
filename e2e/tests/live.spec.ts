@@ -17,6 +17,9 @@ test("run-view-104 @live: a real /code task shows live output and aborts cleanly
   test.skip(!LIVE, "live lane only");
   await open(page, app);
   await expect(page.getByTestId("captain-home")).toContainText("demo-project");
+  // The seeded template's agents must be ready on this machine, or the
+  // lane proves nothing: fail early, naming what is not signed in.
+  await expect(page.getByTestId("captain-home")).not.toContainText(/aren't ready/i);
 
   await send(
     page,
@@ -24,10 +27,31 @@ test("run-view-104 @live: a real /code task shows live output and aborts cleanly
   );
   const captain = page.getByTestId("captain-pane");
   await expect(captain).toBeVisible();
+  const attach = async (label: string) => {
+    await test.info().attach(label, {
+      body: [
+        "--- captain ---",
+        await captain.innerText(),
+        "--- players ---",
+        await page.getByTestId("player-grid").innerText(),
+      ].join("\n"),
+      contentType: "text/plain",
+    });
+  };
 
-  // A player's pane fills with the agent's live output.
-  const pane = page.getByTestId(/^player-pane-/).filter({ hasText: /\S{20,}/ }).first();
-  await expect(pane).toBeVisible({ timeout: 8 * 60_000 });
+  // A player is dispatched and its pane fills with live output: the
+  // running mark first, then real text from the agent.
+  const running = page.getByTestId("player-running").first();
+  await expect(running).toBeVisible({ timeout: 8 * 60_000 });
+  const pane = page
+    .getByTestId(/^player-pane-/)
+    .filter({ has: page.getByTestId("player-running") })
+    .first();
+  await expect
+    .poll(async () => (await pane.innerText()).length, { timeout: 8 * 60_000 })
+    .toBeGreaterThan(200);
+  await attach("live output");
+  await expect(captain).not.toContainText(/turn failed/i);
 
   // Abort acknowledges at once and the turn ends aborted.
   const abort = page.getByTestId("abort-button");
@@ -35,6 +59,7 @@ test("run-view-104 @live: a real /code task shows live output and aborts cleanly
   await expect(abort).toContainText(/aborting/i);
   await expect(captain).toContainText(/abort/i, { timeout: 90_000 });
   await expect(page.getByTestId("boss-composer")).toBeEnabled({ timeout: 90_000 });
+  await attach("after abort");
 
   await page.getByTestId("end-session").click();
   await page.getByRole("button", { name: "end", exact: true }).click();
