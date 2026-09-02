@@ -175,12 +175,17 @@ async function measure(page: Page): Promise<Measured> {
       if (shown(container)) check(container);
     }
 
-    // (iii) Accessible names of every button, in document order.
-    const names = Array.from(document.querySelectorAll("button")).map((button) => {
-      const label = button.getAttribute("aria-label");
-      const text = (button.textContent ?? "").trim().replace(/\s+/g, " ");
-      return label ?? (text || (button.getAttribute("title") ?? ""));
-    });
+    // (iii) Accessible names of every button, in document order. The
+    // Now row names the live run's current state, which advances
+    // between measurements; its words are live content, not chrome,
+    // so it stays out of the stability check.
+    const names = Array.from(document.querySelectorAll("button"))
+      .filter((button) => !button.closest('[data-testid^="now-session-"]'))
+      .map((button) => {
+        const label = button.getAttribute("aria-label");
+        const text = (button.textContent ?? "").trim().replace(/\s+/g, " ");
+        return label ?? (text || (button.getAttribute("title") ?? ""));
+      });
     return { overflow, overlap, names };
   });
 }
