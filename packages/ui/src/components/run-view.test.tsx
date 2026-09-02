@@ -36,6 +36,9 @@ import {
   MACHINE_RUN,
   MACHINE_STOPPED,
 } from "../fixtures/sample-run.js";
+import codeGraph from "../fixtures/machines/code.json";
+import reviewGraph from "../fixtures/machines/review.json";
+import type { MachineGraph } from "@sublang/spex-core/protocol";
 
 const SESSION: SessionInfo = {
   id: "s1",
@@ -351,7 +354,7 @@ describe("run-view-47: the End confirm says the session can continue", () => {
 
 // run-view-66: the machine call tree over a fixture replay (DR-031).
 describe("run-view-66: the machine call tree from the trace", () => {
-  test("a running child nests under its caller, which folds to a strip", () => {
+  test("a running child nests under its caller, which stays drawn as the only root", () => {
     // Replay to the review's first transition: /code is delegating,
     // /review is the running leaf.
     renderRun(MACHINE_RUN.slice(0, 13));
@@ -361,15 +364,11 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(cards[0].getAttribute("data-playbook")).toBe("code");
     expect(cards[1].getAttribute("data-playbook")).toBe("review");
 
-    // A caption longer than its box is trimmed rather than spilling
-    // over the border, and the box's title keeps it whole (run-view-63).
-    const captions = [...cards[1].querySelectorAll("text")].map(
-      (node) => node.textContent ?? "",
+    // State names read at the name step (run-view-60, DR-010 §8).
+    const reviewing = within(cards[1]).getByTestId(
+      "machine-state-t-review-reviewing",
     );
-    expect(
-      captions.every((text) => text.length <= 24),
-      `a caption overflowed its box: ${captions.join(" | ")}`,
-    ).toBe(true);
+    expect(reviewing.querySelector("text")!.getAttribute("font-size")).toBe("13");
 
     // A drawing wider than its column scrolls, and the column masks
     // its edge so the cut reads as "more this way" (run-view-81).
@@ -377,23 +376,26 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(scroller.className).toContain("overflow-x-auto");
     expect(scroller.className).toContain("mask-image");
 
-    // The caller is the ancestor: a strip that still names the calling
-    // state and the callee, so the containment survives the fold.
-    expect(cards[0].getAttribute("data-expanded")).toBe("false");
+    // The caller is the only root: it stays drawn while it delegates,
+    // its calling state in the call voice naming the callee, and the
+    // strip's sentence still names both for the accessible name.
+    expect(cards[0].getAttribute("data-expanded")).toBe("true");
     expect(cards[0].getAttribute("aria-label")).toContain("review first commit");
     expect(cards[0].getAttribute("aria-label")).toContain("/review");
+    const delegating = within(cards[0]).getByTestId(
+      "machine-state-t-code-reviewFirstCommit",
+    );
+    expect(delegating.getAttribute("data-delegating")).toBe("true");
+    expect(within(delegating).getByText("call /review")).toBeTruthy();
     expect(
       within(live).getByTestId("machine-connector-t-code"),
     ).toBeTruthy();
 
-    // The running leaf is what is drawn, and its header names the
-    // state that called it.
+    // The running leaf is drawn too, and its header names the state
+    // that called it.
     expect(cards[1].getAttribute("data-expanded")).toBe("true");
     expect(cards[1].getAttribute("data-caller-state")).toBe("reviewFirstCommit");
-    const active = within(cards[1]).getByTestId(
-      "machine-state-t-review-reviewing",
-    );
-    expect(active.getAttribute("data-active")).toBe("true");
+    expect(reviewing.getAttribute("data-active")).toBe("true");
 
     // The running mark is the app's one pulse, and it says so.
     const mark = within(cards[1]).getByTestId("machine-running-t-review");
@@ -409,7 +411,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(systemLine("→ directCommit")).toBeNull();
   });
 
-  test("expanding the caller is arrangement, and shows both drawings", () => {
+  test("collapsing the caller is arrangement, and the child stays drawn", () => {
     renderRun(MACHINE_RUN.slice(0, 13));
     const before = screen
       .getAllByTestId(/^machine-card-/)
@@ -418,13 +420,11 @@ describe("run-view-66: the machine call tree from the trace", () => {
     fireEvent.click(screen.getByTestId("machine-disclose-t-code"));
 
     const cards = screen.getAllByTestId(/^machine-card-/);
-    expect(cards[0].getAttribute("data-expanded")).toBe("true");
-    // The delegating state wears the call voice and names its callee.
-    const delegating = within(cards[0]).getByTestId(
-      "machine-state-t-code-reviewFirstCommit",
-    );
-    expect(delegating.getAttribute("data-delegating")).toBe("true");
-    expect(within(delegating).getByText("call /review")).toBeTruthy();
+    // The strip names the calling state and the callee, and the
+    // connector still leaves it — containment survives the fold.
+    expect(cards[0].getAttribute("data-expanded")).toBe("false");
+    expect(cards[0].getAttribute("aria-label")).toContain("review first commit");
+    expect(screen.getByTestId("machine-connector-t-code")).toBeTruthy();
     // The child is untouched: the same tree, differently disclosed.
     expect(cards.map((card) => card.getAttribute("data-playbook"))).toEqual(
       before,
@@ -485,6 +485,153 @@ describe("run-view-66: the machine call tree from the trace", () => {
   });
 });
 
+
+// run-view-60/76/81: the drawing reads from a projector (DR-010 §8).
+describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
+  const graphs: Record<string, MachineGraph> = {
+    code: codeGraph as MachineGraph,
+    review: reviewGraph as MachineGraph,
+  };
+  beforeEach(() => {
+    useAppStore.setState({ machineGraphs: graphs });
+  });
+  afterEach(() => {
+    useAppStore.setState({ machineGraphs: {} });
+  });
+
+  test("boxes take their column's longest label; a long caption falls back to its role", () => {
+    renderRun(MACHINE_RUN.slice(0, 13));
+    const code = screen.getByTestId("machine-card-t-code");
+    // "reported review failure" sets its column's width, so it reads
+    // whole at 13px and the shorter names share the box width.
+    const reported = within(code).getByTestId(
+      "machine-state-t-code-reportedReviewFailure",
+    );
+    expect(reported.querySelector("text")!.textContent).toBe(
+      "reported review failure",
+    );
+    const reportedBox = reported.querySelector("rect")!;
+    const readyBox = within(code)
+      .getByTestId("machine-state-t-code-ready")
+      .querySelector("rect")!;
+    expect(Number(reportedBox.getAttribute("width"))).toBeGreaterThan(132);
+    expect(readyBox.getAttribute("width")).toBe(reportedBox.getAttribute("width"));
+    // Exit labels sit one step under the small step, never lower.
+    const exit = within(code).getAllByTestId(/^machine-exit-/)[0];
+    expect(exit.getAttribute("font-size")).toBe("11");
+  });
+
+  test("a running call names role and player at the caption step, or the role alone", () => {
+    // Through the coder's call: the code machine's first column is as
+    // wide as "reported review failure", so the pair reads whole.
+    renderRun(MACHINE_RUN.slice(0, 8));
+    const running = screen.getByTestId("machine-state-t-code-runFirstPhase");
+    const caption = within(running).getByTestId(
+      "machine-caption-t-code-runFirstPhase",
+    );
+    expect(caption.textContent).toBe("coder · dev.coder");
+    expect(caption.getAttribute("font-size")).toBe("12");
+    cleanup();
+
+    // A pair no box can hold falls back to the role, the whole pair
+    // kept in the box's title (run-view-61).
+    const longLane = MACHINE_RUN.slice(0, 7).concat([
+      {
+        seq: 406,
+        record: {
+          type: "captain_telemetry",
+          turnId: 9,
+          timestamp: 9_004,
+          topic: "playbook.trace",
+          payload: {
+            schemaVersion: 3,
+            sessionId: "t-code",
+            playbookId: "code",
+            depth: 1,
+            type: "player.call.started",
+            timestamp: 9_004,
+            payload: {
+              stateId: "runFirstPhase",
+              roleId: "coder",
+              playerId: "security.compliance.reviewer.lane",
+            },
+          },
+        } as unknown as TmuxPlayRecord,
+      },
+    ]);
+    renderRun(longLane);
+    const state = screen.getByTestId("machine-state-t-code-runFirstPhase");
+    expect(
+      within(state).getByTestId("machine-caption-t-code-runFirstPhase").textContent,
+    ).toBe("coder");
+    expect(state.querySelector("title")!.textContent).toContain(
+      "coder · security.compliance.reviewer.lane",
+    );
+    expect(Number(state.querySelector("rect")!.getAttribute("width"))).toBeLessThanOrEqual(240);
+  });
+
+  test("unwalked exits into rest states fold to a count until walked or hovered", () => {
+    renderRun(MACHINE_RUN.slice(0, 13));
+    const code = screen.getByTestId("machine-card-t-code");
+    // Both of runFirstPhase's exits lead to failed: one "+2" marker
+    // whose title lists them, and no label.
+    const first = within(code).getByTestId("machine-state-t-code-runFirstPhase");
+    const folded = within(first).getByTestId(
+      "machine-exits-folded-t-code-runFirstPhase",
+    );
+    expect(folded.textContent).toContain("+2");
+    expect(folded.querySelector("title")!.textContent).toContain("→ failed");
+    expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(0);
+    // Hovering the box reveals them all; leaving folds them again.
+    fireEvent.mouseEnter(first);
+    expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(2);
+    expect(
+      within(first).queryByTestId("machine-exits-folded-t-code-runFirstPhase"),
+    ).toBeNull();
+    fireEvent.mouseLeave(first);
+    expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(0);
+    // An exit into working state stays a label; the one into failed
+    // beside it folds to "+1".
+    const review = within(code).getByTestId(
+      "machine-state-t-code-reviewFirstCommit",
+    );
+    const labels = within(review).getAllByTestId(/^machine-exit-/);
+    expect(labels).toHaveLength(1);
+    expect(labels[0].textContent).toContain("→ run ir task");
+    expect(
+      within(review).getByTestId("machine-exits-folded-t-code-reviewFirstCommit")
+        .textContent,
+    ).toContain("+1");
+  });
+
+  test("the split's row form is a query on its wrapper, never on itself", () => {
+    // An element cannot answer its own container query (run-view-107):
+    // the wrapper is the container, the flex box asks it.
+    renderRun(MACHINE_RUN.slice(0, 13));
+    const split = screen.getByTestId("captain-column").parentElement!;
+    expect(split.className).toContain("@2xl:flex-row");
+    expect(split.className).not.toContain("@container");
+    expect(split.parentElement!.className).toContain("@container");
+  });
+
+  test("the drawing scales into a pane it exceeds by under a quarter, else scrolls", () => {
+    renderRun(MACHINE_RUN.slice(0, 13));
+    const scroller = screen.getByTestId("machine-scroll-t-code");
+    const svg = scroller.querySelector("svg")!;
+    const natural = Number(svg.getAttribute("data-natural-width"));
+    const floor = Number(svg.getAttribute("data-scale-floor"));
+    expect(natural).toBeGreaterThan(0);
+    expect(floor).toBeCloseTo(natural / 1.25, 0);
+    // The rule rides the card as a container query: the pane's width
+    // decides between the drawing's natural width and the pane's.
+    expect(scroller.style.getPropertyValue("--fit")).toContain("100cqw");
+    expect(scroller.style.getPropertyValue("--fit")).toContain(`${floor}px`);
+    expect(scroller.className).toContain("var(--beyond");
+    expect(screen.getByTestId("machine-card-t-code").className).toContain(
+      "@container",
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Intent ledger coverage (run-view-92..96, DR-035): the composer's

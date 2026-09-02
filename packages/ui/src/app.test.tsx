@@ -151,7 +151,7 @@ function seed(): void {
     openTabs: { p1: ["a-live"] },
     expandedProjects: {},
     railCollapsed: false,
-    captainSplit: 34,
+    captainSplit: 45,
     specTrees: {},
     specErrors: {},
     homeDraft: "",
@@ -416,19 +416,19 @@ describe("run-view-81: the reader sets the Captain/players split", () => {
 
   test("keys move it, a double-click restores it, and it persists", () => {
     const { unmount } = render(<App />);
-    expect(split()).toBe("34%");
+    expect(split()).toBe("45%");
 
     const divider = screen.getByTestId("captain-divider");
     fireEvent.keyDown(divider, { key: "ArrowRight" });
-    expect(split()).toBe("36%");
+    expect(split()).toBe("47%");
 
     // Chrome state is a preference: it survives a remount (DR-030).
     unmount();
     render(<App />);
-    expect(split()).toBe("36%");
+    expect(split()).toBe("47%");
 
     fireEvent.doubleClick(screen.getByTestId("captain-divider"));
-    expect(split()).toBe("34%");
+    expect(split()).toBe("45%");
   });
 
   test("neither side can be squeezed away", () => {

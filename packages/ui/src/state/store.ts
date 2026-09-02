@@ -236,7 +236,11 @@ const CURRENT_PROJECT_KEY = "spex.currentProject";
 const RAIL_COLLAPSED_KEY = "spex.railCollapsed";
 const EXPANDED_PROJECTS_KEY = "spex.expandedProjects";
 const CAPTAIN_SPLIT_KEY = "spex.captainSplit";
-export const CAPTAIN_SPLIT_DEFAULT = 34;
+/** The default share leaves a 1280px window's Captain column wide
+ * enough for the built-in machines' drawings to scale into it rather
+ * than scroll (run-view-81); chrome never moves by itself (DR-030), so
+ * the default holds whether or not a drawing is up. */
+export const CAPTAIN_SPLIT_DEFAULT = 45;
 export const CAPTAIN_SPLIT_MIN = 22;
 export const CAPTAIN_SPLIT_MAX = 70;
 

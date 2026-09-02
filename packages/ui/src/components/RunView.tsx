@@ -399,10 +399,17 @@ export function RunView({
       </div>
       {/* The split is layout by its own width (run-view-107): panes
           side by side with the divider from 42rem, stacked below it
-          with the divider hidden and the reader's split kept. */}
+          with the divider hidden and the reader's split kept. The
+          container is the wrapper, never the flex box itself — an
+          element cannot answer its own container query, and a split
+          that carried both stacked at every width. */}
+      <div
+        data-testid="split-container"
+        className="@container flex min-h-0 flex-1 flex-col"
+      >
       <div
         ref={splitRef}
-        className="@container flex min-h-0 flex-1 flex-col gap-3 p-3 @2xl:flex-row"
+        className="flex min-h-0 flex-1 flex-col gap-3 p-3 @2xl:flex-row"
       >
         <div
           data-testid="captain-column"
@@ -525,6 +532,7 @@ export function RunView({
             />
           ))}
           </div>
+      </div>
       </div>
     </div>
   );

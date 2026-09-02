@@ -250,7 +250,8 @@ While a playbook run's trace records flow in a live session, the Captain pane sh
 - the card renders read-only, never intercepting the composer;
 - the card takes the form its disclosure assigns — the full drawing or the strip [[run-view-75](#run-view-75)];
 - while the run's frame is open, the glyph progress lines of that run fold into the card instead of the thread [[run-view-1](#run-view-1)], while failure lines always stay in the thread [[run-view-2](#run-view-2)];
-- state labels are the human labels with raw ids in tooltips, matching the chip's law [[run-view-59](#run-view-59)].
+- state labels are the human labels with raw ids in tooltips, matching the chip's law [[run-view-59](#run-view-59)];
+- a state name reads at 13px and its caption at 12px — the type scale's small step ([DR-010](../decisions/010-interface-craft.md) §8) — and a box is as wide as its column's longest name or caption needs, from a 132px floor to a 240px cap, so a name such as "reported review failure" reads whole; a name past the cap is trimmed with its whole in the box's tooltip.
 
 #### run-view-61
 
@@ -260,7 +261,7 @@ While a machine card is live, the Captain pane shall show the run's state throug
 - a parked state awaiting the Boss carries the attention emphasis and a failed state the failure emphasis, the derivations of the attention count [[run-view-34](#run-view-34)], and every other state stays quiet ink;
 - a firing transition flashes once and decays in well under a second, instantly under reduced motion;
 - every transition shows its direction at rest with a constant-size glyph, drawn lines and exit labels alike [[run-view-76](#run-view-76)];
-- the active state names the player it runs and shows that player's running activity, when the trace attributes one.
+- the active state names the player it runs — the role the machine asked for and the player answering it — and shows that player's running activity, when the trace attributes one; where the pair does not fit its box, the caption falls back to the role alone with the pair in the box's tooltip.
 
 #### run-view-62
 
@@ -296,7 +297,7 @@ While trace records fold into the run view's state [[run-view-14](#run-view-14)]
 
 While machine cards are shown, each card shall render as either its full drawing or a one-line strip — the playbook, its current state or outcome, its calling state for a child, and its status mark — with defaults partitioning the whole tree ([DR-031](../decisions/031-machine-call-tree.md)):
 
-- every running leaf card is expanded; every other card — running ancestors and settled runs — is a strip;
+- every running leaf card is expanded, and so is a running root while it is the tree's only root — the one drawing never folds the moment it calls; every other card — a running ancestor beside another root, and settled runs — is a strip;
 - a disclosure toggle on each card overrides the default for that card, altering no fold state — a replay renders identically whatever was expanded ([DR-027](../decisions/027-linked-views-contract.md));
 - expanding a settled strip shows the machine's final drawing with its settled descendants in place, identical under replay;
 - a strip carries an accessible name stating the run, its status, and its caller, so the relation never depends on the connector alone.
@@ -308,7 +309,9 @@ When a machine card draws its edges, an edge shall render as a drawn line only b
 - a drawn head touches the target's border at a port no other head shares, and no drawn path crosses a state box;
 - reciprocal drawn pairs stay offset;
 - a state's exit labels stack inside its box without overlap, and its box grows to hold them;
-- exit labels walk, fire, and dash exactly as drawn edges do.
+- exit labels walk, fire, and dash exactly as drawn edges do;
+- an exit label reads at 11px — the one text on the card a step under the small step, since a box and not a line carries its meaning ([DR-010](../decisions/010-interface-craft.md) §8);
+- a state's unwalked exits into rest states — a parked state, or a failure state — fold into one "+N" marker whose tooltip lists them, each unfolding as it is walked and all of them while the box is hovered, so a box's every escape hatch never shouts over its work.
 
 #### run-view-78
 
@@ -382,7 +385,8 @@ The run view shall divide the Captain column from the player panes at a divider 
 
 - the divider drags, nudges by arrow key, and restores its default on a double-click or Home;
 - the split is bounded so neither side can be squeezed away;
-- a machine drawing wider than its column scrolls rather than shrinking [[run-view-60](#run-view-60)], and the column shows that more lies beyond its edge — a drawing cut without a sign reads as broken rather than scrollable.
+- a machine drawing [[run-view-60](#run-view-60)] wider than its column by less than a quarter scales down to the column — the drawing's own container decides, as a container query and never a width hook ([DR-041](../decisions/041-chrome-that-fits.md)) — and one wider than that keeps its size and scrolls, the column showing that more lies beyond its edge — a drawing cut without a sign reads as broken rather than scrollable;
+- the default is a 45% share, at which the built-in machines' drawings scale into a 1280px window's Captain column rather than scroll, and it holds whether or not a drawing is up — chrome never moves by itself ([DR-030](../decisions/030-workspace-chrome.md)).
 
 #### run-view-107
 
@@ -614,8 +618,10 @@ Where a fixture stream carries a playbook run's trace records — an invocation 
 - the glyph progress lines of the framed run leave the thread while failure lines stay [[run-view-60](#run-view-60)];
 - the active state names its attributed player while that player runs [[run-view-61](#run-view-61)] and its callee while the nested run is open [[run-view-63](#run-view-63)];
 - the nested invocation renders nested directly under the card of the run that called it, with the connector and the mutual naming [[run-view-63](#run-view-63)];
-- while the child runs, the caller defaults to a strip naming its calling state and callee, and each strip's accessible name states its run, status, and caller [[run-view-75](#run-view-75)];
-- expanding the caller's strip while the child runs is arrangement only: both drawings show, and the fold state is unchanged [[run-view-75](#run-view-75)];
+- while the child runs, the caller — the tree's only root — stays drawn with its calling state in the call voice, and its accessible name states its run, status, and callee [[run-view-75](#run-view-75)];
+- collapsing the drawn caller while the child runs is arrangement only: the strip stands with the connector, the child is unchanged, and the fold state is untouched [[run-view-75](#run-view-75)];
+- the boxes take their column's longest label's width with names at 13px, captions at 12px, and exit labels at 11px, and a role-and-player caption no box holds falls back to the role with the pair in the tooltip [[run-view-60](#run-view-60)] [[run-view-61](#run-view-61)] [[run-view-76](#run-view-76)];
+- a state's unwalked exits into rest states fold to one counted marker listing them, unfolding while the box is hovered, while an exit into a working state stays a label [[run-view-76](#run-view-76)];
 - the child's settled finish lands as a strip under its calling state, and the root's settles into the thread as a strip whose expansion shows the final drawing [[run-view-62](#run-view-62)] [[run-view-75](#run-view-75)];
 - the post-terminal reports open no frame and change no settled card — exactly one card per run, its outcome "done" [[run-view-74](#run-view-74)] [[run-view-62](#run-view-62)];
 - a second fixture run that ends by disposal alone, without a terminal transition, settles exactly one card with the outcome "stopped" [[run-view-62](#run-view-62)] [[run-view-74](#run-view-74)];
@@ -700,7 +706,7 @@ Where a fixture stream calls one player under two roles, the test suite shall as
 
 #### run-view-82
 
-Where the run view renders with its default split, the test suite shall assert the divider contract of [[run-view-81](#run-view-81)]: an arrow key moves the split and a double-click restores the default, the split survives a remount, a nudge past either bound stops at that bound, and a machine drawing wider than its column is presented scrollable rather than cut.
+Where the run view renders with its default split, the test suite shall assert the divider contract of [[run-view-81](#run-view-81)]: an arrow key moves the split and a double-click restores the default of 45%, the split survives a remount, a nudge past either bound stops at that bound, and a machine drawing carries the scale-or-scroll rule — its natural width, the floor at four fifths of it, and the container query choosing between them — inside a scrolling box that masks its edge.
 
 #### run-view-53
 

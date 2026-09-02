@@ -305,6 +305,15 @@ export function CaptainPane({
     pendingQuestion: view.pendingQuestion !== undefined,
     turnActive: view.turnActive,
   });
+  // The live call tree's roots: a frame with no caller the pane knows
+  // (run-view-63/78).
+  const roots = view.frames.filter(
+    (frame) =>
+      !frame.parentSessionId ||
+      !view.frames.some(
+        (other) => other.traceSessionId === frame.parentSessionId,
+      ),
+  );
 
   return (
     <section
@@ -388,28 +397,20 @@ export function CaptainPane({
             // saw, which renders at the top level rather than vanishing
             // (run-view-63/78).
             <div data-testid="live-machines" className="flex flex-col gap-2">
-              {view.frames
-                .filter(
-                  (frame) =>
-                    !frame.parentSessionId ||
-                    !view.frames.some(
-                      (other) =>
-                        other.traceSessionId === frame.parentSessionId,
-                    ),
-                )
-                .map((frame) => (
-                  <MachineCard
-                    key={frame.traceSessionId}
-                    frame={frame}
-                    graph={machineGraphs?.[frame.playbookId]}
-                    graphs={machineGraphs}
-                    openFrames={view.frames}
-                    openChildren={view.frames.filter(
-                      (other) =>
-                        other.parentSessionId === frame.traceSessionId,
-                    )}
-                  />
-                ))}
+              {roots.map((frame) => (
+                <MachineCard
+                  key={frame.traceSessionId}
+                  frame={frame}
+                  graph={machineGraphs?.[frame.playbookId]}
+                  graphs={machineGraphs}
+                  openFrames={view.frames}
+                  openChildren={view.frames.filter(
+                    (other) =>
+                      other.parentSessionId === frame.traceSessionId,
+                  )}
+                  onlyRoot={roots.length === 1}
+                />
+              ))}
             </div>
           ) : null}
           {view.captainDraft ? (
