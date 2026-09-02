@@ -90,6 +90,7 @@ When the user picks a project from the palette or opens one of its sessions from
 When the user confirms removal in the Overview tab, the workspace shall forget the project and clear it from the sidebar, leaving the repository directory, its files, and its git state on disk unmodified:
 
 - While the project has a live session, the Overview tab disables removal, stating that sessions must be ended first.
+- Removal confirms inline with Remove and Keep ([DR-010](../decisions/010-interface-craft.md) §4); Keep returns focus to the Remove control, and a completed removal moves focus to the sidebar's Dashboard entry — never to the page body.
 
 ### Labels and Vocabulary
 

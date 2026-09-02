@@ -7,9 +7,11 @@
 // (dashboard-26..30), capture with the shelf reveal (dashboard-30/31,
 // 37), the paged Sources tabs with the captured-artifact swap
 // (dashboard-19/20/24/25), History as done work (dashboard-27/38,
-// DR-038), empty states without takeover (dashboard-8/21/22), and the
-// Overview tab's header over the shared group (projects-4/6/7,
-// forge-work-lists-1).
+// DR-038), empty states without takeover (dashboard-8/21/22), the
+// row menu as the house popover with Move up/down and Undo
+// (dashboard-29), focus hand-offs (dashboard-4, projects-9, DR-010
+// §6), and the Overview tab's header over the shared group
+// (projects-4/6/7/9, forge-work-lists-1).
 
 import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
 import {
@@ -143,6 +145,66 @@ function callsOf(type: string) {
     .map((call) => call[1]);
 }
 
+/** A stateful ledger behind the command mock: close removes, queue
+ * appends, move reorders, and ledger.get serves the current state —
+ * enough for the queue's acts to read back the way the core's fold
+ * would serve them. */
+function ledgerMock(initial: LedgerState): () => LedgerState {
+  let current = initial;
+  let minted = 0;
+  commandMock.mockImplementation(async (type: string, fields) => {
+    if (type === "ledger.get") return current;
+    if (type === "ledger.history") return { intents: [], more: false };
+    if (type === "intent.close") {
+      const { intentId } = fields as { intentId: string };
+      current = {
+        ...current,
+        intents: current.intents.filter((d) => d.intent.id !== intentId),
+        attention: current.attention.filter((e) => e.intentId !== intentId),
+      };
+      return {};
+    }
+    if (type === "intent.queue") {
+      const input = fields as {
+        projectId: string;
+        text: string;
+        source?: IntentSource;
+      };
+      minted += 1;
+      const intent = info({
+        id: `i-new-${minted}`,
+        projectId: input.projectId,
+        text: input.text,
+        ...(input.source ? { source: input.source } : {}),
+      });
+      current = {
+        ...current,
+        intents: [...current.intents, { intent, state: "queued" }],
+      };
+      return intent;
+    }
+    if (type === "intent.move") {
+      const { intentId, afterIntentId } = fields as {
+        intentId: string;
+        afterIntentId: string | null;
+      };
+      const moving = current.intents.find((d) => d.intent.id === intentId);
+      if (moving) {
+        const rest = current.intents.filter((d) => d.intent.id !== intentId);
+        const at =
+          afterIntentId === null
+            ? 0
+            : rest.findIndex((d) => d.intent.id === afterIntentId) + 1;
+        rest.splice(at, 0, moving);
+        current = { ...current, intents: rest };
+      }
+      return {};
+    }
+    return {};
+  });
+  return () => current;
+}
+
 // ---------------------------------------------------------------------------
 // Attention queue
 // ---------------------------------------------------------------------------
@@ -242,7 +304,13 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     expect(question.textContent).toContain("needs your reply");
     expect(question.textContent).toContain("Fix login");
     expect(question.textContent).toContain("alpha");
-    expect(question.textContent).toContain("10m");
+    // The age says "ago" and carries the absolute moment (DR-010 §2).
+    expect(question.textContent).toContain("10m ago");
+    expect(
+      within(question).getByTitle(
+        new Date(ATTENTION[0].since).toLocaleString(),
+      ),
+    ).toBeTruthy();
     expect(
       screen.getByTestId("attention-s6-permission").textContent,
     ).toContain("awaiting permission");
@@ -289,7 +357,7 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     const confirm = screen.getByTestId("attention-confirm-id1");
     fireEvent.click(confirm);
     // The action acknowledges where it was taken (DR-010 §5).
-    expect(confirm.textContent).toBe("confirming…");
+    expect(confirm.textContent).toBe("Confirming…");
     expect((confirm as HTMLButtonElement).disabled).toBe(true);
     expect(callsOf("intent.close")).toEqual([
       { intentId: "id1", as: "done" },
@@ -306,6 +374,76 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
       { intentId: "id2", as: "dropped" },
     ]);
     await act(async () => settleClose());
+  });
+
+  test("a verdict hands focus on: the next entry, then the all-clear Start (dashboard-4, DR-010 §6)", async () => {
+    const current = ledgerMock({
+      intents: [q("n1", "p1", "Polish README")],
+      attention: [ATTENTION[3], ATTENTION[4]],
+      badge: 2,
+    });
+    seed({ ledger: current() });
+    renderSurface();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("attention-confirm-id1"));
+    });
+    // The row that took the closed one's place holds focus.
+    expect(screen.queryByTestId("attention-id1-finish")).toBeNull();
+    const next = screen.getByTestId("attention-id2-finish");
+    expect(document.activeElement).toBe(
+      within(next).getByRole("button", { name: /Open Tidy CI/ }),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("attention-drop-id2"));
+    });
+    // The last verdict lands on the all-clear's Start, never on body.
+    expect(screen.queryByTestId("attention-id2-finish")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("all-clear-start"));
+  });
+});
+
+describe("dashboard-8: no false all-clear before the ledger is read", () => {
+  test("a quiet loading row until the ledger arrives", () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "ledger.get") return new Promise(() => {});
+      if (type === "ledger.history") return { intents: [], more: false };
+      return {};
+    });
+    seed({ ledger: undefined, ledgerError: undefined });
+    renderSurface();
+
+    const loading = screen.getByTestId("attention-loading");
+    expect(loading.getAttribute("role")).toBe("status");
+    expect(loading.textContent).toBe("Loading…");
+    expect(screen.queryByTestId("attention-all-clear")).toBeNull();
+    // The queue band waits too, rather than claiming an empty queue.
+    const upnext = screen.getByTestId("upnext-p1");
+    expect(upnext.textContent).toContain("Loading…");
+    expect(upnext.textContent).not.toContain("Nothing queued");
+  });
+
+  test("a failed load shows the failure strip with Retry and nothing else in the box", async () => {
+    seed({ ledger: undefined, ledgerError: "state root unreadable" });
+    renderSurface();
+
+    const strip = screen.getByTestId("ledger-error");
+    expect(strip.textContent).toContain("state root unreadable");
+    expect(screen.queryByTestId("attention-all-clear")).toBeNull();
+    expect(screen.queryByTestId("attention-loading")).toBeNull();
+    expect(screen.getByTestId("upnext-p1").textContent).toContain(
+      "could not be loaded",
+    );
+
+    // Retry reads the ledger again; only a loaded ledger brings the
+    // all-clear.
+    await act(async () => {
+      fireEvent.click(within(strip).getByRole("button", { name: "Retry" }));
+    });
+    expect(callsOf("ledger.get")).toHaveLength(1);
+    expect(screen.queryByTestId("ledger-error")).toBeNull();
+    expect(screen.getByTestId("attention-all-clear")).toBeTruthy();
   });
 });
 
@@ -467,6 +605,181 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(callsOf("intent.close")).toEqual([
       { intentId: "q3", as: "dropped" },
     ]);
+  });
+
+  test("Move up and Move down in the row menu take Alt+↑/↓'s step (dashboard-29)", async () => {
+    seed({ ledger: QUEUE_LEDGER });
+    renderSurface();
+
+    const trigger = screen.getByTestId("upnext-menu-q3");
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const menu = screen.getByRole("menu", { name: "Actions for Third thing" });
+    // The last row cannot move down; each item names its keyboard
+    // step for the eye and the ear.
+    const down = within(menu).getByRole("menuitem", {
+      name: "Move down",
+    }) as HTMLButtonElement;
+    expect(down.disabled).toBe(true);
+    expect(down.getAttribute("aria-keyshortcuts")).toBe("Alt+ArrowDown");
+    expect(down.textContent).toContain("Alt+↓");
+    await act(async () => {
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "Move up" }));
+    });
+    expect(callsOf("intent.move")).toEqual([
+      { intentId: "q3", afterIntentId: "q1" },
+    ]);
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("upnext-menu-q1"));
+    const head = screen.getByRole("menu", { name: "Actions for First thing" });
+    expect(
+      (within(head).getByRole("menuitem", { name: "Move up" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    await act(async () => {
+      fireEvent.click(within(head).getByRole("menuitem", { name: "Move down" }));
+    });
+    expect(callsOf("intent.move")[1]).toEqual({
+      intentId: "q1",
+      afterIntentId: "q2",
+    });
+  });
+
+  test("the row menu is the house popover: focus in, arrows, Escape and outside close, focus back, one at a time", () => {
+    seed({ ledger: QUEUE_LEDGER });
+    renderSurface();
+
+    const trigger = screen.getByTestId("upnext-menu-q1");
+    trigger.focus();
+    fireEvent.click(trigger);
+    const menu = screen.getByRole("menu", { name: "Actions for First thing" });
+    // Focus lands on the first item that can act (Move up is off at
+    // the head); arrows walk the items.
+    expect(document.activeElement).toBe(
+      within(menu).getByRole("menuitem", { name: "Move down" }),
+    );
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(
+      within(menu).getByRole("menuitem", { name: "Edit text" }),
+    );
+    // Escape closes and returns focus to the trigger.
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
+
+    // Opening another row's menu closes this one: one menu at a time.
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByTestId("upnext-menu-q2"));
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    expect(
+      screen.getByRole("menu", { name: "Actions for Blocked thing" }),
+    ).toBeTruthy();
+    // A click outside closes.
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  test("Remove offers Undo, which re-queues the same text and provenance at its place (dashboard-29)", async () => {
+    const current = ledgerMock({
+      intents: [
+        q("q1", "p1", "First thing"),
+        {
+          intent: info({
+            id: "q2",
+            projectId: "p1",
+            text: "Address #7: Fix the bug",
+            source: {
+              kind: "issue",
+              ref: "7",
+              url: "https://github.com/x/y/issues/7",
+              labels: ["bug"],
+            },
+          }),
+          state: "queued",
+        },
+        q("q3", "p1", "Third thing"),
+      ],
+      attention: [],
+      badge: 0,
+    });
+    seed({ ledger: current() });
+    renderSurface();
+
+    fireEvent.click(screen.getByTestId("upnext-menu-q2"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("upnext-remove-action-q2"));
+    });
+    expect(screen.queryByTestId("upnext-row-q2")).toBeNull();
+    const notice = screen.getByTestId("upnext-removed-p1");
+    expect(notice.getAttribute("role")).toBe("status");
+    expect(notice.textContent).toContain("Removed “Address #7: Fix the bug”");
+    const undo = within(notice).getByRole("button", { name: "Undo" });
+    // The removed row took focus with it; Undo is where it lands.
+    expect(document.activeElement).toBe(undo);
+
+    await act(async () => {
+      fireEvent.click(undo);
+    });
+    // The same text and provenance, back after the row it followed,
+    // revealed and focused.
+    expect(callsOf("intent.queue")).toEqual([
+      {
+        projectId: "p1",
+        text: "Address #7: Fix the bug",
+        source: {
+          kind: "issue",
+          ref: "7",
+          url: "https://github.com/x/y/issues/7",
+          labels: ["bug"],
+        },
+      },
+    ]);
+    expect(callsOf("intent.move")).toEqual([
+      { intentId: "i-new-1", afterIntentId: "q1" },
+    ]);
+    expect(screen.queryByTestId("upnext-removed-p1")).toBeNull();
+    const restored = screen.getByTestId("upnext-row-i-new-1");
+    expect(restored.getAttribute("data-highlight")).toBe("true");
+    expect(document.activeElement).toBe(restored);
+    expect(
+      screen
+        .getAllByTestId(/^upnext-row-/)
+        .map((el) => el.getAttribute("data-testid")),
+    ).toEqual(["upnext-row-q1", "upnext-row-i-new-1", "upnext-row-q3"]);
+  });
+
+  test("the Undo line stays six seconds, and longer while its control holds focus", async () => {
+    vi.useFakeTimers();
+    try {
+      const current = ledgerMock(QUEUE_LEDGER);
+      seed({ ledger: current() });
+      renderSurface();
+      fireEvent.click(screen.getByTestId("upnext-menu-q3"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("upnext-remove-action-q3"));
+      });
+      const undo = within(screen.getByTestId("upnext-removed-p1")).getByRole(
+        "button",
+        { name: "Undo" },
+      );
+      expect(document.activeElement).toBe(undo);
+      act(() => {
+        vi.advanceTimersByTime(6_000);
+      });
+      // Still there: a keyboard user on the control is never raced.
+      expect(screen.getByTestId("upnext-removed-p1")).toBeTruthy();
+      undo.blur();
+      act(() => {
+        vi.advanceTimersByTime(6_000);
+      });
+      expect(screen.queryByTestId("upnext-removed-p1")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("the provenance action is named after what it opens (dashboard-29, DR-038)", () => {
@@ -641,7 +954,11 @@ describe("dashboard-28: the Now band reads the live lane", () => {
     expect(row.textContent).toContain("code review");
     expect(row.querySelector('[title="codeReview"]')).toBeTruthy();
     expect(row.textContent).toContain("Fix login flow");
-    expect(row.textContent).toContain("45m");
+    // The start reads as an age with the moment in the tooltip.
+    expect(row.textContent).toContain("started 45m ago");
+    expect(
+      within(row).getByTitle(new Date(NOW - 45 * MIN).toLocaleString()),
+    ).toBeTruthy();
     fireEvent.click(row);
     expect(onOpenSession).toHaveBeenCalledWith("s-live");
 
@@ -726,9 +1043,11 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
     expect(issue.textContent).toContain("Fix the bug");
     expect(issue.textContent).toContain("bug");
     expect(issue.textContent).toContain("urgent");
-    expect(
-      issue.querySelector("a")?.getAttribute("href"),
-    ).toBe("https://github.com/x/y/issues/7");
+    const link = issue.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("https://github.com/x/y/issues/7");
+    // The page opens outside the app, without a referrer.
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toBe("noreferrer");
 
     // Queue seeds the spec table's text with the URL as provenance
     // (dashboard-30/37).
@@ -983,6 +1302,11 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     expect(done.getAttribute("data-verdict")).toBe("done");
     expect(done.textContent).toContain("✓");
     expect(done.querySelector(".line-through")).toBeNull();
+    // Ages say "ago" and carry the absolute moment (DR-010 §2).
+    expect(done.textContent).toContain("2m ago");
+    expect(
+      within(done).getByTitle(new Date(NOW - 2 * MIN).toLocaleString()),
+    ).toBeTruthy();
 
     // A fixed bug: struck through under the red tag, no check.
     const bug = screen.getByTestId("history-row-hb");
@@ -1016,6 +1340,7 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     // The accessible older control fetches the next intent page with
     // the cursor of the last served row (dashboard-38); records keep
     // their place in the one timeline.
+    expect(screen.getByTestId("history-older-p1").textContent).toBe("Older…");
     await act(async () => {
       fireEvent.click(screen.getByTestId("history-older-p1"));
     });
@@ -1151,8 +1476,12 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
     // Removal keeps its one confirm (projects-9): a project is not a row.
     fireEvent.click(within(overview).getByRole("button", { name: "Remove project" }));
     expect(overview.textContent).toContain("Remove from Spex?");
-    fireEvent.click(within(overview).getByRole("button", { name: "keep" }));
+    fireEvent.click(within(overview).getByRole("button", { name: "Keep" }));
     expect(callsOf("project.remove")).toEqual([]);
+    // Keep hands focus back to the control it replaced (DR-010 §6).
+    expect(document.activeElement).toBe(
+      within(overview).getByRole("button", { name: "Remove project" }),
+    );
 
     // The project's group as the Dashboard draws it, no project filter
     // (dashboard-26, DR-038).
@@ -1218,6 +1547,45 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
       within(pr).getByTestId("source-pr-p1-8-state").textContent,
     ).toBe("queued");
     expect(within(pr).queryByRole("button", { name: /Queue/ })).toBeNull();
+  });
+
+  test("Remove forgets the project and hands focus to the sidebar's Dashboard entry (projects-9)", async () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "project.list") return [PROJECTS[1]];
+      if (type === "ledger.get") return useAppStore.getState().ledger;
+      if (type === "ledger.history") return { intents: [], more: false };
+      return {};
+    });
+    seed();
+    const onRemoved = vi.fn();
+    render(
+      <>
+        <nav aria-label="Spex navigation">
+          <button type="button" aria-label="Dashboard — 2 need your attention">
+            Dashboard
+          </button>
+        </nav>
+        <OverviewTab
+          projectId="p1"
+          onRemoved={onRemoved}
+          onOpenSession={vi.fn()}
+          onOpenIntent={vi.fn()}
+          onStartIntent={vi.fn()}
+        />
+      </>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove project" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    });
+    expect(callsOf("project.remove")).toEqual([{ projectId: "p1" }]);
+    expect(onRemoved).toHaveBeenCalled();
+    // The Overview went with the project; focus lands on the sidebar's
+    // Dashboard entry, found by its accessible name — never on body.
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /^Dashboard/ }),
+    );
   });
 
   test("GitHub setup guidance names the unmet condition inside the Sources band (projects-7)", () => {

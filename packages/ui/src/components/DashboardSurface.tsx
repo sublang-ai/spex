@@ -8,7 +8,7 @@
 // same component the Overview tab draws (DR-038). Every state here is
 // derived — the surface writes nothing but Boss acts (queue, close).
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AttentionEntry,
   DerivedIntent,
@@ -18,10 +18,10 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
+import { absoluteTitle, duration, relativeAge } from "../lib/time.js";
 import {
   ProjectGroup,
   firstLine,
-  elapsed,
   queueOf,
   useCaptureReveal,
   useForgeAge,
@@ -53,13 +53,6 @@ const TONE_ROW: Record<"amber" | "red", string> = {
     "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200",
   red: "border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
 };
-
-function duration(ms: number): string {
-  const minutes = Math.round(ms / 60_000);
-  if (minutes < 1) return `${Math.max(1, Math.round(ms / 1000))}s`;
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
 
 /** The finished entry's stats line (dashboard-35): review rounds
  * foremost, omitted when absent. */
@@ -100,20 +93,28 @@ function AttentionRow({
   now,
   onOpen,
   onClose,
+  onClosed,
 }: {
   entry: AttentionEntry;
   projectName: string;
   now: number;
   onOpen: () => void;
   onClose: (as: "done" | "dropped") => Promise<void>;
+  /** The verdict landed and this row is leaving: the parent hands
+   * focus on (DR-010 §6). */
+  onClosed: () => void;
 }) {
   const [busy, setBusy] = useState<"done" | "dropped">();
+  const [error, setError] = useState<string>();
   const tone = entryTone(entry);
   // A verdict is one click by design (DR-038): Confirm and Drop both
   // act on the click, and the History row is the record of it.
   const close = (as: "done" | "dropped") => {
     setBusy(as);
-    void onClose(as).finally(() => setBusy(undefined));
+    setError(undefined);
+    void onClose(as)
+      .then(onClosed, (cause: Error) => setError(cause.message))
+      .finally(() => setBusy(undefined));
   };
   const finishedIntent = entry.kind === "finish" && entry.intentId;
   return (
@@ -142,13 +143,18 @@ function AttentionRow({
               {statsLine(entry.stats)}
             </span>
           ) : null}
+          {error ? (
+            <span className="block truncate text-[11px]" role="alert">
+              Couldn't record the verdict: {error}
+            </span>
+          ) : null}
         </span>
         <span className="shrink-0 text-[11px] opacity-70">{projectName}</span>
         <span
           className="shrink-0 text-[11px] opacity-70"
-          title={new Date(entry.since).toLocaleString()}
+          title={absoluteTitle(entry.since)}
         >
-          {elapsed(entry.since, now)}
+          {relativeAge(entry.since, now)}
         </span>
       </button>
       {finishedIntent ? (
@@ -160,7 +166,7 @@ function AttentionRow({
             onClick={() => close("done")}
             className="min-h-6 rounded border border-current px-2 py-0.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50 dark:hover:bg-black/20"
           >
-            {busy === "done" ? "confirming…" : "Confirm"}
+            {busy === "done" ? "Confirming…" : "Confirm"}
           </button>
           <button
             type="button"
@@ -169,7 +175,7 @@ function AttentionRow({
             onClick={() => close("dropped")}
             className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
           >
-            {busy === "dropped" ? "dropping…" : "Drop"}
+            {busy === "dropped" ? "Dropping…" : "Drop"}
           </button>
         </span>
       ) : null}
@@ -208,7 +214,7 @@ export function DashboardSurface({
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const now = useNow();
   useGroupInputs(projects);
-  const ageOf = useForgeAge(projects, now);
+  const fetchedAt = useForgeAge(projects);
   const { highlightId, capture } = useCaptureReveal();
 
   const filtered =
@@ -223,6 +229,26 @@ export function DashboardSurface({
   const nextHead = nextUnblockedHead(intents, filtered);
   const projectName = (projectId: string) =>
     projects.find((project) => project.id === projectId)?.name ?? projectId;
+
+  // A verdict removes its row; focus moves on to the entry that took
+  // its place, else the previous one, else the all-clear — never the
+  // page body (DR-010 §6).
+  const queueRef = useRef<HTMLDivElement>(null);
+  const [handOff, setHandOff] = useState<{ index: number }>();
+  useEffect(() => {
+    if (!handOff) return;
+    const box = queueRef.current;
+    if (!box) return;
+    const rows = Array.from(box.querySelectorAll<HTMLElement>("[data-band]"));
+    const row = rows[handOff.index] ?? rows[rows.length - 1];
+    const target =
+      row?.querySelector<HTMLElement>("button") ??
+      box.querySelector<HTMLElement>('[data-testid="all-clear-start"]') ??
+      box.querySelector<HTMLElement>('[data-testid="attention-all-clear"]') ??
+      box.querySelector<HTMLElement>("button");
+    target?.focus();
+    setHandOff(undefined);
+  }, [handOff]);
 
   const workspaceLink = (label: string) =>
     onNavigate ? (
@@ -249,16 +275,20 @@ export function DashboardSurface({
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 overflow-y-auto p-6">
       {ledgerError ? (
-        <div className="flex items-center gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <div
+          role="alert"
+          data-testid="ledger-error"
+          className="flex items-center gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+        >
           <span className="min-w-0 flex-1 truncate">
             The ledger could not be loaded: {ledgerError}
           </span>
           <button
             type="button"
             onClick={() => void loadLedger()}
-            className="shrink-0 rounded border border-current px-2 py-0.5 text-xs"
+            className="min-h-6 shrink-0 rounded border border-current px-2 py-0.5 text-xs"
           >
-            retry
+            Retry
           </button>
         </div>
       ) : null}
@@ -275,7 +305,7 @@ export function DashboardSurface({
             title="Filter by project (visibility only)"
             aria-label="Filter by project"
           >
-            <option value="all">all projects</option>
+            <option value="all">All projects</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
@@ -283,8 +313,12 @@ export function DashboardSurface({
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-2" data-testid="attention-queue">
-          {attention.map((entry) => (
+        <div
+          ref={queueRef}
+          className="flex flex-col gap-2"
+          data-testid="attention-queue"
+        >
+          {attention.map((entry, index) => (
             <AttentionRow
               key={`${entry.intentId ?? entry.sessionId}-${entry.kind}`}
               entry={entry}
@@ -296,12 +330,26 @@ export function DashboardSurface({
                   ? closeIntent(entry.intentId, as)
                   : Promise.resolve()
               }
+              onClosed={() => setHandOff({ index })}
             />
           ))}
-          {attention.length === 0 ? (
+          {/* No false all-clear (dashboard-8): the box says it is
+              loading until the ledger has been read, and says nothing
+              beside the failure strip while a load has failed. */}
+          {!ledger && !ledgerError ? (
+            <div
+              role="status"
+              data-testid="attention-loading"
+              className="rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-center text-sm text-neutral-500 dark:border-neutral-700"
+            >
+              Loading…
+            </div>
+          ) : null}
+          {ledger && !ledgerError && attention.length === 0 ? (
             <div
               data-testid="attention-all-clear"
-              className="flex items-center gap-3 rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-sm text-neutral-500 dark:border-neutral-700"
+              tabIndex={-1}
+              className="flex items-center gap-3 rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-sm text-neutral-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:border-neutral-700"
             >
               {nextHead ? (
                 <>
@@ -349,7 +397,7 @@ export function DashboardSurface({
               key={project.id}
               project={project}
               now={now}
-              ageText={ageOf(project.id)}
+              fetchedAt={fetchedAt(project.id)}
               highlightId={highlightId}
               onOpenSession={onOpenSession}
               onOpenIntent={onOpenIntent}

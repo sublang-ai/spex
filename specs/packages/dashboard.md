@@ -54,6 +54,7 @@ While an attention entry is displayed, when its clearing condition arrives, the 
 | Session turn to review | the session's persisted last-viewed marker advancing past the turn |
 
 - Resolving one entry removes no other entry.
+- A verdict taken on the Dashboard hands focus on as its entry leaves: to the entry now at its place, else the last entry, else the all-clear's Start — never to the page body ([DR-010](../decisions/010-interface-craft.md) §6).
 
 ### Attention Badge
 
@@ -82,11 +83,11 @@ Where a project has done work — intents closed after a turn of theirs ended fi
 
 - an intent closed before any turn of it ended finished never lists — it left the queue without a trace;
 - a finished record already named by a closed intent's provenance lists once, as that intent;
-- records order by their file's last change, intents by their close time.
+- records order by their file's last change, intents by their close time, and each row shows that time as an age with the absolute moment in its tooltip.
 
 #### dashboard-28
 
-While the project's one live session [[core-service-4](core-service.md#core-service-4)] runs, the group's Now band shall show that session's status mark, active playbook (or an idle indicator when no engagement is active), human-readable engagement state label — tinted by the state's tone, with the raw state id in the tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and elapsed time since the session started, together with the open intent the session serves, or the latest Boss turn's text for a session serving no intent:
+While the project's one live session [[core-service-4](core-service.md#core-service-4)] runs, the group's Now band shall show that session's status mark, active playbook (or an idle indicator when no engagement is active), human-readable engagement state label — tinted by the state's tone, with the raw state id in the tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and the session's start as an age ("started 3m ago") with the absolute moment in its tooltip, together with the open intent the session serves, or the latest Boss turn's text for a session serving no intent:
 
 - the band updates as session records arrive, without a manual refresh;
 - while no session is live, the band stays quiet with its empty-state note [[dashboard-8](#dashboard-8)].
@@ -96,8 +97,9 @@ While the project's one live session [[core-service-4](core-service.md#core-serv
 The group's Up next band shall list the project's queued intents in rank order, ending in an inline add row that captures a new queued intent, with the head unblocked intent emphasized as the project's next and carrying Start:
 
 - a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with "after ⟨title⟩", the predecessor's project named when it lives in another project, its Start disabled with the reason ([DR-026](../decisions/026-data-graphics-craft.md) §2), and is never presented as next;
-- reorder works by drag and by keyboard alike, and changes only the queue's rank order;
-- each row's actions offer Edit text, Remove — acting on the click with no confirmation, and leaving no history ([DR-038](../decisions/038-history-is-done-work.md)) — and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, "IR-N" opening the record, "Session" opening the capturing session.
+- reorder works by drag — the grip at the row's left is the affordance — by keyboard (Alt+↑/↓ on the focused row), and by the row menu's Move up and Move down, which take the same step, are disabled at the queue's ends, and name the shortcut; a reorder changes only the queue's rank order;
+- each row's actions live in a ⋯ menu that follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) — focus moves into it on open and returns to the trigger on close, Escape and an outside click close it, at most one row menu is open — offering Move up, Move down, Edit text, Remove, and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, "IR-N" opening the record, "Session" opening the capturing session;
+- Remove acts on the click with no confirmation and leaves no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", taking focus and lasting six seconds beyond the last moment its control holds it — re-queues the same text and provenance at the row's former place.
 
 ### Capture
 
@@ -158,12 +160,15 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 
 | Section | Empty condition | Guidance |
 | --- | --- | --- |
-| Attention queue | no entry | all-clear copy naming the globally next unblocked queue head — first by sidebar order — with Start, or plain all-clear copy when no unblocked head exists |
+| Attention queue | no entry, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — with Start, or plain all-clear copy when no unblocked head exists |
 | Project groups | no registered project | how to register a project, with a navigation control to the Workspace |
 | History | no done work | a note that nothing is done here yet |
 | Now | no live session | a quiet idle note |
 | Up next | no queued intent | the inline add row [[dashboard-29](#dashboard-29)] with capture guidance |
 | Sources | no forge binding, or forge adapter not ready | the GitHub setup guidance naming the unmet condition [[projects-7](projects.md#projects-7)] in place ([DR-006](../decisions/006-projects-and-forge.md)) |
+
+- until the ledger has been read, the attention queue and each Up next band show a quiet loading note in place of their empty-state copy, and the all-clear never renders unread;
+- while a ledger read has failed, the failure strip with its Retry stands alone in the attention section — no all-clear, no loading note — and the Up next band names the failure with a Retry of its own.
 
 ### No Takeover
 
@@ -248,7 +253,7 @@ Where fixture intent rows and a fixture record stream span two projects — one 
 
 #### dashboard-16
 
-While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, a viewed-marker advance past the un-ledgered finished turn, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry [[dashboard-4](#dashboard-4)], that the marker advance cleared the turn-to-review stand-in and no intent entry [[dashboard-4](#dashboard-4)], that the verdict cleared the finished entry [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
+While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, a viewed-marker advance past the un-ledgered finished turn, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry [[dashboard-4](#dashboard-4)], that the marker advance cleared the turn-to-review stand-in and no intent entry [[dashboard-4](#dashboard-4)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's Start [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
 
 #### dashboard-17
 
@@ -258,7 +263,7 @@ Where fixture intent rows, records, and review state are persisted to the app st
 
 #### dashboard-36
 
-Where a fixture project holds a queue of three intents, the second after-linked to the first, when the fixture stream dispatches the first, runs a follow-up Boss turn, dispatches the third into a turn that aborts, then finishes the first and closes it done, the test suite shall assert each derived state in sequence: Working on dispatch and again on the follow-up owned by the newest open intent [[dashboard-10](#dashboard-10)] [[dashboard-33](#dashboard-33)], the aborted dispatch releasing the third to Queued at its kept rank with its stamps intact and text editable [[dashboard-34](#dashboard-34)], Finished when its last turn ends finished [[dashboard-10](#dashboard-10)], the after-linked second blocked and never offered as next until the first closes, then unblocked as the project's next [[dashboard-10](#dashboard-10)] [[dashboard-29](#dashboard-29)], and a reorder yielding the new rank order [[dashboard-29](#dashboard-29)].
+Where a fixture project holds a queue of three intents, the second after-linked to the first, when the fixture stream dispatches the first, runs a follow-up Boss turn, dispatches the third into a turn that aborts, then finishes the first and closes it done, the test suite shall assert each derived state in sequence: Working on dispatch and again on the follow-up owned by the newest open intent [[dashboard-10](#dashboard-10)] [[dashboard-33](#dashboard-33)], the aborted dispatch releasing the third to Queued at its kept rank with its stamps intact and text editable [[dashboard-34](#dashboard-34)], Finished when its last turn ends finished [[dashboard-10](#dashboard-10)], the after-linked second blocked and never offered as next until the first closes, then unblocked as the project's next [[dashboard-10](#dashboard-10)] [[dashboard-29](#dashboard-29)], a reorder by keyboard and by the row menu's Move up and Move down — disabled at the ends — yielding the new rank order [[dashboard-29](#dashboard-29)], the row menu opening with focus inside and closing on Escape and on an outside click with focus back on its trigger, one menu open at a time [[dashboard-29](#dashboard-29)], and a Remove followed by Undo re-queuing the same text and provenance at the row's former place, the status line outlasting six seconds only while its control holds focus [[dashboard-29](#dashboard-29)].
 
 ### Capture Coverage
 
@@ -280,7 +285,7 @@ Where a fixture project's `specs/` tree lists one intent record whose status rea
 
 #### dashboard-38
 
-Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings, the never-run drop is absent, the open record is absent, and scrolling back fetches and appends the older intent page.
+Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, and scrolling back fetches and appends the older intent page.
 
 ### Empty-State Coverage
 
@@ -290,13 +295,14 @@ Where Dashboard state is derived across the empty conditions, the test suite sha
 
 - with no registered project, the attention queue and projects area render their empty-state guidance with an activatable navigation control to the Workspace [[dashboard-8](#dashboard-8)], and no welcome takeover replaces the surface [[dashboard-21](#dashboard-21)];
 - with a registered project whose ledger is empty, each band renders its guidance in place [[dashboard-8](#dashboard-8)];
-- with one queued unblocked intent and no attention entry, the all-clear names that intent with Start [[dashboard-8](#dashboard-8)].
+- with one queued unblocked intent and no attention entry, the all-clear names that intent with Start [[dashboard-8](#dashboard-8)];
+- before the ledger is read, the attention queue and the Up next band show their loading notes and no all-clear; with a failed read, the failure strip with Retry stands alone, and Retry reads the ledger again [[dashboard-8](#dashboard-8)].
 
 ### Now-Band Coverage
 
 #### dashboard-23
 
-Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook, human-readable state label with the raw state id in the tooltip, elapsed time, and the open intent's title [[dashboard-28](#dashboard-28)], and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].
+Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook, human-readable state label with the raw state id in the tooltip, the start as an age with the absolute moment in its tooltip, and the open intent's title [[dashboard-28](#dashboard-28)], and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].
 
 ### Browser Journeys
 
@@ -310,4 +316,5 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - queuing from a record row lands a row wearing the record's identifier [[dashboard-30](#dashboard-30)] [[dashboard-31](#dashboard-31)];
 - while the dispatched intent's session runs, the Now band shows it [[dashboard-28](#dashboard-28)];
 - once its turn ends finished, the attention queue lists the finished entry with Confirm and the count badge reads one [[dashboard-1](#dashboard-1)] [[dashboard-9](#dashboard-9)];
-- Confirm removes the entry, the badge clears, and History lists the intent as done [[dashboard-4](#dashboard-4)] [[dashboard-27](#dashboard-27)].
+- Confirm removes the entry, the badge clears, and History lists the intent as done [[dashboard-4](#dashboard-4)] [[dashboard-27](#dashboard-27)];
+- in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)].

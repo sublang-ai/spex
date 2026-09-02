@@ -18,6 +18,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import type { ProjectMeta } from "../state/store.js";
+import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { Icon } from "./Icon.js";
 import {
   CapturedState,
@@ -98,7 +99,8 @@ export function SourcesBand({
   meta,
   tree,
   openSources,
-  ageText,
+  fetchedAt,
+  now,
   onRefresh,
   onQueue,
   onOpenIntent,
@@ -109,10 +111,12 @@ export function SourcesBand({
   tree?: SpecTreeState;
   /** Open intents by `kind:ref` — the captured-artifact swap. */
   openSources: Map<string, DerivedIntent>;
-  /** Age of the served forge data, e.g. "3m ago" (dashboard-14). */
-  ageText?: string;
+  /** When this client observed the served forge data — the line's
+   * data age (dashboard-14). */
+  fetchedAt?: number;
+  now: number;
   onRefresh: () => void;
-  onQueue: (text: string, source: IntentSource) => void | Promise<void>;
+  onQueue: (text: string, source: IntentSource) => void | Promise<unknown>;
   onOpenIntent: (projectId: string, path: string) => void;
   /** Navigation to the project's Overview tab, whose header shows the
    * GitHub binding (dashboard-8); absent on the Overview itself. */
@@ -147,7 +151,7 @@ export function SourcesBand({
         (meta?.forgeError
           ? `Couldn't load GitHub data: ${meta.forgeError}`
           : meta?.loading
-            ? "loading GitHub state…"
+            ? "Loading GitHub state…"
             : "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here.")}{" "}
       {onOpenOverview ? (
         <button
@@ -200,11 +204,17 @@ export function SourcesBand({
             {forgeReady
               ? `${plural(issues.length, "issue")} · ${plural(prs.length, "PR")}`
               : meta?.loading && !forge
-                ? "loading GitHub…"
+                ? "Loading GitHub…"
                 : "GitHub not connected"}{" "}
             · {plural(records.length, "open record")}
-            {ageText ? (
-              <span className="text-neutral-500"> — {ageText}</span>
+            {fetchedAt !== undefined ? (
+              <span
+                className="text-neutral-500"
+                title={absoluteTitle(fetchedAt)}
+              >
+                {" "}
+                — {relativeAge(fetchedAt, now)}
+              </span>
             ) : null}
           </span>
         </button>

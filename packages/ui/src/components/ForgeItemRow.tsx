@@ -71,7 +71,7 @@ export function QueueControl({
   onQueue,
 }: {
   ariaLabel: string;
-  onQueue: () => void | Promise<void>;
+  onQueue: () => void | Promise<unknown>;
 }) {
   const [busy, setBusy] = useState(false);
   return (
@@ -85,7 +85,7 @@ export function QueueControl({
       }}
       className="min-h-6 shrink-0 rounded border border-brand-300 px-2 text-xs text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-950"
     >
-      {busy ? "queuing…" : "Queue"}
+      {busy ? "Queuing…" : "Queue"}
     </button>
   );
 }
@@ -122,7 +122,7 @@ export function ForgeItemRow({
   /** The open intent already sourced from this artifact, when one
    * exists — it replaces the Queue control (dashboard-30). */
   captured?: DerivedIntent;
-  onQueue: (item: ForgeItem) => void | Promise<void>;
+  onQueue: (item: ForgeItem) => void | Promise<unknown>;
   testId?: string;
 }) {
   return (

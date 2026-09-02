@@ -7,7 +7,7 @@
 // the same component the Dashboard uses. Registry management (add,
 // create) lives in the project palette; removal lives here.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { IntentInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
@@ -28,7 +28,7 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
         className="text-[11px] text-red-500"
         title={meta.statusError}
       >
-        repo unreadable — does the path still exist?
+        Repo unreadable — does the path still exist?
       </span>
     );
   }
@@ -66,7 +66,7 @@ function GitHubLine({ meta }: { meta?: ProjectMeta }) {
     : meta?.forgeError
       ? `Couldn't load GitHub data: ${meta.forgeError}`
       : meta?.loading
-        ? "loading GitHub state…"
+        ? "Loading GitHub state…"
         : undefined;
   if (!text) return null;
   return (
@@ -77,6 +77,21 @@ function GitHubLine({ meta }: { meta?: ProjectMeta }) {
       GitHub: {text}
     </div>
   );
+}
+
+/** The sidebar's Dashboard entry, found by its accessible name — the
+ * place focus lands once this project is gone (projects-9, DR-010
+ * §6), since the Overview it stood on goes with it. */
+function focusDashboardEntry(): void {
+  const rail = document.querySelector('[aria-label="Spex navigation"]');
+  const entry = Array.from(
+    rail?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+  ).find((button) =>
+    /^Dashboard( —|$)/.test(
+      button.getAttribute("aria-label") ?? button.textContent ?? "",
+    ),
+  );
+  entry?.focus();
 }
 
 export function OverviewTab({
@@ -104,6 +119,16 @@ export function OverviewTab({
 
   const [error, setError] = useState<string>();
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const removeRef = useRef<HTMLButtonElement>(null);
+  const returnToRemove = useRef(false);
+  // Keep — or a failed removal — hands focus back to the control the
+  // confirm replaced, never to the page body (DR-010 §6).
+  useEffect(() => {
+    if (!confirmRemove && returnToRemove.current) {
+      returnToRemove.current = false;
+      removeRef.current?.focus();
+    }
+  }, [confirmRemove, error]);
 
   const project = projects.find((entry) => entry.id === projectId);
   const meta = projectMeta[projectId];
@@ -116,7 +141,7 @@ export function OverviewTab({
   const pinned = useMemo(() => (project ? [project] : []), [project]);
   const now = useNow();
   useGroupInputs(pinned);
-  const ageOf = useForgeAge(pinned, now);
+  const fetchedAt = useForgeAge(pinned);
   const { highlightId, capture } = useCaptureReveal();
 
   if (!project) {
@@ -158,18 +183,28 @@ export function OverviewTab({
           // (projects-9, DR-010 §4).
           <InlineConfirm
             question="Remove from Spex? The repo stays on disk."
-            confirmLabel="remove"
-            cancelLabel="keep"
+            confirmLabel="Remove"
+            cancelLabel="Keep"
             onConfirm={() => {
               setConfirmRemove(false);
               removeProject(project.id)
-                .then(onRemoved)
-                .catch((cause: Error) => setError(cause.message));
+                .then(() => {
+                  onRemoved();
+                  focusDashboardEntry();
+                })
+                .catch((cause: Error) => {
+                  returnToRemove.current = true;
+                  setError(cause.message);
+                });
             }}
-            onCancel={() => setConfirmRemove(false)}
+            onCancel={() => {
+              returnToRemove.current = true;
+              setConfirmRemove(false);
+            }}
           />
         ) : (
           <button
+            ref={removeRef}
             type="button"
             disabled={liveCount > 0}
             title={
@@ -193,7 +228,7 @@ export function OverviewTab({
         project={project}
         heading={false}
         now={now}
-        ageText={ageOf(project.id)}
+        fetchedAt={fetchedAt(project.id)}
         highlightId={highlightId}
         onOpenSession={onOpenSession}
         onOpenIntent={onOpenIntent}

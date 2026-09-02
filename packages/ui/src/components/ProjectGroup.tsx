@@ -12,6 +12,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ButtonHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
@@ -28,6 +29,8 @@ import type {
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import { stateLabel, type StatusTone } from "../lib/labels.js";
+import { absoluteTitle, relativeAge } from "../lib/time.js";
+import { usePopover } from "../lib/usePopover.js";
 import { RunningMark } from "./RunningMark.js";
 import { SourcesBand } from "./SourcesTabs.js";
 import { openSourceIntents } from "./ForgeItemRow.js";
@@ -38,15 +41,6 @@ import { openSourceIntents } from "./ForgeItemRow.js";
 
 export function firstLine(text: string): string {
   return text.split(/\r?\n/, 1)[0] ?? text;
-}
-
-export function elapsed(since: number, now: number): string {
-  const minutes = Math.floor((now - since) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ${minutes % 60}m`;
-  return `${Math.floor(hours / 24)}d`;
 }
 
 /** A project's queue in served (rank) order. */
@@ -78,7 +72,13 @@ const NEUTRAL_TAG = `${TAG} bg-neutral-100 text-neutral-500 dark:bg-neutral-800 
 const BUG_TAG = `${TAG} bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300`;
 
 const MENU_ITEM =
-  "min-h-6 rounded px-2 py-1 text-left hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-neutral-800";
+  "flex min-h-6 items-center gap-3 rounded px-2 py-1 text-left hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-neutral-800";
+
+const TEXT_LINK =
+  "min-h-6 rounded px-1 text-brand-600 hover:underline dark:text-brand-300";
+
+/** How long a removal stays undoable. */
+const UNDO_MS = 6_000;
 
 export interface CaptureInput {
   projectId: string;
@@ -86,11 +86,15 @@ export interface CaptureInput {
   source?: IntentSource;
 }
 
+/** The ledger's read state, so an empty queue is never claimed before
+ * the ledger has been read (dashboard-8). */
+type LedgerState = "loading" | "failed" | "ready";
+
 // ---------------------------------------------------------------------------
 // The group's inputs, shared by every surface that draws one
 // ---------------------------------------------------------------------------
 
-/** A slow clock for the elapsed labels: honest during quiet periods,
+/** A slow clock for the age labels: honest during quiet periods,
  * never a re-render storm. */
 export function useNow(): number {
   const [now, setNow] = useState(() => Date.now());
@@ -119,13 +123,12 @@ export function useGroupInputs(projects: readonly ProjectInfo[]): void {
   }, [connection, key]);
 }
 
-/** Data age for the Sources line (dashboard-14): when this client
- * observed the served forge data. (The read model's own fetch time
- * is not on the wire yet — see the report.) */
+/** When this client observed each project's served forge data — the
+ * Sources line's data age (dashboard-14). (The read model's own fetch
+ * time is not on the wire yet — see the report.) */
 export function useForgeAge(
   projects: readonly ProjectInfo[],
-  now: number,
-): (projectId: string) => string | undefined {
+): (projectId: string) => number | undefined {
   const projectMeta = useAppStore((state) => state.projectMeta);
   const metaSeen = useRef(new Map<string, ProjectMeta>());
   const [fetchedAt, setFetchedAt] = useState<Record<string, number>>({});
@@ -142,19 +145,14 @@ export function useForgeAge(
       setFetchedAt((current) => ({ ...current, ...updates }));
     }
   }, [projectMeta, projects]);
-  return (projectId) => {
-    const age = fetchedAt[projectId];
-    if (age === undefined) return undefined;
-    const text = elapsed(age, now);
-    return text === "just now" ? text : `${text} ago`;
-  };
+  return (projectId) => fetchedAt[projectId];
 }
 
 /** Capture reveals the shelf (dashboard-31): the new row lands with
  * a brief highlight where it landed. */
 export function useCaptureReveal(): {
   highlightId?: string;
-  capture: (input: CaptureInput) => Promise<void>;
+  capture: (input: CaptureInput) => Promise<IntentInfo>;
 } {
   const queueIntent = useAppStore((state) => state.queueIntent);
   const [highlightId, setHighlightId] = useState<string>();
@@ -165,11 +163,12 @@ export function useCaptureReveal(): {
     },
     [],
   );
-  const capture = async (input: CaptureInput): Promise<void> => {
+  const capture = async (input: CaptureInput): Promise<IntentInfo> => {
     const intent = await queueIntent(input);
     setHighlightId(intent.id);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setHighlightId(undefined), 2500);
+    return intent;
   };
   return { highlightId, capture };
 }
@@ -242,11 +241,16 @@ function Check() {
   );
 }
 
+/** An age in the one time vocabulary (DR-010 §2): "3m ago" with the
+ * absolute moment in the tooltip. */
 function Age({ at, now }: { at?: number; now: number }) {
   if (at === undefined) return null;
   return (
-    <span className="shrink-0 text-[11px] text-neutral-500">
-      {elapsed(at, now)}
+    <span
+      className="shrink-0 text-[11px] text-neutral-500"
+      title={absoluteTitle(at)}
+    >
+      {relativeAge(at, now)}
     </span>
   );
 }
@@ -332,7 +336,7 @@ function RecordHistoryRow({
         type="button"
         onClick={onOpen}
         title={`${record.id}: ${record.title}`}
-        className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
+        className="flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left hover:underline"
       >
         <span
           data-testid="history-tag"
@@ -364,7 +368,7 @@ function HistoryBand({
 
   const more = history?.more ?? false;
   // Older intent pages load as the reader nears the end
-  // (dashboard-27); the "older…" button below stays the accessible
+  // (dashboard-27); the "Older…" button below stays the accessible
   // path.
   useEffect(() => {
     const el = sentinelRef.current;
@@ -387,7 +391,7 @@ function HistoryBand({
       <BandHeading>History</BandHeading>
       {rows.length === 0 ? (
         <div className="text-xs text-neutral-500">
-          {history?.loading ? "loading…" : "Nothing done here yet."}
+          {history?.loading ? "Loading…" : "Nothing done here yet."}
         </div>
       ) : (
         <div className="max-h-40 overflow-y-auto">
@@ -416,9 +420,9 @@ function HistoryBand({
                   data-testid={`history-older-${project.id}`}
                   disabled={history?.loading}
                   onClick={() => void loadHistory(project.id, true)}
-                  className="min-h-6 text-xs text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-300"
+                  className={`${TEXT_LINK} text-xs disabled:opacity-50`}
                 >
-                  {history?.loading ? "loading…" : "older…"}
+                  {history?.loading ? "Loading…" : "Older…"}
                 </button>
               </li>
             ) : null}
@@ -504,8 +508,11 @@ function NowBand({
         <span className="min-w-0 flex-1 truncate" title={title}>
           {title}
         </span>
-        <span className="shrink-0 text-[11px] text-neutral-500">
-          {elapsed(session.createdAt, now)}
+        <span
+          className="shrink-0 text-[11px] text-neutral-500"
+          title={absoluteTitle(session.createdAt)}
+        >
+          started {relativeAge(session.createdAt, now)}
         </span>
       </button>
     </div>
@@ -515,6 +522,26 @@ function NowBand({
 // ---------------------------------------------------------------------------
 // Up next
 // ---------------------------------------------------------------------------
+
+/** One entry of the row menu: the label, and the keyboard shortcut
+ * where one exists — shown for the eye, carried by aria-keyshortcuts
+ * for the ear. */
+function MenuItem({
+  children,
+  hint,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { hint?: string }) {
+  return (
+    <button type="button" role="menuitem" className={MENU_ITEM} {...props}>
+      <span className="flex-1">{children}</span>
+      {hint ? (
+        <span aria-hidden="true" className="text-neutral-500">
+          {hint}
+        </span>
+      ) : null}
+    </button>
+  );
+}
 
 /** The provenance action, named after what it opens (dashboard-29,
  * DR-038): an issue or PR page, the record, or the capturing session. */
@@ -543,6 +570,7 @@ function ProvenanceAction({
         href={source.url}
         target="_blank"
         rel="noreferrer"
+        role="menuitem"
         data-testid={testId}
         onClick={onDone}
         className={MENU_ITEM}
@@ -553,8 +581,7 @@ function ProvenanceAction({
   }
   if (source.kind === "record") {
     return (
-      <button
-        type="button"
+      <MenuItem
         data-testid={testId}
         disabled={!recordPath}
         title={
@@ -566,15 +593,13 @@ function ProvenanceAction({
           onDone();
           if (recordPath) onOpenIntent(intent.projectId, recordPath);
         }}
-        className={MENU_ITEM}
       >
         {source.ref}
-      </button>
+      </MenuItem>
     );
   }
   return (
-    <button
-      type="button"
+    <MenuItem
       data-testid={testId}
       disabled={!sessionKnown}
       title={
@@ -586,10 +611,29 @@ function ProvenanceAction({
         onDone();
         onOpenSession(source.ref);
       }}
-      className={MENU_ITEM}
     >
       Session
-    </button>
+    </MenuItem>
+  );
+}
+
+/** The drag affordance at the row's left (dashboard-29): six quiet
+ * dots under a grab cursor; the row itself is what drags. */
+function Grip() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className="h-4 w-3 shrink-0 cursor-grab text-neutral-300 group-hover:text-neutral-500 active:cursor-grabbing dark:text-neutral-600 dark:group-hover:text-neutral-400"
+    >
+      <circle cx="5.5" cy="3.5" r="1.4" />
+      <circle cx="10.5" cy="3.5" r="1.4" />
+      <circle cx="5.5" cy="8" r="1.4" />
+      <circle cx="10.5" cy="8" r="1.4" />
+      <circle cx="5.5" cy="12.5" r="1.4" />
+      <circle cx="10.5" cy="12.5" r="1.4" />
+    </svg>
   );
 }
 
@@ -599,9 +643,11 @@ function QueueRow({
   queue,
   isNext,
   highlighted,
+  menuOpen,
   projects,
   recordPath,
   sessionKnown,
+  onMenuToggle,
   onStart,
   onMove,
   onEdit,
@@ -616,11 +662,14 @@ function QueueRow({
   queue: DerivedIntent[];
   isNext: boolean;
   highlighted: boolean;
+  /** Whether this row's menu is the band's one open menu. */
+  menuOpen: boolean;
   projects: ProjectInfo[];
   /** The record path for a record-sourced row, when the tree knows it. */
   recordPath?: string;
   /** Whether a chat-sourced row's capturing session still exists. */
   sessionKnown: boolean;
+  onMenuToggle: (open: boolean) => void;
   onStart: () => void;
   onMove: (afterIntentId: string | null) => void;
   onEdit: (text: string) => Promise<void>;
@@ -630,9 +679,17 @@ function QueueRow({
   onDragStart: () => void;
   onDropOn: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState<string>();
+  const rowRef = useRef<HTMLLIElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const returnToRow = useRef(false);
+  const menuRef = usePopover<HTMLDivElement>(menuOpen, {
+    anchorRef: triggerRef,
+    onClose: () => onMenuToggle(false),
+    menu: true,
+  });
   const intent = derived.intent;
+  const title = firstLine(intent.text);
   const blocked = derived.blockedBy;
   const blockedForeign =
     blocked && blocked.projectId !== intent.projectId
@@ -640,17 +697,35 @@ function QueueRow({
         blocked.projectId)
       : undefined;
 
-  // Keyboard reorder (dashboard-29): Alt+Arrow moves the focused row.
+  // One move vocabulary (dashboard-29): the menu's Move up/down and
+  // Alt+↑/↓ on the focused row take the same step.
+  const canMoveUp = index > 0;
+  const canMoveDown = index < queue.length - 1;
+  const moveUp = () => onMove(index >= 2 ? queue[index - 2].intent.id : null);
+  const moveDown = () => onMove(queue[index + 1].intent.id);
   const onKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
     if (!event.altKey) return;
-    if (event.key === "ArrowUp" && index > 0) {
+    if (event.key === "ArrowUp" && canMoveUp) {
       event.preventDefault();
-      onMove(index >= 2 ? queue[index - 2].intent.id : null);
-    } else if (event.key === "ArrowDown" && index < queue.length - 1) {
+      moveUp();
+    } else if (event.key === "ArrowDown" && canMoveDown) {
       event.preventDefault();
-      onMove(queue[index + 1].intent.id);
+      moveDown();
     }
   };
+
+  // Leaving the edit — saved or cancelled — puts focus back on the
+  // row it replaced, never on the page body (DR-010 §6).
+  const leaveEdit = () => {
+    returnToRow.current = true;
+    setEditing(undefined);
+  };
+  useEffect(() => {
+    if (editing === undefined && returnToRow.current) {
+      returnToRow.current = false;
+      rowRef.current?.focus();
+    }
+  }, [editing]);
 
   if (editing !== undefined) {
     return (
@@ -664,9 +739,9 @@ function QueueRow({
           onChange={(event) => setEditing(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && editing.trim()) {
-              void onEdit(editing).then(() => setEditing(undefined));
+              void onEdit(editing).then(leaveEdit);
             } else if (event.key === "Escape") {
-              setEditing(undefined);
+              leaveEdit();
             }
           }}
           aria-label="Edit intent text"
@@ -676,9 +751,12 @@ function QueueRow({
     );
   }
 
+  const menuId = `upnext-menu-${intent.id}-items`;
   return (
     <li
+      ref={rowRef}
       data-testid={`upnext-row-${intent.id}`}
+      data-intent-id={intent.id}
       data-next={isNext ? "true" : undefined}
       data-blocked={blocked ? "true" : undefined}
       data-highlight={highlighted ? "true" : undefined}
@@ -691,18 +769,19 @@ function QueueRow({
       }}
       tabIndex={0}
       onKeyDown={onKeyDown}
-      title="Alt+↑/↓ reorders"
+      title="Drag, Alt+↑/↓, or the row menu reorders"
       className={`group relative flex min-h-6 items-center gap-2 rounded px-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
         highlighted ? "ring-2 ring-brand-400" : ""
       }`}
     >
+      <Grip />
       <span
         className={`min-w-0 flex-1 truncate ${isNext ? "font-medium" : ""} ${
           blocked ? "text-neutral-500" : ""
         }`}
         title={intent.text}
       >
-        {firstLine(intent.text)}
+        {title}
       </span>
       {blocked ? (
         <span
@@ -736,48 +815,79 @@ function QueueRow({
         </button>
       ) : null}
       <button
+        ref={triggerRef}
         type="button"
-        aria-label={`Actions for ${firstLine(intent.text)}`}
+        aria-label={`Actions for ${title}`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-controls={menuOpen ? menuId : undefined}
         data-testid={`upnext-menu-${intent.id}`}
-        onClick={() => setMenuOpen((current) => !current)}
-        className="min-h-6 shrink-0 rounded px-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+        onClick={() => onMenuToggle(!menuOpen)}
+        className="min-h-6 min-w-6 shrink-0 rounded px-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
       >
         ⋯
       </button>
       {menuOpen ? (
-        <div className="absolute right-0 top-full z-10 mt-0.5 flex min-w-36 flex-col rounded-md border border-neutral-200 bg-white p-1 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-          <button
-            type="button"
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          aria-label={`Actions for ${title}`}
+          className="absolute right-0 top-full z-10 mt-0.5 flex min-w-44 flex-col rounded-md border border-neutral-200 bg-white p-1 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+        >
+          {/* A single-pointer alternative to dragging (WCAG 2.2 2.5.7). */}
+          <MenuItem
+            data-testid={`upnext-moveup-action-${intent.id}`}
+            disabled={!canMoveUp}
+            aria-keyshortcuts="Alt+ArrowUp"
+            hint="Alt+↑"
+            onClick={() => {
+              onMenuToggle(false);
+              moveUp();
+            }}
+          >
+            Move up
+          </MenuItem>
+          <MenuItem
+            data-testid={`upnext-movedown-action-${intent.id}`}
+            disabled={!canMoveDown}
+            aria-keyshortcuts="Alt+ArrowDown"
+            hint="Alt+↓"
+            onClick={() => {
+              onMenuToggle(false);
+              moveDown();
+            }}
+          >
+            Move down
+          </MenuItem>
+          <MenuItem
             data-testid={`upnext-edit-action-${intent.id}`}
             onClick={() => {
-              setMenuOpen(false);
+              onMenuToggle(false);
               setEditing(intent.text);
             }}
-            className={MENU_ITEM}
           >
             Edit text
-          </button>
-          <button
-            type="button"
+          </MenuItem>
+          <MenuItem
             data-testid={`upnext-remove-action-${intent.id}`}
             // Remove acts on the click (dashboard-29, DR-038): no
-            // confirmation, no history — a mistaken removal costs one
-            // retyped line.
+            // confirmation, no history — the band's Undo line is the
+            // way back.
             onClick={() => {
-              setMenuOpen(false);
+              onMenuToggle(false);
               void onRemove();
             }}
-            className={MENU_ITEM}
           >
             Remove
-          </button>
+          </MenuItem>
           <ProvenanceAction
             intent={intent}
             recordPath={recordPath}
             sessionKnown={sessionKnown}
             onOpenIntent={onOpenIntent}
             onOpenSession={onOpenSession}
-            onDone={() => setMenuOpen(false)}
+            onDone={() => onMenuToggle(false)}
           />
         </div>
       ) : null}
@@ -785,9 +895,19 @@ function QueueRow({
   );
 }
 
+/** A removal held for Undo (dashboard-29): the row's text and
+ * provenance, and the row it followed, so Undo puts it back where it
+ * was. */
+interface Removal {
+  intent: IntentInfo;
+  afterId: string | null;
+  error?: string;
+}
+
 function UpNextBand({
   project,
   queue,
+  ledgerState,
   projects,
   sessions,
   tree,
@@ -799,6 +919,7 @@ function UpNextBand({
 }: {
   project: ProjectInfo;
   queue: DerivedIntent[];
+  ledgerState: LedgerState;
   projects: ProjectInfo[];
   sessions: SessionInfo[];
   tree?: SpecTreeState;
@@ -806,13 +927,21 @@ function UpNextBand({
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
   onOpenIntent: (projectId: string, path: string) => void;
   onOpenSession: (sessionId: string) => void;
-  onCapture: (input: CaptureInput) => Promise<void>;
+  onCapture: (input: CaptureInput) => Promise<IntentInfo>;
 }) {
   const moveIntent = useAppStore((state) => state.moveIntent);
   const editIntent = useAppStore((state) => state.editIntent);
   const closeIntent = useAppStore((state) => state.closeIntent);
+  const loadLedger = useAppStore((state) => state.loadLedger);
   const [draft, setDraft] = useState("");
+  // One row menu open at a time (dashboard-29): the band holds whose.
+  const [menuFor, setMenuFor] = useState<string>();
+  const [removed, setRemoved] = useState<Removal>();
+  const [focusRowId, setFocusRowId] = useState<string>();
   const dragged = useRef<string | undefined>(undefined);
+  const bandRef = useRef<HTMLDivElement>(null);
+  const undoRef = useRef<HTMLButtonElement>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const nextId = queue.find((derived) => !derived.blockedBy)?.intent.id;
 
@@ -822,13 +951,113 @@ function UpNextBand({
     void onCapture({ projectId: project.id, text }).then(() => setDraft(""));
   };
 
+  // The Undo line stays six seconds — longer while its control holds
+  // focus, so a keyboard user is never raced.
+  const armUndo = () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => {
+      if (document.activeElement === undoRef.current) {
+        armUndo();
+        return;
+      }
+      setRemoved(undefined);
+    }, UNDO_MS);
+  };
+  useEffect(
+    () => () => {
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    },
+    [],
+  );
+  // The removed row took focus with it; the Undo control is the next
+  // sensible place for it.
+  useEffect(() => {
+    if (removed && !removed.error) undoRef.current?.focus();
+  }, [removed]);
+  // A restored row gets focus once the ledger serves it again.
+  useEffect(() => {
+    if (!focusRowId) return;
+    const row = Array.from(
+      bandRef.current?.querySelectorAll<HTMLElement>("li[data-intent-id]") ??
+        [],
+    ).find((el) => el.dataset.intentId === focusRowId);
+    if (!row) return;
+    row.focus();
+    setFocusRowId(undefined);
+  }, [focusRowId, queue]);
+
+  const remove = async (index: number) => {
+    const intent = queue[index].intent;
+    const afterId = index > 0 ? queue[index - 1].intent.id : null;
+    try {
+      // A queued intent has never run, so the core's drop leaves no
+      // trace (core-service-46): the row's Remove.
+      await closeIntent(intent.id, "dropped");
+      setRemoved({ intent, afterId });
+    } catch (cause) {
+      setRemoved({
+        intent,
+        afterId,
+        error: `Couldn't remove “${firstLine(intent.text)}”: ${(cause as Error).message}`,
+      });
+    }
+    armUndo();
+  };
+
+  const undo = async () => {
+    if (!removed || removed.error) return;
+    const { intent, afterId } = removed;
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setRemoved(undefined);
+    try {
+      const restored = await onCapture({
+        projectId: project.id,
+        text: intent.text,
+        source: intent.source,
+      });
+      if (queue.length > 0) {
+        try {
+          await moveIntent(restored.id, afterId);
+        } catch {
+          // The row is back; its former place is best effort.
+        }
+      }
+      setFocusRowId(restored.id);
+    } catch (cause) {
+      setRemoved({
+        intent,
+        afterId,
+        error: `Couldn't undo: ${(cause as Error).message}`,
+      });
+      armUndo();
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-1" data-testid={`upnext-${project.id}`}>
+    <div
+      ref={bandRef}
+      className="flex flex-col gap-1"
+      data-testid={`upnext-${project.id}`}
+    >
       <BandHeading>Up next</BandHeading>
       {queue.length === 0 ? (
         <div className="text-xs text-neutral-500">
-          Nothing queued — add an intent below, or Queue an issue, PR, or
-          record from Sources.
+          {ledgerState === "ready" ? (
+            "Nothing queued — add an intent below, or Queue an issue, PR, or record from Sources."
+          ) : ledgerState === "loading" ? (
+            "Loading…"
+          ) : (
+            <>
+              The queue could not be loaded.{" "}
+              <button
+                type="button"
+                onClick={() => void loadLedger()}
+                className={TEXT_LINK}
+              >
+                Retry
+              </button>
+            </>
+          )}
         </div>
       ) : null}
       <ul className="flex flex-col gap-0.5">
@@ -842,6 +1071,7 @@ function UpNextBand({
               queue={queue}
               isNext={derived.intent.id === nextId}
               highlighted={derived.intent.id === highlightId}
+              menuOpen={menuFor === derived.intent.id}
               projects={projects}
               recordPath={
                 source?.kind === "record"
@@ -853,14 +1083,21 @@ function UpNextBand({
                 source?.kind === "chat" &&
                 sessions.some((session) => session.id === source.ref)
               }
+              onMenuToggle={(open) =>
+                setMenuFor((current) =>
+                  open
+                    ? derived.intent.id
+                    : current === derived.intent.id
+                      ? undefined
+                      : current,
+                )
+              }
               onStart={() => void onStartIntent(derived.intent)}
               onMove={(afterIntentId) =>
                 void moveIntent(derived.intent.id, afterIntentId)
               }
               onEdit={(text) => editIntent(derived.intent.id, text)}
-              // A queued intent has never run, so the core's drop leaves
-              // no trace (core-service-46): the row's Remove.
-              onRemove={() => closeIntent(derived.intent.id, "dropped")}
+              onRemove={() => remove(index)}
               onOpenIntent={onOpenIntent}
               onOpenSession={onOpenSession}
               onDragStart={() => {
@@ -882,6 +1119,34 @@ function UpNextBand({
           );
         })}
       </ul>
+      {removed ? (
+        <div
+          role="status"
+          data-testid={`upnext-removed-${project.id}`}
+          className="flex items-center gap-1.5 text-xs text-neutral-500"
+        >
+          {removed.error ? (
+            <span className="min-w-0 truncate text-red-600 dark:text-red-400">
+              {removed.error}
+            </span>
+          ) : (
+            <>
+              <span className="min-w-0 truncate">
+                Removed “{firstLine(removed.intent.text)}”
+              </span>
+              <span aria-hidden="true">—</span>
+              <button
+                ref={undoRef}
+                type="button"
+                onClick={() => void undo()}
+                className={TEXT_LINK}
+              >
+                Undo
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
       <input
         value={draft}
         data-testid={`add-intent-${project.id}`}
@@ -904,8 +1169,9 @@ function UpNextBand({
 export interface ProjectGroupProps {
   project: ProjectInfo;
   now: number;
-  /** Age of the served forge data, e.g. "3m ago" (dashboard-14). */
-  ageText?: string;
+  /** When this client observed the served forge data — the Sources
+   * line's data age (dashboard-14). */
+  fetchedAt?: number;
   /** The just-captured row to reveal (dashboard-31). */
   highlightId?: string;
   /** The Dashboard names each group; the Overview's header already
@@ -917,7 +1183,7 @@ export interface ProjectGroupProps {
   onOpenIntent: (projectId: string, path: string) => void;
   /** Stage an intent's dispatch (run-view-86). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
-  onCapture: (input: CaptureInput) => Promise<void>;
+  onCapture: (input: CaptureInput) => Promise<IntentInfo>;
   /** Navigation to the project's Overview tab, where the repository
    * header shows the GitHub binding (dashboard-8); absent on the
    * Overview itself. */
@@ -927,7 +1193,7 @@ export interface ProjectGroupProps {
 export function ProjectGroup({
   project,
   now,
-  ageText,
+  fetchedAt,
   highlightId,
   heading = true,
   onOpenSession,
@@ -939,10 +1205,16 @@ export function ProjectGroup({
   const projects = useAppStore((state) => state.projects);
   const sessions = useAppStore((state) => state.sessions);
   const ledger = useAppStore((state) => state.ledger);
+  const ledgerError = useAppStore((state) => state.ledgerError);
   const meta = useAppStore((state) => state.projectMeta[project.id]);
   const tree = useAppStore((state) => state.specTrees[project.id]);
   const loadProjectMeta = useAppStore((state) => state.loadProjectMeta);
   const intents = ledger?.intents ?? [];
+  const ledgerState: LedgerState = ledger
+    ? "ready"
+    : ledgerError
+      ? "failed"
+      : "loading";
   const session = sessions.find(
     (candidate) => candidate.live && candidate.projectId === project.id,
   );
@@ -968,6 +1240,7 @@ export function ProjectGroup({
       <UpNextBand
         project={project}
         queue={queueOf(intents, project.id)}
+        ledgerState={ledgerState}
         projects={projects}
         sessions={sessions}
         tree={tree}
@@ -982,7 +1255,8 @@ export function ProjectGroup({
         meta={meta}
         tree={tree}
         openSources={openSourceIntents(ledger, project.id)}
-        ageText={ageText}
+        fetchedAt={fetchedAt}
+        now={now}
         onRefresh={() => void loadProjectMeta(project.id, true)}
         onQueue={(text, source) =>
           onCapture({ projectId: project.id, text, source })
