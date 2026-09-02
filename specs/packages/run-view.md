@@ -326,14 +326,14 @@ Each session row in the sidebar shall read as its conversation — its title (th
 - a session that ended holding a failure wears a quieter historical mark that counts toward no attention signal;
 - every mark's meaning is in the row's accessible description, so color is never the only channel;
 - the active session's row carries the app's interaction hue, the treatment the surface entries already use;
-- the row's own controls — the project's disclosure caret above it and a deletable session's delete control — are 24px targets, the delete control revealed on hover and on keyboard focus alike.
+- the row's own controls — the project's disclosure caret above it and every non-live session's delete control — are 24px targets, the delete control revealed on hover and on keyboard focus alike; a session the terminal wrote asks its inline confirm in those words, its history going too ([DR-042](../decisions/042-sessions-continue.md)).
 
 
 #### run-view-68
 
 When a session is activated in the sidebar, the workspace shall show that session's project and open the session as a tab, whatever project was current before ([DR-029](../decisions/029-session-history-home.md)):
 
-- a live session opens as its running tab, an ended one as a read-only tab;
+- a live session opens as its running tab, an ended one as its ended tab — a paused conversation a message continues, or read-only where it cannot ([DR-042](../decisions/042-sessions-continue.md));
 - a session already open is focused rather than opened twice;
 - the project the switch made current is named where a new session would be dispatched [[run-view-25](#run-view-25)], so the target is never guessed;
 - the tab's close control files the session back to the sidebar without ending it [[run-view-47](#run-view-47)], where it stays reachable.
@@ -794,3 +794,7 @@ Where the live lane runs with the machine's signed-in agents ([DR-039](../decisi
 #### run-view-115
 
 Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the composer [[run-view-113](#run-view-113)].
+
+#### run-view-109
+
+Where the hermetic lane's demo shell has run a task to its end ([DR-039](../decisions/039-browser-acceptance-journeys.md)), the test suite shall assert through the page that ending the session leaves the composer in place reading as a paused conversation, that a message sent there continues the session on the same tab — the Captain narrating again, the end control back — and that after the shell restarts underneath the page the same tab continues once more [[run-view-68](#run-view-68)]; and, with a session the terminal wrote listed for the project, that its sidebar row's delete control and inline confirm — worded for the terminal's history — remove it from the listing and its record and stream from the shared session store [[run-view-73](#run-view-73)].

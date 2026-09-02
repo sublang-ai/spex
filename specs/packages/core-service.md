@@ -68,28 +68,45 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 
 - While a live session exists for a project, a further session request for the same project is rejected and creates no session.
 - Live sessions for distinct projects run concurrently.
-- While a session is live, a client's disposal request disposes the session's runtime, reports the session as ended, and a subsequent session request for the same project is accepted.
+- While a session is live, a client's disposal request persists the session's Captain snapshot [[core-service-72](#core-service-72)], disposes the session's runtime, reports the session as ended, and a subsequent session request for the same project is accepted; ending pauses the conversation, which a Boss message continues [[core-service-73](#core-service-73)] ([DR-042](../decisions/042-sessions-continue.md)).
 - Where the runtime's own disposal fails, the session is still reported as ended and its project still accepts a new session, with the failure reported to the requesting client — a runtime that failed to dispose is unusable, so holding its project would strand it until a restart.
+
+#### core-service-72
+
+When a Boss turn on a live session ends, and when a live session ends [[core-service-4](#core-service-4)], the core service shall persist the session's Captain snapshot in its sidecar [[core-service-10](#core-service-10)] — the Captain shell's own export, stripped of every provider token — so a crash loses at most the turn underway ([DR-042](../decisions/042-sessions-continue.md)):
+
+- stripping removes every player's resume token and every parked frame's role tokens, and sets the Captain's conversation to reseed from the journal digest on its first call — unopened only while the history is empty — so players begin new conversations on continuation while the Captain carries the story;
+- a shell that cannot export at that moment — a turn still unwinding, a torn state — leaves the last snapshot in place;
+- a Captain that exports no state persists an empty snapshot, and continuation starts it fresh;
+- a snapshot the disk refuses costs continuation, never the turn.
 
 #### core-service-70
 
 When a client sends `session.delete` for a stored session, the core service shall delete the session's files and every in-memory trace of it — its records, turns, usage, and viewed marker — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
 
 - a live session is refused with a `busy` error: it ends first [[core-service-4](#core-service-4)];
-- a session another host wrote [[core-service-60](#core-service-60)] is refused: this core writes none of its files [[core-service-65](#core-service-65)];
+- a session another host wrote [[core-service-60](#core-service-60)] is deleted from the shared session store where its files sit — its record and its stream, nothing else, never a lease directory — behind the lease check [[core-service-75](#core-service-75)]: deleting is the one write that crosses hosts ([DR-042](../decisions/042-sessions-continue.md));
 - an open intent the session served re-derives as queued, and a closed one keeps its verdict [[core-service-49](#core-service-49)].
+
+#### core-service-75
+
+When a client sends `session.delete` for a session another host wrote [[core-service-60](#core-service-60)], the core service shall check the session's lease in the shared session store — the playbook CLI's `.<id>.lock` directory naming the holder's pid and host — and refuse with a `busy` error naming the holder while the lease names a live process on this host or any process on another host ([DR-042](../decisions/042-sessions-continue.md)):
+
+- no lease, or a lease naming a dead process on this host, holds nothing, and the deletion proceeds [[core-service-70](#core-service-70)];
+- a lease directory — live, dead, or retired — is never removed.
 
 #### core-service-32
 
 When a client requests the session list, the core service shall reply with every stored session's lifecycle fields and its conversation summary ([DR-029](../decisions/029-session-history-home.md)):
 
 - each entry carries the session's project, creation and end times, liveness, and whether another host wrote it;
+- each entry says whether a Boss message continues it [[core-service-73](#core-service-73)]: an ended session this core ran, holding a snapshot [[core-service-72](#core-service-72)], with its stream whole [[core-service-10](#core-service-10)] ([DR-042](../decisions/042-sessions-continue.md));
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count and whether it ended holding a failure record.
 
 #### core-service-34
 
-When the core service reports a session's state to subscribed clients — at each turn's start and end, and when the session ends — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with:
+When the core service reports a session's state to subscribed clients — at each turn's start and end, when the session ends, and when a message continues it [[core-service-73](#core-service-73)] — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with:
 
 - A session is named from the turn that starts, not the turn that finishes, so a running session is never listed as having said nothing.
 
@@ -100,6 +117,23 @@ When the core service reports a session's state to subscribed clients — at eac
 While a session is live and no boss turn is active on it, when a client submits Boss composer text for that session, the core service shall start a boss turn on the session's runtime and stream the turn-started record to subscribed clients:
 
 - While a boss turn is active on a session, a further Boss submission for that session is rejected with a busy error and starts no turn, so boss turns on one session run strictly one at a time.
+- A submission for an ended session continues it first [[core-service-73](#core-service-73)], then starts the turn as above.
+
+#### core-service-73
+
+While a session is ended [[core-service-4](#core-service-4)], when a client submits Boss composer text for it [[core-service-5](#core-service-5)], the core service shall continue the session — restore its snapshot [[core-service-72](#core-service-72)] into a fresh Captain shell behind a new runtime on the same session id [[core-service-74](#core-service-74)], report it live again with its end time cleared [[core-service-34](#core-service-34)], then start the turn — or refuse, naming the reason and the way forward ([DR-042](../decisions/042-sessions-continue.md)):
+
+| Case | Reply |
+| --- | --- |
+| another session of the project is live | `busy`: end it to continue this one |
+| the session was written by another host [[core-service-60](#core-service-60)] | `invalid_request`: read-only here — start a new session |
+| the stream is incomplete [[core-service-10](#core-service-10)] | `invalid_request`: cannot continue — start a new session |
+| no snapshot | `invalid_request`: nothing to continue from — start a new session |
+| the config is missing or invalid [[core-service-2](#core-service-2)] | `invalid_config`, as session creation |
+| the shell rejects the snapshot — playbooks, players, role bindings, or the effect ledger changed since | `invalid_config` naming the drift and offering a new session; the session stays ended and continuable |
+
+- an engagement parked on a question resumes with its frames, so the reply lands where the question waited;
+- a refused continuation starts no turn and stamps no intent [[core-service-47](#core-service-47)].
 
 #### core-service-6
 
@@ -215,10 +249,10 @@ When a client requests adapter readiness, the core service shall report one dedu
 
 #### core-service-10
 
-The core service shall persist each session as files in the shared session store as records occur — the session's record stream appended one record per line (hidden records included), beside its manifest and its project-binding sidecar ([DR-036](../decisions/036-file-state-store.md)):
+The core service shall persist each session as files in the shared session store as records occur — the session's record stream appended one record per line (hidden records included), beside its manifest and its project-binding sidecar, which also carries the Captain snapshot [[core-service-72](#core-service-72)] ([DR-036](../decisions/036-file-state-store.md)):
 
 - Where sessions have been persisted, a startup serves the stored sessions, turns, records, and usage over the protocol with the same content and record order as originally streamed, applying the same visibility filtering as live streaming [[core-service-8](#core-service-8)] — turns, titles, and usage totals folded from the stored stream, never separately stored.
-- Where a session was live at shutdown, the next startup reports that session as no longer live.
+- Where a session was live at shutdown, the next startup reports that session as no longer live, its snapshot kept so it lists continuable [[core-service-32](#core-service-32)].
 - The synthesized visible failure record [[core-service-30](#core-service-30)] is persisted in the stream, so replay carries what live subscribers saw.
 - The stream is a token-free replay projection: provider resume tokens are stripped before a record is served or persisted, the session manifest being their only durable home ([DR-036](../decisions/036-file-state-store.md)).
 - When a record cannot be durably appended, the record is still delivered and served from memory, no further stream write is attempted for that session, and the session's listing marks the stream incomplete after its last durable sequence — truncated history is never presented as complete.
@@ -227,14 +261,18 @@ The core service shall persist each session as files in the shared session store
 
 The core service shall serve every session present in the shared session store's directory — the directory the shared config's `sessions` key names, defaulting to the playbook CLI's own sessions directory ([DR-036](../decisions/036-file-state-store.md)) — whether found there at startup or written by another host while the service runs:
 
-- such a session binds to the registered project whose path is the session's recorded working directory, and lists non-live [[core-service-32](#core-service-32)] with its records served per [[core-service-10](#core-service-10)]; a session matching no registered project is not listed;
+- such a session binds to the registered project whose path is the session's recorded working directory, and lists non-live [[core-service-32](#core-service-32)] — read-only, never continued [[core-service-73](#core-service-73)] — with its records served per [[core-service-10](#core-service-10)]; a session matching no registered project is not listed;
 - a record beside no replay stream lists from its Boss journal: each Boss entry opens a turn with its prompt, each Captain reply follows it, and the record's own timestamps bound them ([DR-037](../decisions/037-playbook-12-adoption.md));
-- an arrival or change while the service runs is announced to subscribed clients as a session-state report, with `intents.changed` where a derived intent state can change [[core-service-51](#core-service-51)].
+- an arrival or change while the service runs is announced to subscribed clients as a session-state report, with `intents.changed` where a derived intent state can change [[core-service-51](#core-service-51)]; a record's disappearance is forgotten [[core-service-76](#core-service-76)];
 - registering a project [[core-service-4](#core-service-4)] lists the sessions the directory already holds for it, without waiting for a new record.
+
+#### core-service-76
+
+While the core service serves a session another host wrote [[core-service-60](#core-service-60)], when that session's record leaves the shared session store's directory, the core service shall forget the session — its listing entry [[core-service-32](#core-service-32)] and its served history — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-042](../decisions/042-sessions-continue.md)).
 
 #### core-service-65
 
-The core service shall write none of the files of a session another host wrote [[core-service-60](#core-service-60)], so per-session single-writer holds across hosts without coordination ([DR-036](../decisions/036-file-state-store.md)).
+The core service shall write none of the files of a session another host wrote [[core-service-60](#core-service-60)] — their deletion at the user's request being the one exception [[core-service-70](#core-service-70)] — so per-session single-writer holds across hosts without coordination ([DR-036](../decisions/036-file-state-store.md)).
 
 #### core-service-61
 
@@ -250,7 +288,7 @@ Where the host shell names a legacy SQLite store, when the core service starts o
 
 #### core-service-39
 
-When a host shell stops the core service, the core service shall attempt disposal of every live session's runtime, close its endpoint and its store, and report the disposal failures to the host once every session has been attempted:
+When a host shell stops the core service, the core service shall persist every live session's Captain snapshot [[core-service-72](#core-service-72)] and attempt disposal of its runtime, close its endpoint and its store, and report the disposal failures to the host once every session has been attempted:
 
 - One session's disposal failure neither skips another session's disposal nor leaves the endpoint or the store open, so no live runtime survives a stop because an earlier one failed.
 - Each attempted session is recorded as ended whether or not its runtime disposal succeeded [[core-service-4](#core-service-4)].
@@ -339,7 +377,16 @@ When a session is created for a project, the core package shall build one host c
 
 - A project directory that is no git worktree fails session creation, naming the cause.
 - A reconciliation failure before a turn is delivered as a runtime error record and starts no turn.
-- The settlement hooks settle nothing durable: a Spex session never resumes, so the shell's abandonment clears its stack and no record is written.
+- The settlement hooks settle nothing durable: the sidecar's snapshot is the session's only record [[core-service-72](#core-service-72)], so the shell's abandonment clears its stack and no settlement is written.
+
+#### core-service-74
+
+When a session continues [[core-service-73](#core-service-73)], the core package shall build its new runtime as the playbook CLI continues its own sessions ([DR-042](../decisions/042-sessions-continue.md)):
+
+- the fresh shell enters through the runtime's one init boundary as a restore of the snapshot, never an init;
+- the host effect ledger [[core-service-67](#core-service-67)] is seeded from the snapshot's, since the shell accepts a restore only when the two agree;
+- the runtime's turn ids — numbered from one per runtime — are offset past the session's stored turns before any record is persisted, served, or stamped onto an intent [[core-service-47](#core-service-47)];
+- the record sequence continues from the stored stream's last, so the turn appends to the same stream [[core-service-10](#core-service-10)].
 
 #### core-service-29
 
@@ -449,7 +496,17 @@ Where a fixture session — manifest naming a registered project's directory as 
 
 #### core-service-71
 
-Where a stored session has ended and a second session is live, the test suite shall assert the deletion contract of [[core-service-70](#core-service-70)]: `session.delete` on the ended session removes its files, drops it from the listing [[core-service-32](#core-service-32)] and its history from `history.get`, and a subscribed client receives the removal; the same command on the live session is refused `busy`; and on a fixture session another host wrote [[core-service-60](#core-service-60)] it is refused with the files byte-identical afterwards.
+Where a stored session has ended and a second session is live, the test suite shall assert the deletion contract of [[core-service-70](#core-service-70)]: `session.delete` on the ended session removes its files, drops it from the listing [[core-service-32](#core-service-32)] and its history from `history.get`, and a subscribed client receives the removal; the same command on the live session is refused `busy`; and on a fixture session another host wrote [[core-service-60](#core-service-60)] whose lease names this live process it is refused `busy` naming the holder [[core-service-75](#core-service-75)], with the files byte-identical afterwards.
+
+#### core-service-78
+
+Where fixture sessions another host wrote [[core-service-60](#core-service-60)] sit in the sessions directory — one leased to a dead process on this host beside a retired lease, one leased to another host, and one unleased — the test suite shall assert the cross-host deletion contract: `session.delete` on the dead-leased session removes its record and stream, leaves both lease directories, drops it from the listing, and reaches a subscribed client as a removal [[core-service-70](#core-service-70)] [[core-service-75](#core-service-75)]; on the session leased to another host it is refused `busy` naming that host, its files intact [[core-service-75](#core-service-75)]; and removing the unleased session's files while the service runs makes it leave the listing with a removal broadcast [[core-service-76](#core-service-76)].
+
+#### core-service-77
+
+Where a session on the scripted fake adapter [[core-service-18](#core-service-18)] has completed a turn and ended, the test suite shall assert the continuation contract: the ended session's state report and listing say a message continues it [[core-service-32](#core-service-32)]; while a second session of the project is live, a submission to it is refused `busy` naming the way forward, and once that session ends the same submission continues it — reported live with its end time cleared [[core-service-34](#core-service-34)], its new turn numbered past the stored one, its records appended to the same stream in one ascending sequence [[core-service-74](#core-service-74)] [[core-service-10](#core-service-10)]; after a restart on the same root it lists continuable and continues again [[core-service-72](#core-service-72)]; and a session another host wrote and one whose stream is torn are refused with their reasons [[core-service-73](#core-service-73)]:
+
+- Where the core service runs with the installed playbook's real Captain shell [[core-service-69](#core-service-69)] and players whose results carry resume tokens, the suite shall assert that the sidecar carries no token after the turn and the snapshot's conversation reseeds from its journal [[core-service-72](#core-service-72)], that the continued turn round-trips the Captain's reply with the effect ledger unchanged [[core-service-74](#core-service-74)], and that a roster change in the config makes the next submission fail naming the drift and offering a new session, which the project then accepts [[core-service-73](#core-service-73)].
 
 #### core-service-63
 
