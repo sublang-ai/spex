@@ -38,7 +38,7 @@ import {
   gzipSync,
 } from "node:zlib";
 
-import { CoreService } from "@sublang/spex-core";
+import { CoreService, type CoreServiceOptions } from "@sublang/spex-core";
 
 export interface ServerShellOptions {
   host: string;
@@ -52,6 +52,25 @@ export interface ServerShellOptions {
   tlsKey?: string;
   insecure: boolean;
   uiDist: string;
+  /**
+   * Core service overrides for a harness starting the shell from code
+   * (server-shell-20, DR-039): the core's agent seams and its
+   * environment. No command-line form exists, so a served deployment
+   * never carries them; absent, the boot is exactly the command line's.
+   */
+  core?: Pick<
+    CoreServiceOptions,
+    | "adapterImports"
+    | "adapterRuntime"
+    | "captainFactory"
+    | "env"
+    | "home"
+    | "loadModule"
+    | "runCommand"
+    | "forgeAdapter"
+    | "scaffoldCommand"
+    | "watchConfig"
+  >;
 }
 
 export interface RunningServer {
@@ -408,6 +427,7 @@ export async function startServer(
     dataDir: options.dataDir,
     ...(existsSync(legacy) ? { legacyDbPath: legacy } : {}),
     ...(options.configPath ? { configPath: options.configPath } : {}),
+    ...(options.core ?? {}),
   });
   try {
     await new Promise<void>((resolveListen, rejectListen) => {

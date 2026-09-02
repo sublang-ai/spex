@@ -3,3 +3,4 @@
 
 export * from "./fake-adapter.js";
 export * from "./scripted-captain.js";
+export * from "./demo.js";
