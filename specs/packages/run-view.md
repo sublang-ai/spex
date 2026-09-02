@@ -51,7 +51,9 @@ When the session record stream delivers a tool-use event for a visible player, t
 | an object holding a string at one of `command`, `file_path`, `path`, `pattern`, `url`, `query`, `prompt`, `description` | the first such value in that key order |
 | anything else | nothing — the label is the tool name alone, never a guessed field |
 
-- a subject is presented as one line — outer whitespace trimmed, inner whitespace runs collapsed to single spaces, elided where the card's width ends — so the collapsed card carries what the call acts on and never its payload.
+- a subject is presented as one line — outer whitespace trimmed, inner whitespace runs collapsed to single spaces, elided where the card's width ends — so the collapsed card carries what the call acts on and never its payload;
+- the expanded body prints each string-valued field — a command, a patch, an old and new string, a file's content, the result's text — verbatim under the field's name, and only a value that is not a string as JSON, every line wrapping inside the card so it never widens the pane;
+- a delivered result's span shows in the app's one duration vocabulary — "<1s", "12s", "3m 12s" — never as raw milliseconds ([DR-010](../decisions/010-interface-craft.md) §2).
 
 #### run-view-83
 
@@ -82,7 +84,9 @@ The run view shall show exactly one player pane per player in the session's boun
 
 - a pane is a player's lane, so it stands whether or not that player is engaged in the call now running, and a finished call's transcript stays where the reader last read it;
 - the runtime's report of which players a call engages adds no pane and removes none — a lane the reader is following never leaves under them;
-- a roster with no players renders no player pane.
+- a roster with no players renders no player pane;
+- the pane's header names the lane and, from its first call on, the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the player's model chip beside it, and a lane no call has reached yet reads "Idle until the playbook calls ⟨lane⟩";
+- while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second, hidden first in a narrow pane ([DR-041](../decisions/041-chrome-that-fits.md)) — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5).
 
 #### run-view-79
 
@@ -210,7 +214,7 @@ The run view shall keep cross-project attention and playbook creation at hand:
 
 #### run-view-37
 
-While a turn is active and the Captain is not streaming speech, the Captain thread shall show a working indicator naming what runs ("players working…" while any player runs, "Captain is thinking…" otherwise), so the thread is never inert mid-turn.
+While a turn is active and the Captain is not streaming speech, the Captain thread shall show a working indicator naming what runs — "⟨role⟩ working · ⟨elapsed⟩" while any player runs, the roles of the running lanes' latest calls [[run-view-7](#run-view-7)] and the span since the earliest open call's prompt ticking each second, "Captain is thinking…" otherwise — so the thread is never inert mid-turn and a long call reports its progress ([DR-010](../decisions/010-interface-craft.md) §5).
 
 #### run-view-38
 
@@ -608,7 +612,7 @@ The start view shall obtain projects, playbooks, captain identity, and readiness
 
 #### run-view-20
 
-Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per roster player and a record narrowing the engaged players removes none [[run-view-7](#run-view-7)], player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards labeled by tool name and input subject, with a subject-less input labeled by name alone [[run-view-4](#run-view-4)], a transcript's Markdown link to a target the shell cannot open renders as plain text while an `https` one stays a link [[run-view-83](#run-view-83)], every completed turn with usage data shows its usage [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
+Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per roster player and a record narrowing the engaged players removes none [[run-view-7](#run-view-7)], player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards labeled by tool name and input subject, with a subject-less input labeled by name alone, their bodies printing string fields verbatim and other values as JSON with the result's span in the duration vocabulary [[run-view-4](#run-view-4)], each pane's header naming its latest call's role and an unprompted lane saying whom it waits for [[run-view-7](#run-view-7)], a transcript's Markdown link to a target the shell cannot open renders as plain text while an `https` one stays a link [[run-view-83](#run-view-83)], every completed turn with usage data shows its usage [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
 
 #### run-view-66
 
@@ -710,7 +714,7 @@ Where the run view renders with its default split, the test suite shall assert t
 
 #### run-view-53
 
-While a fixture turn is active, the test suite shall assert the Captain thread shows the working indicator [[run-view-37](#run-view-37)], queued entries render in full with the sends-when-this-turn-ends caption [[run-view-38](#run-view-38)], the composer renders a store-provided draft and reports edits to the store [[run-view-39](#run-view-39)], and activating Abort disables it with an "Aborting…" label [[run-view-40](#run-view-40)].
+While a fixture turn is active, the test suite shall assert the Captain thread shows the working indicator — the Captain thinking while no player runs, and a running player's role with the ticking span since its prompt, the same span in that player's pane header [[run-view-37](#run-view-37)] [[run-view-7](#run-view-7)] — queued entries render in full with the sends-when-this-turn-ends caption [[run-view-38](#run-view-38)], the composer renders a store-provided draft and reports edits to the store [[run-view-39](#run-view-39)], and activating Abort disables it with an "Aborting…" label [[run-view-40](#run-view-40)].
 
 #### run-view-54
 

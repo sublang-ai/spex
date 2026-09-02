@@ -27,8 +27,11 @@ export function compactAge(at: number, now: number): string {
   return age === "just now" ? "now" : age.replace(" ago", "");
 }
 
-/** A span in words: "12s", "3m 12s", "2h 5m". */
+/** A span in words: "<1s", "12s", "3m 12s", "2h 5m" — every span the
+ * app shows, a tool call's included, so milliseconds never reach the
+ * reader. */
 export function duration(ms: number): string {
+  if (ms < 1000) return "<1s";
   const seconds = Math.max(0, Math.round(ms / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);

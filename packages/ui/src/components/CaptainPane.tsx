@@ -10,7 +10,10 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
+import { duration } from "../lib/time.js";
+import { useClock } from "../lib/useClock.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
+import { latestCall } from "./PlayerPane.js";
 import { Markdown } from "./Markdown.js";
 import { MachineCard } from "./MachineCard.js";
 import { SourceChip } from "./DeliveryCard.js";
@@ -298,9 +301,25 @@ export function CaptainPane({
     };
   }
 
-  const anyPlayerRunning = Object.values(view.players).some(
-    (playerView) => playerView.running,
-  );
+  // Who is at work, and since when (DR-010 §5): the running lanes'
+  // latest calls, named by the role each serves, the span since the
+  // earliest open call ticking so a minutes-long call never reads as
+  // a hang.
+  const working = Object.values(view.players)
+    .filter((playerView) => playerView.running)
+    .map((playerView) => ({
+      who: latestCall(playerView)?.role ?? playerView.id,
+      at: latestCall(playerView)?.at,
+    }));
+  const anyPlayerRunning = working.length > 0;
+  const since = working
+    .map((entry) => entry.at)
+    .filter((at): at is number => at !== undefined)
+    .reduce<number | undefined>(
+      (earliest, at) => (earliest === undefined ? at : Math.min(earliest, at)),
+      undefined,
+    );
+  const now = useClock(anyPlayerRunning && since !== undefined);
   const status = stateLabel(view.fsmState, {
     pendingQuestion: view.pendingQuestion !== undefined,
     turnActive: view.turnActive,
@@ -434,7 +453,9 @@ export function CaptainPane({
                 </span>
                 <span className="text-xs text-neutral-500 dark:text-neutral-400">
                   {anyPlayerRunning
-                    ? "players working…"
+                    ? `${working.map((entry) => entry.who).join(", ")} working${
+                        since !== undefined ? ` · ${duration(now - since)}` : "…"
+                      }`
                     : "Captain is thinking…"}
                 </span>
               </div>

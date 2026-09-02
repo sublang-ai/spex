@@ -5,7 +5,7 @@
 // fixture stream shows the expected panes and never hidden content.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen,
+import { act, cleanup, fireEvent, render, screen,
   within,
 } from "@testing-library/react";
 
@@ -111,9 +111,41 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     // A collapsed tool card says the tool and what it acts on; an
     // input naming nothing recognizable stays the name alone.
     expect(screen.getByText("Edit", { exact: false })).toBeTruthy();
-    expect(screen.getByText("src/auth.ts")).toBeTruthy();
+    expect(screen.getByTestId("tool-subject-7").textContent).toBe("src/auth.ts");
     const todo = screen.getByText("TodoWrite").closest("summary");
     expect(todo?.querySelector('[data-testid^="tool-subject-"]')).toBeNull();
+    // The body prints each string field verbatim and only the rest as
+    // JSON, every line wrapping inside the card; a span reads in the
+    // app's one duration vocabulary, never raw milliseconds
+    // (run-view-4).
+    const body = screen.getByTestId("tool-body-7");
+    const blocks = [...body.querySelectorAll("pre")];
+    expect(blocks.map((pre) => pre.getAttribute("data-kind"))).toEqual([
+      "text",
+      "text",
+      "text",
+      "text",
+    ]);
+    expect(blocks[0].textContent).toBe("src/auth.ts");
+    expect(blocks[3].textContent).toBe("ok");
+    expect(body.textContent).toContain("old_string");
+    expect(body.textContent).not.toContain('"src/auth.ts"');
+    expect(blocks[0].className).toContain("overflow-wrap:anywhere");
+    expect(screen.getByTestId("tool-duration-7").textContent).toContain("<1s");
+    const todoBody = screen.getByTestId("tool-body-9");
+    expect(todoBody.querySelector("pre")!.getAttribute("data-kind")).toBe("json");
+    expect(todoBody.textContent).toContain('"content": "ship it"');
+    // A call the core resolved no role for names the lane alone, and
+    // an unprompted lane says whom it waits for (run-view-7).
+    expect(screen.getByTestId("player-name-dev.coder").textContent).toBe(
+      "dev.coder",
+    );
+    expect(screen.getByTestId("player-name-dev.reviewer").textContent).toBe(
+      "dev.reviewer",
+    );
+    expect(screen.getByTestId("player-pane-dev.reviewer").textContent).toContain(
+      "Idle until the playbook calls dev.reviewer",
+    );
     // Only what the shell can open wears a link's affordance.
     expect(screen.getByText("the SDK docs").tagName).toBe("A");
     expect(screen.getByText("auth.md").tagName).toBe("SPAN");
@@ -197,6 +229,39 @@ describe("RUN-37: the thread stays alive while a turn runs", () => {
     expect(screen.getByTestId("working-indicator").textContent).toContain(
       "Captain is thinking…",
     );
+  });
+
+  test("a running player is named with the span since its call, ticking", () => {
+    // Through the coder's prompt and its first delta: the call is open,
+    // and the core resolved its role (run-view-79).
+    const promptAt = (TURN_ONE[3].record as { timestamp: number }).timestamp;
+    const entries = TURN_ONE.slice(0, 5).map((entry, index) =>
+      index === 3 ? { ...entry, role: "coder" } : entry,
+    );
+    vi.useFakeTimers();
+    vi.setSystemTime(promptAt + 133_000);
+    try {
+      renderRun(entries);
+      const indicator = screen.getByTestId("working-indicator");
+      expect(indicator.textContent).toContain("coder working · 2m 13s");
+      // The running lane's header names the role beside the lane and
+      // says the same span, beside its mark (run-view-7).
+      expect(screen.getByTestId("player-name-dev.coder").textContent).toBe(
+        "coder · dev.coder",
+      );
+      expect(screen.getByTestId("player-working").textContent).toBe(
+        "coder working · 2m 13s",
+      );
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(indicator.textContent).toContain("coder working · 2m 14s");
+      expect(screen.getByTestId("player-working").textContent).toBe(
+        "coder working · 2m 14s",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

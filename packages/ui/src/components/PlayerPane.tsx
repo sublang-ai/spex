@@ -9,6 +9,9 @@ import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
+import { duration } from "../lib/time.js";
+import { inputBlocks, outputBlock } from "../lib/tool-body.js";
+import { useClock } from "../lib/useClock.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
 import { Markdown } from "./Markdown.js";
 import { RunningMark } from "./RunningMark.js";
@@ -63,6 +66,20 @@ const SUBJECT_KEYS = [
 
 /** What the call acts on, in one line: a collapsed card that says only
  * "Bash" leaves the reader guessing at every step of a run. */
+/** The call a lane is on, or was last on: its latest prompt names the
+ * role it served and when it opened (run-view-7). */
+export function latestCall(
+  view: PlayerView,
+): { role?: string; at: number } | undefined {
+  for (let i = view.segments.length - 1; i >= 0; i -= 1) {
+    const segment = view.segments[i];
+    if (segment.kind === "prompt") {
+      return { at: segment.at, ...(segment.role ? { role: segment.role } : {}) };
+    }
+  }
+  return undefined;
+}
+
 function toolSubject(input: unknown): string | undefined {
   const raw =
     typeof input === "string"
@@ -160,8 +177,11 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
                 </span>
               ) : null}
               {segment.durationMs !== undefined ? (
-                <span className="shrink-0 text-neutral-500">
-                  · {segment.durationMs}ms
+                <span
+                  data-testid={`tool-duration-${segment.seq}`}
+                  className="shrink-0 text-neutral-500"
+                >
+                  · {duration(segment.durationMs)}
                 </span>
               ) : null}
               {subject ? (
@@ -174,12 +194,30 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
               ) : null}
             </span>
           </summary>
-          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-neutral-600 dark:text-neutral-400">
-            {JSON.stringify(segment.input, null, 2)}
-            {segment.output !== undefined
-              ? `\n\u2192 ${typeof segment.output === "string" ? segment.output : JSON.stringify(segment.output, null, 2)}`
-              : ""}
-          </pre>
+          {/* Each string field verbatim, the rest as JSON, every line
+              wrapping inside the card (run-view-4). */}
+          <div
+            data-testid={`tool-body-${segment.seq}`}
+            className="mt-1 flex max-h-64 flex-col gap-1.5 overflow-y-auto"
+          >
+            {[...inputBlocks(segment.input), outputBlock(segment.output)]
+              .filter((block) => block !== undefined)
+              .map((block, index) => (
+                <div key={index} className="min-w-0">
+                  {block.label ? (
+                    <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                      {block.label}
+                    </div>
+                  ) : null}
+                  <pre
+                    data-kind={block.kind}
+                    className="whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-xs text-neutral-600 dark:text-neutral-400"
+                  >
+                    {block.text}
+                  </pre>
+                </div>
+              ))}
+          </div>
         </details>
       );
     }
@@ -227,6 +265,12 @@ export function PlayerPane({
   const { scrollRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
     view.segments.length,
   );
+  // The pane names the role its latest call served, and while that
+  // call is open, how long the player has been at it — ticking, so a
+  // minutes-long call never reads as a hang (DR-010 §5).
+  const call = latestCall(view);
+  const who = call?.role ?? view.id;
+  const now = useClock(view.running);
 
   const segments = view.segments.slice(-windowSize);
 
@@ -239,8 +283,17 @@ export function PlayerPane({
           a long model name elides, and the at-a-glance usage — which
           the transcript's own result line repeats — gives way first. */}
       <header className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
-        <span className="shrink-0 font-mono text-sm font-semibold">
-          {view.id}
+        <span
+          data-testid={`player-name-${view.id}`}
+          className="shrink-0 text-sm font-semibold"
+        >
+          {call?.role ? (
+            <>
+              {call.role}
+              <span className="font-normal text-neutral-400"> · </span>
+            </>
+          ) : null}
+          <span className="font-mono">{view.id}</span>
         </span>
         {meta ? (
           <span
@@ -262,15 +315,27 @@ export function PlayerPane({
             ) : null}
           </span>
         ) : null}
-        <span className="ml-auto flex shrink-0 items-center">
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {view.running ? (
             // The app's one running mark (run-view-61), its meaning in
-            // text as well as in the pulse.
-            <RunningMark
-              running
-              data-testid="player-running"
-              title="Running"
-            />
+            // text as well as in the pulse — and the elapsed span of
+            // the open call beside it, hidden first in a narrow pane.
+            <>
+              <RunningMark
+                running
+                data-testid="player-running"
+                title="Running"
+              />
+              {call ? (
+                <span
+                  data-testid="player-working"
+                  title={`${who} working since ${new Date(call.at).toLocaleTimeString()}`}
+                  className="hidden whitespace-nowrap text-xs text-neutral-500 @md:inline dark:text-neutral-400"
+                >
+                  {who} working · {duration(now - call.at)}
+                </span>
+              ) : null}
+            </>
           ) : view.turnUsage ? (
             <span className="hidden whitespace-nowrap @md:inline">
               <Usage usage={view.turnUsage} />
@@ -302,7 +367,7 @@ export function PlayerPane({
           ))}
           {view.segments.length === 0 ? (
             <div className="m-auto text-xs text-neutral-500">
-              Waiting for the first prompt
+              Idle until the playbook calls {view.id}
             </div>
           ) : null}
         </div>
