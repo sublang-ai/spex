@@ -291,6 +291,9 @@ export function deliverServerMessageForTests(message: ServerMessage): void {
   deliver?.(message);
 }
 
+/** The newest ledger read's number: only its reply applies. */
+let ledgerReads = 0;
+
 export const useAppStore = create<AppState>((set, get) => {
   function setRunError(sessionId: string, message: string): void {
     set({ runErrors: { ...get().runErrors, [sessionId]: message } });
@@ -942,10 +945,15 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async loadLedger(): Promise<void> {
+      // Replies apply in request order (dashboard-42): an older read
+      // landing after a newer one is discarded, never applied.
+      const read = (ledgerReads += 1);
       try {
         const ledger = await getClient().command("ledger.get", {});
+        if (read !== ledgerReads) return;
         set({ ledger, ledgerError: undefined });
       } catch (cause) {
+        if (read !== ledgerReads) return;
         set({ ledgerError: (cause as Error).message });
       }
     },
