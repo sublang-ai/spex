@@ -5,9 +5,9 @@
 
 ## Status
 
-Accepted (2026-09-01).
-Playbook 12.1 publishes `@sublang/playbook/host-capabilities`, but its repository object lacks two of the six members the Captain shell's exact-shape validator demands and its per-playbook ledgers diverge where the shell requires agreement, so the by-path builder below stands ([DR-038](038-history-is-done-work.md)).
-Amends [DR-034](034-playbook-9-adoption.md) (the playbook floor moves to ^12.0.0), [DR-032](032-session-players.md) (the cligent floor moves to ^0.24.0), and [DR-036](036-file-state-store.md) (a captain-session record without a replay stream lists from its Boss journal).
+Accepted (2026-09-01); the floor moved to ^12.2.0 on 2026-09-02 in lockstep with slc 0.7.0, whose link contract has a linked runtime import `renderGovernedOutcomeContract` from the engine — an export playbook 12.2 introduces.
+Playbook 12.1 and 12.2 publish `@sublang/playbook/host-capabilities`, but its repository object lacks two of the six members the Captain shell's exact-shape validator demands and its per-playbook ledgers diverge where the shell requires agreement, so the by-path builder below stands ([DR-038](038-history-is-done-work.md)).
+Amends [DR-034](034-playbook-9-adoption.md) (the playbook floor moves to ^12.2.0), [DR-032](032-session-players.md) (the cligent floor moves to ^0.24.0), and [DR-036](036-file-state-store.md) (a captain-session record without a replay stream lists from its Boss journal).
 
 ## Context
 
@@ -22,7 +22,7 @@ Amends [DR-034](034-playbook-9-adoption.md) (the playbook floor moves to ^12.0.0
 
 ### The floor
 
-- `@sublang/playbook` ^12.0.0 and `@sublang/cligent` ^0.24.0.
+- `@sublang/playbook` ^12.2.0 and `@sublang/cligent` ^0.24.0: the compiler and the engine move together, since slc 0.7.0 links every compiled playbook against the installed engine's runtime contract and that contract imports `renderGovernedOutcomeContract`, which only 12.2 and later export.
 - The artifact schemas a manifest may advertise are read from the installed package, never restated in Spex or its fixtures, so a release that moves the schema moves the check with it.
 
 ### Host capabilities from the shipped builder

@@ -15,7 +15,7 @@
 // session seeds its ledger from the snapshot it restores, since the
 // shell accepts a restore only when the two agree.
 //
-// Playbook 12.1 publishes `@sublang/playbook/host-capabilities`, but
+// Playbook 12.1 and 12.2 publish `@sublang/playbook/host-capabilities`, but
 // that facade serves a standalone runtime, not the shell: its
 // repository object lacks `acquire` and `runCohort` of the six members
 // the shell's exact-shape validator demands, and each construction

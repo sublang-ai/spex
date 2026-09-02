@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-09-02) on the owner's review of the Dashboard and Workspace; session deletion is extended to sessions another host wrote by [DR-042](042-sessions-continue.md).
-Amends [DR-035](035-intent-ledger.md) (a never-worked intent leaves the ledger without a trace; history lists done work, records included), [DR-011](011-project-workspace.md) (the Repo tab becomes the project's Overview), and [DR-029](029-session-history-home.md) (session deletion is decided); playbook 12.1's published host-capabilities facade was tried against the Captain shell and refused — its repository object lacks `acquire` and `runCohort`, and its per-playbook ledgers diverge where the shell requires one — so [DR-037](037-playbook-12-adoption.md)'s by-path builder stands.
+Amends [DR-035](035-intent-ledger.md) (a never-worked intent leaves the ledger without a trace; history lists done work, records included), [DR-011](011-project-workspace.md) (the Repo tab becomes the project's Overview), and [DR-029](029-session-history-home.md) (session deletion is decided); playbook 12.1 and 12.2's published host-capabilities facade was tried against the Captain shell and refused — its repository object lacks `acquire` and `runCohort`, and its per-playbook ledgers diverge where the shell requires one — so [DR-037](037-playbook-12-adoption.md)'s by-path builder stands.
 
 ## Context
 
