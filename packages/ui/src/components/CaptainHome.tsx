@@ -15,7 +15,8 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import type { AgentPatch } from "../lib/config-ops.js";
-import type { StagedIntent } from "../state/store.js";
+import { keyLabel } from "../lib/shortcuts.js";
+import { useAppStore, type StagedIntent } from "../state/store.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
@@ -140,6 +141,10 @@ export function CaptainHome(props: CaptainHomeProps) {
   /** Transient queue-instead acknowledgment (run-view-85). */
   const [queueNote, setQueueNote] = useState<string>();
   const [captainPopover, setCaptainPopover] = useState(false);
+  // With nothing registered the greeting itself carries the ways in
+  // (run-view-25); seeding is the store action the palette uses.
+  const openAcademyExample = useAppStore((state) => state.openAcademyExample);
+  const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const gearRef = useRef<HTMLButtonElement>(null);
 
@@ -178,6 +183,22 @@ export function CaptainHome(props: CaptainHomeProps) {
     composerRef.current?.focus();
   }
 
+  async function runAcademy(): Promise<void> {
+    if (seeding) return;
+    setSeeding(true);
+    setError(undefined);
+    try {
+      // Registration and selection happen in the store; the greeting
+      // then names the project and the draft is ready to send.
+      await openAcademyExample();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setSeeding(false);
+      composerRef.current?.focus();
+    }
+  }
+
   // A fresh canvas centers the whole cluster — greeting, quick start,
   // project chip, composer — instead of hugging the bottom fifth of
   // an empty window (DR-010 §8). Any real content reverts to the IM
@@ -201,23 +222,47 @@ export function CaptainHome(props: CaptainHomeProps) {
             {props.hasProject ? (
               <>
                 Hello! This is {props.projectName ?? "your project"} — tell
-                me what to do with it and I'll route it to a playbook and
-                drive the players.
+                me what to do with it and I'll route it to a playbook, a
+                scripted workflow the AI players run.
               </>
             ) : props.hasProjects ? (
               <>
                 Hello! I'm your Captain. Pick a project in the sidebar,
                 then tell me what to do with it and I'll route it to a
-                playbook and drive the players.
+                playbook, a scripted workflow the AI players run.
               </>
             ) : (
               <>
                 Hello! I'm your Captain. Add a project — any local git
                 repo — and tell me what to do with it; I'll route it to a
-                playbook and drive the players.
+                playbook, a scripted workflow the AI players run.
               </>
             )}
           </p>
+          {!props.hasProject && !props.hasProjects ? (
+            // The two ways in, in the greeting itself: nothing in the
+            // sidebar to pick means nothing to send the reader to.
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="home-add-project"
+                onClick={props.onOpenPalette}
+                className="rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500"
+              >
+                Add a project…
+              </button>
+              <button
+                type="button"
+                data-testid="home-academy"
+                disabled={seeding || !connected}
+                title="Seeds a sample project with specs, ready to run"
+                onClick={() => void runAcademy()}
+                className="rounded-md border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-950"
+              >
+                {seeding ? "Seeding…" : "Try the Academy example"}
+              </button>
+            </div>
+          ) : null}
           <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
             Tip: type <span className="font-mono">/</span> to browse
             playbooks, or just describe the task in your own words.
@@ -227,7 +272,9 @@ export function CaptainHome(props: CaptainHomeProps) {
         {configBroken ? (
           <CaptainBubble tone="error">
             <p className="text-xs font-semibold">
-              Your config file has errors — playbooks are unavailable.
+              {props.configStatus === "missing"
+                ? "Spex has no config file yet — playbooks are unavailable."
+                : "Your config file has errors — playbooks are unavailable."}
             </p>
             {props.configErrors && props.configErrors.length > 0 ? (
               <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[11px]">
@@ -308,7 +355,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 type="button"
                 data-testid="next-start"
                 disabled={staging || !connected}
-                title="Stage this intent into the composer — sending dispatches it"
+                title="Put this task in the message — Send starts it"
                 onClick={() => {
                   setStaging(true);
                   void Promise.resolve(
@@ -452,10 +499,10 @@ export function CaptainHome(props: CaptainHomeProps) {
             </span>
             <button
               type="button"
-              title="Detach the intent — sending then stamps nothing"
-              aria-label="Detach the staged intent"
+              title="Take the task out of the message"
+              aria-label="Take the task out of the message"
               onClick={props.onDetachStaged}
-              className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-900"
+              className="-my-0.5 flex h-6 w-6 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-900"
             >
               <Icon name="close" className="h-3 w-3" />
             </button>
@@ -533,7 +580,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               <button
                 type="button"
                 data-testid="queue-intent-button"
-                title="Queue as an intent instead of starting a session"
+                title="Save this for later in the project's Up next instead of sending it now"
                 disabled={
                   text.trim().length === 0 || busy || queueing || !connected
                 }
@@ -555,7 +602,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 }}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
               >
-                Queue intent
+                Add to Up next
               </button>
             ) : null}
             <button
@@ -565,10 +612,10 @@ export function CaptainHome(props: CaptainHomeProps) {
               onClick={() => void start()}
               title={
                 props.hasProject
-                  ? undefined
+                  ? "Enter to send · Shift+Enter for a new line"
                   : props.hasProjects
-                    ? "Pick a project first (⌘P)"
-                    : "Add a project first (⌘P)"
+                    ? `Pick a project first (${keyLabel("P")})`
+                    : `Add a project first (${keyLabel("P")})`
               }
               className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >

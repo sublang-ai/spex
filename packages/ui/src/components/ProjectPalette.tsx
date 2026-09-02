@@ -4,8 +4,12 @@
 // The project palette (DR-011): a centered command palette that is
 // the one place projects are chosen, added, and created. Rows carry
 // each project's live state so quiet runs in other projects stay one
-// keystroke away. The palette owns focus while open; Escape returns
-// focus to the opener with any draft intact.
+// keystroke away. With nothing registered there is nothing to filter,
+// so the palette opens as an add flow: the path field focused and the
+// Academy example leading the list (projects-22). The palette owns
+// focus while open — Tab wraps inside it and Escape closes from
+// anywhere in it — and returns focus to the opener with any draft
+// intact (run-view-42).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
@@ -34,6 +38,11 @@ interface ProjectRowState {
   worst?: "question" | "failure";
 }
 
+const ROW_ACTIVE = "bg-neutral-100 dark:bg-neutral-800";
+
+/** The controls Tab walks inside the dialog, in document order. */
+const FOCUSABLE = "button:not([disabled]), input:not([disabled])";
+
 export function ProjectPalette(props: ProjectPaletteProps) {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
@@ -41,19 +50,27 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const pathRef = useRef<HTMLInputElement>(null);
   const openerRef = useRef<Element | null>(null);
   // Academy seeding (DR-015) lives on the store: registration and
   // project selection happen there, the palette only offers the row.
   const openAcademyExample = useAppStore((state) => state.openAcademyExample);
+  // No project registered: the remedy is adding one, so the filter
+  // goes and the add flow takes the front (projects-22).
+  const empty = props.projects.length === 0;
 
   // The palette owns focus while open and hands it back on close.
   useEffect(() => {
     openerRef.current = document.activeElement;
-    searchRef.current?.focus();
+    (empty ? pathRef.current : searchRef.current)?.focus();
     return () => {
       (openerRef.current as HTMLElement | null)?.focus?.();
     };
+    // The opening state decides where focus lands; later renders
+    // must not steal it back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const rowState = useMemo(() => {
@@ -87,9 +104,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       project.path.toLowerCase().includes(query.toLowerCase()),
   );
 
-  // Entries the arrow keys traverse: projects, then Open folder…
-  const entryCount = filtered.length + (props.onPickFolder ? 1 : 0);
+  // Entries the arrow keys traverse, in visual order: the Academy row
+  // where it leads the list, then projects, then Open folder…
+  const lead = empty ? 1 : 0;
+  const entryCount = lead + filtered.length + (props.onPickFolder ? 1 : 0);
   const clamped = Math.min(index, Math.max(0, entryCount - 1));
+  const openFolderIndex = lead + filtered.length;
 
   function pick(projectId: string): void {
     props.onPick(projectId);
@@ -142,33 +162,87 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     });
   }
 
-  function keydown(event: React.KeyboardEvent): void {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      props.onClose();
+  /** Enter on the highlighted entry. */
+  function activate(at: number): void {
+    if (empty && at === 0) {
+      void runAcademy();
       return;
     }
+    const project = filtered[at - lead];
+    if (project) pick(project.id);
+    else if (props.onPickFolder && at === openFolderIndex) openFolder();
+  }
+
+  /** Arrow keys move the highlight from either input. */
+  function moveHighlight(event: React.KeyboardEvent): boolean {
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setIndex((i) => (entryCount === 0 ? 0 : (i + 1) % entryCount));
-      return;
+      return true;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
       setIndex((i) =>
         entryCount === 0 ? 0 : (i - 1 + entryCount) % entryCount,
       );
-      return;
+      return true;
     }
+    return false;
+  }
+
+  function searchKeydown(event: React.KeyboardEvent): void {
+    if (moveHighlight(event)) return;
     if (event.key === "Enter") {
       event.preventDefault();
-      if (clamped < filtered.length && filtered[clamped]) {
-        pick(filtered[clamped].id);
-      } else if (props.onPickFolder && clamped === filtered.length) {
-        openFolder();
-      }
+      activate(clamped);
     }
   }
+
+  function pathKeydown(event: React.KeyboardEvent): void {
+    if (moveHighlight(event)) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      // A typed path adds; an empty field hands Enter to the
+      // highlighted row, so the zero-state is one keystroke deep.
+      if (pathDraft.trim()) void runAdd(false);
+      else activate(clamped);
+    }
+  }
+
+  /** The dialog's own keys: Escape closes from anywhere inside it,
+   * and Tab wraps so focus never leaves it (DR-010 §6). */
+  function dialogKeydown(event: React.KeyboardEvent): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      props.onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const nodes = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [],
+    );
+    if (nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    } else if (!dialogRef.current?.contains(active)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  const academyHint = pathDraft.trim()
+    ? `— seeds ${pathDraft.trim()}`
+    : empty
+      ? "— a sample project with specs, ready to run"
+      : "— seeds a sample project";
 
   return (
     <div
@@ -179,23 +253,44 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
-        aria-label="Choose a project"
+        aria-modal="true"
+        aria-label={empty ? "Add a project" : "Choose a project"}
+        onKeyDown={dialogKeydown}
         className="flex w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
       >
-        <input
-          ref={searchRef}
-          data-testid="palette-search"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setIndex(0);
-          }}
-          onKeyDown={keydown}
-          placeholder="Switch to a project…"
-          className="border-b border-neutral-200 bg-transparent px-4 py-3 text-sm outline-none dark:border-neutral-800"
-        />
+        {empty ? null : (
+          <input
+            ref={searchRef}
+            data-testid="palette-search"
+            aria-label="Filter projects"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setIndex(0);
+            }}
+            onKeyDown={searchKeydown}
+            placeholder="Switch to a project…"
+            className="border-b border-neutral-200 bg-transparent px-4 py-3 text-sm outline-none dark:border-neutral-800"
+          />
+        )}
         <div className="max-h-[40vh] overflow-y-auto py-1">
+          {empty ? (
+            <button
+              type="button"
+              data-testid="palette-academy"
+              disabled={busy}
+              onClick={() => void runAcademy()}
+              className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-brand-600 hover:bg-neutral-50 disabled:opacity-40 dark:text-brand-300 dark:hover:bg-neutral-800 ${
+                clamped === 0 ? ROW_ACTIVE : ""
+              }`}
+            >
+              <Icon name="book" className="h-3.5 w-3.5" />
+              {busy ? "Seeding…" : "Try the Academy example"}
+              <span className="text-[11px] text-neutral-500">{academyHint}</span>
+            </button>
+          ) : null}
           {filtered.map((project, i) => {
             const row = rowState.get(project.id);
             return (
@@ -206,7 +301,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 title={project.path}
                 onClick={() => pick(project.id)}
                 className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
-                  i === clamped ? "bg-neutral-100 dark:bg-neutral-800" : ""
+                  i + lead === clamped ? ROW_ACTIVE : ""
                 }`}
               >
                 <Icon name="folder" className="h-3.5 w-3.5 text-neutral-500" />
@@ -263,9 +358,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               onClick={openFolder}
               disabled={busy}
               className={`flex w-full items-center gap-2 border-t border-neutral-100 px-4 py-2 text-left text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800 ${
-                clamped === filtered.length
-                  ? "bg-neutral-100 dark:bg-neutral-800"
-                  : ""
+                clamped === openFolderIndex ? ROW_ACTIVE : ""
               }`}
             >
               Open folder…
@@ -275,16 +368,17 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         <div className="flex flex-col gap-1.5 border-t border-neutral-200 p-2 dark:border-neutral-800">
           <div className="flex gap-1.5">
             <input
+              ref={pathRef}
               data-testid="palette-path"
+              aria-label="Project path"
               value={pathDraft}
               onChange={(event) => setPathDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") props.onClose();
-                if (event.key === "Enter" && pathDraft.trim()) {
-                  void runAdd(false);
-                }
-              }}
-              placeholder="~/path — add an existing repo or create new"
+              onKeyDown={pathKeydown}
+              placeholder={
+                empty
+                  ? "Add a project by path…"
+                  : "~/path — add an existing repo or create new"
+              }
               className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-950"
             />
             <button
@@ -316,20 +410,18 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               Scaffold specs when creating
             </label>
           ) : null}
-          <button
-            type="button"
-            data-testid="palette-academy"
-            disabled={busy}
-            onClick={() => void runAcademy()}
-            className="flex items-center gap-1.5 rounded px-0.5 py-0.5 text-left text-xs text-brand-600 hover:underline disabled:opacity-40 dark:text-brand-300"
-          >
-            Try the Academy example
-            <span className="text-[11px] text-neutral-500">
-              {pathDraft.trim()
-                ? `— seeds ${pathDraft.trim()}`
-                : "— seeds a sample project"}
-            </span>
-          </button>
+          {empty ? null : (
+            <button
+              type="button"
+              data-testid="palette-academy"
+              disabled={busy}
+              onClick={() => void runAcademy()}
+              className="flex items-center gap-1.5 rounded px-0.5 py-0.5 text-left text-xs text-brand-600 hover:underline disabled:opacity-40 dark:text-brand-300"
+            >
+              Try the Academy example
+              <span className="text-[11px] text-neutral-500">{academyHint}</span>
+            </button>
+          )}
           {error ? (
             <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
               {error}

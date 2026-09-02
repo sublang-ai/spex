@@ -5,7 +5,13 @@
 // operable, carries per-project live state, and owns add/create.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 
 afterEach(cleanup);
 
@@ -108,6 +114,67 @@ describe("project palette keyboard contract (DR-011)", () => {
     });
     expect(screen.queryByTestId("palette-project-p1")).toBeNull();
     expect(screen.getByTestId("palette-project-p2")).toBeTruthy();
+  });
+
+  test("Escape closes from a control deep inside the dialog", () => {
+    const { onClose } = renderPalette();
+    const create = screen.getByTestId("palette-path");
+    create.focus();
+    fireEvent.keyDown(create, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  test("the dialog is modal and Tab wraps at both ends", () => {
+    renderPalette();
+    const dialog = screen.getByRole("dialog", { name: "Choose a project" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    const search = screen.getByTestId("palette-search");
+    const last = screen.getByTestId("palette-academy");
+    // Shift+Tab from the first control lands on the last, Tab from
+    // the last lands on the first: focus never leaves the palette.
+    search.focus();
+    fireEvent.keyDown(search, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(document.activeElement).toBe(search);
+  });
+});
+
+describe("projects-22: with no project, the palette is an add flow", () => {
+  const EMPTY = { projects: [], sessions: [], views: {} };
+
+  test("no filter; the path field is focused; the Academy row leads", () => {
+    renderPalette(EMPTY);
+    expect(screen.queryByTestId("palette-search")).toBeNull();
+    const path = screen.getByTestId("palette-path") as HTMLInputElement;
+    expect(document.activeElement).toBe(path);
+    expect(path.placeholder).toBe("Add a project by path…");
+    const dialog = screen.getByRole("dialog", { name: "Add a project" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    const [first] = within(dialog).getAllByRole("button");
+    expect(first.getAttribute("data-testid")).toBe("palette-academy");
+    expect(first.textContent).toContain("Try the Academy example");
+  });
+
+  test("Enter in the empty path field takes the leading Academy row", async () => {
+    const openAcademyExample = vi.fn(async () => PROJECTS[1]);
+    useAppStore.setState({ openAcademyExample });
+    const { onPick } = renderPalette(EMPTY);
+    fireEvent.keyDown(screen.getByTestId("palette-path"), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(openAcademyExample).toHaveBeenCalledWith(undefined);
+      expect(onPick).toHaveBeenCalledWith("p2");
+    });
+  });
+
+  test("a typed path still adds on Enter", async () => {
+    const { onAddPath } = renderPalette(EMPTY);
+    const path = screen.getByTestId("palette-path");
+    fireEvent.change(path, { target: { value: "/tmp/repo" } });
+    fireEvent.keyDown(path, { key: "Enter" });
+    await vi.waitFor(() =>
+      expect(onAddPath).toHaveBeenCalledWith("/tmp/repo"),
+    );
   });
 });
 

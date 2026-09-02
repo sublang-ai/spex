@@ -27,7 +27,8 @@ import type {
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 import type { AgentPatch } from "../lib/config-ops.js";
-import type { StagedIntent } from "../state/store.js";
+import { keyLabel } from "../lib/shortcuts.js";
+import { useAppStore, type StagedIntent } from "../state/store.js";
 
 // A hand-written `instruction` rides along in the summary: the editor
 // never surfaces it, so a merge patch must leave it out (DR-019).
@@ -167,13 +168,30 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     // The remedy the workspace actually has: with nothing registered,
     // there is nothing in the sidebar to pick (run-view-25).
     renderHome({ hasProject: false, hasProjects: false });
-    expect(screen.getByText(/Add a project/)).toBeTruthy();
+    expect(screen.getByText(/Add a project — any local git repo/)).toBeTruthy();
     expect(screen.queryByText(/Pick a project in the sidebar/)).toBeNull();
+    // Send says what to do first, with this platform's modifier.
+    expect(screen.getByTestId("start-send").title).toBe(
+      `Add a project first (${keyLabel("P")})`,
+    );
+  });
+
+  test("the greeting says what a playbook is, and Send says how", () => {
+    renderHome();
+    expect(
+      screen.getByText(/a scripted workflow the AI players run/),
+    ).toBeTruthy();
+    expect(screen.getByTestId("start-send").title).toBe(
+      "Enter to send · Shift+Enter for a new line",
+    );
   });
 
   test("submitting without a project opens the palette, draft intact", () => {
     const { onStart, onOpenPalette } = renderHome({ hasProject: false });
     expect(screen.getByText(/Pick a project in the sidebar/)).toBeTruthy();
+    expect(screen.getByTestId("start-send").title).toBe(
+      `Pick a project first (${keyLabel("P")})`,
+    );
     const composer = screen.getByTestId(
       "start-composer",
     ) as HTMLTextAreaElement;
@@ -182,6 +200,45 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     expect(onStart).not.toHaveBeenCalled();
     expect(onOpenPalette).toHaveBeenCalled();
     expect(composer.value).toBe("do it");
+  });
+});
+
+describe("run-view-25: with nothing registered, the greeting carries the ways in", () => {
+  test("Add a project… opens the palette; the Academy control seeds through the store", async () => {
+    const openAcademyExample = vi.fn(async () => PROJECT);
+    useAppStore.setState({ openAcademyExample });
+    const { onOpenPalette } = renderHome({
+      hasProject: false,
+      hasProjects: false,
+    });
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    expect(onOpenPalette).toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("home-academy"));
+    // The same store action the palette uses (DR-015); it registers
+    // and selects, so the host then greets by name.
+    await vi.waitFor(() => expect(openAcademyExample).toHaveBeenCalled());
+  });
+
+  test("a seeding failure lands in the thread, the controls stay", async () => {
+    useAppStore.setState({
+      openAcademyExample: vi.fn(async (): Promise<never> => {
+        throw new Error("target directory is not empty");
+      }),
+    });
+    renderHome({ hasProject: false, hasProjects: false });
+    fireEvent.click(screen.getByTestId("home-academy"));
+    await vi.waitFor(() =>
+      expect(screen.getByText(/not empty/).textContent).toBeTruthy(),
+    );
+    expect(
+      (screen.getByTestId("home-academy") as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  test("with projects to pick from, the greeting carries no add controls", () => {
+    renderHome({ hasProject: false, hasProjects: true });
+    expect(screen.queryByTestId("home-add-project")).toBeNull();
+    expect(screen.queryByTestId("home-academy")).toBeNull();
   });
 });
 
@@ -369,6 +426,9 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     expect(card.textContent).toContain("Up next");
     expect(card.textContent).toContain("Address #12: harden the auth flow");
     expect(card.textContent).toContain("+2 more queued");
+    expect(screen.getByTestId("next-start").title).toBe(
+      "Put this task in the message — Send starts it",
+    );
     // Coexists with the quick start card (run-view-88).
     expect(screen.getByTestId("quick-start")).toBeTruthy();
 
@@ -394,9 +454,10 @@ describe("run-view-86: the home composer wears the staged chip", () => {
     });
     const chip = screen.getByTestId("staged-intent-chip");
     expect(chip.textContent).toContain("Address #12: harden the auth flow");
-    fireEvent.click(
-      screen.getByLabelText("Detach the staged intent"),
-    );
+    // Plain words for the control (DR-010 §8), on a 24px target.
+    const detach = screen.getByLabelText("Take the task out of the message");
+    expect(detach.className).toContain("h-6 w-6");
+    fireEvent.click(detach);
     expect(onDetachStaged).toHaveBeenCalled();
   });
 
@@ -424,6 +485,10 @@ describe("run-view-85: queue instead of send, from the home", () => {
       "start-composer",
     ) as HTMLTextAreaElement;
     fireEvent.change(composer, { target: { value: "later: tidy the docs" } });
+    // The secondary action is named by where the text goes.
+    expect(screen.getByTestId("queue-intent-button").textContent).toBe(
+      "Add to Up next",
+    );
     fireEvent.click(screen.getByTestId("queue-intent-button"));
     await vi.waitFor(() =>
       expect(onQueueInstead).toHaveBeenCalledWith("later: tidy the docs"),
