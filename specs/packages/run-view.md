@@ -706,3 +706,56 @@ Where the run view's production modules are inspected, the test suite shall asse
 
 - the modules import no Node-only modules and call no `@sublang/cligent` or `@sublang/playbook` APIs [[run-view-13](#run-view-13)];
 - every write to the rendered record state originates from the protocol client's message handling [[run-view-13](#run-view-13)].
+
+### Browser Journeys
+
+#### run-view-97
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on an empty state root with no config and opens its token URL, the test suite shall assert the first run through the page alone:
+
+- the Captain home greets and offers adding a project, with the quick start listing the seeded playbooks [[run-view-25](#run-view-25)] [[run-view-27](#run-view-27)];
+- submitting composer text with no project opens the palette and keeps the draft [[run-view-26](#run-view-26)];
+- once the Academy example seeds from the palette, the greeting names the project and the sidebar lists it [[run-view-25](#run-view-25)] [[run-view-67](#run-view-67)];
+- typing `/` lists the configured playbooks, Escape hides the menu with the draft intact, and typing reopens it [[run-view-27](#run-view-27)] [[run-view-43](#run-view-43)].
+
+#### run-view-98
+
+Where the harness boots the served shell with the demo project registered and the scripted Captain, when the journey sends a task from the Captain home, the test suite shall assert the first session through the page:
+
+- a session tab opens titled by the task and the sidebar row reads the same title [[run-view-48](#run-view-48)] [[run-view-73](#run-view-73)];
+- the Captain pane shows the run's status lines and a machine card for the code run with its review call nested [[run-view-1](#run-view-1)] [[run-view-60](#run-view-60)] [[run-view-63](#run-view-63)];
+- one pane per roster player stands, the coder's streaming text and collapsed tool cards, then its usage [[run-view-7](#run-view-7)] [[run-view-3](#run-view-3)] [[run-view-4](#run-view-4)] [[run-view-6](#run-view-6)];
+- a message sent during the turn reads queued, never sent, and goes out when the turn ends [[run-view-38](#run-view-38)];
+- ending the session asks the inline confirm, and the tab then renders read-only with the ended note [[run-view-47](#run-view-47)] [[run-view-69](#run-view-69)].
+
+#### run-view-99
+
+Where the harness boots with the demo project registered, when the journey sends a prompt the scripted Captain parks on a player question, the test suite shall assert the reply round trip through the page: the question renders as an incoming bubble naming the player with the composer inviting the answer [[run-view-9](#run-view-9)], the state chip reads waiting in amber [[run-view-59](#run-view-59)], and the reply goes out as the next turn, after which the chip settles [[run-view-9](#run-view-9)].
+
+#### run-view-100
+
+Where the harness boots the served shell, the test suite shall assert the page fails loudly when the core is out of reach [[run-view-50](#run-view-50)]:
+
+- opened with a wrong token, the page names the core it cannot reach and offers retry, and the composer does not read ready;
+- with the shell stopped while the page is open, the page says it is reconnecting; started again on the same root and port, the page recovers with its project list intact.
+
+#### run-view-101
+
+Where the harness boots with the demo project registered, the test suite shall assert the keyboard journey [[run-view-49](#run-view-49)]:
+
+- the platform modifier with P opens the palette, arrow keys move its selection, Enter picks, Escape closes [[run-view-42](#run-view-42)];
+- the modifier with 1 through 4 switches surfaces, and the modifier with B collapses and restores the sidebar [[run-view-71](#run-view-71)];
+- in the composer Enter sends while Shift+Enter inserts a line break [[run-view-8](#run-view-8)];
+- a Tab sequence from the page start reaches the composer, and no shortcut leaves focus stranded on the document body.
+
+#### run-view-102
+
+Where the harness boots with the demo project registered and a finished session, when each surface — Captain home, a session, the Dashboard, the Overview, the Specs tab, Playbooks, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
+
+#### run-view-103
+
+Where the harness boots with the demo project registered, when the journey breaks the shared config on disk while the page is open and then repairs it, the test suite shall assert the Captain home lists the actual error with its in-place Settings link while broken, and returns to its greeting once repaired [[run-view-44](#run-view-44)].
+
+#### run-view-104
+
+Where the live lane runs with the machine's signed-in agents ([DR-039](../decisions/039-browser-acceptance-journeys.md)), when the journey sends a minimal no-change `/code` task, the test suite shall assert through the page that a player pane shows the coder's live output, that the abort control acknowledges instantly and the turn ends aborted [[run-view-10](#run-view-10)] [[run-view-40](#run-view-40)], and that ending the session leaves the tab read-only [[run-view-47](#run-view-47)].

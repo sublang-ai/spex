@@ -113,7 +113,7 @@ When preparing a release tag, the developer/agent shall verify that the tarball 
 
 #### release-20
 
-When preparing a release tag, the developer/agent shall run the automated smoke suite (`npm run smoke`, with the desktop stage for app releases) and see it pass every stage: build, spec lint, unit and integration tests, a core round-trip that seeds the bundled template, serves the built-in catalog and artifacts, and seeds and parses the example project, and an end-user CLI pass that packs the release tarball, installs it into an isolated prefix, and walks the published README's fresh-user and upgrading-user journeys through the installed `spex` bin.
+When preparing a release tag, the developer/agent shall run the automated smoke suite (`npm run smoke`, with the desktop stage for app releases) and see it pass every stage: build, spec lint, unit and integration tests, the browser journeys — the served UI driven in Chromium against a real core with substitute agents ([DR-039](../decisions/039-browser-acceptance-journeys.md)) — a core round-trip that seeds the bundled template, serves the built-in catalog and artifacts, and seeds and parses the example project, and an end-user CLI pass that packs the release tarball, installs it into an isolated prefix, and walks the published README's fresh-user and upgrading-user journeys through the installed `spex` bin.
 
 #### release-21
 

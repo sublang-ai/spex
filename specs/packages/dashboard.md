@@ -124,6 +124,7 @@ When an intent is captured from any Dashboard gesture — a Queue control or the
 While a project group renders, the group's Sources band shall present as a collapsed one-line summary — issue, pull-request, and open-record counts with the age of the data — expanding in place to three tabs, Issues [[dashboard-6](#dashboard-6)], PRs [[dashboard-6](#dashboard-6)], and Open records [[dashboard-24](#dashboard-24)], each paginated in place:
 
 - issue and pull-request rows carry their forge labels as tags;
+- while GitHub is not connected — no binding, or the adapter not ready — the summary says so in place of the issue and pull-request counts, so zero never reads as an empty tracker;
 - expanding, switching tabs, and paging are visibility-only and change no ledger state.
 
 #### dashboard-6
@@ -296,3 +297,17 @@ Where Dashboard state is derived across the empty conditions, the test suite sha
 #### dashboard-23
 
 Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook, human-readable state label with the raw state id in the tooltip, elapsed time, and the open intent's title [[dashboard-28](#dashboard-28)], and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].
+
+### Browser Journeys
+
+#### dashboard-39
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and the scripted Captain, when the journey works the ledger through the page, the test suite shall assert:
+
+- every empty band carries its guidance, and the Sources line reads collapsed with the seeded example's open records behind it, each with a Queue control [[dashboard-8](#dashboard-8)] [[dashboard-20](#dashboard-20)] [[dashboard-24](#dashboard-24)] [[dashboard-30](#dashboard-30)];
+- the inline add row captures a queued intent, revealing its row and clearing the field, and the all-clear names it next [[dashboard-29](#dashboard-29)] [[dashboard-31](#dashboard-31)];
+- a queued intent removed before any turn leaves History untouched [[dashboard-27](#dashboard-27)];
+- queuing from a record row lands a row wearing the record's identifier [[dashboard-30](#dashboard-30)] [[dashboard-31](#dashboard-31)];
+- while the dispatched intent's session runs, the Now band shows it [[dashboard-28](#dashboard-28)];
+- once its turn ends finished, the attention queue lists the finished entry with Confirm and the count badge reads one [[dashboard-1](#dashboard-1)] [[dashboard-9](#dashboard-9)];
+- Confirm removes the entry, the badge clears, and History lists the intent as done [[dashboard-4](#dashboard-4)] [[dashboard-27](#dashboard-27)].

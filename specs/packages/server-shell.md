@@ -120,6 +120,15 @@ The `apps/server` workspace package shall declare the `claude`, `codex`, and `op
 
 The server shell build shall stage the built UI bundle into the shell package, so serving depends on no sibling workspace at run time.
 
+### Test Seam
+
+#### server-shell-20
+
+Where the server shell is started from code with core service overrides — the agent seams of the core: adapter imports, the adapter runtime check, the Captain factory, environment, and home ([DR-039](../decisions/039-browser-acceptance-journeys.md)) — the server shell shall pass them to the core service it boots [[server-shell-1](#server-shell-1)] unchanged:
+
+- the overrides have no command-line form, so a served deployment never carries them;
+- absent overrides leave the boot exactly as the command line configures it.
+
 ### Representation Cache
 
 #### server-shell-18
@@ -196,3 +205,9 @@ Where the server shell serves mutable fixture assets, when the integration suite
 - a fresh launch does not reuse an earlier launch's cache entry [[server-shell-18](#server-shell-18)];
 - an index edit that preserves size and modification time is still observed because the index remains uncached [[server-shell-18](#server-shell-18)], and distinct Host values produce independently retargeted bodies [[server-shell-4](#server-shell-4)] after content coding [[server-shell-16](#server-shell-16)];
 - a populated path later resolving outside the bundle is rejected [[server-shell-4](#server-shell-4)] before cache reuse [[server-shell-18](#server-shell-18)].
+
+### Browser Journey Coverage
+
+#### server-shell-21
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) starts the server shell from code with core overrides naming the fake adapter, a ready adapter runtime, and the scripted Captain, when a browser opens the shell's token URL, the test suite shall assert that the page connects to its own origin and drops the token from the address bar, that a reload reconnects without the token [[server-shell-5](#server-shell-5)], and that the served core answers through the overrides — readiness reporting the fake environment ready and a turn running the scripted narration [[server-shell-20](#server-shell-20)].

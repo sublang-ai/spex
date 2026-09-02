@@ -383,3 +383,9 @@ Where a fixture tree carries decision records — once alongside package files a
 #### spec-view-36
 
 Where a fixture project contains a symlink escaping the project and `specs.read` requests carry `..` segments, absolute paths, non-`.md` targets, and missing files, the test suite shall assert the confinement of [[spec-view-16](#spec-view-16)]: the tree walk skips the escaping symlink with a notice, each malformed read is rejected as `invalid_request`, the missing-file read replies `not_found`, and a valid in-tree path returns the file's raw markdown over the protocol.
+
+### Browser Journeys
+
+#### spec-view-46
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the Academy example seeded and current, when the journey opens the Specs tab, the test suite shall assert the spec view through the page: the outline lists the tree's packages and its decisions branch [[spec-view-1](#spec-view-1)] [[spec-view-7](#spec-view-7)]; expanding a package shows its items and an item's citation activates a jump that lands on the cited item [[spec-view-2](#spec-view-2)] [[spec-view-6](#spec-view-6)]; typing in the filter box narrows the outline to matching items with the match count shown, and clearing it restores the outline [[spec-view-5](#spec-view-5)]; the graph toggle adds the citation graph beside the outline and removes it again [[spec-view-20](#spec-view-20)].

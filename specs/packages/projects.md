@@ -19,7 +19,7 @@ When the user confirms a directory in the project palette, the palette shall res
 
 - The top level of a git work tree: the palette registers the directory as a project and makes it the workspace's current project.
 - Inside a work tree below its top level: the palette registers nothing and shows a message naming the work tree's top-level path.
-- No git work tree at all: the palette initializes a git repository in the directory and registers it as a project, without further prompts.
+- No git work tree at all: the palette registers nothing and shows a message naming the condition and pointing at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path — an existing-repo action never initializes a repository on its own.
 
 #### projects-2
 
@@ -77,6 +77,7 @@ Where a project is bound to a GitHub repository, while the gh CLI is installed a
 Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition — no GitHub `origin` remote, gh not installed, or gh not authenticated — instead of issue and pull-request lists:
 
 - While the panel shows setup guidance, the Overview tab keeps showing repository state [[projects-4](#projects-4)] and its remove control remains functional.
+- The Overview's header names the guidance beside the repository state, so the reason GitHub is empty is read without opening the Sources band.
 
 ### Session and Removal
 
@@ -196,6 +197,18 @@ Where a fixture repository is registered, when the project is removed and the co
 #### projects-26
 
 Where the project palette renders with one project holding a live session and one without, the test suite shall assert that the mode choices read "Add an existing repo" and "Create a new project" with the submit label mirroring the selected mode [[projects-22](#projects-22)], that the live project's open control reads "Open live session" and carries the pulsing status dot while the other project's reads "Open session" [[projects-23](#projects-23)], and that no user-facing string on the surface contains the word "forge" [[projects-25](#projects-25)].
+
+### Browser Journeys
+
+#### projects-28
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with no project, the test suite shall assert the project journey through the page:
+
+- the palette's Academy action seeds the example, which becomes the current project [[projects-27](#projects-27)];
+- confirming a path that is no git work tree shows the guidance and registers nothing [[projects-1](#projects-1)];
+- confirming an existing repository's path adds it and makes it current, and confirming the same path again switches to it without a duplicate [[projects-1](#projects-1)] [[projects-2](#projects-2)];
+- the Overview tab shows the repository's branch and, for a project with no GitHub origin, the setup guidance naming that condition in GitHub terms [[projects-4](#projects-4)] [[projects-7](#projects-7)] [[projects-25](#projects-25)];
+- confirming removal in the Overview forgets the project, clears it from the sidebar, and leaves the directory in place [[projects-9](#projects-9)].
 
 ## References
 

@@ -256,3 +256,14 @@ While a compile driven through the app store is running, the test suite shall as
 #### playbook-library-31
 
 Where the shared config state is missing or invalid, the test suite shall assert that the Library renders the config gate — the Captain-scope explanation and the fix-it-in-Settings direction [[playbook-library-28](#playbook-library-28)] — with "Settings" as an activatable navigation control when a navigation callback is supplied and as plain text when it is not, and that no playbook list or compile form is rendered.
+
+### Browser Journeys
+
+#### playbook-library-41
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on the demo config, when the journey works the Playbooks surface through the page, the test suite shall assert:
+
+- every configured playbook lists with its command, intent, and role bindings [[playbook-library-1](#playbook-library-1)];
+- the built-ins absent from the config list beside them, and adding one writes it to the config and lists it among the configured playbooks, after which the Captain home's slash menu offers its command [[playbook-library-34](#playbook-library-34)];
+- opening a playbook's pipeline view shows its stages [[playbook-library-22](#playbook-library-22)];
+- removing a configured playbook asks for the inline confirm, then leaves the config without it [[playbook-library-16](#playbook-library-16)].

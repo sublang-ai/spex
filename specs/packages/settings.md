@@ -192,3 +192,14 @@ Where external edit reflection is exercised, given a connected client holding Se
 #### settings-25
 
 Where the Settings surface renders against fixture state, the test suite shall assert that each notification row shows its human-readable label with the wire event id in the row's tooltip [[settings-22](#settings-22)], that a not-ready adapter's long fix requirement renders without truncation [[settings-23](#settings-23)], and that with an invalid config the copy control places the config file path on the clipboard and shows a transient copied confirmation [[settings-24](#settings-24)].
+
+### Browser Journeys
+
+#### settings-29
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a demo config carrying a comment, when the journey edits Settings through the page, the test suite shall assert:
+
+- the Captain editor shows the config's captain block and saving a changed model writes the file with the comment and key order kept and the surface showing the new value [[settings-1](#settings-1)] [[settings-4](#settings-4)] [[settings-7](#settings-7)];
+- an edit the fail-closed rules reject is refused with its message shown and the file left unchanged [[settings-2](#settings-2)];
+- the readiness panel lists one entry per adapter the config names [[settings-5](#settings-5)];
+- an edit made to the file on disk from outside the app is reflected on the surface without a reload [[settings-8](#settings-8)].
