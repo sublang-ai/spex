@@ -346,6 +346,9 @@ export function CaptainPane({
   const status = stateLabel(view.fsmState, {
     pendingQuestion: view.pendingQuestion !== undefined,
     turnActive: view.turnActive,
+    playersRunning: Object.values(view.players).some(
+      (playerView) => playerView.running,
+    ),
   });
   // The live call tree's roots: a frame with no caller the pane knows
   // (run-view-63/78).

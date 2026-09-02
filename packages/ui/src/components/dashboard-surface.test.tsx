@@ -975,6 +975,35 @@ describe("dashboard-28: the Now band reads the live lane", () => {
     expect(screen.queryByTestId("now-drop-p2")).toBeNull();
   });
 
+  test("before a run draws, the row names no playbook and a live turn reads working", () => {
+    const view = initialSessionView([{ id: "dev.coder" }]);
+    view.turnActive = true;
+    view.players["dev.coder"].running = true;
+    seed({
+      sessions: [
+        {
+          id: "s-live",
+          projectId: "p1",
+          projectPath: "/tmp/alpha",
+          title: "Fix login flow",
+          createdAt: NOW - MIN,
+          live: true,
+          endedAt: null,
+          players: [],
+          initialVisible: [],
+          turns: 1,
+          failed: false,
+        },
+      ],
+      views: { "s-live": view },
+    });
+    renderSurface();
+    const row = screen.getByTestId("now-session-p1");
+    expect(row.textContent).not.toContain("no playbook");
+    expect(row.textContent).toContain("working");
+    expect(row.textContent).not.toContain("idle");
+  });
+
   test("Drop beside the served intent asks the inline confirm, then closes it dropped (dashboard-41)", async () => {
     const view = initialSessionView([]);
     view.turnActive = true;
@@ -1384,6 +1413,11 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     });
     const { onOpenIntent } = renderSurface();
 
+    // Until the first page answers the band loads: the tree's records
+    // already show, and the control says a page is in flight rather
+    // than offering more (dashboard-8/27).
+    expect(screen.getByTestId("history-older-p1").textContent).toBe("Loading…");
+    expect((screen.getByTestId("history-older-p1") as HTMLButtonElement).disabled).toBe(true);
     await screen.findByTestId("history-row-h1");
     // Newest first — intents by close time, records by last change;
     // IR-2 lists once, as the intent naming it; open IR-3 never lists.
@@ -1450,6 +1484,99 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     await waitFor(() =>
       expect(screen.queryByTestId("history-older-p1")).toBeNull(),
     );
+  });
+
+  test("an empty band reads Loading… until its first page answers", async () => {
+    let answer!: (page: { intents: never[]; more: boolean }) => void;
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "ledger.history") {
+        return new Promise((resolve) => {
+          answer = resolve;
+        });
+      }
+      if (type === "ledger.get") return useAppStore.getState().ledger;
+      return {};
+    });
+    seed({ projects: [PROJECTS[0]], history: {} });
+    renderSurface();
+    expect(screen.getByTestId("history-empty-p1").textContent).toBe("Loading…");
+    await act(async () => {
+      answer({ intents: [], more: false });
+    });
+    expect(screen.getByTestId("history-empty-p1").textContent).toBe(
+      "Nothing done here yet.",
+    );
+  });
+
+  test("the newest eight rows show; Older… reveals the rest before fetching", async () => {
+    const many = {
+      intents: Array.from({ length: 10 }, (_, index) => ({
+        intent: info({
+          id: `m${index}`,
+          projectId: "p1",
+          text: `Done ${index}`,
+          closedAt: NOW - (index + 1) * MIN,
+          closedAs: "done",
+        }),
+      })),
+      more: false,
+    };
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "ledger.history") return many;
+      if (type === "ledger.get") return useAppStore.getState().ledger;
+      return {};
+    });
+    seed({ projects: [PROJECTS[0]], history: {} });
+    renderSurface();
+    await screen.findByTestId("history-row-m0");
+    expect(ids()).toHaveLength(8);
+    expect(screen.queryByTestId("history-row-m8")).toBeNull();
+    // No scroll box: the band shows its rows in full.
+    expect(screen.getByTestId("history-p1").querySelector(".overflow-y-auto")).toBeNull();
+    // Older… reveals what is already loaded without another fetch.
+    const older = screen.getByTestId("history-older-p1");
+    expect(older.textContent).toBe("Older…");
+    fireEvent.click(older);
+    expect(ids()).toHaveLength(10);
+    expect(callsOf("ledger.history")).toHaveLength(1);
+    // Nothing left behind: the control leaves.
+    expect(screen.queryByTestId("history-older-p1")).toBeNull();
+  });
+
+  test("a record orders by the date its status line carries, else file time", () => {
+    const tree: SpecTreeState = {
+      ...RECORD_TREE,
+      intents: [
+        {
+          id: "IR-9",
+          title: "Dated late, filed early",
+          path: "intents/009-dated.md",
+          status: "Done (2026-03-01)",
+          finished: "done",
+          updatedAt: Date.parse("2026-01-01"),
+        },
+        {
+          id: "IR-8",
+          title: "Undated, filed later",
+          path: "intents/008-undated.md",
+          status: "Done",
+          finished: "done",
+          updatedAt: Date.parse("2026-02-01"),
+        },
+      ],
+    };
+    seed({
+      projects: [PROJECTS[0]],
+      specTrees: { p1: tree },
+      history: { p1: { intents: [], more: false } },
+    });
+    renderSurface();
+    expect(ids()).toEqual(["IR-9", "IR-8"]);
+    expect(
+      within(screen.getByTestId("history-row-IR-9")).getByTitle(
+        new Date(Date.parse("2026-03-01")).toLocaleString(),
+      ),
+    ).toBeTruthy();
   });
 
   test("a finished record lists with a check before its record row", () => {
@@ -1572,6 +1699,25 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     fireEvent.click(screen.getByTestId("sources-toggle-p1"));
     expect(screen.getByTestId("sources-p1").textContent).toContain(
       "No GitHub connection yet",
+    );
+  });
+
+  test("a forge state not yet read is loading, never not connected (dashboard-20)", () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "forge.items" || type === "project.status") {
+        return new Promise(() => {});
+      }
+      if (type === "ledger.get") return useAppStore.getState().ledger;
+      return {};
+    });
+    seed({ projects: [PROJECTS[0]], projectMeta: {} });
+    renderSurface();
+    const line = screen.getByTestId("sources-toggle-p1");
+    expect(line.textContent).toContain("Loading GitHub…");
+    expect(line.textContent).not.toContain("GitHub not connected");
+    fireEvent.click(line);
+    expect(screen.getByTestId("sources-guidance-p1").textContent).toContain(
+      "Loading GitHub state…",
     );
   });
 

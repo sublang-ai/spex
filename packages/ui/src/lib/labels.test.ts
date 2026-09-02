@@ -39,8 +39,24 @@ describe("stateLabel", () => {
   test("an active turn tints emerald; no state reads idle", () => {
     expect(stateLabel("coding", { turnActive: true }).tone).toBe("emerald");
     expect(stateLabel(undefined)).toEqual({ text: "idle", tone: "neutral" });
-    expect(stateLabel(undefined, { turnActive: true }).text).toBe(
-      "players working",
+    expect(stateLabel("hub")).toEqual({ text: "idle", tone: "neutral" });
+  });
+
+  test("a live turn with no leaf state is deciding or working, never idle", () => {
+    expect(stateLabel(undefined, { turnActive: true })).toEqual({
+      text: "deciding",
+      tone: "emerald",
+    });
+    expect(stateLabel("hub", { turnActive: true, playersRunning: true })).toEqual({
+      text: "working",
+      tone: "emerald",
+    });
+    expect(stateLabel("idle", { turnActive: true, playersRunning: false }).text).toBe(
+      "deciding",
+    );
+    // A real leaf state keeps its own words.
+    expect(stateLabel("coding", { turnActive: true, playersRunning: true }).text).toBe(
+      "coding",
     );
   });
 });

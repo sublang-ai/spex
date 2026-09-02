@@ -191,11 +191,20 @@ export type HistoryRow =
   | { kind: "intent"; id: string; at: number; intent: IntentInfo }
   | { kind: "record"; id: string; at: number; record: SpecRecordInfo };
 
+/** The moment a finished record's status line dates it — "Done
+ * (2026-09-02)" — when it carries one (dashboard-27). */
+export function statusDate(status: string | undefined): number | undefined {
+  const match = /\b(\d{4}-\d{2}-\d{2})\b/.exec(status ?? "");
+  if (!match) return undefined;
+  const at = Date.parse(match[1]);
+  return Number.isFinite(at) ? at : undefined;
+}
+
 /** The band's one timeline (dashboard-27, DR-038): the served worked
  * closed intents and the tree's finished records, newest first — a
  * record a closed intent names as its provenance lists once, as that
- * intent. Intents order by close time, records by their file's last
- * change. */
+ * intent. Intents order by close time, records by the date their
+ * status line carries, else by their file's last change. */
 export function historyRows(
   closed: readonly ClosedIntent[],
   records: readonly SpecRecordInfo[],
@@ -216,7 +225,7 @@ export function historyRows(
     rows.push({
       kind: "record",
       id: record.id,
-      at: record.updatedAt ?? 0,
+      at: statusDate(record.status) ?? record.updatedAt ?? 0,
       record,
     });
   }
@@ -346,10 +355,13 @@ function RecordHistoryRow({
           ) : undefined
         }
       />
-      <Age at={record.updatedAt} now={now} />
+      <Age at={statusDate(record.status) ?? record.updatedAt} now={now} />
     </li>
   );
 }
+
+/** How many History rows show before "Older…" (dashboard-27). */
+const HISTORY_PAGE = 8;
 
 function HistoryBand({
   project,
@@ -364,39 +376,43 @@ function HistoryBand({
 }) {
   const history = useAppStore((state) => state.history[project.id]);
   const loadHistory = useAppStore((state) => state.loadHistory);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // The newest eight rows, then "Older…" reveals eight more from what
+  // is loaded and fetches the next intent page once that runs out
+  // (dashboard-27) — a control, never a scroll box the eye slides past.
+  const [shown, setShown] = useState(HISTORY_PAGE);
 
   const more = history?.more ?? false;
-  // Older intent pages load as the reader nears the end
-  // (dashboard-27); the "Older…" button below stays the accessible
-  // path.
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || !more || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver((entries) => {
-      if (
-        entries.some((entry) => entry.isIntersecting) &&
-        !useAppStore.getState().history[project.id]?.loading
-      ) {
-        void loadHistory(project.id, true);
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [more, history?.intents.length, project.id, loadHistory]);
-
   const rows = historyRows(history?.intents ?? [], tree?.intents ?? []);
+  const visible = rows.slice(0, shown);
+  // Loading reads as loading until the page has answered
+  // (dashboard-8): an unread band never claims nothing was done, and
+  // the control says a page is in flight while records already show.
+  const inFlight = history === undefined || history.loading === true;
+  const older = rows.length > shown || more || inFlight;
+  const reveal = () => {
+    if (rows.length > shown) {
+      setShown((count) => count + HISTORY_PAGE);
+      return;
+    }
+    if (more && !inFlight) {
+      setShown((count) => count + HISTORY_PAGE);
+      void loadHistory(project.id, true);
+    }
+  };
   return (
     <div className="flex flex-col gap-1" data-testid={`history-${project.id}`}>
       <BandHeading>History</BandHeading>
       {rows.length === 0 ? (
-        <div className="text-xs text-neutral-500">
-          {history?.loading ? "Loading…" : "Nothing done here yet."}
+        <div
+          className="text-xs text-neutral-500"
+          data-testid={`history-empty-${project.id}`}
+        >
+          {inFlight ? "Loading…" : "Nothing done here yet."}
         </div>
       ) : (
-        <div className="max-h-40 overflow-y-auto">
+        <div>
           <ul className="flex flex-col gap-0.5">
-            {rows.map((row) =>
+            {visible.map((row) =>
               row.kind === "intent" ? (
                 <IntentHistoryRow
                   key={`intent:${row.id}`}
@@ -412,17 +428,16 @@ function HistoryBand({
                 />
               ),
             )}
-            {more ? (
+            {older ? (
               <li>
-                <div ref={sentinelRef} aria-hidden="true" />
                 <button
                   type="button"
                   data-testid={`history-older-${project.id}`}
-                  disabled={history?.loading}
-                  onClick={() => void loadHistory(project.id, true)}
+                  disabled={inFlight}
+                  onClick={reveal}
                   className={`${TEXT_LINK} text-xs disabled:opacity-50`}
                 >
-                  {history?.loading ? "Loading…" : "Older…"}
+                  {inFlight ? "Loading…" : "Older…"}
                 </button>
               </li>
             ) : null}
@@ -488,6 +503,9 @@ function NowBand({
   const label = stateLabel(view?.fsmState, {
     pendingQuestion: view?.pendingQuestion !== undefined,
     turnActive: view?.turnActive,
+    playersRunning: Object.values(view?.players ?? {}).some(
+      (playerView) => playerView.running,
+    ),
   });
   // The open intent this lane serves: the newest open dispatch into
   // the session owns the conversation (dashboard-28/33).
@@ -548,9 +566,13 @@ function NowBand({
           className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left text-sm dark:border-neutral-800 dark:bg-neutral-900"
         >
           <RunningMark running={view?.turnActive ?? false} />
-          <span className="hidden shrink-0 text-xs text-neutral-500 @xs:inline">
-            {playbook ?? "no playbook"}
-          </span>
+          {/* The playbook only once a run draws one: "no playbook" says
+              nothing a reader can act on (dashboard-28). */}
+          {playbook ? (
+            <span className="hidden shrink-0 text-xs text-neutral-500 @xs:inline">
+              {playbook}
+            </span>
+          ) : null}
           <span
             className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${TONE_CHIP[label.tone]}`}
             title={view?.fsmState}

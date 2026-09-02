@@ -241,7 +241,9 @@ The Captain thread shall render visible time separators before the first message
 
 #### run-view-59
 
-The session state chip shall show a human-readable label (amber while waiting on the Boss, red for failure) with the raw state id in its tooltip, never as the primary copy ([DR-010](../decisions/010-interface-craft.md) §2).
+The session state chip shall show a human-readable label (amber while waiting on the Boss, red for failure) with the raw state id in its tooltip, never as the primary copy ([DR-010](../decisions/010-interface-craft.md) §2):
+
+- while a turn is active and the state names no leaf — no state yet, or the shell's own rest state — the chip reads "working" while a player runs and "deciding" while the Captain has the floor, never "idle".
 
 #### run-view-46
 

@@ -32,10 +32,18 @@ export function humanizeId(id: string): string {
 
 /** Human label + tone for a session state. Tone keys off signals the
  * reducer derives (a pending question, failure), not open-ended
- * playbook-authored state names. */
+ * playbook-authored state names. While a turn is active and the
+ * state names no leaf — no state yet, or the shell's own rest states
+ * — the label says what the turn is doing: "working" while a player
+ * runs, "deciding" while the Captain has the floor; a live turn never
+ * reads "idle" (run-view-59). */
 export function stateLabel(
   fsmState: string | undefined,
-  options?: { pendingQuestion?: boolean; turnActive?: boolean },
+  options?: {
+    pendingQuestion?: boolean;
+    turnActive?: boolean;
+    playersRunning?: boolean;
+  },
 ): { text: string; tone: StatusTone } {
   if (options?.pendingQuestion || fsmState === "awaitBossReply") {
     return { text: STATE_LABELS.awaitBossReply, tone: "amber" };
@@ -43,12 +51,14 @@ export function stateLabel(
   if (fsmState === "failed") {
     return { text: STATE_LABELS.failed, tone: "red" };
   }
-  if (!fsmState) {
+  const resting = !fsmState || STATE_LABELS[fsmState] === "idle";
+  if (resting && options?.turnActive) {
     return {
-      text: options?.turnActive ? "players working" : "idle",
-      tone: options?.turnActive ? "emerald" : "neutral",
+      text: options.playersRunning ? "working" : "deciding",
+      tone: "emerald",
     };
   }
+  if (!fsmState) return { text: "idle", tone: "neutral" };
   return {
     text: STATE_LABELS[fsmState] ?? humanizeId(fsmState),
     tone: options?.turnActive ? "emerald" : "neutral",

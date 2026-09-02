@@ -73,7 +73,7 @@ While projects are registered, the Dashboard shall display one ledger group per 
 
 #### dashboard-27
 
-Where a project has done work — intents closed after a turn of theirs ended finished, and finished intent records in its specs tree [[dashboard-24](#dashboard-24)] — the group's History band shall list it as one timeline newest first in a compact scroll, fetching older intent pages on demand as the reader scrolls back ([DR-038](../decisions/038-history-is-done-work.md)):
+Where a project has done work — intents closed after a turn of theirs ended finished, and finished intent records in its specs tree [[dashboard-24](#dashboard-24)] — the group's History band shall list it as one timeline newest first, its newest eight rows under an "Older…" control that reveals eight more and fetches the next intent page once the loaded rows run out ([DR-038](../decisions/038-history-is-done-work.md)):
 
 | Row | Rendering |
 | --- | --- |
@@ -84,11 +84,12 @@ Where a project has done work — intents closed after a turn of theirs ended fi
 
 - an intent closed before any turn of it ended finished never lists — it left the queue without a trace;
 - a finished record already named by a closed intent's provenance lists once, as that intent;
-- records order by their file's last change, intents by their close time, and each row shows that time as an age with the absolute moment in its tooltip.
+- a record orders by the date its status line carries ("Done (2026-09-02)"), else by its file's last change; an intent by its close time; and each row shows that time as an age with the absolute moment in its tooltip;
+- the control stands only while more rows wait, loaded or unfetched, and reads "Loading…" while a page is in flight — never a scroll box the eye slides past.
 
 #### dashboard-28
 
-While the project's one live session [[core-service-4](core-service.md#core-service-4)] runs, the group's Now band shall show that session's status mark, active playbook (or an idle indicator when no engagement is active), human-readable engagement state label — tinted by the state's tone, with the raw state id in the tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and the session's start as an age ("started 3m ago") with the absolute moment in its tooltip, together with the open intent the session serves, or the latest Boss turn's text for a session serving no intent:
+While the project's one live session [[core-service-4](core-service.md#core-service-4)] runs, the group's Now band shall show that session's status mark, its active playbook once a run draws one (nothing in its place before), human-readable engagement state label — tinted by the state's tone, with the raw state id in the tooltip, reading "deciding" or "working" rather than "idle" while a turn is active with no leaf state [[run-view-59](run-view.md#run-view-59)] ([DR-010](../decisions/010-interface-craft.md) §2) — and the session's start as an age ("started 3m ago") with the absolute moment in its tooltip, together with the open intent the session serves, or the latest Boss turn's text for a session serving no intent:
 
 - the band updates as session records arrive, without a manual refresh;
 - the served intent carries Drop beside the session row [[dashboard-41](#dashboard-41)];
@@ -144,7 +145,7 @@ When an intent is captured from any Dashboard gesture — a Queue control or the
 While a project group renders, the group's Sources band shall present as a collapsed one-line summary — issue, pull-request, and open-record counts with the age of the data — expanding in place to three tabs, Issues [[dashboard-6](#dashboard-6)], PRs [[dashboard-6](#dashboard-6)], and Open records [[dashboard-24](#dashboard-24)], each paginated in place:
 
 - issue and pull-request rows carry their forge labels as tags;
-- while GitHub is not connected — no binding, or the adapter not ready — the summary says so in place of the issue and pull-request counts, so zero never reads as an empty tracker;
+- while GitHub is not connected — no binding, or the adapter not ready — the summary says so in place of the issue and pull-request counts, so zero never reads as an empty tracker; while the project's forge state has not been read yet, the summary and the guidance read as loading, never as not connected;
 - expanding, switching tabs, and paging are visibility-only and change no ledger state.
 
 #### dashboard-6
@@ -180,7 +181,7 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 | --- | --- | --- |
 | Attention queue | no entry, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — with Start, or plain all-clear copy when no unblocked head exists |
 | Project groups | no registered project | how to register a project, with a navigation control to the Workspace |
-| History | no done work | a note that nothing is done here yet |
+| History | no done work, once the first history page has answered | a note that nothing is done here yet — "Loading…" until then |
 | Now | no live session | a quiet idle note |
 | Up next | no queued intent | the inline add row [[dashboard-29](#dashboard-29)] with capture guidance |
 | Sources | no forge binding, or forge adapter not ready | the GitHub setup guidance naming the unmet condition [[projects-7](projects.md#projects-7)] in place ([DR-006](../decisions/006-projects-and-forge.md)) |
@@ -308,7 +309,7 @@ Where a fixture project's `specs/` tree lists one intent record whose status rea
 
 #### dashboard-38
 
-Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, and scrolling back fetches and appends the older intent page.
+Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — a dated status line placing its record before an undated newer file, and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, the band reads "Loading…" until the first page answers, only the newest eight rows show with "Older…" revealing the rest, and the control fetches and appends the older intent page once the loaded rows run out.
 
 ### Empty-State Coverage
 
@@ -317,7 +318,7 @@ Where a fixture project holds more worked closed intents than one history page, 
 Where Dashboard state is derived across the empty conditions, the test suite shall assert the guidance of [[dashboard-8](#dashboard-8)] case by case:
 
 - with no registered project, the attention queue and projects area render their empty-state guidance with an activatable navigation control to the Workspace [[dashboard-8](#dashboard-8)], and no welcome takeover replaces the surface [[dashboard-21](#dashboard-21)];
-- with a registered project whose ledger is empty, each band renders its guidance in place [[dashboard-8](#dashboard-8)];
+- with a registered project whose ledger is empty, each band renders its guidance in place, the Sources line reading as loading until the project's forge state has been read and as not connected after [[dashboard-8](#dashboard-8)] [[dashboard-20](#dashboard-20)];
 - with one queued unblocked intent and no attention entry, the all-clear names that intent with Start [[dashboard-8](#dashboard-8)];
 - before the ledger is read, the attention queue and the Up next band show their loading notes and no all-clear; with a failed read, the failure strip with Retry stands alone, and Retry reads the ledger again [[dashboard-8](#dashboard-8)].
 
@@ -325,7 +326,7 @@ Where Dashboard state is derived across the empty conditions, the test suite sha
 
 #### dashboard-23
 
-Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook, human-readable state label with the raw state id in the tooltip, the start as an age with the absolute moment in its tooltip, and the open intent's title [[dashboard-28](#dashboard-28)], that the Drop beside it asks the inline confirm — Keep returning focus to the control, Drop closing the intent dropped over the protocol with the outcome announced, the control gone, and focus on the session row [[dashboard-41](#dashboard-41)] — and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].
+Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook — nothing in its place while no run has drawn one — human-readable state label with the raw state id in the tooltip, reading "working" for an active turn with no leaf state while a player runs, the start as an age with the absolute moment in its tooltip, and the open intent's title [[dashboard-28](#dashboard-28)], that the Drop beside it asks the inline confirm — Keep returning focus to the control, Drop closing the intent dropped over the protocol with the outcome announced, the control gone, and focus on the session row [[dashboard-41](#dashboard-41)] — and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].
 
 ### Browser Journeys
 

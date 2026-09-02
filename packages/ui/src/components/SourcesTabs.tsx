@@ -134,6 +134,9 @@ export function SourcesBand({
   const forge = meta?.forge;
   const forgeReady =
     forge !== undefined && !(forge.guidance && forge.authenticated !== true);
+  // No meta yet is a read in flight, never "not connected"
+  // (dashboard-20): the group asks for it on mount.
+  const forgeLoading = meta === undefined || (meta.loading === true && !forge);
   const issues = (forgeReady ? forge.issues : undefined) ?? [];
   const prs = (forgeReady ? forge.prs : undefined) ?? [];
   const records = openRecordsOf(tree);
@@ -151,7 +154,7 @@ export function SourcesBand({
       {forge?.guidance ??
         (meta?.forgeError
           ? `Couldn't load GitHub data: ${meta.forgeError}`
-          : meta?.loading
+          : forgeLoading
             ? "Loading GitHub state…"
             : "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here.")}{" "}
       {onOpenOverview ? (
@@ -204,7 +207,7 @@ export function SourcesBand({
             Sources:{" "}
             {forgeReady
               ? `${plural(issues.length, "issue")} · ${plural(prs.length, "PR")}`
-              : meta?.loading && !forge
+              : forgeLoading
                 ? "Loading GitHub…"
                 : "GitHub not connected"}{" "}
             · {plural(records.length, "open record")}
