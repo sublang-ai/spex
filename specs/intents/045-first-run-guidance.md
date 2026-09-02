@@ -30,4 +30,4 @@ Close the first-run defects a heuristic audit found, so a new user is led from a
 
 ## Verification
 
-ui 283 green (20 added); the 16 journeys green, among them `run-view-97` with the new ways-in journey, `projects-28`, `settings-29`, `playbook-library-41`, `run-view-101`, and `run-view-102` (light and dark, no serious or critical axe violation).
+ui 299 green (20 added by this intent); the 16 journeys green, among them `run-view-97` with the new ways-in journey, `projects-28`, `settings-29`, `playbook-library-41`, `run-view-101`, and `run-view-102` (light and dark, no serious or critical axe violation).
