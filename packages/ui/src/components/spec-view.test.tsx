@@ -2027,7 +2027,8 @@ describe("spec-view-53: the editor", () => {
     // Once the draft is discarded, the requested record is there.
     fireEvent.click(screen.getByTestId("editor-cancel"));
     fireEvent.click(within(screen.getByTestId("editor-confirm")).getByText("Discard"));
+    // The reader mounts before its read resolves: wait for the words.
     const reader = await screen.findByTestId("record-reader");
-    expect(reader.textContent).toContain("Accepted");
+    await within(reader).findByText(/Accepted/);
   });
 });
