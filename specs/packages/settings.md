@@ -17,7 +17,7 @@ Integration coverage is exercised through the core service's WebSocket protocol 
 
 #### settings-1
 
-Where the Settings surface is open, the Settings surface shall present the Captain's agent editor over the shared config's top-level `captain` entry, with the fields of an inline agent block: adapter (one of the embedded runtime's known adapters, each carrying its readiness indicator), optional model, optional reasoning effort offered only from the selected adapter's effort vocabulary, and permissions (mode `auto` or `bypass`, optional writable paths):
+Where the Settings surface is open, the Settings surface shall present the Captain's agent editor over the shared config's top-level `captain` entry, with the fields of an inline agent block: adapter (one of the embedded runtime's known adapters, each carrying its readiness indicator), optional model, optional reasoning effort offered only from the selected adapter's effort vocabulary, a fast-mode switch offered only for an adapter the embedded runtime declares as supporting it ([DR-038](../decisions/038-history-is-done-work.md)), and permissions (mode `auto` or `bypass`, optional writable paths):
 
 - When a captain edit is saved, the change appears in the shared config file's `captain` entry as a merge patch that alters only the fields the editor surfaced, preserving hand-written fields such as `instruction` and granular permissions (see [[settings-21](#settings-21)]).
 

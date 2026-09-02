@@ -5,8 +5,8 @@
 
 ## Intent
 
-This spec covers project management in the Spex desktop app — its palette and Repo-tab behavior, the core-service implementation behind it, and the integration coverage that verifies both.
-Users register and create local git projects in the project palette, and the workspace's Repo tab shows repository and GitHub state: a project is a local git repository, with registry persistence in the app state root, repository state collected from local git only, and forge access exclusively through the forge adapter interface.
+This spec covers project management in the Spex desktop app — its palette and Overview-tab behavior, the core-service implementation behind it, and the integration coverage that verifies both.
+Users register and create local git projects in the project palette, and the workspace's Overview tab shows the project's ledger group under its repository and GitHub state: a project is a local git repository, with registry persistence in the app state root, repository state collected from local git only, and forge access exclusively through the forge adapter interface.
 Integration coverage exercises registration and card state against fixture repositories, the create-project flow, forge panels against a stubbed gh CLI, and removal without touching the repository on disk.
 
 ## External Behavior
@@ -45,11 +45,11 @@ When the user picks the palette's Academy-example action ([DR-015](../decisions/
 
 - Target directory not empty: the palette reports the refusal and registers nothing.
 
-### The Repo Tab
+### The Overview Tab
 
 #### projects-4
 
-While a project is the workspace's current project, the Repo tab shall show the repository state fields below:
+While a project is the workspace's current project, the Overview tab shall show the project's ledger group — History, Now, Up next, and Sources exactly as the Dashboard draws it for that project [[dashboard-26](dashboard.md#dashboard-26)], with no project filter — under a repository header carrying the fields below ([DR-038](../decisions/038-history-is-done-work.md)):
 
 | Field | Content |
 | --- | --- |
@@ -76,7 +76,7 @@ Where a project is bound to a GitHub repository, while the gh CLI is installed a
 
 Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition — no GitHub `origin` remote, gh not installed, or gh not authenticated — instead of issue and pull-request lists:
 
-- While the panel shows setup guidance, the Repo tab keeps showing repository state [[projects-4](#projects-4)] and its remove control remains functional.
+- While the panel shows setup guidance, the Overview tab keeps showing repository state [[projects-4](#projects-4)] and its remove control remains functional.
 
 ### Session and Removal
 
@@ -86,9 +86,9 @@ When the user picks a project from the palette or opens one of its sessions from
 
 #### projects-9
 
-When the user confirms removal in the Repo tab, the workspace shall forget the project and clear it from the sidebar, leaving the repository directory, its files, and its git state on disk unmodified:
+When the user confirms removal in the Overview tab, the workspace shall forget the project and clear it from the sidebar, leaving the repository directory, its files, and its git state on disk unmodified:
 
-- While the project has a live session, the Repo tab disables removal, stating that sessions must be ended first.
+- While the project has a live session, the Overview tab disables removal, stating that sessions must be ended first.
 
 ### Labels and Vocabulary
 
@@ -106,7 +106,7 @@ Where the palette's create action offers the specs-scaffold option, the option s
 
 #### projects-25
 
-User-facing copy in the palette and the Repo tab shall say "GitHub" and shall not use the internal adapter term "forge" ([DR-010](../decisions/010-interface-craft.md) §2).
+User-facing copy in the palette and the Overview tab shall say "GitHub" and shall not use the internal adapter term "forge" ([DR-010](../decisions/010-interface-craft.md) §2).
 
 ## Internal Behavior
 

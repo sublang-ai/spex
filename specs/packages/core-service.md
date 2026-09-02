@@ -71,11 +71,19 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 - While a session is live, a client's disposal request disposes the session's runtime, reports the session as ended, and a subsequent session request for the same project is accepted.
 - Where the runtime's own disposal fails, the session is still reported as ended and its project still accepts a new session, with the failure reported to the requesting client — a runtime that failed to dispose is unusable, so holding its project would strand it until a restart.
 
+#### core-service-70
+
+When a client sends `session.delete` for a stored session, the core service shall delete the session's files and every in-memory trace of it — its records, turns, usage, and viewed marker — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
+
+- a live session is refused with a `busy` error: it ends first [[core-service-4](#core-service-4)];
+- a session another host wrote [[core-service-60](#core-service-60)] is refused: this core writes none of its files [[core-service-65](#core-service-65)];
+- an open intent the session served re-derives as queued, and a closed one keeps its verdict [[core-service-49](#core-service-49)].
+
 #### core-service-32
 
 When a client requests the session list, the core service shall reply with every stored session's lifecycle fields and its conversation summary ([DR-029](../decisions/029-session-history-home.md)):
 
-- each entry carries the session's project, creation and end times, and liveness;
+- each entry carries the session's project, creation and end times, liveness, and whether another host wrote it;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count and whether it ended holding a failure record.
 
@@ -101,7 +109,7 @@ While a boss turn is active on a session, when a client requests an abort for th
 
 #### core-service-42
 
-When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent — the request's text, its optional source (kind, reference, and URL), its optional after-link, and its queue position — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
+When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent — the request's text, its optional source (kind, reference, URL, and labels), its optional after-link, and its queue position — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the request places the intent at the head or the tail of the project's queue as it asks, tail when it says nothing;
 - where the source kind is issue, PR, or record and the project already holds an open intent with the same source kind and reference, the request is rejected with a `conflict` error naming that intent and stores nothing — at most one open intent per source artifact per project;
@@ -129,10 +137,10 @@ When a client sends `intent.link` for an intent, the core service shall set the 
 
 #### core-service-46
 
-When a client sends `intent.close` for an open intent with a verdict of `done` or `dropped`, the core service shall record the verdict and its time on the intent — the row kept, never deleted [[core-service-52](#core-service-52)] — and announce the write [[core-service-51](#core-service-51)]:
+When a client sends `intent.close` for an open intent with a verdict of `done` or `dropped`, the core service shall record the verdict and its time on the intent — the act appended, never rewritten [[core-service-52](#core-service-52)] — and announce the write [[core-service-51](#core-service-51)]:
 
 - `done` is accepted only while a turn the intent attributes [[core-service-47](#core-service-47)] ended finished with none later active, and is otherwise rejected — confirming work that never ran would falsify the ledger ([DR-035](../decisions/035-intent-ledger.md));
-- `dropped` is legal on any open intent;
+- `dropped` is legal on any open intent; dropped before any turn the intent attributes [[core-service-47](#core-service-47)] ended finished, the intent is removed — the history read excludes it [[core-service-50](#core-service-50)] and no verdict shows anywhere ([DR-038](../decisions/038-history-is-done-work.md));
 - a close of an already-closed intent is rejected.
 
 #### core-service-47
@@ -163,7 +171,7 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 
 #### core-service-50
 
-When a client sends `ledger.history` for a project, the core service shall reply with one page of that project's closed intents, newest-closed first, the same stored data yielding identical pages after a restart [[core-service-10](#core-service-10)]:
+When a client sends `ledger.history` for a project, the core service shall reply with one page of that project's worked closed intents — closed done, or closed dropped after a turn of theirs ended finished ([DR-038](../decisions/038-history-is-done-work.md)) — newest-closed first, the same stored data yielding identical pages after a restart [[core-service-10](#core-service-10)]:
 
 - a page holds at most twenty rows and carries a cursor naming its last row's close time and id;
 - a request carrying a prior page's cursor returns the page after it, overlapping nothing.
@@ -303,7 +311,7 @@ The core package shall hold intents in one per-project append-only act log of ac
 | `dispatched` (`sessionId`, `turnId`, `at`) | the dispatch stamp, re-written by a later dispatch |
 | `closedAt`, `closedAs` | the close time and verdict — `done` or `dropped` |
 
-- An act is never deleted or rewritten: an edit, move, link, dispatch, or close appends, the fold takes each field's latest act, and a dropped intent keeps its struck fold — permanent deletion waits for its own decision ([DR-035](../decisions/035-intent-ledger.md)).
+- An act is never deleted or rewritten: an edit, move, link, dispatch, or close appends, and the fold takes each field's latest act; an intent removed before it was worked keeps its acts in the log while every read excludes it ([DR-038](../decisions/038-history-is-done-work.md)).
 
 ### Runtime Composition
 
@@ -439,6 +447,10 @@ Where a fixture session — manifest naming a registered project's directory as 
 - a fixture record with a Boss journal and no stream lists with the first Boss entry as its title, its Boss turns counted, and a history of turn starts, Captain replies, and turn finishes [[core-service-60](#core-service-60)];
 - every fixture file is byte-identical once the service stops, and no sidecar joins them [[core-service-65](#core-service-65)].
 
+#### core-service-71
+
+Where a stored session has ended and a second session is live, the test suite shall assert the deletion contract of [[core-service-70](#core-service-70)]: `session.delete` on the ended session removes its files, drops it from the listing [[core-service-32](#core-service-32)] and its history from `history.get`, and a subscribed client receives the removal; the same command on the live session is refused `busy`; and on a fixture session another host wrote [[core-service-60](#core-service-60)] it is refused with the files byte-identical afterwards.
+
 #### core-service-63
 
 While a core service is serving a state root, the test suite shall start a second core service against the same root and assert the admission contract of [[core-service-61](#core-service-61)]: the second start refuses to serve reporting the holder, and after the first service stops [[core-service-39](#core-service-39)], a fresh start on that root succeeds.
@@ -460,7 +472,7 @@ Where the core service runs with a valid config and the scripted fake adapter [[
 - a queued intent comes back from `ledger.get` in its project's queue at the requested position [[core-service-42](#core-service-42)] [[core-service-49](#core-service-49)];
 - an edit lands while the intent is queued, and the same edit after dispatch is rejected [[core-service-43](#core-service-43)];
 - a move reorders the queue within the project, and a move naming another project's intent is rejected [[core-service-44](#core-service-44)];
-- closing the dispatched intent as `done` before its turn finishes is rejected, succeeds after the finish, and `dropped` is accepted on a second, still-queued intent [[core-service-46](#core-service-46)];
+- closing the dispatched intent as `done` before its turn finishes is rejected, succeeds after the finish, and `dropped` is accepted on a second, still-queued intent, which then appears in no `ledger.history` page while the done one does [[core-service-46](#core-service-46)] [[core-service-50](#core-service-50)];
 - an `intents.changed` broadcast naming the project arrives for each write and for the turn's start and finish [[core-service-51](#core-service-51)].
 
 #### core-service-54

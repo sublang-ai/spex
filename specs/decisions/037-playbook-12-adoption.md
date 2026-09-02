@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-09-01).
+Playbook 12.1 publishes `@sublang/playbook/host-capabilities`, but its repository object lacks two of the six members the Captain shell's exact-shape validator demands and its per-playbook ledgers diverge where the shell requires agreement, so the by-path builder below stands ([DR-038](038-history-is-done-work.md)).
 Amends [DR-034](034-playbook-9-adoption.md) (the playbook floor moves to ^12.0.0), [DR-032](032-session-players.md) (the cligent floor moves to ^0.24.0), and [DR-036](036-file-state-store.md) (a captain-session record without a replay stream lists from its Boss journal).
 
 ## Context

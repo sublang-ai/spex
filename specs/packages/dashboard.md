@@ -71,7 +71,18 @@ While projects are registered, the Dashboard shall display one ledger group per 
 
 #### dashboard-27
 
-Where a project has closed intents, the group's History band shall list them newest first in a compact scroll, each row showing the intent's title and verdict, fetching older pages on demand as the reader scrolls back.
+Where a project has done work — intents closed after a turn of theirs ended finished, and finished intent records in its specs tree [[dashboard-24](#dashboard-24)] — the group's History band shall list it as one timeline newest first in a compact scroll, fetching older intent pages on demand as the reader scrolls back ([DR-038](../decisions/038-history-is-done-work.md)):
+
+| Row | Rendering |
+| --- | --- |
+| an intent closed done | a check before its title |
+| an intent closed done whose source labels include a bug label | its title struck through under a red "bug" tag, no check |
+| an intent closed dropped | a quiet "dropped" tag, the row dimmed, never struck |
+| a finished record | a check, the record's ID as its tag; "superseded" as the tag and the row dimmed where the status classifies so |
+
+- an intent closed before any turn of it ended finished never lists — it left the queue without a trace;
+- a finished record already named by a closed intent's provenance lists once, as that intent;
+- records order by their file's last change, intents by their close time.
 
 #### dashboard-28
 
@@ -85,13 +96,14 @@ While the project's one live session [[core-service-4](core-service.md#core-serv
 The group's Up next band shall list the project's queued intents in rank order, ending in an inline add row that captures a new queued intent, with the head unblocked intent emphasized as the project's next and carrying Start:
 
 - a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with "after ⟨title⟩", the predecessor's project named when it lives in another project, its Start disabled with the reason ([DR-026](../decisions/026-data-graphics-craft.md) §2), and is never presented as next;
-- reorder works by drag and by keyboard alike, and changes only the queue's rank order.
+- reorder works by drag and by keyboard alike, and changes only the queue's rank order;
+- each row's actions offer Edit text, Remove — acting on the click with no confirmation, and leaving no history ([DR-038](../decisions/038-history-is-done-work.md)) — and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, "IR-N" opening the record, "Session" opening the capturing session.
 
 ### Capture
 
 #### dashboard-30
 
-Where a Sources row names an issue, pull request, or open intent record with no open intent sourced from that artifact, the row shall carry a Queue control that captures a queued intent for the project with editable seeded text and the source's URL kept as provenance:
+Where a Sources row names an issue, pull request, or open intent record with no open intent sourced from that artifact, the row shall carry a Queue control that captures a queued intent for the project with editable seeded text and the source's URL and labels kept as provenance ([DR-038](../decisions/038-history-is-done-work.md)):
 
 | Source | Seeded text |
 | --- | --- |
@@ -123,11 +135,11 @@ Where a project is bound to a forge repository and the forge adapter ([DR-006](.
 
 #### dashboard-24
 
-Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.md#spec-view-14)], the group's Sources band shall carry the project's open records — an intent record is work to finish, not spec law ([DR-027](../decisions/027-linked-views-contract.md)) — listing only unfinished records, read from each record's listed status [[spec-view-14](spec-view.md#spec-view-14)]:
+Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.md#spec-view-14)], the group's Sources band shall carry the project's open records — an intent record is work to finish, not spec law ([DR-027](../decisions/027-linked-views-contract.md)) — listing only records the records read classifies as open [[spec-view-14](spec-view.md#spec-view-14)] ([DR-038](../decisions/038-history-is-done-work.md)):
 
 - each row names the record's ID and title, and activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)];
-- a record whose status reads Done is finished and does not list;
-- a project whose tree lists no unfinished records counts zero open records in the collapsed line.
+- a record classified finished does not list here — it lists in History [[dashboard-27](#dashboard-27)] — so every record lands in exactly one band;
+- a project whose tree lists no open records counts zero open records in the collapsed line.
 
 ### Project Filter
 
@@ -147,10 +159,10 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 | --- | --- | --- |
 | Attention queue | no entry | all-clear copy naming the globally next unblocked queue head — first by sidebar order — with Start, or plain all-clear copy when no unblocked head exists |
 | Project groups | no registered project | how to register a project, with a navigation control to the Workspace |
-| History | no closed intent | a note that no intent has closed yet |
+| History | no done work | a note that nothing is done here yet |
 | Now | no live session | a quiet idle note |
 | Up next | no queued intent | the inline add row [[dashboard-29](#dashboard-29)] with capture guidance |
-| Sources | no forge binding, or forge adapter not ready | a plain-language note with a navigation control to the Workspace, whose Repo tab is where GitHub is connected ([DR-006](../decisions/006-projects-and-forge.md)) |
+| Sources | no forge binding, or forge adapter not ready | the GitHub setup guidance naming the unmet condition [[projects-7](projects.md#projects-7)] in place ([DR-006](../decisions/006-projects-and-forge.md)) |
 
 ### No Takeover
 
@@ -267,7 +279,7 @@ Where a fixture project's `specs/` tree lists one intent record whose status rea
 
 #### dashboard-38
 
-Where a fixture project holds more closed intents than one history page, the test suite shall assert that the History band lists closed intents newest first with title and verdict [[dashboard-27](#dashboard-27)], and that scrolling back fetches and appends the older page [[dashboard-27](#dashboard-27)].
+Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings, the never-run drop is absent, the open record is absent, and scrolling back fetches and appends the older intent page.
 
 ### Empty-State Coverage
 

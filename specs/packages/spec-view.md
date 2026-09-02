@@ -239,7 +239,13 @@ The core package shall list `specs/decisions/*.md` as decision records and the u
 - a legacy file whose basename reappears under `intents/` is omitted, and both the shadowing and the directory coexistence are reported as tree notices;
 - differently named files sharing a leading number all list, with each duplicated record ID a tree notice;
 - each record carries an ID formed from the record kind and the filename's leading number [[meta-22](../meta.md#meta-22)] (e.g. `DR-011`), a title taken from the file's first `#` heading minus any leading `DR-nnn:`/`IR-nnn:` prefix, and a path relative to `specs/`;
-- each record additionally carries the first non-empty line of its `## Status` section, verbatim, as its status — absent when the file has no `## Status` section — and consumers treat a status line starting with "Done" (case-insensitively) as marking a finished record.
+- each record additionally carries the first non-empty line of its `## Status` section, verbatim, as its status — absent when the file has no `## Status` section — together with the classification the core derives from the line's first word of letters, case-insensitively, and the file's last-change time ([DR-038](../decisions/038-history-is-done-work.md)):
+
+| Leading word | Classification |
+| --- | --- |
+| done, complete, completed, closed, shipped, released, finished | finished, done |
+| superseded, cancelled, canceled, dropped, abandoned, withdrawn | finished, superseded |
+| any other word, or no status | open |
 
 ## Internal Behavior
 

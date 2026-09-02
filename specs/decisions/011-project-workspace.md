@@ -9,6 +9,7 @@ Accepted; the spec view's data layout and group model are amended by [DR-015](01
 The Settings surface's profile inventory is amended by [DR-019](019-inline-agent-configuration.md).
 The project bar, the Captain home's session list, and the live-sessions-only tab strip are amended by [DR-029](029-session-history-home.md) — the sidebar became the navigator; the text below is rewritten where it named them.
 The Dashboard content row is amended by [DR-035](035-intent-ledger.md) — the intent ledger replaced running sessions, work lists, and usage; the taxonomy row below is rewritten.
+The Repo tab is amended by [DR-038](038-history-is-done-work.md) — it becomes the project's Overview, the ledger group under the repository header.
 
 ## Context
 

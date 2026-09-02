@@ -136,7 +136,7 @@ The run view shall provide light and dark color themes and size the Captain and 
 
 #### run-view-25
 
-Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter and model with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
+Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip and player label wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
 
 - the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place;
 - with no project current, the greeting names the remedy the workspace actually has — picking one where projects exist, adding one where none do — never sending the reader to a sidebar holding nothing;
@@ -443,7 +443,7 @@ Each project shall keep its own working set — the sessions open as tabs and wh
 
 #### run-view-58
 
-The tab strip shall end with pinned Specs and Repo tabs — one spec view and one repo view per project — that participate in the tab list and the tab-cycling shortcut:
+The tab strip shall end with pinned Specs and Overview tabs — one spec view and one project overview [[projects-4](projects.md#projects-4)] per project — that participate in the tab list and the tab-cycling shortcut ([DR-038](../decisions/038-history-is-done-work.md)):
 
 - Switching projects swaps the whole strip; sessions of other projects keep running and stay reachable through the sidebar [[run-view-67](#run-view-67)], the palette's live-state rows, and the Dashboard.
 
@@ -454,7 +454,7 @@ The tab strip shall end with pinned Specs and Repo tabs — one spec view and on
 When the composer's queue-instead-of-send action is activated, the Boss composer shall capture the typed text as a queued intent for the session's project with chat provenance and acknowledge the capture in place, sending nothing ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the capture starts no turn and queues no submission [[run-view-8](#run-view-8)] — the text is shelved, not sent;
-- the acknowledgment is an inline note naming where the row landed in the project's queue, the run view's form of the shelf reveal;
+- the acknowledgment is an inline note naming where the row landed — the project's Up next, in its Overview tab, where the row's Remove waits [[dashboard-29](dashboard.md#dashboard-29)] — the run view's form of the shelf reveal;
 - the action stands beside send as the composer's one secondary action.
 
 #### run-view-86
