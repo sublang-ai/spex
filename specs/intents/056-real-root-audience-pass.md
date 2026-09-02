@@ -14,10 +14,12 @@ Walk the served UI over the owner's real state root — real projects, CLI-run s
 ## Deliverables
 
 - [x] The Boss composer keeps one row through a first paint with no viewport height and refits when the viewport resizes (run-view-106).
+- [x] A session whose roster binds no player — a record the CLI wrote — shows the Captain column alone at the home's reading width, with no divider to a blank half (run-view-7).
 
 ## Tasks
 
 1. Floor the composer field at one row in both the auto-grow hook and its CSS cap, refit on viewport resize, and pin it with a fit journey that opens at a one-pixel-tall viewport.
+2. Lay a lane-less session out as a solo Captain column: no divider, no player grid, the home's measure.
 
 ## Verification
 

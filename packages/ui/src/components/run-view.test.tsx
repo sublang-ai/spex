@@ -1642,3 +1642,22 @@ describe("run-view-50: focus is never stranded", () => {
     expect(document.activeElement).toBe(screen.getByTestId("end-session"));
   });
 });
+
+describe("run-view-7: a roster with no players", () => {
+  test("renders the Captain column alone, with no divider and no player grid", () => {
+    renderRunWith(FULL_RUN, {
+      session: { ...SESSION, players: [] },
+      readOnly: true,
+    });
+    expect(screen.getByTestId("captain-pane")).toBeTruthy();
+    expect(screen.queryByTestId("player-grid")).toBeNull();
+    expect(screen.queryByRole("separator")).toBeNull();
+    expect(screen.getByTestId("captain-column").className).toContain("max-w-2xl");
+  });
+
+  test("keeps the divider and the grid while any lane is bound", () => {
+    renderRunWith(FULL_RUN, { readOnly: true });
+    expect(screen.getByTestId("player-grid")).toBeTruthy();
+    expect(screen.getByRole("separator")).toBeTruthy();
+  });
+});

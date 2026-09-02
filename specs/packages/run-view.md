@@ -86,7 +86,7 @@ The run view shall show exactly one player pane per player in the session's boun
 
 - a pane is a player's lane, so it stands whether or not that player is engaged in the call now running, and a finished call's transcript stays where the reader last read it;
 - the runtime's report of which players a call engages adds no pane and removes none — a lane the reader is following never leaves under them;
-- a roster with no players renders no player pane;
+- a roster with no players renders no player pane, and the Captain column then stands alone at the Captain home's reading width with no divider — a division with nothing on its far side reads as a pane that failed to load;
 - the pane's header names the lane and, from its first call on, the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the player's model chip beside it, and a lane no call has reached yet reads "Idle until the playbook calls ⟨lane⟩";
 - while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second, hidden first in a narrow pane ([DR-041](../decisions/041-chrome-that-fits.md)) — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5).
 

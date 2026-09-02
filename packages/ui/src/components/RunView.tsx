@@ -338,6 +338,10 @@ export function RunView({
   // bound roster is the pane set for the session's whole life, so a
   // call that ends leaves its transcript where the reader last saw it.
   const lanes = session.players.map((player) => player.id);
+  // No lane, no split (run-view-7): a session whose roster binds no
+  // player — a record the CLI wrote — reads as the Captain home does,
+  // one column at the home's measure, with no divider to nowhere.
+  const soloCaptain = lanes.length === 0;
   const metaById = new Map(session.players.map((player) => [player.id, player]));
   const title = session.title ?? "new session";
   const queued = composer.queued.length;
@@ -414,7 +418,11 @@ export function RunView({
         <div
           data-testid="captain-column"
           style={{ "--captain-split": `${captainSplit}%` } as React.CSSProperties}
-          className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 @2xl:w-(--captain-split) @2xl:min-w-[280px] @2xl:flex-none"
+          className={`flex min-h-0 min-w-0 flex-1 flex-col gap-2 ${
+            soloCaptain
+              ? "mx-auto w-full max-w-2xl"
+              : "@2xl:w-(--captain-split) @2xl:min-w-[280px] @2xl:flex-none"
+          }`}
         >
           <CaptainPane
             view={view}
@@ -507,31 +515,35 @@ export function RunView({
             />
           )}
         </div>
-        <div className="hidden @2xl:contents">
-          <SplitDivider
-            percent={captainSplit}
-            onChange={setCaptainSplit}
-            containerRef={splitRef}
-          />
-        </div>
-        <div
-          data-testid="player-grid"
-          className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"
-        >
-          {lanes.map((playerId) => (
-            <PlayerPane
-              key={playerId}
-              view={
-                view.players[playerId] ?? {
-                  id: playerId,
-                  running: false,
-                  segments: [],
-                }
-              }
-              meta={metaById.get(playerId)}
-            />
-          ))}
-          </div>
+        {soloCaptain ? null : (
+          <>
+            <div className="hidden @2xl:contents">
+              <SplitDivider
+                percent={captainSplit}
+                onChange={setCaptainSplit}
+                containerRef={splitRef}
+              />
+            </div>
+            <div
+              data-testid="player-grid"
+              className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"
+            >
+              {lanes.map((playerId) => (
+                <PlayerPane
+                  key={playerId}
+                  view={
+                    view.players[playerId] ?? {
+                      id: playerId,
+                      running: false,
+                      segments: [],
+                    }
+                  }
+                  meta={metaById.get(playerId)}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
       </div>
     </div>
