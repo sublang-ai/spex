@@ -65,11 +65,7 @@ test("run-view-115, dashboard-39: an intent dropped from the working line leaves
   await expect(page.getByTestId(/^attention-confirm-/)).toHaveCount(0);
 });
 
-// Depends on the pending record reaching the spec view — the
-// `openRecordPath` thread through App into SpecView — which lands
-// with the sibling change; until then the click switches to the Specs
-// tab but the reader does not open.
-test.fixme("dashboard-39: a History record row opens the record in the Specs tab's reader", async ({
+test("dashboard-39: a History record row opens the record in the Specs tab's reader", async ({
   page,
   app,
 }) => {
