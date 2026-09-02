@@ -596,15 +596,25 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
     expect(useAppStore.getState().views["a-failed"]).toBeUndefined();
   });
 
-  test("a session another host wrote carries no delete control", () => {
+  test("a session another host wrote offers delete, the confirm naming the terminal history (DR-042)", async () => {
     useAppStore.setState({
       sessions: SESSIONS.map((entry) =>
         entry.id === "a-failed" ? { ...entry, foreign: true as const } : entry,
       ),
     });
     render(<App />);
-    expect(screen.queryByTestId("sidebar-delete-a-failed")).toBeNull();
     expect(screen.getByTestId("sidebar-delete-a-bare")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("sidebar-delete-a-failed"));
+    const confirm = screen.getByTestId("sidebar-delete-confirm-a-failed");
+    expect(confirm.textContent).toContain(
+      "Delete this session? It was run from the terminal; its history goes too.",
+    );
+    await act(async () => {
+      fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
+    });
+    expect(commandMock).toHaveBeenCalledWith("session.delete", {
+      sessionId: "a-failed",
+    });
   });
 
   test("the removal broadcast drops the session and closes its tab", () => {

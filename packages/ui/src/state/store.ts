@@ -924,7 +924,12 @@ export const useAppStore = create<AppState>((set, get) => {
         enqueue();
         return;
       }
+      const session = state.sessions.find((s) => s.id === sessionId);
       try {
+        // A message to an ended session continues it (DR-042): the
+        // connection re-subscribed only live sessions, so this one's
+        // records need a subscription before the turn they belong to.
+        if (session && !session.live) await ensureSubscribed(sessionId);
         await getClient().command("turn.submit", {
           sessionId,
           text,
@@ -933,9 +938,10 @@ export const useAppStore = create<AppState>((set, get) => {
         consumeStaged();
       } catch (cause) {
         const error = cause as { code?: string; message: string };
-        if (error.code === "busy") {
+        if (error.code === "busy" && session?.live !== false) {
           // The view lagged reality (e.g. right after a reconnect):
-          // queueing is what the user meant.
+          // queueing is what the user meant. An ended session's busy
+          // names another live session instead, and is shown as said.
           enqueue();
           return;
         }

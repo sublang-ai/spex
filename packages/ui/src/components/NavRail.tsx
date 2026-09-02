@@ -486,9 +486,10 @@ export function NavRail(props: NavRailProps) {
                   const item = attention.get(session.id);
                   const life = lifeOf(session, item);
                   const active = session.id === activeSessionId;
-                  // Ended and this core's own: a session another host
-                  // wrote is served, never deleted (core-service-70).
-                  const deletable = !session.live && !session.foreign;
+                  // Every non-live session can be deleted (DR-042): a
+                  // session another host wrote goes from the shared
+                  // store, its terminal history with it (core-service-70).
+                  const deletable = !session.live;
                   const confirming = confirmDelete === session.id;
                   return (
                     <div
@@ -522,7 +523,11 @@ export function NavRail(props: NavRailProps) {
                           className="min-w-0 flex-1 [&>span]:flex-wrap"
                         >
                           <InlineConfirm
-                            question="Delete this session and its transcript?"
+                            question={
+                              session.foreign
+                                ? "Delete this session? It was run from the terminal; its history goes too."
+                                : "Delete this session and its transcript?"
+                            }
                             confirmLabel="Delete"
                             cancelLabel="Keep"
                             onConfirm={() => deleteSession(session.id)}
