@@ -369,7 +369,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 }}
                 className="shrink-0 rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
               >
-                {staging ? "Staging…" : "Start"}
+                {staging ? "Starting…" : "Start"}
               </button>
             </div>
             {props.next.more > 0 ? (
@@ -495,7 +495,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             className="flex items-center gap-2 self-start rounded-full border border-brand-300 bg-brand-50 py-0.5 pl-3 pr-1 text-xs font-medium text-brand-700 dark:border-brand-700 dark:bg-brand-950 dark:text-brand-300"
           >
             <span className="max-w-[24rem] truncate">
-              Dispatching: {props.staged.title}
+              Starting: {props.staged.title}
             </span>
             <button
               type="button"
@@ -580,7 +580,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               <button
                 type="button"
                 data-testid="queue-intent-button"
-                title="Save this for later in the project's Up next instead of sending it now"
+                title="Add this to the project's Up next without sending it"
                 disabled={
                   text.trim().length === 0 || busy || queueing || !connected
                 }
@@ -592,7 +592,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                     .onQueueInstead!(trimmed)
                     .then(() => {
                       setText("");
-                      setQueueNote("Queued for later — see Up next in Overview.");
+                      setQueueNote("Added to Up next — see the project's Overview.");
                     })
                     .catch((cause: Error) => setError(cause.message))
                     .finally(() => {
