@@ -62,6 +62,6 @@ test("run-view-104 @live: a real /code task shows live output and aborts cleanly
   await attach("after abort");
 
   await page.getByTestId("end-session").click();
-  await page.getByRole("button", { name: "end", exact: true }).click();
+  await page.getByRole("button", { name: "End", exact: true }).click();
   await expect(page.getByTestId("ended-notice")).toBeVisible();
 });
