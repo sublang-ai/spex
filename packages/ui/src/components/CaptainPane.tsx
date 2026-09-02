@@ -26,16 +26,29 @@ export interface ThreadExtra {
   node: ReactNode;
 }
 
+/** The way to Settings a failure line offers while the Captain's
+ * adapter reports not ready (run-view-2): the likely cause sits one
+ * step from its remedy instead of behind a sidebar entry. */
+export interface ReadinessHint {
+  /** The unmet requirement, named in the link's tooltip. */
+  requirement?: string;
+  onOpenSettings(): void;
+}
+
 function Line({
   line,
   graphs,
   source,
+  readiness,
 }: {
   line: CaptainLine;
   graphs?: Record<string, MachineGraph | null>;
   /** The dispatched intent's provenance, worn by the bound turn's
    * Boss bubble (run-view-89). */
   source?: IntentSource;
+  /** Present while the Captain's adapter is not ready: every failure
+   * line then carries the link to Settings (run-view-2). */
+  readiness?: ReadinessHint;
 }) {
   const time = new Date(line.at).toLocaleString();
   switch (line.kind) {
@@ -102,12 +115,37 @@ function Line({
         </div>
       );
     case "error":
+      // One line per failure (run-view-2): a repeat folds into a
+      // count, and while the Captain's adapter is not ready the line
+      // carries the way to the remedy.
       return (
         <div
           title={time}
-          className="mx-auto max-w-[90%] rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+          data-testid="failure-line"
+          className="mx-auto flex max-w-[90%] flex-wrap items-baseline gap-x-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
-          {line.text}
+          <span className="min-w-0">{line.text}</span>
+          {line.count !== undefined && line.count > 1 ? (
+            <span
+              data-testid="failure-count"
+              title={`The same failure ${line.count} times in this turn`}
+              className="shrink-0 font-medium"
+            >
+              <span aria-hidden="true">×{line.count}</span>
+              <span className="sr-only">, {line.count} times</span>
+            </span>
+          ) : null}
+          {readiness ? (
+            <button
+              type="button"
+              data-testid="failure-readiness-link"
+              onClick={readiness.onOpenSettings}
+              title={readiness.requirement}
+              className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-300"
+            >
+              Check agent readiness
+            </button>
+          ) : null}
         </div>
       );
     default:
@@ -169,6 +207,7 @@ export function CaptainPane({
   machineGraphs,
   bossSources,
   extras,
+  readiness,
   focusKey,
   onFocusHandled,
 }: {
@@ -180,6 +219,9 @@ export function CaptainPane({
   bossSources?: Map<number, IntentSource>;
   /** Nodes anchored after specific lines (run-view-87). */
   extras?: ThreadExtra[];
+  /** The Captain's adapter is not ready: failure lines link to
+   * Settings (run-view-2). */
+  readiness?: ReadinessHint;
   /** Scroll to and briefly highlight this line ("line-<index>") or
    * extra (its focusKey) — attention activation lands at the intent's
    * place (run-view-91). */
@@ -294,6 +336,7 @@ export function CaptainPane({
                         ? bossSources?.get(line.turnId)
                         : undefined
                     }
+                    readiness={readiness}
                   />
                 </div>
                 {extras
@@ -381,7 +424,7 @@ export function CaptainPane({
         </div>
         {newBelow ? (
           <button type="button" onClick={jump} className={jumpPillClasses()}>
-            ↓ latest
+            ↓ Latest
           </button>
         ) : null}
       </div>

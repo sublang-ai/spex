@@ -4,6 +4,22 @@
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+const WEB_URL = /^https?:\/\//i;
+
+/** A web link leaves the page rather than replacing it: a new tab when
+ * the UI is served, the system browser on the desktop, and never a
+ * referrer. A link within the app stays a plain anchor for the surface
+ * that routes it. */
+function link(href: string, children: React.ReactNode) {
+  return WEB_URL.test(href) ? (
+    <a href={href} target="_blank" rel="noreferrer">
+      {children}
+    </a>
+  ) : (
+    <a href={href}>{children}</a>
+  );
+}
+
 // Remote images are stripped (only data: URIs render): transcripts can
 // carry untrusted markdown, and remote fetches would leak activity.
 const components: Components = {
@@ -15,6 +31,8 @@ const components: Components = {
         [external image blocked: {alt || "image"}]
       </span>
     ),
+  a: ({ href, children }) =>
+    typeof href === "string" ? link(href, children) : <>{children}</>,
 };
 
 /** Transcript rendering: an agent cites a repo path or a spec anchor
@@ -26,8 +44,8 @@ const components: Components = {
 const transcriptComponents: Components = {
   ...components,
   a: ({ href, children }) =>
-    typeof href === "string" && /^https?:\/\//i.test(href) ? (
-      <a href={href}>{children}</a>
+    typeof href === "string" && WEB_URL.test(href) ? (
+      link(href, children)
     ) : (
       <span title={typeof href === "string" ? href : undefined}>
         {children}

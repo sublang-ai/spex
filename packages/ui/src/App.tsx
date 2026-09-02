@@ -12,6 +12,7 @@ import type { IntentInfo, SessionInfo } from "@sublang/spex-core/protocol";
 import { useAppStore } from "./state/store.js";
 import type { AttentionItem } from "./state/dashboard.js";
 import { setCaptain } from "./lib/config-ops.js";
+import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionView } from "./state/reducer.js";
 import { RunView } from "./components/RunView.js";
 import { CaptainHome } from "./components/CaptainHome.js";
@@ -346,6 +347,20 @@ function WorkspaceSurface({
   const summary =
     configState?.status === "valid" ? configState.summary : undefined;
 
+  // The Captain's adapter not ready is the likeliest cause of a failed
+  // turn: a live session's failure lines then carry the way to
+  // Settings (run-view-2).
+  const captainReadiness = summary?.captain
+    ? readiness.find((entry) => entry.adapter === summary.captain?.adapter)
+    : undefined;
+  const readinessHint =
+    captainReadiness?.ready === false
+      ? {
+          requirement: captainReadiness.requirement,
+          onOpenSettings: () => onNavigate("Settings"),
+        }
+      : undefined;
+
   function pickTab(next: string): void {
     if (!currentProjectId) return;
     const pinned = pinnedTab(next);
@@ -423,6 +438,9 @@ function WorkspaceSurface({
   /** Ending stops the agents; it never moves the reader (run-view-69). */
   function endSession(session: SessionInfo): void {
     setEnding((current) => ({ ...current, [session.id]: true }));
+    // The confirm leaves with its buttons: focus lands on the
+    // session's own tab, never on <body> (run-view-50).
+    (tabRefs.current.get(session.id) ?? tabRefs.current.get("start"))?.focus();
     void disposeSession(session.id)
       .catch(() => {})
       .finally(() => {
@@ -435,9 +453,42 @@ function WorkspaceSurface({
   function closeTabAt(session: SessionInfo): void {
     const index = open.findIndex((entry) => entry.id === session.id);
     closeTab(session.projectId, session.id);
-    // Keyboard flow: focus the neighboring tab, never <body>.
+    // Keyboard flow: focus the neighboring tab — the new-session tab
+    // when no session tab is left, from which the start view's own
+    // composer takes it as it mounts — never <body>.
     const neighbor = open[index + 1] ?? open[index - 1];
-    if (neighbor) tabRefs.current.get(neighbor.id)?.focus();
+    (neighbor
+      ? tabRefs.current.get(neighbor.id)
+      : tabRefs.current.get("start")
+    )?.focus();
+  }
+
+  // The strip is one tab list with one Tab stop (run-view-48): the
+  // active tab is reachable by Tab, and the arrows, Home, and End walk
+  // the rest — session tabs, the new-session control, and the pinned
+  // views alike. Activation stays a click or Enter, so walking the
+  // strip switches nothing.
+  const tabOrder = [
+    ...open.map((session) => session.id),
+    "start",
+    "specs",
+    "overview",
+  ];
+  function walkTabs(event: React.KeyboardEvent, id: string): void {
+    const index = tabOrder.indexOf(id);
+    let next: string | undefined;
+    if (event.key === "ArrowRight") {
+      next = tabOrder[(index + 1) % tabOrder.length];
+    } else if (event.key === "ArrowLeft") {
+      next = tabOrder[(index - 1 + tabOrder.length) % tabOrder.length];
+    } else if (event.key === "Home") {
+      next = tabOrder[0];
+    } else if (event.key === "End") {
+      next = tabOrder[tabOrder.length - 1];
+    }
+    if (!next) return;
+    event.preventDefault();
+    tabRefs.current.get(next)?.focus();
   }
 
   if (!project) {
@@ -465,6 +516,16 @@ function WorkspaceSurface({
           const attentionItem = attentionBySession.get(session.id);
           const isActive = session.id === tab;
           const title = sessionTitle(views[session.id], session);
+          // The dot's meaning is in the tab's name (run-view-48), so
+          // color is never the only channel.
+          const name =
+            title +
+            (session.live ? "" : " — ended") +
+            (attentionItem
+              ? attentionItem.kind === "failure"
+                ? " — failed"
+                : " — needs your reply"
+              : "");
           return (
             <span
               key={session.id}
@@ -478,6 +539,8 @@ function WorkspaceSurface({
                 type="button"
                 role="tab"
                 aria-selected={isActive}
+                aria-label={name}
+                tabIndex={isActive ? 0 : -1}
                 ref={(element) => {
                   if (element) tabRefs.current.set(session.id, element);
                   else tabRefs.current.delete(session.id);
@@ -492,7 +555,9 @@ function WorkspaceSurface({
                   if (event.key === "Delete" || event.key === "Backspace") {
                     event.preventDefault();
                     closeTabAt(session);
+                    return;
                   }
+                  walkTabs(event, session.id);
                 }}
                 onClick={() => pickTab(session.id)}
                 className="flex min-w-0 items-center gap-1.5 hover:text-neutral-900 dark:hover:text-neutral-100"
@@ -536,8 +601,14 @@ function WorkspaceSurface({
           type="button"
           role="tab"
           aria-selected={tab === "start"}
-          title="Start another session"
+          tabIndex={tab === "start" ? 0 : -1}
+          ref={(element) => {
+            if (element) tabRefs.current.set("start", element);
+            else tabRefs.current.delete("start");
+          }}
+          title={`Start another session (${keyLabel("N")})`}
           aria-label="Start another session"
+          onKeyDown={(event) => walkTabs(event, "start")}
           onClick={() => pickTab("start")}
           className={`shrink-0 rounded-t-md px-3 py-1.5 text-sm ${
             tab === "start"
@@ -554,6 +625,7 @@ function WorkspaceSurface({
           type="button"
           role="tab"
           aria-selected={tab === pinned}
+          tabIndex={tab === pinned ? 0 : -1}
           data-testid={`workspace-tab-${pinned}`}
           ref={(element) => {
             if (element) tabRefs.current.set(pinned, element);
@@ -561,9 +633,10 @@ function WorkspaceSurface({
           }}
           title={
             pinned === "specs"
-              ? "The project's spec packages (⌘⇧S)"
+              ? `The project's spec packages (${keyLabel("⇧S")})`
               : "This project's overview: history, now, up next, sources, repo state"
           }
+          onKeyDown={(event) => walkTabs(event, pinned)}
           onClick={() => pickTab(pinned)}
           className={`shrink-0 rounded-t-md px-3 py-1.5 text-sm ${
             tab === pinned
@@ -621,7 +694,7 @@ function WorkspaceSurface({
       ) : activeSession && view ? (
         view.loading ? (
           <div className="m-auto text-sm text-neutral-500">
-            loading transcript…
+            Loading transcript…
           </div>
         ) : (
           <RunView
@@ -634,6 +707,7 @@ function WorkspaceSurface({
             error={runErrors[activeSession.id]}
             readOnly={!activeSession.live}
             ending={ending[activeSession.id]}
+            readinessHint={readinessHint}
             onEnd={
               activeSession.live ? () => endSession(activeSession) : undefined
             }
@@ -913,7 +987,7 @@ export function App() {
         {railCollapsed ? (
           <Icon name="gear" className="h-3.5 w-3.5" />
         ) : (
-          <>config {configState.status} →</>
+          <>Config {configState.status} →</>
         )}
       </button>
     ) : railCollapsed || playbookCount === undefined ? null : (

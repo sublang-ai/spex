@@ -65,4 +65,23 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   await expect(page.getByRole("tab", { name: /line one/i })).toBeVisible();
   await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
   expect(await focusedIsBody()).toBe(false);
+
+  // The strip walks by arrow keys, Home, and End without switching
+  // tabs; Delete closes the focused tab and focus lands on a tab, never
+  // on the body (run-view-48).
+  const sessionTab = page.getByRole("tab", { name: /line one/i });
+  const plusTab = page.getByRole("tab", { name: "Start another session" });
+  await sessionTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(plusTab).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(page.getByRole("tab", { name: "Overview" })).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(sessionTab).toBeFocused();
+  await expect(sessionTab).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Delete");
+  await expect(page.getByRole("tab", { name: /line one/i })).toHaveCount(0);
+  // The last session tab closed: the start view's composer is ready.
+  await expect(page.getByTestId("start-composer")).toBeFocused();
+  expect(await focusedIsBody()).toBe(false);
 });

@@ -14,7 +14,11 @@ import type {
 
 import type { SessionView } from "../state/reducer.js";
 import type { ComposerState } from "../state/store.js";
-import { CaptainPane, type ThreadExtra } from "./CaptainPane.js";
+import {
+  CaptainPane,
+  type ReadinessHint,
+  type ThreadExtra,
+} from "./CaptainPane.js";
 import {
   CAPTAIN_SPLIT_DEFAULT,
   CAPTAIN_SPLIT_MAX,
@@ -114,6 +118,7 @@ export function RunView({
   onAbort,
   onRemoveQueued,
   onDismissError,
+  readinessHint,
   focusTurn,
   onFocusHandled,
 }: {
@@ -123,6 +128,9 @@ export function RunView({
   connected: boolean;
   error?: string;
   playbooks?: PlaybookSummary[];
+  /** Set while the Captain's adapter reports not ready: a live
+   * session's failure lines then link to Settings (run-view-2). */
+  readinessHint?: ReadinessHint;
   /** Ended-session transcript browsing (RUN-33): input replaced. */
   readOnly?: boolean;
   /** The end request is in flight — the agents are shutting down. */
@@ -155,6 +163,15 @@ export function RunView({
   const stageDispatch = useAppStore((state) => state.stageDispatch);
   const splitRef = useRef<HTMLDivElement>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  // Backing out of the end confirm returns focus to the control that
+  // opened it, never to <body> (run-view-50).
+  const endButtonRef = useRef<HTMLButtonElement>(null);
+  const [refocusEnd, setRefocusEnd] = useState(false);
+  useEffect(() => {
+    if (!refocusEnd || confirmEnd) return;
+    endButtonRef.current?.focus();
+    setRefocusEnd(false);
+  }, [refocusEnd, confirmEnd]);
 
   // The intents this session's turns are bound to (DR-035): the open
   // fold serves them; a closed one survives below as a snapshot so its
@@ -337,7 +354,7 @@ export function RunView({
             data-testid="session-ended-at"
             className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
           >
-            ended{" "}
+            Ended{" "}
             {session.endedAt ? new Date(session.endedAt).toLocaleString() : ""}
           </span>
         ) : confirmEnd ? (
@@ -349,18 +366,22 @@ export function RunView({
                   ? ` ${queued} queued message${queued === 1 ? "" : "s"} will be discarded.`
                   : "")
               }
-              confirmLabel="end"
-              cancelLabel="keep"
+              confirmLabel="End"
+              cancelLabel="Keep"
               onConfirm={() => {
                 setConfirmEnd(false);
                 onEnd?.();
               }}
-              onCancel={() => setConfirmEnd(false)}
+              onCancel={() => {
+                setConfirmEnd(false);
+                setRefocusEnd(true);
+              }}
             />
           </span>
         ) : onEnd ? (
           <button
             type="button"
+            ref={endButtonRef}
             data-testid="end-session"
             disabled={ending}
             onClick={() => setConfirmEnd(true)}
@@ -382,6 +403,7 @@ export function RunView({
             machineGraphs={machineGraphs}
             bossSources={bossSources}
             extras={extras}
+            readiness={readOnly ? undefined : readinessHint}
             focusKey={focusKey}
             onFocusHandled={onFocusHandled}
           />

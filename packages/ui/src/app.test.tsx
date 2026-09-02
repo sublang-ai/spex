@@ -32,6 +32,7 @@ import {
   useAppStore,
 } from "./state/store.js";
 import { initialSessionView, type SessionView } from "./state/reducer.js";
+import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 // A live clock: the rows print ages relative to now.
@@ -270,7 +271,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
 
     fireEvent.click(screen.getByTestId("end-session"));
     await act(async () => {
-      fireEvent.click(screen.getByText("end"));
+      fireEvent.click(screen.getByText("End"));
     });
     expect(commandMock).toHaveBeenCalledWith("session.dispose", {
       sessionId: "a-live",
@@ -635,5 +636,76 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
       "end it first",
     );
     expect(screen.getByTestId("sidebar-session-a-failed")).toBeTruthy();
+  });
+});
+
+describe("run-view-48/50: the strip walks by keyboard and names its attention", () => {
+  beforeEach(() => {
+    useAppStore.setState({ openTabs: { p1: ["a-live", "a-failed"] } });
+  });
+
+  test("one Tab stop, arrows and Home/End between tabs, attention in the name", () => {
+    render(<App />);
+    const live = screen.getByRole("tab", {
+      name: "harden the session refresh — needs your reply",
+    });
+    const failed = screen.getByRole("tab", {
+      name: "chase the flaky test — ended",
+    });
+    const plus = screen.getByRole("tab", { name: "Start another session" });
+    const specs = screen.getByTestId("workspace-tab-specs");
+    const overview = screen.getByTestId("workspace-tab-overview");
+    expect(live.tabIndex).toBe(0);
+    for (const other of [failed, plus, specs, overview]) {
+      expect(other.tabIndex).toBe(-1);
+    }
+
+    live.focus();
+    fireEvent.keyDown(live, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(failed);
+    fireEvent.keyDown(failed, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(plus);
+    fireEvent.keyDown(plus, { key: "End" });
+    expect(document.activeElement).toBe(overview);
+    fireEvent.keyDown(overview, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(live);
+    fireEvent.keyDown(live, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(overview);
+    fireEvent.keyDown(overview, { key: "Home" });
+    expect(document.activeElement).toBe(live);
+    // Walking the strip activates nothing.
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("a-live");
+
+    // A tooltip naming a shortcut prints the platform's own modifier.
+    expect(specs.title).toBe(
+      `The project's spec packages (${keyLabel("⇧S")})`,
+    );
+    expect(plus.title).toBe(`Start another session (${keyLabel("N")})`);
+  });
+
+  test("closing tabs and ending a session leave focus on a tab", async () => {
+    render(<App />);
+    const failed = screen.getByRole("tab", {
+      name: "chase the flaky test — ended",
+    });
+    failed.focus();
+    fireEvent.keyDown(failed, { key: "Delete" });
+    expect(useAppStore.getState().openTabs.p1).toEqual(["a-live"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("tab", { name: /harden the session refresh/ }),
+    );
+
+    fireEvent.click(screen.getByTestId("end-session"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("End"));
+    });
+    const live = screen.getByRole("tab", { name: /harden the session refresh/ });
+    expect(document.activeElement).toBe(live);
+
+    // The last session tab closed: the workspace falls to the start
+    // view, whose composer is ready to type — never the body.
+    fireEvent.keyDown(live, { key: "Delete" });
+    expect(useAppStore.getState().openTabs.p1).toEqual([]);
+    expect(document.activeElement).toBe(screen.getByTestId("start-composer"));
   });
 });

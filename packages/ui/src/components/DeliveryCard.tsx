@@ -16,6 +16,8 @@ import type {
   IntentStats,
 } from "@sublang/spex-core/protocol";
 
+import { duration } from "../lib/time.js";
+
 /** The first line of the intent's text is its display title (DR-035). */
 export function intentTitle(intent: IntentInfo): string {
   return intent.text.split(/\r?\n/, 1)[0] ?? intent.text;
@@ -30,8 +32,10 @@ const SOURCE_LABEL: Record<IntentSource["kind"], (ref: string) => string> = {
 
 /** The intent's provenance chip: the source ref as the label, the raw
  * kind/ref/url in the tooltip. With a canonical URL it activates as a
- * link the shell opens externally (run-view-89); without one it is a
- * plain marker — provenance is a category, never a status hue. */
+ * link that opens outside the page — a new tab when served, the system
+ * browser on the desktop — so the session never navigates away
+ * (run-view-89); without one it is a plain marker — provenance is a
+ * category, never a status hue. */
 export function SourceChip({
   source,
   onDark,
@@ -52,6 +56,8 @@ export function SourceChip({
       <a
         data-testid="intent-source-chip"
         href={source.url}
+        target="_blank"
+        rel="noreferrer"
         title={tooltip}
         className={`${base} ${
           onDark
@@ -78,21 +84,9 @@ export function SourceChip({
   );
 }
 
-export function formatElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    const rest = seconds % 60;
-    return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest > 0 ? `${hours}h ${rest}m` : `${hours}h`;
-}
-
 /** Review rounds foremost (omitted when zero), then turns, then
- * elapsed — the verdict is informed before the click (run-view-87). */
+ * elapsed in the app's one duration vocabulary — the verdict is
+ * informed before the click (run-view-87). */
 export function statsLine(stats?: IntentStats): string | undefined {
   if (!stats) return undefined;
   const parts: string[] = [];
@@ -102,7 +96,7 @@ export function statsLine(stats?: IntentStats): string | undefined {
     );
   }
   parts.push(`${stats.turns} turn${stats.turns === 1 ? "" : "s"}`);
-  if (stats.elapsedMs !== undefined) parts.push(formatElapsed(stats.elapsedMs));
+  if (stats.elapsedMs !== undefined) parts.push(duration(stats.elapsedMs));
   return parts.join(" · ");
 }
 
@@ -181,7 +175,7 @@ export function DeliveryCard({
               }}
               className="shrink-0 rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
-              {starting ? "Staging…" : "Start"}
+              {starting ? "Starting…" : "Start"}
             </button>
           </div>
         ) : (
@@ -215,7 +209,7 @@ export function DeliveryCard({
               title={inertTitle}
               className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
-              {adding ? "Queueing…" : "Queue"}
+              {adding ? "Queuing…" : "Queue"}
             </button>
           </form>
         )}

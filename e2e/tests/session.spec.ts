@@ -55,10 +55,16 @@ test("run-view-98: the first task runs, queues, and ends", async ({ page, app })
   // A message during the turn queues — never reads as sent — and
   // goes out when the turn ends.
   const box = page.getByTestId("boss-composer");
+  await expect(box).toHaveAttribute("placeholder", /sends when this turn ends/);
   await box.fill("Also add a test for expiry skew");
-  await page.getByRole("button", { name: /^queue$/i }).click();
+  await page
+    .getByRole("button", { name: "Send after this turn", exact: true })
+    .click();
   await expect(page.getByTestId("queue-indicator")).toBeVisible();
   await expect(page.getByTestId("queue-indicator")).toContainText(/expiry skew/i);
+  await expect(page.getByTestId("queue-indicator")).toContainText(
+    "sends when this turn ends",
+  );
   await expect(captain).toContainText("/code finished");
   await expect(captain).toContainText(/review/i);
   await expect(coder).toContainText(/\$0\.12|2,?400/);
@@ -67,9 +73,23 @@ test("run-view-98: the first task runs, queues, and ends", async ({ page, app })
   await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
   await expect(captain).toContainText("/code finished");
 
+  // Text shelved instead of sent (run-view-85): the control and its
+  // note name where it went, and the Overview's Up next holds it.
+  await box.fill("Later: tighten the expiry tests");
+  await page.getByRole("button", { name: "Add to Up next", exact: true }).click();
+  await expect(page.getByTestId("queued-intent-note")).toHaveText(
+    "Added to Up next — see the project's Overview.",
+  );
+  await expect(box).toHaveValue("");
+  await page.getByRole("tab", { name: "Overview" }).click();
+  await expect(page.getByTestId(`upnext-${app.projectId}`)).toContainText(
+    /tighten the expiry tests/i,
+  );
+  await tab.click();
+
   // Ending: the inline confirm, then read-only.
   await page.getByTestId("end-session").click();
-  await page.getByRole("button", { name: "end", exact: true }).click();
+  await page.getByRole("button", { name: "End", exact: true }).click();
   await expect(page.getByTestId("ended-notice")).toBeVisible();
   await expect(page.getByTestId("boss-composer")).toHaveCount(0);
   await expect(tree).toContainText(/fix the token refresh/i);

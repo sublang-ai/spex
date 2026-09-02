@@ -892,3 +892,291 @@ describe("run-view-25, DR-038: the player label wears the fast-mode mark", () =>
     ).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Session view craft (run-view-2/8/38/50/83/85/87): labels that say
+// what happens, every state in more than color, links that leave the
+// page instead of replacing it, and focus that is never stranded.
+// ---------------------------------------------------------------------------
+
+describe("run-view-8/38: the composer says what a send does mid-turn", () => {
+  test("the primary control, the placeholder, and the caption agree", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONLY_STARTED);
+    render(
+      <RunView
+        session={SESSION}
+        view={view}
+        composer={{ queued: [{ text: "and the changelog" }] }}
+        connected
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    const send = screen.getByRole("button", { name: "Send after this turn" });
+    expect(send.title).toBe("Enter to send · Shift+Enter for a new line");
+    expect(
+      screen.getByTestId("boss-composer").getAttribute("placeholder"),
+    ).toContain("sends when this turn ends");
+    expect(screen.getByTestId("queue-indicator").textContent).toContain(
+      "sends when this turn ends",
+    );
+    // The remove control is a real hit target (run-view-50).
+    const remove = screen.getByRole("button", {
+      name: "Remove this queued message",
+    });
+    expect(remove.className).toContain("h-6 w-6");
+    expect(remove.title).toBe("Remove this message");
+  });
+
+  test("idle, the control reads Send", () => {
+    renderRun(TURN_ONE);
+    expect(screen.getByRole("button", { name: "Send" }).title).toBe(
+      "Enter to send · Shift+Enter for a new line",
+    );
+  });
+
+  test("the staged chip names the task and its control speaks plainly", () => {
+    useAppStore.setState({
+      stagedIntents: { s1: { intentId: "i1", title: "Address #7" } },
+    });
+    renderRunWith(TURN_ONE);
+    expect(screen.getByTestId("staged-intent-chip").textContent).toContain(
+      "Starting: Address #7",
+    );
+    const detach = screen.getByRole("button", {
+      name: "Take the task out of the message",
+    });
+    expect(detach.className).toContain("h-6 w-6");
+    useAppStore.setState({ stagedIntents: {} });
+  });
+});
+
+describe("run-view-85: Add to Up next says where the text goes", () => {
+  afterEach(() => {
+    useAppStore.setState({ ledger: undefined, stagedIntents: {} });
+    setClientForTests(undefined);
+  });
+
+  test("the control and its note both name Up next", async () => {
+    const command = vi.fn(async (type: string) =>
+      type === "intent.queue"
+        ? makeIntent({ id: "chat-2" })
+        : type === "ledger.get"
+          ? EMPTY_LEDGER
+          : {},
+    );
+    setClientForTests({ command } as never);
+    renderRunWith(TURN_ONE);
+    const add = screen.getByRole("button", { name: "Add to Up next" });
+    expect(add.title).toBe(
+      "Add this to the project's Up next without sending it",
+    );
+    fireEvent.change(screen.getByTestId("boss-composer"), {
+      target: { value: "tidy the docs" },
+    });
+    fireEvent.click(add);
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("queued-intent-note").textContent).toBe(
+        "Added to Up next — see the project's Overview.",
+      ),
+    );
+  });
+});
+
+const TURN_FAILING = [
+  {
+    seq: 1,
+    record: {
+      type: "turn_started",
+      turnId: 5,
+      timestamp: 1,
+      turn: { id: 5, prompt: "go", timestamp: 1 },
+    },
+  },
+  {
+    seq: 2,
+    record: {
+      type: "runtime_error",
+      turnId: 5,
+      timestamp: 2,
+      message: "the coder crashed",
+    },
+  },
+  {
+    seq: 3,
+    record: {
+      type: "runtime_error",
+      turnId: 5,
+      timestamp: 3,
+      message: "the coder crashed",
+    },
+  },
+  {
+    seq: 4,
+    record: {
+      type: "runtime_error",
+      turnId: 5,
+      timestamp: 4,
+      message: "disk full",
+    },
+  },
+  { seq: 5, record: { type: "turn_finished", turnId: 5, timestamp: 5 } },
+] as typeof FULL_RUN;
+
+describe("run-view-2: failure lines fold, and point at the remedy", () => {
+  test("a repeat counts, and the not-ready hint links to Settings", () => {
+    const onOpenSettings = vi.fn();
+    renderRunWith(TURN_FAILING, {
+      readinessHint: {
+        requirement: "ANTHROPIC_API_KEY is not set",
+        onOpenSettings,
+      },
+    });
+    const lines = screen.getAllByTestId("failure-line");
+    expect(lines).toHaveLength(2);
+    expect(within(lines[0]).getByTestId("failure-count").textContent).toContain(
+      "×2",
+    );
+    expect(within(lines[1]).queryByTestId("failure-count")).toBeNull();
+    const link = within(lines[0]).getByRole("button", {
+      name: "Check agent readiness",
+    });
+    expect(link.title).toBe("ANTHROPIC_API_KEY is not set");
+    fireEvent.click(link);
+    expect(onOpenSettings).toHaveBeenCalled();
+  });
+
+  test("no hint without the not-ready report, and none in a replay", () => {
+    const { unmount } = renderRunWith(TURN_FAILING);
+    expect(screen.queryByTestId("failure-readiness-link")).toBeNull();
+    unmount();
+    renderRunWith(TURN_FAILING, {
+      readinessHint: { onOpenSettings: vi.fn() },
+      session: { ...SESSION, live: false, endedAt: 5 },
+      readOnly: true,
+      onStartNew: () => {},
+    });
+    expect(screen.queryByTestId("failure-readiness-link")).toBeNull();
+  });
+});
+
+const TOOL_FATES = [
+  ...TURN_ONE.slice(0, 4),
+  {
+    seq: 5,
+    record: {
+      type: "player_event",
+      turnId: 1,
+      timestamp: 5,
+      playerId: "dev.coder",
+      event: {
+        type: "tool_use",
+        payload: { toolName: "Bash", toolUseId: "tu9", input: "rm -rf build" },
+      },
+    },
+  },
+  {
+    seq: 6,
+    record: {
+      type: "player_event",
+      turnId: 1,
+      timestamp: 6,
+      playerId: "dev.coder",
+      event: {
+        type: "tool_result",
+        payload: { toolUseId: "tu9", status: "error", output: "exit 1" },
+      },
+    },
+  },
+  {
+    seq: 7,
+    record: {
+      type: "player_event",
+      turnId: 1,
+      timestamp: 7,
+      playerId: "dev.coder",
+      event: {
+        type: "tool_use",
+        payload: { toolName: "Write", toolUseId: "tu10", input: { path: "x" } },
+      },
+    },
+  },
+  {
+    seq: 8,
+    record: {
+      type: "player_event",
+      turnId: 1,
+      timestamp: 8,
+      playerId: "dev.coder",
+      event: {
+        type: "tool_result",
+        payload: { toolUseId: "tu10", status: "denied" },
+      },
+    },
+  },
+] as typeof FULL_RUN;
+
+describe("run-view-50: color is never the only channel in a player pane", () => {
+  test("tool cards say how they ended, and the running mark says running", () => {
+    renderRun(TOOL_FATES);
+    // The prompt landed and no result yet: the lane runs, in words.
+    const running = screen.getByTestId("player-running");
+    expect(running.getAttribute("data-running")).toBe("true");
+    expect(running.textContent).toBe("running");
+
+    const status = (tool: string) =>
+      within(screen.getByText(tool).closest("summary")!).getByTestId(
+        /^tool-status-/,
+      );
+    expect(status("Bash").textContent).toBe("✗failed");
+    expect(status("Write").textContent).toBe("✗denied");
+  });
+
+  test("a call that succeeded wears the ok mark", () => {
+    renderRun(TURN_ONE);
+    const edit = screen.getByText("Edit").closest("summary")!;
+    expect(within(edit).getByTestId(/^tool-status-/).textContent).toBe("✓ok");
+  });
+});
+
+describe("run-view-83/87: links leave the page, never replace it", () => {
+  afterEach(() => {
+    useAppStore.setState({ ledger: undefined });
+  });
+
+  test("a transcript's web link and the source chip open a new tab without a referrer", () => {
+    useAppStore.setState({
+      ledger: { intents: [FINISHED], attention: [], badge: 1 },
+    });
+    renderRunWith(TURN_ONE);
+    const link = screen.getByText("the SDK docs");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noreferrer");
+    const chip = within(screen.getByTestId("boss-bubble")).getByTestId(
+      "intent-source-chip",
+    );
+    expect(chip.getAttribute("target")).toBe("_blank");
+    expect(chip.getAttribute("rel")).toBe("noreferrer");
+  });
+});
+
+describe("run-view-50: focus is never stranded", () => {
+  test("abort keeps focus in the composer", () => {
+    renderRun(TURN_ONLY_STARTED);
+    const abort = screen.getByTestId("abort-button");
+    abort.focus();
+    fireEvent.click(abort);
+    expect(document.activeElement).toBe(screen.getByTestId("boss-composer"));
+  });
+
+  test("backing out of the end confirm returns to its control", () => {
+    renderRunWith(TURN_ONE, { onEnd: () => {} });
+    fireEvent.click(screen.getByTestId("end-session"));
+    const keep = screen.getByRole("button", { name: "Keep" });
+    expect(document.activeElement).toBe(keep);
+    fireEvent.click(keep);
+    expect(document.activeElement).toBe(screen.getByTestId("end-session"));
+  });
+});

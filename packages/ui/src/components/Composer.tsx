@@ -35,7 +35,7 @@ export function Composer({
   connected: boolean;
   error?: string;
   playbooks?: PlaybookSummary[];
-  /** The staged dispatch this composer wears (DR-035). */
+  /** The intent staged into this composer, worn as a chip (DR-035). */
   staged?: StagedIntent;
   onCompileNew?: () => void;
   /** Persist the draft in the store (DR-010: drafts survive). */
@@ -171,10 +171,10 @@ export function Composer({
                 sends when this turn ends
                 <button
                   type="button"
-                  title="Remove from queue"
-                  aria-label="Remove queued message"
+                  title="Remove this message"
+                  aria-label="Remove this queued message"
                   onClick={() => onRemoveQueued(index)}
-                  className="flex h-5 w-5 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
+                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
                 >
                   <Icon name="close" className="h-3 w-3" />
                 </button>
@@ -189,14 +189,14 @@ export function Composer({
           className="flex items-center gap-2 self-start rounded-full border border-brand-300 bg-brand-50 py-0.5 pl-3 pr-1 text-xs font-medium text-brand-700 dark:border-brand-700 dark:bg-brand-950 dark:text-brand-300"
         >
           <span className="max-w-[24rem] truncate">
-            Dispatching: {staged.title}
+            Starting: {staged.title}
           </span>
           <button
             type="button"
-            title="Detach the intent — sending then stamps nothing"
-            aria-label="Detach the staged intent"
+            title="Take the task out of the message"
+            aria-label="Take the task out of the message"
             onClick={onDetachStaged}
-            className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-900"
+            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-900"
           >
             <Icon name="close" className="h-3 w-3" />
           </button>
@@ -279,7 +279,7 @@ export function Composer({
                 : awaiting
                   ? "Answer the question (or give a new directive)…"
                   : view.turnActive
-                    ? "A turn is running — your message is delivered when it finishes…"
+                    ? "A turn is running — your message sends when this turn ends…"
                     : "Message the Captain — free text or /command…"
             }
             disabled={!connected}
@@ -290,7 +290,7 @@ export function Composer({
               <button
                 type="button"
                 data-testid="queue-intent-button"
-                title="Queue as an intent instead of sending"
+                title="Add this to the project's Up next without sending it"
                 onClick={() => {
                   const trimmed = text.trim();
                   if (!trimmed || sending) return;
@@ -298,7 +298,9 @@ export function Composer({
                   onQueueInstead(trimmed)
                     .then(() => {
                       setText("");
-                      setQueuedNote("Queued for later — see Up next in Overview.");
+                      setQueuedNote(
+                        "Added to Up next — see the project's Overview.",
+                      );
                     })
                     .catch(() => {
                       // Draft kept; the error strip explains.
@@ -311,7 +313,7 @@ export function Composer({
                 disabled={text.trim().length === 0 || sending || !connected}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
               >
-                Queue intent
+                Add to Up next
               </button>
             ) : null}
             {view.turnActive ? (
@@ -321,9 +323,13 @@ export function Composer({
                 onClick={() => {
                   setAborting(true);
                   onAbort();
+                  // The control leaves with the turn it stops; focus
+                  // stays in the conversation, never on <body>
+                  // (run-view-50).
+                  textareaRef.current?.focus();
                 }}
                 disabled={aborting || !connected}
-                title={!connected ? "not connected" : undefined}
+                title={!connected ? "Not connected" : undefined}
                 className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
               >
                 {aborting ? "Aborting…" : "Abort"}
@@ -334,9 +340,13 @@ export function Composer({
               onClick={submit}
               className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
               disabled={text.trim().length === 0 || sending || !connected}
-              title={!connected ? "not connected" : undefined}
+              title={
+                !connected
+                  ? "Not connected"
+                  : "Enter to send · Shift+Enter for a new line"
+              }
             >
-              {view.turnActive ? "Queue" : "Send"}
+              {view.turnActive ? "Send after this turn" : "Send"}
             </button>
           </div>
         </div>

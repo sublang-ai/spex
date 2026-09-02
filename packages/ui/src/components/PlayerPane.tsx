@@ -11,6 +11,7 @@ import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
 import { Markdown } from "./Markdown.js";
+import { RunningMark } from "./RunningMark.js";
 
 const RENDER_WINDOW = 200;
 
@@ -124,6 +125,17 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
       );
     case "tool": {
       const subject = toolSubject(segment.input);
+      // The glyph's hue says how the call ended; the word and the
+      // mark say it too, so color is never the only channel
+      // (run-view-50).
+      const outcome =
+        segment.status === "success"
+          ? { word: "ok", mark: "✓", tone: "text-emerald-700 dark:text-emerald-400" }
+          : segment.status === "error"
+            ? { word: "failed", mark: "✗", tone: "text-red-600 dark:text-red-400" }
+            : segment.status === "denied"
+              ? { word: "denied", mark: "✗", tone: "text-red-600 dark:text-red-400" }
+              : undefined;
       return (
         <details className="rounded border border-neutral-200 bg-white px-2 py-1 text-xs dark:border-neutral-800 dark:bg-neutral-900">
           <summary className="cursor-pointer select-none font-mono">
@@ -132,17 +144,21 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
             <span className="inline-flex w-[calc(100%-1.25rem)] items-baseline gap-1.5 align-middle">
               <span
                 aria-hidden="true"
-                className={
-                  segment.status === "error" || segment.status === "denied"
-                    ? "text-red-600 dark:text-red-400"
-                    : segment.status === "success"
-                      ? "text-emerald-700 dark:text-emerald-400"
-                      : "text-neutral-500"
-                }
+                className={outcome?.tone ?? "text-neutral-500"}
               >
                 ⚒
               </span>
               <span className="shrink-0">{segment.toolName}</span>
+              {outcome ? (
+                <span
+                  data-testid={`tool-status-${segment.seq}`}
+                  title={outcome.word}
+                  className={`shrink-0 ${outcome.tone}`}
+                >
+                  <span aria-hidden="true">{outcome.mark}</span>
+                  <span className="sr-only">{outcome.word}</span>
+                </span>
+              ) : null}
               {segment.durationMs !== undefined ? (
                 <span className="shrink-0 text-neutral-500">
                   · {segment.durationMs}ms
@@ -246,12 +262,14 @@ export function PlayerPane({
             ) : null}
           </span>
         ) : null}
-        <span className="ml-auto shrink-0">
+        <span className="ml-auto flex shrink-0 items-center">
           {view.running ? (
-            <span
+            // The app's one running mark (run-view-61), its meaning in
+            // text as well as in the pulse.
+            <RunningMark
+              running
               data-testid="player-running"
-              className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500"
-              title="running"
+              title="Running"
             />
           ) : view.turnUsage ? (
             <span className="hidden whitespace-nowrap @[22rem]:inline">
@@ -275,7 +293,7 @@ export function PlayerPane({
               }}
               className="text-center text-[11px] text-neutral-500 hover:text-brand-500"
             >
-              show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)}{" "}
+              Show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)}{" "}
               of {view.segments.length - windowSize} earlier entries
             </button>
           ) : null}
@@ -284,13 +302,13 @@ export function PlayerPane({
           ))}
           {view.segments.length === 0 ? (
             <div className="m-auto text-xs text-neutral-500">
-              waiting for the first prompt
+              Waiting for the first prompt
             </div>
           ) : null}
         </div>
         {newBelow ? (
           <button type="button" onClick={jump} className={jumpPillClasses()}>
-            ↓ latest
+            ↓ Latest
           </button>
         ) : null}
       </div>
