@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import type { LineSpawner } from "./compile.js";
+import { defaultSpawner } from "./compile.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
 import type {
   Command,
@@ -1827,6 +1828,16 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   writeFileSync(stubPath, stubSlcSource("['Coder', 'Reviewer']"));
   const harness = await startHarness(VALID_CONFIG, {
     env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
+    // The toolchain probe wants a system Node slc can run on; the
+    // runner's own Node is whatever CI installed, so the probe is
+    // answered here and every other spawn — the stub slc — is real.
+    compileSpawner: (command, args, cwd, onLine, signal) => {
+      if (args.length === 1 && args[0] === "--version" && command !== process.execPath) {
+        onLine("v24.1.0");
+        return Promise.resolve(0);
+      }
+      return defaultSpawner(command, args, cwd, onLine, signal);
+    },
   });
   const client = new Client(harness.service.port());
   await client.open();
