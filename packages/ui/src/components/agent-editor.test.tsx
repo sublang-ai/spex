@@ -20,21 +20,25 @@ import {
 afterEach(cleanup);
 
 import { AgentEditor, AgentEditorPopover } from "./AgentEditor.js";
+import type { ChipAgent } from "./AgentChip.js";
 import type { AgentPatch } from "../lib/config-ops.js";
-import type {
-  AgentBlockInput,
-  ReadinessEntry,
-} from "@sublang/spex-core/protocol";
+import type { ReadinessEntry } from "@sublang/spex-core/protocol";
 
 const READINESS: ReadinessEntry[] = [
-  { adapter: "claude", ready: true, usedBy: ["captain"] },
+  { adapter: "claude", ready: true, usedBy: ["captain"], fastModeSupported: true },
   {
     adapter: "codex",
     ready: false,
     requirement: "set OPENAI_API_KEY or run `codex login`",
     usedBy: ["code.reviewer"],
+    fastModeSupported: false,
   },
-  { adapter: "gemini", ready: null, usedBy: ["review.reviewer"] },
+  {
+    adapter: "gemini",
+    ready: null,
+    usedBy: ["review.reviewer"],
+    fastModeSupported: false,
+  },
 ];
 
 function saver() {
@@ -42,8 +46,8 @@ function saver() {
 }
 
 function renderEditor(
-  initial?: AgentBlockInput,
-  extra: { captain?: AgentBlockInput; readiness?: ReadinessEntry[] } = {},
+  initial?: ChipAgent,
+  extra: { captain?: ChipAgent; readiness?: ReadinessEntry[] } = {},
 ) {
   const onSave = saver();
   render(
@@ -257,7 +261,7 @@ describe("DR-019: a save emits a merge patch over surfaced fields", () => {
 });
 
 describe("DR-019: Same as Captain copies settings, not prose", () => {
-  const CAPTAIN: AgentBlockInput = {
+  const CAPTAIN: ChipAgent = {
     adapter: "codex",
     model: "gpt-5.5-codex",
     effort: "ultra",
@@ -366,5 +370,63 @@ describe("DR-019/DR-010 §6: the popover's at-hand discipline", () => {
     expect(onClose).not.toHaveBeenCalled();
     fireEvent.mouseDown(document.body);
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe("DR-038: fast mode is offered where the runtime declares it", () => {
+  test("the switch shows for a supporting adapter and hides for the rest", () => {
+    renderEditor({ adapter: "claude" }, { readiness: READINESS });
+    expect(screen.getByTestId("agent-fast-mode")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("agent-adapter-codex"));
+    expect(screen.queryByTestId("agent-fast-mode")).toBeNull();
+  });
+
+  test("with no readiness known, no switch is offered", () => {
+    renderEditor({ adapter: "claude" });
+    expect(screen.queryByTestId("agent-fast-mode")).toBeNull();
+  });
+
+  test("checking writes true; unchecking a set value unsets it", () => {
+    const first = renderEditor({ adapter: "claude" }, { readiness: READINESS });
+    fireEvent.click(screen.getByTestId("agent-fast-mode"));
+    fireEvent.click(first.save());
+    expect(first.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ fastMode: true }),
+    );
+    cleanup();
+
+    const second = renderEditor(
+      { adapter: "claude", fastMode: true },
+      { readiness: READINESS },
+    );
+    const box = screen.getByTestId("agent-fast-mode") as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    fireEvent.click(second.save());
+    expect(second.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ fastMode: null }),
+    );
+  });
+
+  test("an untouched switch emits no fastMode key", () => {
+    const { onSave, model, save } = renderEditor(
+      { adapter: "claude" },
+      { readiness: READINESS },
+    );
+    fireEvent.change(model(), { target: { value: "claude-opus-5" } });
+    fireEvent.click(save());
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty("fastMode");
+  });
+
+  test("switching to an adapter without fast mode unsets the value", () => {
+    const { onSave, save } = renderEditor(
+      { adapter: "claude", fastMode: true },
+      { readiness: READINESS },
+    );
+    fireEvent.click(screen.getByTestId("agent-adapter-codex"));
+    fireEvent.click(save());
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ adapter: "codex", fastMode: null }),
+    );
   });
 });

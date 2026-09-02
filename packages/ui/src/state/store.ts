@@ -163,6 +163,13 @@ export interface AppState {
    * `force` retries after a failed load (clears the stale view). */
   loadPastSession(sessionId: string, force?: boolean): Promise<void>;
   disposeSession(sessionId: string): Promise<void>;
+  /** Delete an ended session's files and every trace (DR-038,
+   * core-service-70); the core refuses a live or foreign one. */
+  deleteSession(sessionId: string): Promise<void>;
+  /** Forget a deleted session everywhere — the listing, its tab, its
+   * transcript, composer, and staged chip. The removal broadcast and
+   * the delete reply both land here, idempotently. */
+  forgetSession(sessionId: string, projectId: string): void;
   submitBossText(sessionId: string, text: string): Promise<void>;
   /** Re-pull the one ledger fold (DR-035). */
   loadLedger(): Promise<void>;
@@ -271,6 +278,14 @@ export function getClient(): SpexClient {
  * module mocks cannot reach — vitest injects a fake through here. */
 export function setClientForTests(fake: SpexClient | undefined): void {
   client = fake;
+}
+
+let deliver: ((message: ServerMessage) => void) | undefined;
+
+/** Test seam: hand the store a server message as the client would,
+ * without a socket. */
+export function deliverServerMessageForTests(message: ServerMessage): void {
+  deliver?.(message);
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -405,6 +420,9 @@ export const useAppStore = create<AppState>((set, get) => {
         set({ sessions });
         break;
       }
+      case "session.removed":
+        get().forgetSession(message.sessionId, message.projectId);
+        break;
       case "intents.changed": {
         // The one fold moved (DR-035): re-pull it, and refresh any
         // loaded History first page for the named projects.
@@ -462,6 +480,8 @@ export const useAppStore = create<AppState>((set, get) => {
         break;
     }
   }
+
+  deliver = handleMessage;
 
   return {
     connection: "closed",
@@ -833,6 +853,36 @@ export const useAppStore = create<AppState>((set, get) => {
           throw cause;
         }
       }
+    },
+
+    async deleteSession(sessionId: string): Promise<void> {
+      const session = get().sessions.find((s) => s.id === sessionId);
+      await getClient().command("session.delete", { sessionId });
+      // The broadcast follows; the reply is proof enough to forget it.
+      if (session) get().forgetSession(sessionId, session.projectId);
+    },
+
+    forgetSession(sessionId: string, projectId: string): void {
+      // The tab first: closing lands the reader on a neighbour, never
+      // on nothing (run-view-47).
+      get().closeTab(projectId, sessionId);
+      backfilling.delete(sessionId);
+      const state = get();
+      const { [sessionId]: _view, ...views } = state.views;
+      const { [sessionId]: _composer, ...composers } = state.composers;
+      const { [sessionId]: _error, ...runErrors } = state.runErrors;
+      const { [sessionId]: _staged, ...stagedIntents } = state.stagedIntents;
+      set({
+        sessions: state.sessions.filter((s) => s.id !== sessionId),
+        views,
+        composers,
+        runErrors,
+        stagedIntents,
+        activeSessionId:
+          state.activeSessionId === sessionId
+            ? undefined
+            : state.activeSessionId,
+      });
     },
 
     async submitBossText(sessionId: string, text: string): Promise<void> {

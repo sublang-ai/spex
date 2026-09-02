@@ -40,7 +40,12 @@ const CAPTAIN: AgentSummary = {
 };
 
 const READY: ReadinessEntry[] = [
-  { adapter: "claude", ready: true, usedBy: ["captain", "code.coder"] },
+  {
+    adapter: "claude",
+    ready: true,
+    usedBy: ["captain", "code.coder"],
+    fastModeSupported: true,
+  },
 ];
 
 const PLAYBOOKS: PlaybookSummary[] = [
@@ -330,6 +335,7 @@ describe("RUN-45: readiness heals at hand", () => {
           ready: false,
           requirement: "set ANTHROPIC_API_KEY or sign in with Claude Code",
           usedBy: ["captain", "code.coder"],
+          fastModeSupported: true,
         },
       ],
     });
@@ -434,5 +440,21 @@ describe("run-view-85: queue instead of send, from the home", () => {
   test("without a current project the control hides", () => {
     renderHome({ hasProject: false });
     expect(screen.queryByTestId("queue-intent-button")).toBeNull();
+  });
+});
+
+describe("run-view-25, DR-038: the Captain chip wears the fast-mode mark", () => {
+  test("a captain in fast mode shows the lightning with its tooltip", () => {
+    renderHome({ captain: { ...CAPTAIN, fastMode: true } });
+    const chip = screen.getByTestId("agent-chip");
+    expect(within(chip).getByTitle("fast mode").textContent).toBe("⚡");
+    expect(chip.getAttribute("aria-label")).toContain("fast mode");
+  });
+
+  test("without fast mode there is no mark", () => {
+    renderHome();
+    expect(
+      within(screen.getByTestId("agent-chip")).queryByTitle("fast mode"),
+    ).toBeNull();
   });
 });

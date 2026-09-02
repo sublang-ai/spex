@@ -300,7 +300,7 @@ export function Composer({
                   onQueueInstead(trimmed)
                     .then(() => {
                       setText("");
-                      setQueuedNote("Queued for later — see Up next.");
+                      setQueuedNote("Queued for later — see Up next in Overview.");
                     })
                     .catch(() => {
                       // Draft kept; the error strip explains.

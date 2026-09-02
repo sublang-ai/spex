@@ -23,6 +23,11 @@ const PATHS: Record<string, ReactNode> = {
     <path d="M11.4 2.6a1.5 1.5 0 0 1 2 2L6 12l-3 1 1-3 7.4-7.4Z" />
   ),
   close: <path d="M4 4l8 8M12 4l-8 8" />,
+  // Closing files a thing away; deleting destroys it, so the bin is
+  // its own glyph (DR-038, DR-010 §8).
+  trash: (
+    <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8M6.8 7v4M9.2 7v4" />
+  ),
   refresh: (
     <path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.8v2.7h-2.7" />
   ),

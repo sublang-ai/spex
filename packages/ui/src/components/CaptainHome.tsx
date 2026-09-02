@@ -545,7 +545,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                     .onQueueInstead!(trimmed)
                     .then(() => {
                       setText("");
-                      setQueueNote("Queued for later — see Up next.");
+                      setQueueNote("Queued for later — see Up next in Overview.");
                     })
                     .catch((cause: Error) => setError(cause.message))
                     .finally(() => {

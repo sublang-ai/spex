@@ -18,7 +18,7 @@ import { CaptainHome } from "./components/CaptainHome.js";
 import { DashboardSurface } from "./components/DashboardSurface.js";
 import { LibrarySurface } from "./components/LibrarySurface.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
-import { RepoTab } from "./components/ProjectsSurface.js";
+import { OverviewTab } from "./components/ProjectsSurface.js";
 import { ProjectPalette } from "./components/ProjectPalette.js";
 import { NavRail, SURFACES, type Surface } from "./components/NavRail.js";
 import {
@@ -29,6 +29,16 @@ import {
 import { Icon } from "./components/Icon.js";
 
 export type { Surface };
+
+/** The pinned project views beside the sessions (run-view-58). "repo"
+ * is the retired name of the Overview (DR-038): a remembered value
+ * still lands there. */
+function pinnedTab(tab: string | undefined): "start" | "specs" | "overview" | undefined {
+  if (tab === "repo") return "overview";
+  return tab === "start" || tab === "specs" || tab === "overview"
+    ? tab
+    : undefined;
+}
 
 declare global {
   interface Window {
@@ -186,9 +196,17 @@ function WorkspaceSurface({
   attentionBySession,
   pendingFocus,
   onFocusHandled,
+  onOpenSession,
+  onOpenIntent,
+  onStartIntent,
 }: {
   onNavigate: (surface: Surface) => void;
   onOpenPalette: () => void;
+  /** The Overview's ledger group actions, the Dashboard's own
+   * (projects-4, DR-038). */
+  onOpenSession: (sessionId: string, turnId?: number) => void;
+  onOpenIntent: (projectId: string, path: string) => void;
+  onStartIntent: (intent: IntentInfo) => Promise<void> | void;
   /** A session just ended: the sidebar reveals where it landed. */
   onEnded: (sessionId: string) => void;
   /** The ledger-fed attention map the nav shares (DR-035). */
@@ -261,13 +279,12 @@ function WorkspaceSurface({
     ? workspaceTabs[currentProjectId]
     : undefined;
   const tab =
-    remembered === "start" || remembered === "specs" || remembered === "repo"
+    pinnedTab(remembered) ??
+    (remembered && open.some((session) => session.id === remembered)
       ? remembered
-      : remembered && open.some((session) => session.id === remembered)
-        ? remembered
-        : (open.find((session) => session.id === activeSessionId)?.id ??
-          open[0]?.id ??
-          "start");
+      : (open.find((session) => session.id === activeSessionId)?.id ??
+        open[0]?.id ??
+        "start"));
 
   // Keep the active tab reachable when the strip scrolls.
   useEffect(() => {
@@ -292,10 +309,11 @@ function WorkspaceSurface({
 
   function pickTab(next: string): void {
     if (!currentProjectId) return;
-    if (next !== "start" && next !== "specs" && next !== "repo") {
-      void focusSession(next);
+    const pinned = pinnedTab(next);
+    if (pinned) {
+      setWorkspaceTab(currentProjectId, pinned);
     } else {
-      setWorkspaceTab(currentProjectId, next);
+      void focusSession(next);
     }
   }
 
@@ -387,10 +405,7 @@ function WorkspaceSurface({
     return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;
   }
 
-  const view =
-    tab !== "start" && tab !== "specs" && tab !== "repo"
-      ? views[tab]
-      : undefined;
+  const view = pinnedTab(tab) ? undefined : views[tab];
   const activeSession = open.find((session) => session.id === tab);
   const composer = activeSession
     ? (composers[activeSession.id] ?? { queued: [] })
@@ -482,7 +497,7 @@ function WorkspaceSurface({
           +
         </button>
       </div>
-      {(["specs", "repo"] as const).map((pinned) => (
+      {(["specs", "overview"] as const).map((pinned) => (
         <button
           key={pinned}
           type="button"
@@ -496,7 +511,7 @@ function WorkspaceSurface({
           title={
             pinned === "specs"
               ? "The project's spec packages (⌘⇧S)"
-              : "Repo state, issues and PRs"
+              : "This project's overview: history, now, up next, sources, repo state"
           }
           onClick={() => pickTab(pinned)}
           className={`shrink-0 rounded-t-md px-3 py-1.5 text-sm ${
@@ -505,7 +520,7 @@ function WorkspaceSurface({
               : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
           }`}
         >
-          {pinned === "specs" ? "Specs" : "Repo"}
+          {pinned === "specs" ? "Specs" : "Overview"}
         </button>
       ))}
     </div>
@@ -543,10 +558,14 @@ function WorkspaceSurface({
             }))
           }
         />
-      ) : tab === "repo" ? (
-        <RepoTab
+      ) : tab === "overview" ? (
+        <OverviewTab
+          key={project.id}
           projectId={project.id}
           onRemoved={() => setCurrentProject(undefined)}
+          onOpenSession={onOpenSession}
+          onOpenIntent={onOpenIntent}
+          onStartIntent={onStartIntent}
         />
       ) : activeSession && view ? (
         view.loading ? (
@@ -763,12 +782,13 @@ export function App() {
           // The cycle walks the working set in strip order, pinned
           // tabs included (run-view-49).
           const openIds = state.openTabs[projectId] ?? [];
-          const order = [...openIds, "start", "specs", "repo"];
+          const order = [...openIds, "start", "specs", "overview"];
           event.preventDefault();
           setSurface("Workspace");
+          const remembered = state.workspaceTabs[projectId];
           const current = Math.max(
             0,
-            order.indexOf(state.workspaceTabs[projectId] ?? order[0]),
+            order.indexOf(pinnedTab(remembered) ?? remembered ?? order[0]),
           );
           const delta = event.code === "BracketRight" ? 1 : -1;
           const next = order[(current + delta + order.length) % order.length];
@@ -820,9 +840,7 @@ export function App() {
   const activeTabSessionId = (projectId: string): string | undefined => {
     if (surface !== "Workspace") return undefined;
     const tab = workspaceTabs[projectId];
-    if (!tab || tab === "start" || tab === "specs" || tab === "repo") {
-      return undefined;
-    }
+    if (!tab || pinnedTab(tab)) return undefined;
     return tab;
   };
 
@@ -904,6 +922,9 @@ export function App() {
             state.setWorkspaceTab(projectId, "start");
             setSurface("Workspace");
           }}
+          onDeleteSession={(sessionId) =>
+            useAppStore.getState().deleteSession(sessionId)
+          }
           onOpenPalette={() => setPaletteOpen(true)}
           revealSessionId={revealSessionId}
           foot={configFoot}
@@ -928,6 +949,9 @@ export function App() {
               attentionBySession={attentionBySession}
               pendingFocus={pendingFocus}
               onFocusHandled={() => setPendingFocus(undefined)}
+              onOpenSession={openSessionAndShow}
+              onOpenIntent={openIntent}
+              onStartIntent={startIntent}
             />
           )}
         </main>

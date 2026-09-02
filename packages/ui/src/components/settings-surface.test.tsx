@@ -66,12 +66,14 @@ const READINESS: ReadinessEntry[] = [
     adapter: "claude",
     ready: true,
     usedBy: ["captain", "dev.coder (code.coder)"],
+    fastModeSupported: true,
   },
   {
     adapter: "codex",
     ready: false,
     requirement: "set OPENAI_API_KEY or sign in with the Codex CLI",
     usedBy: ["dev.reviewer (code.reviewer)"],
+    fastModeSupported: false,
   },
 ];
 
@@ -218,5 +220,36 @@ describe("SET: the session-player roster", () => {
         },
       }),
     );
+  });
+});
+
+describe("settings-1, DR-038: fast mode is visible and switchable", () => {
+  test("the captain chip wears the mark and the editor offers the switch", () => {
+    useAppStore.setState({
+      configState: {
+        ...CONFIG,
+        summary: {
+          ...CONFIG.summary,
+          captain: { ...CONFIG.summary.captain, fastMode: true },
+        },
+      },
+      readiness: READINESS,
+      refreshReadiness: vi.fn(async () => {}),
+    });
+    render(<SettingsSurface />);
+    const section = screen.getByTestId("captain-section");
+    const chip = within(section).getByTestId("agent-chip");
+    expect(within(chip).getByTitle("fast mode").textContent).toBe("⚡");
+    expect(chip.getAttribute("aria-label")).toContain("fast mode");
+    expect(
+      (within(section).getByTestId("agent-fast-mode") as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+    // A lane not in fast mode wears no mark; codex declares none, so
+    // its editor offers no switch.
+    const reviewer = screen.getByTestId("player-row-dev.reviewer");
+    expect(within(reviewer).queryByTitle("fast mode")).toBeNull();
+    fireEvent.click(screen.getByTestId("player-edit-dev.reviewer"));
+    expect(within(reviewer).queryByTestId("agent-fast-mode")).toBeNull();
   });
 });

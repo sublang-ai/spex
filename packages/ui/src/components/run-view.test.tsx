@@ -862,3 +862,33 @@ describe("run-view-96/91: attention activation lands at the place", () => {
     expect(onFocusHandled).toHaveBeenCalled();
   });
 });
+
+describe("run-view-25, DR-038: the player label wears the fast-mode mark", () => {
+  test("a fast-mode player shows the lightning; the other lane does not", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+    render(
+      <RunView
+        session={{
+          ...SESSION,
+          players: [{ ...PLAYERS[0], fastMode: true }, PLAYERS[1]],
+        }}
+        view={view}
+        composer={{ queued: [] }}
+        connected
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    const coder = screen.getByTestId("player-pane-dev.coder");
+    expect(within(coder).getByTestId("player-fast-mode").title).toBe(
+      "fast mode",
+    );
+    expect(
+      within(screen.getByTestId("player-pane-dev.reviewer")).queryByTestId(
+        "player-fast-mode",
+      ),
+    ).toBeNull();
+  });
+});

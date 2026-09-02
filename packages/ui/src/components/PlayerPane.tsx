@@ -9,6 +9,7 @@ import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
+import { FAST_MODE_MARK } from "./AgentChip.js";
 import { Markdown } from "./Markdown.js";
 
 const RENDER_WINDOW = 200;
@@ -231,6 +232,18 @@ export function PlayerPane({
             className="min-w-0 truncate rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
           >
             {meta.model ?? meta.adapter}
+            {meta.fastMode ? (
+              // The player label wears the mark every chip wears
+              // (DR-038, run-view-25).
+              <span
+                data-testid="player-fast-mode"
+                title="fast mode"
+                aria-label="fast mode"
+                className="ml-1 text-amber-500"
+              >
+                {FAST_MODE_MARK}
+              </span>
+            ) : null}
           </span>
         ) : null}
         <span className="ml-auto shrink-0">

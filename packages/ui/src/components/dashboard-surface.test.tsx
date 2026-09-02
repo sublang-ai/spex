@@ -6,9 +6,10 @@
 // all-clear pull (dashboard-8), the per-project groups' four bands
 // (dashboard-26..30), capture with the shelf reveal (dashboard-30/31,
 // 37), the paged Sources tabs with the captured-artifact swap
-// (dashboard-19/20/24/25), History paging (dashboard-27/38), empty
-// states without takeover (dashboard-8/21/22), and the Repo tab's
-// shared row representation (forge-work-lists-1, projects-6).
+// (dashboard-19/20/24/25), History as done work (dashboard-27/38,
+// DR-038), empty states without takeover (dashboard-8/21/22), and the
+// Overview tab's header over the shared group (projects-4/6/7,
+// forge-work-lists-1).
 
 import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
 import {
@@ -25,12 +26,13 @@ import type {
   DerivedIntent,
   ForgeState,
   IntentInfo,
+  IntentSource,
   LedgerState,
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
 import { DashboardSurface } from "./DashboardSurface.js";
-import { RepoTab } from "./ProjectsSurface.js";
+import { OverviewTab } from "./ProjectsSurface.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
 import { initialSessionView } from "../state/reducer.js";
 
@@ -270,7 +272,7 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     expect(onOpenSession).toHaveBeenCalledWith("s1", 4);
   });
 
-  test("Confirm closes done with an in-frame busy state; Drop guards", async () => {
+  test("Confirm closes done with an in-frame busy state; Drop acts on the click", async () => {
     seed({ ledger: { intents: [], attention: ATTENTION, badge: 6 } });
     let settleClose!: () => void;
     commandMock.mockImplementation(async (type: string) => {
@@ -294,11 +296,11 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     ]);
     await act(async () => settleClose());
 
-    // Drop is guarded, then closes dropped (dashboard-4: a verdict).
+    // Drop is a verdict on the click (dashboard-4, DR-038): no guard —
+    // the History row it produces is the record of it.
     fireEvent.click(screen.getByTestId("attention-drop-id2"));
     const row = screen.getByTestId("attention-id2-finish");
-    expect(row.textContent).toContain("Drop this intent?");
-    fireEvent.click(within(row).getByRole("button", { name: "drop" }));
+    expect(row.textContent).not.toContain("Drop this intent?");
     expect(callsOf("intent.close")).toEqual([
       { intentId: "id1", as: "done" },
       { intentId: "id2", as: "dropped" },
@@ -437,7 +439,7 @@ describe("dashboard-26/29: groups and the queue band", () => {
     ]);
   });
 
-  test("the row popover edits queued text and drops with a guard", async () => {
+  test("the row popover edits queued text and removes on the click", async () => {
     seed({ ledger: QUEUE_LEDGER });
     renderSurface();
 
@@ -453,15 +455,101 @@ describe("dashboard-26/29: groups and the queue band", () => {
       { intentId: "q1", text: "First thing, sharper" },
     ]);
 
+    // Remove acts on the click (dashboard-29, DR-038): no confirm, and
+    // the word is Remove, never Drop — a queued intent never ran.
     fireEvent.click(screen.getByTestId("upnext-menu-q3"));
-    fireEvent.click(screen.getByTestId("upnext-drop-action-q3"));
     const row = screen.getByTestId("upnext-row-q3");
+    expect(within(row).queryByText("Drop")).toBeNull();
     await act(async () => {
-      fireEvent.click(within(row).getByRole("button", { name: "drop" }));
+      fireEvent.click(screen.getByTestId("upnext-remove-action-q3"));
     });
+    expect(row.textContent).not.toContain("Drop?");
     expect(callsOf("intent.close")).toEqual([
       { intentId: "q3", as: "dropped" },
     ]);
+  });
+
+  test("the provenance action is named after what it opens (dashboard-29, DR-038)", () => {
+    const sourced = (
+      id: string,
+      text: string,
+      source: IntentSource,
+    ): DerivedIntent => ({
+      intent: info({ id, projectId: "p1", text, source }),
+      state: "queued",
+    });
+    seed({
+      specTrees: {
+        p1: {
+          ...EMPTY_TREE,
+          intents: [
+            { id: "IR-3", title: "Half done", path: "intents/003-half.md" },
+          ],
+        },
+        p2: EMPTY_TREE,
+      },
+      sessions: [
+        {
+          id: "s-chat",
+          projectId: "p1",
+          projectPath: "/tmp/alpha",
+          createdAt: NOW - MIN,
+          live: false,
+          endedAt: NOW,
+          players: [],
+          initialVisible: [],
+          turns: 1,
+          failed: false,
+        },
+      ],
+      ledger: {
+        intents: [
+          sourced("i1", "Address #7: Fix the bug", {
+            kind: "issue",
+            ref: "7",
+            url: "https://github.com/x/y/issues/7",
+          }),
+          sourced("i2", "Review PR #8: Add tests", {
+            kind: "pr",
+            ref: "8",
+            url: "https://github.com/x/y/pull/8",
+          }),
+          sourced("i3", "Resume IR-3: Half done", { kind: "record", ref: "IR-3" }),
+          sourced("i4", "later: tidy the docs", { kind: "chat", ref: "s-chat" }),
+          sourced("i5", "orphaned chat", { kind: "chat", ref: "s-gone" }),
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    const { onOpenIntent, onOpenSession } = renderSurface();
+
+    fireEvent.click(screen.getByTestId("upnext-menu-i1"));
+    const issue = screen.getByTestId("upnext-source-i1");
+    expect(issue.textContent).toBe("Issue #7 ↗");
+    expect(issue.getAttribute("href")).toBe("https://github.com/x/y/issues/7");
+    expect(screen.queryByText("Open source")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("upnext-menu-i2"));
+    expect(screen.getByTestId("upnext-source-i2").textContent).toBe("PR #8 ↗");
+
+    fireEvent.click(screen.getByTestId("upnext-menu-i3"));
+    const record = screen.getByTestId("upnext-source-i3");
+    expect(record.textContent).toBe("IR-3");
+    fireEvent.click(record);
+    expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/003-half.md");
+
+    fireEvent.click(screen.getByTestId("upnext-menu-i4"));
+    const session = screen.getByTestId("upnext-source-i4");
+    expect(session.textContent).toBe("Session");
+    fireEvent.click(session);
+    expect(onOpenSession).toHaveBeenCalledWith("s-chat");
+
+    // A capturing session that is gone leaves the action inert.
+    fireEvent.click(screen.getByTestId("upnext-menu-i5"));
+    expect(
+      (screen.getByTestId("upnext-source-i5") as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   test("the inline add row captures and the shelf reveals the row", async () => {
@@ -598,8 +686,18 @@ const RECORD_TREE: SpecTreeState = {
       title: "Old finished",
       path: "intents/002-old.md",
       status: "Done (2026-01-05)",
+      finished: "done",
+      updatedAt: NOW - 180 * MIN,
     },
     { id: "IR-3", title: "Half done", path: "intents/003-half.md", status: "In review" },
+    {
+      id: "IR-4",
+      title: "Abandoned idea",
+      path: "intents/004-idea.md",
+      status: "Superseded by IR-3",
+      finished: "superseded",
+      updatedAt: NOW - 120 * MIN,
+    },
   ],
 };
 
@@ -647,6 +745,7 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
           kind: "issue",
           ref: "7",
           url: "https://github.com/x/y/issues/7",
+          labels: ["bug", "urgent"],
         },
       },
     ]);
@@ -663,13 +762,20 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
     expect(callsOf("intent.queue")[1]).toEqual({
       projectId: "p1",
       text: "Review PR #8: Add tests\nhttps://github.com/x/y/pull/8",
-      source: { kind: "pr", ref: "8", url: "https://github.com/x/y/pull/8" },
+      source: {
+        kind: "pr",
+        ref: "8",
+        url: "https://github.com/x/y/pull/8",
+        labels: ["ci"],
+      },
     });
 
-    // Records tab lists only unfinished records (dashboard-24/25):
-    // the Done record does not list.
+    // Records tab lists only records the core classifies open
+    // (dashboard-24/25, spec-view-14): the finished ones list in
+    // History instead.
     fireEvent.click(screen.getByTestId("sources-tab-records-p1"));
     expect(screen.queryByTestId("source-record-p1-IR-2")).toBeNull();
+    expect(screen.queryByTestId("source-record-p1-IR-4")).toBeNull();
     const record = screen.getByTestId("source-record-p1-IR-3");
     await act(async () => {
       fireEvent.click(
@@ -782,45 +888,75 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
 // History
 // ---------------------------------------------------------------------------
 
-describe("dashboard-27/38: History pages newest first", () => {
-  test("closed intents render with verdicts and older pages append", async () => {
-    const page1 = {
-      intents: [
-        {
-          intent: info({
-            id: "h1",
-            projectId: "p1",
-            text: "Newest done",
-            closedAt: NOW - 2 * MIN,
-            closedAs: "done",
-          }),
-        },
-        {
-          intent: info({
-            id: "h2",
-            projectId: "p1",
-            text: "Dropped one",
-            closedAt: NOW - 5 * MIN,
-            closedAs: "dropped",
-          }),
-        },
-      ],
-      more: true,
-    };
-    const page2 = {
-      intents: [
-        {
-          intent: info({
-            id: "h3",
-            projectId: "p1",
-            text: "Older done",
-            closedAt: NOW - 60 * MIN,
-            closedAs: "done",
-          }),
-        },
-      ],
-      more: false,
-    };
+describe("dashboard-27/38: History is done work, one timeline newest first", () => {
+  const page1 = {
+    intents: [
+      {
+        intent: info({
+          id: "h1",
+          projectId: "p1",
+          text: "Newest done",
+          closedAt: NOW - 2 * MIN,
+          closedAs: "done",
+        }),
+      },
+      {
+        intent: info({
+          id: "hb",
+          projectId: "p1",
+          text: "Address #7: Fix the bug",
+          closedAt: NOW - 4 * MIN,
+          closedAs: "done",
+          source: {
+            kind: "issue",
+            ref: "7",
+            url: "https://github.com/x/y/issues/7",
+            labels: ["bug", "urgent"],
+          },
+        }),
+      },
+      {
+        intent: info({
+          id: "h2",
+          projectId: "p1",
+          text: "Dropped after work",
+          closedAt: NOW - 5 * MIN,
+          closedAs: "dropped",
+        }),
+      },
+      {
+        intent: info({
+          id: "hr",
+          projectId: "p1",
+          text: "Resume IR-2: Old finished",
+          closedAt: NOW - 6 * MIN,
+          closedAs: "done",
+          source: { kind: "record", ref: "IR-2" },
+        }),
+      },
+    ],
+    more: true,
+  };
+  const page2 = {
+    intents: [
+      {
+        intent: info({
+          id: "h3",
+          projectId: "p1",
+          text: "Older done",
+          closedAt: NOW - 60 * MIN,
+          closedAs: "done",
+        }),
+      },
+    ],
+    more: false,
+  };
+  const ids = () =>
+    screen
+      .getAllByTestId(/^history-row-/)
+      .map((el) => el.getAttribute("data-testid")!.replace("history-row-", ""));
+
+  test("checks, the bug strike, the quiet drop, records, and older pages", async () => {
     commandMock.mockImplementation(async (type: string, fields) => {
       if (type === "ledger.history") {
         return (fields as { before?: unknown }).before ? page2 : page1;
@@ -828,40 +964,87 @@ describe("dashboard-27/38: History pages newest first", () => {
       if (type === "ledger.get") return useAppStore.getState().ledger;
       return {};
     });
-    // History absent for p1: the band loads its first page itself.
+    // History absent for p1: the band loads its first page itself. The
+    // tree holds a done, an open, and a superseded record.
     seed({
       projects: [PROJECTS[0]],
       projectMeta: { p1: {} },
-      specTrees: { p1: EMPTY_TREE },
+      specTrees: { p1: RECORD_TREE },
       history: {},
     });
-    renderSurface();
+    const { onOpenIntent } = renderSurface();
 
-    const first = await screen.findByTestId("history-row-h1");
-    const second = screen.getByTestId("history-row-h2");
-    // Newest first, dropped struck (dashboard-27).
+    await screen.findByTestId("history-row-h1");
+    // Newest first — intents by close time, records by last change;
+    // IR-2 lists once, as the intent naming it; open IR-3 never lists.
+    expect(ids()).toEqual(["h1", "hb", "h2", "hr", "IR-4"]);
+
+    const done = screen.getByTestId("history-row-h1");
+    expect(done.getAttribute("data-verdict")).toBe("done");
+    expect(done.textContent).toContain("✓");
+    expect(done.querySelector(".line-through")).toBeNull();
+
+    // A fixed bug: struck through under the red tag, no check.
+    const bug = screen.getByTestId("history-row-hb");
+    expect(bug.getAttribute("data-verdict")).toBe("bug");
+    expect(bug.querySelector(".line-through")).toBeTruthy();
+    expect(within(bug).getByTestId("history-tag").textContent).toBe("bug");
+    expect(bug.textContent).not.toContain("✓");
+
+    // Dropped after work: a quiet tag, dimmed, never struck.
+    const dropped = screen.getByTestId("history-row-h2");
+    expect(dropped.getAttribute("data-verdict")).toBe("dropped");
+    expect(within(dropped).getByTestId("history-tag").textContent).toBe(
+      "dropped",
+    );
+    expect(dropped.querySelector(".line-through")).toBeNull();
+    expect(dropped.textContent).not.toContain("✓");
+    expect(dropped.textContent).not.toContain("✕");
+
+    // A superseded record wears that word, dimmed, no check, and opens
+    // in the records reader.
+    const superseded = screen.getByTestId("history-row-IR-4");
+    expect(superseded.getAttribute("data-kind")).toBe("record");
+    expect(superseded.getAttribute("data-verdict")).toBe("superseded");
     expect(
-      first.compareDocumentPosition(second) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(second.getAttribute("data-verdict")).toBe("dropped");
-    expect(second.querySelector(".line-through")).toBeTruthy();
-    expect(second.textContent).toContain("✕");
-    expect(first.textContent).toContain("✓");
+      within(superseded).getByTestId("history-tag").textContent,
+    ).toBe("superseded");
+    expect(superseded.textContent).not.toContain("✓");
+    fireEvent.click(within(superseded).getByRole("button"));
+    expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/004-idea.md");
 
-    // The accessible older control fetches the next page with the
-    // cursor of the last served row (dashboard-38).
+    // The accessible older control fetches the next intent page with
+    // the cursor of the last served row (dashboard-38); records keep
+    // their place in the one timeline.
     await act(async () => {
       fireEvent.click(screen.getByTestId("history-older-p1"));
     });
     expect(callsOf("ledger.history")[1]).toEqual({
       projectId: "p1",
-      before: { closedAt: NOW - 5 * MIN, intentId: "h2" },
+      before: { closedAt: NOW - 6 * MIN, intentId: "hr" },
     });
     expect(await screen.findByTestId("history-row-h3")).toBeTruthy();
+    expect(ids()).toEqual(["h1", "hb", "h2", "hr", "h3", "IR-4"]);
     await waitFor(() =>
       expect(screen.queryByTestId("history-older-p1")).toBeNull(),
     );
+  });
+
+  test("a finished record lists with a check under its ID tag", () => {
+    seed({
+      projects: [PROJECTS[0]],
+      projectMeta: { p1: {} },
+      specTrees: { p1: RECORD_TREE },
+      history: { p1: { intents: [], more: false } },
+    });
+    const { onOpenIntent } = renderSurface();
+    expect(screen.queryByTestId("history-row-IR-3")).toBeNull();
+    const record = screen.getByTestId("history-row-IR-2");
+    expect(record.getAttribute("data-verdict")).toBe("done");
+    expect(record.textContent).toContain("✓");
+    expect(within(record).getByTestId("history-tag").textContent).toBe("IR-2");
+    fireEvent.click(within(record).getByRole("button"));
+    expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/002-old.md");
   });
 });
 
@@ -891,7 +1074,7 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     seed({ projects: [PROJECTS[0]] });
     renderSurface();
     expect(screen.getByTestId("history-p1").textContent).toContain(
-      "No intent has closed here yet.",
+      "Nothing done here yet.",
     );
     expect(screen.getByTestId("now-p1").textContent).toContain(
       "Idle — no live session.",
@@ -927,15 +1110,65 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The Repo tab shares the row representation (forge-work-lists-1)
+// The Overview tab: header over the shared group (projects-4/6/7)
 // ---------------------------------------------------------------------------
 
-describe("projects-6, forge-work-lists-1: the Repo tab's shared rows", () => {
-  test("labels, Queue with the same seed, and the captured swap", async () => {
-    seedSources();
-    render(<RepoTab projectId="p1" onRemoved={() => {}} />);
+function renderOverview(onOpenIntent = vi.fn()) {
+  render(
+    <OverviewTab
+      projectId="p1"
+      onRemoved={() => {}}
+      onOpenSession={vi.fn()}
+      onOpenIntent={onOpenIntent}
+      onStartIntent={vi.fn()}
+    />,
+  );
+  return { onOpenIntent, overview: screen.getByTestId("overview-tab") };
+}
 
-    const issue = screen.getByTestId("repo-issue-p1-7");
+describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
+  test("the repository header over the project's own group, sharing the rows", async () => {
+    seedSources({
+      projectMeta: {
+        p1: {
+          forge: FORGE,
+          status: { branch: "main", dirty: true, ahead: 2, behind: 1 },
+        },
+        p2: {},
+      },
+    });
+    const { overview } = renderOverview();
+
+    // The header (projects-4): name, path, branch, dirty, ahead/behind,
+    // and the GitHub slug.
+    expect(overview.textContent).toContain("alpha");
+    expect(overview.textContent).toContain("/tmp/alpha");
+    expect(overview.textContent).toContain("main");
+    expect(within(overview).getByTitle("uncommitted changes")).toBeTruthy();
+    expect(within(overview).getByTitle("ahead of upstream").textContent).toBe("↑2");
+    expect(within(overview).getByTitle("behind upstream").textContent).toBe("↓1");
+    expect(overview.textContent).toContain("x/y");
+    // Removal keeps its one confirm (projects-9): a project is not a row.
+    fireEvent.click(within(overview).getByRole("button", { name: "Remove project" }));
+    expect(overview.textContent).toContain("Remove from Spex?");
+    fireEvent.click(within(overview).getByRole("button", { name: "keep" }));
+    expect(callsOf("project.remove")).toEqual([]);
+
+    // The project's group as the Dashboard draws it, no project filter
+    // (dashboard-26, DR-038).
+    expect(within(overview).getByTestId("project-group-p1")).toBeTruthy();
+    expect(
+      within(overview).queryByRole("combobox", { name: "Filter by project" }),
+    ).toBeNull();
+    expect(within(overview).getByTestId("history-p1")).toBeTruthy();
+    expect(within(overview).getByTestId("now-p1")).toBeTruthy();
+    expect(within(overview).getByTestId("upnext-p1")).toBeTruthy();
+
+    // The Sources band carries the one row representation
+    // (forge-work-lists-1): labels, Queue with the same seed and the
+    // labels kept as provenance.
+    fireEvent.click(within(overview).getByTestId("sources-toggle-p1"));
+    const issue = within(overview).getByTestId("source-issue-p1-7");
     expect(issue.textContent).toContain("#7");
     expect(issue.textContent).toContain("bug");
     expect(
@@ -954,6 +1187,7 @@ describe("projects-6, forge-work-lists-1: the Repo tab's shared rows", () => {
           kind: "issue",
           ref: "7",
           url: "https://github.com/x/y/issues/7",
+          labels: ["bug", "urgent"],
         },
       },
     ]);
@@ -978,10 +1212,50 @@ describe("projects-6, forge-work-lists-1: the Repo tab's shared rows", () => {
         },
       });
     });
-    const pr = screen.getByTestId("repo-pr-p1-8");
+    fireEvent.click(within(overview).getByTestId("sources-tab-prs-p1"));
+    const pr = within(overview).getByTestId("source-pr-p1-8");
     expect(
-      within(pr).getByTestId("repo-pr-p1-8-state").textContent,
+      within(pr).getByTestId("source-pr-p1-8-state").textContent,
     ).toBe("queued");
     expect(within(pr).queryByRole("button", { name: /Queue/ })).toBeNull();
+  });
+
+  test("GitHub setup guidance names the unmet condition inside the Sources band (projects-7)", () => {
+    seed({
+      projectMeta: {
+        p1: {
+          status: { branch: "main", dirty: false, ahead: 0, behind: 0 },
+          forge: {
+            adapter: "github",
+            authenticated: null,
+            issues: [],
+            prs: [],
+            guidance:
+              "gh is not installed — install the GitHub CLI to list issues and PRs.",
+          },
+        },
+        p2: {},
+      },
+    });
+    const { overview } = renderOverview();
+    // Repo state and removal stay functional beside the guidance.
+    expect(overview.textContent).toContain("main");
+    expect(
+      (
+        within(overview).getByRole("button", {
+          name: "Remove project",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+    fireEvent.click(within(overview).getByTestId("sources-toggle-p1"));
+    expect(
+      within(overview).getByTestId("sources-guidance-p1").textContent,
+    ).toContain("gh is not installed");
+    // The band is the one place for the lists: no second list in the
+    // header, and no link away from the Overview itself.
+    expect(within(overview).queryByText("Issues to do")).toBeNull();
+    expect(
+      within(overview).queryByRole("button", { name: /Open the project/ }),
+    ).toBeNull();
   });
 });

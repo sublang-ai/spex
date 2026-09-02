@@ -1,147 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The workspace's Repo tab (PROJ, DR-011): the current project's
-// git state and GitHub issues/PRs. Registry management (add, create)
-// lives in the project palette; removal lives here.
+// The workspace's Overview tab (projects-4, DR-011, DR-038): the
+// current project's repository header — git state, GitHub binding,
+// refresh, removal — over the project's own ledger group, drawn by
+// the same component the Dashboard uses. Registry management (add,
+// create) lives in the project palette; removal lives here.
 
-import { useEffect, useState } from "react";
-import type { DerivedIntent, ForgeItem } from "@sublang/spex-core/protocol";
+import { useMemo, useState } from "react";
+import type { IntentInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import {
-  ForgeItemRow,
-  forgeSeedText,
-  openSourceIntents,
-} from "./ForgeItemRow.js";
-
-function ForgeList({
-  label,
-  kind,
-  items,
-  projectId,
-  openSources,
-  onQueue,
-}: {
-  label: string;
-  kind: "issue" | "pr";
-  items: ForgeItem[];
-  projectId: string;
-  /** Open intents by `kind:ref` — the captured-artifact swap shared
-   * with the Dashboard's Sources rows (forge-work-lists-1). */
-  openSources: Map<string, DerivedIntent>;
-  onQueue: (kind: "issue" | "pr", item: ForgeItem) => Promise<void>;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? items : items.slice(0, 8);
-  return (
-    <div className="min-w-0 flex-1">
-      <div className="mb-1 text-xs font-semibold text-neutral-500">
-        {label} ({items.length})
-      </div>
-      <ul className="flex flex-col gap-1">
-        {shown.map((item) => (
-          <ForgeItemRow
-            key={item.url}
-            item={item}
-            kind={kind}
-            captured={openSources.get(`${kind}:${item.number}`)}
-            testId={`repo-${kind}-${projectId}-${item.number}`}
-            onQueue={() => onQueue(kind, item)}
-          />
-        ))}
-        {items.length > shown.length ? (
-          <li>
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              className="text-xs text-brand-600 hover:underline dark:text-brand-300"
-            >
-              +{items.length - shown.length} more
-            </button>
-          </li>
-        ) : null}
-        {items.length === 0 ? (
-          <li className="text-xs text-neutral-400">none open</li>
-        ) : null}
-      </ul>
-    </div>
-  );
-}
-
-function ForgePanel({
-  projectId,
-  meta,
-}: {
-  projectId: string;
-  meta?: ProjectMeta;
-}) {
-  const ledger = useAppStore((state) => state.ledger);
-  const queueIntent = useAppStore((state) => state.queueIntent);
-  const openSources = openSourceIntents(ledger, projectId);
-  const onQueue = async (kind: "issue" | "pr", item: ForgeItem) => {
-    // One gesture from every source (DR-035): the seed text the spec
-    // table pins, the canonical URL kept as provenance (projects-6).
-    await queueIntent({
-      projectId,
-      text: forgeSeedText(kind, item),
-      source: { kind, ref: String(item.number), url: item.url },
-    });
-  };
-  if (meta?.forgeError) {
-    return (
-      <div className="text-xs text-red-500">
-        Couldn't load GitHub data: {meta.forgeError}
-      </div>
-    );
-  }
-  const forge = meta?.forge;
-  if (!forge) {
-    return (
-      <div className="text-xs text-neutral-400">
-        {meta?.loading
-          ? "loading GitHub state…"
-          : "no GitHub data yet — refresh the card"}
-      </div>
-    );
-  }
-  if (forge.guidance && forge.authenticated !== true) {
-    return (
-      <div className="rounded border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-700">
-        {forge.guidance}
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-2">
-      {forge.guidance ? (
-        <div className="text-xs text-amber-600 dark:text-amber-400">
-          {forge.guidance}
-        </div>
-      ) : null}
-      <div className="flex gap-6">
-        <ForgeList
-          label="Issues to do"
-          kind="issue"
-          items={forge.issues}
-          projectId={projectId}
-          openSources={openSources}
-          onQueue={onQueue}
-        />
-        <ForgeList
-          label="PRs to review"
-          kind="pr"
-          items={forge.prs}
-          projectId={projectId}
-          openSources={openSources}
-          onQueue={onQueue}
-        />
-      </div>
-    </div>
-  );
-}
+  ProjectGroup,
+  useCaptureReveal,
+  useForgeAge,
+  useGroupInputs,
+  useNow,
+} from "./ProjectGroup.js";
 
 function StatusBadges({ meta }: { meta?: ProjectMeta }) {
   if (meta?.statusError) {
@@ -175,20 +53,28 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
   );
 }
 
-export function RepoTab({
+export function OverviewTab({
   projectId,
   onRemoved,
+  onOpenSession,
+  onOpenIntent,
+  onStartIntent,
 }: {
   projectId: string;
   /** Called after the project is removed from the registry. */
   onRemoved: () => void;
+  /** Open a session; with a turnId, land at that turn's place. */
+  onOpenSession: (sessionId: string, turnId?: number) => void;
+  /** Open an intent record in this project's records reader. */
+  onOpenIntent: (projectId: string, path: string) => void;
+  /** Stage an intent's dispatch (run-view-86). */
+  onStartIntent: (intent: IntentInfo) => Promise<void> | void;
 }) {
   const projects = useAppStore((state) => state.projects);
   const projectMeta = useAppStore((state) => state.projectMeta);
   const sessions = useAppStore((state) => state.sessions);
   const loadProjectMeta = useAppStore((state) => state.loadProjectMeta);
   const removeProject = useAppStore((state) => state.removeProject);
-  const connection = useAppStore((state) => state.connection);
 
   const [error, setError] = useState<string>();
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -199,12 +85,13 @@ export function RepoTab({
     (session) => session.live && session.projectId === projectId,
   ).length;
 
-  useEffect(() => {
-    if (connection === "open" && project && !projectMeta[project.id]) {
-      void loadProjectMeta(project.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connection, projectId]);
+  // The Overview pins one project (DR-038): the group's inputs load
+  // for it alone, the way the Dashboard loads every project's.
+  const pinned = useMemo(() => (project ? [project] : []), [project]);
+  const now = useNow();
+  useGroupInputs(pinned);
+  const ageOf = useForgeAge(pinned, now);
+  const { highlightId, capture } = useCaptureReveal();
 
   if (!project) {
     return (
@@ -215,7 +102,10 @@ export function RepoTab({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
+    <div
+      data-testid="overview-tab"
+      className="mx-auto flex w-full max-w-3xl flex-col gap-4 overflow-y-auto p-6"
+    >
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -237,6 +127,8 @@ export function RepoTab({
           <Icon name="refresh" />
         </button>
         {confirmRemove ? (
+          // Removal forgets a project: the one confirm this tab keeps
+          // (projects-9, DR-010 §4).
           <InlineConfirm
             question="Remove from Spex? The repo stays on disk."
             confirmLabel="remove"
@@ -270,9 +162,17 @@ export function RepoTab({
           {error}
         </div>
       ) : null}
-      <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <ForgePanel projectId={project.id} meta={meta} />
-      </div>
+      <ProjectGroup
+        project={project}
+        heading={false}
+        now={now}
+        ageText={ageOf(project.id)}
+        highlightId={highlightId}
+        onOpenSession={onOpenSession}
+        onOpenIntent={onOpenIntent}
+        onStartIntent={onStartIntent}
+        onCapture={capture}
+      />
     </div>
   );
 }

@@ -32,13 +32,11 @@ function plural(count: number, noun: string, nouns = `${noun}s`): string {
   return `${count} ${count === 1 ? noun : nouns}`;
 }
 
-/** A record whose status line starts with "Done" is finished and no
- * longer work; an absent status keeps a record listed (dashboard-24,
- * DR-035). */
+/** The records the core's read classifies as open (spec-view-14,
+ * dashboard-24): a finished one lists in History instead, so every
+ * record lands in exactly one band (DR-038). */
 export function openRecordsOf(tree: SpecTreeState | undefined): SpecRecordInfo[] {
-  return (tree?.intents ?? []).filter(
-    (record) => !/^done/i.test((record.status ?? "").trim()),
-  );
+  return (tree?.intents ?? []).filter((record) => !record.finished);
 }
 
 /** One tab's quiet in-place pager (dashboard-20). */
@@ -104,7 +102,7 @@ export function SourcesBand({
   onRefresh,
   onQueue,
   onOpenIntent,
-  onNavigateWorkspace,
+  onOpenOverview,
 }: {
   project: ProjectInfo;
   meta?: ProjectMeta;
@@ -116,9 +114,9 @@ export function SourcesBand({
   onRefresh: () => void;
   onQueue: (text: string, source: IntentSource) => void | Promise<void>;
   onOpenIntent: (projectId: string, path: string) => void;
-  /** Navigation to the Workspace's Repo tab, where GitHub is
-   * connected (dashboard-8); plain copy stands in when unwired. */
-  onNavigateWorkspace?: () => void;
+  /** Navigation to the project's Overview tab, whose header shows the
+   * GitHub binding (dashboard-8); absent on the Overview itself. */
+  onOpenOverview?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState<SourceTab>("issues");
@@ -138,17 +136,26 @@ export function SourcesBand({
   const setPage = (which: SourceTab) => (page: number) =>
     setPages((current) => ({ ...current, [which]: page }));
 
+  // The setup guidance names the unmet condition (projects-7) in place
+  // of the lists, here and on the Overview alike (dashboard-8).
   const forgeGuidance = (
-    <div className="rounded border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-700">
+    <div
+      data-testid={`sources-guidance-${project.id}`}
+      className="rounded border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-700"
+    >
       {forge?.guidance ??
-        "No GitHub connection yet — connect it in the project's Repo tab in the Workspace."}{" "}
-      {onNavigateWorkspace ? (
+        (meta?.forgeError
+          ? `Couldn't load GitHub data: ${meta.forgeError}`
+          : meta?.loading
+            ? "loading GitHub state…"
+            : "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here.")}{" "}
+      {onOpenOverview ? (
         <button
           type="button"
-          onClick={onNavigateWorkspace}
+          onClick={onOpenOverview}
           className="text-brand-600 hover:underline dark:text-brand-300"
         >
-          Open the Workspace
+          Open the project's Overview
         </button>
       ) : null}
     </div>
@@ -286,11 +293,15 @@ export function SourcesBand({
                     kind={kind}
                     captured={openSources.get(`${kind}:${item.number}`)}
                     testId={`source-${kind}-${project.id}-${item.number}`}
+                    // The labels ride as provenance (dashboard-30,
+                    // DR-038): a fixed bug is known as one from
+                    // capture, never from a later forge read.
                     onQueue={() =>
                       onQueue(forgeSeedText(kind, item), {
                         kind,
                         ref: String(item.number),
                         url: item.url,
+                        ...(item.labels?.length ? { labels: item.labels } : {}),
                       })
                     }
                   />

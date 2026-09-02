@@ -673,7 +673,13 @@ export function LibrarySurface({
                     </span>
                     {lane ? (
                       <AgentChip
-                        agent={lane.agent}
+                        // The row says what the role effectively runs:
+                        // a binding's own fast mode over the lane's.
+                        agent={
+                          binding.fastMode !== undefined
+                            ? { ...lane.agent, fastMode: binding.fastMode }
+                            : lane.agent
+                        }
                         readiness={readinessByAdapter.get(lane.agent.adapter)}
                         label={binding.playerId}
                       />

@@ -13,6 +13,7 @@ import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { AttentionItem } from "../state/dashboard.js";
 import { Icon, type IconName } from "./Icon.js";
+import { InlineConfirm } from "./InlineConfirm.js";
 import logo from "../assets/spex-logo.svg";
 
 /** Sessions listed per project before the reveal-the-rest control
@@ -65,6 +66,9 @@ export interface NavRailProps {
   onPickProject(projectId: string): void;
   onActivateSession(sessionId: string): void;
   onNewSession(projectId: string): void;
+  /** Delete an ended session this core owns (DR-038); rejects with
+   * the core's reason, which the row shows. */
+  onDeleteSession(sessionId: string): Promise<void>;
   onOpenPalette(): void;
   /** A just-ended session's row, revealed and briefly lit up. */
   revealSessionId?: string;
@@ -153,6 +157,11 @@ export function NavRail(props: NavRailProps) {
   } = props;
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [focusKey, setFocusKey] = useState<string>();
+  // Deletion is destructive and irreversible, so it keeps one inline
+  // confirmation at the row (DR-038, DR-010 §4).
+  const [confirmDelete, setConfirmDelete] = useState<string>();
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
   const treeRef = useRef<HTMLDivElement>(null);
   const typeahead = useRef({ text: "", at: 0 });
   // One clock per render keeps every row's age consistent.
@@ -323,6 +332,27 @@ export function NavRail(props: NavRailProps) {
     }
   }
 
+  function deleteSession(sessionId: string): void {
+    setConfirmDelete(undefined);
+    setDeleting((current) => ({ ...current, [sessionId]: true }));
+    setDeleteErrors(({ [sessionId]: _, ...rest }) => rest);
+    void props
+      .onDeleteSession(sessionId)
+      .catch((cause: Error) =>
+        setDeleteErrors((current) => ({
+          ...current,
+          [sessionId]: cause.message || "delete failed",
+        })),
+      )
+      .finally(() =>
+        setDeleting(({ [sessionId]: _, ...rest }) => rest),
+      );
+  }
+
+  /** The row's own controls: a click or key inside them never
+   * activates or navigates the row. */
+  const stop = (event: React.SyntheticEvent) => event.stopPropagation();
+
   const surfaceEntry = (name: Surface) => {
     const active = surface === name;
     const badge = name === "Dashboard" && attentionCount > 0;
@@ -448,6 +478,10 @@ export function NavRail(props: NavRailProps) {
                   const item = attention.get(session.id);
                   const life = lifeOf(session, item);
                   const active = session.id === activeSessionId;
+                  // Ended and this core's own: a session another host
+                  // wrote is served, never deleted (core-service-70).
+                  const deletable = !session.live && !session.foreign;
+                  const confirming = confirmDelete === session.id;
                   return (
                     <div
                       key={session.id}
@@ -460,7 +494,7 @@ export function NavRail(props: NavRailProps) {
                       onClick={() => props.onActivateSession(session.id)}
                       aria-label={sessionLabel(session, life, now, item)}
                       title={sessionLabel(session, life, now, item)}
-                      className={`${rowClass(active)} pl-6 ${
+                      className={`${rowClass(active)} group pl-6 ${
                         revealSessionId === session.id
                           ? "animate-pulse ring-2 ring-brand-300 dark:ring-brand-700"
                           : ""
@@ -472,18 +506,71 @@ export function NavRail(props: NavRailProps) {
                         data-life={life}
                         className={`h-2 w-2 shrink-0 rounded-full ${LIFE_MARKS[life]}`}
                       />
-                      <span
-                        className={`min-w-0 flex-1 truncate ${
-                          session.title
-                            ? ""
-                            : "italic text-neutral-500 dark:text-neutral-400"
-                        }`}
-                      >
-                        {session.title ?? "no messages yet"}
-                      </span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-neutral-500 dark:text-neutral-400">
-                        {relativeTime(session.endedAt ?? session.createdAt, now)}
-                      </span>
+                      {confirming ? (
+                        <span
+                          data-testid={`sidebar-delete-confirm-${session.id}`}
+                          onClick={stop}
+                          onKeyDown={stop}
+                          className="min-w-0 flex-1 [&>span]:flex-wrap"
+                        >
+                          <InlineConfirm
+                            question="Delete this session and its transcript?"
+                            confirmLabel="Delete"
+                            cancelLabel="Keep"
+                            onConfirm={() => deleteSession(session.id)}
+                            onCancel={() => setConfirmDelete(undefined)}
+                          />
+                        </span>
+                      ) : (
+                        <>
+                          <span
+                            className={`min-w-0 flex-1 truncate ${
+                              session.title
+                                ? ""
+                                : "italic text-neutral-500 dark:text-neutral-400"
+                            }`}
+                          >
+                            {session.title ?? "no messages yet"}
+                          </span>
+                          {deleteErrors[session.id] ? (
+                            <span
+                              data-testid={`sidebar-delete-error-${session.id}`}
+                              title={deleteErrors[session.id]}
+                              className="shrink-0 truncate text-[11px] text-red-600 dark:text-red-400"
+                            >
+                              not deleted
+                            </span>
+                          ) : (
+                            <span className="shrink-0 text-[11px] tabular-nums text-neutral-500 dark:text-neutral-400">
+                              {deleting[session.id]
+                                ? "deleting…"
+                                : relativeTime(
+                                    session.endedAt ?? session.createdAt,
+                                    now,
+                                  )}
+                            </span>
+                          )}
+                          {deletable ? (
+                            // Revealed on hover or focus, reachable by
+                            // Tab regardless (DR-010 §6).
+                            <button
+                              type="button"
+                              data-testid={`sidebar-delete-${session.id}`}
+                              aria-label={`Delete session ${session.title ?? "no messages yet"}`}
+                              title="Delete this session and its transcript"
+                              disabled={deleting[session.id]}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setConfirmDelete(session.id);
+                              }}
+                              onKeyDown={stop}
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-400 opacity-0 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:hover:text-red-400"
+                            >
+                              <Icon name="trash" className="h-3.5 w-3.5" />
+                            </button>
+                          ) : null}
+                        </>
+                      )}
                     </div>
                   );
                 })}

@@ -95,12 +95,18 @@ const CONFIG_STATE: ConfigState = {
 };
 
 const READINESS: ReadinessEntry[] = [
-  { adapter: "claude", ready: true, usedBy: ["captain", "dev.coder (code.coder)"] },
+  {
+    adapter: "claude",
+    ready: true,
+    usedBy: ["captain", "dev.coder (code.coder)"],
+    fastModeSupported: true,
+  },
   {
     adapter: "codex",
     ready: false,
     requirement: "set OPENAI_API_KEY or run `codex login`",
     usedBy: [],
+    fastModeSupported: false,
   },
 ];
 

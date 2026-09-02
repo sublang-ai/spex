@@ -7,7 +7,14 @@
 // contract is about how the rail, the strip and the run view agree.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 
 afterEach(cleanup);
 
@@ -19,7 +26,11 @@ vi.mock("./state/store.js", async (importOriginal) => {
 });
 
 import { App } from "./App.js";
-import { setClientForTests, useAppStore } from "./state/store.js";
+import {
+  deliverServerMessageForTests,
+  setClientForTests,
+  useAppStore,
+} from "./state/store.js";
 import { initialSessionView, type SessionView } from "./state/reducer.js";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 
@@ -427,5 +438,202 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
     await useAppStore.getState().refresh();
 
     expect(useAppStore.getState().currentProjectId).toBe("fresh-1");
+  });
+});
+
+describe("run-view-58, projects-4: the Overview tab pins the project's group", () => {
+  test("the strip ends with Specs and Overview; the Overview draws header and group", async () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "ledger.get") return LEDGER;
+      if (type === "project.status") {
+        return { branch: "main", dirty: true, ahead: 2, behind: 0 };
+      }
+      if (type === "forge.items") {
+        return {
+          adapter: "github",
+          authenticated: null,
+          issues: [],
+          prs: [],
+          guidance:
+            "No GitHub origin remote — add one to list issues and PRs here.",
+        };
+      }
+      if (type === "specs.get") {
+        return {
+          present: true,
+          legacy: false,
+          files: [],
+          decisions: [],
+          intents: [],
+          notices: [],
+          readAt: NOW,
+        };
+      }
+      if (type === "ledger.history") return { intents: [], more: false };
+      return {};
+    });
+    render(<App />);
+    expect(screen.queryByTestId("workspace-tab-repo")).toBeNull();
+    const tab = screen.getByTestId("workspace-tab-overview");
+    expect(tab.textContent).toBe("Overview");
+    fireEvent.click(tab);
+    const overview = await screen.findByTestId("overview-tab");
+
+    // The repository header (projects-4).
+    await vi.waitFor(() => expect(overview.textContent).toContain("main"));
+    expect(overview.textContent).toContain("/tmp/alpha");
+    expect(within(overview).getByTitle("uncommitted changes")).toBeTruthy();
+    expect(within(overview).getByTitle("ahead of upstream").textContent).toBe(
+      "↑2",
+    );
+    expect(
+      within(overview).getByRole("button", { name: "Remove project" }),
+    ).toBeTruthy();
+
+    // The project's own group, no project filter (dashboard-26, DR-038).
+    expect(within(overview).getByTestId("project-group-p1")).toBeTruthy();
+    for (const band of ["history", "now", "upnext", "sources"]) {
+      expect(within(overview).getByTestId(`${band}-p1`)).toBeTruthy();
+    }
+    expect(
+      within(overview).queryByRole("combobox", { name: "Filter by project" }),
+    ).toBeNull();
+
+    // The GitHub setup guidance sits in the Sources band (projects-7,
+    // dashboard-8), so the Dashboard and the Overview show one thing.
+    fireEvent.click(within(overview).getByTestId("sources-toggle-p1"));
+    expect(
+      within(overview).getByTestId("sources-guidance-p1").textContent,
+    ).toContain("No GitHub origin remote");
+  });
+
+  test("a remembered 'repo' tab lands on the Overview, and the cycle walks it", () => {
+    useAppStore.setState({ workspaceTabs: { p1: "repo" } });
+    render(<App />);
+    expect(
+      screen.getByTestId("workspace-tab-overview").getAttribute("aria-selected"),
+    ).toBe("true");
+    // ⌘⇧[ from the Overview reaches Specs; ⌘⇧] returns (run-view-58).
+    fireEvent.keyDown(window, {
+      code: "BracketLeft",
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("specs");
+    fireEvent.keyDown(window, {
+      code: "BracketRight",
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("overview");
+  });
+});
+
+describe("DR-038, core-service-70: sessions can be deleted from the sidebar", () => {
+  test("an ended session offers delete; the confirm sends session.delete and every trace goes", async () => {
+    render(<App />);
+    // A live session carries no delete control; an ended one does.
+    expect(screen.queryByTestId("sidebar-delete-a-live")).toBeNull();
+    const control = screen.getByTestId("sidebar-delete-a-failed");
+    expect(control.getAttribute("aria-label")).toBe(
+      "Delete session chase the flaky test",
+    );
+    fireEvent.click(control);
+    // The control never activates the row.
+    expect(useAppStore.getState().openTabs.p1).toEqual(["a-live"]);
+    const confirm = screen.getByTestId("sidebar-delete-confirm-a-failed");
+    expect(confirm.textContent).toContain(
+      "Delete this session and its transcript?",
+    );
+    // Keep backs out, and nothing was asked of the core.
+    fireEvent.click(within(confirm).getByRole("button", { name: "Keep" }));
+    expect(screen.queryByTestId("sidebar-delete-confirm-a-failed")).toBeNull();
+    expect(commandMock).not.toHaveBeenCalledWith(
+      "session.delete",
+      expect.anything(),
+    );
+
+    // Open the ended session as a tab, so the removal has one to close.
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get"
+        ? (LEDGER as object)
+        : type === "history.get"
+          ? { records: [] }
+          : {},
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("sidebar-session-a-failed"));
+    });
+    expect(useAppStore.getState().openTabs.p1).toEqual(["a-live", "a-failed"]);
+
+    fireEvent.click(screen.getByTestId("sidebar-delete-a-failed"));
+    await act(async () => {
+      fireEvent.click(
+        within(
+          screen.getByTestId("sidebar-delete-confirm-a-failed"),
+        ).getByRole("button", { name: "Delete" }),
+      );
+    });
+    expect(commandMock).toHaveBeenCalledWith("session.delete", {
+      sessionId: "a-failed",
+    });
+    // The reply forgets it: the listing, its tab, its transcript.
+    expect(screen.queryByTestId("sidebar-session-a-failed")).toBeNull();
+    expect(useAppStore.getState().openTabs.p1).toEqual(["a-live"]);
+    expect(useAppStore.getState().views["a-failed"]).toBeUndefined();
+  });
+
+  test("a session another host wrote carries no delete control", () => {
+    useAppStore.setState({
+      sessions: SESSIONS.map((entry) =>
+        entry.id === "a-failed" ? { ...entry, foreign: true as const } : entry,
+      ),
+    });
+    render(<App />);
+    expect(screen.queryByTestId("sidebar-delete-a-failed")).toBeNull();
+    expect(screen.getByTestId("sidebar-delete-a-bare")).toBeTruthy();
+  });
+
+  test("the removal broadcast drops the session and closes its tab", () => {
+    useAppStore.setState({
+      openTabs: { p1: ["a-live", "a-failed"] },
+      workspaceTabs: { p1: "a-failed" },
+      views: { ...useAppStore.getState().views, "a-failed": view() },
+    });
+    render(<App />);
+    act(() => {
+      deliverServerMessageForTests({
+        type: "session.removed",
+        sessionId: "a-failed",
+        projectId: "p1",
+      });
+    });
+    expect(screen.queryByTestId("sidebar-session-a-failed")).toBeNull();
+    expect(useAppStore.getState().openTabs.p1).toEqual(["a-live"]);
+    // The closed tab lands on a neighbour (run-view-47).
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("a-live");
+    expect(useAppStore.getState().views["a-failed"]).toBeUndefined();
+  });
+
+  test("the core's refusal shows at the row, the session kept", async () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "session.delete") {
+        throw new Error("the session is live — end it first");
+      }
+      return type === "ledger.get" ? (LEDGER as object) : {};
+    });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("sidebar-delete-a-failed"));
+    await act(async () => {
+      fireEvent.click(
+        within(
+          screen.getByTestId("sidebar-delete-confirm-a-failed"),
+        ).getByRole("button", { name: "Delete" }),
+      );
+    });
+    expect(screen.getByTestId("sidebar-delete-error-a-failed").title).toContain(
+      "end it first",
+    );
+    expect(screen.getByTestId("sidebar-session-a-failed")).toBeTruthy();
   });
 });

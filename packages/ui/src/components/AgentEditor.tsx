@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The one shared agent editor (DR-019): adapter (with readiness
-// dots), model, adapter-scoped effort, permission mode and writable
-// paths. It edits a local draft and emits a merge patch on save;
+// dots), model, adapter-scoped effort, a fast-mode switch where the
+// runtime declares it (DR-038), permission mode and writable paths.
+// It edits a local draft and emits a merge patch on save;
 // AgentEditorPopover wraps it for the at-hand flows (DR-007/009).
 
 import { useEffect, useRef, useState, type RefObject } from "react";
@@ -15,6 +16,7 @@ import {
 } from "@sublang/spex-core/protocol";
 
 import type { AgentPatch } from "../lib/config-ops.js";
+import { FAST_MODE_MARK, type ChipAgent } from "./AgentChip.js";
 
 export const ADAPTERS = adapterNameSchema.options;
 
@@ -39,7 +41,7 @@ function knownAdapter(adapter: string | undefined): AdapterName {
     : "claude";
 }
 
-function initialMode(agent: AgentBlockInput | undefined): Mode {
+function initialMode(agent: ChipAgent | undefined): Mode {
   const mode = agent?.permissions?.mode;
   return mode === "auto" || mode === "bypass" ? mode : "none";
 }
@@ -63,12 +65,13 @@ function carriedFrom(agent: AgentBlockInput | undefined): CarriedPermissions {
 export interface AgentEditorProps {
   /** The block the draft seeds from; a fresh assignment passes its
    * default block. */
-  initial?: AgentBlockInput;
-  /** Adapter-keyed readiness entries; dots render when passed. */
+  initial?: ChipAgent;
+  /** Adapter-keyed readiness entries; dots render when passed, and
+   * the fast-mode switch shows for adapters declaring it (DR-038). */
   readiness?: ReadinessEntry[];
   /** When set, offers "Same as Captain": copies the Captain's
-   * adapter, model, effort, and permissions into the draft. */
-  captain?: AgentBlockInput;
+   * adapter, model, effort, fast mode, and permissions into the draft. */
+  captain?: ChipAgent;
   saveLabel?: string;
   /** Creation forms save an untouched draft: the seeded block is
    * already a deliberate choice, so there is nothing to dirty. */
@@ -84,6 +87,7 @@ export function AgentEditor(props: AgentEditorProps) {
   );
   const [model, setModel] = useState(initial?.model ?? "");
   const [effort, setEffort] = useState(initial?.effort ?? "");
+  const [fastMode, setFastMode] = useState(initial?.fastMode ?? false);
   const [mode, setMode] = useState<Mode>(initialMode(initial));
   const [writablePaths, setWritablePaths] = useState(
     (initial?.permissions?.writablePaths ?? []).join(", "),
@@ -101,18 +105,26 @@ export function AgentEditor(props: AgentEditorProps) {
     (props.readiness ?? []).map((entry) => [entry.adapter, entry]),
   );
 
+  /** Only an adapter the embedded runtime declares as supporting fast
+   * mode offers the switch (DR-038, settings-1). */
+  const supportsFastMode = (name: AdapterName): boolean =>
+    readinessByAdapter.get(name)?.fastModeSupported ?? false;
+
   function pickAdapter(next: AdapterName): void {
     setAdapter(next);
     // The effort vocabulary is adapter-scoped: a value the new
     // adapter does not accept clears to none rather than riding
     // along into a config the runtime would refuse.
     if (effort && !EFFORT_VOCAB[next].includes(effort)) setEffort("");
+    // Fast mode likewise: no switch, no value.
+    if (fastMode && !supportsFastMode(next)) setFastMode(false);
   }
 
   const dirty =
     adapter !== knownAdapter(initial?.adapter) ||
     model !== (initial?.model ?? "") ||
     effort !== (initial?.effort ?? "") ||
+    fastMode !== (initial?.fastMode ?? false) ||
     mode !== initialMode(initial) ||
     writablePaths !== (initial?.permissions?.writablePaths ?? []).join(", ");
 
@@ -132,6 +144,10 @@ export function AgentEditor(props: AgentEditorProps) {
     else if (initial?.model) patch.model = null;
     if (effort) patch.effort = effort;
     else if (initial?.effort) patch.effort = null;
+    // Fast mode is off by default, so the switch writes true or unsets
+    // the key (DR-038) — the same shape effort takes.
+    if (fastMode) patch.fastMode = true;
+    else if (initial?.fastMode) patch.fastMode = null;
     const permissions: NonNullable<AgentPatch["permissions"]> = {
       ...carried,
     };
@@ -234,6 +250,23 @@ export function AgentEditor(props: AgentEditorProps) {
             ))}
           </select>
         </label>
+        {supportsFastMode(adapter) ? (
+          <label className="col-span-2 flex items-center gap-2">
+            <input
+              type="checkbox"
+              data-testid="agent-fast-mode"
+              checked={fastMode}
+              onChange={(event) => setFastMode(event.target.checked)}
+              className="accent-brand-600"
+            />
+            <span>
+              Fast mode <span aria-hidden>{FAST_MODE_MARK}</span>
+            </span>
+            <span className="text-xs text-neutral-500">
+              the adapter's quicker lane for this agent's turns
+            </span>
+          </label>
+        ) : null}
         <label className="flex flex-col gap-0.5">
           <span className="text-xs text-neutral-500">Permission mode</span>
           <select
@@ -289,7 +322,7 @@ export function AgentEditor(props: AgentEditorProps) {
           <button
             type="button"
             data-testid="agent-same-as-captain"
-            title="Copies the Captain's adapter, model, effort, and permissions"
+            title="Copies the Captain's adapter, model, effort, fast mode, and permissions"
             onClick={() => {
               const captain = props.captain!;
               const nextAdapter = knownAdapter(captain.adapter);
@@ -300,6 +333,9 @@ export function AgentEditor(props: AgentEditorProps) {
                   EFFORT_VOCAB[nextAdapter].includes(captain.effort)
                   ? captain.effort
                   : "",
+              );
+              setFastMode(
+                Boolean(captain.fastMode) && supportsFastMode(nextAdapter),
               );
               setMode(initialMode(captain));
               setWritablePaths(
