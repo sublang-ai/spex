@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+// A session end to end (run-view-98, run-view-99, server-shell-21): the
+// served page, its token gone from the address bar, running the
+// scripted Captain's narration through the real core.
+
+import { test, expect, open, send } from "../src/harness";
+
+test.use({ appOptions: { project: true, agentDelayMs: 1500 } });
+
+test("server-shell-21: the token URL connects, scrubs, and reloads", async ({
+  page,
+  app,
+}) => {
+  await open(page, app);
+  await expect(page).toHaveURL(`${app.origin}/`);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByText(/reconnecting to the spex core/i)).toHaveCount(0);
+  // The overrides drive the served core: the fake environment is ready.
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByText(/claude/).first()).toBeVisible();
+  await expect(page.getByText(/not ready|aren't ready/i)).toHaveCount(0);
+});
+
+test("run-view-98: the first task runs, queues, and ends", async ({ page, app }) => {
+  await open(page, app);
+  const home = page.getByTestId("captain-home");
+  await expect(home).toContainText("demo-project");
+
+  await send(page, "Fix the token refresh in auth.ts");
+
+  // The tab and the sidebar row carry the task as the title.
+  const tab = page.getByRole("tab", { name: /fix the token refresh/i });
+  await expect(tab).toBeVisible();
+  const tree = page.getByRole("tree", { name: "Projects and sessions" });
+  await expect(tree).toContainText(/fix the token refresh/i);
+
+  // The Captain narrates; the machine card draws the code run with
+  // its nested review.
+  const captain = page.getByTestId("captain-pane");
+  await expect(captain).toContainText("/code started");
+  const machines = page.getByTestId("live-machines");
+  await expect(machines).toContainText(/code/i);
+
+  // One pane per roster player; the coder streams and uses tools.
+  const coder = page.getByTestId("player-pane-dev.coder");
+  const reviewer = page.getByTestId("player-pane-dev.reviewer");
+  await expect(coder).toBeVisible();
+  await expect(reviewer).toBeVisible();
+  await expect(coder).toContainText(/editing/i);
+  await expect(coder).toContainText(/Edit|Read/);
+
+  // A message during the turn queues — never reads as sent — and
+  // goes out when the turn ends.
+  const box = page.getByTestId("boss-composer");
+  await box.fill("Also add a test for expiry skew");
+  await page.getByRole("button", { name: /^queue$/i }).click();
+  await expect(page.getByTestId("queue-indicator")).toBeVisible();
+  await expect(page.getByTestId("queue-indicator")).toContainText(/expiry skew/i);
+  await expect(captain).toContainText("/code finished");
+  await expect(captain).toContainText(/review/i);
+  await expect(coder).toContainText(/\$0\.12|2,?400/);
+  // The queued message became the next turn.
+  await expect(captain.getByTestId("boss-bubble").filter({ hasText: /expiry skew/i })).toBeVisible();
+  await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
+  await expect(captain).toContainText("/code finished");
+
+  // Ending: the inline confirm, then read-only.
+  await page.getByTestId("end-session").click();
+  await page.getByRole("button", { name: "end", exact: true }).click();
+  await expect(page.getByTestId("ended-notice")).toBeVisible();
+  await expect(page.getByTestId("boss-composer")).toHaveCount(0);
+  await expect(tree).toContainText(/fix the token refresh/i);
+});
+
+test("run-view-99: a player question parks the session until the Boss replies", async ({
+  page,
+  app,
+}) => {
+  await open(page, app);
+  await send(page, "ask before migrating");
+
+  const question = page.getByTestId("question-bubble");
+  await expect(question).toContainText(/migrate the legacy sessions/i);
+  await expect(question).toContainText(/coder/i);
+  const chip = page.getByTestId("state-chip");
+  await expect(chip).toContainText(/wait/i);
+  const box = page.getByTestId("boss-composer");
+  await expect(box).toHaveAttribute("placeholder", /answer the question/i);
+
+  await box.fill("Yes, migrate them too");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  const captain = page.getByTestId("captain-pane");
+  await expect(captain).toContainText("/code finished");
+  await expect(chip).not.toContainText(/wait/i);
+});

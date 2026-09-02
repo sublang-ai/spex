@@ -133,8 +133,10 @@ unless you also pass `--insecure`
 | [`apps/server`](apps/server) | Server shell for remote browser access |
 | [`demo/`](demo) | Academy example and spec-package case study |
 
-For development, run `npm ci`, `npm run build`, and `npm test`. Maintainers
-also use the [release smoke checklist](docs/release-smoke.md).
+For development, run `npm ci`, `npm run build`, and `npm test`; `npm run e2e`
+drives the served UI through its user journeys in Chromium (after a one-time
+`npx playwright install chromium`). Maintainers also use the
+[release smoke checklist](docs/release-smoke.md).
 
 Contributions are welcome through
 [issues](https://github.com/sublang-ai/spex/issues),

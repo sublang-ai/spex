@@ -1,0 +1,356 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+// The journey harness (DR-039): every test boots the real server shell
+// on a scratch root — scratch config, scratch state, scratch home —
+// with the core's agent seams substituted (server-shell-20), and opens
+// the shell's token URL in the browser. The live lane keeps the
+// machine's agents and sign-in, redirecting only the state it writes.
+
+import { test as base, expect, type Page } from "@playwright/test";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import WebSocket from "ws";
+
+import type {
+  Command,
+  CommandResults,
+  ServerMessage,
+} from "@sublang/spex-core";
+import {
+  DEMO_CONFIG,
+  demoAdapterImports,
+  demoCaptain,
+  seedDemoProject,
+} from "@sublang/spex-core/testing";
+import {
+  startServer,
+  type RunningServer,
+  type ServerShellOptions,
+} from "spex-server/dist/server.js";
+
+export { expect };
+
+/** The live lane: the machine's real adapters and Captain (DR-020). */
+export const LIVE = process.env.SPEX_E2E_LIVE === "1";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(here, "..", "..");
+const uiDist = join(repoRoot, "apps", "server", "ui-dist");
+
+export interface AppOptions {
+  /**
+   * `demo` writes the two-player demo config before boot; `none`
+   * leaves the path empty so the core seeds its installed template —
+   * the true first run.
+   */
+  config?: "demo" | "none";
+  /** Seed and register the demo project before the browser opens. */
+  project?: boolean;
+  /** The core's environment; readiness derives from it. */
+  env?: NodeJS.ProcessEnv;
+  /**
+   * How long each fake player call stays in flight; long enough to
+   * act during a turn, short enough to keep the journey quick.
+   */
+  agentDelayMs?: number;
+}
+
+// ---------------------------------------------------------------------------
+// A protocol client for arranging state (never for asserting the UI)
+// ---------------------------------------------------------------------------
+
+export class CoreClient {
+  private readonly socket: WebSocket;
+  readonly messages: ServerMessage[] = [];
+  private nextId = 0;
+
+  constructor(url: string) {
+    this.socket = new WebSocket(url);
+    this.socket.on("message", (data) => {
+      this.messages.push(JSON.parse(String(data)) as ServerMessage);
+    });
+  }
+
+  async open(): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      if (this.socket.readyState === WebSocket.OPEN) return resolve();
+      this.socket.once("open", () => resolve());
+      this.socket.once("error", reject);
+    });
+    await this.waitFor((m) => m.type === "hello");
+  }
+
+  close(): void {
+    this.socket.close();
+  }
+
+  async command<T extends Command["type"]>(
+    type: T,
+    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+  ): Promise<CommandResults[T]> {
+    const id = `e2e${(this.nextId += 1)}`;
+    this.socket.send(JSON.stringify({ type, id, ...fields }));
+    const reply = await this.waitFor((m) => m.type === "reply" && m.id === id);
+    if (reply.type !== "reply") throw new Error("unreachable");
+    if (!reply.ok) {
+      throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
+    }
+    return reply.result as CommandResults[T];
+  }
+
+  async waitFor(
+    check: (message: ServerMessage) => boolean,
+    timeoutMs = 15_000,
+  ): Promise<ServerMessage> {
+    const start = Date.now();
+    for (;;) {
+      const found = this.messages.find(check);
+      if (found) return found;
+      if (Date.now() - start > timeoutMs) {
+        throw new Error(
+          `timeout; got ${JSON.stringify(this.messages.map((m) => m.type))}`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The app under test
+// ---------------------------------------------------------------------------
+
+export interface App {
+  /** The one access URL: origin plus token. */
+  url: string;
+  origin: string;
+  token: string;
+  /** Scratch home (hermetic) — readiness and `~` resolve here. */
+  home: string;
+  dataDir: string;
+  configPath: string;
+  /** The demo project's path — registered when `project` was asked. */
+  projectDir: string;
+  projectId?: string;
+  server: RunningServer;
+  /** Arrange-only protocol client on the running shell. */
+  core: CoreClient;
+  /** Stop the shell, keeping the root; `start` boots it again on the
+   * same port so an open page's origin still reaches it. */
+  stop(): Promise<void>;
+  start(): Promise<void>;
+  close(): Promise<void>;
+  readConfig(): string;
+}
+
+async function boot(
+  options: ServerShellOptions,
+): Promise<{ server: RunningServer; core: CoreClient }> {
+  const server = await startServer(options);
+  const core = new CoreClient(
+    server.url.replace(/^http/, "ws"),
+  );
+  await core.open();
+  return { server, core };
+}
+
+export async function startApp(options: AppOptions = {}): Promise<App> {
+  const scratch = mkdtempSync(join(tmpdir(), "spex-e2e-"));
+  const home = join(scratch, "home");
+  mkdirSync(home, { recursive: true });
+  const dataDir = join(scratch, "state");
+  const configPath = join(scratch, "config", "playbook.config.yaml");
+  mkdirSync(dirname(configPath), { recursive: true });
+  if ((options.config ?? "demo") === "demo") {
+    writeFileSync(configPath, DEMO_CONFIG);
+  }
+  const projectDir = join(scratch, "demo-project");
+  if (options.project) seedDemoProject(projectDir);
+  const token = `e2e-${Math.random().toString(36).slice(2, 10)}`;
+
+  const env = options.env ?? {
+    ANTHROPIC_API_KEY: "e2e-fake",
+    OPENAI_API_KEY: "e2e-fake",
+  };
+  const shellOptions: ServerShellOptions = {
+    host: "127.0.0.1",
+    port: 0,
+    token,
+    configPath,
+    dataDir,
+    legacyDb: join(scratch, "no-legacy.db"),
+    insecure: false,
+    uiDist,
+    core: LIVE
+      ? {
+          // Real adapters and Captain; only what the run writes is
+          // redirected, so the machine's own sessions stay untouched.
+          env: { ...process.env, XDG_STATE_HOME: join(scratch, "xdg-state") },
+        }
+      : {
+          adapterImports: demoAdapterImports({
+            delayMs: options.agentDelayMs ?? 400,
+          }).imports,
+          adapterRuntime: () => ({ usable: true }),
+          captainFactory: async () => demoCaptain(),
+          env,
+          home,
+        },
+  };
+
+  let running: { server: RunningServer; core: CoreClient } | undefined =
+    await boot(shellOptions);
+  const live = () => {
+    if (!running) throw new Error("the shell is stopped");
+    return running;
+  };
+  const app: App = {
+    get url() {
+      return live().server.url;
+    },
+    get origin() {
+      return new URL(live().server.url).origin;
+    },
+    token,
+    home,
+    dataDir,
+    configPath,
+    projectDir,
+    get server() {
+      return live().server;
+    },
+    get core() {
+      return live().core;
+    },
+    async stop() {
+      if (!running) return;
+      const port = running.server.port;
+      running.core.close();
+      await running.server.close();
+      running = undefined;
+      shellOptions.port = port;
+    },
+    async start() {
+      if (running) return;
+      running = await boot(shellOptions);
+    },
+    async close() {
+      await app.stop();
+      rmSync(scratch, { recursive: true, force: true });
+    },
+    readConfig() {
+      return existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
+    },
+  };
+  if (options.project) {
+    const info = await app.core.command("project.register", { path: projectDir });
+    app.projectId = info.id;
+  }
+  return app;
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures and page helpers
+// ---------------------------------------------------------------------------
+
+export const test = base.extend<{ app: App; appOptions: AppOptions }>({
+  appOptions: [{}, { option: true }],
+  app: async ({ appOptions }, use) => {
+    const app = await startApp(appOptions);
+    try {
+      await use(app);
+    } finally {
+      await app.close();
+    }
+  },
+});
+
+/** Open the app at its token URL and wait for the shell to draw. */
+export async function open(page: Page, app: App, path = ""): Promise<void> {
+  if (process.env.SPEX_E2E_DEBUG) {
+    const tag = `[${app.origin}]`;
+    await page.addInitScript(() => {
+      const Native = window.WebSocket;
+      const stamp = () => performance.now().toFixed(0);
+      window.WebSocket = new Proxy(Native, {
+        construct(target, args: [string, ...unknown[]]) {
+          console.log(`[ws ctor ${stamp()}] ${args[0]}`);
+          const socket = new target(...(args as [string]));
+          socket.addEventListener("open", () =>
+            console.log(`[ws opened ${stamp()}] ${args[0]}`),
+          );
+          socket.addEventListener("close", (event) =>
+            console.log(
+              `[ws closed ${stamp()}] ${args[0]} code=${event.code} reason=${event.reason}`,
+            ),
+          );
+          const bag = window as unknown as { __sockets?: unknown[] };
+          bag.__sockets ??= [];
+          bag.__sockets.push(socket);
+          return socket;
+        },
+      });
+      // Log the connection banner's comings and goings against the
+      // sockets' ready states, so a status flap shows its cause.
+      let shown = false;
+      const check = () => {
+        const now = !!document.body && document.body.innerText.includes("actions are paused");
+        if (now !== shown) {
+          shown = now;
+          const states = (
+            (window as unknown as { __sockets?: { readyState: number }[] })
+              .__sockets ?? []
+          )
+            .map((s) => s.readyState)
+            .join(",");
+          console.log(`[banner ${stamp()}] ${now ? "shown" : "hidden"} sockets=${states}`);
+        }
+      };
+      new MutationObserver(check).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    });
+    page.on("console", (m) => console.log(tag, "console", m.type(), m.text()));
+    page.on("websocket", (ws) => {
+      console.log(tag, "ws open", ws.url());
+      ws.on("close", () => console.log(tag, "ws close", ws.url()));
+      ws.on("socketerror", (e) => console.log(tag, "ws error", e));
+      ws.on("framesent", (f) => console.log(tag, "->", String(f.payload).slice(0, 120)));
+      ws.on("framereceived", (f) =>
+        console.log(tag, `<- @${Date.now() % 100000}`, String(f.payload).slice(0, 120)),
+      );
+    });
+  }
+  await page.goto(`${app.origin}/${path}?token=${encodeURIComponent(app.token)}`);
+  await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
+}
+
+/** The sidebar entry for a surface. */
+export function nav(page: Page, name: "Dashboard" | "Playbooks" | "Settings") {
+  return page.getByRole("button", { name, exact: true });
+}
+
+/** The Boss composer on the Captain home or in a session (the test
+ * ids sit on the textareas themselves). */
+export function composer(page: Page) {
+  return page.getByTestId("start-composer").or(page.getByTestId("boss-composer"));
+}
+
+/** Send composer text and return once the send was accepted. */
+export async function send(page: Page, text: string): Promise<void> {
+  const box = composer(page);
+  await box.fill(text);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+}

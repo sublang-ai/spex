@@ -45,3 +45,34 @@ jobs:
 
       - name: Tests
         run: npm test
+
+  # The browser journeys (DR-039): the served UI driven in Chromium
+  # against a real core with substitute agents — one lane, one OS.
+  journeys:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser journeys
+        run: npm run e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: journey-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7

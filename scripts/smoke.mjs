@@ -118,6 +118,11 @@ try {
   run("lint", "node", ["packages/cli/dist/cli.js", "lint"]);
   run("unit", "npm", ["test"]);
   run("integration", "npm", ["run", "test:integration", "-w", "packages/core"]);
+  // The browser journeys (DR-039): the served UI in Chromium against
+  // a real core with substitute agents. The browser install is a
+  // cached no-op after the first run.
+  run("browser", "npx", ["playwright", "install", "chromium"]);
+  run("journeys", "npm", ["run", "e2e"]);
   await coreRoundTrip();
   // The end-user pass: pack the real tarball, install it into an
   // isolated prefix, and walk the README journeys (fresh scaffold,

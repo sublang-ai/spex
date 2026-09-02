@@ -1,0 +1,28 @@
+{
+  "name": "spex-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser acceptance journeys: the served Spex UI driven in Chromium against a real core (DR-039)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sublang-ai/spex.git",
+    "directory": "e2e"
+  },
+  "scripts": {
+    "journeys": "playwright test",
+    "journeys:live": "SPEX_E2E_LIVE=1 playwright test --grep @live",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.62.1",
+    "@sublang/spex-core": "*",
+    "@types/node": "^26.4.0",
+    "@types/ws": "^8.18.0",
+    "spex-server": "*",
+    "typescript": "^7.0.2",
+    "ws": "^8.18.0"
+  }
+}
