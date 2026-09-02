@@ -19,7 +19,12 @@ When the spec view is opened for a project whose `specs/` tree has been read, th
 
 - collection subdirectories and root-level file nodes list at the outline's top level, spending no row on a collection root ([DR-027](../decisions/027-linked-views-contract.md)), with directory levels expanded and file nodes collapsed by default;
 - directories are ordered by name, and files by basename within their directory;
-- the decisions branch [[spec-view-7](#spec-view-7)] stands last, below every collection entry.
+- the decisions branch [[spec-view-7](#spec-view-7)] stands last, below every collection entry;
+- each file row fits its own width ([DR-041](../decisions/041-chrome-that-fits.md)): the collapsed intent text yields first, the package-identifier chip then truncates with the full name in its title, and below 28rem the count chips print numbers alone — each chip's group word riding its accessible name and title — while the citation rollup leaves the row for the row's title.
+
+#### spec-view-55
+
+While an item row is displayed in a file row narrower than 28rem, the spec view shall yield the row's at-a-glance extras ([DR-041](../decisions/041-chrome-that-fits.md)): the citation-count hint hides — the expanded row's citation rows carry the counts — and the shown-despite-filter badge wraps rather than overflowing.
 
 ### Package Nodes
 
@@ -456,3 +461,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### spec-view-54
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the Academy example seeded, when the journey opens a decision record from the Specs decisions branch and activates Edit, the test suite shall assert editing through the page: the editor opens on the record with its path named and Save disabled [[spec-view-48](#spec-view-48)]; a changed line shows under Preview [[spec-view-48](#spec-view-48)]; the editor carries no serious or critical accessibility violation in either mode; Save lands the change in the file on disk, the reader shows it, and the decisions branch's title follows the re-read [[spec-view-50](#spec-view-50)]; and Edit from an expanded item opens the package file with the caret on the item's heading line [[spec-view-3](#spec-view-3)] [[spec-view-48](#spec-view-48)].
+
+#### spec-view-56
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, when the journey opens the Specs tab with the graph shown and one package expanded at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, within every list row no two visible siblings overlap and every child lies inside its parent [[spec-view-1](#spec-view-1)] [[spec-view-55](#spec-view-55)], and every control keeps its accessible name at every width [[spec-view-1](#spec-view-1)].

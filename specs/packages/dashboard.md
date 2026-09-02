@@ -23,6 +23,7 @@ While at least one attention entry derives across the registered projects' inten
 | Finished | one entry per finished intent awaiting a verdict, leading with the intent's title and showing its project, session, and the run's stats [[dashboard-35](#dashboard-35)] with review rounds foremost |
 
 - A live session serving no intent stands in with session-level entries: its question, permission, and failure conditions — the same conditions, holding outside any intent's turn range — join the interrupted band, and at most one turn-to-review entry per session, for a finished Boss turn later than the session's persisted last-viewed marker, joins the finished band.
+- An entry's title owns its row's slack, and the project name truncates at 10rem with the full name in its title ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 #### dashboard-2
 
@@ -341,3 +342,9 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)];
 - an intent dropped from its running session leaves the Now band showing the session serving none, with no Drop beside it, and lists in History as dropped once that turn ends finished, no verdict owed [[dashboard-28](#dashboard-28)] [[dashboard-27](#dashboard-27)];
 - a History record row opens the record in the Specs tab's records reader [[dashboard-27](#dashboard-27)] [[dashboard-40](#dashboard-40)].
+
+- in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)].
+
+#### dashboard-43
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, a queued intent with a second queued behind it, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], and every control keeps its accessible name at every width [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].

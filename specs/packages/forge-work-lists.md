@@ -14,7 +14,7 @@ The value — one consistent view of what needs doing — emerges only when the 
 
 Where a project is bound to a GitHub repository and its forge data is served through the project's forge adapter, when its issues and pull requests are displayed anywhere in the app — the project's Overview tab [[projects-6](projects.md#projects-6)] or the Dashboard's Sources rows [[dashboard-6](dashboard.md#dashboard-6)] — both surfaces shall apply one selection and representation, presenting identical items whenever they render the same adapter fetch:
 
-- each row carries its entry's number and title, its forge labels as tags, and a Queue control capturing the entry as an intent;
+- each row carries its entry's number and title, at most two of its forge labels as tags followed by a "+N" tag whose title lists every label ([DR-041](../decisions/041-chrome-that-fits.md)), and a Queue control capturing the entry as an intent;
 - a row whose issue or pull request already has an open intent shows that intent's state in place of the Queue control, on both surfaces alike, and regains the control when that intent closes.
 
 ## Verification

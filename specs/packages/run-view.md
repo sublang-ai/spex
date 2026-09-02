@@ -95,9 +95,20 @@ While a player pane holds a call the core resolved to a role [[core-service-36](
 The Boss composer shall accept free text and `/`-prefixed command text, be the only input control in the run view, and dispatch or queue each Boss submission by turn state:
 
 - while no turn is active, a submission dispatches without queueing, the primary control reading "Send";
-- while a turn is active, a submission queues with a visible queued indicator until the queued submission is dispatched, the primary control reading "Send after this turn";
+- while a turn is active, a submission queues with a visible queued indicator until the queued submission is dispatched, the primary control reading "Send next" ([DR-041](../decisions/041-chrome-that-fits.md));
 - when the active turn ends, the queued submission dispatches;
-- the primary control's tooltip names its keys — Enter sends, Shift+Enter adds a line.
+- the primary control's tooltip names its keys — Enter sends, Shift+Enter adds a line — and, while a turn is active, opens by saying the message sends when this turn ends.
+
+#### run-view-106
+
+The Boss composer — on the Captain home and in a session alike — shall take one shape ([DR-041](../decisions/041-chrome-that-fits.md)):
+
+| Part | Form |
+| --- | --- |
+| Field | on top at full width, one row when empty, growing with its text to eight lines or two fifths of the viewport and scrolling past that, with no native resize grip |
+| Caption | one line under the field reading "/ for playbooks · Enter sends", which an acknowledgment or the staged intent chip occupies instead of stacking above the box |
+| Action row | beneath, wrapping: the secondary action at the left, then Abort while a turn runs, and the primary control last at the right |
+| Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Sends after this turn…" while a turn runs, "Connecting…" without the core |
 
 #### run-view-9
 
@@ -179,8 +190,10 @@ When the user opens the captain identity's editor control (or another agent's ed
 
 #### run-view-33
 
-When an ended session is opened [[run-view-68](#run-view-68)], the run view shall show a loading note while its stored transcript loads and offer starting a new session for the same project once it is shown — nothing the user produced becomes unreachable ([DR-009](../decisions/009-at-hand-interaction.md)):
+When an ended session is opened [[run-view-68](#run-view-68)], the run view shall show a loading note while its stored transcript loads and, once it is shown, an ended notice whose "New session" control starts a new session for the same project — nothing the user produced becomes unreachable ([DR-009](../decisions/009-at-hand-interaction.md)):
 
+- for a session the core lists as continuable ([DR-042](../decisions/042-sessions-continue.md)) the notice reads "Ended · a message continues it" above the enabled composer; otherwise it reads "Ended — this session can't be continued" in the composer's place;
+- the notice wraps its control under its words when its pane is too narrow for both ([DR-041](../decisions/041-chrome-that-fits.md));
 - when the transcript fails to load, the run view says so and offers a retry that reloads it — a failed load never presents as an empty run.
 
 #### run-view-34
@@ -202,7 +215,7 @@ While a turn is active and the Captain is not streaming speech, the Captain thre
 A queued Boss submission shall never read as sent:
 
 - queued submissions render as pending outgoing bubbles in full, each captioned "sends when this turn ends" and each individually removable by a control of full hit size [[run-view-50](#run-view-50)];
-- while a turn is active, the composer placeholder says the message sends when this turn ends — the caption's words, and the primary control's [[run-view-8](#run-view-8)].
+- while a turn is active, the composer placeholder reads "Sends after this turn…" — the caption's words, and the primary control's tooltip's [[run-view-8](#run-view-8)].
 
 #### run-view-39
 
@@ -341,9 +354,9 @@ When a session is activated in the sidebar, the workspace shall show that sessio
 
 #### run-view-69
 
-While a session's tab is shown, the run view shall render it live or read-only by the session's own state, never navigating on that change ([DR-029](../decisions/029-session-history-home.md)):
+While a session's tab is shown, the run view shall render it live, ended, or read-only by the session's own state, never navigating on that change ([DR-029](../decisions/029-session-history-home.md)):
 
-- ending the live session keeps its transcript on screen, transitioned read-only with a fresh-session affordance in the composer's place, and marks it ended on its tab and on its sidebar row, which is revealed and briefly highlighted so the reader sees where the conversation landed;
+- ending the live session keeps its transcript on screen, transitioned to the ended notice [[run-view-33](#run-view-33)] — the composer staying for a continuable session and leaving otherwise — and marks it ended on its tab and on its sidebar row, which is revealed and briefly highlighted so the reader sees where the conversation landed;
 - a read-only session renders the identical fold of its stored records [[run-view-14](#run-view-14)], settled machine cards included [[run-view-62](#run-view-62)], headed by its title and ended time;
 - each open session keeps its own scroll position as tabs change.
 
@@ -357,6 +370,10 @@ The sidebar shall collapse between its two states — the tree, and the icon rai
 - collapse is chrome only: the open tabs remain the reach [[run-view-48](#run-view-48)], so it makes nothing unreachable;
 - collapsing never strands focus.
 
+#### run-view-108
+
+While the attention count [[run-view-34](#run-view-34)] exceeds nine, the sidebar's Dashboard badge shall print "9+" — in the collapsed rail [[run-view-71](#run-view-71)] a positioned badge of at most two characters that never covers the entry's glyph — with the count itself in the entry's accessible name and tooltip ([DR-041](../decisions/041-chrome-that-fits.md)).
+
 #### run-view-81
 
 The run view shall divide the Captain column from the player panes at a divider the reader sets, persisting across launches ([DR-030](../decisions/030-workspace-chrome.md)):
@@ -364,6 +381,10 @@ The run view shall divide the Captain column from the player panes at a divider 
 - the divider drags, nudges by arrow key, and restores its default on a double-click or Home;
 - the split is bounded so neither side can be squeezed away;
 - a machine drawing wider than its column scrolls rather than shrinking [[run-view-60](#run-view-60)], and the column shows that more lies beyond its edge — a drawing cut without a sign reads as broken rather than scrollable.
+
+#### run-view-107
+
+While a session's tab is shown, the run view shall lay the Captain column and the player grid by the split's own container width — layout, never chrome moving by itself ([DR-041](../decisions/041-chrome-that-fits.md)): side by side with the divider [[run-view-81](#run-view-81)] between them from 42rem, and below that stacked, the Captain column above the player grid with the divider hidden and the split's setting kept for the wider form.
 
 ### Keyboard and Guardrails (DR-010 §4/§6)
 
@@ -386,7 +407,7 @@ While a slash menu is open, when Escape is pressed, the slash menu shall hide wi
 
 #### run-view-47
 
-When the user ends a live session, the run view shall always use the inline confirm (safe default focused, Escape cancels), naming the number of queued messages that would be discarded — the emergency abort control stays one-click:
+When the user ends a live session, the run view shall always use the inline confirm (safe default focused, Escape cancels) asking "End this session? A message can continue it later." with "End" and "Keep" ([DR-042](../decisions/042-sessions-continue.md)), naming the number of queued messages that would be discarded — the emergency abort control stays one-click:
 
 - ending is a named control of its own, never the tab's close control, which stops no agent ([DR-029](../decisions/029-session-history-home.md));
 - after a tab closes, focus moves to a neighboring tab, never to the document body.
@@ -399,7 +420,7 @@ The tab strip shall show the current project's open sessions, live and ended ali
 - session tabs are titled by the session's first Boss turn (truncated; "new session" before the first turn) with the full prompt and start time in the tooltip — never by the project name, which the sidebar carries ([DR-011](../decisions/011-project-workspace.md));
 - tabs carry the shared attention signal: an amber dot for a waiting question and a red dot for a failure on background tabs (the active tab shows the banner instead), with the detail in the tab tooltip and the tab's accessible name ending in "needs your reply" or "failed" so the dot is never the only channel, and an ended session's tab says so;
 - each tab's close control files the session out of the working set without ending it or confirming [[run-view-47](#run-view-47)];
-- the strip scrolls horizontally when tabs overflow, keeps the new-session control reachable, exposes tab-list semantics, and keeps the active tab scrolled into view;
+- the strip scrolls horizontally when tabs overflow, keeps the new-session control — a plus glyph, its name in its accessible name and tooltip ([DR-041](../decisions/041-chrome-that-fits.md)) — reachable, exposes tab-list semantics, and keeps the active tab scrolled into view;
 - the strip has one Tab stop — the active tab — and Arrow Left, Arrow Right, Home, and End move focus between session tabs, the new-session control, and the pinned tabs without activating any;
 - a tab tooltip that names a shortcut prints it with the platform's own modifier (⌘ on a Mac, Ctrl elsewhere).
 
@@ -470,7 +491,7 @@ The tab strip shall end with pinned Specs and Overview tabs — one spec view an
 When the composer's add-to-Up-next action is activated, the Boss composer shall capture the typed text as a queued intent for the session's project with chat provenance and acknowledge the capture in place, sending nothing ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the capture starts no turn and queues no submission [[run-view-8](#run-view-8)] — the text is shelved, not sent;
-- the acknowledgment is an inline note naming where the row landed — "Added to Up next — see the project's Overview.", the project's Up next in its Overview tab, where the row's Remove waits [[dashboard-29](dashboard.md#dashboard-29)] — the run view's form of the shelf reveal;
+- the acknowledgment is an inline note in the composer's caption line [[run-view-106](#run-view-106)] naming where the row landed — "Added to Up next — see the project's Overview.", the project's Up next in its Overview tab, where the row's Remove waits [[dashboard-29](dashboard.md#dashboard-29)] — the run view's form of the shelf reveal;
 - the action stands beside send as the composer's one secondary action, labeled "Add to Up next" — by where the text goes, never by a mechanism.
 
 #### run-view-86
@@ -798,3 +819,12 @@ Where the harness boots with the demo project registered and the scripted Captai
 #### run-view-109
 
 Where the hermetic lane's demo shell has run a task to its end ([DR-039](../decisions/039-browser-acceptance-journeys.md)), the test suite shall assert through the page that ending the session leaves the composer in place reading as a paused conversation, that a message sent there continues the session on the same tab — the Captain narrating again, the end control back — and that after the shell restarts underneath the page the same tab continues once more [[run-view-68](#run-view-68)]; and, with a session the terminal wrote listed for the project, that its sidebar row's delete control and inline confirm — worded for the terminal's history — remove it from the listing and its record and stream from the shared session store [[run-view-73](#run-view-73)].
+
+#### run-view-105
+
+Where the harness boots with the demo project registered, the scripted Captain, and ten further projects each holding a live session parked on a player question, when the journey shows each surface — the Captain home, a session with a turn in flight, the Dashboard, the project's Overview, the Specs tab with the graph shown, Playbooks, and Settings — at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md): the open sidebar is 224 pixels wide), the test suite shall assert fit through the page, naming every offending element:
+
+- the page never scrolls sideways, and no element outside a sideways-scrolling canvas is wider than its box [[run-view-106](#run-view-106)] [[run-view-107](#run-view-107)] [[run-view-48](#run-view-48)];
+- within every tab list, toolbar, header, list row, and composer box, no two visible siblings overlap and every child lies inside its parent [[run-view-106](#run-view-106)] [[run-view-71](#run-view-71)];
+- every control's accessible name is the same at every width [[run-view-8](#run-view-8)] [[run-view-85](#run-view-85)] [[run-view-47](#run-view-47)];
+- the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)].

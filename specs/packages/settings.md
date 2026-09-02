@@ -105,7 +105,9 @@ Where the Settings surface presents an editable setting, the Settings surface sh
 
 #### settings-22
 
-While the notifications editor lists notification events, each event shall be labeled with a human-readable phrase from the app's notification label map rather than the wire event id ([DR-010](../decisions/010-interface-craft.md) §2); the wire id shall remain available in the row's tooltip.
+While the notifications editor lists notification events, each event shall be labeled with a human-readable phrase from the app's notification label map rather than the wire event id ([DR-010](../decisions/010-interface-craft.md) §2); the wire id shall remain available in the row's tooltip:
+
+- the label takes a 14rem basis and shrinks, and the row wraps its select under the label when the pane is too narrow for both ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 #### settings-23
 
@@ -221,3 +223,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - an edit the fail-closed rules reject is refused with its message shown and the file left unchanged [[settings-2](#settings-2)];
 - the readiness panel lists one entry per adapter the config names [[settings-5](#settings-5)];
 - an edit made to the file on disk from outside the app is reflected on the surface without a reload [[settings-8](#settings-8)].
+
+#### settings-30
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on the demo config, when the journey shows the Settings surface at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside the shortcut sheet's sideways-scrolling table is wider than its box [[settings-10](#settings-10)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[settings-22](#settings-22)] [[settings-5](#settings-5)], and every control keeps its accessible name at every width [[settings-6](#settings-6)].
