@@ -89,7 +89,10 @@ jobs:
           VERSION="${GITHUB_REF_NAME#app-v}"
           # The version's section of the app changelog, then the way
           # to run this release from source.
-          sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md > /tmp/release-notes.md
+          # The last section runs to the file's end, where the link
+          # definitions live; those lines are not notes.
+          sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md \
+            | grep -v -E '^\[[^]]+\]: ' > /tmp/release-notes.md || true
           if [ ! -s /tmp/release-notes.md ]; then
             echo "::error::No release notes found for version ${VERSION} in CHANGELOG.md"
             exit 1
