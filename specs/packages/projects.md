@@ -95,7 +95,9 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 
 #### projects-22
 
-The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, and the palette shall list projects with filter-as-you-type matching on name and path.
+The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, and the palette shall list projects with filter-as-you-type matching on name and path:
+
+- With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, opens with the path field focused and its placeholder saying a project is added by path, and leads its list with the Academy-example action [[projects-27](#projects-27)].
 
 #### projects-23
 
@@ -103,11 +105,11 @@ While a project has running sessions or sessions needing a human, its palette ro
 
 #### projects-24
 
-Where the palette's create action offers the specs-scaffold option, the option shall be labeled to say it applies when creating, and the palette shall default it to on.
+Where the palette's create action offers the specs-scaffold option, the option shall be labeled to say it applies when creating, appear once a path is typed beside the actions it qualifies, and default to on.
 
 #### projects-25
 
-User-facing copy in the palette and the Overview tab shall say "GitHub" and shall not use the internal adapter term "forge" ([DR-010](../decisions/010-interface-craft.md) §2).
+User-facing copy in the palette and the Overview tab shall use plain words — "GitHub" for the forge, "Add" and "Create" for the path actions, sentence case throughout — and shall not use an internal term such as "forge", "stamp", or "ledger" ([DR-010](../decisions/010-interface-craft.md) §2).
 
 ## Internal Behavior
 

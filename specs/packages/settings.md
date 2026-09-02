@@ -72,6 +72,8 @@ Where the Settings surface is open, the Settings surface shall show a per-adapte
 Where the Settings surface is open, the Settings surface shall provide editors for the shared config's `layout` (pane column weights), `notifications`, and `theme` maps:
 
 - When a preference change is saved, the change appears under the corresponding top-level map in the shared config file.
+- A preference control is disabled while its edit is in flight and, once the edit lands, a transient "Saved ✓" status stands beside it — beside Save for an agent editor — so no edit goes unacknowledged ([DR-010](../decisions/010-interface-craft.md) §3).
+- The `theme` editor is labeled as the terminal pane theme for CLI-run sessions only, stands last, and says Spex itself follows the OS theme.
 
 ### Config File Semantics
 
@@ -87,13 +89,19 @@ While the Settings surface is open, when the shared config file changes on disk 
 
 #### settings-9
 
-Where the app starts on a machine with no shared config file, while the core service has seeded the starter config ([DR-004](../decisions/004-config-and-persistence.md)), the Settings surface shall display the starter's values as the current settings before any user save, and the displayed values shall equal the seeded file's content.
+Where the app starts on a machine with no shared config file, while the core service has seeded the starter config ([DR-004](../decisions/004-config-and-persistence.md)), the Settings surface shall display the starter's values as the current settings before any user save, and the displayed values shall equal the seeded file's content:
+
+- For that run the surface says it created a starter config at the file's path, so the file's origin is never a mystery.
 
 ### Guidance
 
 #### settings-10
 
-Where the Settings surface presents an editable setting, the Settings surface shall accompany the setting with a short inline description of its effect; no setting shall appear as a bare, unexplained control.
+Where the Settings surface presents an editable setting, the Settings surface shall accompany the setting with a short inline description of its effect; no setting shall appear as a bare, unexplained control:
+
+- the permission mode's description follows the selected mode — `auto` working on its own inside the repo under the adapter's protections, `bypass` running with no permission prompts and for sandboxed repos only, none leaving the adapter's default;
+- the writable-paths field carries a worked example;
+- the surface lists the app's keyboard shortcuts [[run-view-49](run-view.md#run-view-49)] as a sheet of keys and what each does, printing the platform's own modifier.
 
 #### settings-22
 
@@ -105,7 +113,10 @@ While an adapter's readiness entry reports not ready, the accompanying fix requi
 
 #### settings-24
 
-While the shared config file is missing or invalid, the Settings surface shall show the config file's path together with a secondary control that copies the path to the clipboard and briefly confirms the copy in place, so the user can open the file in an editor.
+While the shared config file is missing or invalid, the Settings surface shall show the config file's path together with a secondary control that copies the path to the clipboard and briefly confirms the copy in place, so the user can open the file in an editor:
+
+- missing: the surface says Spex could not create a starter config at that path, tells the user to check the folder is writable and retry, and offers a Retry control that re-reads the app state — never telling the user to fix a file that is not there;
+- invalid: the surface lists the errors and says the file, fixed in an editor, reloads live.
 
 ## Internal Behavior
 
@@ -191,7 +202,13 @@ Where external edit reflection is exercised, given a connected client holding Se
 
 #### settings-25
 
-Where the Settings surface renders against fixture state, the test suite shall assert that each notification row shows its human-readable label with the wire event id in the row's tooltip [[settings-22](#settings-22)], that a not-ready adapter's long fix requirement renders without truncation [[settings-23](#settings-23)], and that with an invalid config the copy control places the config file path on the clipboard and shows a transient copied confirmation [[settings-24](#settings-24)].
+Where the Settings surface renders against fixture state, the test suite shall assert that each notification row shows its human-readable label with the wire event id in the row's tooltip [[settings-22](#settings-22)], that a not-ready adapter's long fix requirement renders without truncation [[settings-23](#settings-23)], and that with an invalid config the copy control places the config file path on the clipboard and shows a transient copied confirmation [[settings-24](#settings-24)]:
+
+- a saved Captain edit shows the transient Saved status beside Save, and a notification select is disabled while its edit is in flight and ticks once it lands [[settings-6](#settings-6)];
+- the terminal theme editor stands last under its CLI-only name [[settings-6](#settings-6)];
+- a seeded config names the created file, and a loaded one says nothing [[settings-9](#settings-9)];
+- the permission mode's description follows the selected mode, and the shortcut sheet lists the bindings with the platform's modifier [[settings-10](#settings-10)];
+- a missing config names the could-not-create remedy with a Retry that refreshes the app state, and never the fix-in-editor line [[settings-24](#settings-24)].
 
 ### Browser Journeys
 
@@ -199,7 +216,8 @@ Where the Settings surface renders against fixture state, the test suite shall a
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a demo config carrying a comment, when the journey edits Settings through the page, the test suite shall assert:
 
-- the Captain editor shows the config's captain block and saving a changed model writes the file with the comment and key order kept and the surface showing the new value [[settings-1](#settings-1)] [[settings-4](#settings-4)] [[settings-7](#settings-7)];
+- the Captain editor shows the config's captain block and saving a changed model writes the file with the comment and key order kept, the surface showing the new value and the Saved status beside Save [[settings-1](#settings-1)] [[settings-4](#settings-4)] [[settings-7](#settings-7)] [[settings-6](#settings-6)];
+- the shortcut sheet lists the palette binding with the platform's modifier [[settings-10](#settings-10)];
 - an edit the fail-closed rules reject is refused with its message shown and the file left unchanged [[settings-2](#settings-2)];
 - the readiness panel lists one entry per adapter the config names [[settings-5](#settings-5)];
 - an edit made to the file on disk from outside the app is reflected on the surface without a reload [[settings-8](#settings-8)].

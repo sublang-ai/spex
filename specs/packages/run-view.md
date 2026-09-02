@@ -143,8 +143,9 @@ The run view shall provide light and dark color themes and size the Captain and 
 
 Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip and player label wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
 
-- the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place;
+- the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place, and says in one clause what a playbook is — a scripted workflow the AI players run — so the first sentence needs no glossary;
 - with no project current, the greeting names the remedy the workspace actually has — picking one where projects exist, adding one where none do — never sending the reader to a sidebar holding nothing;
+- with no project registered, the greeting itself carries the two ways in — a control opening the project palette [[run-view-42](#run-view-42)] and one seeding the Academy example through the same action the palette uses [[projects-27](projects.md#projects-27)] — acknowledging in place while it seeds and reporting a refusal in the thread;
 - Project choice lives in the sidebar and palette, not in the composer row.
 
 #### run-view-26
@@ -152,7 +153,8 @@ Where no session tab is active, when the Workspace is shown, the run view shall 
 While the Captain home is shown, when the user submits composer text, the run view shall act by whether the workspace has a current project:
 
 - a current project — the run view creates a session for that project, dispatches the text as the session's first Boss turn, and switches to the new session's tab;
-- no project chosen — the workspace opens the project palette instead of dispatching, keeping the draft intact.
+- no project chosen — the workspace opens the project palette instead of dispatching, keeping the draft intact, and the draft equally survives a project arriving through the greeting's own controls [[run-view-25](#run-view-25)], so the text goes the moment there is somewhere to send it;
+- the send control's tooltip says how to send — Enter, with Shift+Enter for a new line — and, with no project, what to do first, naming the palette's binding the platform's way [[run-view-49](#run-view-49)].
 
 #### run-view-27
 
@@ -318,12 +320,13 @@ While the app is connected, the sidebar shall present navigation as surface entr
 
 #### run-view-73
 
-Each session row in the sidebar shall read as its conversation — its title (the first Boss turn, or a never-spoken marker), its relative time, and a status mark — with its turn count in the row's accessible description [[core-service-32](core-service.md#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)):
+Each session row in the sidebar shall read as its conversation — its title (the first Boss turn, or a never-spoken marker), its age in the app's compact form with the exact moment in its tooltip, and a status mark — with its turn count and its age in words in the row's accessible description [[core-service-32](core-service.md#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)):
 
 - the mark speaks attention first and life second, in the app's one status palette: amber while the session waits on the human, red while it holds an unacknowledged failure — the same derivation the Dashboard entry's count uses [[run-view-34](#run-view-34)] — then running, then ended;
 - a session that ended holding a failure wears a quieter historical mark that counts toward no attention signal;
 - every mark's meaning is in the row's accessible description, so color is never the only channel;
-- the active session's row carries the app's interaction hue, the treatment the surface entries already use.
+- the active session's row carries the app's interaction hue, the treatment the surface entries already use;
+- the row's own controls — the project's disclosure caret above it and a deletable session's delete control — are 24px targets, the delete control revealed on hover and on keyboard focus alike.
 
 
 #### run-view-68
@@ -349,7 +352,7 @@ While a session's tab is shown, the run view shall render it live or read-only b
 
 The sidebar shall collapse between its two states — the tree, and the icon rail alone — behind a control at its foot and a keyboard binding, persisting across launches ([DR-030](../decisions/030-workspace-chrome.md)):
 
-- collapsed entries keep their accessible names and gain tooltips, the config-and-playbooks foot indicator included;
+- collapsed entries keep their accessible names and gain tooltips, the config-and-playbooks foot indicator and the Workspace section's palette control [[run-view-42](#run-view-42)] included — the control stays under the Workspace entry in icon-only form, since collapse never hides a duty;
 - the attention count survives on the collapsed Dashboard entry [[run-view-34](#run-view-34)];
 - collapse is chrome only: the open tabs remain the reach [[run-view-48](#run-view-48)], so it makes nothing unreachable;
 - collapsing never strands focus.
@@ -368,11 +371,12 @@ The run view shall divide the Captain column from the player panes at a divider 
 
 The project palette shall be fully keyboard-operable ([DR-011](../decisions/011-project-workspace.md)):
 
-- it opens from Cmd/Ctrl+P, the sidebar's Workspace section, or submitting a composer with no project chosen;
-- its filter input holds focus;
-- arrow keys move the highlight over project rows and "Open folder…";
-- Enter picks;
-- Escape closes and returns focus to the opener with any composer draft intact, never auto-sending.
+- it opens from Cmd/Ctrl+P, the sidebar's Workspace section — in the expanded tree and the collapsed rail alike [[run-view-71](#run-view-71)] — the Captain home's greeting where nothing is registered [[run-view-25](#run-view-25)], or submitting a composer with no project chosen;
+- its filter input holds focus — the path field where no project is registered, the palette then being an add flow [[projects-22](projects.md#projects-22)];
+- arrow keys move the highlight over the Academy row where it leads the list, the project rows, and "Open folder…";
+- Enter picks, in an empty path field too, while a typed path adds;
+- the palette announces itself modal, and Tab and Shift+Tab wrap inside it;
+- Escape closes from anywhere inside the palette and returns focus to the opener with any composer draft intact, never auto-sending.
 
 #### run-view-43
 
@@ -401,13 +405,16 @@ The tab strip shall show the current project's open sessions, live and ended ali
 
 #### run-view-49
 
-The app shall provide keyboard shortcuts implemented in the web UI (so they work identically in a browser), each preventing the host's own default: Cmd/Ctrl+1..4 switch surfaces in the sidebar's order [[run-view-67](#run-view-67)], Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project palette, Cmd/Ctrl+N opens the new-session tab (or the palette when no project is chosen), Cmd/Ctrl+B collapses and restores the sidebar [[run-view-71](#run-view-71)], Cmd/Ctrl+Shift+S toggles the Specs tab with the previous tab, Cmd/Ctrl+Shift+[ and ] cycle the current project's open tabs including the pinned ones [[run-view-48](#run-view-48)], and a printable key pressed outside any input and outside the sidebar refocuses the Boss composer.
+The app shall provide keyboard shortcuts implemented in the web UI (so they work identically in a browser), each preventing the host's own default: Cmd/Ctrl+1..4 switch surfaces in the sidebar's order [[run-view-67](#run-view-67)], Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project palette, Cmd/Ctrl+N opens the new-session tab (or the palette when no project is chosen), Cmd/Ctrl+B collapses and restores the sidebar [[run-view-71](#run-view-71)], Cmd/Ctrl+Shift+S toggles the Specs tab with the previous tab, Cmd/Ctrl+Shift+[ and ] cycle the current project's open tabs including the pinned ones [[run-view-48](#run-view-48)], and a printable key pressed outside any input and outside the sidebar refocuses the Boss composer:
+
+- every control that names its binding prints the platform's own modifier — ⌘ on a Mac, Ctrl elsewhere — from one shared table of the bindings;
+- that table is listed as a sheet on the Settings surface [[settings-10](settings.md#settings-10)], the modifier bindings and the plain keys alike.
 
 ### First-Hour Integrity (DR-010 §5)
 
 #### run-view-44
 
-While the shared config is invalid or missing, the Captain home shall say so in the thread — listing the actual errors — with an in-place link to Settings, never rendering the captain identity blank.
+While the shared config is invalid or missing, the Captain home shall say so in the thread — listing the actual errors, or saying there is no config file yet where it is missing — with an in-place link to Settings, where the missing file's remedy waits [[settings-24](settings.md#settings-24)], never rendering the captain identity blank.
 
 #### run-view-45
 

@@ -106,7 +106,7 @@ When the core package derives a playbook's artifacts from its FSM, the core pack
 
 #### playbook-library-26
 
-The Library surface shall be presented to the user as "Playbooks": the navigation entry and the surface's user-facing copy shall say "Playbooks" or "playbook", reserving the word "library" for the on-disk compiled-artifact store ([DR-010](../decisions/010-interface-craft.md) §2).
+The Library surface shall be presented to the user as "Playbooks": the navigation entry and the surface's user-facing copy shall say "Playbooks" or "playbook", reserving the word "library" for the on-disk compiled-artifact store, and shall name actions by their outcome — a built-in is enabled, a configured playbook is removed behind a confirm whose choices read "Remove" and "Keep" — never by the config write behind them ([DR-010](../decisions/010-interface-craft.md) §2).
 
 #### playbook-library-29
 
@@ -116,9 +116,10 @@ While a configured playbook is listed, the Library shall label the playbook's re
 
 #### playbook-library-34
 
-When the Library surface is opened, the Library shall list each known built-in playbook absent from the shared config ([DR-015](../decisions/015-reference-content.md)) with its command, intent, required roles, and browsable source markdown, and shall offer an add flow that gives each role a player and registers the playbook through the shared-config write path [[playbook-library-16](#playbook-library-16)]:
+When the Library surface is opened, the Library shall list each known built-in playbook absent from the shared config ([DR-015](../decisions/015-reference-content.md)) with its command, intent, required roles, and browsable source markdown, and shall offer an enable flow — one "Enable" action per built-in, acknowledging while it writes — that gives each role a player and registers the playbook through the shared-config write path [[playbook-library-16](#playbook-library-16)]:
 
 - Browsing a built-in's source requires no config change.
+- With no playbook configured, the configured list says so and points at enabling a built-in below or compiling one.
 - A role's proposed player id is `dev.<role>`, editable before it is written, because the id is the sharing decision ([DR-032](../decisions/032-session-players.md)).
 - A proposed id the roster lacks is written to the roster first, carrying the agent block chosen for that role, so no binding is written dangling.
 
@@ -264,6 +265,6 @@ Where the shared config state is missing or invalid, the test suite shall assert
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on the demo config, when the journey works the Playbooks surface through the page, the test suite shall assert:
 
 - every configured playbook lists with its command, intent, and role bindings [[playbook-library-1](#playbook-library-1)];
-- the built-ins absent from the config list beside them, and adding one writes it to the config and lists it among the configured playbooks, after which the Captain home's slash menu offers its command [[playbook-library-34](#playbook-library-34)];
+- the built-ins absent from the config list beside them, and enabling one writes it to the config and lists it among the configured playbooks, after which the Captain home's slash menu offers its command [[playbook-library-34](#playbook-library-34)];
 - opening a playbook's pipeline view shows its stages [[playbook-library-22](#playbook-library-22)];
-- removing a configured playbook asks for the inline confirm, then leaves the config without it [[playbook-library-16](#playbook-library-16)].
+- removing a configured playbook asks for the inline confirm — Remove or Keep [[playbook-library-26](#playbook-library-26)] — then leaves the config without it [[playbook-library-16](#playbook-library-16)].
