@@ -402,7 +402,7 @@ describe("DR-015: the slc demo example card", () => {
   test("collapsed by default; opening stages all four artifacts", () => {
     renderLibrary();
     const card = screen.getByTestId("example-card");
-    expect(card.textContent).toContain("Example: Two-Agent Task Workflow");
+    expect(card.textContent).toContain("Example: Two-Agent Change-and-Review Workflow");
     expect(card.textContent).toContain("from the slc demo");
     // Collapsed: no stage rail yet.
     expect(card.textContent).not.toContain("Normalized text");
@@ -417,11 +417,11 @@ describe("DR-015: the slc demo example card", () => {
     );
 
     fireEvent.click(within(card).getByRole("button", { name: "Normalized text" }));
-    expect(card.textContent).toContain("Coder is the agent that modifies");
+    expect(card.textContent).toContain("Use two agents, Coder and Reviewer");
 
     fireEvent.click(within(card).getByRole("button", { name: "Gears" }));
     // Gears render as markdown: the item heading becomes an <h3>.
-    expect(within(card).getByText("REPO-1").tagName).toBe("H3");
+    expect(within(card).getByText("WORKFLOW-1").tagName).toBe("H3");
 
     fireEvent.click(within(card).getByRole("button", { name: "State machine" }));
     expect(card.textContent).toContain("from 'xstate'");
@@ -446,13 +446,13 @@ describe("DR-015: the slc demo example card", () => {
     expect(id.value).toBe("workflow");
     expect(command.value).toBe("workflow");
     expect(intent.value).toBe(
-      "Two-Agent Task Workflow — Use two agents to carry out the input task.",
+      "Two-Agent Change-and-Review Workflow — Use two agents to carry out the input task.",
     );
     expect(roles.value).toBe("Coder, Reviewer");
     // The NORMALIZED text, never the raw prose (DR-015): the compile
     // pipeline skips slc's normalize phase.
     expect(source.value).toBe(SLC_DEMO.stages.normalized);
-    expect(source.value).toContain("# Two-Agent Task Workflow");
+    expect(source.value).toContain("# Two-Agent Change-and-Review Workflow");
     expect(source.value).not.toBe(SLC_DEMO.stages.source);
     // A stale source path would override the text: prefill clears it.
     expect(path.value).toBe("");
