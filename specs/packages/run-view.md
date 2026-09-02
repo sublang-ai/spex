@@ -258,7 +258,7 @@ While a playbook run's trace records flow in a live session, the Captain pane sh
 - the card renders read-only, never intercepting the composer;
 - the card takes the form its disclosure assigns — the full drawing or the strip [[run-view-75](#run-view-75)];
 - while the run's frame is open, the glyph progress lines of that run fold into the card instead of the thread [[run-view-1](#run-view-1)], while failure lines always stay in the thread [[run-view-2](#run-view-2)];
-- state labels are the human labels with raw ids in tooltips, matching the chip's law [[run-view-59](#run-view-59)];
+- state labels are the human labels with raw ids in tooltips, matching the chip's law [[run-view-59](#run-view-59)] — a nested state, whose id carries its parent's path as a region of a parallel state does, goes by its own last segment, wears its parent's name as its caption when no role captions it, and keeps its whole path in its tooltip, in its exit labels' tooltips, and in the card's status line;
 - a state name reads at 13px and its caption at 12px — the type scale's small step ([DR-010](../decisions/010-interface-craft.md) §8) — and a box is as wide as its column's longest name or caption needs, from a 132px floor to a 240px cap, so a name such as "reported review failure" reads whole; a name past the cap is trimmed with its whole in the box's tooltip.
 
 #### run-view-61

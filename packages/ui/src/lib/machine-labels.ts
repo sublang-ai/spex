@@ -45,9 +45,27 @@ export function textWidth(text: string, px: number): number {
   return Math.ceil(text.length * px * EM_PER_CHAR);
 }
 
+/** A state's name as a person reads it (run-view-60): a nested
+ * state — one whose id carries its parent's path, as a region of a
+ * parallel state does — goes by its own last segment, the whole
+ * path staying in the tooltip; every other state by its id. */
+export function stateName(id: string): string {
+  const dot = id.lastIndexOf(".");
+  return humanizeId(dot >= 0 ? id.slice(dot + 1) : id);
+}
+
+/** A state's whole path in words — "independent proposals · coder ·
+ * working" — for the places a bare leaf would lose its context: the
+ * card's status line and the tooltips. */
+export function statePath(id: string): string {
+  return id.split(".").map(humanizeId).join(" · ");
+}
+
 /** The caption a state wears: the call it runs, or the role the
  * machine asked for with the player answering it — a lane several
- * roles share makes the pair the only unambiguous label (DR-032). */
+ * roles share makes the pair the only unambiguous label (DR-032) —
+ * or, for a nested state no role captions, its parent's name, so a
+ * "working" box says whose work it is. */
 export function stateCaption(
   node: MachineGraphNode,
   frame: MachineFrame,
@@ -63,7 +81,8 @@ export function stateCaption(
       ? { text: `${player.role} · ${player.playerId}`, role: player.role }
       : { text: player.role, role: player.role };
   }
-  return node.role ? { text: humanizeId(node.role) } : undefined;
+  if (node.role) return { text: humanizeId(node.role) };
+  return node.parent ? { text: stateName(node.parent) } : undefined;
 }
 
 /** The words a caption shows in a box of `boxWidth`: the whole
@@ -117,7 +136,7 @@ export function widenLayout(
     const place = layout.nodes.get(node.id);
     if (!place) continue;
     const column = columnOf(place);
-    const need = labelWidth(humanizeId(node.id), stateCaption(node, frame)?.text);
+    const need = labelWidth(stateName(node.id), stateCaption(node, frame)?.text);
     widths.set(column, Math.max(widths.get(column) ?? STATE_W, need));
   }
   const columns = [...widths.keys()].sort((a, b) => a - b);

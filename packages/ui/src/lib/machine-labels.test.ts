@@ -9,6 +9,7 @@ import { describe, expect, test } from "vitest";
 import type { MachineGraph } from "@sublang/spex-core/protocol";
 
 import codeGraph from "../fixtures/machines/code.json";
+import decideGraph from "../fixtures/machines/decide.json";
 import { layoutMachine, STATE_W, type MachineFrame } from "./machine-frames.js";
 import {
   drawingWidthRule,
@@ -19,6 +20,8 @@ import {
   scaleFloor,
   stateCaption,
   widenLayout,
+  stateName,
+  statePath,
 } from "./machine-labels.js";
 
 function frame(over: Partial<MachineFrame> = {}): MachineFrame {
@@ -141,5 +144,39 @@ describe("the scale-or-scroll rule", () => {
     expect(rule.fit).toBe("clamp(0px, (100cqw - 400px) * 1000000, 1px)");
     expect(rule.width).toBe("min(500px, 100cqw + (1px - var(--fit)) * 1000000)");
     expect(rule.beyond).toContain("var(--fit)");
+  });
+});
+
+describe("run-view-60: a nested state goes by its own segment", () => {
+  const decide = decideGraph as MachineGraph;
+  const emptyFrame = {
+    calls: [],
+    settledCalls: [],
+    walked: [],
+    fired: [],
+  } as unknown as MachineFrame;
+
+  test("the leaf names the box, the path names the tooltip", () => {
+    expect(stateName("independentProposals.coder.working")).toBe("working");
+    expect(stateName("independentProposals.coder")).toBe("coder");
+    expect(stateName("reportedReviewFailure")).toBe("reported review failure");
+    expect(statePath("independentProposals.coder.working")).toBe(
+      "independent proposals · coder · working",
+    );
+    expect(statePath("ready")).toBe("ready");
+  });
+
+  test("a nested state with no role wears its parent's name", () => {
+    const region = decide.nodes.find((n) => n.id === "independentProposals.coder")!;
+    const waiting = decide.nodes.find(
+      (n) => n.id === "independentProposals.reviewer.waiting",
+    )!;
+    const working = decide.nodes.find(
+      (n) => n.id === "independentProposals.coder.working",
+    )!;
+    expect(stateCaption(region, emptyFrame)?.text).toBe("independent proposals");
+    expect(stateCaption(waiting, emptyFrame)?.text).toBe("reviewer");
+    // A role still captions the box it names.
+    expect(stateCaption(working, emptyFrame)?.text).toBe("coder");
   });
 });
