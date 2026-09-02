@@ -158,8 +158,13 @@ export interface SessionInfo {
   /** Panes visible at session start, before any player_view_changed record. */
   initialVisible: string[];
   /** Set on a session another host wrote into the shared session
-   * store: served here, never written or deleted (DR-036, DR-038). */
+   * store: served here, never continued; deletable behind a lease
+   * check (DR-036, DR-042). */
   foreign?: true;
+  /** Set on an ended session a Boss message can continue: not
+   * foreign, whole stream, a Captain snapshot in its sidecar
+   * (DR-042). */
+  continuable?: boolean;
   /** The session's own words: its first Boss turn, absent when the
    * session held no turn (core-service-32). */
   title?: string;
