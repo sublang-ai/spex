@@ -661,15 +661,30 @@ export function routeEdges(
     const lateral = Math.abs(to.y - from.y) < 1;
     if (lateral) {
       // Neighbours across the row meet on their facing borders, the
-      // two directions offset above and below the midline.
+      // two directions offset above and below the midline. Several
+      // heads on one facing border spread down it — a state whose
+      // done and error branches both name its lateral neighbour
+      // draws two lines, each at its own port.
       const leftToRight = centerX(to) >= centerX(from);
       const offset = leftToRight ? -6 : 6;
+      const border = leftToRight ? "left" : "right";
+      const group = portGroups.get(`${edge.to}|${border}`) ?? [edge.id];
+      const slot = Math.max(0, group.indexOf(edge.id));
+      const usable = Math.max(PORT_GAP, to.height - 2 * PORT_GAP);
+      const portY =
+        group.length <= 1
+          ? to.y + to.height / 2
+          : to.y + PORT_GAP + (usable * slot) / (group.length - 1);
+      const headY = Math.min(
+        to.y + to.height - 8,
+        Math.max(to.y + 8, portY + offset),
+      );
       const tail = leftToRight
         ? { x: from.x + from.width, y: from.y + from.height / 2 + offset }
         : { x: from.x, y: from.y + from.height / 2 + offset };
       const head = leftToRight
-        ? { x: to.x, y: to.y + to.height / 2 + offset }
-        : { x: to.x + to.width, y: to.y + to.height / 2 + offset };
+        ? { x: to.x, y: headY }
+        : { x: to.x + to.width, y: headY };
       routed.push({
         ...base,
         kind: "line",

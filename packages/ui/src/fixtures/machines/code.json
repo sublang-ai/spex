@@ -13,7 +13,7 @@
       "id": "runFirstPhase",
       "kind": "state",
       "role": "coder",
-      "description": "Coder is implementing one direct phase or committing a new intent record.",
+      "description": "Coder is running the first coding phase: a direct implementation, a new intent record, or an existing intent-record task.",
       "tags": [
         "playbook.busy"
       ]
@@ -21,7 +21,7 @@
     {
       "id": "reviewFirstCommit",
       "kind": "state",
-      "description": "The REVIEW playbook is checking the first phase commit.",
+      "description": "The REVIEW playbook is checking the direct or new-IR phase commit.",
       "tags": [
         "playbook.suspended"
       ]
@@ -68,7 +68,7 @@
     {
       "id": "done",
       "kind": "final",
-      "description": "The coding workflow completed after REVIEW found no unsettled findings.",
+      "description": "The coding workflow completed after every phase's REVIEW passed with no unsettled findings.",
       "tags": []
     }
   ],
@@ -94,11 +94,23 @@
     {
       "id": "runFirstPhase::done::2::0",
       "from": "runFirstPhase",
-      "to": "awaitBossReply",
+      "to": "reviewIrTask",
       "event": "done"
     },
     {
       "id": "runFirstPhase::done::3::0",
+      "from": "runFirstPhase",
+      "to": "reviewIrTask",
+      "event": "done"
+    },
+    {
+      "id": "runFirstPhase::done::4::0",
+      "from": "runFirstPhase",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "runFirstPhase::done::5::0",
       "from": "runFirstPhase",
       "to": "failed",
       "event": "done"

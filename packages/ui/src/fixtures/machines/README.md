@@ -12,7 +12,7 @@ Refresh with:
 node --input-type=module -e "
 import { resolveArtifacts } from './packages/core/dist/artifacts.js';
 import { writeFileSync } from 'node:fs';
-for (const id of ['code','review','decide']) {
+for (const id of ['code','review','decide','dev']) {
   const a = await resolveArtifacts({ id, from: '@sublang/playbook/' + id + '/registry' });
   writeFileSync('packages/ui/src/fixtures/machines/' + id + '.json', JSON.stringify(a.machine, null, 2) + '\n');
 }

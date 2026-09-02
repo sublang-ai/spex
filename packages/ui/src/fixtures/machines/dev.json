@@ -1,0 +1,220 @@
+{
+  "initial": "ready",
+  "nodes": [
+    {
+      "id": "ready",
+      "kind": "state",
+      "description": "Waiting for a development request.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "planAnalysis",
+      "kind": "state",
+      "role": "analyst",
+      "description": "Analyst is analyzing the development request to choose the smallest sound next step.",
+      "tags": [
+        "playbook.busy"
+      ]
+    },
+    {
+      "id": "callCode",
+      "kind": "state",
+      "description": "The CODE playbook is implementing the planned development path.",
+      "tags": [
+        "playbook.suspended"
+      ]
+    },
+    {
+      "id": "callDecide",
+      "kind": "state",
+      "description": "The DECIDE playbook is settling the durable decision the planned path requires.",
+      "tags": [
+        "playbook.suspended"
+      ]
+    },
+    {
+      "id": "callCodeAfterDecide",
+      "kind": "state",
+      "description": "The CODE playbook is implementing the decided development path.",
+      "tags": [
+        "playbook.suspended"
+      ]
+    },
+    {
+      "id": "awaitBossReply",
+      "kind": "state",
+      "description": "Waiting for Boss to answer Analyst.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "failed",
+      "kind": "state",
+      "description": "The development planning workflow failed and is waiting for a new development request.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
+      "id": "discussionComplete",
+      "kind": "final",
+      "description": "The planning discussion concluded after a Boss reply with no repository work to follow.",
+      "tags": []
+    },
+    {
+      "id": "done",
+      "kind": "final",
+      "description": "The selected development path completed with the final child playbook's successful result.",
+      "tags": []
+    },
+    {
+      "id": "reportedChildFailure",
+      "kind": "final",
+      "description": "The development workflow relayed a child playbook's authored abort, failure, or insufficient terminal result.",
+      "tags": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "ready::START_DEV::0::0",
+      "from": "ready",
+      "to": "planAnalysis",
+      "event": "START_DEV"
+    },
+    {
+      "id": "planAnalysis::done::0::0",
+      "from": "planAnalysis",
+      "to": "discussionComplete",
+      "event": "done"
+    },
+    {
+      "id": "planAnalysis::done::1::0",
+      "from": "planAnalysis",
+      "to": "callCode",
+      "event": "done"
+    },
+    {
+      "id": "planAnalysis::done::2::0",
+      "from": "planAnalysis",
+      "to": "callDecide",
+      "event": "done"
+    },
+    {
+      "id": "planAnalysis::done::3::0",
+      "from": "planAnalysis",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "planAnalysis::done::4::0",
+      "from": "planAnalysis",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "planAnalysis::error::0::0",
+      "from": "planAnalysis",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "callCode::done::0::0",
+      "from": "callCode",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "callCode::done::1::0",
+      "from": "callCode",
+      "to": "reportedChildFailure",
+      "event": "done"
+    },
+    {
+      "id": "callCode::error::0::0",
+      "from": "callCode",
+      "to": "reportedChildFailure",
+      "event": "error"
+    },
+    {
+      "id": "callCode::error::1::0",
+      "from": "callCode",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "callDecide::done::0::0",
+      "from": "callDecide",
+      "to": "callCodeAfterDecide",
+      "event": "done"
+    },
+    {
+      "id": "callDecide::done::1::0",
+      "from": "callDecide",
+      "to": "reportedChildFailure",
+      "event": "done"
+    },
+    {
+      "id": "callDecide::error::0::0",
+      "from": "callDecide",
+      "to": "reportedChildFailure",
+      "event": "error"
+    },
+    {
+      "id": "callDecide::error::1::0",
+      "from": "callDecide",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "callCodeAfterDecide::done::0::0",
+      "from": "callCodeAfterDecide",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "callCodeAfterDecide::done::1::0",
+      "from": "callCodeAfterDecide",
+      "to": "reportedChildFailure",
+      "event": "done"
+    },
+    {
+      "id": "callCodeAfterDecide::error::0::0",
+      "from": "callCodeAfterDecide",
+      "to": "reportedChildFailure",
+      "event": "error"
+    },
+    {
+      "id": "callCodeAfterDecide::error::1::0",
+      "from": "callCodeAfterDecide",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::0::0",
+      "from": "awaitBossReply",
+      "to": "failed",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::1::0",
+      "from": "awaitBossReply",
+      "to": "planAnalysis",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::START_DEV::0::0",
+      "from": "awaitBossReply",
+      "to": "planAnalysis",
+      "event": "START_DEV"
+    },
+    {
+      "id": "failed::START_DEV::0::0",
+      "from": "failed",
+      "to": "planAnalysis",
+      "event": "START_DEV"
+    }
+  ]
+}

@@ -83,7 +83,7 @@
       "id": "commitCoderProposal",
       "kind": "state",
       "role": "coder",
-      "description": "Coder writes and commits Coder’s independent proposal.",
+      "description": "Coder synthesizes both proposals and commits the design.",
       "tags": [
         "playbook.busy"
       ]

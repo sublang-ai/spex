@@ -14,6 +14,7 @@ import type { MachineGraph } from "@sublang/spex-core/protocol";
 import codeGraph from "../fixtures/machines/code.json";
 import reviewGraph from "../fixtures/machines/review.json";
 import decideGraph from "../fixtures/machines/decide.json";
+import devGraph from "../fixtures/machines/dev.json";
 
 import {
   edgeCrossesBox,
@@ -155,6 +156,7 @@ describe("run-view-77: solved machine geometry", () => {
     ["code", codeGraph],
     ["review", reviewGraph],
     ["decide", decideGraph],
+    ["dev", devGraph],
   ] as const) {
     test(`${id} holds the law over its served graph`, () => {
       const { lines } = assertLaw(id, graph as MachineGraph);

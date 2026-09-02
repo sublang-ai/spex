@@ -4,7 +4,7 @@
     {
       "id": "ready",
       "kind": "state",
-      "description": "Waits for a caller to start a committed-work review.",
+      "description": "Waits for a caller to start a scoped committed-work review.",
       "tags": [
         "playbook.parked"
       ]
@@ -13,7 +13,7 @@
       "id": "reviewInitial",
       "kind": "state",
       "role": "reviewer",
-      "description": "REVIEW-1: Reviewer examines the latest commit against the caller input.",
+      "description": "REVIEW-1: Reviewer reviews the caller's review scope against the original intent.",
       "tags": [
         "playbook.busy"
       ]
@@ -31,7 +31,7 @@
       "id": "reviewAfterCommit",
       "kind": "state",
       "role": "reviewer",
-      "description": "REVIEW-3: Reviewer examines the new review-fix commit and repository state.",
+      "description": "REVIEW-3: Reviewer reviews the cumulative committed state after a review-fix commit.",
       "tags": [
         "playbook.busy"
       ]
@@ -64,7 +64,7 @@
     {
       "id": "done",
       "kind": "final",
-      "description": "The latest commit is approved with no unsettled findings.",
+      "description": "The requested review is complete: no unsettled findings remain within the review scope.",
       "tags": []
     }
   ],
