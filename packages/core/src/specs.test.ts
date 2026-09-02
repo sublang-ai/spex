@@ -3,15 +3,19 @@
 
 // SPECV coverage: fixture spec trees in the packages-only layout
 // (DR-012, DR-000) driving parseSpecTree, path confinement for
-// specs.read, an end-to-end parse of the staged Academy corpus, and
-// one protocol round-trip through the service.
+// specs.read and specs.write, the digest-token write (spec-view-47),
+// an end-to-end parse of the staged Academy corpus, and one protocol
+// round-trip through the service.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -22,7 +26,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 
-import { parseSpecFileText, parseSpecTree, resolveSpecPath } from "./specs.js";
+import {
+  parseSpecFileText,
+  parseSpecTree,
+  readSpecFile,
+  resolveSpecPath,
+  specVersion,
+  writeSpecFile,
+} from "./specs.js";
 import { CoreService } from "./service.js";
 import type {
   SpecFileInfo,
@@ -765,7 +776,30 @@ test("resolveSpecPath confines reads to specs/", () => {
   if (!missing.ok) assert.equal(missing.code, "not_found");
 });
 
-posixTest("resolveSpecPath rejects a symlink escaping the project", () => {
+test("spec-view-36: writeSpecFile confines writes like reads and creates nothing", () => {
+  const dir = fixture({ "specs/packages/auth.md": "# auth: A\n" });
+  for (const bad of [
+    "../secret.md",
+    "packages/../../x.md",
+    "/etc/hosts.md",
+    "packages/auth.txt",
+  ]) {
+    const rejected = writeSpecFile(dir, bad, "# x\n");
+    assert.equal(rejected.ok, false, bad);
+    if (!rejected.ok) assert.equal(rejected.code, "invalid_request", bad);
+  }
+  const missing = writeSpecFile(dir, "packages/nope.md", "# nope\n");
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.code, "not_found");
+  assert.equal(existsSync(join(dir, "specs", "packages", "nope.md")), false);
+  assert.equal(
+    readFileSync(join(dir, "specs", "packages", "auth.md"), "utf8"),
+    "# auth: A\n",
+  );
+  assert.deepEqual(readdirSync(join(dir, "specs", "packages")), ["auth.md"]);
+});
+
+posixTest("resolveSpecPath and writeSpecFile reject a symlink escaping the project", () => {
   const outside = mkdtempSync(join(tmpdir(), "spex-outside-"));
   writeFileSync(join(outside, "secret.md"), "top secret\n");
   const dir = fixture({ "specs/packages/auth.md": "# auth: A\n" });
@@ -773,6 +807,69 @@ posixTest("resolveSpecPath rejects a symlink escaping the project", () => {
   const escaped = resolveSpecPath(dir, "evil.md");
   assert.equal(escaped.ok, false);
   if (!escaped.ok) assert.equal(escaped.code, "invalid_request");
+  const write = writeSpecFile(dir, "evil.md", "clobbered\n");
+  assert.equal(write.ok, false);
+  if (!write.ok) assert.equal(write.code, "invalid_request");
+  assert.equal(readFileSync(join(outside, "secret.md"), "utf8"), "top secret\n");
+});
+
+// ---------------------------------------------------------------------------
+// The digest-token write (spec-view-47)
+// ---------------------------------------------------------------------------
+
+test("spec-view-52: writeSpecFile replaces bytes under the digest token", () => {
+  const original = "# auth: A\n\nOne.\n";
+  const dir = fixture({ "specs/packages/auth.md": original });
+  const abs = join(dir, "specs", "packages", "auth.md");
+  const first = readSpecFile(abs);
+  assert.equal(first.markdown, original);
+  assert.equal(first.version, specVersion(Buffer.from(original)));
+  assert.match(first.version, /^[0-9a-f]{16}$/);
+
+  // A stale token refuses with the bytes unchanged.
+  const stale = writeSpecFile(
+    dir,
+    "packages/auth.md",
+    "# auth: A\n\nTwo.\n",
+    "0000000000000000",
+  );
+  assert.equal(stale.ok, false);
+  if (!stale.ok) assert.equal(stale.code, "conflict");
+  assert.equal(readFileSync(abs, "utf8"), original);
+
+  // The read's token lands the write — exactly as sent, no trailing
+  // newline added — and the next read repeats the write's token.
+  const edited = "# auth: A\n\nTwo.";
+  const written = writeSpecFile(dir, "packages/auth.md", edited, first.version);
+  assert.equal(written.ok, true);
+  assert.equal(readFileSync(abs, "utf8"), edited);
+  const second = readSpecFile(abs);
+  if (written.ok) assert.equal(second.version, written.version);
+  assert.notEqual(second.version, first.version);
+
+  // Identical content writes nothing and repeats the token.
+  const untouched = statSync(abs).mtimeMs;
+  const same = writeSpecFile(dir, "packages/auth.md", edited, second.version);
+  assert.equal(same.ok, true);
+  if (same.ok) assert.equal(same.version, second.version);
+  assert.equal(statSync(abs).mtimeMs, untouched);
+
+  // No token: unconditional.
+  const free = writeSpecFile(dir, "packages/auth.md", "# auth: A\n\nThree.\n");
+  assert.equal(free.ok, true);
+  assert.equal(readFileSync(abs, "utf8"), "# auth: A\n\nThree.\n");
+
+  // No stage file remains beside the written file.
+  assert.deepEqual(readdirSync(join(dir, "specs", "packages")), ["auth.md"]);
+});
+
+posixTest("spec-view-47: the write keeps the file's mode", () => {
+  const dir = fixture({ "specs/packages/auth.md": "# auth: A\n" });
+  const abs = join(dir, "specs", "packages", "auth.md");
+  chmodSync(abs, 0o600);
+  const written = writeSpecFile(dir, "packages/auth.md", "# auth: B\n");
+  assert.equal(written.ok, true);
+  assert.equal(statSync(abs).mode & 0o777, 0o600);
 });
 
 // ---------------------------------------------------------------------------
@@ -851,7 +948,10 @@ test("specs.get and specs.read serve over the protocol", async () => {
 
     const read = await call("specs.read", { projectId, path: "packages/auth.md" });
     assert.equal(read.ok, true);
-    assert.match((read.result as { markdown: string }).markdown, /auth-1/);
+    const served = read.result as { markdown: string; version: string; mtime: number };
+    assert.match(served.markdown, /auth-1/);
+    assert.match(served.version, /^[0-9a-f]{16}$/);
+    assert.equal(typeof served.mtime, "number");
 
     const escape = await call("specs.read", { projectId, path: "../secret.md" });
     assert.equal(escape.ok, false);
@@ -860,6 +960,48 @@ test("specs.get and specs.read serve over the protocol", async () => {
     const gone = await call("specs.read", { projectId, path: "packages/nope.md" });
     assert.equal(gone.ok, false);
     assert.equal(gone.error?.code, "not_found");
+
+    // The write over the protocol (spec-view-52, spec-view-36): a
+    // stale token is a conflict, the read's token lands the change,
+    // the next read repeats the write's token, and a missing target
+    // is not_found with nothing created.
+    const stale = await call("specs.write", {
+      projectId,
+      path: "packages/auth.md",
+      content: "# auth: A\n",
+      baseVersion: "deadbeefdeadbeef",
+    });
+    assert.equal(stale.ok, false);
+    assert.equal(stale.error?.code, "conflict");
+    const edited = served.markdown.replace("One sentence.", "Two sentences.");
+    const written = await call("specs.write", {
+      projectId,
+      path: "packages/auth.md",
+      content: edited,
+      baseVersion: served.version,
+    });
+    assert.equal(written.ok, true);
+    const again = await call("specs.read", { projectId, path: "packages/auth.md" });
+    assert.equal((again.result as { markdown: string }).markdown, edited);
+    assert.equal(
+      (again.result as { version: string }).version,
+      (written.result as { version: string }).version,
+    );
+    const create = await call("specs.write", {
+      projectId,
+      path: "packages/nope.md",
+      content: "# nope\n",
+    });
+    assert.equal(create.ok, false);
+    assert.equal(create.error?.code, "not_found");
+    assert.equal(existsSync(join(project, "specs", "packages", "nope.md")), false);
+    const outside = await call("specs.write", {
+      projectId,
+      path: "../secret.md",
+      content: "x",
+    });
+    assert.equal(outside.ok, false);
+    assert.equal(outside.error?.code, "invalid_request");
   } finally {
     socket.close();
     await service.stop();

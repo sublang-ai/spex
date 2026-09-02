@@ -526,6 +526,19 @@ export const commandSchema = z.discriminatedUnion("type", [
     path: z.string().min(1),
   }),
   z.object({
+    type: z.literal("specs.write"),
+    id,
+    projectId: z.string().min(1),
+    /** Path relative to the project's specs/ directory; the file must
+     * exist — the write never creates one (DR-043). */
+    path: z.string().min(1),
+    /** The whole file, written exactly as sent. */
+    content: z.string(),
+    /** The version token specs.read handed out: a mismatch is a
+     * conflict, and no token writes unconditionally. */
+    baseVersion: z.string().min(1).optional(),
+  }),
+  z.object({
     type: z.literal("intent.queue"),
     id,
     projectId: z.string().min(1),
@@ -620,7 +633,11 @@ export interface CommandResults {
   "playbook.artifacts": PlaybookArtifacts;
   "library.builtins": { builtins: BuiltinPlaybookInfo[] };
   "specs.get": SpecTreeState;
-  "specs.read": { markdown: string };
+  /** The file's text with its version token — a digest of the bytes —
+   * and last change (spec-view-16, DR-043). */
+  "specs.read": { markdown: string; version: string; mtime: number };
+  /** The token and last change of the bytes written (spec-view-47). */
+  "specs.write": { version: string; mtime: number };
   "intent.queue": IntentInfo;
   "intent.edit": IntentInfo;
   "intent.move": IntentInfo;

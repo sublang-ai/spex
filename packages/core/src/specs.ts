@@ -3,13 +3,24 @@
 
 // The spec-view data plane (SPECV; DR-011, DR-015): parse a project's
 // specs/ tree — the packages collection of meta-1 — into the
-// protocol's SpecTreeState in one pass, and confine specs.read
-// fetches to the specs/ directory. Sync fs is deliberate — spec
+// protocol's SpecTreeState in one pass, confine specs.read fetches
+// to the specs/ directory, and replace one file atomically under a
+// digest token (specs.write, DR-043). Sync fs is deliberate — spec
 // trees are small and reads happen on request (no watcher).
 
-import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  chmodSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import type { Dirent } from "node:fs";
-import { isAbsolute, join, posix, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, posix, sep } from "node:path";
 
 import type {
   SpecFileInfo,
@@ -696,4 +707,97 @@ export function resolveSpecPath(
     };
   }
   return { ok: true, path: abs };
+}
+
+// ---------------------------------------------------------------------------
+// specs.read / specs.write: the version token and the atomic replace
+// ---------------------------------------------------------------------------
+
+/** The version token (spec-view-47): a digest of the file's bytes, so
+ * a checkout that touches a file without changing it keeps the token
+ * where an mtime would not. 16 hex characters are ample for the
+ * "did it change under me" question. */
+export function specVersion(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+}
+
+export interface SpecFileRead {
+  markdown: string;
+  version: string;
+  /** Last change, ms epoch. */
+  mtime: number;
+}
+
+/** One resolved file's text with its token (spec-view-16). */
+export function readSpecFile(absPath: string): SpecFileRead {
+  const bytes = readFileSync(absPath);
+  return {
+    markdown: bytes.toString("utf8"),
+    version: specVersion(bytes),
+    mtime: Math.round(statSync(absPath).mtimeMs),
+  };
+}
+
+export type SpecWriteResult =
+  | { ok: true; version: string; mtime: number }
+  | {
+      ok: false;
+      code: "invalid_request" | "not_found" | "conflict";
+      message: string;
+    };
+
+/**
+ * Replace one existing spec file's bytes atomically under the digest
+ * token (spec-view-47): a `baseVersion` that no longer matches is a
+ * conflict; none means unconditional. Content lands exactly as sent
+ * through a staged sibling dotfile — neither a `.md` file nor a
+ * top-level entry the tree parse would list — renamed over the
+ * original with its mode kept. Confinement is resolveSpecPath's, so a
+ * missing target is not_found and nothing is ever created.
+ */
+export function writeSpecFile(
+  projectPath: string,
+  relPath: string,
+  content: string,
+  baseVersion?: string,
+): SpecWriteResult {
+  const resolved = resolveSpecPath(projectPath, relPath);
+  if (!resolved.ok) return resolved;
+  const current = readFileSync(resolved.path);
+  const currentVersion = specVersion(current);
+  if (baseVersion !== undefined && baseVersion !== currentVersion) {
+    return {
+      ok: false,
+      code: "conflict",
+      message: `specs/${relPath} changed on disk since it was read`,
+    };
+  }
+  const next = Buffer.from(content, "utf8");
+  if (next.equals(current)) {
+    return {
+      ok: true,
+      version: currentVersion,
+      mtime: Math.round(statSync(resolved.path).mtimeMs),
+    };
+  }
+  const mode = statSync(resolved.path).mode & 0o7777;
+  const stage = join(
+    dirname(resolved.path),
+    `.${basename(resolved.path)}.spex-stage`,
+  );
+  try {
+    writeFileSync(stage, next, { mode });
+    // The mode option only applies to a file being created; a stage
+    // left by an interrupted write would otherwise keep its own.
+    chmodSync(stage, mode);
+    renameSync(stage, resolved.path);
+  } catch (cause) {
+    rmSync(stage, { force: true });
+    throw cause;
+  }
+  return {
+    ok: true,
+    version: specVersion(next),
+    mtime: Math.round(statSync(resolved.path).mtimeMs),
+  };
 }

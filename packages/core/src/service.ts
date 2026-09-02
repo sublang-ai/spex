@@ -11,7 +11,6 @@
 import {
   cpSync,
   existsSync,
-  readFileSync,
   rmSync,
   statSync,
   watch,
@@ -73,7 +72,12 @@ import {
 } from "./config-edit.js";
 import { resolveArtifacts } from "./artifacts.js";
 import { loadBuiltinCatalog } from "./builtins.js";
-import { parseSpecTree, resolveSpecPath } from "./specs.js";
+import {
+  parseSpecTree,
+  readSpecFile,
+  resolveSpecPath,
+  writeSpecFile,
+} from "./specs.js";
 import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
 import { isFastModeSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
@@ -1057,7 +1061,21 @@ export class CoreService {
         }
         const resolved = resolveSpecPath(project.path, command.path);
         if (!resolved.ok) throw new CoreError(resolved.code, resolved.message);
-        return { markdown: readFileSync(resolved.path, "utf8") };
+        return readSpecFile(resolved.path);
+      }
+      case "specs.write": {
+        const project = this.store.getProject(command.projectId);
+        if (!project) {
+          throw new CoreError("not_found", `no project ${command.projectId}`);
+        }
+        const written = writeSpecFile(
+          project.path,
+          command.path,
+          command.content,
+          command.baseVersion,
+        );
+        if (!written.ok) throw new CoreError(written.code, written.message);
+        return { version: written.version, mtime: written.mtime };
       }
       case "intent.queue": {
         const project = this.store.getProject(command.projectId);
