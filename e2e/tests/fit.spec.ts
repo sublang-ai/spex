@@ -21,6 +21,12 @@ import { test, expect, open, nav, send } from "../src/harness";
 test.use({ appOptions: { project: true, agentDelayMs: 4000 } });
 
 const WIDTHS = [320, 480, 640, 800, 1024, 1280];
+/** An unbroken token longer than any pane (run-view-3): it rides the
+ * task into the Boss bubble, the coder's prompt, and the tab and row
+ * titles, and must wrap or truncate everywhere rather than scroll a
+ * pane sideways. */
+const LONG_URL = `https://example.com/${"a".repeat(380)}`;
+const TASK = `Fix the token refresh in auth.ts — see ${LONG_URL}`;
 const HEIGHT = 800;
 /** The open sidebar is 224px wide, so the 320px floor holds with it
  * collapsed (DR-041): the open state is measured from 480px. */
@@ -249,7 +255,7 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
   const abort = page.getByTestId("abort-button");
   const ensureTurnRunning = async () => {
     if (await abort.isVisible()) return;
-    await page.getByTestId("boss-composer").fill("Fix the token refresh in auth.ts");
+    await page.getByTestId("boss-composer").fill(TASK);
     await page.getByRole("button", { name: "Send", exact: true }).click();
     await expect(abort).toBeVisible();
   };
@@ -263,7 +269,7 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
     {
       name: "Session (turn in flight)",
       show: async () => {
-        await send(page, "Fix the token refresh in auth.ts");
+        await send(page, TASK);
         await expect(page.getByTestId("captain-pane")).toContainText("/code started");
       },
       ready: async () => {

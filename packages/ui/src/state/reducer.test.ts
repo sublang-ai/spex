@@ -181,7 +181,9 @@ describe("run-view-1: the playbook-7 shell's captain_reply is Captain speech", (
     expect(view.captain.filter((line) => line.kind === "speech")).toHaveLength(0);
     const errors = view.captain.filter((line) => line.kind === "error");
     expect(errors).toHaveLength(1);
-    expect(errors[0].text).toContain("OAuth session expired");
+    // The line speaks plain; the runtime's words ride the tooltip.
+    expect(errors[0].text).toBe("The agent's sign-in has expired — sign in again");
+    expect(errors[0].raw).toContain("OAuth session expired");
   });
 });
 
@@ -380,6 +382,38 @@ describe("run-view-2: a failure repeated is one line with a count", () => {
     ]);
   });
 
+  test("a failure speaks plain, the runtime's words kept aside (DR-010 §2)", () => {
+    const view = applyRecords(fresh(), [
+      failure(1, 1, "Error: adapter refused.."),
+      failure(2, 1, "Error: adapter refused.."),
+      failure(3, 1, "The Captain's turn failed: OAuth session expired"),
+      failure(4, 1, "Error: Claude Code process exited with code 1"),
+      failure(5, 1, "repository-effect reconciliation failed: git is dirty"),
+      failure(6, 1, "disk full"),
+    ]);
+    const errors = view.captain.filter((line) => line.kind === "error");
+    expect(errors.map((line) => [line.text, line.raw, line.count])).toEqual([
+      ["adapter refused.", "Error: adapter refused..", 2],
+      [
+        "The Captain's turn failed — The agent's sign-in has expired — sign in again",
+        "The Captain's turn failed: OAuth session expired",
+        undefined,
+      ],
+      [
+        "The agent process exited unexpectedly (1)",
+        "Error: Claude Code process exited with code 1",
+        undefined,
+      ],
+      [
+        "Couldn't reconcile the repository: git is dirty",
+        "repository-effect reconciliation failed: git is dirty",
+        undefined,
+      ],
+      // Words that changed nothing carry no raw copy.
+      ["disk full", undefined, undefined],
+    ]);
+  });
+
   test("a captain result's synthesized failure folds the same way", () => {
     const errored = (seq: number) => ({
       seq,
@@ -393,7 +427,8 @@ describe("run-view-2: a failure repeated is one line with a count", () => {
     const view = applyRecords(fresh(), [errored(1), errored(2)]);
     const errors = view.captain.filter((line) => line.kind === "error");
     expect(errors).toHaveLength(1);
-    expect(errors[0].text).toBe("OAuth session expired");
+    expect(errors[0].text).toBe("The agent's sign-in has expired — sign in again");
+    expect(errors[0].raw).toBe("OAuth session expired");
     expect(errors[0].count).toBe(2);
   });
 });

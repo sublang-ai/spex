@@ -7,8 +7,8 @@
 
 import { describe, expect, test } from "vitest";
 
-import { humanizeId, stateLabel } from "./labels.js";
-import { timeSeparator } from "../components/CaptainPane.js";
+import { humanizeId, plainFailure, stateLabel } from "./labels.js";
+import { timeSeparator, withoutTrailingUrl } from "../components/CaptainPane.js";
 
 describe("stateLabel", () => {
   test("a pending question always reads as waiting, amber", () => {
@@ -42,6 +42,52 @@ describe("stateLabel", () => {
     expect(stateLabel(undefined, { turnActive: true }).text).toBe(
       "players working",
     );
+  });
+});
+
+describe("plainFailure (run-view-2)", () => {
+  test("a leading Error: and doubled periods go; unchanged words keep no raw", () => {
+    expect(plainFailure("Error: the disk is full..")).toEqual({
+      text: "the disk is full.",
+      raw: "Error: the disk is full..",
+    });
+    expect(plainFailure("the disk is full")).toEqual({ text: "the disk is full" });
+    expect(plainFailure("  ")).toEqual({ text: "failed", raw: "  " });
+  });
+
+  test("known runtime messages map to plain phrases with the raw text kept", () => {
+    expect(plainFailure("Timed out waiting for OpenCode server readiness (30000ms)").text).toBe(
+      "The call timed out",
+    );
+    expect(plainFailure("HTTP 429 rate limit exceeded").text).toContain("rate-limited");
+    expect(plainFailure("Kimi ACP process exited on signal SIGKILL").text).toBe(
+      "The agent process exited unexpectedly (SIGKILL)",
+    );
+    expect(
+      plainFailure("CodexAdapter could not resolve '@openai/codex', the Codex CLI").text,
+    ).toBe("@openai/codex is not installed");
+    expect(plainFailure('Unknown adapter "gemini" at players.dev.coder').text).toBe(
+      'No adapter named "gemini" — check the config',
+    );
+    expect(plainFailure("Unknown player: dev.tester").text).toBe(
+      'No player named "dev.tester" — check the config',
+    );
+    expect(plainFailure("The Captain's turn failed: request timeout")).toEqual({
+      text: "The Captain's turn failed — The call timed out",
+      raw: "The Captain's turn failed: request timeout",
+    });
+  });
+});
+
+describe("withoutTrailingUrl (run-view-89)", () => {
+  test("only a last line equal to the source URL leaves; the rest stays whole", () => {
+    const url = "https://github.com/acme/app/issues/7";
+    expect(withoutTrailingUrl(`Address #7: fix login\n${url}\n`, url)).toBe(
+      "Address #7: fix login",
+    );
+    expect(withoutTrailingUrl(`See ${url} first`, url)).toBe(`See ${url} first`);
+    expect(withoutTrailingUrl(url, url)).toBe(url);
+    expect(withoutTrailingUrl(`fix\n${url}`, undefined)).toBe(`fix\n${url}`);
   });
 });
 

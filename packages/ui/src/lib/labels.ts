@@ -55,6 +55,70 @@ export function stateLabel(
   };
 }
 
+/** The runtime failures a person meets often enough to deserve a
+ * plain phrase (DR-010 §2, run-view-2); the raw text rides the line's
+ * tooltip. Order matters: the first match wins. */
+const KNOWN_FAILURES: { test: RegExp; text: (match: RegExpExecArray) => string }[] = [
+  {
+    test: /repository-effect reconciliation failed: (.+)/i,
+    text: (m) => `Couldn't reconcile the repository: ${m[1]}`,
+  },
+  {
+    test: /oauth session expired|not logged in|unauthori[sz]ed|\b401\b|authentication/i,
+    text: () => "The agent's sign-in has expired — sign in again",
+  },
+  {
+    test: /rate limit|\b429\b/i,
+    text: () => "The provider rate-limited the call — it can be retried",
+  },
+  {
+    test: /timed out|timeout/i,
+    text: () => "The call timed out",
+  },
+  {
+    test: /exited (?:with code|on signal) (\S+)/i,
+    text: (m) => `The agent process exited unexpectedly (${m[1]})`,
+  },
+  {
+    test: /ENOENT|is not installed|could not resolve '([^']+)'/i,
+    text: (m) =>
+      m[1]
+        ? `${m[1]} is not installed`
+        : "A command the run needs is not installed",
+  },
+  {
+    test: /Unknown adapter "([^"]+)"/,
+    text: (m) => `No adapter named "${m[1]}" — check the config`,
+  },
+  {
+    test: /Unknown player:? "?([^"\s]+)"?/,
+    text: (m) => `No player named "${m[1]}" — check the config`,
+  },
+];
+
+/** A failure message as a person reads it: a leading "Error:" gone,
+ * doubled periods healed, a known runtime message mapped to its plain
+ * phrase — and the raw text kept when the words changed, so a tooltip
+ * can still show what the runtime said. */
+export function plainFailure(raw: string): { text: string; raw?: string } {
+  const message = String(raw);
+  let text = message
+    .replace(/^\s*(?:error|uncaught|unhandled)\s*:\s*/i, "")
+    .replace(/^\s*error\s*:\s*/i, "")
+    .replace(/\.{2,}(?!\.)/g, ".")
+    .replace(/\s+\./g, ".")
+    .trim();
+  const captain = /^The Captain's turn failed:\s*(.*)$/s.exec(text);
+  const cause = captain ? captain[1].trim() : text;
+  const known = KNOWN_FAILURES.find((entry) => entry.test.test(cause));
+  const plainCause = known
+    ? known.text(known.test.exec(cause) as RegExpExecArray)
+    : cause;
+  text = captain ? `The Captain's turn failed — ${plainCause}` : plainCause;
+  if (!text) text = message.trim() || "failed";
+  return text === message ? { text } : { text, raw: message };
+}
+
 /** Notification event labels (SET): wire ids stay in tooltips. */
 export const NOTIFICATION_LABELS: Record<string, string> = {
   player_finished: "A player finishes its step",

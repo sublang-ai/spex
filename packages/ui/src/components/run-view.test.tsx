@@ -146,6 +146,13 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     expect(screen.getByTestId("player-pane-dev.reviewer").textContent).toContain(
       "Idle until the playbook calls dev.reviewer",
     );
+    // Agent text breaks anywhere rather than widening its pane
+    // (run-view-3), and so does a call's prompt.
+    const markdown = screen.getByText("the SDK docs").closest(".markdown")!;
+    expect(markdown.className).toContain("overflow-wrap:anywhere");
+    expect(
+      screen.getByText("Fix the bug in auth.ts").className,
+    ).toContain("overflow-wrap:anywhere");
     // Only what the shell can open wears a link's affordance.
     expect(screen.getByText("the SDK docs").tagName).toBe("A");
     expect(screen.getByText("auth.md").tagName).toBe("SPAN");
@@ -1051,6 +1058,26 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
     setClientForTests(undefined);
   });
 
+  test("a trailing line repeating the source URL leaves the bubble", () => {
+    const url = "https://github.com/acme/demo/issues/7";
+    const withUrl = TURN_ONE.map((entry, index) =>
+      index === 0
+        ? {
+            ...entry,
+            record: {
+              ...(entry.record as unknown as Record<string, unknown>),
+              turn: { id: 1, prompt: `Address #7: fix login\n${url}` },
+            } as unknown as TmuxPlayRecord,
+          }
+        : entry,
+    );
+    renderRunWith(withUrl);
+    const bubble = screen.getByTestId("boss-bubble");
+    expect(bubble.textContent).toContain("Address #7: fix login");
+    expect(bubble.textContent).not.toContain(url);
+    expect(within(bubble).getByTestId("intent-source-chip").getAttribute("href")).toBe(url);
+  });
+
   test("the bound bubble wears the source chip as a canonical link", () => {
     renderRunWith(TURN_ONE);
     const bubble = screen.getByTestId("boss-bubble");
@@ -1443,6 +1470,24 @@ const TURN_FAILING = [
 ] as typeof FULL_RUN;
 
 describe("run-view-2: failure lines fold, and point at the remedy", () => {
+  test("a failure line speaks plain with the runtime's words in its tooltip", () => {
+    renderRunWith([
+      ...TURN_ONLY_STARTED,
+      {
+        seq: 2,
+        record: {
+          type: "runtime_error",
+          turnId: 9,
+          timestamp: 2,
+          message: "Error: Claude Code process exited with code 1",
+        } as unknown as TmuxPlayRecord,
+      },
+    ]);
+    const text = screen.getByTestId("failure-text");
+    expect(text.textContent).toBe("The agent process exited unexpectedly (1)");
+    expect(text.title).toBe("Error: Claude Code process exited with code 1");
+  });
+
   test("a repeat counts, and the not-ready hint links to Settings", () => {
     const onOpenSettings = vi.fn();
     renderRunWith(TURN_FAILING, {

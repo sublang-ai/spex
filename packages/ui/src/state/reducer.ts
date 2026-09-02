@@ -7,6 +7,8 @@
 
 import type { TmuxPlayRecord } from "@sublang/spex-core/protocol";
 
+import { plainFailure } from "../lib/labels.js";
+
 /** What one call reported spending. Every figure is optional because
  * cligent 0.22 reports each independently, and an absent report means
  * unreported — never zero (DR-032). */
@@ -110,6 +112,9 @@ export interface CaptainLine {
    * a repeat that follows it in the same turn folds into it, so a
    * retry loop reads as one line with a count (run-view-2). */
   count?: number;
+  /** error lines: what the runtime actually said, kept when the
+   * shown text is its plain-spoken form (run-view-2, DR-010 §2). */
+  raw?: string;
 }
 
 export interface SessionView {
@@ -438,7 +443,9 @@ export function applyRecord(
       if (result.status === "error") {
         pushCaptain(view, {
           kind: "error",
-          text: result.error ?? result.finalText ?? "the Captain's turn failed",
+          ...plainFailure(
+            result.error ?? result.finalText ?? "the Captain's turn failed",
+          ),
           turnId: r.turnId,
           at: r.timestamp,
         });
@@ -569,9 +576,12 @@ export function applyRecord(
       // (run-view-7).
       break;
     case "runtime_error": {
+      // The line speaks plain (DR-010 §2): a leading "Error:" and
+      // doubled periods go, a known runtime message maps to its
+      // phrase, and the raw text survives for the tooltip.
       pushCaptain(view, {
         kind: "error",
-        text: String(r.message),
+        ...plainFailure(String(r.message)),
         turnId: r.turnId,
         at: r.timestamp,
       });

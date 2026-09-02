@@ -31,6 +31,7 @@ While a project session is live, when the session record stream delivers a capta
 While a project session is live, when the session record stream delivers a failure, the Captain pane shall display one ◆ line carrying both the failure name and the failure message, so no delivered failure is left without a visible line:
 
 - a failure identical to the line just before it, within the same turn, folds into that line as a visible count (×2, ×3, …) whose meaning is also in text — never suppressed, never merged with a different failure or across turns;
+- the line speaks plain ([DR-010](../decisions/010-interface-craft.md) §2): a leading "Error:" and doubled periods are stripped, a known runtime message — a sign-in that expired, a rate limit, a timeout, an agent process that exited, a command not installed, an unknown adapter or player, a repository reconciliation that failed — reads as its plain phrase, and whenever the words changed the runtime's own text stays in the line's tooltip;
 - while the Captain agent's adapter readiness reports not ready [[core-service-9](core-service.md#core-service-9)], each failure line carries a "Check agent readiness" link that opens Settings in place, its tooltip naming the unmet requirement.
 
 ### Player Panes
@@ -39,7 +40,8 @@ While a project session is live, when the session record stream delivers a failu
 
 While a project session is live, when the session record stream delivers text or text deltas for a visible player, that player's pane shall render the accumulating message as formatted Markdown, appending each delta as it arrives rather than waiting for turn completion:
 
-- A player pane is read-only — no text input, reply, or edit affordance — since Boss input happens only in the Boss composer [[run-view-8](#run-view-8)].
+- A player pane is read-only — no text input, reply, or edit affordance — since Boss input happens only in the Boss composer [[run-view-8](#run-view-8)];
+- rendered text wraps inside its pane — an unbroken token such as a long URL breaks anywhere rather than scrolling the pane sideways, in a player pane, a call's prompt, and the Captain thread's bubbles alike ([DR-041](../decisions/041-chrome-that-fits.md)) — while a code block scrolls inside itself as a canvas.
 
 #### run-view-4
 
@@ -532,7 +534,8 @@ While the Captain home is shown and the current project's queue holds an unblock
 
 While a Boss turn is bound to an intent, that turn's outgoing bubble [[run-view-30](#run-view-30)] shall wear the intent's source chip, so the thread shows the provenance of what it dispatched ([DR-035](../decisions/035-intent-ledger.md)):
 
-- the chip names the intent's source — issue, PR, record, or chat — and an unsourced intent's bubble wears none.
+- the chip names the intent's source — issue, PR, record, or chat — and an unsourced intent's bubble wears none;
+- a trailing line of the dispatched text that only repeats the source's URL stays out of the bubble, since the chip carries it.
 
 #### run-view-90
 
@@ -746,7 +749,7 @@ Where a fixture project holds a queued intent and a live session, the test suite
 
 Where a replayed fixture stream dispatches a queued intent whose turn then ends finished, the test suite shall assert the delivery flow:
 
-- the bound turn's bubble wears the intent's source chip [[run-view-89](#run-view-89)];
+- the bound turn's bubble wears the intent's source chip, and a trailing line repeating the source's URL leaves the bubble [[run-view-89](#run-view-89)];
 - while the intent is open, the working line above the composer names it [[run-view-90](#run-view-90)];
 - Drop on the working line asks the inline confirm — Keep leaves the intent open with focus back on the control; Drop sends the close command as dropped, the line leaves with the outcome announced where it stood and focus in the composer; a refused drop keeps the line and names the refusal [[run-view-113](#run-view-113)];
 - the delivery card at the final turn's end carries the intent's title, its provenance chip, its review rounds, turn count, and elapsed time, a primary Confirm with Drop beside, and the visible follow-up note [[run-view-87](#run-view-87)];

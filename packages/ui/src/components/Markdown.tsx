@@ -62,8 +62,11 @@ export function Markdown({
    * — agent text, where only an openable target is a link. */
   links?: "routed" | "web-only";
 }) {
+  // An unbroken token — a long URL, a hash, a path — breaks anywhere
+  // rather than widening its pane sideways (run-view-3, DR-041); a
+  // code block stays a canvas that scrolls inside itself.
   return (
-    <div className="markdown text-sm leading-relaxed">
+    <div className="markdown min-w-0 text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={links === "web-only" ? transcriptComponents : components}

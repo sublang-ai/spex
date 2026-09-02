@@ -83,7 +83,13 @@ function Line({
                 <SourceChip source={source} onDark />
               </div>
             ) : null}
-            <span className="whitespace-pre-wrap">{line.text}</span>
+            {/* The chip already carries the source's URL, so a trailing
+                line that only repeats it stays out of the bubble
+                (run-view-89); an unbroken token wraps rather than
+                widening the pane. */}
+            <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {withoutTrailingUrl(line.text, source?.url)}
+            </span>
           </div>
         </div>
       );
@@ -125,7 +131,13 @@ function Line({
           data-testid="failure-line"
           className="mx-auto flex max-w-[90%] flex-wrap items-baseline gap-x-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
-          <span className="min-w-0">{line.text}</span>
+          <span
+            className="min-w-0 [overflow-wrap:anywhere]"
+            title={line.raw}
+            data-testid="failure-text"
+          >
+            {line.text}
+          </span>
           {line.count !== undefined && line.count > 1 ? (
             <span
               data-testid="failure-count"
@@ -152,6 +164,17 @@ function Line({
     default:
       return <SystemLine text={line.text} title={time} />;
   }
+}
+
+/** A Boss text without a last line that only repeats the intent
+ * source's URL — the chip says it already (run-view-89). */
+export function withoutTrailingUrl(text: string, url?: string): string {
+  if (!url) return text;
+  const lines = text.trimEnd().split(/\r?\n/);
+  if (lines.length > 1 && lines[lines.length - 1].trim() === url) {
+    return lines.slice(0, -1).join("\n").trimEnd();
+  }
+  return text;
 }
 
 /** The glyphs the captain shell narrates with (run-view-1). */

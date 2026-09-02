@@ -117,7 +117,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
               {new Date(segment.at).toLocaleTimeString()}
             </span>
           </summary>
-          <pre className="mt-1 whitespace-pre-wrap font-mono text-xs">
+          <pre className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-xs">
             {segment.text}
           </pre>
         </details>
