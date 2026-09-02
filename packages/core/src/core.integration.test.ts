@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import type { LineSpawner } from "./compile.js";
+import { stubSlcSource } from "./testing/stub-slc.js";
 import type {
   Command,
   CommandResults,
@@ -1810,4 +1811,63 @@ test("core-service-66: a config at the previous location relocates once, bytes a
   });
   assert.ok(readFileSync(canonical, "utf8").endsWith("# edited after relocation\n"));
   await second.stop();
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-17: compile.run over the protocol with a stub slc,
+// the bindings re-keyed onto the entry's derived role ids
+// (playbook-library-32)
+// ---------------------------------------------------------------------------
+
+test("playbook-library-32: compile.run binds derived roles however the form cased them", async () => {
+  const stubDir = mkdtempSync(join(tmpdir(), "spex-stub-slc-"));
+  const stubPath = join(stubDir, "stub-slc.cjs");
+  // slc emits the ids as the gears declared them (DR-032): `Coder`
+  // and `Reviewer`, not their lowercase forms.
+  writeFileSync(stubPath, stubSlcSource("['Coder', 'Reviewer']"));
+  const harness = await startHarness(VALID_CONFIG, {
+    env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
+  });
+  const client = new Client(harness.service.port());
+  await client.open();
+
+  // The form keys one binding as the role reads and one lowercased;
+  // both must land on the derived ids.
+  const state = await client.expectOk("compile.run", {
+    playbookId: "pair",
+    sourceText: "# Pair\n\nA two-player workflow.\n",
+    roles: ["Coder", "Reviewer"],
+    command: "pair",
+    intent: "pair workflow for tests",
+    bindings: { Coder: "dev.coder", reviewer: "dev.reviewer" },
+    newPlayers: { "dev.reviewer": { adapter: "claude" } },
+  });
+  assert.equal(state.status, "valid");
+  const registered =
+    state.status === "valid"
+      ? state.summary.playbooks.find((p) => p.id === "pair")
+      : undefined;
+  assert.ok(registered, "the compiled playbook is configured");
+  assert.ok(
+    registered.from.startsWith(join(harness.dataDir, "playbooks", "pair")),
+    `manifest under the library: ${registered.from}`,
+  );
+  // The config entry binds each derived role by its own id.
+  const config = readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8");
+  const start = config.indexOf("\n  pair:\n");
+  assert.ok(start >= 0, "the pair entry is written");
+  const pairEntry = config.slice(start);
+  assert.match(pairEntry, /\n      Coder: dev\.coder\n/);
+  assert.match(pairEntry, /\n      Reviewer: dev\.reviewer\n/);
+  assert.doesNotMatch(pairEntry, /\n      (coder|reviewer): /);
+
+  // The new playbook's artifacts serve its machine.
+  const artifacts = await client.expectOk("playbook.artifacts", {
+    playbookId: "pair",
+  });
+  assert.ok(artifacts.machine, "machine graph served");
+  assert.ok(artifacts.machine.nodes.some((node) => node.id === "ready"));
+
+  client.close();
+  await harness.service.stop();
 });

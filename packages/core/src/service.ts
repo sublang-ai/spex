@@ -967,12 +967,12 @@ export class CoreService {
             throw new CoreError("invalid_request", message);
           }
           // The compiled entry's derived roles are authoritative
-          // (DR-014): re-key the request's role -> agent assignments
-          // onto them case-insensitively; an unmatched role fails
-          // before any config write, keeping the artifacts for a
-          // re-registration without recompiling.
-          // The compiled entry's derived roles are authoritative
-          // (DR-014); each must name the lane that answers it.
+          // (DR-014): re-key the request's role -> player bindings
+          // onto them by case-insensitive name match — slc emits the
+          // ids as the gears declared them (`Coder`), the form may
+          // key them either way — and an unmatched role fails before
+          // any config write, keeping the artifacts for a
+          // re-registration without recompiling (playbook-library-32).
           const assignments = new Map(
             Object.entries(command.bindings).map(([role, playerId]) => [
               role.toLowerCase(),
@@ -982,7 +982,7 @@ export class CoreService {
           const roles: Record<string, string> = {};
           const unmatched: string[] = [];
           for (const role of result.roles) {
-            const playerId = assignments.get(role);
+            const playerId = assignments.get(role.toLowerCase());
             if (playerId === undefined) unmatched.push(role);
             else roles[role] = playerId;
           }
