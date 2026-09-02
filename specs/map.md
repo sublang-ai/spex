@@ -75,7 +75,7 @@ meta.md       The spec of specs
 | File | Summary |
 | --- | --- |
 | [app-shell.md](packages/app-shell.md) | Desktop shell: guarded source launch and ABI restoration; single-instance window, notifications, dock badge, core-in-main over WebSocket, packaging; packaged-app acceptance |
-| [core-service.md](packages/core-service.md) | Headless core service: WebSocket protocol, config load/seed/reload, session lifecycle, record streaming, persistence, readiness — with fake-adapter end-to-end coverage |
+| [core-service.md](packages/core-service.md) | Headless core service: WebSocket protocol, config load/seed/reload, session lifecycle with snapshot-backed continuation and lease-checked deletion, record streaming, persistence, readiness — with fake-adapter end-to-end coverage |
 | [dashboard.md](packages/dashboard.md) | Dashboard as the intent ledger: two-band attention queue, per-project History/Now/Up next/Sources groups, one-gesture capture; one deterministic core fold |
 | [desktop-session.md](packages/desktop-session.md) | A Boss session in the packaged app: shell process topology, core streaming, and run-view rendering over one protocol |
 | [forge-work-lists.md](packages/forge-work-lists.md) | Repo tab and Dashboard render the same forge-adapter data |
@@ -85,7 +85,7 @@ meta.md       The spec of specs
 | [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, per-role inline agents, slc compile pipeline, registry validation, comment-preserving config writes |
 | [projects.md](packages/projects.md) | Projects: register/create local git repos, repo state, gh forge binding and work lists, safe removal |
 | [release.md](packages/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene, end-user and live migration smokes |
-| [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, protocol-only rendering, fixture-stream coverage |
+| [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, paused sessions a message continues, protocol-only rendering, fixture-stream and browser-journey coverage |
 | [scaffold.md](packages/scaffold.md) | Scaffold CLI: target resolution, idempotent seeding, LICENSE emission, language selection, agent instructions, and --update prompts for reconciliation or legacy migration |
 | [server-shell.md](packages/server-shell.md) | Server shell: one-command source launch; UI bundle with negotiated response compression and core WebSocket served from one port; token URL, TLS, bind safety, page connection |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
