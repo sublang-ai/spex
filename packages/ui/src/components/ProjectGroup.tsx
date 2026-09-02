@@ -453,6 +453,29 @@ function NowBand({
   const view = useAppStore((state) =>
     session ? state.views[session.id] : undefined,
   );
+  const closeIntent = useAppStore((state) => state.closeIntent);
+  // Drop on the served intent (dashboard-41): behind the inline
+  // confirm, since work is underway; the outcome line lasts six
+  // seconds, and focus goes back to the control — or, once the
+  // control has left with the intent, to the session row.
+  const [confirmDrop, setConfirmDrop] = useState(false);
+  const [dropping, setDropping] = useState(false);
+  const [dropNote, setDropNote] = useState<string>();
+  const [refocusDrop, setRefocusDrop] = useState(false);
+  const dropRef = useRef<HTMLButtonElement>(null);
+  const rowRef = useRef<HTMLButtonElement>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (!refocusDrop || confirmDrop) return;
+    (dropRef.current ?? rowRef.current)?.focus();
+    setRefocusDrop(false);
+  }, [refocusDrop, confirmDrop]);
+  useEffect(
+    () => () => {
+      if (noteTimer.current) clearTimeout(noteTimer.current);
+    },
+    [],
+  );
   if (!session) {
     // Quiet when no session is live (dashboard-8/28).
     return (
@@ -486,35 +509,104 @@ function NowBand({
       "no messages yet",
   );
   const playbook = view?.frames[0]?.playbookId;
+
+  const drop = async () => {
+    if (!served) return;
+    const dropped = served.intent;
+    const droppedTitle = firstLine(dropped.text);
+    setConfirmDrop(false);
+    setDropping(true);
+    try {
+      // The verdict closes the intent; the session keeps its turn
+      // (dashboard-41) — History lists the drop once that turn ends.
+      await closeIntent(dropped.id, "dropped");
+      setDropNote(`Dropped “${droppedTitle}” — the session keeps running.`);
+    } catch (cause) {
+      setDropNote(
+        `Couldn't drop “${droppedTitle}”: ${(cause as Error).message}`,
+      );
+    } finally {
+      setDropping(false);
+      setRefocusDrop(true);
+    }
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => setDropNote(undefined), UNDO_MS);
+  };
+
   return (
     <div className="flex flex-col gap-1" data-testid={`now-${project.id}`}>
       <BandHeading>Now</BandHeading>
-      <button
-        type="button"
-        data-testid={`now-session-${project.id}`}
-        onClick={() => onOpenSession(session.id)}
-        className="flex min-w-0 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left text-sm dark:border-neutral-800 dark:bg-neutral-900"
-      >
-        <RunningMark running={view?.turnActive ?? false} />
-        <span className="shrink-0 text-xs text-neutral-500">
-          {playbook ?? "no playbook"}
-        </span>
-        <span
-          className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] ${TONE_CHIP[label.tone]}`}
-          title={view?.fsmState}
+      <div className="flex items-center gap-2">
+        <button
+          ref={rowRef}
+          type="button"
+          data-testid={`now-session-${project.id}`}
+          data-intent-id={served?.intent.id}
+          onClick={() => onOpenSession(session.id)}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left text-sm dark:border-neutral-800 dark:bg-neutral-900"
         >
-          {label.text}
-        </span>
-        <span className="min-w-0 flex-1 truncate" title={title}>
-          {title}
-        </span>
-        <span
-          className="shrink-0 text-[11px] text-neutral-500"
-          title={absoluteTitle(session.createdAt)}
+          <RunningMark running={view?.turnActive ?? false} />
+          <span className="shrink-0 text-xs text-neutral-500">
+            {playbook ?? "no playbook"}
+          </span>
+          <span
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] ${TONE_CHIP[label.tone]}`}
+            title={view?.fsmState}
+          >
+            {label.text}
+          </span>
+          <span className="min-w-0 flex-1 truncate" title={title}>
+            {title}
+          </span>
+          <span
+            className="shrink-0 text-[11px] text-neutral-500"
+            title={absoluteTitle(session.createdAt)}
+          >
+            started {relativeAge(session.createdAt, now)}
+          </span>
+        </button>
+        {served ? (
+          <button
+            ref={dropRef}
+            type="button"
+            data-testid={`now-drop-${project.id}`}
+            disabled={dropping}
+            aria-label={`Drop ${title}`}
+            title="Close this intent as dropped — the session keeps running"
+            onClick={() => setConfirmDrop(true)}
+            className="min-h-6 shrink-0 rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:border-red-300 hover:text-red-600 disabled:animate-pulse dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-red-800 dark:hover:text-red-400"
+          >
+            {dropping ? "Dropping…" : "Drop"}
+          </button>
+        ) : null}
+      </div>
+      {confirmDrop && served ? (
+        <div data-testid={`now-drop-confirm-${project.id}`}>
+          <InlineConfirm
+            question={`Drop “${title}”? Work is underway.`}
+            confirmLabel="Drop"
+            cancelLabel="Keep"
+            onConfirm={() => void drop()}
+            onCancel={() => {
+              setConfirmDrop(false);
+              setRefocusDrop(true);
+            }}
+          />
+        </div>
+      ) : null}
+      {dropNote ? (
+        <div
+          role="status"
+          data-testid={`now-note-${project.id}`}
+          className={`text-xs ${
+            dropNote.startsWith("Couldn't")
+              ? "text-red-600 dark:text-red-400"
+              : "text-neutral-500"
+          }`}
         >
-          started {relativeAge(session.createdAt, now)}
-        </span>
-      </button>
+          {dropNote}
+        </div>
+      ) : null}
     </div>
   );
 }

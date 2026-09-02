@@ -642,6 +642,91 @@ describe("run-view-90/89: the working line and the bound turn's chip", () => {
       .toBe("chat");
     expect(within(bubbles[0]).queryByTestId("intent-source-chip")).toBeNull();
   });
+
+  test("Drop asks the inline confirm, closes the intent dropped, and hands focus on (run-view-113)", async () => {
+    const command = vi.fn(async (type: string) => {
+      // The fold re-derives without the dropped intent.
+      if (type === "ledger.get") return { intents: [], attention: [], badge: 0 };
+      return {};
+    });
+    setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
+    seedLedger({
+      intents: [
+        {
+          intent: makeIntent({
+            id: "i1",
+            dispatched: { sessionId: "s1", turnId: 9, at: 1 },
+          }),
+          state: "working",
+        },
+      ],
+      attention: [],
+      badge: 0,
+    });
+    renderRunWith(TURN_ONLY_STARTED as typeof FULL_RUN);
+    const drop = screen.getByTestId("working-drop");
+    expect(drop.textContent).toBe("Drop");
+    // Work is underway: the confirm names the act, its safe default
+    // focused; Keep backs out to the control (DR-010 §4, §6).
+    fireEvent.click(drop);
+    const keep = screen.getByRole("button", { name: "Keep" });
+    expect(document.activeElement).toBe(keep);
+    expect(command).not.toHaveBeenCalledWith("intent.close", expect.anything());
+    fireEvent.click(keep);
+    expect(screen.getByTestId("working-line")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByTestId("working-drop"));
+
+    fireEvent.click(screen.getByTestId("working-drop"));
+    fireEvent.click(screen.getByRole("button", { name: "Drop" }));
+    await vi.waitFor(() =>
+      expect(command).toHaveBeenCalledWith("intent.close", {
+        intentId: "i1",
+        as: "dropped",
+      }),
+    );
+    // The line leaves with its control, the outcome announces where it
+    // stood, and focus lands in the composer — never on the body.
+    await vi.waitFor(() =>
+      expect(screen.queryByTestId("working-line")).toBeNull(),
+    );
+    const note = screen.getByTestId("working-note");
+    expect(note.getAttribute("role")).toBe("status");
+    expect(note.textContent).toContain("Dropped “Address #7: fix the login bug”");
+    expect(document.activeElement).toBe(screen.getByTestId("boss-composer"));
+    setClientForTests(undefined);
+  });
+
+  test("a refused drop keeps the line, names the refusal, and returns to the control", async () => {
+    const command = vi.fn(async (type: string) => {
+      if (type === "intent.close") throw new Error("the intent is already closed");
+      return {};
+    });
+    setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
+    seedLedger({
+      intents: [
+        {
+          intent: makeIntent({
+            id: "i1",
+            dispatched: { sessionId: "s1", turnId: 9, at: 1 },
+          }),
+          state: "working",
+        },
+      ],
+      attention: [],
+      badge: 0,
+    });
+    renderRunWith(TURN_ONLY_STARTED as typeof FULL_RUN);
+    fireEvent.click(screen.getByTestId("working-drop"));
+    fireEvent.click(screen.getByRole("button", { name: "Drop" }));
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("working-note").textContent).toContain(
+        "Couldn't drop “Address #7: fix the login bug”: the intent is already closed",
+      ),
+    );
+    expect(screen.getByTestId("working-line")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByTestId("working-drop"));
+    setClientForTests(undefined);
+  });
 });
 
 describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {

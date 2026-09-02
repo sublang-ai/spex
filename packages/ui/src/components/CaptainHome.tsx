@@ -20,8 +20,8 @@ import { useAppStore, type StagedIntent } from "../state/store.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
-import { intentTitle } from "./DeliveryCard.js";
 import { Icon } from "./Icon.js";
+import { NextCard } from "./NextCard.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
 
@@ -136,7 +136,6 @@ export function CaptainHome(props: CaptainHomeProps) {
   );
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [staging, setStaging] = useState(false);
   const [queueing, setQueueing] = useState(false);
   /** Transient queue-instead acknowledgment (run-view-85). */
   const [queueNote, setQueueNote] = useState<string>();
@@ -334,51 +333,15 @@ export function CaptainHome(props: CaptainHomeProps) {
           </CaptainBubble>
         ) : null}
 
-        {props.next ? (
-          // The project's plan, one Enter away (run-view-88): the head
-          // unblocked intent with Start, beside the quick start card.
-          <div
-            data-testid="next-card"
-            className="ml-8 flex max-w-[85%] flex-col gap-1 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
-          >
-            <span className="text-xs font-semibold text-neutral-500">
-              Up next
-            </span>
-            <div className="flex items-center gap-2">
-              <span
-                className="min-w-0 flex-1 truncate text-sm"
-                title={props.next.intent.text}
-              >
-                {intentTitle(props.next.intent)}
-              </span>
-              <button
-                type="button"
-                data-testid="next-start"
-                disabled={staging || !connected}
-                title="Put this task in the message — Send starts it"
-                onClick={() => {
-                  setStaging(true);
-                  void Promise.resolve(
-                    props.onStartIntent?.(props.next!.intent),
-                  )
-                    .catch(() => {})
-                    .finally(() => {
-                      setStaging(false);
-                      composerRef.current?.focus();
-                    });
-                }}
-                className="shrink-0 rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
-              >
-                {staging ? "Starting…" : "Start"}
-              </button>
-            </div>
-            {props.next.more > 0 ? (
-              <span className="text-[11px] text-neutral-500">
-                +{props.next.more} more queued
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+        {/* The project's plan, one Enter away (run-view-88): the head
+         * unblocked intent with Start and Remove (run-view-114),
+         * beside the quick start card. */}
+        <NextCard
+          next={props.next}
+          connected={connected}
+          composerRef={composerRef}
+          onStartIntent={props.onStartIntent}
+        />
 
         {!quickStartHidden && playbooks.length > 0 ? (
           <div

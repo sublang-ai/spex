@@ -26,9 +26,10 @@ import {
   useAppStore,
 } from "../state/store.js";
 import { Composer } from "./Composer.js";
-import { DeliveryCard, intentTitle } from "./DeliveryCard.js";
+import { DeliveryCard } from "./DeliveryCard.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { PlayerPane } from "./PlayerPane.js";
+import { WorkingLine } from "./WorkingLine.js";
 
 
 /** The Captain/players divider (DR-030). A machine drawing has a
@@ -407,19 +408,14 @@ export function RunView({
             focusKey={focusKey}
             onFocusHandled={onFocusHandled}
           />
-          {workingIntent && !readOnly ? (
-            // Re-entry answered where the eye lands (run-view-90): the
-            // lane names what it is working on, raw text in the tooltip.
-            <div
-              data-testid="working-line"
-              title={workingIntent.intent.text}
-              className="flex items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300"
-            >
-              <span className="shrink-0 font-medium">Working:</span>
-              <span className="min-w-0 truncate">
-                {intentTitle(workingIntent.intent)}
-              </span>
-            </div>
+          {!readOnly ? (
+            // The working line (run-view-90) with its Drop
+            // (run-view-113): the verdict closes the intent over the
+            // protocol while the turn keeps running.
+            <WorkingLine
+              intent={workingIntent?.intent}
+              onDrop={(intent) => closeIntent(intent.id, "dropped")}
+            />
           ) : null}
           {readOnly ? (
             <>

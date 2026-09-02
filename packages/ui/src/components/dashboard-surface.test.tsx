@@ -972,6 +972,82 @@ describe("dashboard-28: the Now band reads the live lane", () => {
     expect(screen.getByTestId("now-p2").textContent).toContain(
       "Idle — no live session.",
     );
+    expect(screen.queryByTestId("now-drop-p2")).toBeNull();
+  });
+
+  test("Drop beside the served intent asks the inline confirm, then closes it dropped (dashboard-41)", async () => {
+    const view = initialSessionView([]);
+    view.turnActive = true;
+    view.frames = [{ playbookId: "code" } as never];
+    const current = ledgerMock({
+      intents: [
+        {
+          intent: info({
+            id: "w1",
+            projectId: "p1",
+            text: "Fix login flow\nmore detail",
+            dispatched: { sessionId: "s-live", turnId: 3, at: NOW - 10 * MIN },
+          }),
+          state: "working",
+          stats: { turns: 1 },
+        },
+      ],
+      attention: [],
+      badge: 0,
+    });
+    seed({
+      sessions: [
+        {
+          id: "s-live",
+          projectId: "p1",
+          projectPath: "/tmp/alpha",
+          createdAt: NOW - 45 * MIN,
+          live: true,
+          endedAt: null,
+          players: [],
+          initialVisible: [],
+          turns: 3,
+          failed: false,
+        },
+      ],
+      views: { "s-live": view },
+      ledger: current(),
+    });
+    renderSurface();
+
+    const row = screen.getByTestId("now-session-p1");
+    expect(row.getAttribute("data-intent-id")).toBe("w1");
+    const drop = screen.getByTestId("now-drop-p1");
+    expect(drop.textContent).toBe("Drop");
+    // Work is underway, so the act sits behind the inline confirm,
+    // its safe default focused; Keep backs out to the control.
+    fireEvent.click(drop);
+    const confirm = screen.getByTestId("now-drop-confirm-p1");
+    expect(confirm.textContent).toContain("Drop “Fix login flow”?");
+    const keep = within(confirm).getByRole("button", { name: "Keep" });
+    expect(document.activeElement).toBe(keep);
+    expect(callsOf("intent.close")).toEqual([]);
+    fireEvent.click(keep);
+    expect(screen.queryByTestId("now-drop-confirm-p1")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("now-drop-p1"));
+
+    fireEvent.click(screen.getByTestId("now-drop-p1"));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByTestId("now-drop-confirm-p1")).getByRole("button", {
+          name: "Drop",
+        }),
+      );
+    });
+    expect(callsOf("intent.close")).toEqual([{ intentId: "w1", as: "dropped" }]);
+    // The fold re-derives without the intent: the control leaves with
+    // it, the outcome announces, and focus lands on the session row.
+    expect(screen.queryByTestId("now-drop-p1")).toBeNull();
+    expect(row.getAttribute("data-intent-id")).toBeNull();
+    const note = screen.getByTestId("now-note-p1");
+    expect(note.getAttribute("role")).toBe("status");
+    expect(note.textContent).toContain("Dropped “Fix login flow”");
+    expect(document.activeElement).toBe(row);
   });
 });
 

@@ -28,7 +28,11 @@ import type {
 } from "@sublang/spex-core/protocol";
 import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
-import { useAppStore, type StagedIntent } from "../state/store.js";
+import {
+  setClientForTests,
+  useAppStore,
+  type StagedIntent,
+} from "../state/store.js";
 
 // A hand-written `instruction` rides along in the summary: the editor
 // never surfaces it, so a merge patch must leave it out (DR-019).
@@ -442,6 +446,80 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     renderHome();
     expect(screen.queryByTestId("next-card")).toBeNull();
     expect(screen.getByTestId("quick-start")).toBeTruthy();
+  });
+
+  test("Remove closes the head dropped on the click; Undo re-queues it at the head (run-view-114)", async () => {
+    const command = vi.fn(async (type: string) => {
+      if (type === "ledger.get") return { intents: [], attention: [], badge: 0 };
+      if (type === "intent.queue") return { ...NEXT_INTENT, id: "i-back" };
+      return {};
+    });
+    setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
+    const props = {
+      hasProject: true,
+      hasProjects: true,
+      projectName: PROJECT.name,
+      playbooks: PLAYBOOKS,
+      captain: CAPTAIN,
+      readiness: READY,
+      connected: true,
+      onOpenPalette: vi.fn(),
+      onNavigate: vi.fn(),
+      onSaveCaptain: vi.fn(async () => {}),
+      onStart: vi.fn(async () => {}),
+      storage: memoryStorage(),
+    };
+    const view = render(
+      <CaptainHome {...props} next={{ intent: NEXT_INTENT, more: 0 }} />,
+    );
+
+    const remove = screen.getByTestId("next-remove");
+    expect(remove.textContent).toBe("Remove");
+    // One click, no confirm — the Undo line is the way back.
+    fireEvent.click(remove);
+    await vi.waitFor(() =>
+      expect(command).toHaveBeenCalledWith("intent.close", {
+        intentId: "i-next",
+        as: "dropped",
+      }),
+    );
+    const removed = await screen.findByTestId("next-removed");
+    expect(removed.getAttribute("role")).toBe("status");
+    expect(removed.textContent).toContain(
+      "Removed “Address #12: harden the auth flow”",
+    );
+    const undo = within(removed).getByRole("button", { name: "Undo" });
+    expect(document.activeElement).toBe(undo);
+    // The host's fold now serves no next: the card stays for its Undo
+    // line alone.
+    view.rerender(<CaptainHome {...props} next={undefined} />);
+    expect(screen.getByTestId("next-card")).toBeTruthy();
+    expect(screen.queryByTestId("next-start")).toBeNull();
+    expect(screen.getByTestId("next-removed")).toBeTruthy();
+
+    fireEvent.click(undo);
+    await vi.waitFor(() =>
+      expect(command).toHaveBeenCalledWith(
+        "intent.queue",
+        expect.objectContaining({
+          projectId: "p1",
+          text: NEXT_INTENT.text,
+          at: "head",
+        }),
+      ),
+    );
+    expect(screen.queryByTestId("next-removed")).toBeNull();
+    // Served again, the restored intent's Start takes focus.
+    view.rerender(
+      <CaptainHome
+        {...props}
+        next={{ intent: { ...NEXT_INTENT, id: "i-back" }, more: 0 }}
+      />,
+    );
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId("next-start")),
+    );
+    setClientForTests(undefined);
   });
 });
 
