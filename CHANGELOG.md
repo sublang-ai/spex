@@ -14,6 +14,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-02
+
 ### Added
 
 - **Sessions continue.** An ended session is a paused conversation: a
@@ -81,5 +83,6 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Chromium against a real core with substitute agents, including an
   accessibility scan of every surface in both themes.
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v0.1.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v0.2.0...HEAD
+[0.2.0]: https://github.com/sublang-ai/spex/compare/app-v0.1.0...app-v0.2.0
 [0.1.0]: https://github.com/sublang-ai/spex/releases/tag/app-v0.1.0
