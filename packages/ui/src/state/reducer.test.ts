@@ -328,3 +328,72 @@ describe("DR-032: an unreported figure is silence, never zero", () => {
     expect(readDoneUsage({ status: "success" })).toBeUndefined();
   });
 });
+
+describe("run-view-2: a failure repeated is one line with a count", () => {
+  const failure = (seq: number, turnId: number, message: string) => ({
+    seq,
+    record: {
+      type: "runtime_error",
+      turnId,
+      timestamp: seq,
+      message,
+    } as unknown as TmuxPlayRecord,
+  });
+
+  test("consecutive identical failures in one turn fold into a count", () => {
+    const view = applyRecords(fresh(), [
+      failure(1, 1, "adapter refused"),
+      failure(2, 1, "adapter refused"),
+      failure(3, 1, "adapter refused"),
+    ]);
+    const errors = view.captain.filter((line) => line.kind === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].count).toBe(3);
+    // The line keeps the moment the failure first landed.
+    expect(errors[0].at).toBe(1);
+  });
+
+  test("another message, another turn, or a line between keeps its own line", () => {
+    const view = applyRecords(fresh(), [
+      failure(1, 1, "adapter refused"),
+      failure(2, 1, "disk full"),
+      failure(3, 2, "disk full"),
+      {
+        seq: 4,
+        record: {
+          type: "captain_status",
+          turnId: 2,
+          timestamp: 4,
+          message: "◇ /code stopped",
+        } as unknown as TmuxPlayRecord,
+      },
+      failure(5, 2, "disk full"),
+    ]);
+    expect(
+      view.captain.map((line) => [line.kind, line.text, line.count]),
+    ).toEqual([
+      ["error", "adapter refused", undefined],
+      ["error", "disk full", undefined],
+      ["error", "disk full", undefined],
+      ["status", "◇ /code stopped", undefined],
+      ["error", "disk full", undefined],
+    ]);
+  });
+
+  test("a captain result's synthesized failure folds the same way", () => {
+    const errored = (seq: number) => ({
+      seq,
+      record: {
+        type: "captain_finished",
+        turnId: 1,
+        timestamp: seq,
+        result: { status: "error", error: "OAuth session expired" },
+      } as unknown as TmuxPlayRecord,
+    });
+    const view = applyRecords(fresh(), [errored(1), errored(2)]);
+    const errors = view.captain.filter((line) => line.kind === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].text).toBe("OAuth session expired");
+    expect(errors[0].count).toBe(2);
+  });
+});

@@ -106,6 +106,10 @@ export interface CaptainLine {
   data?: unknown;
   /** question lines: the asking player (pane id when resolvable). */
   player?: string;
+  /** error lines: how many identical failures the line stands for —
+   * a repeat that follows it in the same turn folds into it, so a
+   * retry loop reads as one line with a count (run-view-2). */
+  count?: number;
 }
 
 export interface SessionView {
@@ -160,6 +164,19 @@ function player(view: SessionView, playerId: string): PlayerView {
 }
 
 function pushCaptain(view: SessionView, line: CaptainLine): void {
+  // A failure identical to the line just before it, in the same turn,
+  // is the same failure again: it counts rather than repeats, and no
+  // delivered failure goes unshown (run-view-2).
+  const last = view.captain[view.captain.length - 1];
+  if (
+    line.kind === "error" &&
+    last?.kind === "error" &&
+    last.text === line.text &&
+    last.turnId === line.turnId
+  ) {
+    last.count = (last.count ?? 1) + 1;
+    return;
+  }
   view.captain.push(line);
 }
 
