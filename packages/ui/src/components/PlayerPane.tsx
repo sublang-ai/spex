@@ -89,8 +89,32 @@ function toolSubject(input: unknown): string | undefined {
             (key) => (input as Record<string, unknown>)[key],
           ).find((value): value is string => typeof value === "string")
         : undefined;
-  const line = raw?.trim().replace(/\s+/g, " ");
+  const line = unwrapShell(raw ?? "").trim().replace(/\s+/g, " ");
   return line ? line : undefined;
+}
+
+/** A command an agent's runner wrapped as `<shell> -lc <command>` —
+ * codex runs every command through a login shell — is the inner
+ * command as it was typed, its wrapper quotes gone (run-view-4). */
+export function unwrapShell(command: string): string {
+  const match = /^\s*(?:\/bin\/|\/usr\/bin\/)?(?:zsh|bash|sh)\s+-l?c\s+([\s\S]+)$/.exec(
+    command,
+  );
+  if (!match) return command;
+  const inner = match[1].trim();
+  const quote = inner[0];
+  if ((quote === "'" || quote === '"') && inner.endsWith(quote) && inner.length >= 2) {
+    const body = inner.slice(1, -1);
+    return quote === '"' ? body.replace(/\\(["\\$`])/g, "$1") : body.replace(/'\\''/g, "'");
+  }
+  return inner;
+}
+
+/** The tool name as a person reads it: a runner's wire name for its
+ * shell tool reads "shell"; every other name stands as the runner
+ * gave it. */
+export function toolLabel(name: string): string {
+  return name === "command_execution" ? "shell" : name;
 }
 
 function Segment({ segment }: { segment: TranscriptSegment }) {
@@ -165,7 +189,9 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
               >
                 ⚒
               </span>
-              <span className="shrink-0">{segment.toolName}</span>
+              <span className="shrink-0" title={segment.toolName}>
+                {toolLabel(segment.toolName)}
+              </span>
               {outcome ? (
                 <span
                   data-testid={`tool-status-${segment.seq}`}

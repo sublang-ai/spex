@@ -54,6 +54,7 @@ When the session record stream delivers a tool-use event for a visible player, t
 | anything else | nothing — the label is the tool name alone, never a guessed field |
 
 - a subject is presented as one line — outer whitespace trimmed, inner whitespace runs collapsed to single spaces, elided where the card's width ends — so the collapsed card carries what the call acts on and never its payload;
+- a command a runner wrapped as `<shell> -lc <command>` — a login-shell wrapper with its quoting — presents the inner command as it was typed, and a runner's wire name for its shell tool reads "shell" with the wire name in the label's tooltip, so the coder's rows read as commands whichever agent runs them;
 - the expanded body prints each string-valued field — a command, a patch, an old and new string, a file's content, the result's text — verbatim under the field's name, and only a value that is not a string as JSON, every line wrapping inside the card so it never widens the pane;
 - a delivered result's span shows in the app's one duration vocabulary — "<1s", "12s", "3m 12s" — never as raw milliseconds ([DR-010](../decisions/010-interface-craft.md) §2).
 

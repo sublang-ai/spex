@@ -12,6 +12,7 @@ import { act, cleanup, fireEvent, render, screen,
 afterEach(cleanup);
 
 import { RunView } from "./RunView.js";
+import { toolLabel, unwrapShell } from "./PlayerPane.js";
 import { applyRecords, initialSessionView } from "../state/reducer.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
 import type {
@@ -1660,5 +1661,20 @@ describe("run-view-7: a roster with no players", () => {
     renderRunWith(FULL_RUN, { readOnly: true });
     expect(screen.getByTestId("player-grid")).toBeTruthy();
     expect(screen.getByRole("separator")).toBeTruthy();
+  });
+});
+
+describe("run-view-4: a runner's shell wrapper", () => {
+  test("the inner command is the subject and the wire name reads shell", () => {
+    expect(unwrapShell(`/bin/zsh -lc "rg --files -g '!specs/**' | sort"`)).toBe(
+      "rg --files -g '!specs/**' | sort",
+    );
+    expect(unwrapShell("/bin/zsh -lc 'cat guidelines.md | head -120'")).toBe(
+      "cat guidelines.md | head -120",
+    );
+    expect(unwrapShell("bash -c ls")).toBe("ls");
+    expect(unwrapShell("ls -la")).toBe("ls -la");
+    expect(toolLabel("command_execution")).toBe("shell");
+    expect(toolLabel("Bash")).toBe("Bash");
   });
 });
