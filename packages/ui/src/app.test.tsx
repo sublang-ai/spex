@@ -731,3 +731,61 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
     expect(document.activeElement).toBe(screen.getByTestId("start-composer"));
   });
 });
+
+describe("spec-view-7, dashboard-24: a History record opens in the reader", () => {
+  test("a finished record row on the Overview lands in the Specs tab's reader", async () => {
+    const tree = {
+      present: true,
+      legacy: false,
+      files: [],
+      decisions: [],
+      intents: [
+        {
+          id: "IR-001",
+          title: "First intent",
+          path: "intents/001-first-intent.md",
+          status: "Done",
+          finished: "done",
+          updatedAt: NOW - 1_000,
+        },
+      ],
+      notices: [],
+      readAt: NOW,
+    };
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "ledger.get") return LEDGER;
+      if (type === "ledger.history") return { intents: [], more: false };
+      if (type === "specs.get") return tree;
+      if (type === "specs.read") {
+        return {
+          markdown: "# IR-001: First intent\n\nThe first intent, done.",
+          version: "v1",
+        };
+      }
+      if (type === "project.status") {
+        return { branch: "main", dirty: false, ahead: 0, behind: 0 };
+      }
+      if (type === "forge.items") {
+        return { adapter: "github", authenticated: null, issues: [], prs: [] };
+      }
+      return {};
+    });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("workspace-tab-overview"));
+    const overview = await screen.findByTestId("overview-tab");
+    const row = await within(overview).findByTestId("history-row-IR-001");
+    fireEvent.click(within(row).getByRole("button"));
+
+    // The Specs tab takes over and its reader shows the record — the
+    // request survives the tree read the tab activation triggers.
+    expect(
+      screen.getByTestId("workspace-tab-specs").getAttribute("aria-selected"),
+    ).toBe("true");
+    const reader = await screen.findByTestId("record-reader");
+    await within(reader).findByText("The first intent, done.");
+    expect(commandMock).toHaveBeenCalledWith("specs.read", {
+      projectId: "p1",
+      path: "intents/001-first-intent.md",
+    });
+  });
+});

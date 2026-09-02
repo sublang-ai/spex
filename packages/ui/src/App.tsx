@@ -239,6 +239,8 @@ function WorkspaceSurface({
   onOpenSession,
   onOpenIntent,
   onStartIntent,
+  pendingRecord,
+  onRecordOpened,
 }: {
   onNavigate: (surface: Surface) => void;
   onOpenPalette: () => void;
@@ -247,6 +249,10 @@ function WorkspaceSurface({
   onOpenSession: (sessionId: string, turnId?: number) => void;
   onOpenIntent: (projectId: string, path: string) => void;
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
+  /** A record another surface asked the spec view to open, still
+   * owed its landing (spec-view-7, dashboard-24). */
+  pendingRecord?: { projectId: string; path: string } | null;
+  onRecordOpened: () => void;
   /** A session just ended: the sidebar reveals where it landed. */
   onEnded: (sessionId: string) => void;
   /** The ledger-fed attention map the nav shares (DR-035). */
@@ -681,6 +687,12 @@ function WorkspaceSurface({
               [project.id]: next,
             }))
           }
+          openRecordPath={
+            pendingRecord?.projectId === project.id
+              ? pendingRecord.path
+              : undefined
+          }
+          onRecordOpened={onRecordOpened}
         />
       ) : tab === "overview" ? (
         <OverviewTab
@@ -1077,6 +1089,8 @@ export function App() {
               onOpenSession={openSessionAndShow}
               onOpenIntent={openIntent}
               onStartIntent={startIntent}
+              pendingRecord={pendingRecord}
+              onRecordOpened={() => setPendingRecord(null)}
             />
           )}
         </main>

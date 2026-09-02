@@ -269,16 +269,21 @@ export function SpecView(props: SpecViewProps) {
   // lives (spec-view-7, dashboard-24).
   const requestedRecord = props.openRecordPath;
   const onRecordOpened = props.onRecordOpened;
+  const treeLoaded = props.tree !== undefined;
   useEffect(() => {
-    if (!requestedRecord) return;
+    // The request outlives a tree still in flight: it is answered
+    // once a loaded tree can name the record, or drops when a loaded
+    // tree lacks it — never before.
+    if (!requestedRecord || !treeLoaded) return;
     const record = [...tree.decisions, ...tree.intents].find(
       (entry) => entry.path === requestedRecord,
     );
     if (record) openRecord(record);
+    else setLiveNote(`${requestedRecord} is not in the tree`);
     onRecordOpened?.();
     // openRecord is stable for this purpose: it only reads props.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedRecord]);
+  }, [requestedRecord, props.tree]);
 
   // The reader takes focus on its Back control when it opens and hands
   // focus back to its invoker's DOM id on close (§6: never strand).
