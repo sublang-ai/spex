@@ -142,6 +142,10 @@ export interface App {
   /** The demo project's path — registered when `project` was asked. */
   projectDir: string;
   projectId?: string;
+  /** The shared session store the playbook CLI would write into —
+   * scratch in both lanes, so a terminal-run fixture lands where the
+   * core serves it (core-service-60). */
+  sharedSessionsDir: string;
   server: RunningServer;
   /** Arrange-only protocol client on the running shell. */
   core: CoreClient;
@@ -177,10 +181,16 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
   const projectDir = join(scratch, "demo-project");
   if (options.project) seedDemoProject(projectDir);
   const token = `e2e-${Math.random().toString(36).slice(2, 10)}`;
+  // The shared session store resolves under XDG state in both lanes;
+  // it exists before boot so the core watches it from the start.
+  const xdgState = join(scratch, "xdg-state");
+  const sharedSessionsDir = join(xdgState, "playbook", "sessions");
+  mkdirSync(sharedSessionsDir, { recursive: true, mode: 0o700 });
 
   const env = options.env ?? {
     ANTHROPIC_API_KEY: "e2e-fake",
     OPENAI_API_KEY: "e2e-fake",
+    XDG_STATE_HOME: xdgState,
   };
   const shellOptions: ServerShellOptions = {
     host: "127.0.0.1",
@@ -195,7 +205,7 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
       ? {
           // Real adapters and Captain; only what the run writes is
           // redirected, so the machine's own sessions stay untouched.
-          env: { ...process.env, XDG_STATE_HOME: join(scratch, "xdg-state") },
+          env: { ...process.env, XDG_STATE_HOME: xdgState },
         }
       : {
           adapterImports: demoAdapterImports({
@@ -226,6 +236,7 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
     dataDir,
     configPath,
     projectDir,
+    sharedSessionsDir,
     get server() {
       return live().server;
     },
@@ -257,6 +268,39 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
     app.projectId = info.id;
   }
   return app;
+}
+
+/**
+ * A session the playbook CLI would have written into the shared store
+ * (core-service-60): its captain-session record naming the demo
+ * project as the working directory and a replay stream holding one
+ * Boss turn. The core adopts it as a terminal-run session, served and
+ * deletable (DR-042). Returns the session id.
+ */
+export function writeTerminalSession(
+  app: App,
+  options: { id?: string; prompt?: string } = {},
+): string {
+  const id = options.id ?? `e2e00000-0000-4000-8000-${Date.now().toString().slice(-12).padStart(12, "0")}`;
+  const prompt = options.prompt ?? "from the terminal";
+  mkdirSync(app.sharedSessionsDir, { recursive: true, mode: 0o700 });
+  const records = [
+    { type: "turn_started", turnId: 1, turn: { id: 1, prompt }, timestamp: 1000 },
+    { type: "captain_reply", turnId: 1, timestamp: 1500, text: "Done from the terminal." },
+    { type: "turn_finished", turnId: 1, timestamp: 2000 },
+  ];
+  writeFileSync(
+    join(app.sharedSessionsDir, `${id}.records.jsonl`),
+    records.map((record, index) => JSON.stringify({ v: 1, seq: index + 1, record })).join("\n") +
+      "\n",
+    { mode: 0o600 },
+  );
+  writeFileSync(
+    join(app.sharedSessionsDir, `${id}.json`),
+    JSON.stringify({ schemaVersion: 6, sessionId: id, state: "settled", cwd: app.projectDir }),
+    { mode: 0o600 },
+  );
+  return id;
 }
 
 // ---------------------------------------------------------------------------
