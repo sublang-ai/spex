@@ -25,7 +25,7 @@ The version in the released package's `package.json` (`packages/cli/package.json
 
 #### release-3
 
-All notable changes to the released package shall be documented in its `CHANGELOG.md` (`packages/cli/CHANGELOG.md`) following the Keep a Changelog [[2]] format.
+All notable changes to a release channel shall be documented in that channel's `CHANGELOG.md` following the Keep a Changelog [[2]] format — `packages/cli/CHANGELOG.md` for the CLI, and the repository root `CHANGELOG.md` for the app ([DR-040](../decisions/040-source-only-app-releases.md)).
 
 #### release-4
 
@@ -76,7 +76,7 @@ When a release tag is pushed, the release workflow shall confirm the CI workflow
 Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), release tags shall use disjoint namespaces per channel:
 
 - tags matching `vMAJOR.MINOR.PATCH` release only the `@sublang/spex` package from `packages/cli`;
-- desktop app releases use the `app-v*` tag namespace.
+- tags matching `app-vMAJOR.MINOR.PATCH` release the app — the desktop and server shells — as source ([DR-040](../decisions/040-source-only-app-releases.md)).
 
 ### Package Hygiene
 
@@ -105,7 +105,7 @@ When preparing a release tag, the developer/agent shall verify that all changes 
 
 #### release-16
 
-When preparing a release tag, the developer/agent shall verify that `CHANGELOG.md` is updated with the new version and date, and `package.json` version is bumped.
+When preparing a release tag, the developer/agent shall verify that the channel's `CHANGELOG.md` [[release-3](#release-3)] is updated with the new version and date, and the channel's `package.json` version is bumped — `packages/cli` for a CLI tag; `apps/desktop` and `apps/server` together for an app tag.
 
 #### release-17
 
@@ -117,9 +117,10 @@ When preparing a release tag, the developer/agent shall run the automated smoke 
 
 #### release-21
 
-When preparing an app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the desktop visuals and packaging automation cannot see — with a failing step blocking the tag until resolved:
+When preparing an app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the desktop visuals automation cannot see — with a failing step blocking the tag until resolved:
 
-- a CLI release tag is not gated on it: the checklist's only CLI step is the tarball inspection that [[release-17](#release-17)] already requires and [[release-23](#release-23)] verifies.
+- a CLI release tag is not gated on it: the checklist's only CLI step is the tarball inspection that [[release-17](#release-17)] already requires and [[release-23](#release-23)] verifies;
+- the checklist's packaging pass is a local option, not a gate: an app release ships no binaries ([DR-040](../decisions/040-source-only-app-releases.md)).
 
 #### release-22
 

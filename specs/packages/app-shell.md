@@ -125,10 +125,12 @@ Where the app is packaged, the packaged app shall ship agent-SDK native binaries
 
 #### app-shell-14
 
-When a tag matching `app-v*` is pushed, the desktop release workflow shall build the macOS arm64 app with electron-builder [[3]] and attach the unsigned build artifacts to a GitHub release for that tag:
+When a tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog and the run-from-source instructions, attaching no build artifacts ([DR-040](../decisions/040-source-only-app-releases.md)):
 
-- The desktop package names its Electron version exactly, never as a range: the packager downloads the platform binaries of one release and refuses a range outright, so a caret leaves the release with nothing to build against.
-- The desktop release workflow does not publish to npm and does not run for `v*` tags, keeping the app and CLI release channels disjoint ([DR-002](../decisions/002-desktop-app-architecture.md)).
+- the workflow confirms the CI workflow concluded `success` for the tagged commit, verifies the tag's version against both shells' `package.json`, and builds and tests the tree before creating the release — empty notes or a mismatch fail it without a release;
+- the release names Node 20 or later, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
+- the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
+- the workflow does not publish to npm and does not run for `v*` tags, keeping the app and CLI release channels disjoint ([DR-002](../decisions/002-desktop-app-architecture.md)).
 
 ### App Data
 

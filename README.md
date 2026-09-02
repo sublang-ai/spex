@@ -102,8 +102,10 @@ module ABI for system Node when the app exits.
 Real playbook runs require a ready coding-agent adapter. GitHub issue and PR
 panels use an authenticated `gh` CLI. Compiling new playbooks requires
 [`slc`](https://github.com/sublang-ai/slc) and its supported Node.js version.
-Packaged macOS builds are published on
-[GitHub Releases](https://github.com/sublang-ai/spex/releases) when available.
+App releases on
+[GitHub Releases](https://github.com/sublang-ai/spex/releases) (`app-v*` tags)
+ship as source with their changelog: check out the tag and run the commands
+above. Binaries follow once the app can be signed.
 
 ## Remote access
 

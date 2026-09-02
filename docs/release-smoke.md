@@ -59,7 +59,10 @@ Launch: `npm start`.
 | Settings | A Captain agent edit round-trips (adapter, model, effort, permissions); config stays valid |
 | Dark theme (OS toggle) | Sidebar mark, panes, and spec view stay legible |
 
-## 3. Manual pass — packaging
+## 3. Packaging — a local option, not a gate
+
+App releases ship as source (DR-040); packaging stays available for
+a local check and returns as a gate once the app can be signed.
 
 ```bash
 npm run package -w apps/desktop
@@ -69,7 +72,7 @@ npm run package -w apps/desktop
 | --- | --- |
 | Open the zip in `apps/desktop/release/` | App bundle carries the sunset-rabbit icon |
 | Launch the packaged app | Boots to Captain home; seeding and Specs tab work as in the dev pass |
-| `npm pack --dry-run -w packages/cli` | Tarball lists only production files (release-17) |
+| `npm pack --dry-run -w packages/cli` (CLI tags) | Tarball lists only production files (release-17) |
 
 ## 4. Record
 

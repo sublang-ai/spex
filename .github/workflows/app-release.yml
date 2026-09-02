@@ -1,5 +1,9 @@
 name: App Release
 
+# The app channel (DR-040): an app-v* tag releases the desktop and
+# server shells as source — a GitHub release carrying the changelog
+# notes and the run-from-source instructions, no build artifacts.
+
 on:
   push:
     tags:
@@ -7,14 +11,56 @@ on:
 
 permissions: {}
 
+env:
+  # Nothing here launches Electron: the release is source only.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
 jobs:
+  require-ci-green:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Require CI to be green for the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for CI (ci.yml) to succeed for commit $SHA"
+          for attempt in $(seq 1 60); do
+            line="$(gh api \
+              "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=1" \
+              --jq '(.workflow_runs[0].status // "missing") + " " + (.workflow_runs[0].conclusion // "none")')"
+            status="${line%% *}"
+            conclusion="${line##* }"
+            echo "attempt $attempt/60: status=$status conclusion=$conclusion"
+            if [ "$status" = "completed" ]; then
+              if [ "$conclusion" = "success" ]; then
+                echo "CI is green for $SHA."
+                exit 0
+              fi
+              echo "::error::CI for $SHA concluded '$conclusion'; refusing to release."
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "::error::Timed out waiting for CI to complete for $SHA; refusing to release."
+          exit 1
+
   release:
-    runs-on: macos-latest
+    needs: require-ci-green
+    runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
+      # Full history: the CLI's file-history guard, part of npm test,
+      # audits every committed manifest version.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -24,21 +70,51 @@ jobs:
       - name: Verify version matches tag
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#app-v}"
-          PKG_VERSION="$(node -p 'require("./apps/desktop/package.json").version')"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag $TAG_VERSION does not match apps/desktop/package.json $PKG_VERSION"
-            exit 1
-          fi
+          for pkg in apps/desktop apps/server; do
+            PKG_VERSION="$(node -p "require('./$pkg/package.json').version")"
+            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+              echo "::error::Tag $TAG_VERSION does not match $pkg/package.json $PKG_VERSION"
+              exit 1
+            fi
+          done
 
-      # Electron binaries are needed here (unlike the v* CLI channel),
-      # so ELECTRON_SKIP_BINARY_DOWNLOAD is deliberately not set.
       - run: npm ci
       - run: npm run build
 
-      - name: Package the desktop app (unsigned arm64 zip)
-        run: npm run package -w apps/desktop
+      - name: Tests
+        run: npm test
+
+      - name: Extract release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#app-v}"
+          # The version's section of the app changelog, then the way
+          # to run this release from source.
+          sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md > /tmp/release-notes.md
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "::error::No release notes found for version ${VERSION} in CHANGELOG.md"
+            exit 1
+          fi
+          cat >> /tmp/release-notes.md <<EOF
+
+          ## Run from source
+
+          This release ships no binaries: build it locally with Node.js 20 or later (22 recommended) and a native build toolchain.
+
+          \`\`\`bash
+          git clone https://github.com/${GITHUB_REPOSITORY}.git
+          cd spex
+          git checkout ${GITHUB_REF_NAME}
+          npm ci
+          npm start              # the desktop app
+          npm run start:server   # the server shell: prints http://127.0.0.1:8137/?token=…
+          \`\`\`
+
+          Agent sign-in, GitHub, and playbook-compile prerequisites are in the [README](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/README.md).
+          EOF
+          cat /tmp/release-notes.md
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: apps/desktop/release/*.zip
+          name: Spex app ${{ github.ref_name }}
+          body_path: /tmp/release-notes.md
