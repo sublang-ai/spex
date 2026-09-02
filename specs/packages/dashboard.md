@@ -79,7 +79,7 @@ Where a project has done work — intents closed after a turn of theirs ended fi
 | an intent closed done | a check before its title |
 | an intent closed done whose source labels include a bug label | its title struck through under a red "bug" tag, no check |
 | an intent closed dropped | a quiet "dropped" tag, the row dimmed, never struck |
-| a finished record | a check, the record's ID as its tag; "superseded" as the tag and the row dimmed where the status classifies so |
+| a finished record | a check before its record row [[dashboard-40](#dashboard-40)]; a "superseded" tag after the title, the row dimmed and no check, where the status classifies so |
 
 - an intent closed before any turn of it ended finished never lists — it left the queue without a trace;
 - a finished record already named by a closed intent's provenance lists once, as that intent;
@@ -90,7 +90,15 @@ Where a project has done work — intents closed after a turn of theirs ended fi
 While the project's one live session [[core-service-4](core-service.md#core-service-4)] runs, the group's Now band shall show that session's status mark, active playbook (or an idle indicator when no engagement is active), human-readable engagement state label — tinted by the state's tone, with the raw state id in the tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and the session's start as an age ("started 3m ago") with the absolute moment in its tooltip, together with the open intent the session serves, or the latest Boss turn's text for a session serving no intent:
 
 - the band updates as session records arrive, without a manual refresh;
+- the served intent carries Drop beside the session row [[dashboard-41](#dashboard-41)];
 - while no session is live, the band stays quiet with its empty-state note [[dashboard-8](#dashboard-8)].
+
+#### dashboard-41
+
+While the Now band shows the open intent the session serves [[dashboard-28](#dashboard-28)], the band shall carry Drop beside the session row, which — behind an inline confirm, Drop or Keep, since work is underway ([DR-010](../decisions/010-interface-craft.md) §4) — closes that intent dropped while the session keeps its turn:
+
+- the outcome — the drop, or the refusal with its reason — announces in a status line lasting six seconds, and focus returns to the control, or to the session row once the control has left with the intent ([DR-010](../decisions/010-interface-craft.md) §6);
+- the dropped intent lists in History once the turn it was dropped from ends finished [[dashboard-27](#dashboard-27)].
 
 #### dashboard-29
 
@@ -98,8 +106,16 @@ The group's Up next band shall list the project's queued intents in rank order, 
 
 - a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with "after ⟨title⟩", the predecessor's project named when it lives in another project, its Start disabled with the reason ([DR-026](../decisions/026-data-graphics-craft.md) §2), and is never presented as next;
 - reorder works by drag — the grip at the row's left is the affordance — by keyboard (Alt+↑/↓ on the focused row), and by the row menu's Move up and Move down, which take the same step, are disabled at the queue's ends, and name the shortcut; a reorder changes only the queue's rank order;
-- each row's actions live in a ⋯ menu that follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) — focus moves into it on open and returns to the trigger on close, Escape and an outside click close it, at most one row menu is open — offering Move up, Move down, Edit text, Remove, and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, "IR-N" opening the record, "Session" opening the capturing session;
+- each row's actions live in a ⋯ menu that follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) — focus moves into it on open and returns to the trigger on close, Escape and an outside click close it, at most one row menu is open — offering Move up, Move down, Edit text, Remove, and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, the record row [[dashboard-40](#dashboard-40)] opening the record, "Session" opening the capturing session;
 - Remove acts on the click with no confirmation and leaves no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", taking focus and lasting six seconds beyond the last moment its control holds it — re-queues the same text and provenance at the row's former place.
+
+### Record Rows
+
+#### dashboard-40
+
+Where a band or menu of the Dashboard lists a spec record, the row shall present as the one record row — the record's identifier as the chip the Specs outline's package rows wear [[spec-view-2](spec-view.md#spec-view-2)], its title truncated to one line, a hover background and a pointer over the whole row, named as an opener ("Open IR-N") — and activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)]:
+
+- the brand-coloured underline link stays reserved for what leaves the app — an issue or pull-request page [[dashboard-6](#dashboard-6)] — so a record, which opens in place, never wears it ([DR-013](../decisions/013-sublang-brand.md)).
 
 ### Capture
 
@@ -140,7 +156,7 @@ Where a project is bound to a forge repository and the forge adapter ([DR-006](.
 
 Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.md#spec-view-14)], the group's Sources band shall carry the project's open records — an intent record is work to finish, not spec law ([DR-027](../decisions/027-linked-views-contract.md)) — listing only records the records read classifies as open [[spec-view-14](spec-view.md#spec-view-14)] ([DR-038](../decisions/038-history-is-done-work.md)):
 
-- each row names the record's ID and title, and activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)];
+- each row is the record row [[dashboard-40](#dashboard-40)];
 - a record classified finished does not list here — it lists in History [[dashboard-27](#dashboard-27)] — so every record lands in exactly one band;
 - a project whose tree lists no open records counts zero open records in the collapsed line.
 
@@ -199,7 +215,8 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 
 - the fold produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md));
 - where several rows hold at once, the fold ranks failure, then permission, then working, then question, then finished — a standing summons is never masked by the running mark;
-- the per-project next is the first queued, unblocked intent in rank order.
+- the per-project next is the first queued, unblocked intent in rank order;
+- a consumer reading the fold over the protocol applies replies in request order — an older read's reply landing after a newer one's is discarded — so a stale fold never overwrites a fresh one.
 
 #### dashboard-33
 
@@ -263,7 +280,11 @@ Where fixture intent rows, records, and review state are persisted to the app st
 
 #### dashboard-36
 
-Where a fixture project holds a queue of three intents, the second after-linked to the first, when the fixture stream dispatches the first, runs a follow-up Boss turn, dispatches the third into a turn that aborts, then finishes the first and closes it done, the test suite shall assert each derived state in sequence: Working on dispatch and again on the follow-up owned by the newest open intent [[dashboard-10](#dashboard-10)] [[dashboard-33](#dashboard-33)], the aborted dispatch releasing the third to Queued at its kept rank with its stamps intact and text editable [[dashboard-34](#dashboard-34)], Finished when its last turn ends finished [[dashboard-10](#dashboard-10)], the after-linked second blocked and never offered as next until the first closes, then unblocked as the project's next [[dashboard-10](#dashboard-10)] [[dashboard-29](#dashboard-29)], a reorder by keyboard and by the row menu's Move up and Move down — disabled at the ends — yielding the new rank order [[dashboard-29](#dashboard-29)], the row menu opening with focus inside and closing on Escape and on an outside click with focus back on its trigger, one menu open at a time [[dashboard-29](#dashboard-29)], and a Remove followed by Undo re-queuing the same text and provenance at the row's former place, the status line outlasting six seconds only while its control holds focus [[dashboard-29](#dashboard-29)].
+Where a fixture project holds a queue of three intents, the second after-linked to the first, when the fixture stream dispatches the first, runs a follow-up Boss turn, dispatches the third into a turn that aborts, then finishes the first and closes it done, the test suite shall assert each derived state in sequence: Working on dispatch and again on the follow-up owned by the newest open intent [[dashboard-10](#dashboard-10)] [[dashboard-33](#dashboard-33)], the aborted dispatch releasing the third to Queued at its kept rank with its stamps intact and text editable [[dashboard-34](#dashboard-34)], Finished when its last turn ends finished [[dashboard-10](#dashboard-10)], the after-linked second blocked and never offered as next until the first closes, then unblocked as the project's next [[dashboard-10](#dashboard-10)] [[dashboard-29](#dashboard-29)], a reorder by keyboard and by the row menu's Move up and Move down — disabled at the ends — yielding the new rank order [[dashboard-29](#dashboard-29)], the row menu opening with focus inside and closing on Escape and on an outside click with focus back on its trigger, one menu open at a time [[dashboard-29](#dashboard-29)], and a Remove followed by Undo re-queuing the same text and provenance at the row's former place, the status line outlasting six seconds only while its control holds focus [[dashboard-29](#dashboard-29)], and each sourced row's provenance item named after what it opens, the record's drawn as the record row [[dashboard-29](#dashboard-29)] [[dashboard-40](#dashboard-40)].
+
+#### dashboard-42
+
+Where two ledger reads overlap and the older one's reply lands last, the test suite shall assert that the newer fold stays in place and the Up next band lists its queue, the older reply discarded [[dashboard-10](#dashboard-10)].
 
 ### Capture Coverage
 
@@ -279,13 +300,13 @@ Where a stubbed forge adapter returns fixture open issues and pull requests with
 
 #### dashboard-25
 
-Where a fixture project's `specs/` tree lists one intent record whose status reads Done and one unfinished record, the test suite shall assert that the Open records tab lists only the unfinished record with its ID and title [[dashboard-24](#dashboard-24)], that activating it opens the record in the Specs surface's records reader [[dashboard-24](#dashboard-24)], and that its Queue control seeds `Resume IR-<N>: <title>` [[dashboard-30](#dashboard-30)].
+Where a fixture project's `specs/` tree lists one intent record whose status reads Done and one unfinished record, the test suite shall assert that the Open records tab lists only the unfinished record [[dashboard-24](#dashboard-24)] as the record row — chip, title, pointer, no brand link — that activating it opens the record in the Specs surface's records reader [[dashboard-40](#dashboard-40)], and that its Queue control seeds `Resume IR-<N>: <title>` [[dashboard-30](#dashboard-30)].
 
 ### History Coverage
 
 #### dashboard-38
 
-Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, and scrolling back fetches and appends the older intent page.
+Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, and scrolling back fetches and appends the older intent page.
 
 ### Empty-State Coverage
 
@@ -302,7 +323,7 @@ Where Dashboard state is derived across the empty conditions, the test suite sha
 
 #### dashboard-23
 
-Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook, human-readable state label with the raw state id in the tooltip, the start as an age with the absolute moment in its tooltip, and the open intent's title [[dashboard-28](#dashboard-28)], and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].
+Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook, human-readable state label with the raw state id in the tooltip, the start as an age with the absolute moment in its tooltip, and the open intent's title [[dashboard-28](#dashboard-28)], that the Drop beside it asks the inline confirm — Keep returning focus to the control, Drop closing the intent dropped over the protocol with the outcome announced, the control gone, and focus on the session row [[dashboard-41](#dashboard-41)] — and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].
 
 ### Browser Journeys
 
@@ -317,4 +338,6 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - while the dispatched intent's session runs, the Now band shows it [[dashboard-28](#dashboard-28)];
 - once its turn ends finished, the attention queue lists the finished entry with Confirm and the count badge reads one [[dashboard-1](#dashboard-1)] [[dashboard-9](#dashboard-9)];
 - Confirm removes the entry, the badge clears, and History lists the intent as done [[dashboard-4](#dashboard-4)] [[dashboard-27](#dashboard-27)];
-- in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)].
+- in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)];
+- an intent dropped from its running session leaves the Now band showing the session serving none, with no Drop beside it, and lists in History as dropped once that turn ends finished, no verdict owed [[dashboard-28](#dashboard-28)] [[dashboard-27](#dashboard-27)];
+- a History record row opens the record in the Specs tab's records reader [[dashboard-27](#dashboard-27)] [[dashboard-40](#dashboard-40)].

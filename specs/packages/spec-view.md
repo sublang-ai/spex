@@ -196,6 +196,7 @@ While the graph renders beside the outline, the spec view shall seat the item fi
 While the spec tree renders, the spec view shall serve the tree's records in their places ([DR-027](../decisions/027-linked-views-contract.md)) — the decision records as the outline's last branch [[spec-view-1](#spec-view-1)] and `meta.md` and `map.md` as footer links — each opening the records reader:
 
 - the decisions branch renders whenever decision records exist, file-less and legacy trees included, carrying its count in its label, closed until asked for, its rows sorted by number, each announced as a reader opener rather than an expandable node, and the group filters never touch it;
+- each decisions row is the record row the Dashboard's bands share [[dashboard-40](dashboard.md#dashboard-40)] — identifier chip, title, hover, pointer — and the branch's label reads in the package rows' tone, not dimmed;
 - intent records do not appear anywhere in the view — they are work items, carried by the Dashboard's next-work lists [[dashboard-24](dashboard.md#dashboard-24)];
 - when a record is picked, the view replaces itself with that record's rendered markdown behind a Back control, and Back restores focus to the invoking row and the outline's scroll position;
 - links inside the reader keep the view's semantics [[spec-view-6](#spec-view-6)]: a path resolving to a record, `meta.md`, or `map.md` opens in the reader, an item citation leaves the reader and jumps to the item, and any other local link stays inert;
@@ -376,7 +377,7 @@ Where a fixture tree renders with the graph on, the test suite shall assert the 
 
 #### spec-view-45
 
-Where a fixture tree carries decision records — once alongside package files and once with none — the test suite shall assert the records access of [[spec-view-7](#spec-view-7)]: the decisions branch renders in both fixtures with its count and stands last in the outline [[spec-view-1](#spec-view-1)], no intent record appears anywhere in the view [[spec-view-7](#spec-view-7)], a record row opens the reader and Back restores focus to that row [[spec-view-7](#spec-view-7)], a search matching a decision's ID narrows the branch to it [[spec-view-5](#spec-view-5)], the footer's `meta` and `map` links open the reader [[spec-view-7](#spec-view-7)], and a record-internal item citation leaves the reader and lands on the item [[spec-view-7](#spec-view-7)].
+Where a fixture tree carries decision records — once alongside package files and once with none — the test suite shall assert the records access of [[spec-view-7](#spec-view-7)]: the decisions branch renders in both fixtures with its count and stands last in the outline [[spec-view-1](#spec-view-1)], no intent record appears anywhere in the view [[spec-view-7](#spec-view-7)], a record row — the identifier chip, the title, named as an opener under a pointer — opens the reader and Back restores focus to that row [[spec-view-7](#spec-view-7)], a search matching a decision's ID narrows the branch to it [[spec-view-5](#spec-view-5)], the footer's `meta` and `map` links open the reader [[spec-view-7](#spec-view-7)], and a record-internal item citation leaves the reader and lands on the item [[spec-view-7](#spec-view-7)].
 
 ### Confinement Coverage
 

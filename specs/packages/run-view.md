@@ -493,7 +493,7 @@ When a dispatched intent's final turn ends finished, the run view shall render t
 
 #### run-view-88
 
-While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the queue's head unblocked intent with Start and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md)):
+While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the queue's head unblocked intent with Start, Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md)):
 
 - Start stages the intent into the home composer under its chip [[run-view-86](#run-view-86)], where sending creates the session and dispatches the text in one motion [[run-view-26](#run-view-26)].
 
@@ -505,7 +505,7 @@ While a Boss turn is bound to an intent, that turn's outgoing bubble [[run-view-
 
 #### run-view-90
 
-While a session's lane holds an open dispatched intent, the run view shall show a slim working line above the Boss composer naming that intent — the newest open intent, which owns the conversation — so re-entry is answered where the eye lands ([DR-035](../decisions/035-intent-ledger.md)).
+While a session's lane holds an open dispatched intent, the run view shall show a slim working line above the Boss composer naming that intent — the newest open intent, which owns the conversation — with Drop beside it [[run-view-113](#run-view-113)], so re-entry is answered where the eye lands ([DR-035](../decisions/035-intent-ledger.md)).
 
 #### run-view-91
 
@@ -516,6 +516,19 @@ When the workspace opens a session from an attention entry [[dashboard-1](dashbo
 | a pending question | the question's incoming bubble [[run-view-9](#run-view-9)] |
 | an unacknowledged failure | the failure's ◆ line [[run-view-2](#run-view-2)] |
 | a finish awaiting its verdict | the delivery card at the intent's final turn [[run-view-87](#run-view-87)] |
+
+#### run-view-113
+
+While the working line names an open intent [[run-view-90](#run-view-90)], the run view shall offer Drop on the line, which — behind an inline confirm, Drop or Keep, since work is underway ([DR-010](../decisions/010-interface-craft.md) §4) — closes that intent dropped over the protocol while the turn keeps running ([DR-035](../decisions/035-intent-ledger.md)):
+
+- the outcome — the drop, or the refusal with its reason — announces in a status line where the working line stood, lasting six seconds;
+- Keep returns focus to the control; a drop hands it to the composer once the line has left with its control ([DR-010](../decisions/010-interface-craft.md) §6).
+
+#### run-view-114
+
+While the next card names the queue's head [[run-view-88](#run-view-88)], the Captain home shall offer Remove beside Start, acting on the click with no confirmation and leaving no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", taking focus and lasting six seconds beyond the last moment its control holds it — that re-queues the same text and provenance at the queue's head:
+
+- the card stays while the Undo line stands, even once no queued intent is left behind it, and a restored intent's Start takes focus.
 
 ## Internal Behavior
 
@@ -702,6 +715,7 @@ Where a replayed fixture stream dispatches a queued intent whose turn then ends 
 
 - the bound turn's bubble wears the intent's source chip [[run-view-89](#run-view-89)];
 - while the intent is open, the working line above the composer names it [[run-view-90](#run-view-90)];
+- Drop on the working line asks the inline confirm — Keep leaves the intent open with focus back on the control; Drop sends the close command as dropped, the line leaves with the outcome announced where it stood and focus in the composer; a refused drop keeps the line and names the refusal [[run-view-113](#run-view-113)];
 - the delivery card at the final turn's end carries the intent's title, its provenance chip, its review rounds, turn count, and elapsed time, a primary Confirm with Drop beside, and the visible follow-up note [[run-view-87](#run-view-87)];
 - giving a verdict sends a close command over the protocol and resolves the card in place into the project's next queued intent with Start [[run-view-87](#run-view-87)];
 - with an empty fixture queue, the card resolves into the inline add affordance instead [[run-view-87](#run-view-87)];
@@ -709,7 +723,7 @@ Where a replayed fixture stream dispatches a queued intent whose turn then ends 
 
 #### run-view-95
 
-Where a fixture project holds a queue whose unblocked head intent has more intents behind it, when the Captain home renders, the test suite shall assert the next card names the head intent with Start and counts the rest while the quick start card stands beside it [[run-view-88](#run-view-88)], and that activating Start stages the intent into the home composer under its chip [[run-view-88](#run-view-88)] [[run-view-86](#run-view-86)].
+Where a fixture project holds a queue whose unblocked head intent has more intents behind it, when the Captain home renders, the test suite shall assert the next card names the head intent with Start and counts the rest while the quick start card stands beside it [[run-view-88](#run-view-88)], and that activating Start stages the intent into the home composer under its chip [[run-view-88](#run-view-88)] [[run-view-86](#run-view-86)], and that Remove closes the head intent dropped on the click with the Undo line taking focus, the card standing on that line alone once no next is served, and Undo re-queuing the same text and provenance at the head with the restored intent's Start focused [[run-view-114](#run-view-114)].
 
 #### run-view-96
 
@@ -776,3 +790,7 @@ Where the harness boots with the demo project registered, when the journey break
 #### run-view-104
 
 Where the live lane runs with the machine's signed-in agents ([DR-039](../decisions/039-browser-acceptance-journeys.md)), when the journey sends a minimal no-change `/code` task, the test suite shall assert through the page that a player pane shows the coder's live output, that the abort control acknowledges instantly and the turn ends aborted [[run-view-10](#run-view-10)] [[run-view-40](#run-view-40)], and that ending the session leaves the tab read-only [[run-view-47](#run-view-47)].
+
+#### run-view-115
+
+Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the composer [[run-view-113](#run-view-113)].
