@@ -35,6 +35,14 @@ export const EFFORT_VOCAB: Record<AdapterName, readonly string[]> = {
 const MODES = ["auto", "bypass", "none"] as const;
 type Mode = (typeof MODES)[number];
 
+/** What each permission mode means, in the reader's words
+ * (settings-10): the select alone says nothing about the stakes. */
+export const MODE_HELP: Record<Mode, string> = {
+  auto: "auto: the agent works on its own inside the repo, with the adapter's own protections on",
+  bypass: "bypass: no permission prompts — sandboxed repos only",
+  none: "none: the adapter's own default posture",
+};
+
 function knownAdapter(adapter: string | undefined): AdapterName {
   return (ADAPTERS as readonly string[]).includes(adapter ?? "")
     ? (adapter as AdapterName)
@@ -73,6 +81,9 @@ export interface AgentEditorProps {
    * adapter, model, effort, fast mode, and permissions into the draft. */
   captain?: ChipAgent;
   saveLabel?: string;
+  /** A transient acknowledgment beside Save ("Saved ✓"), owned by the
+   * host because a saved config re-seeds this editor (settings-6). */
+  status?: string;
   /** Creation forms save an untouched draft: the seeded block is
    * already a deliberate choice, so there is nothing to dirty. */
   allowUnchanged?: boolean;
@@ -279,6 +290,12 @@ export function AgentEditor(props: AgentEditorProps) {
             <option value="bypass">bypass</option>
             <option value="none">none (adapter default)</option>
           </select>
+          <span
+            data-testid="agent-mode-help"
+            className="text-[11px] text-neutral-500"
+          >
+            {MODE_HELP[mode]}
+          </span>
         </label>
         <label className="flex flex-col gap-0.5">
           <span className="text-xs text-neutral-500">
@@ -288,9 +305,14 @@ export function AgentEditor(props: AgentEditorProps) {
             data-testid="agent-paths"
             value={writablePaths}
             onChange={(event) => setWritablePaths(event.target.value)}
-            placeholder="e.g. .git"
+            placeholder="e.g. .git, docs/generated"
             className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
           />
+          <span className="text-[11px] text-neutral-500">
+            Repo-relative paths the agent may write under auto mode beyond
+            its usual set — e.g. <span className="font-mono">.git</span> for
+            commits
+          </span>
         </label>
       </div>
       {error ? (
@@ -308,6 +330,15 @@ export function AgentEditor(props: AgentEditorProps) {
         >
           {busy ? "Saving…" : (props.saveLabel ?? "Save")}
         </button>
+        {/* Always present so a save's acknowledgment is announced as a
+            change, not as a region appearing (DR-010 §3/§7). */}
+        <span
+          role="status"
+          data-testid="agent-status"
+          className="text-xs text-emerald-700 dark:text-emerald-300"
+        >
+          {props.status ?? ""}
+        </span>
         {props.onCancel ? (
           <button
             type="button"

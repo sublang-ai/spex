@@ -24,9 +24,11 @@ test("settings-29: the Captain editor round-trips the shared config", async ({
   const model = captain.getByTestId("agent-model");
   await expect(model).toHaveValue("claude-opus-5");
 
-  // Change the model; the file keeps its comment and key order.
+  // Change the model; the save says so beside Save, and the file
+  // keeps its comment and key order.
   await model.fill("claude-sonnet-5");
   await captain.getByTestId("agent-save").click();
+  await expect(captain.getByRole("status")).toHaveText("Saved ✓");
   await expect(captain.getByTestId("agent-model")).toHaveValue("claude-sonnet-5");
   await expect.poll(() => app.readConfig()).toContain("claude-sonnet-5");
   const written = app.readConfig();
@@ -38,6 +40,15 @@ test("settings-29: the Captain editor round-trips the shared config", async ({
   const agents = page.getByTestId("agents-section");
   await expect(agents.getByTestId("agent-row-claude")).toBeVisible();
   await expect(agents.getByTestId("agent-row-codex")).toBeVisible();
+
+  // The shortcut sheet names the palette binding with this platform's
+  // modifier, and the terminal theme stands last under its CLI name.
+  const sheet = page.getByTestId("shortcuts-section");
+  await expect(sheet).toContainText("Switch or add a project");
+  await expect(sheet.getByRole("row").nth(1)).toContainText(/⌘P|Ctrl\+P/);
+  await expect(page.getByRole("heading", { level: 2 }).last()).toHaveText(
+    "Terminal pane theme (CLI only)",
+  );
 
   // A refused edit: a player id that already exists is turned back
   // with its message, and the file stays as it was.

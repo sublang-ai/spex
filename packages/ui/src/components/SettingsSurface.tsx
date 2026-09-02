@@ -8,9 +8,10 @@
 // Captain and the session-player roster are identities and live here,
 // while which player answers a role is a binding and lives with its
 // playbook in the Library. The Agents panel shows per-adapter
-// readiness.
+// readiness. Every edit acknowledges in place — disabled while it is
+// in flight, a transient "Saved ✓" once it landed (DR-010 §3).
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PROTOCOL_VERSION,
   type AgentBlockInput,
@@ -22,6 +23,12 @@ import {
 import { getClient, useAppStore } from "../state/store.js";
 import { patchPlayer, setCaptain } from "../lib/config-ops.js";
 import { NOTIFICATION_LABELS } from "../lib/labels.js";
+import {
+  PLAIN_SHORTCUTS,
+  SHORTCUTS,
+  keyLabel,
+  modKey,
+} from "../lib/shortcuts.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditor } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
@@ -33,6 +40,45 @@ const NOTIFICATION_EVENTS = [
   "turn_aborted",
 ] as const;
 const SINKS = ["off", "bell", "desktop"] as const;
+
+/** The one acknowledgment a landed edit gets (settings-6). */
+const SAVED = "Saved ✓";
+
+/** Transient text that clears itself — the saved tick — with the
+ * timer dying alongside the component. */
+function useTransient(
+  ms: number,
+): [string | undefined, (value: string) => void] {
+  const [value, setValue] = useState<string>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const set = useCallback(
+    (next: string) => {
+      setValue(next);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setValue(undefined), ms);
+    },
+    [ms],
+  );
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  return [value, set];
+}
+
+function SavedTick({ testId }: { testId: string }) {
+  return (
+    <span
+      role="status"
+      data-testid={testId}
+      className="text-xs text-emerald-700 dark:text-emerald-300"
+    >
+      {SAVED}
+    </span>
+  );
+}
 
 function ReadinessBadge({ entry }: { entry?: ReadinessEntry }) {
   if (!entry) return null;
@@ -77,9 +123,11 @@ function positionLabel(position: string): string {
 
 function ThemeInput({
   value,
+  disabled,
   onCommit,
 }: {
   value: string;
+  disabled?: boolean;
   onCommit: (value: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
@@ -89,18 +137,25 @@ function ThemeInput({
   };
   return (
     <input
+      aria-label="Terminal pane theme"
       value={draft}
       placeholder="auto"
+      disabled={disabled}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
       onKeyDown={(event) => {
         if (event.key === "Enter") commit();
       }}
-      className="w-48 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
+      className="w-48 rounded border border-neutral-300 bg-white px-2 py-1 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
     />
   );
 }
 
+/** The sheet's keys the platform way: glyphs on a Mac, words
+ * elsewhere, so "Ctrl+Shift+S" never reads "Ctrl+⇧S". */
+function sheetKeys(keys: string): string {
+  return keyLabel(modKey() === "⌘" ? keys : keys.replace(/⇧/g, "Shift+"));
+}
 
 /** The starting block for a lane the user is adding: a deliberate,
  * visible choice rather than a blank the launcher would refuse. */
@@ -129,6 +184,8 @@ function PlayerRoster({
   const [newId, setNewId] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string>();
   const [error, setError] = useState<{ playerId: string; message: string }>();
+  // The editor closes on save, so the tick lives on the row.
+  const [saved, setSaved] = useTransient(1500);
   const readinessByAdapter = new Map(
     readiness.map((entry) => [entry.adapter, entry]),
   );
@@ -188,6 +245,9 @@ function PlayerRoster({
               </span>
             )}
             <span className="ml-auto flex items-center gap-1">
+              {saved === player.id ? (
+                <SavedTick testId={`player-saved-${player.id}`} />
+              ) : null}
               <button
                 type="button"
                 data-testid={`player-edit-${player.id}`}
@@ -205,7 +265,8 @@ function PlayerRoster({
               {confirmDelete === player.id ? (
                 <InlineConfirm
                   question={`Remove ${player.id}?`}
-                  confirmLabel="remove"
+                  confirmLabel="Remove"
+                  cancelLabel="Keep"
                   onConfirm={() => remove(player.id)}
                   onCancel={() => setConfirmDelete(undefined)}
                 />
@@ -240,6 +301,7 @@ function PlayerRoster({
               onSave={(patch) =>
                 patchPlayer(player.id, patch).then((result) => {
                   setEditing(undefined);
+                  setSaved(player.id);
                   return result;
                 })
               }
@@ -304,6 +366,7 @@ function PlayerRoster({
                   setAdding(false);
                   setNewId("");
                   setError(undefined);
+                  setSaved(id);
                   return result;
                 },
                 (cause: Error) => {
@@ -336,8 +399,13 @@ export function SettingsSurface() {
   const configState = useAppStore((state) => state.configState);
   const readiness = useAppStore((state) => state.readiness);
   const refreshReadiness = useAppStore((state) => state.refreshReadiness);
+  const refresh = useAppStore((state) => state.refresh);
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  // Which preference edit is in flight, and which one just landed.
+  const [pending, setPending] = useState<string>();
+  const [saved, setSaved] = useTransient(1500);
 
   if (!configState) {
     return (
@@ -345,16 +413,27 @@ export function SettingsSurface() {
     );
   }
   if (configState.status !== "valid") {
+    const missing = configState.status === "missing";
     return (
       <div className="mx-auto max-w-2xl p-6">
-        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+        <div
+          data-testid="config-broken"
+          className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+        >
           <div className="font-semibold">
-            {configState.status === "missing"
-              ? "Config file missing"
-              : "Config file invalid"}
+            {missing ? "No config file" : "Config file invalid"}
           </div>
-          <div className="mt-1 flex items-center gap-2">
-            <span className="font-mono text-xs">{configState.path}</span>
+          {missing ? (
+            <p className="mt-1 text-xs">
+              Spex could not create a starter config at{" "}
+              <span className="font-mono">{configState.path}</span> — check
+              the folder is writable, then retry.
+            </p>
+          ) : null}
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {missing ? null : (
+              <span className="font-mono text-xs">{configState.path}</span>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -366,17 +445,37 @@ export function SettingsSurface() {
             >
               {copied ? "Copied" : "Copy path"}
             </button>
+            {missing ? (
+              <button
+                type="button"
+                data-testid="config-retry"
+                disabled={retrying}
+                onClick={() => {
+                  setRetrying(true);
+                  setError(undefined);
+                  refresh()
+                    .catch((cause: Error) => setError(cause.message))
+                    .finally(() => setRetrying(false));
+                }}
+                className="rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-900"
+              >
+                {retrying ? "Retrying…" : "Retry"}
+              </button>
+            ) : null}
           </div>
           {configState.status === "invalid" ? (
-            <ul className="mt-2 list-disc pl-5">
-              {configState.errors.map((entry) => (
-                <li key={entry}>{entry}</li>
-              ))}
-            </ul>
+            <>
+              <ul className="mt-2 list-disc pl-5">
+                {configState.errors.map((entry) => (
+                  <li key={entry}>{entry}</li>
+                ))}
+              </ul>
+              <div className="mt-2 text-xs">
+                Fix the file in your editor; Spex reloads it live.
+              </div>
+            </>
           ) : null}
-          <div className="mt-2 text-xs">
-            Fix the file in your editor; Spex reloads it live.
-          </div>
+          {error ? <p className="mt-2 text-xs">{error}</p> : null}
         </div>
       </div>
     );
@@ -387,11 +486,17 @@ export function SettingsSurface() {
     readiness.map((entry) => [entry.adapter, entry]),
   );
 
-  function edit(op: ConfigEditOpInput) {
+  /** A preference edit: disabled in flight, ticked once landed. */
+  function edit(op: ConfigEditOpInput, key: string) {
     setError(undefined);
+    setPending(key);
     getClient()
       .command("config.edit", { op })
-      .catch((cause: Error) => setError(cause.message));
+      .then(() => setSaved(key))
+      .catch((cause: Error) => setError(cause.message))
+      .finally(() =>
+        setPending((current) => (current === key ? undefined : current)),
+      );
   }
 
   return (
@@ -403,6 +508,15 @@ export function SettingsSurface() {
           <span className="font-mono">{summary.path}</span> — external edits
           appear here live.
         </p>
+        {configState.seeded ? (
+          <p
+            data-testid="config-seeded"
+            className="mt-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
+          >
+            Created a starter config at{" "}
+            <span className="font-mono">{summary.path}</span>
+          </p>
+        ) : null}
         <p className="mt-0.5 text-[11px] text-neutral-500">
           Spex {new URLSearchParams(window.location.search).get("version") ?? "dev"}
           {" · protocol "}
@@ -431,7 +545,13 @@ export function SettingsSurface() {
           key={JSON.stringify(summary.captain)}
           initial={summary.captain}
           readiness={readiness}
-          onSave={(patch) => setCaptain(patch)}
+          status={saved === "captain" ? SAVED : undefined}
+          onSave={(patch) =>
+            setCaptain(patch).then((result) => {
+              setSaved("captain");
+              return result;
+            })
+          }
         />
       </section>
 
@@ -487,51 +607,126 @@ export function SettingsSurface() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-2">
+      <section
+        data-testid="notifications-section"
+        className="flex flex-col gap-2"
+      >
         <h2 className="text-sm font-semibold text-neutral-500">
           Notifications
         </h2>
+        <p className="text-xs text-neutral-500">
+          Where each moment reaches you: nowhere, a terminal bell, or a
+          desktop notification.
+        </p>
         <div className="flex flex-col gap-1.5">
-          {NOTIFICATION_EVENTS.map((event) => (
-            <div key={event} className="flex items-center gap-3 text-sm">
-              <span className="w-56 text-xs" title={event}>
-                {NOTIFICATION_LABELS[event] ?? event}
-              </span>
-              <select
-                aria-label={`${NOTIFICATION_LABELS[event] ?? event} — where to notify`}
-                value={summary.notifications?.[event] ?? "off"}
-                onChange={(changeEvent) =>
-                  edit({
-                    kind: "notifications.set",
-                    prefs: {
-                      ...(summary.notifications ?? {}),
-                      [event]: changeEvent.target.value,
-                    },
-                  })
-                }
-                className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-              >
-                {SINKS.map((sink) => (
-                  <option key={sink}>{sink}</option>
-                ))}
-              </select>
-            </div>
-          ))}
+          {NOTIFICATION_EVENTS.map((event) => {
+            const key = `notifications:${event}`;
+            return (
+              <div key={event} className="flex items-center gap-3 text-sm">
+                <span className="w-56 text-xs" title={event}>
+                  {NOTIFICATION_LABELS[event] ?? event}
+                </span>
+                <select
+                  aria-label={`${NOTIFICATION_LABELS[event] ?? event} — where to notify`}
+                  value={summary.notifications?.[event] ?? "off"}
+                  disabled={pending === key}
+                  onChange={(changeEvent) =>
+                    edit(
+                      {
+                        kind: "notifications.set",
+                        prefs: {
+                          ...(summary.notifications ?? {}),
+                          [event]: changeEvent.target.value,
+                        },
+                      },
+                      key,
+                    )
+                  }
+                  className="rounded border border-neutral-300 bg-white px-2 py-1 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
+                >
+                  {SINKS.map((sink) => (
+                    <option key={sink}>{sink}</option>
+                  ))}
+                </select>
+                {saved === key ? (
+                  <SavedTick testId={`notification-saved-${event}`} />
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-neutral-500">Theme</h2>
-        <div className="flex items-center gap-2 text-sm">
+      <section data-testid="shortcuts-section" className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-neutral-500">
+          Keyboard shortcuts
+        </h2>
+        <p className="text-xs text-neutral-500">
+          The same in the desktop app and a browser; {modKey()} is this
+          machine's modifier.
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">Keyboard shortcuts</caption>
+            <thead>
+              <tr className="text-xs text-neutral-500">
+                <th scope="col" className="px-3 py-1.5 font-medium">
+                  Keys
+                </th>
+                <th scope="col" className="px-3 py-1.5 font-medium">
+                  Does
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {SHORTCUTS.map((shortcut) => (
+                <tr
+                  key={shortcut.keys}
+                  className="border-t border-neutral-100 dark:border-neutral-800"
+                >
+                  <td className="whitespace-nowrap px-3 py-1.5">
+                    <kbd className="rounded border border-neutral-300 bg-neutral-50 px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950">
+                      {sheetKeys(shortcut.keys)}
+                    </kbd>
+                  </td>
+                  <td className="px-3 py-1.5">{shortcut.does}</td>
+                </tr>
+              ))}
+              {PLAIN_SHORTCUTS.map((shortcut) => (
+                <tr
+                  key={shortcut.keys}
+                  className="border-t border-neutral-100 dark:border-neutral-800"
+                >
+                  <td className="whitespace-nowrap px-3 py-1.5">
+                    <kbd className="rounded border border-neutral-300 bg-neutral-50 px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950">
+                      {shortcut.keys}
+                    </kbd>
+                  </td>
+                  <td className="px-3 py-1.5">{shortcut.does}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section data-testid="theme-section" className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-neutral-500">
+          Terminal pane theme (CLI only)
+        </h2>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
           <ThemeInput
             value={summary.theme ?? ""}
+            disabled={pending === "theme"}
             onCommit={(value) =>
-              edit({ kind: "theme.set", theme: value || null })
+              edit({ kind: "theme.set", theme: value || null }, "theme")
             }
           />
+          {saved === "theme" ? <SavedTick testId="theme-saved" /> : null}
           <span className="text-xs text-neutral-500">
-            Pane theme carried to tmux-play (e.g. a catppuccin flavor or
-            auto); Spex itself follows your OS theme.
+            Only sessions run from the playbook CLI use it — the tmux pane
+            theme (e.g. a catppuccin flavor, or auto); Spex itself follows
+            your OS theme.
           </span>
         </div>
       </section>

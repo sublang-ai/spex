@@ -19,6 +19,7 @@ vi.mock("../state/store.js", async (importOriginal) => {
 
 import { SettingsSurface } from "./SettingsSurface.js";
 import { useAppStore } from "../state/store.js";
+import { keyLabel } from "../lib/shortcuts.js";
 import type { ConfigState, ReadinessEntry } from "@sublang/spex-core/protocol";
 
 const CONFIG: ConfigState = {
@@ -195,7 +196,7 @@ describe("SET: the session-player roster", () => {
     });
     renderSettings();
     fireEvent.click(screen.getByTestId("player-delete-dev.coder"));
-    fireEvent.click(screen.getByText("remove"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     await vi.waitFor(() =>
       expect(
         screen.getByTestId("player-error-dev.coder").textContent,
@@ -220,6 +221,117 @@ describe("SET: the session-player roster", () => {
         },
       }),
     );
+  });
+});
+
+describe("settings-6: every edit acknowledges in place", () => {
+  test("saving the Captain shows a transient Saved tick beside Save", async () => {
+    renderSettings();
+    const section = screen.getByTestId("captain-section");
+    expect(within(section).getByTestId("agent-status").textContent).toBe("");
+    fireEvent.change(within(section).getByTestId("agent-model"), {
+      target: { value: "claude-opus-5" },
+    });
+    fireEvent.click(within(section).getByTestId("agent-save"));
+    await vi.waitFor(() =>
+      expect(within(section).getByRole("status").textContent).toBe("Saved ✓"),
+    );
+  });
+
+  test("a notification select is disabled in flight, then ticks", async () => {
+    let land!: (value: unknown) => void;
+    commandMock.mockImplementation(
+      () => new Promise((resolve) => (land = resolve)),
+    );
+    renderSettings();
+    const [select] = within(
+      screen.getByTestId("notifications-section"),
+    ).getAllByRole("combobox") as HTMLSelectElement[];
+    fireEvent.change(select, { target: { value: "bell" } });
+    expect(select.disabled).toBe(true);
+    expect(
+      screen.queryByTestId("notification-saved-player_finished"),
+    ).toBeNull();
+    land(CONFIG);
+    await vi.waitFor(() => expect(select.disabled).toBe(false));
+    expect(
+      screen.getByTestId("notification-saved-player_finished").textContent,
+    ).toBe("Saved ✓");
+  });
+
+  test("the terminal theme is named for the CLI and stands last", () => {
+    renderSettings();
+    const headings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(headings[headings.length - 1]).toBe(
+      "Terminal pane theme (CLI only)",
+    );
+    expect(headings).toContain("Keyboard shortcuts");
+  });
+});
+
+describe("settings-9: a seeded starter config says so once", () => {
+  test("the header names the created file; a loaded one says nothing", () => {
+    useAppStore.setState({
+      configState: { ...CONFIG, seeded: true },
+      readiness: READINESS,
+      refreshReadiness: vi.fn(async () => {}),
+    });
+    const { unmount } = render(<SettingsSurface />);
+    expect(screen.getByTestId("config-seeded").textContent).toContain(
+      "Created a starter config at /tmp/playbook.config.yaml",
+    );
+    unmount();
+    renderSettings();
+    expect(screen.queryByTestId("config-seeded")).toBeNull();
+  });
+});
+
+describe("settings-10: the shortcut sheet and the mode guidance", () => {
+  test("the sheet lists every binding with this platform's modifier", () => {
+    renderSettings();
+    const sheet = screen.getByTestId("shortcuts-section");
+    const rows = within(sheet).getAllByRole("row").slice(1);
+    expect(rows.length).toBeGreaterThan(8);
+    expect(rows[0].textContent).toContain(keyLabel("P"));
+    expect(rows[0].textContent).toContain("Switch or add a project");
+    expect(sheet.textContent).toContain("Escape");
+    expect(sheet.textContent).toContain("Shift+Enter");
+  });
+
+  test("the permission mode explains its stakes", () => {
+    renderSettings();
+    const section = screen.getByTestId("captain-section");
+    expect(within(section).getByTestId("agent-mode-help").textContent).toMatch(
+      /^auto:/,
+    );
+    fireEvent.change(within(section).getByTestId("agent-mode"), {
+      target: { value: "bypass" },
+    });
+    expect(within(section).getByTestId("agent-mode-help").textContent).toBe(
+      "bypass: no permission prompts — sandboxed repos only",
+    );
+  });
+});
+
+describe("settings-24: a missing config names the remedy and retries", () => {
+  test("the copy names the path, the folder, and a Retry that refreshes", async () => {
+    const refresh = vi.fn(async () => {});
+    useAppStore.setState({
+      configState: { status: "missing", path: "/tmp/playbook.config.yaml" },
+      readiness: [],
+      refreshReadiness: vi.fn(async () => {}),
+      refresh,
+    });
+    render(<SettingsSurface />);
+    const box = screen.getByTestId("config-broken");
+    expect(box.textContent).toContain(
+      "Spex could not create a starter config at /tmp/playbook.config.yaml — check the folder is writable, then retry.",
+    );
+    expect(box.textContent).not.toContain("Fix the file in your editor");
+    fireEvent.click(screen.getByTestId("config-retry"));
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 });
 

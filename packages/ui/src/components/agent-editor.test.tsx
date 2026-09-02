@@ -260,6 +260,20 @@ describe("DR-019: a save emits a merge patch over surfaced fields", () => {
   });
 });
 
+describe("settings-10: the permission mode explains itself", () => {
+  test("each mode carries its own line, bypass naming the sandbox rule", () => {
+    const editor = renderEditor({ adapter: "claude", permissions: { mode: "auto" } });
+    const help = () => screen.getByTestId("agent-mode-help").textContent;
+    expect(help()).toMatch(/^auto: /);
+    fireEvent.change(editor.mode(), { target: { value: "bypass" } });
+    expect(help()).toBe("bypass: no permission prompts — sandboxed repos only");
+    fireEvent.change(editor.mode(), { target: { value: "none" } });
+    expect(help()).toMatch(/^none: /);
+    // Writable paths carry a worked example.
+    expect(editor.paths().placeholder).toContain(".git");
+  });
+});
+
 describe("DR-019: Same as Captain copies settings, not prose", () => {
   const CAPTAIN: ChipAgent = {
     adapter: "codex",
