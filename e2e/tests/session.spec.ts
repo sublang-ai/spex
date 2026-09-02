@@ -85,11 +85,16 @@ test("run-view-98: the first task runs, queues, and ends", async ({ page, app })
   );
   await tab.click();
 
-  // Ending: the inline confirm, then read-only.
+  // Ending: the inline confirm says a message can continue it, then
+  // the notice reads the paused conversation above the composer,
+  // which stays (run-view-33, DR-042).
   await page.getByTestId("end-session").click();
+  await expect(page.getByRole("button", { name: "Keep", exact: true })).toBeVisible();
+  await expect(page.getByText(/A message can continue it later/)).toBeVisible();
   await page.getByRole("button", { name: "End", exact: true }).click();
-  await expect(page.getByTestId("ended-notice")).toBeVisible();
-  await expect(page.getByTestId("boss-composer")).toHaveCount(0);
+  await expect(page.getByTestId("ended-notice")).toContainText("a message continues it");
+  await expect(page.getByTestId("boss-composer")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "New session", exact: true })).toBeVisible();
   await expect(tree).toContainText(/fix the token refresh/i);
 });
 

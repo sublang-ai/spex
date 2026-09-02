@@ -505,8 +505,8 @@ export function SettingsSurface() {
         <h1 className="text-lg font-semibold">Settings</h1>
         <p className="mt-0.5 text-xs text-neutral-500">
           Shared with the playbook CLI:{" "}
-          <span className="font-mono">{summary.path}</span> — external edits
-          appear here live.
+          <span className="font-mono break-all">{summary.path}</span> — external
+          edits appear here live.
         </p>
         {configState.seeded ? (
           <p

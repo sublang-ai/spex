@@ -522,7 +522,7 @@ export function SpecGraph({
     <div
       ref={containerRef}
       data-testid="spec-graph"
-      className="relative flex h-full min-h-0 flex-col"
+      className="@container relative flex h-full min-h-0 flex-col"
     >
       <svg
         ref={svgRef}
@@ -869,7 +869,8 @@ export function SpecGraph({
         >
           Fit
         </button>
-        <span className="ml-auto whitespace-nowrap">
+        {/* A tip, not a key: it yields first in a narrow pane (DR-041). */}
+        <span className="ml-auto hidden whitespace-nowrap @md:inline">
           click opens · drag moves · scroll zooms
         </span>
       </div>

@@ -401,7 +401,7 @@ export function CaptainHome(props: CaptainHomeProps) {
 
       <div className="mt-3 flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
-          <span className="relative ml-auto flex items-center gap-1 text-xs text-neutral-500">
+          <span className="relative ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500">
             Captain:{" "}
             {captain ? (
               <AgentChip

@@ -72,7 +72,7 @@ function GitHubLine({ meta }: { meta?: ProjectMeta }) {
   return (
     <div
       data-testid="overview-github"
-      className="text-xs text-neutral-500"
+      className="text-xs text-neutral-500 [overflow-wrap:anywhere]"
     >
       GitHub: {text}
     </div>
@@ -157,10 +157,14 @@ export function OverviewTab({
       data-testid="overview-tab"
       className="mx-auto flex w-full max-w-3xl flex-col gap-4 overflow-y-auto p-6"
     >
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
+      {/* The header fits its pane (DR-041): the name owns the slack and
+          the controls wrap under it when the pane is too narrow. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1 basis-40">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold">{project.name}</span>
+            <span className="min-w-0 truncate text-lg font-semibold">
+              {project.name}
+            </span>
             <StatusBadges meta={meta} />
           </div>
           <div className="truncate text-xs text-neutral-500">

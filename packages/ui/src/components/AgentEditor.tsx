@@ -242,7 +242,7 @@ export function AgentEditor(props: AgentEditorProps) {
             value={model}
             onChange={(event) => setModel(event.target.value)}
             placeholder={`default for ${adapter}`}
-            className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
+            className="w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
           />
         </label>
         <label className="flex flex-col gap-0.5">
@@ -251,7 +251,7 @@ export function AgentEditor(props: AgentEditorProps) {
             data-testid="agent-effort"
             value={effort}
             onChange={(event) => setEffort(event.target.value)}
-            className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
+            className="w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
           >
             <option value="">(default)</option>
             {EFFORT_VOCAB[adapter].map((name) => (

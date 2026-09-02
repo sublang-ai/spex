@@ -536,7 +536,9 @@ function NowBand({
   return (
     <div className="flex flex-col gap-1" data-testid={`now-${project.id}`}>
       <BandHeading>Now</BandHeading>
-      <div className="flex items-center gap-2">
+      {/* The row fits its band (DR-041): the title owns the slack, the
+          age hides below @md and the playbook name below @xs. */}
+      <div className="@container flex items-center gap-2">
         <button
           ref={rowRef}
           type="button"
@@ -546,7 +548,7 @@ function NowBand({
           className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left text-sm dark:border-neutral-800 dark:bg-neutral-900"
         >
           <RunningMark running={view?.turnActive ?? false} />
-          <span className="shrink-0 text-xs text-neutral-500">
+          <span className="hidden shrink-0 text-xs text-neutral-500 @xs:inline">
             {playbook ?? "no playbook"}
           </span>
           <span
@@ -559,7 +561,7 @@ function NowBand({
             {title}
           </span>
           <span
-            className="shrink-0 text-[11px] text-neutral-500"
+            className="hidden shrink-0 text-[11px] text-neutral-500 @md:inline"
             title={absoluteTitle(session.createdAt)}
           >
             started {relativeAge(session.createdAt, now)}

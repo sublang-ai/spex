@@ -54,9 +54,11 @@ export function AgentChip({
     <span
       data-testid="agent-chip"
       aria-label={`${label ? `${label}: ` : ""}${text}${agent.fastMode ? ", fast mode" : ""}${state ? ` (${state})` : ""}`}
-      className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+      className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
     >
-      {text}
+      {/* The words truncate in a narrow row (DR-041); the accessible
+          name above carries them whole. */}
+      <span className="min-w-0 truncate">{text}</span>
       {agent.fastMode ? (
         <span
           aria-hidden

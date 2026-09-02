@@ -16,9 +16,7 @@ import { test, expect, open, send, writeTerminalSession } from "../src/harness";
 
 test.use({ appOptions: { project: true, agentDelayMs: 300 } });
 
-// Waits for the run view to keep the composer on a continuable ended
-// session (IR-049 lands it); un-fixme then.
-test.fixme("run-view-109: a message continues an ended session, before and after a restart", async ({
+test("run-view-109: a message continues an ended session, before and after a restart", async ({
   page,
   app,
 }) => {

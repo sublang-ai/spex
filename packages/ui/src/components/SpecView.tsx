@@ -1837,7 +1837,9 @@ function ItemRow({
             copy failed
           </span>
         ) : null}
-        <span className={`shrink-0 text-[11px] ${GROUP_TEXT[group]}`}>
+        {/* The group word duplicates the chip's color and accessible
+            name, so it hides first below @md (spec-view-55). */}
+        <span className={`hidden shrink-0 text-[11px] @md:inline ${GROUP_TEXT[group]}`}>
           {group}
         </span>
         <button

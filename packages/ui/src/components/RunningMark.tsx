@@ -18,7 +18,10 @@ export function RunningMark({
     <span
       {...rest}
       data-running={running ? "true" : "false"}
-      className={`h-2 w-2 shrink-0 rounded-full ${
+      // Positioned so the hidden word stays inside the mark — and inside
+      // any scrolling pane the mark sits in — instead of widening the
+      // page from its static position (DR-041).
+      className={`relative h-2 w-2 shrink-0 rounded-full ${
         running
           ? "bg-emerald-500 motion-safe:animate-pulse"
           : "border-2 border-neutral-500"

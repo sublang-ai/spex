@@ -122,7 +122,10 @@ function AttentionRow({
       data-testid={`attention-${entry.intentId ?? entry.sessionId}-${entry.kind}`}
       data-band={entry.band}
       data-tone={tone}
-      className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 text-sm ${TONE_ROW[tone]}`}
+      // The row fits its pane (dashboard-1, DR-041): the title owns
+      // the slack; the project name hides below @xs and the age
+      // below @md.
+      className={`@container flex items-center gap-3 rounded-lg border px-4 py-2.5 text-sm ${TONE_ROW[tone]}`}
     >
       <button
         type="button"
@@ -150,13 +153,13 @@ function AttentionRow({
           ) : null}
         </span>
         <span
-          className="min-w-0 max-w-40 truncate text-[11px] opacity-70"
+          className="hidden min-w-0 max-w-40 truncate text-[11px] opacity-70 @xs:inline"
           title={projectName}
         >
           {projectName}
         </span>
         <span
-          className="shrink-0 text-[11px] opacity-70"
+          className="hidden shrink-0 text-[11px] opacity-70 @md:inline"
           title={absoluteTitle(entry.since)}
         >
           {relativeAge(entry.since, now)}

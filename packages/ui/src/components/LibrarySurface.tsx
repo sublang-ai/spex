@@ -239,12 +239,15 @@ function BuiltinCard({
       data-testid={`builtin-${info.id}`}
       className="flex flex-col gap-2 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900"
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-sm font-semibold">/{info.command}</span>
-        <span className="truncate text-xs text-neutral-500" title={info.intent}>
+        <span
+          className="min-w-0 flex-1 truncate text-xs text-neutral-500"
+          title={info.intent}
+        >
           {info.intent}
         </span>
-        <span className="ml-auto rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+        <span className="ml-auto rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
           available built-in
         </span>
         {info.source ? (
@@ -262,7 +265,10 @@ function BuiltinCard({
         {info.roles.map((role) => {
           const block = players[role] ?? NEUTRAL_BLOCK;
           return (
-            <span key={role} className="relative flex items-center gap-1">
+            <span
+              key={role}
+              className="relative flex min-w-0 max-w-full flex-wrap items-center gap-1"
+            >
               <span className="font-mono">{role}:</span>
               <AgentChip
                 agent={block}
@@ -365,11 +371,11 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
       data-testid="example-card"
       className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900"
     >
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 truncate text-sm font-semibold">
           Example: {SLC_DEMO.title}
         </span>
-        <span className="truncate text-xs text-neutral-500">
+        <span className="min-w-0 truncate text-xs text-neutral-500">
           from {SLC_DEMO.credit}
         </span>
         <span className="ml-auto" />
@@ -666,7 +672,13 @@ export function LibrarySurface({
                   (position) => !position.startsWith(`${playbook.id}.`),
                 );
                 return (
-                  <span key={role} className="relative flex items-center gap-1">
+                  <span
+                    key={role}
+                    // The binding wraps within itself in a narrow pane
+                    // (DR-041): the chip and its control drop under
+                    // the role rather than squeezing to nothing.
+                    className="relative flex min-w-0 max-w-full flex-wrap items-center gap-1"
+                  >
                     <span className="font-mono">{role}:</span>
                     <span
                       data-testid={`role-binding-${playbook.id}-${role}`}

@@ -23,7 +23,7 @@ While at least one attention entry derives across the registered projects' inten
 | Finished | one entry per finished intent awaiting a verdict, leading with the intent's title and showing its project, session, and the run's stats [[dashboard-35](#dashboard-35)] with review rounds foremost |
 
 - A live session serving no intent stands in with session-level entries: its question, permission, and failure conditions — the same conditions, holding outside any intent's turn range — join the interrupted band, and at most one turn-to-review entry per session, for a finished Boss turn later than the session's persisted last-viewed marker, joins the finished band.
-- An entry's title owns its row's slack, and the project name truncates at 10rem with the full name in its title ([DR-041](../decisions/041-chrome-that-fits.md)).
+- An entry's title owns its row's slack; the project name truncates at 10rem with the full name in its title, and in a row narrower than 28rem the age hides, the project name too below 20rem ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 #### dashboard-2
 
@@ -92,6 +92,7 @@ While the project's one live session [[core-service-4](core-service.md#core-serv
 
 - the band updates as session records arrive, without a manual refresh;
 - the served intent carries Drop beside the session row [[dashboard-41](#dashboard-41)];
+- the text owns the row's slack; in a row narrower than 28rem the start age hides, the playbook name too below 20rem, the mark and the state label staying ([DR-041](../decisions/041-chrome-that-fits.md));
 - while no session is live, the band stays quiet with its empty-state note [[dashboard-8](#dashboard-8)].
 
 #### dashboard-41
