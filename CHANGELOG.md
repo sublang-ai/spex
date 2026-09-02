@@ -35,6 +35,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - **A session with no player lanes** — one the playbook terminal
   wrote — shows the Captain column alone at the home's reading width
   instead of a divider beside an empty half.
+- **Nested machine states read by name.** A region of `/decide`'s
+  parallel proposals drew under its whole dotted id, trimmed past the
+  box; it now goes by its own segment with its parent as caption and
+  the whole path in tooltips and the status line.
+- **A codex coder's tool rows read as commands**: the login-shell
+  wrapper is unwrapped and its shell tool reads "shell", as a Claude
+  coder's rows already did.
 
 ## [0.2.0] - 2026-09-02
 
