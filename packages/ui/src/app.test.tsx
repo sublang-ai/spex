@@ -207,9 +207,13 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
       screen.getByTestId("sidebar-mark-a-live").dataset.life,
     ).toBe("question");
     expect(liveRow.textContent).toContain("harden the session refresh");
-    // Relative time is printed, and the fuller scent is in the
-    // accessible description rather than behind a hover.
+    // The compact age is printed with the exact moment on hover, and
+    // the fuller scent is in the accessible description (run-view-73).
     expect(liveRow.textContent).toContain("2m");
+    expect(screen.getByTestId("sidebar-age-a-live").title).toBe(
+      new Date(NOW - 120_000).toLocaleString(),
+    );
+    expect(liveRow.getAttribute("aria-label")).toContain("2m ago");
     expect(liveRow.getAttribute("aria-label")).toContain("2 turns");
 
     // A failure the session ended holding is history, not a summons.
@@ -358,6 +362,14 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     // Sessions stop listing, but the open tab is still the reach.
     expect(screen.queryByTestId("sidebar-session-a-live")).toBeNull();
     expect(screen.getByRole("tab", { selected: true })).toBeTruthy();
+    // The palette control keeps its icon-only form under the
+    // Workspace entry (DR-030): collapse never hides a duty.
+    const palette = screen.getByLabelText("Switch or add a project");
+    expect(palette.title).toBe(`Switch or add a project (${keyLabel("P")})`);
+    fireEvent.click(palette);
+    expect(screen.getByRole("dialog", { name: "Choose a project" })).toBeTruthy();
+    fireEvent.keyDown(screen.getByTestId("palette-search"), { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Choose a project" })).toBeNull();
 
     // Chrome state is a preference: it survives a remount.
     unmount();

@@ -12,6 +12,8 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { AttentionItem } from "../state/dashboard.js";
+import { keyLabel } from "../lib/shortcuts.js";
+import { absoluteTitle, compactAge, relativeAge } from "../lib/time.js";
 import { Icon, type IconName } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import logo from "../assets/spex-logo.svg";
@@ -76,19 +78,6 @@ export interface NavRailProps {
   foot?: ReactNode;
 }
 
-/** Short, scannable age — a sidebar has room for three characters. */
-export function relativeTime(at: number, now: number): string {
-  const seconds = Math.max(0, Math.round((now - at) / 1000));
-  if (seconds < 60) return "now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d`;
-  return `${Math.round(days / 7)}w`;
-}
-
 type Life = "question" | "failure" | "running" | "ended-failed" | "ended";
 
 /** Attention first, life second (run-view-73): the row says "answer
@@ -128,7 +117,7 @@ function sessionLabel(
   const when = session.endedAt ?? session.createdAt;
   const turns = `${session.turns} turn${session.turns === 1 ? "" : "s"}`;
   const detail = item?.text ? ` — ${item.text}` : "";
-  return `${title} — ${LIFE_WORDS[life]}, ${relativeTime(when, now)} ago, ${turns}${detail}`;
+  return `${title} — ${LIFE_WORDS[life]}, ${relativeAge(when, now)}, ${turns}${detail}`;
 }
 
 interface Row {
@@ -398,6 +387,23 @@ export function NavRail(props: NavRailProps) {
     }`;
   }
 
+  // The palette control keeps its icon-only form across the fold
+  // (DR-030): collapse never hides the way to add or switch a project.
+  const paletteControl = (
+    <button
+      type="button"
+      data-testid="sidebar-palette"
+      onClick={props.onOpenPalette}
+      title={`Switch or add a project (${keyLabel("P")})`}
+      aria-label="Switch or add a project"
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+        collapsed ? "self-center" : "-my-0.5"
+      }`}
+    >
+      <Icon name="plus" className="h-3.5 w-3.5" />
+    </button>
+  );
+
   const tree = (
     <div
       ref={treeRef}
@@ -453,7 +459,9 @@ export function NavRail(props: NavRailProps) {
                   event.stopPropagation();
                   onExpanded(project.id, !open);
                 }}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                // A 24px target inside a shorter row: the negative
+                // margins keep the row's height (DR-010 §7).
+                className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
               >
                 <Icon
                   name={open ? "caretDown" : "caretRight"}
@@ -541,10 +549,18 @@ export function NavRail(props: NavRailProps) {
                               not deleted
                             </span>
                           ) : (
-                            <span className="shrink-0 text-[11px] tabular-nums text-neutral-500 dark:text-neutral-400">
+                            // The one time vocabulary (run-view-73): a
+                            // compact age with the exact moment on hover.
+                            <span
+                              data-testid={`sidebar-age-${session.id}`}
+                              title={absoluteTitle(
+                                session.endedAt ?? session.createdAt,
+                              )}
+                              className="shrink-0 text-[11px] tabular-nums text-neutral-500 dark:text-neutral-400"
+                            >
                               {deleting[session.id]
                                 ? "deleting…"
-                                : relativeTime(
+                                : compactAge(
                                     session.endedAt ?? session.createdAt,
                                     now,
                                   )}
@@ -564,7 +580,7 @@ export function NavRail(props: NavRailProps) {
                                 setConfirmDelete(session.id);
                               }}
                               onKeyDown={stop}
-                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 opacity-0 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:hover:text-red-400"
+                              className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:hover:text-red-400"
                             >
                               <Icon name="trash" className="h-3.5 w-3.5" />
                             </button>
@@ -639,6 +655,7 @@ export function NavRail(props: NavRailProps) {
       {collapsed ? (
         <>
           {surfaceEntry("Workspace")}
+          {paletteControl}
           {/* Entries keep their places across the fold: Playbooks and
               Settings stay at the foot in both states. */}
           <div className="flex-1" />
@@ -659,16 +676,7 @@ export function NavRail(props: NavRailProps) {
             >
               Workspace
             </button>
-            <button
-              type="button"
-              data-testid="sidebar-palette"
-              onClick={props.onOpenPalette}
-              title="Switch or add a project (⌘P)"
-              aria-label="Switch or add a project"
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-            >
-              <Icon name="plus" className="h-3.5 w-3.5" />
-            </button>
+            {paletteControl}
           </div>
           {tree}
         </section>
@@ -687,9 +695,7 @@ export function NavRail(props: NavRailProps) {
           type="button"
           data-testid="sidebar-collapse"
           onClick={() => onCollapsed(!collapsed)}
-          title={
-            collapsed ? "Show the sidebar (⌘B)" : "Collapse the sidebar (⌘B)"
-          }
+          title={`${collapsed ? "Show" : "Collapse"} the sidebar (${keyLabel("B")})`}
           aria-label={collapsed ? "Show the sidebar" : "Collapse the sidebar"}
           aria-expanded={!collapsed}
           className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
