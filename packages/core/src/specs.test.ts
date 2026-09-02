@@ -12,6 +12,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -23,7 +24,12 @@ import { WebSocket } from "ws";
 
 import { parseSpecFileText, parseSpecTree, resolveSpecPath } from "./specs.js";
 import { CoreService } from "./service.js";
-import type { SpecFileInfo, SpecItemInfo, SpecTreeState } from "./protocol.js";
+import type {
+  SpecFileInfo,
+  SpecItemInfo,
+  SpecRecordInfo,
+  SpecTreeState,
+} from "./protocol.js";
 
 const posixTest = process.platform === "win32" ? test.skip : test;
 
@@ -44,6 +50,13 @@ function file(tree: SpecTreeState, key: string): SpecFileInfo {
     `file ${key} in ${JSON.stringify(tree.files.map((f) => f.key))}`,
   );
   return found;
+}
+
+/** A record minus its file's last change, which every record carries
+ * and no fixture can pin (spec-view-14). */
+function identity({ updatedAt, ...rest }: SpecRecordInfo): Omit<SpecRecordInfo, "updatedAt"> {
+  assert.equal(typeof updatedAt, "number");
+  return rest;
 }
 
 function item(info: SpecFileInfo, id: string): SpecItemInfo {
@@ -419,7 +432,7 @@ test("a user/dev/test directory flags the tree legacy with empty files", () => {
   assert.deepEqual(tree.files, []);
   assert.deepEqual(tree.notices, []);
   // Records still parse in legacy mode.
-  assert.deepEqual(tree.decisions, [
+  assert.deepEqual(tree.decisions.map(identity), [
     { id: "DR-001", title: "Architecture", path: "decisions/001-arch.md" },
   ]);
 });
@@ -455,7 +468,7 @@ test("a compositions/ directory flags the tree legacy with empty files", () => {
   // Nothing parses from any collection — the packages file included.
   assert.deepEqual(tree.files, []);
   assert.deepEqual(tree.notices, []);
-  assert.deepEqual(tree.decisions, [
+  assert.deepEqual(tree.decisions.map(identity), [
     { id: "DR-001", title: "Architecture", path: "decisions/001-arch.md" },
   ]);
 });
@@ -486,7 +499,7 @@ test("decisions and intents parse id, title, and path sorted by filename", () =>
     "specs/intents/001-first.md": "# IR-001: First intent\n",
   });
   const tree = parseSpecTree(dir);
-  assert.deepEqual(tree.decisions, [
+  assert.deepEqual(tree.decisions.map(identity), [
     { id: "DR-002", title: "Architecture only", path: "decisions/002-arch.md" },
     {
       id: "DR-011",
@@ -494,9 +507,56 @@ test("decisions and intents parse id, title, and path sorted by filename", () =>
       path: "decisions/011-project-workspace.md",
     },
   ]);
-  assert.deepEqual(tree.intents, [
+  assert.deepEqual(tree.intents.map(identity), [
     { id: "IR-001", title: "First intent", path: "intents/001-first.md" },
   ]);
+});
+
+test("spec-view-14: a record's status classifies by its leading word, verbatim kept, with the file's last change", () => {
+  // The real vocabulary of records, with the punctuation they carry.
+  const cases: [string, string | undefined, "done" | "superseded" | undefined][] = [
+    ["001-done", "Done", "done"],
+    ["002-done-details", "Done — shipped 2026-08-01", "done"],
+    ["003-complete", "Complete", "done"],
+    ["004-completed", "Completed.", "done"],
+    ["005-superseded", "Superseded; see IR-9.", "superseded"],
+    ["006-in-progress", "In progress.", undefined],
+    ["007-planned", "Planned", undefined],
+    ["008-open", "Open", undefined],
+    ["009-none", undefined, undefined],
+  ];
+  const files: Record<string, string> = {};
+  for (const [name, status] of cases) {
+    files[`specs/intents/${name}.md`] =
+      `# IR-${name.slice(0, 3)}: ${name}\n\n` +
+      (status === undefined ? "" : `## Status\n\n${status}\n\n`) +
+      "## Intent\n\nWork.\n";
+  }
+  files["specs/decisions/001-kept.md"] =
+    "# DR-001: Kept\n\n## Status\n\nAccepted (2026-09-01).\n";
+  files["specs/decisions/002-gone.md"] =
+    "# DR-002: Gone\n\n## Status\n\nsuperseded by DR-003\n";
+  const dir = fixture(files);
+  const tree = parseSpecTree(dir);
+  const byId = new Map(
+    [...tree.intents, ...tree.decisions].map((record) => [record.id, record]),
+  );
+  for (const [name, status, finished] of cases) {
+    const record = byId.get(`IR-${name.slice(0, 3)}`);
+    assert.ok(record, name);
+    assert.equal(record.status, status, `${name} keeps its status verbatim`);
+    if (finished === undefined) {
+      assert.ok(!("finished" in record), `${name} is open`);
+    } else {
+      assert.equal(record.finished, finished, name);
+    }
+    assert.equal(
+      record.updatedAt,
+      Math.round(statSync(join(dir, "specs", "intents", `${name}.md`)).mtimeMs),
+    );
+  }
+  assert.ok(!("finished" in (byId.get("DR-001") as SpecRecordInfo)));
+  assert.equal(byId.get("DR-002")?.finished, "superseded");
 });
 
 test("duplicate record numbers are kept and noticed", () => {
@@ -531,7 +591,7 @@ test("intent records merge a coexisting legacy iterations directory", () => {
     "specs/iterations/003-shadowing.md": "# IR-003: Legacy copy\n",
   });
   const tree = parseSpecTree(dir);
-  assert.deepEqual(tree.intents, [
+  assert.deepEqual(tree.intents.map(identity), [
     { id: "IR-001", title: "First intent", path: "intents/001-first.md" },
     {
       id: "IR-002",

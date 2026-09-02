@@ -16,6 +16,7 @@ export interface AgentBlock {
   adapter: string;
   model?: string;
   effort?: string;
+  fastMode?: boolean;
   instruction?: string;
   permissions?: {
     mode?: string;
@@ -32,6 +33,8 @@ export type AgentPatch = {
   adapter?: string;
   model?: string | null;
   effort?: string | null;
+  /** `true`/`false` write the key; null removes it (DR-038). */
+  fastMode?: boolean | null;
   instruction?: string | null;
   permissions?: AgentBlock["permissions"] | null;
 };

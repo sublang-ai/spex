@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export type { TmuxPlayRecord };
 
@@ -42,6 +42,8 @@ export interface AgentSummary {
   model?: string;
   /** Adapter-scoped vocabulary; composition validates. */
   effort?: string;
+  /** Adapter-scoped fast mode; the chip wears a lightning mark (DR-038). */
+  fastMode?: boolean;
   instruction?: string;
   permissions?: AgentPermissionsSummary;
 }
@@ -65,6 +67,7 @@ export interface RoleBindingSummary {
   playerId: string;
   model?: string | false;
   effort?: string | false;
+  fastMode?: boolean;
   /** What this role effectively runs, after inheritance. */
   display: string;
 }
@@ -151,9 +154,12 @@ export interface SessionInfo {
   live: boolean;
   endedAt: number | null;
   /** The session's bound player roster, in config order (DR-032). */
-  players: { id: string; adapter: AdapterName; model?: string }[];
+  players: { id: string; adapter: AdapterName; model?: string; fastMode?: boolean }[];
   /** Panes visible at session start, before any player_view_changed record. */
   initialVisible: string[];
+  /** Set on a session another host wrote into the shared session
+   * store: served here, never written or deleted (DR-036, DR-038). */
+  foreign?: true;
   /** The session's own words: its first Boss turn, absent when the
    * session held no turn (core-service-32). */
   title?: string;
@@ -178,6 +184,9 @@ export interface ReadinessEntry {
   requirement?: string;
   /** Positions using this adapter: "captain" or `<playbook>.<role>`. */
   usedBy: string[];
+  /** Whether the embedded runtime declares fast mode for this adapter
+   * (DR-038); the editor offers the switch only then. */
+  fastModeSupported: boolean;
 }
 
 /** What a run reported spending. `costSources` names every provenance
@@ -243,6 +252,9 @@ export interface IntentSource {
    * id for chat capture. */
   ref: string;
   url?: string;
+  /** The forge labels the source carried at capture — provenance, so a
+   * fixed bug is known as one without a later forge read (DR-038). */
+  labels?: string[];
 }
 
 /** One stored intent: a staged Boss turn plus its acts (DR-035).
@@ -362,6 +374,7 @@ export const agentPatchSchema = z.object({
   adapter: z.string().min(1).optional(),
   model: z.string().nullable().optional(),
   effort: z.string().nullable().optional(),
+  fastMode: z.boolean().nullable().optional(),
   instruction: z.string().nullable().optional(),
   permissions: z
     .object({
@@ -517,6 +530,7 @@ export const commandSchema = z.discriminatedUnion("type", [
         kind: z.enum(["issue", "pr", "record", "chat"]),
         ref: z.string().min(1),
         url: z.string().min(1).optional(),
+        labels: z.array(z.string()).optional(),
       })
       .optional(),
     afterIntentId: z.string().min(1).optional(),
@@ -564,6 +578,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     sessionId: z.string().min(1),
     turnId: z.number().int().nonnegative(),
   }),
+  z.object({ type: z.literal("session.delete"), id, sessionId: z.string().min(1) }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -582,6 +597,7 @@ export interface CommandResults {
   "session.list": SessionInfo[];
   "session.create": SessionInfo;
   "session.dispose": null;
+  "session.delete": null;
   "turn.submit": { accepted: true };
   "turn.abort": { aborted: boolean };
   subscribe: null;
@@ -664,9 +680,13 @@ export interface SpecRecordInfo {
   /** Path relative to the project's specs/ directory. */
   path: string;
   /** The first non-empty line of the record's `## Status` section,
-   * verbatim; absent when the file has none. A line starting with
-   * "Done" (case-insensitive) marks a finished record (DR-035). */
+   * verbatim; absent when the file has none. */
   status?: string;
+  /** The core's classification of that line (spec-view-14, DR-038):
+   * absent while open; "done" or "superseded" once finished. */
+  finished?: "done" | "superseded";
+  /** The file's last change, for History's timeline (DR-038). */
+  updatedAt?: number;
 }
 
 export interface SpecTreeState {
@@ -755,6 +775,13 @@ export interface ReadinessStateMessage {
   entries: ReadinessEntry[];
 }
 
+/** A stored session was deleted (DR-038): clients drop every trace. */
+export interface SessionRemovedMessage {
+  type: "session.removed";
+  sessionId: string;
+  projectId: string;
+}
+
 export interface SessionStateMessage {
   type: "session.state";
   session: SessionInfo;
@@ -782,6 +809,7 @@ export type ServerMessage =
   | ConfigStateMessage
   | ReadinessStateMessage
   | SessionStateMessage
+  | SessionRemovedMessage
   | CompileProgressMessage
   | IntentsChangedMessage;
 

@@ -13,6 +13,13 @@
 // with one attempt per Boss turn, because a Spex session never resumes
 // after a restart (core-service-10), so nothing would read a durable
 // ledger back.
+//
+// Playbook 12.1 publishes `@sublang/playbook/host-capabilities`, but
+// that facade serves a standalone runtime, not the shell: its
+// repository object lacks `acquire` and `runCohort` of the six members
+// the shell's exact-shape validator demands, and each construction
+// owns its own ledger where the shell requires every enabled playbook's
+// ledger to agree — so the shipped builder below stands (DR-038).
 
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";

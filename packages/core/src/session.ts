@@ -274,6 +274,8 @@ export class SessionManager {
         id: player.id,
         adapter: player.adapter,
         ...(player.model !== undefined ? { model: player.model } : {}),
+        // The lane's fast mode rides to the pane label (DR-038).
+        ...(player.fastMode !== undefined ? { fastMode: player.fastMode } : {}),
       })),
       initialVisible: composed.initialVisible,
       // A session begins with no conversation to summarize

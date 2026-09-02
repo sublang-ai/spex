@@ -1261,6 +1261,121 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
 
 
 // ---------------------------------------------------------------------------
+// CORE-70/71: session deletion
+// ---------------------------------------------------------------------------
+
+test("core-service-71: session.delete removes an ended session and its traces, refuses a live one, and never touches another host's", async () => {
+  const sessionsDir = join(mkdtempSync(join(tmpdir(), "spex-delete-")), "shared-sessions");
+  const harness = await startHarness(`sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+  const client = new Client(harness.service.port());
+  await client.open();
+  const watcher = new Client(harness.service.port());
+  await watcher.open();
+
+  // A session another host wrote, adopted when its project registers
+  // (core-service-60).
+  const foreignId = "eeeeeee5-5555-4555-8555-eeeeeeeeeeee";
+  writeForeignSession(sessionsDir, foreignId, harness.projectDir, foreignTurn("from the terminal"));
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+
+  // An ended session that served an intent, viewed, then disposed.
+  const ended = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", {
+    channel: { kind: "session", sessionId: ended.id },
+  });
+  const served = await client.expectOk("intent.queue", {
+    projectId: project.id,
+    text: "Served by the session to delete",
+  });
+  await client.expectOk("turn.submit", {
+    sessionId: ended.id,
+    text: "hello",
+    intentId: served.id,
+  });
+  const finished = await client.waitFor(
+    (m) => m.type === "record" && m.record.type === "turn_finished",
+  );
+  const turnId = finished.type === "record" ? (finished.record.turnId ?? -1) : -1;
+  await client.expectOk("session.viewed", { sessionId: ended.id, turnId });
+  await client.expectOk("session.dispose", { sessionId: ended.id });
+  const live = await client.expectOk("session.create", { projectId: project.id });
+
+  const sidecar = join(harness.dataDir, "sessions", `${ended.id}.spex.json`);
+  const stream = join(harness.dataDir, "sessions", `${ended.id}.records.jsonl`);
+  const prefsFile = join(harness.dataDir, "prefs.json");
+  assert.ok(existsSync(sidecar) && existsSync(stream), "the ended session's files exist");
+  assert.ok(readFileSync(prefsFile, "utf8").includes(`viewed:${ended.id}`));
+
+  // The live session ends first (core-service-70).
+  const busy = await client.command("session.delete", { sessionId: live.id });
+  assert.ok(!busy.ok && busy.error.code === "busy");
+
+  // Another host's session is listed as such (core-service-32) and
+  // refused, its files byte-identical (core-service-65).
+  const listedForeign = (await client.expectOk("session.list", {})).find(
+    (s: SessionInfo) => s.id === foreignId,
+  );
+  assert.equal(listedForeign?.foreign, true, "the foreign session is flagged");
+  assert.equal(ended.foreign, undefined, "a session this core ran is not");
+  const manifestBefore = readFileSync(join(sessionsDir, `${foreignId}.json`), "utf8");
+  const streamBefore = readFileSync(join(sessionsDir, `${foreignId}.records.jsonl`), "utf8");
+  const refused = await client.command("session.delete", { sessionId: foreignId });
+  assert.ok(!refused.ok && refused.error.code === "invalid_request");
+  assert.equal(readFileSync(join(sessionsDir, `${foreignId}.json`), "utf8"), manifestBefore);
+  assert.equal(readFileSync(join(sessionsDir, `${foreignId}.records.jsonl`), "utf8"), streamBefore);
+
+  // The ended session deletes: files, listing, history, viewed marker.
+  await client.expectOk("session.delete", { sessionId: ended.id });
+  assert.ok(!existsSync(sidecar) && !existsSync(stream), "the files are gone");
+  const listed = await client.expectOk("session.list", {});
+  assert.ok(!listed.some((s: SessionInfo) => s.id === ended.id), "dropped from the listing");
+  assert.ok(listed.some((s: SessionInfo) => s.id === live.id), "the live session stays");
+  const history = await client.command("history.get", { sessionId: ended.id });
+  assert.ok(!history.ok && history.error.code === "not_found");
+  assert.ok(!readFileSync(prefsFile, "utf8").includes(`viewed:${ended.id}`));
+  const removed = await watcher.waitFor(
+    (m) => m.type === "session.removed" && m.sessionId === ended.id,
+  );
+  assert.equal(
+    removed.type === "session.removed" ? removed.projectId : undefined,
+    project.id,
+    "subscribed clients learn the removal",
+  );
+  const again = await client.command("session.delete", { sessionId: ended.id });
+  assert.ok(!again.ok && again.error.code === "not_found");
+
+  // The intent the session served re-derives as queued (core-service-49).
+  await client.waitFor(
+    (m) => m.type === "intents.changed" && m.projectIds.includes(project.id),
+  );
+  const ledger = await client.expectOk("ledger.get", {});
+  assert.equal(
+    ledger.intents.find((entry) => entry.intent.id === served.id)?.state,
+    "queued",
+  );
+
+  // A restart serves nothing of it, and still serves the other host's.
+  client.close();
+  watcher.close();
+  await harness.service.stop();
+  const restarted = await CoreService.start({
+    token: "test",
+    configPath: join(harness.dir, "playbook.config.yaml"),
+    dataDir: harness.dataDir,
+    env: {},
+    home: join(harness.dir, "home"),
+    watchConfig: false,
+  });
+  const client2 = new Client(restarted.port());
+  await client2.open();
+  const afterRestart = (await client2.expectOk("session.list", {})).map((s: SessionInfo) => s.id);
+  assert.ok(!afterRestart.includes(ended.id));
+  assert.ok(afterRestart.includes(foreignId));
+  client2.close();
+  await restarted.stop();
+});
+
+// ---------------------------------------------------------------------------
 // CORE-66: the shared config relocates once from its previous location
 // ---------------------------------------------------------------------------
 

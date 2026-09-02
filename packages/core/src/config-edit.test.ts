@@ -307,6 +307,53 @@ playbooks:
   assert.match(smuggled, /effort: high/);
 });
 
+test("a fastMode patch writes the key, null removes it, comments kept (DR-038)", async () => {
+  const path = templateFile();
+  const before = readFileSync(path, "utf8");
+  // The template's dev.coder lane runs in fast mode under a comment
+  // that documents that very key.
+  assert.match(before, /dev\.coder:(?:\n\s+.*)*?\n\s+fastMode: true/);
+  const attached = comments(before).filter(
+    (comment) =>
+      comment.startsWith("# Adapter-scoped fast mode") ||
+      comment.startsWith("# omitting it takes the provider default"),
+  );
+  assert.equal(attached.length, 2);
+
+  // null removes the key; every comment but the two on it survives.
+  const off = await editConfigFile(
+    path,
+    { kind: "player.set", playerId: "dev.coder", patch: { fastMode: null } },
+    stubLoader,
+  );
+  assert.ok(off.ok, off.error ?? "edit refused");
+  const afterOff = readFileSync(path, "utf8");
+  assert.doesNotMatch(afterOff, /^\s+fastMode:/m);
+  const survivors = new Set(comments(afterOff));
+  for (const comment of comments(before)) {
+    if (attached.includes(comment)) continue;
+    assert.ok(survivors.has(comment), `lost comment: ${comment}`);
+  }
+
+  // true and false both write the key.
+  const on = await editConfigFile(
+    path,
+    { kind: "captain.set", patch: { fastMode: true } },
+    stubLoader,
+  );
+  assert.ok(on.ok, on.error ?? "edit refused");
+  const literalOff = await editConfigFile(
+    path,
+    { kind: "player.set", playerId: "dev.reviewer", patch: { fastMode: false } },
+    stubLoader,
+  );
+  assert.ok(literalOff.ok, literalOff.error ?? "edit refused");
+  const afterOn = readFileSync(path, "utf8");
+  assert.match(afterOn, /captain:(?:\n\s+.*)*?\n\s+fastMode: true/);
+  assert.match(afterOn, /dev\.reviewer:(?:\n\s+.*)*?\n\s+fastMode: false/);
+  assertCommentsSurvive(afterOff, afterOn);
+});
+
 test("applyConfigOp on an empty file creates the mapping", () => {
   const text = applyConfigOp("", {
     kind: "captain.set",

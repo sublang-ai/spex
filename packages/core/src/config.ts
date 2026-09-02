@@ -129,6 +129,9 @@ export interface SessionAgentBlock {
   adapter: string;
   model: TuningSelection;
   effort: TuningSelection;
+  /** Adapter-scoped fast mode, forwarded so the setting takes effect
+   * (playbook 11: `false` is a literal disabled request). */
+  fastMode?: boolean;
   instruction?: string;
   permissions?: unknown;
 }
@@ -150,6 +153,8 @@ export interface HostRoleBinding {
   playerId: string;
   model: TuningSelection;
   effort: TuningSelection;
+  /** A role's own fast-mode override; absent inherits the player's. */
+  fastMode?: boolean;
 }
 
 export interface ComposedPlaybook {
@@ -659,6 +664,7 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
     // provider's default, never "whatever the last role left behind".
     model: tuningOf(agent.model),
     effort: tuningOf(agent.effort),
+    ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
     ...(agent.instruction !== undefined
       ? { instruction: agent.instruction }
       : {}),
@@ -876,6 +882,7 @@ export async function composeConfig(
         playerId: binding.playerId,
         model: select(binding.model, player.model),
         effort: select(binding.effort, player.effort),
+        ...(binding.fastMode !== undefined ? { fastMode: binding.fastMode } : {}),
       };
       if (!referenced.has(binding.playerId)) {
         referenced.add(binding.playerId);
@@ -996,6 +1003,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
     adapter: agent.adapter,
     ...(agent.model !== undefined ? { model: agent.model } : {}),
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
+    ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
     ...(agent.instruction !== undefined
       ? { instruction: agent.instruction }
       : {}),
@@ -1045,6 +1053,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
               playerId: binding.playerId,
               ...(binding.model !== undefined ? { model: binding.model } : {}),
               ...(binding.effort !== undefined ? { effort: binding.effort } : {}),
+              ...(binding.fastMode !== undefined ? { fastMode: binding.fastMode } : {}),
               display,
             },
           ];

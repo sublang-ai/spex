@@ -447,8 +447,8 @@ function parseIntentRecords(
 }
 
 /** The first non-empty line of a record's `## Status` section,
- * verbatim (DR-035): the Dashboard treats a line starting with "Done"
- * as a finished record, so only unfinished ones list as work. */
+ * verbatim (DR-035); the core classifies it, the clients never match
+ * it themselves (spec-view-14). */
 function recordStatusLine(content: string): string | undefined {
   const lines = content.split(/\r?\n/);
   const start = lines.findIndex((line) => /^##\s+Status\s*$/.test(line));
@@ -458,6 +458,39 @@ function recordStatusLine(content: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length > 0) return trimmed;
   }
+  return undefined;
+}
+
+/** Status words that finish a record (spec-view-14, DR-038): the
+ * leading word decides, case-insensitively; anything else is open. */
+const FINISHED_DONE = new Set([
+  "done",
+  "complete",
+  "completed",
+  "closed",
+  "shipped",
+  "released",
+  "finished",
+]);
+const FINISHED_SUPERSEDED = new Set([
+  "superseded",
+  "cancelled",
+  "canceled",
+  "dropped",
+  "abandoned",
+  "withdrawn",
+]);
+
+/** The classification of a status line: its leading word — the first
+ * run of letters, so trailing punctuation such as "." or " —" never
+ * counts — against the finished vocabularies; open otherwise. */
+function classifyStatus(
+  status: string | undefined,
+): SpecRecordInfo["finished"] {
+  const word = /[A-Za-z]+/.exec(status ?? "")?.[0].toLowerCase();
+  if (word === undefined) return undefined;
+  if (FINISHED_DONE.has(word)) return "done";
+  if (FINISHED_SUPERSEDED.has(word)) return "superseded";
   return undefined;
 }
 
@@ -482,11 +515,13 @@ function parseRecords(
       );
       continue;
     }
+    let stats;
     try {
-      if (!statSync(abs).isFile()) continue;
+      stats = statSync(abs);
     } catch {
       continue;
     }
+    if (!stats.isFile()) continue;
     let title = entry.name.replace(/\.md$/, "");
     let status: string | undefined;
     try {
@@ -497,11 +532,16 @@ function parseRecords(
     } catch {
       // Keep the filename fallback; the reader will surface the error.
     }
+    const finished = classifyStatus(status);
     out.push({
       id: `${idPrefix}-${numbered[1]}`,
       title,
       path: `${sub}/${entry.name}`,
       ...(status !== undefined ? { status } : {}),
+      ...(finished !== undefined ? { finished } : {}),
+      // The file's last change orders finished records in History
+      // (DR-038).
+      updatedAt: Math.round(stats.mtimeMs),
     });
   }
   return out;

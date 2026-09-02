@@ -52,7 +52,7 @@ import {
   type ServerMessage,
 } from "./protocol.js";
 import { CoreError, SessionManager, type CaptainFactory, type RecordEnvelope } from "./session.js";
-import { closedStats, foldLedger, intentTitle } from "./ledger.js";
+import { closedStats, foldLedger, intentTitle, wasWorked } from "./ledger.js";
 import { rankBetween } from "./rank.js";
 import { Store } from "./store.js";
 import {
@@ -75,6 +75,7 @@ import { resolveArtifacts } from "./artifacts.js";
 import { loadBuiltinCatalog } from "./builtins.js";
 import { parseSpecTree, resolveSpecPath } from "./specs.js";
 import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
+import { isFastModeSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
 const CORE_VERSION = "0.1.0";
@@ -511,6 +512,9 @@ export class CoreService {
             ? { requirement: readiness.requirement }
             : {}),
           usedBy,
+          // The embedded runtime declares which adapters take fast mode
+          // (DR-038); the editor offers the switch only for those.
+          fastModeSupported: isFastModeSupported(adapter),
         };
       }),
     );
@@ -753,6 +757,33 @@ export class CoreService {
       case "session.dispose":
         await this.sessions.disposeSession(command.sessionId);
         return null;
+      case "session.delete": {
+        const session = this.store.describeSession(command.sessionId);
+        if (!session) {
+          throw new CoreError("not_found", `no session ${command.sessionId}`);
+        }
+        // A live session ends first (core-service-70): deleting under a
+        // running runtime would orphan its agents.
+        if (this.sessions.getLive(session.id)) {
+          throw new CoreError("busy", "end the session before deleting it");
+        }
+        // Another host's files are served, never written (core-service-65).
+        if (session.foreign) {
+          throw new CoreError(
+            "invalid_request",
+            "a session run by another host cannot be deleted here",
+          );
+        }
+        this.store.deleteSession(session.id);
+        this.broadcast({
+          type: "session.removed",
+          sessionId: session.id,
+          projectId: session.projectId,
+        });
+        // An open intent the session served re-derives as queued (DR-038).
+        this.queueLedgerChange([session.projectId]);
+        return null;
+      }
       case "turn.submit": {
         if (command.intentId !== undefined) {
           const intent = this.requireOpenIntent(command.intentId);
@@ -1141,6 +1172,9 @@ export class CoreService {
         if (!project) {
           throw new CoreError("not_found", `no project ${command.projectId}`);
         }
+        // History is done work (DR-038): closed done, or dropped after
+        // a turn of the intent's ended finished; a drop before any work
+        // left the queue without a trace.
         const page = this.store.listClosedIntents(
           project.id,
           21,
@@ -1150,6 +1184,7 @@ export class CoreService {
                 intentId: command.before.intentId,
               }
             : undefined,
+          (intent) => intent.closedAs === "done" || wasWorked(this.store, intent),
         );
         const more = page.length > 20;
         return {

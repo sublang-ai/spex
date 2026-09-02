@@ -144,6 +144,8 @@ function sessionInfo(
     ...(meta.streamIncompleteAfterSeq !== undefined
       ? { streamIncompleteAfterSeq: meta.streamIncompleteAfterSeq }
       : {}),
+    // Served, never written or deleted here (core-service-32, DR-038).
+    ...(meta.foreign ? { foreign: true } : {}),
   };
 }
 
@@ -844,6 +846,29 @@ export class Store {
     this.saveSidecar(meta);
   }
 
+  /**
+   * Delete a stored session (core-service-70): its files and every
+   * in-memory trace — records, turns, usage, and the viewed marker.
+   * A session another host wrote is never deleted: this core writes
+   * none of its files (core-service-65).
+   */
+  deleteSession(id: string): void {
+    const meta = this.sessions.get(id);
+    if (!meta) return;
+    if (meta.foreign) {
+      throw new Error(`session ${id} was run by another host and is served, never deleted`);
+    }
+    if (this.sessionsDir) {
+      rmSync(this.sidecarFile(id), { force: true });
+      rmSync(this.recordsFile(id), { force: true });
+    }
+    this.sessions.delete(id);
+    this.records.delete(id);
+    this.turns.delete(id);
+    this.usage.delete(id);
+    if (this.prefs.delete(`viewed:${id}`)) this.savePrefs();
+  }
+
   /** Startup recovery (CORE-10): a session live at shutdown is no longer live. */
   markAllSessionsNotLive(): void {
     for (const meta of this.sessions.values()) {
@@ -1149,16 +1174,21 @@ export class Store {
       .map((intent) => ({ ...intent }));
   }
 
-  /** One History page: closed intents newest first (DR-035). */
+  /** One History page: closed intents newest first (DR-035), those
+   * `include` admits — the filter runs before paging, so an excluded
+   * intent never shortens a page (DR-038). */
   listClosedIntents(
     projectId: string,
     limit: number,
     before?: { closedAt: number; intentId: string },
+    include: (intent: IntentInfo) => boolean = () => true,
   ): IntentInfo[] {
     return [...this.intents.values()]
       .filter(
         (intent): intent is IntentInfo & { closedAt: number } =>
-          intent.projectId === projectId && intent.closedAt !== undefined,
+          intent.projectId === projectId &&
+          intent.closedAt !== undefined &&
+          include(intent),
       )
       .filter(
         (intent) =>

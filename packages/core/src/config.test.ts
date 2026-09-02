@@ -18,6 +18,7 @@ import {
   describeRuntimeFault,
   resolveConfigPath,
   seedConfig,
+  summarizeConfig,
   templatePath,
   type LoadModule,
 } from "./config.js";
@@ -325,6 +326,7 @@ test("fast mode composes on agents and roles; a non-boolean is refused", async (
   const top = baseConfig();
   (top.captain as Record<string, unknown>).fastMode = true;
   roster(top)["dev.reviewer"] = { adapter: "codex", fastMode: false };
+  codeRoles(top).coder = { player: "dev.coder", fastMode: false };
   const composed = await composeConfig(top, stubLoader);
   assert.equal(
     composed.captainAgent.fastMode,
@@ -337,6 +339,19 @@ test("fast mode composes on agents and roles; a non-boolean is refused", async (
     false,
     "an explicit false is a literal request, not omission",
   );
+
+  // The summary carries it where an agent is named (DR-038): the
+  // captain, each player, and a role's own override — absent otherwise.
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  assert.equal(summary.captain.fastMode, true);
+  assert.equal(
+    summary.players.find((p) => p.id === "dev.reviewer")?.agent.fastMode,
+    false,
+  );
+  const code = summary.playbooks.find((p) => p.id === "code");
+  assert.equal(code?.roles.coder.fastMode, false);
+  const review = summary.playbooks.find((p) => p.id === "review");
+  assert.ok(review && !("fastMode" in review.roles.reviewer));
 
   const bad = baseConfig();
   (bad.captain as Record<string, unknown>).fastMode = "yes";
@@ -605,4 +620,22 @@ test("a fault's repair is rendered for its install tree", () => {
   const fault = describeRuntimeFault(sdkMissing);
   assert.doesNotMatch(fault, /npm install -g/);
   assert.match(fault, /reinstall the app/);
+});
+
+test("fast mode reaches the shell's agent blocks and role bindings", async () => {
+  // The chip's mark would lie if the setting stayed a summary: the
+  // shell must receive it on the captain, the lane, and the role
+  // (DR-038; playbook 11 treats `false` as a literal disabled request).
+  const top = baseConfig();
+  (top.captain as Record<string, unknown>).fastMode = true;
+  roster(top)["dev.reviewer"] = { adapter: "codex", fastMode: false };
+  codeRoles(top).coder = { player: "dev.coder", fastMode: false };
+  const composed = await composeConfig(top, stubLoader);
+  assert.equal(composed.captainOptions.sessionAgents.captain.fastMode, true);
+  assert.equal(
+    composed.captainOptions.sessionAgents.players["dev.reviewer"]?.fastMode,
+    false,
+  );
+  assert.equal(composed.captainOptions.playbooks.code.roles.coder.fastMode, false);
+  assert.ok(!("fastMode" in composed.captainOptions.playbooks.code.roles));
 });

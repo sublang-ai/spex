@@ -473,6 +473,37 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   return { intents: derived, attention, badge: attention.length };
 }
 
+/** The turns a dispatched intent attributes (DR-035): from its
+ * dispatch turn up to the next dispatch of another intent in the
+ * session, or the session's end. */
+function attributedTurns(
+  store: Store,
+  intent: IntentInfo,
+  bound: NonNullable<IntentInfo["dispatched"]>,
+): { range: Turn[]; endTurnId: number | null } {
+  const dispatches = store.listSessionDispatches(bound.sessionId);
+  const next = dispatches.find(
+    (dispatch) =>
+      dispatch.turnId > bound.turnId && dispatch.intentId !== intent.id,
+  );
+  const endTurnId = next ? next.turnId : null;
+  return {
+    range: rangeOf(store.listTurns(bound.sessionId), bound.turnId, endTurnId),
+    endTurnId,
+  };
+}
+
+/** Whether an intent was worked (DR-038): dispatched, with a turn it
+ * attributes ended finished. A closed intent that never was leaves the
+ * ledger without a trace — the history read excludes it. */
+export function wasWorked(store: Store, intent: IntentInfo): boolean {
+  const bound = intent.dispatched;
+  if (!bound) return false;
+  return attributedTurns(store, intent, bound).range.some(
+    (turn) => turn.status === "finished",
+  );
+}
+
 /** The run stats of a closed intent, for History rows (DR-035). */
 export function closedStats(
   store: Store,
@@ -480,17 +511,7 @@ export function closedStats(
 ): IntentStats | undefined {
   const bound = intent.dispatched;
   if (!bound) return undefined;
-  const dispatches = store.listSessionDispatches(bound.sessionId);
-  const next = dispatches.find(
-    (dispatch) =>
-      dispatch.turnId > bound.turnId && dispatch.intentId !== intent.id,
-  );
-  const endTurnId = next ? next.turnId : null;
-  const range = rangeOf(
-    store.listTurns(bound.sessionId),
-    bound.turnId,
-    endTurnId,
-  );
+  const { range, endTurnId } = attributedTurns(store, intent, bound);
   const lastEnded = [...range]
     .reverse()
     .find((turn) => turn.endedAt !== null);

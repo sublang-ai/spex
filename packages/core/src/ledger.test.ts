@@ -889,8 +889,15 @@ test("core-service-42..46: intent commands hold position, dedup, link, and close
   const issue = await client.expectOk("intent.queue", {
     projectId: project.id,
     text: "Fix the login issue",
-    source: { kind: "issue", ref: "7", url: "https://github.com/o/r/issues/7" },
+    source: {
+      kind: "issue",
+      ref: "7",
+      url: "https://github.com/o/r/issues/7",
+      labels: ["bug", "p1"],
+    },
   });
+  // The source's labels are provenance, kept as captured (DR-038).
+  assert.deepEqual(issue.source?.labels, ["bug", "p1"]);
   const dupIssue = await client.command("intent.queue", {
     projectId: project.id,
     text: "Fix the login issue again",
@@ -1160,6 +1167,41 @@ test("core-service-57: submission validates the intent, the turn start stamps it
     text: "Follow the build, retried",
   });
 
+  // History is done work (core-service-50, DR-038): the done intent
+  // lists; the bystander, worked then dropped, lists under its
+  // verdict; an intent dropped before any turn of it ran leaves no
+  // trace.
+  await client.expectOk("turn.submit", {
+    sessionId: session.id,
+    text: "wrap up",
+    intentId: i3.id,
+  });
+  await client.waitFor(
+    (m) => m.type === "record" && m.record.type === "turn_finished",
+    2,
+  );
+  await client.ledgerUntil(
+    (state) =>
+      state.intents.find((entry) => entry.intent.id === i3.id)?.state ===
+      "finished",
+    "the bystander to finish",
+  );
+  await client.expectOk("intent.close", { intentId: i3.id, as: "dropped" });
+  const neverRun = await client.expectOk("intent.queue", {
+    projectId: project.id,
+    text: "Queued and taken back out",
+  });
+  await client.expectOk("intent.close", { intentId: neverRun.id, as: "dropped" });
+  const history = await client.expectOk("ledger.history", { projectId: project.id });
+  assert.deepEqual(
+    history.intents.map((row) => [row.intent.id, row.intent.closedAs]),
+    [
+      [i3.id, "dropped"],
+      [i1.id, "done"],
+    ],
+  );
+  assert.equal(history.more, false);
+
   client.close();
   await harness.service.stop();
 });
@@ -1175,6 +1217,9 @@ test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest fi
   const dataDir = join(dir, "state");
   const seeded = new Store({ dir: dataDir });
   const project = seeded.registerProject("/tmp/ledger-hist-proj", "hist", 1);
+  // Half close done, half were worked — one finished turn each — then
+  // dropped: both are history (DR-038).
+  addSession(seeded, project.id, "hist-session");
   for (let i = 1; i <= 45; i += 1) {
     const id = `closed-${String(i).padStart(2, "0")}`;
     seeded.addIntent({
@@ -1184,6 +1229,11 @@ test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest fi
       rank: String(i).padStart(3, "0") + "i",
       createdAt: i,
     });
+    if (i % 2 === 1) {
+      beginTurn(seeded, "hist-session", i, `Closed intent ${i}`, 100 + i);
+      finishTurn(seeded, "hist-session", i, 500 + i);
+      seeded.stampIntentDispatch(id, "hist-session", i, 100 + i);
+    }
     seeded.closeIntent(id, i % 2 === 0 ? "done" : "dropped", 1000 + i);
   }
   seeded.close();
