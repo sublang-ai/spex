@@ -38,6 +38,7 @@ When the user edits a role's binding, the Library shall write which session play
 - The players offered are the shared config's roster [[settings-26](settings.md#settings-26)]; the editor mints none and offers no adapter or permissions, which belong to the player's envelope.
 - Each tuning is inherit-the-player, the provider's current default, or a pinned value, written as omission, `false`, and the value respectively.
 - Choosing a player another binding already names states which bindings those are, because equal ids deliberately share one conversation.
+- The editor is a popover anchored at the role's control, following the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6): focus enters it on open and returns to the control on close, and Escape, an outside click, and Cancel close it.
 
 #### playbook-library-38
 
@@ -242,7 +243,7 @@ When each installed built-in playbook's artifacts are requested, the test suite 
 
 #### playbook-library-39
 
-Where a configured playbook binds two roles, one to a player another playbook also names, the test suite shall assert the Library prints each role's bound player with what that binding effectively runs [[playbook-library-1](#playbook-library-1)], marks the shared role and names the other position holding it [[playbook-library-38](#playbook-library-38)], and leaves the unshared role unmarked; and that rebinding through the editor offers exactly the config's roster, writes the chosen player with a pinned effort, and surfaces a refusal inline while keeping the editor open [[playbook-library-4](#playbook-library-4)].
+Where a configured playbook binds two roles, one to a player another playbook also names, the test suite shall assert the Library prints each role's bound player with what that binding effectively runs [[playbook-library-1](#playbook-library-1)], marks the shared role and names the other position holding it [[playbook-library-38](#playbook-library-38)], and leaves the unshared role unmarked; and that rebinding through the editor offers exactly the config's roster, writes the chosen player with a pinned effort, and surfaces a refusal inline while keeping the editor open [[playbook-library-4](#playbook-library-4)]; and that the editor opens with focus inside and closes on Escape, on an outside click, and on Cancel with focus back on the role's control [[playbook-library-4](#playbook-library-4)].
 
 #### playbook-library-40
 

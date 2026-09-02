@@ -6,11 +6,13 @@
 // and workspace belong to the player's envelope and have no control
 // here, because in the released model a binding cannot carry them.
 
-import { useRef, useState, type RefObject } from "react";
+import { useState, type RefObject } from "react";
 import type {
   RoleBindingSummary,
   SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
+
+import { usePopover } from "../lib/usePopover.js";
 
 export interface BindingChange {
   playerId: string;
@@ -90,7 +92,10 @@ export function BindingEditorPopover({
   });
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
+  // The house popover idiom (DR-010 §6): focus enters on open and
+  // returns to the role's control on close; Escape and an outside
+  // click close.
+  const boxRef = usePopover<HTMLDivElement>(true, { anchorRef, onClose });
   const lane = players.find((player) => player.id === draft.playerId);
   // Every other position this lane already answers: picking it here
   // joins that one conversation rather than opening a new one.
@@ -156,11 +161,8 @@ export function BindingEditorPopover({
       <div className="flex justify-end gap-2">
         <button
           type="button"
-          onClick={() => {
-            onClose();
-            anchorRef.current?.focus();
-          }}
-          className="rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          onClick={onClose}
+          className="min-h-6 rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           Cancel
         </button>
@@ -175,7 +177,7 @@ export function BindingEditorPopover({
               .catch((cause: Error) => setError(cause.message))
               .finally(() => setBusy(false));
           }}
-          className="rounded bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-50"
+          className="min-h-6 rounded bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save"}
         </button>
