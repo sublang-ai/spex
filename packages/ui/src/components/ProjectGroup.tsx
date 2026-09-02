@@ -34,6 +34,8 @@ import { usePopover } from "../lib/usePopover.js";
 import { RunningMark } from "./RunningMark.js";
 import { SourcesBand } from "./SourcesTabs.js";
 import { openSourceIntents } from "./ForgeItemRow.js";
+import { InlineConfirm } from "./InlineConfirm.js";
+import { RecordRow } from "./RecordRow.js";
 
 // ---------------------------------------------------------------------------
 // Copy and formatting
@@ -308,9 +310,9 @@ function IntentHistoryRow({
   );
 }
 
-/** A finished record (dashboard-27): a check under its ID tag, opening
- * in the records reader; a superseded one wears that word as its tag,
- * dimmed, with no check. */
+/** A finished record (dashboard-27): a check before its record row
+ * (dashboard-40), opening in the records reader; a superseded one
+ * wears that word as a trailing tag, dimmed, with no check. */
 function RecordHistoryRow({
   record,
   now,
@@ -332,20 +334,18 @@ function RecordHistoryRow({
     >
       {superseded ? null : <Check />}
       <span className="sr-only">{superseded ? "superseded" : "done"}</span>
-      <button
-        type="button"
+      <RecordRow
+        record={record}
         onClick={onOpen}
-        title={`${record.id}: ${record.title}`}
-        className="flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left hover:underline"
-      >
-        <span
-          data-testid="history-tag"
-          className={superseded ? NEUTRAL_TAG : `${NEUTRAL_TAG} font-mono`}
-        >
-          {superseded ? "superseded" : record.id}
-        </span>
-        <span className="min-w-0 flex-1 truncate">{record.title}</span>
-      </button>
+        className="flex-1"
+        trailing={
+          superseded ? (
+            <span data-testid="history-tag" className={NEUTRAL_TAG}>
+              superseded
+            </span>
+          ) : undefined
+        }
+      />
       <Age at={record.updatedAt} now={now} />
     </li>
   );
@@ -560,6 +560,15 @@ function ProvenanceAction({
   onOpenSession: (sessionId: string) => void;
   onDone: () => void;
 }) {
+  // The record's title for its row (dashboard-40), from the tree the
+  // path came from.
+  const record = useAppStore((state) =>
+    intent.source?.kind === "record"
+      ? state.specTrees[intent.projectId]?.intents.find(
+          (entry) => entry.id === intent.source?.ref,
+        )
+      : undefined,
+  );
   const source = intent.source;
   if (!source) return null;
   const testId = `upnext-source-${intent.id}`;
@@ -580,22 +589,24 @@ function ProvenanceAction({
     );
   }
   if (source.kind === "record") {
+    // The one record row (dashboard-40), as a menu item.
     return (
-      <MenuItem
+      <RecordRow
+        role="menuitem"
         data-testid={testId}
+        record={{ id: source.ref, title: record?.title ?? "" }}
         disabled={!recordPath}
         title={
           recordPath
-            ? "Open the record in Specs"
+            ? `Open ${source.ref} in Specs`
             : "This record is not in the project's specs tree"
         }
         onClick={() => {
           onDone();
           if (recordPath) onOpenIntent(intent.projectId, recordPath);
         }}
-      >
-        {source.ref}
-      </MenuItem>
+        className="w-full px-2 py-1"
+      />
     );
   }
   return (

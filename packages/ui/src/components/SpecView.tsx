@@ -57,6 +57,7 @@ import {
 } from "../lib/spec-view-model.js";
 import { Icon } from "./Icon.js";
 import { Markdown } from "./Markdown.js";
+import { RecordRow } from "./RecordRow.js";
 
 export { initialSpecViewState };
 export type { SpecViewState };
@@ -634,7 +635,7 @@ export function SpecView(props: SpecViewProps) {
               return next;
             })
           }
-          className="flex items-center gap-1.5 rounded px-1 py-0.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+          className="flex items-center gap-1.5 rounded px-1 py-0.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-900"
         >
           <Icon
             name="caretDown"
@@ -647,22 +648,17 @@ export function SpecView(props: SpecViewProps) {
         </button>
         {open ? (
           <ul className="ml-[7px] flex flex-col border-l border-neutral-200 pl-3 dark:border-neutral-800">
+            {/* The one record row (dashboard-40): the chip the package
+             * rows wear, the title, hover and pointer. */}
             {shown.map((record) => (
-              <li key={record.path}>
-                <button
+              <li key={record.path} className="flex">
+                <RecordRow
                   id={`specv-record-${record.id}`}
-                  type="button"
                   data-testid={`record-${record.id}`}
+                  record={record}
                   onClick={() => openRecord(record, `specv-record-${record.id}`)}
-                  className="flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left text-xs hover:bg-neutral-50 dark:hover:bg-neutral-900"
-                >
-                  <span className="shrink-0 font-mono text-[11px] font-semibold text-neutral-500">
-                    {record.id}
-                  </span>
-                  <span className="truncate text-neutral-600 dark:text-neutral-300">
-                    {record.title}
-                  </span>
-                </button>
+                  className="flex-1 py-0.5 text-xs"
+                />
               </li>
             ))}
           </ul>

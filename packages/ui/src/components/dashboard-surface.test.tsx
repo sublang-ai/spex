@@ -847,8 +847,14 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(screen.getByTestId("upnext-source-i2").textContent).toBe("PR #8 ↗");
 
     fireEvent.click(screen.getByTestId("upnext-menu-i3"));
+    // The record item is the one record row (dashboard-40): chip,
+    // title, named as an opener, a menu item still.
     const record = screen.getByTestId("upnext-source-i3");
-    expect(record.textContent).toBe("IR-3");
+    expect(record.getAttribute("role")).toBe("menuitem");
+    expect(within(record).getByText("IR-3").className).toContain("font-mono");
+    expect(record.textContent).toContain("Half done");
+    expect(record.getAttribute("aria-label")).toBe("Open IR-3: Half done");
+    expect(record.getAttribute("title")).toBe("Open IR-3 in Specs");
     fireEvent.click(record);
     expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/003-half.md");
 
@@ -1106,8 +1112,17 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
       text: "Resume IR-3: Half done",
       source: { kind: "record", ref: "IR-3" },
     });
-    // The record's title opens the records reader (dashboard-24).
-    fireEvent.click(within(record).getByTitle("Half done"));
+    // The record row opens the records reader (dashboard-24): the one
+    // record row (dashboard-40) — chip, title, pointer, no brand link.
+    const row = within(record).getByRole("button", {
+      name: "Open IR-3: Half done",
+    });
+    expect(row.getAttribute("title")).toBe("Open IR-3");
+    expect(within(row).getByText("IR-3").className).toContain("font-mono");
+    expect(row.className).toContain("cursor-pointer");
+    expect(row.className).not.toContain("underline");
+    expect(row.className).not.toContain("brand");
+    fireEvent.click(row);
     expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/003-half.md");
   });
 
@@ -1325,8 +1340,8 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     expect(dropped.textContent).not.toContain("✓");
     expect(dropped.textContent).not.toContain("✕");
 
-    // A superseded record wears that word, dimmed, no check, and opens
-    // in the records reader.
+    // A superseded record wears that word as a trailing tag after its
+    // record row, dimmed, no check, and opens in the records reader.
     const superseded = screen.getByTestId("history-row-IR-4");
     expect(superseded.getAttribute("data-kind")).toBe("record");
     expect(superseded.getAttribute("data-verdict")).toBe("superseded");
@@ -1334,7 +1349,13 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
       within(superseded).getByTestId("history-tag").textContent,
     ).toBe("superseded");
     expect(superseded.textContent).not.toContain("✓");
-    fireEvent.click(within(superseded).getByRole("button"));
+    const supersededRow = within(superseded).getByRole("button", {
+      name: "Open IR-4: Abandoned idea",
+    });
+    expect(within(supersededRow).getByText("IR-4").className).toContain(
+      "font-mono",
+    );
+    fireEvent.click(supersededRow);
     expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/004-idea.md");
 
     // The accessible older control fetches the next intent page with
@@ -1355,7 +1376,7 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     );
   });
 
-  test("a finished record lists with a check under its ID tag", () => {
+  test("a finished record lists with a check before its record row", () => {
     seed({
       projects: [PROJECTS[0]],
       projectMeta: { p1: {} },
@@ -1367,9 +1388,70 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     const record = screen.getByTestId("history-row-IR-2");
     expect(record.getAttribute("data-verdict")).toBe("done");
     expect(record.textContent).toContain("✓");
-    expect(within(record).getByTestId("history-tag").textContent).toBe("IR-2");
-    fireEvent.click(within(record).getByRole("button"));
+    // The one record row (dashboard-40): the identifier chip, the
+    // title, hover and pointer, named as an opener — never the brand
+    // link, which is for what leaves the app.
+    const row = within(record).getByRole("button", {
+      name: "Open IR-2: Old finished",
+    });
+    expect(row.getAttribute("title")).toBe("Open IR-2");
+    expect(within(row).getByText("IR-2").className).toContain("font-mono");
+    expect(row.className).toContain("cursor-pointer");
+    expect(row.className).toContain("hover:bg-");
+    expect(row.className).not.toContain("underline");
+    expect(within(record).queryByTestId("history-tag")).toBeNull();
+    fireEvent.click(row);
     expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/002-old.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ledger reads in request order
+// ---------------------------------------------------------------------------
+
+describe("dashboard-42: ledger reads apply in request order", () => {
+  test("an older reply landing last never overwrites the newer fold", async () => {
+    const stale: LedgerState = {
+      intents: [q("old", "p1", "Stale queue")],
+      attention: [],
+      badge: 0,
+    };
+    const fresh: LedgerState = {
+      intents: [q("new", "p1", "Fresh queue")],
+      attention: [],
+      badge: 0,
+    };
+    let settleFirst!: () => void;
+    let reads = 0;
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "ledger.get") {
+        reads += 1;
+        if (reads === 1) {
+          return new Promise((resolve) => {
+            settleFirst = () => resolve(stale);
+          });
+        }
+        return fresh;
+      }
+      if (type === "ledger.history") return { intents: [], more: false };
+      return {};
+    });
+    seed({ ledger: undefined });
+    const first = useAppStore.getState().loadLedger();
+    const second = useAppStore.getState().loadLedger();
+    await second;
+    expect(useAppStore.getState().ledger).toEqual(fresh);
+    // The older read lands last: discarded, never applied.
+    await act(async () => {
+      settleFirst();
+      await first;
+    });
+    expect(useAppStore.getState().ledger).toEqual(fresh);
+    renderSurface();
+    expect(screen.getByTestId("upnext-row-new").textContent).toContain(
+      "Fresh queue",
+    );
+    expect(screen.queryByTestId("upnext-row-old")).toBeNull();
   });
 });
 

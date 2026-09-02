@@ -927,6 +927,15 @@ describe("spec-view-7/45: records in their places", () => {
     fireEvent.click(screen.getByTestId("decisions-toggle"));
     expect(within(branch).getByText("Project workspace")).toBeTruthy();
     expect(screen.queryByText("IR-016")).toBeNull();
+    // Each row is the one record row (dashboard-40): the identifier
+    // chip the package rows wear, the title, pointer, named as an
+    // opener.
+    const row = screen.getByTestId("record-DR-011");
+    expect(row.getAttribute("aria-label")).toBe("Open DR-011: Project workspace");
+    expect(row.getAttribute("title")).toBe("Open DR-011");
+    expect(row.className).toContain("cursor-pointer");
+    expect(within(row).getByText("DR-011").className).toContain("font-mono");
+    expect(within(row).getByText("DR-011").className).toContain("bg-neutral-100");
     // Last in the outline, after every package.
     const rows = screen.getAllByTestId(/^(file-|decisions-branch)/);
     expect(rows[rows.length - 1]).toBe(branch);

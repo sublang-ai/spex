@@ -20,6 +20,7 @@ import type {
 import type { ProjectMeta } from "../state/store.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { Icon } from "./Icon.js";
+import { RecordRow } from "./RecordRow.js";
 import {
   CapturedState,
   ForgeItemRow,
@@ -262,17 +263,14 @@ export function SourcesBand({
                     className="flex min-w-0 items-center gap-2 text-sm"
                     data-testid={`source-record-${project.id}-${record.id}`}
                   >
-                    <button
-                      type="button"
-                      title={record.title}
+                    {/* The one record row (dashboard-40): it opens in
+                     * place, so no brand link — that is for what
+                     * leaves the app. */}
+                    <RecordRow
+                      record={record}
                       onClick={() => onOpenIntent(project.id, record.path)}
-                      className="min-w-0 flex-1 truncate text-left hover:underline"
-                    >
-                      <span className="font-mono text-xs text-brand-600 dark:text-brand-300">
-                        {record.id}
-                      </span>{" "}
-                      {record.title}
-                    </button>
+                      className="flex-1"
+                    />
                     {captured ? (
                       <CapturedState
                         derived={captured}
