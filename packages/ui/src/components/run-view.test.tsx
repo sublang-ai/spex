@@ -645,18 +645,19 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
   test("unwalked exits into rest states fold to a count until walked or hovered", () => {
     renderRun(MACHINE_RUN.slice(0, 13));
     const code = screen.getByTestId("machine-card-t-code");
-    // Both of runFirstPhase's exits lead to failed: one "+2" marker
-    // whose title lists them, and no label.
+    // runFirstPhase's three unwalked exits — two into failed, one
+    // into the Boss-reply wait (playbook 12.2's CODE) — fold to one
+    // "+3" marker whose title lists them, and no label.
     const first = within(code).getByTestId("machine-state-t-code-runFirstPhase");
     const folded = within(first).getByTestId(
       "machine-exits-folded-t-code-runFirstPhase",
     );
-    expect(folded.textContent).toContain("+2");
+    expect(folded.textContent).toContain("+3");
     expect(folded.querySelector("title")!.textContent).toContain("→ failed");
     expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(0);
     // Hovering the box reveals them all; leaving folds them again.
     fireEvent.mouseEnter(first);
-    expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(2);
+    expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(3);
     expect(
       within(first).queryByTestId("machine-exits-folded-t-code-runFirstPhase"),
     ).toBeNull();
