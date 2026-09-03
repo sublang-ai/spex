@@ -119,3 +119,26 @@ test("run-view-99: a player question parks the session until the Boss replies", 
   await expect(captain).toContainText("/code finished");
   await expect(chip).not.toContainText(/wait/i);
 });
+
+// The working lane comes into view (run-view-7): stacked at a narrow
+// width, the coder's pane starts below the fold and the grid scrolls
+// to it when its call opens.
+test("run-view-7: a lane's pane scrolls into view when its call opens", async ({
+  page,
+  app,
+}) => {
+  await page.setViewportSize({ width: 600, height: 500 });
+  await open(page, app);
+  await send(page, "Fix the token refresh in auth.ts");
+  const grid = page.getByTestId("player-grid");
+  const coder = page.getByTestId("player-pane-dev.coder");
+  await expect(coder).toContainText("coder working");
+  await expect
+    .poll(async () => {
+      const g = await grid.boundingBox();
+      const p = await coder.boundingBox();
+      if (!g || !p) return false;
+      return p.y + 40 <= g.y + g.height && p.y >= g.y - 1;
+    })
+    .toBe(true);
+});

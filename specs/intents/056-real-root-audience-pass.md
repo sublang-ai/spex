@@ -17,6 +17,7 @@ Walk the served UI over the owner's real state root — real projects, CLI-run s
 - [x] A session whose roster binds no player — a record the CLI wrote — shows the Captain column alone at the home's reading width, with no divider to a blank half (run-view-7).
 - [x] A nested machine state — a region of /decide's parallel proposals — goes by its own segment with its parent as caption, its whole path in tooltips and the status line, instead of a truncated dotted id (run-view-60).
 - [x] A codex coder's tool rows read as commands — the login-shell wrapper unwrapped, the wire name "command_execution" reading "shell" — as a Claude coder's do (run-view-4).
+- [x] A lane whose call opens beyond the grid's visible edge scrolls into view, so the working player never hides behind idle lanes (run-view-7).
 
 ## Tasks
 
@@ -24,6 +25,7 @@ Walk the served UI over the owner's real state root — real projects, CLI-run s
 2. Lay a lane-less session out as a solo Captain column: no divider, no player grid, the home's measure.
 3. Name nested machine states by their own segment on the card, with the parent as caption and the path in tooltips, exit-label tooltips, and the status line.
 4. Unwrap a runner's `<shell> -lc` command wrapper in the tool row's subject and read its shell tool's wire name as "shell".
+5. Scroll a lane's pane into view when its call opens out of sight, pinned by a stacked-width journey.
 
 ## Verification
 

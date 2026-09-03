@@ -163,6 +163,7 @@ export function RunView({
   const closeIntent = useAppStore((state) => state.closeIntent);
   const stageDispatch = useAppStore((state) => state.stageDispatch);
   const splitRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   // Backing out of the end confirm returns focus to the control that
   // opened it, never to <body> (run-view-50).
@@ -338,6 +339,31 @@ export function RunView({
   // bound roster is the pane set for the session's whole life, so a
   // call that ends leaves its transcript where the reader last saw it.
   const lanes = session.players.map((player) => player.id);
+  // A lane whose call just opened comes into view (run-view-7): the
+  // grid scrolls only as far as it must and only when the pane is
+  // out of sight, so a lane the reader is following never leaves
+  // under them and the working one never hides beyond the edge.
+  const runningLanes = lanes
+    .filter((playerId) => view.players[playerId]?.running)
+    .join("\u0000");
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || !runningLanes) return;
+    const box = grid.getBoundingClientRect();
+    for (const playerId of runningLanes.split("\u0000")) {
+      const pane = Array.from(
+        grid.querySelectorAll<HTMLElement>('[data-testid^="player-pane-"]'),
+      ).find((el) => el.dataset.testid === `player-pane-${playerId}`);
+      if (!pane || typeof pane.scrollIntoView !== "function") continue;
+      const rect = pane.getBoundingClientRect();
+      const hidden =
+        rect.right > box.right + 1 ||
+        rect.left < box.left - 1 ||
+        rect.bottom > box.bottom + 1 ||
+        rect.top < box.top - 1;
+      if (hidden) pane.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }, [runningLanes]);
   // No lane, no split (run-view-7): a session whose roster binds no
   // player — a record the CLI wrote — reads as the Captain home does,
   // one column at the home's measure, with no divider to nowhere.
@@ -525,6 +551,7 @@ export function RunView({
               />
             </div>
             <div
+              ref={gridRef}
               data-testid="player-grid"
               className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"
             >
