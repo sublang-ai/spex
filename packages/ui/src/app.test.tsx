@@ -780,7 +780,9 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
 });
 
 describe("spec-view-7, dashboard-24: a History record opens in the reader", () => {
-  test("a finished record row on the Overview lands in the Specs tab's reader", async () => {
+  // A finished record in alpha's tree: History lists it on the
+  // Dashboard and the Overview alike.
+  function serveFinishedRecord(): void {
     const tree = {
       present: true,
       legacy: false,
@@ -817,6 +819,10 @@ describe("spec-view-7, dashboard-24: a History record opens in the reader", () =
       }
       return {};
     });
+  }
+
+  test("a finished record row on the Overview lands in the Specs tab's reader", async () => {
+    serveFinishedRecord();
     render(<App />);
     fireEvent.click(screen.getByTestId("workspace-tab-overview"));
     const overview = await screen.findByTestId("overview-tab");
@@ -834,5 +840,52 @@ describe("spec-view-7, dashboard-24: a History record opens in the reader", () =
       projectId: "p1",
       path: "intents/001-first-intent.md",
     });
+  });
+
+  test("spec-view-57: Back from a record opened on the Overview returns to the Overview row", async () => {
+    serveFinishedRecord();
+    render(<App />);
+    fireEvent.click(screen.getByTestId("workspace-tab-overview"));
+    const overview = await screen.findByTestId("overview-tab");
+    const row = await within(overview).findByTestId("history-row-IR-001");
+    fireEvent.click(within(row).getByRole("button"));
+    const reader = await screen.findByTestId("record-reader");
+    await within(reader).findByText("The first intent, done.");
+
+    // Back names where the record came from, and leads there: the
+    // Overview tab, with the invoking row focused (DR-010 §6).
+    const back = screen.getByTestId("reader-back");
+    expect(back.textContent).toBe("← Back to Overview");
+    fireEvent.click(back);
+    expect(screen.queryByTestId("record-reader")).toBeNull();
+    expect(
+      screen.getByTestId("workspace-tab-overview").getAttribute("aria-selected"),
+    ).toBe("true");
+    const returned = await screen.findByTestId("history-row-IR-001");
+    expect(document.activeElement).toBe(within(returned).getByRole("button"));
+  });
+
+  test("spec-view-57: Back from a record opened on the Dashboard returns to the Dashboard row", async () => {
+    serveFinishedRecord();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^Dashboard/ }));
+    const group = await screen.findByTestId("project-group-p1");
+    const row = await within(group).findByTestId("history-row-IR-001");
+    fireEvent.click(within(row).getByRole("button"));
+    const reader = await screen.findByTestId("record-reader");
+    await within(reader).findByText("The first intent, done.");
+    expect(screen.queryByTestId("project-group-p1")).toBeNull();
+
+    const back = screen.getByTestId("reader-back");
+    expect(back.textContent).toBe("← Back to Dashboard");
+    fireEvent.click(back);
+    expect(screen.queryByTestId("record-reader")).toBeNull();
+    // The Dashboard is back with the project's group and its row
+    // focused, the row scrolled into view.
+    const returnedGroup = await screen.findByTestId("project-group-p1");
+    const returned = within(returnedGroup).getByTestId("history-row-IR-001");
+    const control = within(returned).getByRole("button");
+    expect(document.activeElement).toBe(control);
+    expect(control.scrollIntoView).toHaveBeenCalled();
   });
 });

@@ -995,6 +995,76 @@ describe("spec-view-7/45: records in their places", () => {
     expect(screen.getByTestId("record-DR-001")).toBeTruthy();
     expect(screen.getByTestId("record-DR-011")).toBeTruthy();
   });
+
+  test("spec-view-57: a record asked from another surface names it on Back and hands the origin back", async () => {
+    const origin = {
+      surface: "dashboard" as const,
+      projectId: "p1",
+      anchor: "record-row-DR-011",
+    };
+    const onReturn = vi.fn();
+    const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nAsked for.");
+    function Requested() {
+      const [viewState, setViewState] = useState<SpecViewState>(initialSpecViewState);
+      const [path, setPath] = useState<string>();
+      return (
+        <>
+          <SpecView
+            tree={TREE}
+            onRefresh={() => {}}
+            onReadRecord={onReadRecord}
+            viewState={viewState}
+            onViewState={setViewState}
+            openRecordPath={path}
+            openRecordOrigin={path ? origin : undefined}
+            onRecordOpened={() => setPath(undefined)}
+            onReturn={onReturn}
+          />
+          <button type="button" onClick={() => setPath("decisions/011-project-workspace.md")}>
+            request
+          </button>
+        </>
+      );
+    }
+    render(<Requested />);
+    fireEvent.click(screen.getByText("request"));
+    await screen.findByText("Asked for.");
+    // Back names where the record came from, and takes focus on open.
+    const back = screen.getByTestId("reader-back");
+    expect(back.textContent).toBe("← Back to Dashboard");
+    expect(document.activeElement).toBe(back);
+    // The request is answered once: the origin outlives its clearing.
+    expect(screen.queryByText("request")).toBeTruthy();
+    fireEvent.click(back);
+    // Back closes the reader and hands the origin to the host, which
+    // owns the return — no focus is thrown at the tree.
+    expect(screen.queryByTestId("record-reader")).toBeNull();
+    expect(onReturn).toHaveBeenCalledWith(origin);
+    expect(screen.getByTestId(`file-${AUTH}`)).toBeTruthy();
+  });
+
+  test("spec-view-7: a record picked in the view keeps Back to the tree", async () => {
+    const onReturn = vi.fn();
+    const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nPicked here.");
+    render(
+      <SpecView
+        tree={TREE}
+        onRefresh={() => {}}
+        onReadRecord={onReadRecord}
+        viewState={initialSpecViewState}
+        onViewState={() => {}}
+        onReturn={onReturn}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("decisions-toggle"));
+    fireEvent.click(screen.getByTestId("record-DR-011"));
+    await screen.findByText("Picked here.");
+    const back = screen.getByTestId("reader-back");
+    expect(back.textContent).toBe("← Back");
+    fireEvent.click(back);
+    expect(onReturn).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByTestId("record-DR-011"));
+  });
 });
 
 describe("SPECV-8: freshness and failure states", () => {

@@ -65,7 +65,7 @@ test("run-view-115, dashboard-39: an intent dropped from the working line leaves
   await expect(page.getByTestId(/^attention-confirm-/)).toHaveCount(0);
 });
 
-test("dashboard-39: a History record row opens the record in the Specs tab's reader", async ({
+test("dashboard-46: a History record opens in the reader and Back returns to its row", async ({
   page,
   app,
 }) => {
@@ -87,11 +87,14 @@ test("dashboard-39: a History record row opens the record in the Specs tab's rea
   );
   await open(page, app);
   await nav(page, "Dashboard").click();
-  const row = page.getByTestId("history-row-IR-004");
+  const group = page.getByTestId(`project-group-${app.projectId}`);
+  const row = group.getByTestId("history-row-IR-004");
+  const opener = row.getByRole("button", { name: /open IR-004/i });
   await expect(row).toContainText("Shipped already");
-  await row.getByRole("button", { name: /open IR-004/i }).click();
+  await opener.click();
 
-  // The Specs tab, in the records reader, on that record.
+  // The Specs tab, in the records reader, on that record, with Back
+  // naming where it came from.
   await expect(page.getByRole("tab", { name: "Specs" })).toHaveAttribute(
     "aria-selected",
     "true",
@@ -99,6 +102,32 @@ test("dashboard-39: a History record row opens the record in the Specs tab's rea
   const reader = page.getByTestId("record-reader");
   await expect(reader).toContainText("IR-004");
   await expect(reader).toContainText(/shipped before the app met the project/i);
+  const back = page.getByTestId("reader-back");
+  await expect(back).toHaveText("← Back to Dashboard");
+
+  // Back: the Dashboard, the project's group in view, the row focused.
+  await back.click();
+  await expect(reader).toHaveCount(0);
+  await expect(group).toBeInViewport();
+  await expect(opener).toBeFocused();
+
+  // The same row on the project's Overview returns to the Overview.
+  await page.getByTestId(`sidebar-project-${app.projectId}`).click();
+  await page.getByRole("tab", { name: "Overview" }).click();
+  const overview = page.getByTestId("overview-tab");
+  const overviewOpener = overview
+    .getByTestId("history-row-IR-004")
+    .getByRole("button", { name: /open IR-004/i });
+  await overviewOpener.click();
+  await expect(reader).toContainText("IR-004");
+  await expect(back).toHaveText("← Back to Overview");
+  await back.click();
+  await expect(reader).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(overviewOpener).toBeFocused();
 });
 
 test("dashboard-39: capture, start, confirm, and History through the page", async ({
