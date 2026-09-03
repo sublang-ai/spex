@@ -121,7 +121,7 @@ The group's Up next band shall list the project's queued intents in rank order, 
 Where a band or menu of the Dashboard lists a spec record, the row shall present as the one record row — the record's identifier as the chip the Specs outline's package rows wear [[spec-view-2](spec-view.md#spec-view-2)], its title truncated to one line, a hover background and a pointer over the whole row, named as an opener ("Open IR-N") — and activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)] with the row's surface, the Dashboard or the project's Overview, as the reader's origin [[spec-view-57](spec-view.md#spec-view-57)]:
 
 - the brand-coloured underline link stays reserved for what leaves the app — an issue or pull-request page [[dashboard-6](#dashboard-6)] — so a record, which opens in place, never wears it ([DR-013](../decisions/013-sublang-brand.md));
-- the origin's control is the row itself, except where the row leaves the surface with its activation: a row menu's record item names the menu's trigger, and an Open records row names the Sources band's toggle, since the band stands collapsed again on return [[dashboard-20](#dashboard-20)].
+- the origin's control is the row itself, except where the row leaves the surface with its activation: a row menu's record item names the menu's trigger, and an Open records row names the Sources band's summary line, since the band comes back on its first tab with that row no longer drawn [[dashboard-20](#dashboard-20)].
 
 ### Capture
 
@@ -145,11 +145,12 @@ When an intent is captured from any Dashboard gesture — a Queue control or the
 
 #### dashboard-20
 
-While a project group renders, the group's Sources band shall present as a collapsed one-line summary — issue, pull-request, and open-record counts with the age of the data — expanding in place to three tabs, Issues [[dashboard-6](#dashboard-6)], PRs [[dashboard-6](#dashboard-6)], and Open records [[dashboard-24](#dashboard-24)], each paginated in place:
+While a project group renders, the group's Sources band shall present three tabs — Issues [[dashboard-6](#dashboard-6)], PRs [[dashboard-6](#dashboard-6)], and Open records [[dashboard-24](#dashboard-24)], each paginated in place — under a one-line summary of the issue, pull-request, and open-record counts with the age of the data, which folds the band to itself and unfolds it again:
 
+- the band stands unfolded wherever a group first draws it, so the tabs are read rather than discovered, and a fold is the project's own — kept while the app runs, never on disk, and the same one the Dashboard's group and the project's Overview [[dashboard-26](#dashboard-26)] read;
 - issue and pull-request rows carry their forge labels as tags;
 - while GitHub is not connected — no binding, or the adapter not ready — the summary says so in place of the issue and pull-request counts, so zero never reads as an empty tracker; while the project's forge state has not been read yet, the summary and the guidance read as loading, never as not connected;
-- expanding, switching tabs, and paging are visibility-only and change no ledger state.
+- folding, switching tabs, and paging are visibility-only and change no ledger state.
 
 #### dashboard-6
 
@@ -311,7 +312,7 @@ Where a fixture Sources row lists issue #7, when the user activates its Queue co
 
 #### dashboard-19
 
-Where a stubbed forge adapter returns fixture open issues and pull requests with labels for a bound project, when the group's Sources band is displayed, the test suite shall assert that the collapsed line shows the counts and data age [[dashboard-20](#dashboard-20)], that expanding shows paginated Issues and PRs tabs whose rows render titles, numbers, and forge labels [[dashboard-20](#dashboard-20)] [[dashboard-6](#dashboard-6)], that a manual refresh invokes the stub again [[dashboard-14](#dashboard-14)], and that a stub failure on refresh leaves the previously served lists in place with the failure and data age surfaced [[dashboard-14](#dashboard-14)].
+Where a stubbed forge adapter returns fixture open issues and pull requests with labels for two bound projects, when the group's Sources band is displayed, the test suite shall assert that the band stands unfolded under a summary line showing the counts and data age [[dashboard-20](#dashboard-20)], that its paginated Issues and PRs tabs render their rows' titles, numbers, and forge labels [[dashboard-20](#dashboard-20)] [[dashboard-6](#dashboard-6)], that the line folds one project's band and unfolds it again while the other's stands open, with the fold surviving a redraw on either surface [[dashboard-20](#dashboard-20)] [[dashboard-26](#dashboard-26)], that a manual refresh invokes the stub again [[dashboard-14](#dashboard-14)], and that a stub failure on refresh leaves the previously served lists in place with the failure and data age surfaced [[dashboard-14](#dashboard-14)].
 
 #### dashboard-25
 

@@ -132,6 +132,10 @@ export interface AppState {
    * never on disk — a lane's rail is a reading posture, not a
    * preference. */
   collapsedLanes: Record<string, string[]>;
+  /** Per-project folded Sources bands (dashboard-20): the band opens
+   * expanded, and a fold lasts this launch — the Dashboard's group and
+   * the project's Overview read the same one. */
+  foldedSources: Record<string, boolean>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
 
@@ -147,6 +151,7 @@ export interface AppState {
   setCaptainSplit(percent: number): void;
   toggleProjectExpanded(projectId: string, expanded: boolean): void;
   setLaneCollapsed(sessionId: string, playerId: string, collapsed: boolean): void;
+  setSourcesFolded(projectId: string, folded: boolean): void;
   /** Register a folder, silently git-initializing non-repos
    * (RUN-27); the palette and any surface share this one action. */
   addProjectByPath(path: string): Promise<ProjectInfo>;
@@ -551,6 +556,7 @@ export const useAppStore = create<AppState>((set, get) => {
     history: {},
     stagedIntents: {},
     collapsedLanes: {},
+    foldedSources: {},
 
     connect(url?: string): void {
       const target = url ?? defaultCoreUrl();
@@ -693,6 +699,11 @@ export const useAppStore = create<AppState>((set, get) => {
         ? [...lanes, playerId]
         : lanes.filter((id) => id !== playerId);
       set({ collapsedLanes: { ...get().collapsedLanes, [sessionId]: next } });
+    },
+
+    setSourcesFolded(projectId: string, folded: boolean): void {
+      if ((get().foldedSources[projectId] ?? false) === folded) return;
+      set({ foldedSources: { ...get().foldedSources, [projectId]: folded } });
     },
 
     async addProjectByPath(path: string): Promise<ProjectInfo> {

@@ -2,10 +2,12 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // A project group's Sources band (dashboard-20/6/24/30, DR-035): a
-// collapsed counts-and-age line expanding in place to three paged
-// tabs — Issues, PRs, Open records — whose rows carry the one shared
-// representation (forge-work-lists-1) and the one-gesture Queue
-// control. Expanding, switching, and paging are visibility only.
+// counts-and-age line over three paged tabs — Issues, PRs, Open
+// records — whose rows carry the one shared representation
+// (forge-work-lists-1) and the one-gesture Queue control. The band
+// opens expanded, so a first-time reader sees what there is to queue
+// from; the line folds it, and that fold is the project's for the
+// app's run. Folding, switching, and paging are visibility only.
 
 import { useState, type ReactNode } from "react";
 import type {
@@ -17,7 +19,7 @@ import type {
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
-import type { ProjectMeta } from "../state/store.js";
+import { useAppStore, type ProjectMeta } from "../state/store.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { Icon } from "./Icon.js";
 import { RecordRow } from "./RecordRow.js";
@@ -123,7 +125,11 @@ export function SourcesBand({
    * GitHub binding (dashboard-8); absent on the Overview itself. */
   onOpenOverview?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  // Open by default (dashboard-20): the fold is the project's, held
+  // in the store so the Dashboard's group and the Overview show the
+  // same band, and only for this launch.
+  const expanded = !useAppStore((state) => state.foldedSources[project.id]);
+  const setSourcesFolded = useAppStore((state) => state.setSourcesFolded);
   const [tab, setTab] = useState<SourceTab>("issues");
   const [pages, setPages] = useState<Record<SourceTab, number>>({
     issues: 0,
@@ -193,7 +199,7 @@ export function SourcesBand({
           type="button"
           aria-expanded={expanded}
           data-testid={`sources-toggle-${project.id}`}
-          onClick={() => setExpanded((current) => !current)}
+          onClick={() => setSourcesFolded(project.id, expanded)}
           className="flex min-h-6 min-w-0 items-center gap-1 rounded text-left text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
         >
           <Icon
@@ -271,8 +277,9 @@ export function SourcesBand({
                      * leaves the app. */}
                     <RecordRow
                       record={record}
-                      // The band stands collapsed again on return: its
-                      // toggle is what Back lands on (spec-view-57).
+                      // The band comes back on its first tab, so this
+                      // row is not drawn: its summary line is what
+                      // Back lands on (spec-view-57).
                       onClick={() =>
                         onOpenIntent(
                           project.id,
