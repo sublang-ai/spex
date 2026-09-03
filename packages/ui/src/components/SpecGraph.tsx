@@ -49,6 +49,33 @@ export {
 /** The card waits for the pointer to settle, so crossing the canvas
  * does not flash a card per mark (spec-view-26). */
 const HOVER_DELAY_MS = 130;
+
+/** The card's shape before it has been measured — the width its class
+ * asks for, and a height under its smallest form (spec-view-26). */
+const CARD_SIZE = { width: 224, height: 132 };
+/** Breathing room between the card and the edge of the graph pane. */
+const CARD_GAP = 8;
+
+/**
+ * Where the details card sits in the graph pane: centred on its mark,
+ * moved in so the whole card lies inside the pane (spec-view-26). The
+ * card's own measured size decides — a guessed half-width paints it
+ * over the outline beside the pane at either edge.
+ */
+export function cardPlacement(
+  anchor: { left: number; top: number },
+  pane: { width: number; height: number },
+  card: { width: number; height: number },
+): { left: number; top: number } {
+  const half = Math.min(card.width, pane.width) / 2;
+  return {
+    left: Math.min(Math.max(anchor.left, half), Math.max(pane.width - half, half)),
+    top: Math.max(
+      Math.min(anchor.top, pane.height - card.height - CARD_GAP),
+      CARD_GAP,
+    ),
+  };
+}
 /** How far past the fitted whole the camera may zoom in. The base
  * picture is the fit, so the reader's transform starts at identity
  * and only ever adds to it (spec-view-27). */
@@ -507,6 +534,21 @@ export function SpecGraph({
 
   const anchor = cardAnchor();
 
+  // The card's height varies with its group rows, and its width with
+  // a narrow pane, so both are read back rather than assumed.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardBox, setCardBox] = useState(CARD_SIZE);
+  useEffect(() => {
+    const box = cardRef.current?.getBoundingClientRect();
+    if (!box || box.width <= 0 || box.height <= 0) return;
+    setCardBox((current) =>
+      current.width === box.width && current.height === box.height
+        ? current
+        : { width: box.width, height: box.height },
+    );
+  }, [cardNode, cardEdge, size.width, size.height]);
+  const place = anchor ? cardPlacement(anchor, size, cardBox) : null;
+
   // --- Render ----------------------------------------------------------------
 
   /** Dimming belongs to the selection alone; inspection lifts the
@@ -788,15 +830,13 @@ export function SpecGraph({
       </svg>
 
       {/* Details at hand rather than a native tooltip (spec-view-26). */}
-      {anchor && (cardNode || cardEdge) ? (
+      {place && (cardNode || cardEdge) ? (
         <div
+          ref={cardRef}
           data-testid="graph-card"
           role="tooltip"
-          className="pointer-events-none absolute z-10 w-56 -translate-x-1/2 rounded-lg border border-neutral-200 bg-white p-2.5 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
-          style={{
-            left: Math.min(Math.max(anchor.left, 96), Math.max(size.width - 96, 96)),
-            top: Math.min(anchor.top, Math.max(size.height - 132, 8)),
-          }}
+          className="pointer-events-none absolute z-10 w-56 max-w-full -translate-x-1/2 rounded-lg border border-neutral-200 bg-white p-2.5 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+          style={{ left: place.left, top: place.top }}
         >
           {cardNode ? (
             <>

@@ -43,7 +43,7 @@ While a file node is displayed, the spec view shall present the package's header
 
 While an item row is displayed, the spec view shall render the row by its expansion state:
 
-- collapsed, the row shows the item's ID chip in its group color, its group tag, its first line, and a muted hint counting its outbound citations and inbound backlinks;
+- collapsed, the row shows the item's ID chip in its group color — bounded at 10rem and truncating there, since a long ID would otherwise widen the row past the outline pane ([DR-041](../decisions/041-chrome-that-fits.md)), with the whole ID in the chip's title and accessible name — its group tag, its first line, and a muted hint counting its outbound citations and inbound backlinks;
 - expanded, the row renders the item's full markdown body with horizontal overflow contained and its citations as outbound rows and grouped inbound backlinks per [[spec-view-19](#spec-view-19)], every entry an in-view link;
 - when the ID chip is activated, the view copies the item ID to the clipboard and acknowledges in words beside the chip ([DR-010](../decisions/010-interface-craft.md) §3);
 - expanded, the row offers an Edit control opening its file in the editor with the caret on the item's heading [[spec-view-48](#spec-view-48)].
@@ -166,7 +166,8 @@ While the graph renders, the spec view shall emphasize through dimming alone —
 When a node or an edge takes hover or keyboard focus, the spec view shall answer with a rendered card at hand ([DR-009](../decisions/009-at-hand-interaction.md)) rather than a native tooltip:
 
 - a node's card names the package, states the item total its size encodes, breaks that total down by item group as a list in the fixed group colors and count grammar of [[spec-view-2](#spec-view-2)], and states the file's inbound and outbound cross-file citation counts;
-- an edge's card names the citing and cited packages and states the citation count its width encodes [[spec-view-23](#spec-view-23)].
+- an edge's card names the citing and cited packages and states the citation count its width encodes [[spec-view-23](#spec-view-23)];
+- the card lies inside the graph pane, placed by its own measured size — never a guess at it — so a mark at any edge and a card of any height stay clear of the pane beside it and the legend below ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 #### spec-view-27
 
@@ -310,7 +311,8 @@ The core package shall list `specs/decisions/*.md` as decision records and the u
 
 The spec view shall scroll each of its forms — the outline beside the graph, the records reader [[spec-view-7](#spec-view-7)], and the editor [[spec-view-48](#spec-view-48)] — inside its own box, which fills the surface it is given and never grows past it, however long the tree ([DR-041](../decisions/041-chrome-that-fits.md)):
 
-- each such box is a positioned box, so the screen-reader-only text and the graph's own card [[spec-view-26](#spec-view-26)] are contained by the box they belong to rather than being carried by the page.
+- each such box is a positioned box, so the screen-reader-only text and the graph's own card [[spec-view-26](#spec-view-26)] are contained by the box they belong to rather than being carried by the page;
+- each half of the graph split [[spec-view-20](#spec-view-20)] keeps a readable floor — the outline's package tree never squeezed to nothing by its own filter row — and the split scrolls as one where the surface cannot hold both floors, so what does not fit is reached rather than clipped away.
 
 ## Internal Behavior
 
@@ -484,4 +486,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### spec-view-56
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, when the journey opens the Specs tab with the graph shown and one package expanded at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained [[spec-view-59](#spec-view-59)], within every list row no two visible siblings overlap and every child lies inside its parent [[spec-view-1](#spec-view-1)] [[spec-view-55](#spec-view-55)], and every control keeps its accessible name at every size [[spec-view-1](#spec-view-1)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, when the journey opens the Specs tab with the graph shown and one package expanded at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained [[spec-view-59](#spec-view-59)], within every list row no two visible siblings overlap and every child lies inside its parent [[spec-view-1](#spec-view-1)] [[spec-view-55](#spec-view-55)] [[spec-view-3](#spec-view-3)], and every control keeps its accessible name at every size [[spec-view-1](#spec-view-1)]:
+
+- at the 320-pixel floor in a 400-pixel-tall window, the outline's package tree stands with a height a row can be read in and scrolls to the rest [[spec-view-59](#spec-view-59)];
+- a package node hovered at the narrowest split answers with a card lying wholly inside the graph pane [[spec-view-26](#spec-view-26)].

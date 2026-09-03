@@ -28,6 +28,7 @@ import {
   initialSpecViewState,
   type SpecViewState,
 } from "./SpecView.js";
+import { cardPlacement } from "./SpecGraph.js";
 import { editorDirty } from "../lib/spec-view-model.js";
 import type { SpecTreeState } from "@sublang/spex-core/protocol";
 
@@ -1787,6 +1788,69 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(node("billing").getAttribute("data-items")).toBe("3");
     expect(radiusOf("billing")).toBeGreaterThan(radiusOf("auth"));
     restore();
+  });
+
+  // spec-view-59: neither half of the split is squeezed away.
+  test("both panes keep a floor and the split scrolls rather than clipping", () => {
+    const restore = sized();
+    showGraph();
+    const graphPane = screen.getByTestId("spec-graph").parentElement as HTMLElement;
+    const outlinePane = screen.getByTestId("file-toggle-auth").closest("div.flex.min-h-40");
+    expect(outlinePane).not.toBeNull();
+    expect(graphPane.className).toContain("min-h-24");
+    // The stacked split scrolls as one, so a floor that outgrows the
+    // surface is reachable instead of clipped by the root.
+    const split = graphPane.parentElement as HTMLElement;
+    expect(split.className).toContain("min-h-full");
+    expect((split.parentElement as HTMLElement).className).toContain("overflow-y-auto");
+    restore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DR-041 §9: the outline row and the graph's card fit their panes
+// ---------------------------------------------------------------------------
+
+describe("spec-view-55/26: nothing outgrows the pane it is drawn in", () => {
+  test("a long item id truncates rather than widening its row", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    const chip = screen.getByRole("button", { name: "Copy AUTH-2" });
+    expect(chip.className).toContain("truncate");
+    expect(chip.className).toContain("max-w-40");
+    expect(chip.className).not.toContain("shrink-0");
+  });
+
+  test("the card moves in by its own half-width at either edge", () => {
+    const pane = { width: 300, height: 400 };
+    const card = { width: 224, height: 150 };
+    expect(cardPlacement({ left: 4, top: 10 }, pane, card).left).toBe(112);
+    expect(cardPlacement({ left: 296, top: 10 }, pane, card).left).toBe(188);
+    // Untouched where the mark leaves room on both sides.
+    expect(cardPlacement({ left: 150, top: 10 }, pane, card).left).toBe(150);
+  });
+
+  test("a pane narrower than the card still holds the whole card", () => {
+    // The card takes the pane's width there, so its half follows.
+    const placed = cardPlacement(
+      { left: 12, top: 10 },
+      { width: 180, height: 400 },
+      { width: 180, height: 150 },
+    );
+    expect(placed.left).toBe(90);
+  });
+
+  test("a tall card rides above the legend instead of through it", () => {
+    const placed = cardPlacement(
+      { left: 100, top: 380 },
+      { width: 300, height: 400 },
+      { width: 224, height: 220 },
+    );
+    expect(placed.top).toBe(172);
+    // A card taller than its pane keeps its head in view.
+    expect(
+      cardPlacement({ left: 100, top: 40 }, { width: 300, height: 120 }, { width: 224, height: 220 }).top,
+    ).toBe(8);
   });
 });
 

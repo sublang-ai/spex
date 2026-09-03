@@ -1527,14 +1527,17 @@ export function SpecView(props: SpecViewProps) {
 
         return graphful ? (
           // The split answers its own pane's width, not the window's
-          // (DR-041): side by side from the @2xl step, stacked below it.
-          <div className="@container flex min-h-0 flex-1">
+          // (DR-041): side by side from the @2xl step, stacked below
+          // it. Each half keeps a readable floor and the split itself
+          // scrolls when the surface cannot hold both, so neither is
+          // squeezed to nothing under the root's clip (spec-view-59).
+          <div className="@container flex min-h-0 flex-1 items-start overflow-y-auto">
           <div
             ref={splitRef}
-            className="flex min-h-0 flex-1 flex-col gap-4 @2xl:flex-row @2xl:gap-0"
+            className="flex min-h-full w-full flex-col gap-4 @2xl:flex-row @2xl:gap-0"
           >
             <div
-              className="min-h-0 flex-1 @2xl:h-full @2xl:w-[var(--graph-share)] @2xl:flex-none"
+              className="min-h-24 flex-1 @2xl:h-full @2xl:min-h-0 @2xl:w-[var(--graph-share)] @2xl:flex-none"
               style={{ ["--graph-share" as string]: `${share * 100}%` }}
             >
               <SpecGraph
@@ -1586,7 +1589,7 @@ export function SpecView(props: SpecViewProps) {
             >
               <span className="w-px bg-neutral-200 transition-colors group-hover:bg-brand-600 dark:bg-neutral-800 dark:group-hover:bg-brand-400" />
             </div>
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex min-h-40 min-w-0 flex-1 flex-col">
               {outlineControls}
               <ul className="relative flex min-h-0 flex-col overflow-y-auto pr-1">
                 {outline}
@@ -1867,7 +1870,10 @@ function ItemRow({
           aria-label={`Copy ${item.id}`}
           title={`Copy ${item.id}`}
           onClick={onCopy}
-          className={`shrink-0 cursor-pointer rounded px-1.5 py-0.5 font-mono text-xs font-semibold hover:ring-1 hover:ring-neutral-400 dark:hover:ring-neutral-500 ${GROUP_CHIP[group]}`}
+          // A long id truncates rather than widening the row past the
+          // outline pane (spec-view-55); the whole id rides the
+          // tooltip and the accessible name this chip already carries.
+          className={`min-w-0 max-w-40 cursor-pointer truncate rounded px-1.5 py-0.5 font-mono text-xs font-semibold hover:ring-1 hover:ring-neutral-400 dark:hover:ring-neutral-500 ${GROUP_CHIP[group]}`}
         >
           {item.id}
         </button>
