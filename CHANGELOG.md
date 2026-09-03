@@ -14,6 +14,51 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Added
+
+- **Player lanes fold.** Each pane's header carries a collapse control;
+  a folded lane stands as a narrow rail with its name, running mark,
+  and an expand control, the remaining panes take the freed width,
+  and a folded lane unfolds itself when its call opens.
+- **History in a frame.** The Dashboard's History band lists every
+  loaded row inside a frame eight rows tall that scrolls, with
+  "Older…" at its end fetching the next page, so the groups below
+  never move.
+- **Frames the reader can resize.** The History frame and the
+  Playbooks stage box take the house divider idiom turned horizontal:
+  a bottom grip drags the height within bounds, arrow keys step it,
+  double-click restores the default, and the height is remembered per
+  frame; the grip hides while the content fits.
+- **The pipeline as a row.** Every Playbooks card shows
+  "Source → Gears → State machine" in place of the Pipeline button;
+  each stage toggles its artifact beneath, one at a time, with absent
+  stages struck through and the state list under the State machine.
+- **Sources open by default**, their three tabs in view; the fold is
+  remembered per project while the app runs.
+
+### Changed
+
+- **The page never scrolls.** Every surface scrolls inside its own
+  box, vertically as well as sideways, every scroll box is a
+  positioned box so screen-reader-only text and popovers stay inside
+  it, and the fit journey measures both at 400 and 800 pixels tall on
+  every surface with a resize pass.
+
+### Fixed
+
+- **Back returns to where a record was opened.** A record opened from
+  the Dashboard or a project's Overview reads behind
+  "← Back to Dashboard" / "← Back to Overview", and Back lands on the
+  row that opened it; a record picked in the Specs tree keeps its
+  plain Back.
+- **The working lane comes into view** when its call opens beyond the
+  grid's edge, side by side or stacked.
+- **A parked question stands** until the parked run itself leaves its
+  park or is dismissed; the controller Captain's own state reports no
+  longer clear it from the composer or the Dashboard.
+- **The Sources tab row wraps** before it widens the band on narrow
+  panes.
+
 ## [0.3.0] - 2026-09-02
 
 ### Added
