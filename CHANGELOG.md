@@ -35,6 +35,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
   stages struck through and the state list under the State machine.
 - **Sources open by default**, their three tabs in view; the fold is
   remembered per project while the app runs.
+- **A done intent can be removed from History.** The row's remove
+  control opens the inline confirm; confirming appends a remove act
+  to the intent log, and the intent leaves every band without a
+  trace, on this and any synced copy.
+- **Gears as spec items.** The Playbooks Gears stage renders the
+  compiled GEARS file with the Specs outline's own item rows —
+  chip, group, first line, expandable body, in-artifact citation
+  jumps — and the State machine stage keeps its state list pinned
+  above the scrolling code.
 - **Running sessions listed again.** A Running band below Needs
   attention lists every live session with a turn in flight that
   needs nothing from the Boss — project, title, what it is doing —
@@ -63,6 +72,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   longer clear it from the composer or the Dashboard.
 - **The Sources tab row wraps** before it widens the band on narrow
   panes.
+- **The sidebar's selection follows the surface**: on the Dashboard,
+  Playbooks, or Settings no project row reads as selected; the lit
+  entry alone says where you are, and Workspace restores the
+  remembered project.
 - **Queued Boss messages stay in their box.** The queue is a bounded
   frame that scrolls, so the transcript and the composer's field and
   actions keep their place at any queue length, and an unbroken URL
