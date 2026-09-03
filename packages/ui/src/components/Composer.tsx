@@ -11,6 +11,11 @@
 // hints and acknowledgments share, and an action row beneath that
 // wraps — secondary left, primary last and right. The Captain home
 // builds its composer from the same parts.
+//
+// The queue is the one part that grows without bound, so it lives in
+// its own scrolling frame a few entries tall and the composer yields
+// around it: the field, its caption, and its actions keep their place
+// whatever the Boss has queued (run-view-8).
 
 import {
   useEffect,
@@ -198,6 +203,7 @@ export function Composer({
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const queueRef = useRef<HTMLDivElement>(null);
   const slashItems = slashMatches(text, playbooks);
   const slash = slashDismissed ? undefined : slashItems;
 
@@ -215,6 +221,13 @@ export function Composer({
   useEffect(() => {
     textareaRef.current?.focus();
   }, [awaiting]);
+
+  // The newest queued message is the one the Boss just wrote, so the
+  // frame stays at its end as the queue grows (run-view-8).
+  useEffect(() => {
+    const el = queueRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [composer.queued.length]);
 
   // "Aborting…" clears itself when the abort lands (turn ends) or
   // the attempt failed and the error strip explains why.
@@ -249,12 +262,15 @@ export function Composer({
         : "Message the Captain…";
 
   return (
-    <div className="flex flex-col gap-1.5">
+    // The composer yields inside its column (DR-041 §9): what it holds
+    // scrolls in its own frame rather than pushing the transcript away
+    // and the action row out of the window.
+    <div className="flex min-h-0 flex-col gap-1.5">
       {error ? (
         <div
           data-testid="run-error"
           role="status"
-          className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+          className="flex shrink-0 items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
           <span className="min-w-0 flex-1">{error}</span>
           <button
@@ -271,7 +287,7 @@ export function Composer({
       {awaiting ? (
         <div
           data-testid="boss-reply-banner"
-          className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+          className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
         >
           {view.pendingQuestionPlayer ? (
             <>
@@ -286,16 +302,24 @@ export function Composer({
         </div>
       ) : null}
       {composer.queued.length > 0 ? (
+        // A few entries tall, its own positioned scroll box, its end
+        // in view: the queue never grows the composer past its share
+        // of the column (run-view-8, DR-041 §9).
         <div
+          ref={queueRef}
           data-testid="queue-indicator"
-          className="flex flex-col items-end gap-1"
+          className="relative flex max-h-40 min-h-0 flex-col items-end gap-1 overflow-y-auto"
         >
           {composer.queued.map((entry, index) => (
             <div
               key={index}
-              className="flex max-w-[85%] flex-col rounded-2xl rounded-br-md border border-brand-300 px-3 py-1.5 text-sm text-brand-700 dark:border-brand-700 dark:text-brand-300"
+              className="flex max-w-[85%] shrink-0 flex-col rounded-2xl rounded-br-md border border-brand-300 px-3 py-1.5 text-sm text-brand-700 dark:border-brand-700 dark:text-brand-300"
             >
-              <span className="whitespace-pre-wrap">{entry.text}</span>
+              {/* An unbroken token breaks anywhere rather than
+                  widening the frame (run-view-3). */}
+              <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+                {entry.text}
+              </span>
               <span className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
                 {entry.intentId !== undefined ? (
                   <span
@@ -320,7 +344,7 @@ export function Composer({
           ))}
         </div>
       ) : null}
-      <div className="relative">
+      <div className="relative shrink-0">
         {slash ? (
           <SlashMenuList
             items={slash}

@@ -47,10 +47,22 @@ function SplitDivider({
 }) {
   const [dragging, setDragging] = useState(false);
 
+  // The share is a percentage width on a flex child, so it resolves
+  // against the container's content box and is then carried right by
+  // the gap before the divider. Measuring the border box instead left
+  // the rule up to 40px from the hand that was dragging it, which
+  // reads as a control that refuses to follow (DR-030, DR-041 §9).
   function fromClientX(clientX: number): number | undefined {
-    const box = containerRef.current?.getBoundingClientRect();
-    if (!box || box.width === 0) return undefined;
-    return ((clientX - box.left) / box.width) * 100;
+    const el = containerRef.current;
+    if (!el) return undefined;
+    const box = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    const padLeft = parseFloat(style.paddingLeft) || 0;
+    const padRight = parseFloat(style.paddingRight) || 0;
+    const gap = parseFloat(style.columnGap) || 0;
+    const content = box.width - padLeft - padRight;
+    if (content <= 0) return undefined;
+    return ((clientX - box.left - padLeft - gap) / content) * 100;
   }
 
   return (

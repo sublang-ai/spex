@@ -58,6 +58,52 @@ const SESSION: SessionInfo = {
   failed: false,
 };
 
+const restoreResizeObserver: (() => void)[] = [];
+afterEach(() => {
+  while (restoreResizeObserver.length) restoreResizeObserver.pop()!();
+});
+
+/** A stand-in for the browser's ResizeObserver: a simulated document
+ * has none, so the boxes that watch their own size are driven by
+ * hand. */
+function observeResizes(): { fire(target: Element): void } {
+  interface Watcher {
+    target: Element;
+    fire(): void;
+  }
+  const watchers = new Set<Watcher>();
+  const previous = Reflect.get(globalThis, "ResizeObserver");
+  class Stub {
+    private readonly mine = new Set<Watcher>();
+    constructor(private readonly callback: ResizeObserverCallback) {}
+    observe(target: Element): void {
+      const watcher: Watcher = {
+        target,
+        fire: () => this.callback([], this as unknown as ResizeObserver),
+      };
+      this.mine.add(watcher);
+      watchers.add(watcher);
+    }
+    unobserve(): void {}
+    disconnect(): void {
+      for (const watcher of this.mine) watchers.delete(watcher);
+      this.mine.clear();
+    }
+  }
+  Reflect.set(globalThis, "ResizeObserver", Stub);
+  restoreResizeObserver.push(() => {
+    if (previous === undefined) Reflect.deleteProperty(globalThis, "ResizeObserver");
+    else Reflect.set(globalThis, "ResizeObserver", previous);
+  });
+  return {
+    fire(target: Element): void {
+      for (const watcher of [...watchers]) {
+        if (watcher.target === target) watcher.fire();
+      }
+    },
+  };
+}
+
 /** A system line's words, glyph and all (run-view-1): the glyph sits
  * in its own icon slot, so the line is found by its whole text. */
 function systemLine(text: string | RegExp): HTMLElement | null {
@@ -298,6 +344,57 @@ describe("RUN-38: queued messages read as pending, not sent", () => {
     const queue = screen.getByTestId("queue-indicator");
     expect(queue.textContent).toContain("also update the changelog please");
     expect(queue.textContent).toContain("sends when this turn ends");
+  });
+
+  // run-view-106: the queue is the composer's one unbounded part, so
+  // it lives in a frame a few entries tall, kept at its end.
+  test("the queue scrolls in its own bounded frame, newest in view", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONLY_STARTED);
+    const queued = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        text: `queued message ${index + 1}, long enough to wrap twice over`,
+      }));
+    const run = (count: number) => (
+      <RunView
+        session={SESSION}
+        view={view}
+        composer={{ queued: queued(count) }}
+        connected
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />
+    );
+    const { rerender } = render(run(6));
+    const queue = screen.getByTestId("queue-indicator");
+    expect(queue.className).toContain("overflow-y-auto");
+    expect(queue.className).toContain("max-h-40");
+    // Every scrolling box is a positioned box (run-view-119).
+    expect(queue.className).toContain("relative");
+
+    // A simulated document has no scrolling box of its own; the frame
+    // reports what a painted one would.
+    let top = 0;
+    Object.defineProperty(queue, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (next: number) => {
+        top = next;
+      },
+    });
+    Object.defineProperty(queue, "scrollHeight", {
+      configurable: true,
+      get: () => 480,
+    });
+    rerender(run(7));
+    expect(queue.scrollTop).toBe(480);
+
+    // The composer yields around the frame: its box keeps its place
+    // whatever the queue holds.
+    const box = screen.getByTestId("composer-box").parentElement!;
+    expect(box.className).toContain("shrink-0");
+    expect(box.parentElement!.className).toContain("min-h-0");
   });
 });
 
@@ -708,6 +805,74 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
     expect(screen.getByTestId("machine-card-t-code").className).toContain(
       "@container",
     );
+  });
+
+  // run-view-81: the fade is a fact about the box as much as about the
+  // scroll position, so a pane that narrows behind more drawing brings
+  // it back with no scroll of the reader's own.
+  test("a drawing read to its end regains its fade when the pane narrows", () => {
+    const observers = observeResizes();
+    renderRun(MACHINE_RUN.slice(0, 13));
+    const scroller = screen.getByTestId("machine-scroll-t-code");
+    const geometry = { clientWidth: 600, scrollWidth: 1400, scrollLeft: 0 };
+    for (const key of Object.keys(geometry) as (keyof typeof geometry)[]) {
+      Object.defineProperty(scroller, key, {
+        configurable: true,
+        get: () => geometry[key],
+      });
+    }
+    // Scrolled to the end, the fade retires: nothing lies beyond.
+    geometry.scrollLeft = 800;
+    fireEvent.scroll(scroller);
+    expect(scroller.style.maskImage).toBe("none");
+    // The pane narrows — no scroll event — and 220px of drawing are
+    // hidden again, so the fade returns.
+    geometry.clientWidth = 380;
+    act(() => observers.fire(scroller));
+    expect(scroller.style.maskImage).toBe("");
+  });
+});
+
+describe("run-view-81: the divider lands under the pointer", () => {
+  test("the split is read against the box the share resolves against", () => {
+    renderRun(MACHINE_RUN.slice(0, 13));
+    const divider = screen.getByTestId("captain-divider");
+    const container = screen.getByTestId("captain-column").parentElement!;
+    // The container's padding and its gap are the offsets the share
+    // is carried by; a simulated document reports only what is set.
+    container.style.paddingLeft = "12px";
+    container.style.paddingRight = "12px";
+    container.style.columnGap = "12px";
+    container.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        right: 1200,
+        width: 1200,
+        top: 0,
+        bottom: 800,
+        height: 800,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    divider.setPointerCapture = () => {};
+    divider.releasePointerCapture = () => {};
+
+    fireEvent.pointerDown(divider, { pointerId: 1, clientX: 600 });
+    fireEvent.pointerMove(divider, { pointerId: 1, clientX: 600 });
+    fireEvent.pointerUp(divider, { pointerId: 1, clientX: 600 });
+
+    const percent = parseFloat(
+      screen
+        .getByTestId("captain-column")
+        .style.getPropertyValue("--captain-split"),
+    );
+    // The rule sits at the column's trailing edge plus the gap; that
+    // place is where the pointer was, not 24px past it. The stored
+    // share is rounded, so the rule lands within a pixel of the hand.
+    const content = 1200 - 12 - 12;
+    const rule = 12 + (percent / 100) * content + 12;
+    expect(Math.abs(rule - 600)).toBeLessThanOrEqual(1);
   });
 });
 
