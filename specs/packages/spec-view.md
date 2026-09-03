@@ -205,10 +205,22 @@ While the spec tree renders, the spec view shall serve the tree's records in the
 - the decisions branch renders whenever decision records exist, file-less and legacy trees included, carrying its count in its label, closed until asked for, its rows sorted by number, each announced as a reader opener rather than an expandable node, and the group filters never touch it;
 - each decisions row is the record row the Dashboard's bands share [[dashboard-40](dashboard.md#dashboard-40)] — identifier chip, title, hover, pointer — and the branch's label reads in the package rows' tone, not dimmed;
 - intent records do not appear anywhere in the view — they are work items, carried by the Dashboard's next-work lists [[dashboard-24](dashboard.md#dashboard-24)];
-- when a record is picked, the view replaces itself with that record's rendered markdown behind a Back control, and Back restores focus to the invoking row and the outline's scroll position;
+- when a record is picked in the view, the view replaces itself with that record's rendered markdown behind a Back control reading "← Back", and Back restores focus to the invoking row and the outline's scroll position — a record requested from another surface leads Back there instead [[spec-view-57](#spec-view-57)];
 - the reader carries an Edit control opening the record in the editor [[spec-view-48](#spec-view-48)];
 - links inside the reader keep the view's semantics [[spec-view-6](#spec-view-6)]: a path resolving to a record, `meta.md`, or `map.md` opens in the reader, an item citation leaves the reader and jumps to the item, and any other local link stays inert;
 - the record fetch shows in progress, and any fetch failure shows with a retry.
+
+#### spec-view-57
+
+Where a record is requested from another surface with its origin — the surface, the project it was listed under, and the control that asked — the spec view shall open it in the reader [[spec-view-7](#spec-view-7)] behind a Back control naming that surface, whose activation closes the reader and hands the origin to the host, which returns to that surface with the origin's control scrolled into view and focused ([DR-009](../decisions/009-at-hand-interaction.md)):
+
+| Origin surface | Back reads | The host returns to |
+| --- | --- | --- |
+| the Dashboard | "← Back to Dashboard" | the Dashboard |
+| a project's Overview | "← Back to Overview" | that project's Overview tab, or the Dashboard when the project is no longer registered |
+
+- the origin is kept with the reader through its fetch, its retry, and an edit closing back into it [[spec-view-48](#spec-view-48)];
+- the origin's control is looked up within the project's group on the returned surface; a control no longer there leaves focus unmoved.
 
 ### Editor
 
@@ -432,7 +444,7 @@ Where a fixture tree renders with the graph on, the test suite shall assert the 
 
 #### spec-view-45
 
-Where a fixture tree carries decision records — once alongside package files and once with none — the test suite shall assert the records access of [[spec-view-7](#spec-view-7)]: the decisions branch renders in both fixtures with its count and stands last in the outline [[spec-view-1](#spec-view-1)], no intent record appears anywhere in the view [[spec-view-7](#spec-view-7)], a record row — the identifier chip, the title, named as an opener under a pointer — opens the reader and Back restores focus to that row [[spec-view-7](#spec-view-7)], a search matching a decision's ID narrows the branch to it [[spec-view-5](#spec-view-5)], the footer's `meta` and `map` links open the reader [[spec-view-7](#spec-view-7)], and a record-internal item citation leaves the reader and lands on the item [[spec-view-7](#spec-view-7)].
+Where a fixture tree carries decision records — once alongside package files and once with none — the test suite shall assert the records access of [[spec-view-7](#spec-view-7)]: the decisions branch renders in both fixtures with its count and stands last in the outline [[spec-view-1](#spec-view-1)], no intent record appears anywhere in the view [[spec-view-7](#spec-view-7)], a record row — the identifier chip, the title, named as an opener under a pointer — opens the reader and Back restores focus to that row [[spec-view-7](#spec-view-7)], a record requested with a Dashboard origin opens behind "← Back to Dashboard" whose activation closes the reader and hands that origin to the host [[spec-view-57](#spec-view-57)], a search matching a decision's ID narrows the branch to it [[spec-view-5](#spec-view-5)], the footer's `meta` and `map` links open the reader [[spec-view-7](#spec-view-7)], and a record-internal item citation leaves the reader and lands on the item [[spec-view-7](#spec-view-7)].
 
 ### Editor Coverage
 

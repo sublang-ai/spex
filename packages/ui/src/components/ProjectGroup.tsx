@@ -374,7 +374,7 @@ function HistoryBand({
   project: ProjectInfo;
   tree?: SpecTreeState;
   now: number;
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
 }) {
   const history = useAppStore((state) => state.history[project.id]);
   const loadHistory = useAppStore((state) => state.loadHistory);
@@ -434,7 +434,13 @@ function HistoryBand({
                   key={`record:${row.id}`}
                   record={row.record}
                   now={now}
-                  onOpen={() => onOpenIntent(project.id, row.record.path)}
+                  onOpen={() =>
+                    onOpenIntent(
+                      project.id,
+                      row.record.path,
+                      `record-row-${row.record.id}`,
+                    )
+                  }
                 />
               ),
             )}
@@ -682,7 +688,7 @@ function ProvenanceAction({
   intent: IntentInfo;
   recordPath?: string;
   sessionKnown: boolean;
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   onOpenSession: (sessionId: string) => void;
   onDone: () => void;
 }) {
@@ -729,7 +735,15 @@ function ProvenanceAction({
         }
         onClick={() => {
           onDone();
-          if (recordPath) onOpenIntent(intent.projectId, recordPath);
+          // The menu closes with the pick: its trigger is what Back
+          // returns to (spec-view-57).
+          if (recordPath) {
+            onOpenIntent(
+              intent.projectId,
+              recordPath,
+              `upnext-menu-${intent.id}`,
+            );
+          }
         }}
         className="w-full px-2 py-1"
       />
@@ -811,7 +825,7 @@ function QueueRow({
   onMove: (afterIntentId: string | null) => void;
   onEdit: (text: string) => Promise<void>;
   onRemove: () => Promise<void>;
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   onOpenSession: (sessionId: string) => void;
   onDragStart: () => void;
   onDropOn: () => void;
@@ -1063,7 +1077,7 @@ function UpNextBand({
   tree?: SpecTreeState;
   highlightId?: string;
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   onOpenSession: (sessionId: string) => void;
   onCapture: (input: CaptureInput) => Promise<IntentInfo>;
 }) {
@@ -1318,7 +1332,7 @@ export interface ProjectGroupProps {
   /** Open a session; with a turnId, land at that turn's place. */
   onOpenSession: (sessionId: string, turnId?: number) => void;
   /** Open an intent record in its project's records reader. */
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   /** Stage an intent's dispatch (run-view-86). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
   onCapture: (input: CaptureInput) => Promise<IntentInfo>;

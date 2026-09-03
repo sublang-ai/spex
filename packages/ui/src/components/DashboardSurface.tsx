@@ -204,7 +204,7 @@ export function DashboardSurface({
   /** Open a session; with a turnId, land at that turn's place. */
   onOpenSession: (sessionId: string, turnId?: number) => void;
   /** Open an intent record in its project's records reader. */
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   /** Stage an intent's dispatch (the App wires this to the store's
    * stageDispatch and switches to the Workspace). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;

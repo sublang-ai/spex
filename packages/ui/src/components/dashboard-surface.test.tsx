@@ -117,14 +117,15 @@ beforeEach(() => {
 
 function renderSurface(over: {
   onOpenSession?: Mock<(sessionId: string, turnId?: number) => void>;
-  onOpenIntent?: Mock<(projectId: string, path: string) => void>;
+  onOpenIntent?: Mock<(projectId: string, path: string, anchor: string) => void>;
   onStartIntent?: Mock<(intent: IntentInfo) => void>;
   onNavigate?: Mock<(surface: "Workspace") => void>;
 } = {}) {
   const onOpenSession =
     over.onOpenSession ?? vi.fn<(sessionId: string, turnId?: number) => void>();
   const onOpenIntent =
-    over.onOpenIntent ?? vi.fn<(projectId: string, path: string) => void>();
+    over.onOpenIntent ??
+    vi.fn<(projectId: string, path: string, anchor: string) => void>();
   const onStartIntent =
     over.onStartIntent ?? vi.fn<(intent: IntentInfo) => void>();
   const onNavigate = over.onNavigate ?? vi.fn<(surface: "Workspace") => void>();
@@ -856,7 +857,13 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(record.getAttribute("aria-label")).toBe("Open IR-3: Half done");
     expect(record.getAttribute("title")).toBe("Open IR-3 in Specs");
     fireEvent.click(record);
-    expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/003-half.md");
+    // The menu item leaves with its menu: the trigger is the origin's
+    // control (spec-view-57).
+    expect(onOpenIntent).toHaveBeenCalledWith(
+      "p1",
+      "intents/003-half.md",
+      "upnext-menu-i3",
+    );
 
     fireEvent.click(screen.getByTestId("upnext-menu-i4"));
     const session = screen.getByTestId("upnext-source-i4");
@@ -1228,7 +1235,12 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
     expect(row.className).not.toContain("underline");
     expect(row.className).not.toContain("brand");
     fireEvent.click(row);
-    expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/003-half.md");
+    // The band collapses on return: its toggle is the origin's control.
+    expect(onOpenIntent).toHaveBeenCalledWith(
+      "p1",
+      "intents/003-half.md",
+      "sources-toggle-p1",
+    );
   });
 
   test("a captured artifact swaps its Queue control for the intent's state and regains it on close", () => {
@@ -1466,7 +1478,11 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
       "font-mono",
     );
     fireEvent.click(supersededRow);
-    expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/004-idea.md");
+    expect(onOpenIntent).toHaveBeenCalledWith(
+      "p1",
+      "intents/004-idea.md",
+      "record-row-IR-4",
+    );
 
     // The accessible older control fetches the next intent page with
     // the cursor of the last served row (dashboard-38); records keep
@@ -1657,7 +1673,12 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     expect(row.className).not.toContain("underline");
     expect(within(record).queryByTestId("history-tag")).toBeNull();
     fireEvent.click(row);
-    expect(onOpenIntent).toHaveBeenCalledWith("p1", "intents/002-old.md");
+    // The row itself is the origin's control (dashboard-40).
+    expect(onOpenIntent).toHaveBeenCalledWith(
+      "p1",
+      "intents/002-old.md",
+      "record-row-IR-2",
+    );
   });
 });
 

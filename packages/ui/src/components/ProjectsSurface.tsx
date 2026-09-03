@@ -107,7 +107,7 @@ export function OverviewTab({
   /** Open a session; with a turnId, land at that turn's place. */
   onOpenSession: (sessionId: string, turnId?: number) => void;
   /** Open an intent record in this project's records reader. */
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   /** Stage an intent's dispatch (run-view-86). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
 }) {

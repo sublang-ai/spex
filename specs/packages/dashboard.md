@@ -118,9 +118,10 @@ The group's Up next band shall list the project's queued intents in rank order, 
 
 #### dashboard-40
 
-Where a band or menu of the Dashboard lists a spec record, the row shall present as the one record row — the record's identifier as the chip the Specs outline's package rows wear [[spec-view-2](spec-view.md#spec-view-2)], its title truncated to one line, a hover background and a pointer over the whole row, named as an opener ("Open IR-N") — and activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)]:
+Where a band or menu of the Dashboard lists a spec record, the row shall present as the one record row — the record's identifier as the chip the Specs outline's package rows wear [[spec-view-2](spec-view.md#spec-view-2)], its title truncated to one line, a hover background and a pointer over the whole row, named as an opener ("Open IR-N") — and activating it opens that record in the project's Specs surface's records reader [[spec-view-7](spec-view.md#spec-view-7)] with the row's surface, the Dashboard or the project's Overview, as the reader's origin [[spec-view-57](spec-view.md#spec-view-57)]:
 
-- the brand-coloured underline link stays reserved for what leaves the app — an issue or pull-request page [[dashboard-6](#dashboard-6)] — so a record, which opens in place, never wears it ([DR-013](../decisions/013-sublang-brand.md)).
+- the brand-coloured underline link stays reserved for what leaves the app — an issue or pull-request page [[dashboard-6](#dashboard-6)] — so a record, which opens in place, never wears it ([DR-013](../decisions/013-sublang-brand.md));
+- the origin's control is the row itself, except where the row leaves the surface with its activation: a row menu's record item names the menu's trigger, and an Open records row names the Sources band's toggle, since the band stands collapsed again on return [[dashboard-20](#dashboard-20)].
 
 ### Capture
 
@@ -344,8 +345,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - once its turn ends finished, the attention queue lists the finished entry with Confirm and the count badge reads one [[dashboard-1](#dashboard-1)] [[dashboard-9](#dashboard-9)];
 - Confirm removes the entry, the badge clears, and History lists the intent as done [[dashboard-4](#dashboard-4)] [[dashboard-27](#dashboard-27)];
 - in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)];
-- an intent dropped from its running session leaves the Now band showing the session serving none, with no Drop beside it, and lists in History as dropped once that turn ends finished, no verdict owed [[dashboard-28](#dashboard-28)] [[dashboard-27](#dashboard-27)];
-- a History record row opens the record in the Specs tab's records reader [[dashboard-27](#dashboard-27)] [[dashboard-40](#dashboard-40)].
+- an intent dropped from its running session leaves the Now band showing the session serving none, with no Drop beside it, and lists in History as dropped once that turn ends finished, no verdict owed [[dashboard-28](#dashboard-28)] [[dashboard-27](#dashboard-27)].
 
 - in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)].
 
@@ -356,3 +356,11 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### dashboard-44
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and more worked, closed intents in its state root than one intent page, when the journey shows the Dashboard and then the project's Overview tab, the test suite shall assert the History frame through the page: the first page's rows all list inside a frame exactly eight rows tall that scrolls, with "Older…" as its last item [[dashboard-27](#dashboard-27)]; "Older…" appends the next page while the frame's and the group's heights stay, the control leaving once nothing waits [[dashboard-27](#dashboard-27)]; every row is one frame unit tall [[dashboard-27](#dashboard-27)]; the frame takes keyboard focus and scrolls by key [[dashboard-27](#dashboard-27)]; and the Overview draws the same frame [[dashboard-26](#dashboard-26)] [[dashboard-27](#dashboard-27)].
+
+#### dashboard-46
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and a finished intent record written into its specs tree, when the journey opens that record from a History row and activates the reader's Back, the test suite shall assert the round trip through the page:
+
+- from the Dashboard, the History row lists the record and opens it in the Specs tab's records reader, whose Back control reads "← Back to Dashboard" [[dashboard-27](#dashboard-27)] [[dashboard-40](#dashboard-40)];
+- Back shows the Dashboard with the project's group in view and the invoking row focused [[dashboard-40](#dashboard-40)];
+- from the project's Overview tab, the same row opens the reader behind "← Back to Overview", and Back shows the Overview tab with the row focused [[dashboard-40](#dashboard-40)].

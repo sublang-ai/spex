@@ -25,8 +25,13 @@ import { NavRail, SURFACES, type Surface } from "./components/NavRail.js";
 import {
   SpecView,
   initialSpecViewState,
+  type RecordOrigin,
   type SpecViewState,
 } from "./components/SpecView.js";
+
+/** A record another surface asked the spec view to open, with where
+ * it was asked from (spec-view-57). */
+type PendingRecord = { projectId: string; path: string; origin: RecordOrigin };
 import { editorDirty } from "./lib/spec-view-model.js";
 import { Icon } from "./components/Icon.js";
 
@@ -247,6 +252,7 @@ function WorkspaceSurface({
   onStartIntent,
   pendingRecord,
   onRecordOpened,
+  onReturn,
   specViewStates,
   onSpecViewState,
 }: {
@@ -259,12 +265,15 @@ function WorkspaceSurface({
   /** The Overview's ledger group actions, the Dashboard's own
    * (projects-4, DR-038). */
   onOpenSession: (sessionId: string, turnId?: number) => void;
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
   /** A record another surface asked the spec view to open, still
-   * owed its landing (spec-view-7, dashboard-24). */
-  pendingRecord?: { projectId: string; path: string } | null;
+   * owed its landing (spec-view-7, dashboard-24), with where it was
+   * asked from so Back can lead there (spec-view-57). */
+  pendingRecord?: PendingRecord | null;
   onRecordOpened: () => void;
+  /** The reader's Back on a record with an origin: return there. */
+  onReturn: (origin: RecordOrigin) => void;
   /** A session just ended: the sidebar reveals where it landed. */
   onEnded: (sessionId: string) => void;
   /** The ledger-fed attention map the nav shares (DR-035). */
@@ -715,7 +724,13 @@ function WorkspaceSurface({
               ? pendingRecord.path
               : undefined
           }
+          openRecordOrigin={
+            pendingRecord?.projectId === project.id
+              ? pendingRecord.origin
+              : undefined
+          }
           onRecordOpened={onRecordOpened}
+          onReturn={onReturn}
         />
       ) : tab === "overview" ? (
         <OverviewTab
@@ -837,19 +852,59 @@ export function App() {
     setSurface("Workspace");
   };
 
-  // An intent picked off the Dashboard opens in its own project's
-  // Specs surface, where the records reader lives (dashboard-24).
-  const [pendingRecord, setPendingRecord] = useState<{
-    projectId: string;
-    path: string;
-  } | null>(null);
-  const openIntent = (projectId: string, path: string) => {
+  // An intent picked off the Dashboard or a project's Overview opens
+  // in its own project's Specs surface, where the records reader
+  // lives (dashboard-24), carrying where it was picked so the
+  // reader's Back leads there (spec-view-57).
+  const [pendingRecord, setPendingRecord] = useState<PendingRecord | null>(
+    null,
+  );
+  const openIntentFrom =
+    (surface: RecordOrigin["surface"]) =>
+    (projectId: string, path: string, anchor: string) => {
+      const state = useAppStore.getState();
+      state.setCurrentProject(projectId);
+      state.setWorkspaceTab(projectId, "specs");
+      setSurface("Workspace");
+      setPendingRecord({
+        projectId,
+        path,
+        origin: { surface, projectId, anchor },
+      });
+    };
+  // Back to the origin: the surface first, then its invoking control
+  // once that surface has rendered — a project gone from the registry
+  // sends the Overview's origin to the Dashboard instead.
+  const [pendingReturn, setPendingReturn] = useState<RecordOrigin>();
+  const returnToOrigin = (origin: RecordOrigin) => {
     const state = useAppStore.getState();
-    state.setCurrentProject(projectId);
-    state.setWorkspaceTab(projectId, "specs");
-    setSurface("Workspace");
-    setPendingRecord({ projectId, path });
+    const registered = state.projects.some(
+      (project) => project.id === origin.projectId,
+    );
+    if (origin.surface === "overview" && registered) {
+      state.setCurrentProject(origin.projectId);
+      state.setWorkspaceTab(origin.projectId, "overview");
+      setSurface("Workspace");
+    } else {
+      setSurface("Dashboard");
+    }
+    setPendingReturn(origin);
   };
+  useEffect(() => {
+    if (!pendingReturn) return;
+    setPendingReturn(undefined);
+    const group = document.querySelector(
+      `[data-testid="project-group-${pendingReturn.projectId}"]`,
+    );
+    const control = (group ?? document).querySelector<HTMLElement>(
+      `[data-testid="${pendingReturn.anchor}"]`,
+    );
+    if (!control) return;
+    if (typeof control.scrollIntoView === "function") {
+      control.scrollIntoView({ block: "center" });
+    }
+    control.focus();
+  }, [pendingReturn]);
 
   // Per-project spec view state lives here, above every surface, so
   // a draft under edit survives the workspace's own navigation
@@ -1115,7 +1170,7 @@ export function App() {
           ) : surface === "Dashboard" ? (
             <DashboardSurface
               onOpenSession={openSessionAndShow}
-              onOpenIntent={openIntent}
+              onOpenIntent={openIntentFrom("dashboard")}
               onStartIntent={startIntent}
               onNavigate={setSurface}
             />
@@ -1128,10 +1183,11 @@ export function App() {
               pendingFocus={pendingFocus}
               onFocusHandled={() => setPendingFocus(undefined)}
               onOpenSession={openSessionAndShow}
-              onOpenIntent={openIntent}
+              onOpenIntent={openIntentFrom("overview")}
               onStartIntent={startIntent}
               pendingRecord={pendingRecord}
               onRecordOpened={() => setPendingRecord(null)}
+              onReturn={returnToOrigin}
               specViewStates={specViewStates}
               onSpecViewState={(projectId, next) =>
                 setSpecViewStates((current) => ({

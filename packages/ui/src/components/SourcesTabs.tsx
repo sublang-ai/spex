@@ -118,7 +118,7 @@ export function SourcesBand({
   now: number;
   onRefresh: () => void;
   onQueue: (text: string, source: IntentSource) => void | Promise<unknown>;
-  onOpenIntent: (projectId: string, path: string) => void;
+  onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   /** Navigation to the project's Overview tab, whose header shows the
    * GitHub binding (dashboard-8); absent on the Overview itself. */
   onOpenOverview?: () => void;
@@ -271,7 +271,15 @@ export function SourcesBand({
                      * leaves the app. */}
                     <RecordRow
                       record={record}
-                      onClick={() => onOpenIntent(project.id, record.path)}
+                      // The band stands collapsed again on return: its
+                      // toggle is what Back lands on (spec-view-57).
+                      onClick={() =>
+                        onOpenIntent(
+                          project.id,
+                          record.path,
+                          `sources-toggle-${project.id}`,
+                        )
+                      }
                       className="flex-1"
                     />
                     {captured ? (

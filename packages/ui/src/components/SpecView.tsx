@@ -179,10 +179,31 @@ export interface SpecViewProps {
   viewState: SpecViewState;
   onViewState: (next: SpecViewState) => void;
   /** A record another surface asked to read — the Dashboard sending
-   * an intent home, since the reader lives here (dashboard-24). */
+   * an intent home, since the reader lives here (dashboard-24) — and
+   * where it was asked from, so Back can lead there (spec-view-57). */
   openRecordPath?: string;
+  openRecordOrigin?: RecordOrigin;
   onRecordOpened?: () => void;
+  /** Back on a record with an origin hands that origin to the host,
+   * which returns to the surface and its invoking control. */
+  onReturn?: (origin: RecordOrigin) => void;
 }
+
+/** Where a record was requested from (spec-view-57): the surface, the
+ * project it was listed under, and the test id of the control that
+ * asked — the row, or the control that reopens it where the row
+ * leaves with its activation. */
+export type RecordOrigin = {
+  surface: "dashboard" | "overview";
+  projectId: string;
+  anchor: string;
+};
+
+/** The Back control's name for each origin. */
+const ORIGIN_NAMES: Record<RecordOrigin["surface"], string> = {
+  dashboard: "Dashboard",
+  overview: "Overview",
+};
 
 type ReaderState = {
   record: SpecRecordInfo;
@@ -191,6 +212,9 @@ type ReaderState = {
   /** The token the read handed out, carried into an edit. */
   version?: string;
   error?: string;
+  /** Set when another surface asked for the record: Back leads
+   * there instead of to the tree (spec-view-57). */
+  origin?: RecordOrigin;
 };
 
 export function SpecView(props: SpecViewProps) {
@@ -315,7 +339,7 @@ export function SpecView(props: SpecViewProps) {
     const record = [...tree.decisions, ...tree.intents].find(
       (entry) => entry.path === requestedRecord,
     );
-    if (record) openRecord(record);
+    if (record) openRecord(record, undefined, props.openRecordOrigin);
     else setLiveNote(`${requestedRecord} is not in the tree`);
     onRecordOpened?.();
     // openRecord is stable for this purpose: it only reads props.
@@ -508,23 +532,28 @@ export function SpecView(props: SpecViewProps) {
 
   /** Swap to the records reader; returnFocusId names the DOM id that
    * takes focus back when the reader closes (§6) — absent on the
-   * reader's own Retry so the original invoker is kept. */
-  function openRecord(record: SpecRecordInfo, returnFocusId?: string) {
+   * reader's own Retry so the original invoker is kept; origin names
+   * the surface Back leads to instead (spec-view-57). */
+  function openRecord(
+    record: SpecRecordInfo,
+    returnFocusId?: string,
+    origin?: RecordOrigin,
+  ) {
     if (returnFocusId) readerReturnId.current = returnFocusId;
     setLiveNote(`Opened ${record.id}`);
-    setReader({ record, loading: true });
+    setReader({ record, loading: true, origin });
     readSpec(record.path)
       .then(({ markdown, version }) =>
         setReader((current) =>
           current?.record.path === record.path
-            ? { record, loading: false, markdown, version }
+            ? { record, loading: false, markdown, version, origin }
             : current,
         ),
       )
       .catch((cause: Error) =>
         setReader((current) =>
           current?.record.path === record.path
-            ? { record, loading: false, error: cause.message }
+            ? { record, loading: false, error: cause.message, origin }
             : current,
         ),
       );
@@ -594,6 +623,7 @@ export function SpecView(props: SpecViewProps) {
           loading: false,
           markdown: saved?.content ?? closed?.original ?? "",
           version: saved?.version ?? closed?.version,
+          origin: reader?.record.path === path ? reader.origin : undefined,
         });
       }
     }
@@ -725,10 +755,19 @@ export function SpecView(props: SpecViewProps) {
           <button
             ref={readerBackRef}
             type="button"
-            onClick={() => setReader(null)}
+            data-testid="reader-back"
+            onClick={() => {
+              // Asked from another surface, Back leads there
+              // (spec-view-57); picked here, to the tree.
+              const origin = reader.origin;
+              setReader(null);
+              if (origin) props.onReturn?.(origin);
+            }}
             className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            ← Back
+            {reader.origin
+              ? `← Back to ${ORIGIN_NAMES[reader.origin.surface]}`
+              : "← Back"}
           </button>
           {canEdit && !reader.loading && !reader.error ? (
             <button
@@ -761,7 +800,7 @@ export function SpecView(props: SpecViewProps) {
             <span className="min-w-0 flex-1">{reader.error}</span>
             <button
               type="button"
-              onClick={() => openRecord(reader.record)}
+              onClick={() => openRecord(reader.record, undefined, reader.origin)}
               className="rounded-md border border-red-300 px-2 py-0.5 text-xs hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
             >
               Retry
