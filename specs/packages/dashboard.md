@@ -73,7 +73,7 @@ While projects are registered, the Dashboard shall display one ledger group per 
 
 #### dashboard-27
 
-Where a project has done work — intents closed after a turn of theirs ended finished, and finished intent records in its specs tree [[dashboard-24](#dashboard-24)] — the group's History band shall list it as one timeline newest first, every loaded row inside a frame eight rows tall that scrolls when the rows exceed it, with an "Older…" control at the end of the scrolled list that fetches the next intent page ([DR-038](../decisions/038-history-is-done-work.md)):
+Where a project has done work — intents closed after a turn of theirs ended finished, and finished intent records in its specs tree [[dashboard-24](#dashboard-24)] — the group's History band shall list it as one timeline newest first, every loaded row inside a frame eight rows tall by default that scrolls when the rows exceed it, with an "Older…" control at the end of the scrolled list that fetches the next intent page ([DR-038](../decisions/038-history-is-done-work.md)):
 
 | Row | Rendering |
 | --- | --- |
@@ -85,8 +85,10 @@ Where a project has done work — intents closed after a turn of theirs ended fi
 - an intent closed before any turn of it ended finished never lists — it left the queue without a trace;
 - a finished record already named by a closed intent's provenance lists once, as that intent;
 - a record orders by the date its status line carries ("Done (2026-09-02)"), else by its file's last change; an intent by its close time; and each row shows that time as an age with the absolute moment in its tooltip;
-- every row is one frame unit tall, so eight rows fill the frame exactly and the group's height never grows past it, however many pages load;
+- every row is one frame unit tall, so the frame's rows fill it exactly and the group's height never grows past it, however many pages load;
 - where the rows and the control exceed the frame, its cut edges are drawn and the frame itself takes keyboard focus, so it scrolls by keyboard as well as by tabbing through its rows to the control;
+- the frame's bottom edge carries the house's grip turned horizontal ([DR-030](../decisions/030-workspace-chrome.md)) — dragged, or moved a row per arrow key while focused, it sets the frame between four and twenty-four rows, a double-click restores the eight, and the height is remembered for this project's group across launches;
+- the grip stands only while the rows and the control exceed the frame — a frame they fit has nothing to page through, so it takes their height and shows no edge to pull;
 - the control stands only while unfetched rows wait, and reads "Loading…" while a page is in flight.
 
 #### dashboard-28
@@ -322,7 +324,7 @@ Where a fixture project's `specs/` tree lists one intent record whose status rea
 
 #### dashboard-38
 
-Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — a dated status line placing its record before an undated newer file, and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, the band reads "Loading…" until the first page answers, every loaded row lists inside the frame, which draws its cut edges and takes focus only past eight rows, and the "Older…" control at the frame's end stands only while a page waits and fetches and appends the older intent page with the cursor of the last served row.
+Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — a dated status line placing its record before an undated newer file, and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, the band reads "Loading…" until the first page answers, every loaded row lists inside the frame, which draws its cut edges and takes focus only past eight rows, and the "Older…" control at the frame's end stands only while a page waits and fetches and appends the older intent page with the cursor of the last served row, and the frame's grip — absent while eight rows hold everything — sets the frame between four and twenty-four rows by arrow key, restores the eight on a double-click, and leaves that height remembered for the project's group [[dashboard-27](#dashboard-27)].
 
 ### Empty-State Coverage
 
@@ -366,6 +368,14 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### dashboard-44
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and more worked, closed intents in its state root than one intent page, when the journey shows the Dashboard and then the project's Overview tab, the test suite shall assert the History frame through the page: the first page's rows all list inside a frame exactly eight rows tall that scrolls, with "Older…" as its last item [[dashboard-27](#dashboard-27)]; "Older…" appends the next page while the frame's and the group's heights stay, the control leaving once nothing waits [[dashboard-27](#dashboard-27)]; every row is one frame unit tall [[dashboard-27](#dashboard-27)]; the frame takes keyboard focus and scrolls by key [[dashboard-27](#dashboard-27)]; and the Overview draws the same frame [[dashboard-26](#dashboard-26)] [[dashboard-27](#dashboard-27)].
+
+#### dashboard-48
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and more worked, closed intents than the frame holds, when the journey drags the History frame's grip down by two rows and then reloads the page, the test suite shall assert the frame the reader set [[dashboard-27](#dashboard-27)]:
+
+- the grip names itself, reports the frame's height in rows, and stands only while the rows run past the frame [[dashboard-27](#dashboard-27)];
+- the drag leaves the frame exactly two rows taller, still scrolling its rows [[dashboard-27](#dashboard-27)];
+- the reloaded page draws the frame at that height, chrome state being preference rather than project state [[dashboard-27](#dashboard-27)].
 
 #### dashboard-46
 

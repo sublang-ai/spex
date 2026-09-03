@@ -112,6 +112,9 @@ export interface AppState {
    * machine drawing has a natural width that text does not, so the
    * split is the reader's to set (DR-030). */
   captainSplit: number;
+  /** Capped frames' heights in their own steps, by frame id (DR-030):
+   * a frame the reader pulled taller stays that way across launches. */
+  frameHeights: Record<string, number>;
   /** Per-project sidebar disclosure (run-view-67), persisted; a
    * project with no entry follows the current-project default. */
   expandedProjects: Record<string, boolean>;
@@ -149,6 +152,8 @@ export interface AppState {
   closeTab(projectId: string, sessionId: string): void;
   setRailCollapsed(collapsed: boolean): void;
   setCaptainSplit(percent: number): void;
+  /** Set a capped frame's height, in that frame's own steps. */
+  setFrameHeight(frameId: string, steps: number): void;
   toggleProjectExpanded(projectId: string, expanded: boolean): void;
   setLaneCollapsed(sessionId: string, playerId: string, collapsed: boolean): void;
   setSourcesFolded(projectId: string, folded: boolean): void;
@@ -259,6 +264,26 @@ function readCaptainSplit(): number {
   return Number.isFinite(stored) && stored >= CAPTAIN_SPLIT_MIN && stored <= CAPTAIN_SPLIT_MAX
     ? stored
     : CAPTAIN_SPLIT_DEFAULT;
+}
+
+/** One key per capped frame, so a frame's height is remembered under
+ * its own identity beside the other chrome preferences (DR-030). */
+export const frameKey = (frameId: string): string => `spex.frame:${frameId}`;
+
+function readFrameHeights(): Record<string, number> {
+  const heights: Record<string, number> = {};
+  try {
+    const store = window.localStorage;
+    for (let index = 0; index < store.length; index += 1) {
+      const key = store.key(index);
+      if (!key?.startsWith("spex.frame:")) continue;
+      const steps = Number(store.getItem(key));
+      if (Number.isFinite(steps)) heights[key.slice("spex.frame:".length)] = steps;
+    }
+  } catch {
+    // A frame falls back to its default height.
+  }
+  return heights;
 }
 
 /** localStorage access that tolerates non-browser test environments. */
@@ -549,6 +574,7 @@ export const useAppStore = create<AppState>((set, get) => {
     openTabs: {},
     railCollapsed: safeStorageGet(RAIL_COLLAPSED_KEY) === "1",
     captainSplit: readCaptainSplit(),
+    frameHeights: readFrameHeights(),
     expandedProjects: readExpandedProjects(),
     specTrees: {},
     specErrors: {},
@@ -684,6 +710,13 @@ export const useAppStore = create<AppState>((set, get) => {
       );
       set({ captainSplit: clamped });
       safeStorageSet(CAPTAIN_SPLIT_KEY, String(clamped));
+    },
+
+    setFrameHeight(frameId: string, steps: number): void {
+      // The frame owns its bounds and its unit; the store keeps what
+      // the reader set and hands it back on the next launch.
+      set({ frameHeights: { ...get().frameHeights, [frameId]: steps } });
+      safeStorageSet(frameKey(frameId), String(steps));
     },
 
     toggleProjectExpanded(projectId: string, expanded: boolean): void {

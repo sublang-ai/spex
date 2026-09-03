@@ -84,6 +84,8 @@ While a configured playbook is listed, the Library shall carry that playbook's c
 - Pressing a closed stage opens it and closes the stage that was open, so one stage at a time stands open for that playbook; pressing the open stage closes it.
 - The first open requests that playbook's artifacts [[playbook-library-24](#playbook-library-24)], which the card holds for its later opens; the open stage reads as loading until they arrive, and a failed request leaves its message in the open stage until a later press asks again.
 - A markdown stage renders as formatted text; the State machine stage renders the FSM as code beneath the derived state list.
+- The open stage's artifact sits in a box that caps its height and scrolls, whose bottom edge carries the house's grip turned horizontal ([DR-030](../decisions/030-workspace-chrome.md)): dragged, or moved a step per arrow key while focused, it sets the box between 8rem and 48rem, a double-click restores the default 24rem, and the height is remembered for that playbook across launches, one height serving its stages.
+- The grip stands only while the artifact runs past the box — a stage the box fits has nothing to page through, so the box takes the artifact's height and shows no edge to pull.
 
 #### playbook-library-23
 
@@ -274,4 +276,5 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - every configured playbook lists with its command, intent, and role bindings [[playbook-library-1](#playbook-library-1)];
 - the built-ins absent from the config list beside them, and enabling one writes it to the config and lists it among the configured playbooks, after which the Captain home's slash menu offers its command [[playbook-library-34](#playbook-library-34)];
 - a playbook's stage row opens the stage pressed, swaps to another pressed beside it, and closes on a second press of the open one [[playbook-library-22](#playbook-library-22)];
+- the open stage's box carries a grip that names the stage, and a drag of it leaves the box taller with the height still standing after a reload [[playbook-library-22](#playbook-library-22)];
 - removing a configured playbook asks for the inline confirm — Remove or Keep [[playbook-library-26](#playbook-library-26)] — then leaves the config without it [[playbook-library-16](#playbook-library-16)].
