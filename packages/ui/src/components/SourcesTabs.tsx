@@ -253,7 +253,10 @@ export function SourcesBand({
       </div>
       {expanded ? (
         <div className="mt-1.5 flex flex-col gap-1.5 pl-4">
-          <div role="tablist" className="flex items-center gap-1">
+          {/* The tab row wraps before it widens the band (DR-041): at
+              the 320px floor with the sidebar open, three tabs do not
+              fit one line on every platform's metrics. */}
+          <div role="tablist" className="flex flex-wrap items-center gap-1">
             {tabButton("issues", "Issues")}
             {tabButton("prs", "PRs")}
             {tabButton("records", "Open records")}
