@@ -4,11 +4,14 @@
 // A text field that grows with its text to a stated maximum and then
 // scrolls (DR-041 §9): no native resize grip, no scrollbar before the
 // maximum. The height follows the field's own scroll height on every
-// value change and every viewport resize; `field-sizing: content`
-// covers the first paint where the browser knows it, and the explicit
-// height wins where it does. The field is never shorter than one row,
-// whatever the viewport reports — a window laid out before it is
-// shown reports no height at all.
+// value change and on every change to the box the text wraps in —
+// the field's own, since a divider drag or a collapsing sidebar
+// rewraps the draft with no window resize behind it, and the window's,
+// for the viewport share the maximum is capped at. `field-sizing:
+// content` covers the first paint where the browser knows it, and the
+// explicit height wins where it does. The field is never shorter than
+// one row, whatever the viewport reports — a window laid out before it
+// is shown reports no height at all.
 
 import { useLayoutEffect, type RefObject } from "react";
 
@@ -60,6 +63,23 @@ export function useAutoGrow(
     fitTextArea(el, maxLines);
     const refit = (): void => fitTextArea(el, maxLines);
     window.addEventListener("resize", refit);
-    return () => window.removeEventListener("resize", refit);
+    // The field's own width decides how the draft wraps, and the
+    // gestures that change it — a divider drag, the sidebar folding,
+    // panes stacking — move no window. Only a width change refits, so
+    // the height this very effect writes cannot feed itself back.
+    let width = el.clientWidth;
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(() => {
+            if (el.clientWidth === width) return;
+            width = el.clientWidth;
+            refit();
+          });
+    observer?.observe(el);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", refit);
+    };
   }, [ref, value, maxLines]);
 }
