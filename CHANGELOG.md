@@ -35,6 +35,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   stages struck through and the state list under the State machine.
 - **Sources open by default**, their three tabs in view; the fold is
   remembered per project while the app runs.
+- **Running sessions listed again.** A Running band below Needs
+  attention lists every live session with a turn in flight that
+  needs nothing from the Boss — project, title, what it is doing —
+  and reads "Nothing running." while empty; the attention queue stays
+  the summons.
 
 ### Changed
 
@@ -58,6 +63,17 @@ and `npm start` (desktop) or `npm run start:server` (server).
   longer clear it from the composer or the Dashboard.
 - **The Sources tab row wraps** before it widens the band on narrow
   panes.
+- **Queued Boss messages stay in their box.** The queue is a bounded
+  frame that scrolls, so the transcript and the composer's field and
+  actions keep their place at any queue length, and an unbroken URL
+  in a queued message wraps instead of widening it.
+- **The Captain agent popover opens where it fits**, below its anchor
+  when there is no room above, with its own scroll in a short window.
+- **The composer and the transcript follow their own pane**: the field
+  refits when the pane resizes without a window resize, a transcript
+  following its end keeps following after a resize, a machine drawing
+  scrolled to its end regains its fade when the pane narrows, and the
+  split divider lands under the pointer.
 
 ## [0.3.0] - 2026-09-02
 
