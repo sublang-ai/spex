@@ -281,7 +281,10 @@ export function DashboardSurface({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 overflow-y-auto p-6">
+    // The surface root is the box the Dashboard scrolls in (DR-041
+    // §9): height-constrained, and the containing block for its own
+    // positioned content, so the page itself never scrolls.
+    <div className="relative mx-auto flex w-full min-h-0 max-w-4xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       {ledgerError ? (
         <div
           role="alert"

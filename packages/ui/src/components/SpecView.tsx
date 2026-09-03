@@ -747,7 +747,7 @@ export function SpecView(props: SpecViewProps) {
   if (reader) {
     return (
       <div
-        className="mx-auto flex w-full max-w-3xl flex-col gap-3 overflow-y-auto p-6"
+        className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-3 overflow-y-auto p-6"
         data-testid="record-reader"
       >
         {liveRegion}
@@ -807,7 +807,7 @@ export function SpecView(props: SpecViewProps) {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <Markdown text={reader.markdown ?? ""} />
           </div>
         )}
@@ -924,7 +924,7 @@ export function SpecView(props: SpecViewProps) {
     }
     return (
       <div
-        className="m-auto flex max-w-md flex-col gap-3 p-6 text-center text-sm text-neutral-500"
+        className="relative m-auto flex max-h-full max-w-md flex-col gap-3 overflow-y-auto p-6 text-center text-sm text-neutral-500"
         data-testid="specs-empty"
       >
         {liveRegion}
@@ -969,7 +969,7 @@ export function SpecView(props: SpecViewProps) {
   if (tree.legacy) {
     return (
       <div
-        className="m-auto flex max-w-md flex-col gap-3 p-6 text-center text-sm text-neutral-500"
+        className="relative m-auto flex max-h-full max-w-md flex-col gap-3 overflow-y-auto p-6 text-center text-sm text-neutral-500"
         data-testid="specs-legacy"
       >
         {liveRegion}
@@ -1351,10 +1351,14 @@ export function SpecView(props: SpecViewProps) {
           setGraphSelection(null);
         }
       }}
+      // The surface root is the box the Specs tab scrolls in (DR-041
+      // §9): height-constrained, and the containing block for its own
+      // positioned content, so the page itself never scrolls. With the
+      // graph shown the outline and the canvas scroll inside it.
       className={
         graphful
-          ? "flex h-full w-full flex-col gap-3 overflow-hidden p-6"
-          : "mx-auto flex w-full max-w-3xl flex-col gap-3 overflow-y-auto p-6"
+          ? "relative flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden p-6"
+          : "relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-3 overflow-y-auto p-6"
       }
     >
       {liveRegion}
@@ -1584,7 +1588,7 @@ export function SpecView(props: SpecViewProps) {
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               {outlineControls}
-              <ul className="flex min-h-0 flex-col overflow-y-auto pr-1">
+              <ul className="relative flex min-h-0 flex-col overflow-y-auto pr-1">
                 {outline}
                 {decisionsBranch}
               </ul>
@@ -1913,7 +1917,7 @@ function ItemRow({
       {expanded ? (
         <div className="mb-1 ml-2 flex flex-col gap-1 border-l border-neutral-200 pl-3 dark:border-neutral-800">
           <div
-            className="overflow-x-auto"
+            className="relative overflow-x-auto"
             onClick={(event) => onBodyLinkClick(item.id, event)}
           >
             <Markdown text={item.text} />

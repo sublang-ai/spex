@@ -206,14 +206,17 @@ export function CaptainHome(props: CaptainHomeProps) {
   const emptyCanvas = notReady.length === 0 && !configBroken && !error;
 
   return (
+    // The surface root is height-constrained (DR-041 §9): the shell
+    // fills the window, and the greeting scrolls inside the box below
+    // rather than growing the page.
     <div
       data-testid="captain-home"
-      className={`mx-auto flex w-full max-w-2xl flex-1 flex-col p-6 ${
+      className={`mx-auto flex w-full min-h-0 max-w-2xl flex-1 flex-col p-6 ${
         emptyCanvas ? "justify-center" : ""
       }`}
     >
       <div
-        className={`flex flex-col gap-3 overflow-y-auto ${
+        className={`relative flex min-h-0 flex-col gap-3 overflow-y-auto ${
           emptyCanvas ? "" : "flex-1 justify-end"
         }`}
       >

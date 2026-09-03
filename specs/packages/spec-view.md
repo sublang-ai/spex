@@ -304,6 +304,14 @@ The core package shall list `specs/decisions/*.md` as decision records and the u
 | superseded, cancelled, canceled, dropped, abandoned, withdrawn | finished, superseded |
 | any other word, or no status | open |
 
+### Surface Fit
+
+#### spec-view-59
+
+The spec view shall scroll each of its forms — the outline beside the graph, the records reader [[spec-view-7](#spec-view-7)], and the editor [[spec-view-48](#spec-view-48)] — inside its own box, which fills the surface it is given and never grows past it, however long the tree ([DR-041](../decisions/041-chrome-that-fits.md)):
+
+- each such box is a positioned box, so the screen-reader-only text and the graph's own card [[spec-view-26](#spec-view-26)] are contained by the box they belong to rather than being carried by the page.
+
 ## Internal Behavior
 
 ### Tree Parse
@@ -476,4 +484,4 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### spec-view-56
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, when the journey opens the Specs tab with the graph shown and one package expanded at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, within every list row no two visible siblings overlap and every child lies inside its parent [[spec-view-1](#spec-view-1)] [[spec-view-55](#spec-view-55)], and every control keeps its accessible name at every width [[spec-view-1](#spec-view-1)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, when the journey opens the Specs tab with the graph shown and one package expanded at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained [[spec-view-59](#spec-view-59)], within every list row no two visible siblings overlap and every child lies inside its parent [[spec-view-1](#spec-view-1)] [[spec-view-55](#spec-view-55)], and every control keeps its accessible name at every size [[spec-view-1](#spec-view-1)].

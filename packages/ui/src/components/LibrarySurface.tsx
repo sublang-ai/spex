@@ -141,7 +141,7 @@ function PipelinePanel({ playbookId }: { playbookId: string }) {
           missing stages: {artifacts.missing.join(", ")}
         </div>
       ) : null}
-      <div className="max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="relative max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
         {content === null ? (
           <div className="text-xs text-neutral-500">
             this stage was not found for this playbook
@@ -331,7 +331,7 @@ function BuiltinCard({
         </div>
       ) : null}
       {showSource && info.source ? (
-        <div className="max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+        <div className="relative max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
           <Markdown text={info.source} />
         </div>
       ) : null}
@@ -421,7 +421,7 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
               </span>
             ))}
           </div>
-          <div className="max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+          <div className="relative max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
             {stage === "fsm" || stage === "source" ? (
               <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
                 {content}
@@ -486,7 +486,7 @@ export function LibrarySurface({
 
   if (!configState || configState.status !== "valid") {
     return (
-      <div className="m-auto max-w-md p-6 text-center text-sm text-neutral-500">
+      <div className="relative m-auto max-h-full max-w-md overflow-y-auto p-6 text-center text-sm text-neutral-500">
         <p>The Captain can only run playbooks listed here.</p>
         <p className="mt-1">
           Playbooks need a valid config — fix it in{" "}
@@ -599,7 +599,10 @@ export function LibrarySurface({
   const progressLines = progressId ? (compileProgress[progressId] ?? []) : [];
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 overflow-y-auto p-6">
+    // The surface root is the box Playbooks scrolls in (DR-041 §9):
+    // height-constrained, and the containing block for its own
+    // positioned content, so the page itself never scrolls.
+    <div className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       <h1 className="text-lg font-semibold">Playbooks</h1>
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
@@ -969,7 +972,7 @@ export function LibrarySurface({
               {progressLines.length > 0 ? (
                 <pre
                   data-testid="compile-progress"
-                  className="max-h-48 w-full overflow-y-auto rounded bg-neutral-100 p-2 font-mono text-xs text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400"
+                  className="relative max-h-48 w-full overflow-y-auto rounded bg-neutral-100 p-2 font-mono text-xs text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400"
                 >
                   {progressLines.join("\n")}
                 </pre>

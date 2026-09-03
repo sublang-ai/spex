@@ -30,6 +30,8 @@ Amends [DR-010](010-interface-craft.md) with a ninth principle and clarifies [DR
 - In every row exactly one child owns the slack — minimum width zero, growing, truncating with the full text in its title; marks, chips, ages, and controls refuse to shrink only when narrower than about 6rem; no text child is both unshrinkable and unbounded.
 - The ladder, applied in order as the container narrows: the action row wraps, primary last and right; free text truncates with its title; at-a-glance duplicates hide first — usage, ages, rollups, the words beside counts — information the surface repeats elsewhere; a labelled control collapses to icon plus tooltip with its accessible name and its taxonomy unchanged; side-by-side panes stack; only canvases — a machine drawing, the graph, a table — scroll sideways, inside their own scrolling container with the fade mask.
   Overlap and clipping are never on the ladder, and the page body never scrolls sideways.
+- The shell fills the window at every size and every surface scrolls inside its own box: a surface root is height-constrained, so no surface can grow the shell, and every box that scrolls is a positioned box, so the content it holds — a screen-reader-only span, a popover, a badge — is contained by the box it belongs to rather than carried by the page.
+  The page itself never scrolls, vertically any more than sideways, and a window made shorter or taller re-fits with no reload.
 - Floors: every pane fits at 280px with nothing overlapping; the whole interface at a 320px viewport paints nothing over anything and nothing outside the viewport except inside a scrolling canvas.
   The open rail is 224px, so the 320px floor holds with the rail collapsed; the rail still moves only by the user's hand.
 - Native chrome stays out of custom controls: no resize grips, no native scrollbars in a composer box; a text field grows to a stated maximum, then scrolls.
@@ -38,11 +40,12 @@ Amends [DR-010](010-interface-craft.md) with a ninth principle and clarifies [DR
 
 ### Verification
 
-- A browser journey measures fit: for each surface, each rail state, and viewports from 320px to 1280px, no element scrolls sideways unless it is a canvas, no two visible siblings in a row overlap, every child lies inside its parent, and every control keeps its accessible name at every width.
+- A browser journey measures fit: for each surface, each rail state, and viewports from 320px to 1280px wide at 800px and 400px tall, the page scrolls in neither direction, no element scrolls sideways unless it is a canvas, every scroll box ends inside the viewport with its positioned content contained, no two visible siblings in a row overlap, every child lies inside its parent, and every control keeps its accessible name at every size.
   Simulated documents cannot measure layout, so the journey is the only home of this evidence.
 
 ## Consequences
 
 - Composer labels shorten ("Send" and "Send next"), the ended notice's control becomes "New session", busy forms keep their width, and the composer is rebuilt to the shape above.
 - The Specs outline's count chips keep their words above `@md` and print numbers alone below it, the words riding the accessible name.
+- Every surface root becomes a height-constrained box that scrolls its own content, and every scrolling box in the interface — a surface root, a transcript, the History frame, the outline, the sidebar — becomes a positioned box.
 - [DR-010](010-interface-craft.md)'s review list gains this principle: a new row or control is held to the label budget, the yield order, and the ladder.

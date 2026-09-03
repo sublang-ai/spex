@@ -198,6 +198,15 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 
 While no project is registered, the Dashboard shall still render the attention queue and the projects area with their empty-state guidance [[dashboard-8](#dashboard-8)] and shall not replace the surface with a welcome takeover; first-run onboarding belongs to the Captain home as the single onboarding narrative ([DR-010](../decisions/010-interface-craft.md) §1).
 
+### Surface Fit
+
+#### dashboard-47
+
+The Dashboard shall scroll its queue and its groups inside its own box, which fills the surface it is given and never grows past it, however many projects are registered ([DR-041](../decisions/041-chrome-that-fits.md)):
+
+- that box and the History frame [[dashboard-27](#dashboard-27)] inside it are positioned boxes, so the screen-reader marks their rows carry are contained by the box they scroll in rather than being carried by the page;
+- the group carries the same boxes wherever it is drawn [[dashboard-26](#dashboard-26)].
+
 ## Internal Behavior
 
 ### Ledger Derivation
@@ -351,7 +360,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### dashboard-43
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, a queued intent with a second queued behind it, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], and every control keeps its accessible name at every width [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and holding more closed work than one History page, a queued intent with a second queued behind it, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained [[dashboard-47](#dashboard-47)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], and every control keeps its accessible name at every size [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
 
 #### dashboard-44
 

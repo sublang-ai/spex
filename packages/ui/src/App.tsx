@@ -536,7 +536,7 @@ function WorkspaceSurface({
       aria-label="Sessions and project views"
       className="flex items-center gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-neutral-800"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+      <div className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         {open.map((session) => {
           const attentionItem = attentionBySession.get(session.id);
           const isActive = session.id === tab;

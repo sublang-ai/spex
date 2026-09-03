@@ -275,7 +275,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             className="border-b border-neutral-200 bg-transparent px-4 py-3 text-sm outline-none dark:border-neutral-800"
           />
         )}
-        <div className="max-h-[40vh] overflow-y-auto py-1">
+        <div className="relative max-h-[40vh] overflow-y-auto py-1">
           {empty ? (
             <button
               type="button"

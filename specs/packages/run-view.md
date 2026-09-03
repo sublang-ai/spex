@@ -175,6 +175,13 @@ The run view shall provide light and dark color themes and size the Captain and 
 - a theme configured — the configured theme is selected;
 - no theme configured — the view follows the OS appearance.
 
+#### run-view-119
+
+The app shell shall fill the window at every size, giving the surface it shows a box of the window's height that the surface scrolls its own content inside, so the page itself never scrolls and a window resized shorter or taller re-fits with no reload ([DR-041](../decisions/041-chrome-that-fits.md)):
+
+- the Captain home [[run-view-25](#run-view-25)] and a session's panes [[run-view-107](#run-view-107)] fill that box and scroll inside it rather than growing it;
+- every box that scrolls — a pane, the sidebar [[run-view-67](#run-view-67)], the tab strip [[run-view-48](#run-view-48)] — is a positioned box, so the screen-reader-only text and other positioned content it holds is contained by that box instead of being carried by the page.
+
 ### Session Start
 
 #### run-view-25
@@ -863,9 +870,10 @@ Where the hermetic lane's demo shell has run a task to its end ([DR-039](../deci
 
 #### run-view-105
 
-Where the harness boots with the demo project registered, the scripted Captain, and ten further projects each holding a live session parked on a player question, when the journey shows each surface — the Captain home, a session with a turn in flight, the Dashboard, the project's Overview, the Specs tab with the graph shown, Playbooks, and Settings — at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md): the open sidebar is 224 pixels wide), the test suite shall assert fit through the page, naming every offending element:
+Where the harness boots with the demo project registered and carrying closed work, the scripted Captain, and ten further projects each holding a live session parked on a player question, when the journey shows each surface — the Captain home, a session with a turn in flight, the Dashboard, the project's Overview, the Specs tab with the graph shown, Playbooks, and Settings — at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md): the open sidebar is 224 pixels wide), the test suite shall assert fit through the page, naming every offending element:
 
 - the page never scrolls sideways, and no element outside a sideways-scrolling canvas is wider than its box [[run-view-106](#run-view-106)] [[run-view-107](#run-view-107)] [[run-view-48](#run-view-48)];
+- the page never scrolls vertically, no scrolling box ends past the bottom of the viewport, and no positioned element lies past it with no scrolling box containing it — at either height, and again after the window is made short and tall within one page life [[run-view-119](#run-view-119)];
 - within every tab list, toolbar, header, list row, and composer box, no two visible siblings overlap and every child lies inside its parent [[run-view-106](#run-view-106)] [[run-view-71](#run-view-71)];
 - every control's accessible name is the same at every width [[run-view-8](#run-view-8)] [[run-view-85](#run-view-85)] [[run-view-47](#run-view-47)];
 - the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)].

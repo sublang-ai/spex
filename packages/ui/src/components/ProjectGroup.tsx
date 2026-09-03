@@ -420,7 +420,7 @@ function HistoryBand({
             // A frame that scrolls is reachable by keyboard as well as
             // through the controls it holds (DR-010 §5).
             tabIndex={overflowing ? 0 : undefined}
-            className="flex max-h-48 flex-col overflow-y-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            className="relative flex max-h-48 flex-col overflow-y-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             {rows.map((row) =>
               row.kind === "intent" ? (

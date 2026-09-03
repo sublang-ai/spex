@@ -153,9 +153,12 @@ export function OverviewTab({
   }
 
   return (
+    // The tab root is the box the Overview scrolls in (DR-041 §9):
+    // height-constrained, and the containing block for its own
+    // positioned content, so the page itself never scrolls.
     <div
       data-testid="overview-tab"
-      className="mx-auto flex w-full max-w-3xl flex-col gap-4 overflow-y-auto p-6"
+      className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-4 overflow-y-auto p-6"
     >
       {/* The header fits its pane (DR-041): the name owns the slack and
           the controls wrap under it when the pane is too narrow. */}

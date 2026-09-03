@@ -560,7 +560,7 @@ export function RunView({
             <div
               ref={gridRef}
               data-testid="player-grid"
-              className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"
+              className="relative flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"
             >
               {lanes.map((playerId) => (
                 <PlayerPane

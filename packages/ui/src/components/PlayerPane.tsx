@@ -224,7 +224,7 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
               wrapping inside the card (run-view-4). */}
           <div
             data-testid={`tool-body-${segment.seq}`}
-            className="mt-1 flex max-h-64 flex-col gap-1.5 overflow-y-auto"
+            className="relative mt-1 flex max-h-64 flex-col gap-1.5 overflow-y-auto"
           >
             {[...inputBlocks(segment.input), outputBlock(segment.output)]
               .filter((block) => block !== undefined)
@@ -446,7 +446,7 @@ export function PlayerPane({
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
+          className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
         >
           {view.segments.length > windowSize ? (
             <button

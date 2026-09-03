@@ -120,6 +120,14 @@ While the shared config file is missing or invalid, the Settings surface shall s
 - missing: the surface says Spex could not create a starter config at that path, tells the user to check the folder is writable and retry, and offers a Retry control that re-reads the app state — never telling the user to fix a file that is not there;
 - invalid: the surface lists the errors and says the file, fixed in an editor, reloads live.
 
+### Surface Fit
+
+#### settings-32
+
+The Settings surface shall scroll its sections inside its own box, which fills the surface it is given and never grows past it — in its broken-config form [[settings-24](#settings-24)] as in its full one ([DR-041](../decisions/041-chrome-that-fits.md)):
+
+- that box and the shortcut sheet's sideways-scrolling table [[settings-10](#settings-10)] are positioned boxes, so the screen-reader-only text they hold — the sheet's own caption — is contained by the box it sits in rather than being carried by the page.
+
 ## Internal Behavior
 
 ### Validation
@@ -231,4 +239,4 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### settings-30
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on the demo config, when the journey shows the Settings surface at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside the shortcut sheet's sideways-scrolling table is wider than its box [[settings-10](#settings-10)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[settings-22](#settings-22)] [[settings-5](#settings-5)], and every control keeps its accessible name at every width [[settings-6](#settings-6)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on the demo config, when the journey shows the Settings surface at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside the shortcut sheet's sideways-scrolling table is wider than its box [[settings-10](#settings-10)], the surface scrolls inside its own box with nothing positioned past the viewport uncontained [[settings-32](#settings-32)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[settings-22](#settings-22)] [[settings-5](#settings-5)], and every control keeps its accessible name at every size [[settings-6](#settings-6)].

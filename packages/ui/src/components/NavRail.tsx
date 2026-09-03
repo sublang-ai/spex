@@ -417,7 +417,7 @@ export function NavRail(props: NavRailProps) {
       aria-label="Projects and sessions"
       aria-multiselectable={false}
       onKeyDown={onTreeKeyDown}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
     >
       {projects.length === 0 ? (
         <button

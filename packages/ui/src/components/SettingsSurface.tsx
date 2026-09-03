@@ -416,7 +416,7 @@ export function SettingsSurface() {
   if (configState.status !== "valid") {
     const missing = configState.status === "missing";
     return (
-      <div className="mx-auto max-w-2xl p-6">
+      <div className="relative mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-y-auto p-6">
         <div
           data-testid="config-broken"
           className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
@@ -501,7 +501,11 @@ export function SettingsSurface() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 overflow-y-auto p-6">
+    // The surface root is the box Settings scrolls in (DR-041 §9):
+    // height-constrained, and the containing block for its own
+    // positioned content — the shortcut table's screen-reader caption
+    // included — so the page itself never scrolls.
+    <div className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       <div>
         <h1 className="text-lg font-semibold">Settings</h1>
         <p className="mt-0.5 text-xs text-neutral-500">
@@ -671,7 +675,7 @@ export function SettingsSurface() {
           The same in the desktop app and a browser; {modKey()} is this
           machine's modifier.
         </p>
-        <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="relative overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">Keyboard shortcuts</caption>
             <thead>

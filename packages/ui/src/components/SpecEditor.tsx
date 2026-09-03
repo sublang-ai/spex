@@ -304,7 +304,7 @@ export function SpecEditor({
         <div
           data-testid="editor-preview-pane"
           onClick={inert}
-          className="min-h-0 flex-1 overflow-auto rounded border border-neutral-200 p-4 dark:border-neutral-800"
+          className="relative min-h-0 flex-1 overflow-auto rounded border border-neutral-200 p-4 dark:border-neutral-800"
         >
           <Markdown text={state.draft} />
         </div>
