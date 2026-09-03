@@ -7,7 +7,7 @@
 [![Node.js](https://img.shields.io/node/v/@sublang/spex)](https://nodejs.org/)
 [![CI](https://github.com/sublang-ai/spex/actions/workflows/ci.yml/badge.svg)](https://github.com/sublang-ai/spex/actions/workflows/ci.yml)
 
-*You write the specs. Agents write the code.*
+*Specs are the source.*
 
 ## Why Spex
 
