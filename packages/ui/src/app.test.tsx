@@ -265,6 +265,39 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     expect(useAppStore.getState().currentProjectId).toBe("p1");
   });
 
+  test("selection follows the surface, and the Workspace restores it", () => {
+    render(<App />);
+    const rail = screen.getByTestId("sidebar");
+    const selectedRows = () =>
+      rail.querySelectorAll('[role="treeitem"][aria-selected="true"]');
+    const entry = (name: string) =>
+      within(rail).getByRole("button", { name });
+
+    // The Workspace is the surface: the current project is selected,
+    // and so is the session whose tab it is showing.
+    expect(selectedRows().length).toBe(2);
+    expect(
+      screen.getByTestId("sidebar-project-p1").getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(
+      screen.getByTestId("sidebar-session-a-live").getAttribute("aria-selected"),
+    ).toBe("true");
+
+    // Playbooks is a place of its own: its entry is the only current
+    // one, and no row in the tree still reads as where the reader is.
+    fireEvent.click(entry("Playbooks"));
+    expect(entry("Playbooks").getAttribute("aria-current")).toBe("page");
+    expect(selectedRows().length).toBe(0);
+
+    // The store still remembers the project, so choosing the Workspace
+    // again lights the same rows.
+    fireEvent.click(entry("Workspace"));
+    expect(
+      screen.getByTestId("sidebar-project-p1").getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(selectedRows().length).toBe(2);
+  });
+
   test("a foreign session opens as a read-only tab, once", async () => {
     commandMock.mockResolvedValue({ records: [] });
     render(<App />);

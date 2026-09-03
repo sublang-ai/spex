@@ -385,6 +385,14 @@ export function NavRail(props: NavRailProps) {
     );
   };
 
+  // Selection says where the reader is, so it follows the surface
+  // (run-view-67): off the Workspace the surface's own entry is the
+  // only current place, and the remembered project lights again when
+  // the Workspace comes back.
+  const inWorkspace = surface === "Workspace";
+  const selectedProjectId = inWorkspace ? currentProjectId : undefined;
+  const shownSessionId = inWorkspace ? activeSessionId : undefined;
+
   /** One selection voice: the active row wears the interaction hue,
    * the treatment the surface entries already use (run-view-73). */
   function rowClass(active: boolean): string {
@@ -442,7 +450,7 @@ export function NavRail(props: NavRailProps) {
             <div
               role="treeitem"
               aria-expanded={open}
-              aria-selected={project.id === currentProjectId}
+              aria-selected={project.id === selectedProjectId}
               data-row={`p:${project.id}`}
               data-testid={`sidebar-project-${project.id}`}
               tabIndex={focused === `p:${project.id}` ? 0 : -1}
@@ -451,7 +459,7 @@ export function NavRail(props: NavRailProps) {
               title={`${project.path}${worst ? ` — needs you` : ""}`}
               aria-label={`${project.name}${worst ? `, ${worst === "failure" ? "a session failed" : "a session is waiting for your reply"}` : ""}`}
               className={`${rowClass(
-                project.id === currentProjectId && !activeSessionId,
+                project.id === selectedProjectId && !shownSessionId,
               )} pl-0.5`}
             >
               <button
@@ -491,7 +499,7 @@ export function NavRail(props: NavRailProps) {
                 {[...bucket.live, ...listed].map((session) => {
                   const item = attention.get(session.id);
                   const life = lifeOf(session, item);
-                  const active = session.id === activeSessionId;
+                  const active = session.id === shownSessionId;
                   // Every non-live session can be deleted (DR-042): a
                   // session another host wrote goes from the shared
                   // store, its terminal history with it (core-service-70).
