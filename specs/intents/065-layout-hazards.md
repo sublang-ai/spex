@@ -13,17 +13,17 @@ A three-lens review of the whole interface (height and scroll chains, width and 
 
 ## Deliverables
 
-- [ ] Queued Boss messages list inside a bounded scroll frame and the composer yields inside its column, so the field and its actions stay in view and the page never grows (run-view).
-- [ ] The Captain agent popover on the home opens where the window can show it, never above the top edge (run-view).
+- [x] Queued Boss messages list inside a bounded scroll frame and the composer yields inside its column, so the field and its actions stay in view and the page never grows (run-view).
+- [x] The Captain agent popover on the home opens where the window can show it, never above the top edge (run-view).
 - [ ] The agent editor popover fits the pane at every width from the 320px floor, never clipped by its anchor's edge (settings, playbook-library).
 - [ ] The role-binding popover fits the pane below 480px without widening the Playbooks surface (playbook-library).
 - [ ] A labelled issue or pull-request row yields its trailing cluster before it widens its pane (forge-work-lists, dashboard).
 - [ ] A long spec item id never widens the outline row past the outline pane (spec-view).
 - [ ] With the graph shown, the Specs outline keeps a readable height instead of collapsing under the root's clip (spec-view).
-- [ ] The composer refits its height when its own pane resizes without a window resize (run-view).
-- [ ] A transcript following its end keeps following after its pane resizes (run-view).
-- [ ] A machine drawing scrolled to its end regains its fade mask when the pane narrows (run-view).
-- [ ] The Captain split divider lands where the pointer is, measured against the box the split applies to (run-view).
+- [x] The composer refits its height when its own pane resizes without a window resize (run-view).
+- [x] A transcript following its end keeps following after its pane resizes (run-view).
+- [x] A machine drawing scrolled to its end regains its fade mask when the pane narrows (run-view).
+- [x] The Captain split divider lands where the pointer is, measured against the box the split applies to (run-view).
 - [ ] The spec graph's hover card stays inside the graph pane at the minimum split (spec-view).
 - [ ] The project palette's message stays reachable in a 400px-tall window (projects).
 - [ ] The fit journey measures the queue and the popovers at its widths and heights.
@@ -35,4 +35,8 @@ A three-lens review of the whole interface (height and scroll chains, width and 
 
 ## Verification
 
-Recorded on completion.
+Task 1: The six run-view hazards are fixed at their causes and measured.
+The queue lists inside a positioned frame a few entries tall kept at its end, the composer yields around it, and its own box holds its place, with an unbroken token in a queued message now breaking rather than widening the frame; the Captain home's gear grants its popover the room the window can show on the roomier side, and the popover opens there and scrolls inside that bound; the composer field and both transcript panes observe their own boxes, and a transcript tells a reflow's own scroll event from the reader's by the box it last saw; the machine drawing re-reads its fade on the box's resize; and the split divider maps the pointer against the padded content box the share resolves against, plus the gap it sits behind.
+Amended run-view-8's shape item run-view-106 (queue frame, field refit), run-view-32 (popover placement), run-view-81 (divider under the pointer, fade following the width), and the verification items run-view-35, run-view-53, run-view-82, run-view-105; added run-view-120 (a resized pane keeps following) and its journey item run-view-121.
+Green on `npm run build`, `npx tsc --noEmit -p packages/ui`, `packages/ui` vitest (24 files, 402 tests), `e2e` Playwright hermetic lane (30 passed), and `spex lint`.
+Each journey was checked against the unfixed code first: the queue frame measured 740px tall and carried the send row out of a 700px window; the popover opened 156px above the viewport top with its adapter picker unreachable; the field held 108px for a 128px draft after the sidebar opened; and the thread sat 60px above its end.
