@@ -296,7 +296,10 @@ function ItemRow({
         flashed ? "ring-2 ring-brand-400 dark:ring-brand-500" : ""
       }`}
     >
-      <div className="flex items-center gap-2 py-0.5">
+      {/* The row wraps before anything leaves it (DR-041's ladder):
+          the first line owns the slack, and the row's action drops to
+          a line of its own where the ID chip leaves it no room. */}
+      <div className="group/item flex flex-wrap items-center gap-2 py-0.5">
         {onCopy ? (
           <button
             type="button"
@@ -352,6 +355,29 @@ function ItemRow({
             shown despite filter
           </span>
         ) : null}
+        {/* The row's own action, at its end: the row's hover or a
+            focus within it reveals the control, and the keyboard
+            always reaches it (spec-view-3, DR-010 §6). */}
+        {onEdit ? (
+          <button
+            type="button"
+            data-testid={`item-edit-${item.id}`}
+            aria-label={`Edit ${item.id} in its file`}
+            onClick={onEdit}
+            className={`ml-auto shrink-0 rounded px-1 text-xs opacity-0 focus:opacity-100 group-hover/item:opacity-100 group-focus-within/item:opacity-100 ${LINK_CLASS}`}
+          >
+            Edit
+          </button>
+        ) : null}
+        {editFailure ? (
+          <span
+            role="alert"
+            title={editFailure}
+            className="max-w-40 shrink truncate text-xs text-red-600 dark:text-red-400"
+          >
+            {editFailure}
+          </span>
+        ) : null}
       </div>
       {expanded ? (
         <div className="mb-1 ml-2 flex flex-col gap-1 border-l border-neutral-200 pl-3 dark:border-neutral-800">
@@ -386,50 +412,40 @@ function ItemRow({
               <span className="text-xs text-neutral-500">not found</span>
             </div>
           ) : null}
-          {item.cites.length > 0 || onEdit ? (
-            <div className="flex flex-wrap items-center gap-3 text-xs">
+          {/* One citations block: the outbound row and the backlink
+              row read down a single label column, their entries
+              wrapping in the slack beside it (spec-view-19). */}
+          {item.cites.length > 0 || inbound.length > 0 ? (
+            <div className="flex flex-col gap-1 text-xs">
               {item.cites.length > 0 ? (
                 <div
                   data-testid={`cites-${item.id}`}
-                  className="flex flex-wrap items-center gap-1.5 text-xs"
+                  className="flex items-start gap-2"
                 >
-                  <span className="text-neutral-500">cites</span>
-                  {item.cites.map(citation)}
+                  <span className="w-20 shrink-0 text-neutral-500">cites</span>
+                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                    {item.cites.map(citation)}
+                  </span>
                 </div>
               ) : null}
-              {onEdit ? (
-                <button
-                  type="button"
-                  data-testid={`item-edit-${item.id}`}
-                  aria-label={`Edit ${item.id} in its file`}
-                  onClick={onEdit}
-                  className={`text-xs ${LINK_CLASS}`}
-                >
-                  Edit
-                </button>
+              {inbound.length > 0 ? (
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    data-testid={`inbound-${item.id}`}
+                    aria-expanded={inboundOpen}
+                    onClick={() => setInboundOpen((open) => !open)}
+                    className="w-20 shrink-0 text-left text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300"
+                  >
+                    cited by {inbound.length}
+                  </button>
+                  {inboundOpen ? (
+                    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                      {inbound.map(citation)}
+                    </span>
+                  ) : null}
+                </div>
               ) : null}
-              {editFailure ? (
-                <span
-                  role="alert"
-                  className="text-xs text-red-600 dark:text-red-400"
-                >
-                  {editFailure}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          {inbound.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <button
-                type="button"
-                data-testid={`inbound-${item.id}`}
-                aria-expanded={inboundOpen}
-                onClick={() => setInboundOpen((open) => !open)}
-                className="text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300"
-              >
-                cited by {inbound.length}
-              </button>
-              {inboundOpen ? inbound.map(citation) : null}
             </div>
           ) : null}
         </div>

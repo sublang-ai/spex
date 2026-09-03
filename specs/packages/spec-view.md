@@ -46,7 +46,7 @@ While an item row is displayed, the spec view shall render the row by its expans
 - collapsed, the row shows the item's ID chip in its group color — bounded at 10rem and truncating there, since a long ID would otherwise widen the row past the outline pane ([DR-041](../decisions/041-chrome-that-fits.md)), with the whole ID in the chip's title and accessible name — its group tag, its first line, and a muted hint counting its outbound citations and inbound backlinks;
 - expanded, the row renders the item's full markdown body with horizontal overflow contained and its citations as outbound rows and grouped inbound backlinks per [[spec-view-19](#spec-view-19)], every entry an in-view link;
 - when the ID chip is activated, the view copies the item ID to the clipboard and acknowledges in words beside the chip ([DR-010](../decisions/010-interface-craft.md) §3);
-- expanded, the row offers an Edit control opening its file in the editor with the caret on the item's heading [[spec-view-48](#spec-view-48)].
+- the row's header ends with an Edit control opening its file in the editor with the caret on the item's heading [[spec-view-48](#spec-view-48)], shown by the row's hover or a focus within it and always reachable by keyboard ([DR-010](../decisions/010-interface-craft.md) §6).
 
 ### Citation Rows
 
@@ -56,6 +56,7 @@ While an expanded item carries citations or is cited, the spec view shall presen
 
 - outbound rows list the item's citations in document order, each entry named by the cited item ID;
 - inbound citations render as grouped backlink rows on the cited target, each entry named by the citing item ID;
+- the two rows stand in one block under the body, their labels in one column — the inbound label the control opening and closing its entries — and their entries wrapping in the slack beside it;
 - every file node, collapsed included, carries a rollup counting the file's inbound and outbound cross-file item citations — those whose source and target items live in different files, with an outbound citation of an ID absent from the tree counting as cross-file — while item rows and backlink groups keep every citation regardless of file;
 - a record link in an item body stays a plain link, handled per [[spec-view-6](#spec-view-6)].
 
@@ -240,7 +241,7 @@ Where a record is requested from another surface with its origin — the surface
 
 #### spec-view-48
 
-When an Edit control is activated — in the records reader, on an expanded package node, or in an expanded item — the spec view shall replace itself with an editor holding that file's whole text as `specs.read` served it ([DR-043](../decisions/043-minimal-spec-editing.md)):
+When an Edit control is activated — in the records reader, on an expanded package node, or on an item row — the spec view shall replace itself with an editor holding that file's whole text as `specs.read` served it ([DR-043](../decisions/043-minimal-spec-editing.md)):
 
 - the header names the file's `specs/`-relative path and carries Cancel, Save — disabled while the draft equals the text as read or a save is in flight — and an Edit/Preview toggle exposing its pressed state via aria-pressed;
 - Edit shows the draft in a labeled monospace text field with spell-checking off, taking focus on open; Preview renders the draft as the reader renders a record [[spec-view-7](#spec-view-7)], every link inert;
@@ -436,7 +437,7 @@ Where a fixture tree contains an unreadable file and unknown entries directly un
 
 Where a fixture tree carries a package item citing a peer's item, an intra-file citation, a citation of an absent ID, and a test item citing the behavior items it verifies, the test suite shall assert the citation presentation of [[spec-view-19](#spec-view-19)]:
 
-- outbound rows name each cited item in document order, and grouped inbound backlinks sit on each cited target, the intra-file entries included;
+- outbound rows name each cited item in document order, and grouped inbound backlinks sit on each cited target, the intra-file entries included, the two rows standing in one block whose labels share a column [[spec-view-19](#spec-view-19)];
 - an entry raises no native tooltip: a settled hover raises the card naming the cited item, its statement carried once, a pointer that leaves first raises nothing, keyboard focus raises it at once and blur drops it, Escape drops it, a second entry leaves one card standing, an ID absent from the tree reads as not in the tree, an inline body citation raises the same card while a record link raises none, and the entry's jump drops it [[spec-view-61](#spec-view-61)];
 - every file node, collapsed included, carries the rollup counting cross-file citations only, with the absent-ID citation counted as outbound;
 - an in-view jump lands from an outbound row and from a backlink, and afterwards the one-step return restores the citing item [[spec-view-6](#spec-view-6)];
@@ -474,7 +475,7 @@ Where a fixture tree carries decision records — once alongside package files a
 
 #### spec-view-53
 
-Where a fixture tree renders with a write wired and fixture reads serving text with tokens, the test suite shall assert the editor: the reader's, an expanded package's, and an expanded item's Edit controls open the editor on their file [[spec-view-7](#spec-view-7)] [[spec-view-2](#spec-view-2)] [[spec-view-3](#spec-view-3)] [[spec-view-48](#spec-view-48)], the item's open lands the caret on its heading line [[spec-view-48](#spec-view-48)], Save is disabled until the draft changes and Preview renders the draft with links inert [[spec-view-48](#spec-view-48)], Save writes under the read's token, closes into the reader or the outline, re-reads the tree, and announces [[spec-view-50](#spec-view-50)], a `conflict` reply shows the strip whose Reload re-fetches after a confirm and whose Overwrite writes without a token [[spec-view-50](#spec-view-50)], Cancel on a changed draft asks first and a clean draft closes at once [[spec-view-49](#spec-view-49)], and a remount restores the draft from the lifted view state [[spec-view-51](#spec-view-51)].
+Where a fixture tree renders with a write wired and fixture reads serving text with tokens, the test suite shall assert the editor: the reader's, an expanded package's, and an item row's Edit controls open the editor on their file [[spec-view-7](#spec-view-7)] [[spec-view-2](#spec-view-2)] [[spec-view-3](#spec-view-3)] [[spec-view-48](#spec-view-48)], the item's open lands the caret on its heading line [[spec-view-48](#spec-view-48)], Save is disabled until the draft changes and Preview renders the draft with links inert [[spec-view-48](#spec-view-48)], Save writes under the read's token, closes into the reader or the outline, re-reads the tree, and announces [[spec-view-50](#spec-view-50)], a `conflict` reply shows the strip whose Reload re-fetches after a confirm and whose Overwrite writes without a token [[spec-view-50](#spec-view-50)], Cancel on a changed draft asks first and a clean draft closes at once [[spec-view-49](#spec-view-49)], and a remount restores the draft from the lifted view state [[spec-view-51](#spec-view-51)].
 
 ### Confinement Coverage
 
@@ -497,6 +498,10 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### spec-view-54
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the Academy example seeded, when the journey opens a decision record from the Specs decisions branch and activates Edit, the test suite shall assert editing through the page: the editor opens on the record with its path named and Save disabled [[spec-view-48](#spec-view-48)]; a changed line shows under Preview [[spec-view-48](#spec-view-48)]; the editor carries no serious or critical accessibility violation in either mode; Save lands the change in the file on disk, the reader shows it, and the decisions branch's title follows the re-read [[spec-view-50](#spec-view-50)]; and Edit from an expanded item opens the package file with the caret on the item's heading line [[spec-view-3](#spec-view-3)] [[spec-view-48](#spec-view-48)].
+
+#### spec-view-62
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the Academy example seeded, when the journey opens the Specs tab and expands an item carrying citations, the test suite shall assert the preview at hand through the page: a settled hover on an outbound entry raises the card naming the cited item within a fraction of a second and the pointer leaving drops it [[spec-view-61](#spec-view-61)]; keyboard focus on an item citation inside the rendered body raises it at once and Escape drops it [[spec-view-61](#spec-view-61)]; and while the card stands it lies inside the outline's scrolling box with the page scrolling in neither direction [[spec-view-61](#spec-view-61)] [[spec-view-59](#spec-view-59)].
 
 #### spec-view-56
 

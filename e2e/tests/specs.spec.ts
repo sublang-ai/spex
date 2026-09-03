@@ -3,7 +3,9 @@
 
 // Reading specs (spec-view-46): the seeded example's tree in the
 // Specs tab — outline, expansion, a citation jump, the filter, and
-// the graph toggle. Editing them (spec-view-54): a record from the
+// the graph toggle. Previewing a citation (spec-view-62): the card at
+// hand on a settled hover and on keyboard focus, where it lies, and
+// what dismisses it. Editing them (spec-view-54): a record from the
 // decisions branch through the editor, its preview, an axe scan of
 // both editor modes, the save landing on disk, in the reader, and in
 // the outline, and an item's Edit landing the caret on its heading.
@@ -116,6 +118,65 @@ test("spec-view-54: a record edits through the page, and an item's Edit lands on
   await page.getByTestId("editor-cancel").click();
   await expect(page.getByTestId("spec-editor")).toHaveCount(0);
   await expect(page.getByTestId(/^item-edit-/).first()).toBeVisible();
+});
+
+test("spec-view-62: a citation previews at hand", async ({ page, app }) => {
+  await open(page, app);
+  await page.getByRole("tab", { name: "Specs" }).click();
+
+  // admin-bootstrap-1 cites five peers, in its body and its cites row.
+  await page.getByTestId("file-toggle-admin-bootstrap").click();
+  await page.getByTestId("item-toggle-admin-bootstrap-1").click();
+  const card = page.getByTestId("citation-preview");
+  const entry = page.getByTestId("link-admin-bootstrap-1-delivery-4");
+
+  // The pointer settles on an outbound entry: the card answers well
+  // inside the native tooltip's delay, naming the cited item.
+  await entry.hover();
+  await expect(card).toContainText("delivery-4", { timeout: 400 });
+  await expect(card).toContainText("shall");
+  await expect(entry).toHaveAttribute("aria-describedby", "specv-citation-preview");
+
+  // It lies inside the box the outline scrolls in, and the page
+  // scrolls in neither direction while it stands (DR-041 §9).
+  const placed = await card.evaluate((element) => {
+    const box = (element as HTMLElement).offsetParent as HTMLElement | null;
+    if (!box) return "no scrolling box";
+    const at = element.getBoundingClientRect();
+    const within = box.getBoundingClientRect();
+    const clipped = getComputedStyle(box).overflowY !== "visible";
+    const inside =
+      at.left >= within.left - 1 &&
+      at.right <= within.right + 1 &&
+      at.top >= within.top - 1 &&
+      at.top <= within.bottom + 1;
+    return clipped && inside
+      ? "inside"
+      : `${clipped ? "" : "uncontained "}${Math.round(at.left)}..${Math.round(at.right)} of ${Math.round(within.left)}..${Math.round(within.right)}`;
+  });
+  expect(placed).toBe("inside");
+  const page_ = await page.evaluate(() => ({
+    sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    down: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+  }));
+  expect(page_.sideways).toBeLessThanOrEqual(1);
+  expect(page_.down).toBeLessThanOrEqual(1);
+
+  // The pointer leaves: the card goes with it.
+  await page.getByTestId("item-toggle-admin-bootstrap-1").hover();
+  await expect(card).toHaveCount(0);
+
+  // Keyboard focus on an inline citation in the body answers at once,
+  // and Escape dismisses it.
+  const inline = page
+    .getByTestId("item-admin-bootstrap-1")
+    .getByRole("link", { name: "web-shell-2" })
+    .first();
+  await inline.focus();
+  await expect(card).toContainText("web-shell-2");
+  await expect(inline).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
 });
 
 test("spec-view-46: the Specs tab reads the seeded tree", async ({ page, app }) => {
