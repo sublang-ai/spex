@@ -3,11 +3,14 @@
 
 // The fit journey (run-view-105, spec-view-56, dashboard-43,
 // settings-30; DR-041 §9): every surface, both sidebar states, six
-// widths — the page never scrolls sideways, nothing but a canvas is
-// wider than its box, no two siblings in a row overlap, every child
-// stays inside its parent, and every control keeps its accessible
-// name. Simulated documents cannot measure layout, so this is the one
-// home of that evidence.
+// widths, two heights — the page never scrolls sideways or
+// vertically, nothing but a canvas is wider than its box, every
+// scroll box ends inside the viewport and contains its own positioned
+// content, no two siblings in a row overlap, every child stays inside
+// its parent, and every control keeps its accessible name; a window
+// made short and tall again re-fits without a reload. Simulated
+// documents cannot measure layout, so this is the one home of that
+// evidence.
 
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
@@ -17,8 +20,11 @@ import { test, expect, open, nav, send } from "../src/harness";
 
 
 // Long enough that a turn is still in flight while a surface is
-// measured at eleven widths.
-test.use({ appOptions: { project: true, agentDelayMs: 4000 } });
+// measured at eleven widths. The demo project carries closed work, so
+// the Dashboard's History band draws rows — with their screen-reader
+// marks — below the fold, where a box that fails to contain them
+// stretches the page.
+test.use({ appOptions: { project: true, history: 25, agentDelayMs: 4000 } });
 
 const WIDTHS = [320, 480, 640, 800, 1024, 1280];
 /** An unbroken token longer than any pane (run-view-3): it rides the
@@ -27,7 +33,11 @@ const WIDTHS = [320, 480, 640, 800, 1024, 1280];
  * pane sideways. */
 const LONG_URL = `https://example.com/${"a".repeat(380)}`;
 const TASK = `Fix the token refresh in auth.ts — see ${LONG_URL}`;
-const HEIGHT = 800;
+/** The law is measured in a tall window and a short one (DR-041 §9):
+ * the shell fills either, and the surface scrolls inside its box. */
+const TALL = 800;
+const SHORT = 400;
+const HEIGHTS = [TALL, SHORT];
 /** The open sidebar is 224px wide, so the 320px floor holds with it
  * collapsed (DR-041): the open state is measured from 480px. */
 const OPEN_RAIL_MIN_WIDTH = 480;
@@ -35,6 +45,9 @@ const OPEN_RAIL_MIN_WIDTH = 480;
 interface Measured {
   /** Elements wider than their box outside a scrolling canvas. */
   overflow: string[];
+  /** The page scrolling vertically, and outermost scroll containers
+   * whose box ends past the bottom of the viewport. */
+  vertical: string[];
   /** Sibling pairs that overlap, and children outside their parent,
    * within tab lists, toolbars, headers, list rows, and composer boxes. */
   overlap: string[];
@@ -71,6 +84,10 @@ async function measure(page: Page): Promise<Measured> {
     const scrolls = (el: Element): boolean => {
       const ox = styleOf(el).overflowX;
       return ox === "auto" || ox === "scroll";
+    };
+    const scrollsDown = (el: Element): boolean => {
+      const oy = styleOf(el).overflowY;
+      return oy === "auto" || oy === "scroll";
     };
     const shown = (el: Element): boolean => {
       const style = styleOf(el);
@@ -137,7 +154,66 @@ async function measure(page: Page): Promise<Measured> {
       }
     }
 
-    // (ii) Overlap and containment within the rows that lay controls
+    // (ii) Vertical fit: the page itself never scrolls, and every
+    // surface scrolls inside a box that ends inside the viewport. A
+    // scroll container nested in another one is skipped — its own
+    // parent may have scrolled it out of sight, which is the point.
+    const vertical: string[] = [];
+    const viewportHeight = root.clientHeight;
+    if (root.scrollHeight > root.clientHeight + TOLERANCE) {
+      vertical.push(
+        `document scrolls vertically: ${root.scrollHeight} > ${root.clientHeight}`,
+      );
+    }
+    const inScroller = new Map<Element, boolean>();
+    const insideScroller = (el: Element): boolean => {
+      const known = inScroller.get(el);
+      if (known !== undefined) return known;
+      const parent = el.parentElement;
+      const found = parent ? scrollsDown(parent) || insideScroller(parent) : false;
+      inScroller.set(el, found);
+      return found;
+    };
+    // A positioned box is carried by the page itself unless a scroll
+    // box contains it: its containing block — the offset parent, or
+    // the page for a fixed box — must be, or sit inside, something
+    // that clips. Screen-reader-only text is the usual culprit: it is
+    // absolutely positioned, one pixel tall, and invisible, so only
+    // the page's height shows that it escaped.
+    const contained = (el: HTMLElement): boolean => {
+      let node: Element | null =
+        styleOf(el).position === "fixed" ? null : el.offsetParent;
+      while (node && node !== document.body && node !== root) {
+        const style = styleOf(node);
+        if (style.overflowY !== "visible" || style.overflowX !== "visible") {
+          return true;
+        }
+        node = node.parentElement;
+      }
+      return false;
+    };
+    for (const el of Array.from(document.body.querySelectorAll("*"))) {
+      if (!(el instanceof HTMLElement)) continue;
+      const style = styleOf(el);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      const box = el.getBoundingClientRect();
+      const positioned = style.position === "absolute" || style.position === "fixed";
+      if (!positioned && (!scrollsDown(el) || insideScroller(el))) continue;
+      if (box.height <= 0 || box.bottom <= viewportHeight + TOLERANCE) continue;
+      if (positioned) {
+        if (!contained(el)) {
+          vertical.push(
+            `${describe(el)} is positioned past the viewport with no scroll box containing it (bottom ${Math.round(box.bottom)} of ${viewportHeight})`,
+          );
+        }
+      } else {
+        vertical.push(
+          `${describe(el)} scrolls but ends past the viewport (bottom ${Math.round(box.bottom)} of ${viewportHeight})`,
+        );
+      }
+    }
+
+    // (iii) Overlap and containment within the rows that lay controls
     // side by side.
     const overlap: string[] = [];
     const seen = new Set<Element>();
@@ -181,7 +257,7 @@ async function measure(page: Page): Promise<Measured> {
       if (shown(container)) check(container);
     }
 
-    // (iii) Accessible names of every button, in document order. The
+    // (iv) Accessible names of every button, in document order. The
     // Now row names the live run's current state, which advances
     // between measurements; its words are live content, not chrome,
     // so it stays out of the stability check.
@@ -192,7 +268,7 @@ async function measure(page: Page): Promise<Measured> {
         const text = (button.textContent ?? "").trim().replace(/\s+/g, " ");
         return label ?? (text || (button.getAttribute("title") ?? ""));
       });
-    return { overflow, overlap, names };
+    return { overflow, vertical, overlap, names };
   });
 }
 
@@ -321,7 +397,7 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
   ];
 
   const setRail = async (open: boolean) => {
-    await page.setViewportSize({ width: 1280, height: HEIGHT });
+    await page.setViewportSize({ width: 1280, height: TALL });
     const control = page.getByRole("button", {
       name: open ? "Show the sidebar" : "Collapse the sidebar",
     });
@@ -337,8 +413,13 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
     if (!process.env.SPEX_E2E_DEBUG) return;
     console.log(`[fit +${((Date.now() - started) / 1000).toFixed(1)}s] ${line}`);
   };
+  const record = (where: string, found: Measured): void => {
+    for (const line of found.overflow) defects.push(`${where}: overflow — ${line}`);
+    for (const line of found.vertical) defects.push(`${where}: vertical — ${line}`);
+    for (const line of found.overlap) defects.push(`${where}: ${line}`);
+  };
   for (const surface of surfaces) {
-    await page.setViewportSize({ width: 1280, height: HEIGHT });
+    await page.setViewportSize({ width: 1280, height: TALL });
     await surface.show();
     log(`${surface.name}: shown`);
     for (const railOpen of [false, true]) {
@@ -346,29 +427,39 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
       let reference: string[] | undefined;
       for (const width of WIDTHS) {
         if (railOpen && width < OPEN_RAIL_MIN_WIDTH) continue;
-        await page.setViewportSize({ width, height: HEIGHT });
-        await surface.ready();
-        const where = `${surface.name} · sidebar ${railOpen ? "open" : "collapsed"} · ${width}px`;
-        const found = await measure(page);
-        log(`${where}: measured`);
-        for (const line of found.overflow) defects.push(`${where}: overflow — ${line}`);
-        for (const line of found.overlap) defects.push(`${where}: ${line}`);
-        // (iii) Names hold across widths: the widest measurement of
-        // this sidebar state is the reference.
-        if (!reference) {
-          reference = found.names;
-        } else if (found.names.length !== reference.length) {
-          defects.push(
-            `${where}: ${found.names.length} buttons, ${reference.length} at ${WIDTHS[WIDTHS.length - 1]}px`,
-          );
-        } else {
-          found.names.forEach((name, index) => {
-            if (name !== reference![index]) {
-              defects.push(`${where}: button ${index} reads "${name}", "${reference![index]}" at the reference width`);
-            }
-          });
+        for (const height of HEIGHTS) {
+          await page.setViewportSize({ width, height });
+          await surface.ready();
+          const where = `${surface.name} · sidebar ${railOpen ? "open" : "collapsed"} · ${width}×${height}`;
+          const found = await measure(page);
+          log(`${where}: measured`);
+          record(where, found);
+          // (iv) Names hold at every size: the first measurement of
+          // this sidebar state is the reference.
+          if (!reference) {
+            reference = found.names;
+          } else if (found.names.length !== reference.length) {
+            defects.push(
+              `${where}: ${found.names.length} buttons, ${reference.length} at the reference size`,
+            );
+          } else {
+            found.names.forEach((name, index) => {
+              if (name !== reference![index]) {
+                defects.push(`${where}: button ${index} reads "${name}", "${reference![index]}" at the reference size`);
+              }
+            });
+          }
         }
       }
+    }
+    // One page life, made tall, short, and tall again: a surface that
+    // measured the window once would keep the stale height here.
+    for (const height of [TALL, SHORT, TALL]) {
+      await page.setViewportSize({ width: 1280, height });
+      await surface.ready();
+      const where = `${surface.name} · re-fit after resize · 1280×${height}`;
+      record(where, await measure(page));
+      log(`${where}: measured`);
     }
   }
   // The collapsed rail's badge caps at "9+", the count in the name
