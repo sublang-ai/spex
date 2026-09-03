@@ -167,7 +167,7 @@ When an intent is captured from any Dashboard gesture — a Queue control or the
 While a project group renders, the group's Sources band shall present three tabs — Issues [[dashboard-6](#dashboard-6)], PRs [[dashboard-6](#dashboard-6)], and Open records [[dashboard-24](#dashboard-24)], each paginated in place — under a one-line summary of the issue, pull-request, and open-record counts with the age of the data, which folds the band to itself and unfolds it again:
 
 - the band stands unfolded wherever a group first draws it, so the tabs are read rather than discovered, and a fold is the project's own — kept while the app runs, never on disk, and the same one the Dashboard's group and the project's Overview [[dashboard-26](#dashboard-26)] read;
-- issue and pull-request rows carry their forge labels as tags;
+- issue and pull-request rows carry their forge labels as tags, which yield with the row [[forge-work-lists-1](forge-work-lists.md#forge-work-lists-1)];
 - while GitHub is not connected — no binding, or the adapter not ready — the summary says so in place of the issue and pull-request counts, so zero never reads as an empty tracker; while the project's forge state has not been read yet, the summary and the guidance read as loading, never as not connected;
 - folding, switching tabs, and paging are visibility-only and change no ledger state.
 
@@ -410,3 +410,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - from the Dashboard, the History row lists the record and opens it in the Specs tab's records reader, whose Back control reads "← Back to Dashboard" [[dashboard-27](#dashboard-27)] [[dashboard-40](#dashboard-40)];
 - Back shows the Dashboard with the project's group in view and the invoking row focused [[dashboard-40](#dashboard-40)];
 - from the project's Overview tab, the same row opens the reader behind "← Back to Overview", and Back shows the Overview tab with the row focused [[dashboard-40](#dashboard-40)].
+
+#### dashboard-49
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, a substitute forge adapter serving open issues that carry ordinary GitHub labels, and one of those issues captured as an intent standing behind another, when the journey shows the Dashboard's Sources rows at the 320-pixel viewport floor with the sidebar collapsed, the test suite shall assert through the page: the labelled row's every child lies inside the row with its label tags yielded and their words in the row's title [[dashboard-20](#dashboard-20)], the captured row wearing its intent's state where its Queue control stood [[dashboard-30](#dashboard-30)], and the Dashboard scrolling in neither direction [[dashboard-47](#dashboard-47)].

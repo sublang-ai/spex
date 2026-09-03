@@ -99,13 +99,17 @@ export function CapturedState({
   derived: DerivedIntent;
   testId?: string;
 }) {
+  const text = intentStateText(derived);
   return (
     <span
       data-testid={testId}
-      title={derived.state}
-      className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+      // No chip refuses to shrink past about 6rem (DR-041): the words
+      // truncate, and the tooltip carries them whole — with the raw
+      // enum beside them where the two differ.
+      title={text === derived.state ? text : `${text} (${derived.state})`}
+      className="min-w-0 max-w-24 truncate rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
     >
-      {intentStateText(derived)}
+      {text}
     </span>
   );
 }
@@ -125,16 +129,21 @@ export function ForgeItemRow({
   onQueue: (item: ForgeItem) => void | Promise<unknown>;
   testId?: string;
 }) {
+  const labels = item.labels ?? [];
   return (
+    // The row is its own container (DR-041): its labels are
+    // at-a-glance duplicates and leave first, so a labelled row never
+    // widens the band it lists in.
     <li
-      className="flex min-w-0 items-center gap-2 text-sm"
+      className="@container flex min-w-0 items-center gap-2 text-sm"
       data-testid={testId}
     >
       <a
         href={item.url}
         target="_blank"
         rel="noreferrer"
-        title={item.title}
+        // Every label rides the row's own title, so the tags can go.
+        title={labels.length > 0 ? `${item.title} — ${labels.join(", ")}` : item.title}
         className="min-w-0 flex-1 truncate text-left hover:underline"
       >
         <span className="text-brand-600 dark:text-brand-300">
@@ -143,24 +152,25 @@ export function ForgeItemRow({
         {item.title}
       </a>
       {/* At most two labels show (DR-041); the rest fold into one
-          "+N" tag whose title lists every label. */}
-      {item.labels?.slice(0, 2).map((label) => (
+          "+N" tag whose title lists every label. Below 28rem of row
+          the tags hide, their words kept in the row's title. */}
+      {labels.slice(0, 2).map((label) => (
         <span
           key={label}
           title={label}
-          className="max-w-24 shrink-0 truncate rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+          className="hidden max-w-24 shrink-0 truncate rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 @md:inline-block dark:bg-neutral-800 dark:text-neutral-400"
         >
           {label}
         </span>
       ))}
-      {item.labels && item.labels.length > 2 ? (
+      {labels.length > 2 ? (
         <span
           data-testid={testId ? `${testId}-more-labels` : undefined}
-          title={item.labels.join(", ")}
-          aria-label={`${item.labels.length - 2} more labels: ${item.labels.slice(2).join(", ")}`}
-          className="shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+          title={labels.join(", ")}
+          aria-label={`${labels.length - 2} more labels: ${labels.slice(2).join(", ")}`}
+          className="hidden shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 @md:inline-block dark:bg-neutral-800 dark:text-neutral-400"
         >
-          +{item.labels.length - 2}
+          +{labels.length - 2}
         </span>
       ) : null}
       {captured ? (
