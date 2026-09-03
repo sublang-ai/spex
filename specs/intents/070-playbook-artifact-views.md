@@ -13,7 +13,7 @@ A playbook's Gears stage is a GEARS package file, so the Playbooks card renders 
 
 ## Deliverables
 
-- [ ] The Gears stage parses the artifact with the Specs view's package parser and renders its items as the outline's read-only item rows, collapsed by default, each expanding to its body, with a citation of another item in the same artifact jumping within the box; an artifact the parser cannot read falls back to rendered markdown (playbook-library-22, spec-view).
+- [x] The Gears stage parses the artifact with the Specs view's package parser and renders its items as the outline's read-only item rows, collapsed by default, each expanding to its body, with a citation of another item in the same artifact jumping within the box; an artifact the parser cannot read falls back to rendered markdown (playbook-library-22, spec-view).
 - [ ] The State machine stage pins its state list as the box's header above the scrolling code, so the states stay in view at any scroll position and any frame height (playbook-library-22).
 - [ ] Unit coverage of both stages over the built-in artifacts and the Playbooks journey extended; the fit journey stays green.
 

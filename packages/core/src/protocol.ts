@@ -85,6 +85,10 @@ export interface PlaybookArtifacts {
   source: string | null;
   /** The GEARS spec items. */
   gears: string | null;
+  /** The gears markdown parsed into the item shape the spec outline's
+   * rows read (playbook-library-24); absent when the parse yields no
+   * item. */
+  gearsItems?: SpecFileInfo;
   /** The compiled XState FSM module code. */
   fsm: string | null;
   /** Every state id of the FSM, when derivable. */

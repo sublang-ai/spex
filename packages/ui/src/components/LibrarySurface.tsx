@@ -6,7 +6,7 @@
 // State machine), plus the compile flow driving slc through the
 // core with streamed, persistent progress.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   AgentBlockInput,
   AgentSummary,
@@ -16,6 +16,7 @@ import type {
   PlaybookArtifacts,
   ReadinessEntry,
   SessionPlayerSummary,
+  SpecFileInfo,
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
@@ -28,6 +29,8 @@ import { Markdown } from "./Markdown.js";
 import { ResizableFrame } from "./ResizableFrame.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
+import { itemDomId, SpecItemRows } from "./SpecItemRows.js";
+import { buildItemIndex } from "../lib/spec-view-model.js";
 
 type Toolchain = CommandResults["compile.check"];
 
@@ -163,6 +166,68 @@ function StageBox({
   );
 }
 
+/** The Gears stage as the outline's own item rows (PBLIB-22): the
+ * artifact is a GEARS package file, so the card draws the parse the
+ * core serves — rows collapsed, each expanding to its body, a citation
+ * of a sibling landing on it inside the box — never a wall of
+ * markdown. Read-only: no filters, no edit, no tree beyond this file. */
+function GearsItems({ id, file }: { id: string; file: SpecFileInfo }) {
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [pendingJump, setPendingJump] = useState<string>();
+  const [flashId, setFlashId] = useState<string>();
+  const [notFoundKey, setNotFoundKey] = useState<string>();
+  // One artifact, one index: a citation resolves within this file or
+  // it resolves nowhere — the card holds no spec tree.
+  const itemIndex = useMemo(() => buildItemIndex([file]), [file]);
+  const prefix = `gears-${id}`;
+
+  // The landing waits for the expansion to commit, then scrolls the
+  // row into the box, takes focus (DR-010 §6), and flashes it.
+  useEffect(() => {
+    if (!pendingJump) return;
+    const element = document.getElementById(itemDomId(pendingJump, prefix));
+    if (element && typeof element.scrollIntoView === "function") {
+      element.scrollIntoView({ block: "center" });
+    }
+    element?.focus({ preventScroll: true });
+    setFlashId(pendingJump);
+    setPendingJump(undefined);
+  }, [pendingJump, prefix]);
+
+  useEffect(() => {
+    if (!flashId) return;
+    const timer = setTimeout(() => setFlashId(undefined), 1200);
+    return () => clearTimeout(timer);
+  }, [flashId]);
+
+  return (
+    <SpecItemRows
+      items={file.items}
+      idPrefix={prefix}
+      itemIndex={itemIndex}
+      expandedItems={expanded}
+      flashId={flashId}
+      notFoundKey={notFoundKey}
+      onToggleItem={(itemId) =>
+        setExpanded((current) => {
+          const next = new Set(current);
+          if (!next.delete(itemId)) next.add(itemId);
+          return next;
+        })
+      }
+      onJump={(linkKey, targetId) => {
+        if (!itemIndex.has(targetId)) {
+          setNotFoundKey(linkKey);
+          return;
+        }
+        setNotFoundKey(undefined);
+        setExpanded((current) => new Set(current).add(targetId));
+        setPendingJump(targetId);
+      }}
+    />
+  );
+}
+
 /** A configured playbook's pipeline (PBLIB-22/23): the stage row is
  * permanent, and the artifacts arrive on the card's first open —
  * one request, held for every later open. */
@@ -243,6 +308,8 @@ function PlaybookPipeline({ playbookId }: { playbookId: string }) {
                   {content}
                 </pre>
               </>
+            ) : open === "gears" && artifacts.gearsItems ? (
+              <GearsItems id={playbookId} file={artifacts.gearsItems} />
             ) : (
               <Markdown text={content} />
             )}

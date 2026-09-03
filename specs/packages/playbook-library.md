@@ -90,6 +90,7 @@ While a configured playbook is listed, the Library shall carry that playbook's c
 - Pressing a closed stage opens it and closes the stage that was open, so one stage at a time stands open for that playbook; pressing the open stage closes it.
 - The first open requests that playbook's artifacts [[playbook-library-24](#playbook-library-24)], which the card holds for its later opens; the open stage reads as loading until they arrive, and a failed request leaves its message in the open stage until a later press asks again.
 - A markdown stage renders as formatted text; the State machine stage renders the FSM as code beneath the derived state list.
+- The Gears stage stands instead as the outline's read-only item rows [[spec-view-3](spec-view.md#spec-view-3)] over the parse the playbook's artifacts carry [[playbook-library-24](#playbook-library-24)]: every row collapsed until pressed, an expanded row rendering the item's body, a citation of an item in the same artifact landing on that item within the box [[spec-view-6](spec-view.md#spec-view-6)], no control that edits, and the rendered markdown wherever that parse is absent.
 - The open stage's artifact sits in a box that caps its height and scrolls, whose bottom edge carries the house's grip turned horizontal ([DR-030](../decisions/030-workspace-chrome.md)): dragged, or moved a step per arrow key while focused, it sets the box between 8rem and 48rem, a double-click restores the default 24rem, and the height is remembered for that playbook across launches, one height serving its stages.
 - The grip stands only while the artifact runs past the box — a stage the box fits has nothing to page through, so the box takes the artifact's height and shows no edge to pull.
 
@@ -103,7 +104,7 @@ Where the artifacts a playbook served name a stage absent, the Library shall ren
 
 #### playbook-library-24
 
-When a client requests a playbook's artifacts, the core package shall resolve them from the registry module's location: the compiled library layout (`<id>.md`, `<id>.playbook/<id>.gears.md`, `<id>.playbook/<id>.fsm.ts`) and the published-package layout used by `@sublang/playbook` registries, serving each stage's content, the state ids derived from the FSM, and the machine graph [[playbook-library-36](#playbook-library-36)] over the protocol, and naming absent stages without failing the request.
+When a client requests a playbook's artifacts, the core package shall resolve them from the registry module's location: the compiled library layout (`<id>.md`, `<id>.playbook/<id>.gears.md`, `<id>.playbook/<id>.fsm.ts`) and the published-package layout used by `@sublang/playbook` registries, serving each stage's content, the Gears stage also parsed into the item shape the outline's rows read [[spec-view-3](spec-view.md#spec-view-3)] — carried only where that parse yields an item, so a stage the parser cannot read serves its markdown alone — the state ids derived from the FSM, and the machine graph [[playbook-library-36](#playbook-library-36)] over the protocol, and naming absent stages without failing the request.
 
 #### playbook-library-36
 
@@ -245,9 +246,14 @@ Where the shared config file contains comments and entries unrelated to the togg
 
 #### playbook-library-25
 
-Where a playbook was compiled into the library directory, when its artifacts are requested over the protocol, the test suite shall assert the response carries the source markdown, the gears markdown, the FSM code [[playbook-library-22](#playbook-library-22)], and the derived state ids [[playbook-library-24](#playbook-library-24)]:
+Where a playbook was compiled into the library directory, when its artifacts are requested over the protocol, the test suite shall assert the response carries the source markdown, the gears markdown, the FSM code [[playbook-library-22](#playbook-library-22)], the derived state ids, and that gears markdown parsed into items in document order, each with its first line, body, and citations [[playbook-library-24](#playbook-library-24)]:
 
 - A stage file removed: the test suite asserts the response names the missing stage while still serving the others [[playbook-library-24](#playbook-library-24)].
+- Gears the parser reads no item from: the test suite asserts the markdown still serves, with no parsed items beside it [[playbook-library-24](#playbook-library-24)].
+
+#### playbook-library-44
+
+When each installed built-in playbook's artifacts are requested, the test suite shall assert that built-in's shipped gears file is served parsed [[playbook-library-24](#playbook-library-24)]: at least one item, every item carrying an ID of the authored casing, a non-empty first line, and a body, with the markdown the rows fall back to still served beside them.
 
 #### playbook-library-37
 
@@ -264,6 +270,10 @@ Where a configured playbook binds two roles, one to a player another playbook al
 When a built-in whose roles the roster does not cover is added, the test suite shall assert the missing player is written to the roster first, carrying the block chosen for its role, and only then the playbook entry binding that role to it [[playbook-library-34](#playbook-library-34)].
 
 ### Cancellation and Gate Coverage
+
+#### playbook-library-45
+
+Where a configured playbook's artifacts carry a parsed Gears stage of two items, one citing the other, when the Gears stage is opened, the test suite shall assert the card draws the outline's rows [[playbook-library-22](#playbook-library-22)]: each row collapsed on its ID, group, and first line with no edit control, a pressed row rendering its body, the citation landing on the cited row expanded and highlighted without leaving the card, and — where the parse is absent — the gears markdown rendered instead.
 
 #### playbook-library-30
 

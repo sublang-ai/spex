@@ -398,9 +398,40 @@ describe("playbook-library-34/26: plain words on the list", () => {
   });
 });
 
+/** The Gears artifact as the core serves it: the markdown plus the
+ * parse the card draws as rows (PBLIB-24). */
+const GEARS_ITEMS = {
+  path: "specs/packages/code.md",
+  key: "code",
+  dir: "",
+  basename: "code",
+  title: "Coding Workflow",
+  items: [
+    {
+      id: "CODE-1",
+      group: "external",
+      section: "Coder",
+      firstLine: "The coder shall write the change.",
+      text: "The coder shall write the change.",
+      cites: [] as string[],
+    },
+    {
+      id: "CODE-2",
+      group: "external",
+      section: "Coder",
+      firstLine: "The reviewer shall read it.",
+      text: "The reviewer shall read it [[CODE-1](code.md#CODE-1)]:\n\n- the review names the commit.",
+      cites: ["CODE-1"],
+    },
+  ],
+  notices: [] as string[],
+};
+
 const ARTIFACTS = {
   source: "# Code workflow\n\nThe coder writes.",
-  gears: "### CODE-1\n\nThe coder shall write the change.",
+  gears:
+    "### CODE-1\n\nThe coder shall write the change.\n\n### CODE-2\n\nThe reviewer shall read it.",
+  gearsItems: GEARS_ITEMS,
   fsm: "import { setup } from 'xstate';",
   stateIds: ["idle", "coding"],
   machine: null,
@@ -466,6 +497,61 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
     fireEvent.click(within(row).getByRole("button", { name: "Gears" }));
     expect(screen.getByTestId("pipeline-code").textContent).toContain("CODE-1");
     expect(artifactCalls()).toBe(1);
+  });
+
+  test("the Gears stage stands as the outline's rows, collapsed", async () => {
+    withArtifacts(async () => ARTIFACTS);
+    renderLibrary();
+    const row = screen.getByTestId("stages-code");
+    fireEvent.click(within(row).getByRole("button", { name: "Gears" }));
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("item-CODE-1")).toBeTruthy(),
+    );
+
+    // A row is the ID chip in its group colour, the group word, and
+    // the first line — the body waits behind the toggle.
+    const second = screen.getByTestId("item-CODE-2");
+    expect(second.textContent).toContain("CODE-2");
+    expect(second.textContent).toContain("external");
+    expect(second.textContent).toContain("The reviewer shall read it.");
+    expect(second.textContent).not.toContain("the review names the commit");
+    const toggle = screen.getByTestId("item-toggle-CODE-2");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // Read-only: no Edit control and no copy chip on this surface.
+    expect(screen.queryByTestId("item-edit-CODE-2")).toBeNull();
+    expect(screen.queryByLabelText("Copy CODE-2")).toBeNull();
+
+    // Expanding renders the body with its citations.
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("item-CODE-2").textContent).toContain(
+      "the review names the commit",
+    );
+
+    // A citation of a sibling lands on it inside the box: the target
+    // expands and flashes, with no navigation away from the card.
+    fireEvent.click(screen.getByTestId("link-CODE-2-CODE-1"));
+    expect(
+      screen.getByTestId("item-toggle-CODE-1").getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(screen.getByTestId("item-CODE-1").className).toContain("ring-2");
+    expect(screen.getByTestId("stages-code")).toBeTruthy();
+  });
+
+  test("gears the parser could not read fall back to the markdown", async () => {
+    withArtifacts(async () => ({ ...ARTIFACTS, gearsItems: undefined }));
+    renderLibrary();
+    fireEvent.click(
+      within(screen.getByTestId("stages-code")).getByRole("button", {
+        name: "Gears",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("pipeline-code").textContent).toContain(
+        "The coder shall write the change.",
+      ),
+    );
+    expect(screen.queryByTestId("item-CODE-1")).toBeNull();
   });
 
   test("a stage the load cannot locate is struck out, inactive, and named in the box", async () => {

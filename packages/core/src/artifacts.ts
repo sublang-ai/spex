@@ -3,15 +3,18 @@
 
 // Pipeline artifacts (PBLIB-24): locate a playbook's Source, Gears,
 // and FSM next to its registry module, covering both the compiled
-// library layout and the published-package layout, and derive the
-// FSM's state list for display.
+// library layout and the published-package layout, derive the FSM's
+// state list for display, and parse the Gears artifact — a GEARS
+// package file — with the spec tree's own parser, so the card draws
+// it as items rather than as a wall of markdown.
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { resolveModulePath } from "./config.js";
 import { loadFsmInfo } from "./compile.js";
-import type { PlaybookArtifacts } from "./protocol.js";
+import { parseSpecFileText } from "./specs.js";
+import type { PlaybookArtifacts, SpecFileInfo } from "./protocol.js";
 
 function firstExisting(candidates: string[]): string | undefined {
   return candidates.find((candidate) => existsSync(candidate));
@@ -19,6 +22,21 @@ function firstExisting(candidates: string[]): string | undefined {
 
 function readOrNull(path: string | undefined): string | null {
   return path ? readFileSync(path, "utf8") : null;
+}
+
+/**
+ * The Gears artifact parsed as the package file it is (PBLIB-24):
+ * undefined whenever the parser reads no item from it, so a stage the
+ * parser cannot make rows of falls back to its markdown.
+ */
+function parseGears(id: string, gears: string | null): SpecFileInfo | undefined {
+  if (gears === null) return undefined;
+  try {
+    const parsed = parseSpecFileText(gears, id);
+    return parsed.items.length > 0 ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -100,12 +118,15 @@ export async function resolveArtifacts(
 
   const source = readOrNull(sourcePath);
   const gears = readOrNull(gearsPath);
+  const gearsText = gears === null ? null : stripLeadingComments(gears);
+  const gearsItems = parseGears(id, gearsText);
   const fsmInfo = fsmPath
     ? await loadFsmInfo(fsmPath)
     : { stateIds: null, machine: null };
   return {
     source: source === null ? null : stripLeadingComments(source),
-    gears: gears === null ? null : stripLeadingComments(gears),
+    gears: gearsText,
+    ...(gearsItems ? { gearsItems } : {}),
     fsm: readOrNull(fsmPath),
     stateIds: fsmInfo.stateIds,
     machine: fsmInfo.machine,

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// PBLIB-25: pipeline artifacts from both layouts, with degradation.
+// PBLIB-25: pipeline artifacts from both layouts, with degradation,
+// and the Gears stage parsed into items (PBLIB-44).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -26,12 +27,33 @@ export const demoMachine = setup({}).createMachine({
 });
 `;
 
+/** A Gears artifact is a GEARS package file: item headings with a
+ * statement, an attachment, and an enclosed citation of a sibling. */
+function gearsFile(id: string): string {
+  return [
+    `# ${id}: GEARS for ${id}`,
+    "",
+    `## ${id} roles`,
+    "",
+    `### ${id}-1`,
+    "",
+    "When the phase begins, Coder shall write the change:",
+    "",
+    "- the commit stands alone.",
+    "",
+    `### ${id}-2`,
+    "",
+    `When the change lands, Reviewer shall read it [[${id}-1](${id}.md#${id}-1)].`,
+    "",
+  ].join("\n");
+}
+
 function compiledLayout(id: string): { dir: string; from: string } {
   const dir = mkdtempSync(join(tmpdir(), "spex-artifacts-"));
   writeFileSync(join(dir, `${id}.md`), `# ${id} workflow\n`);
   const artifactDir = join(dir, `${id}.playbook`);
   mkdirSync(artifactDir);
-  writeFileSync(join(artifactDir, `${id}.gears.md`), `## GEARS for ${id}\n`);
+  writeFileSync(join(artifactDir, `${id}.gears.md`), gearsFile(id));
   writeFileSync(join(artifactDir, `${id}.fsm.ts`), FSM);
   const from = join(dir, `${id}.registry.mjs`);
   writeFileSync(from, "export default {};\n");
@@ -58,6 +80,31 @@ test("artifacts resolve from the compiled library layout with state ids", async 
     "failed",
     "done",
   ]);
+  // playbook-library-24: the Gears stage also rides parsed, in the
+  // shape the outline's rows read — id, first line, body, citations.
+  const gears = artifacts.gearsItems;
+  assert.ok(gears, "gears items must be served");
+  assert.deepEqual(
+    gears.items.map((item) => item.id),
+    ["demo-1", "demo-2"],
+  );
+  assert.equal(
+    gears.items[0].firstLine,
+    "When the phase begins, Coder shall write the change:",
+  );
+  assert.match(gears.items[0].text, /the commit stands alone/);
+  assert.deepEqual(gears.items[1].cites, ["demo-1"]);
+});
+
+test("gears the parser reads no item from serve as markdown alone", async () => {
+  const { dir, from } = compiledLayout("plain");
+  writeFileSync(
+    join(dir, "plain.playbook", "plain.gears.md"),
+    "# plain\n\nProse with no item heading at all.\n",
+  );
+  const artifacts = await resolveArtifacts({ id: "plain", from });
+  assert.match(artifacts.gears ?? "", /Prose with no item heading/);
+  assert.equal(artifacts.gearsItems, undefined);
 });
 
 test("artifacts resolve from the published-package layout", async () => {
@@ -82,6 +129,7 @@ test("a removed stage is named missing while others still serve", async () => {
   rmSync(join(dir, "gone.playbook", "gone.gears.md"));
   const artifacts = await resolveArtifacts({ id: "gone", from });
   assert.equal(artifacts.gears, null);
+  assert.equal(artifacts.gearsItems, undefined);
   assert.deepEqual(artifacts.missing, ["gears"]);
   assert.match(artifacts.source ?? "", /gone workflow/);
   assert.match(artifacts.fsm ?? "", /createMachine/);
@@ -157,4 +205,28 @@ test("playbook-library-37: every built-in serves a whole machine graph", async (
     ),
     "decide's parallel join must appear as an edge",
   );
+});
+
+test("playbook-library-44: every built-in serves its gears as items", async () => {
+  // The shipped gears files carry ALLCAPS ids under role sections —
+  // the shape the outline's rows must draw without a fixture's help.
+  const builtins = {
+    code: "@sublang/playbook/code/registry",
+    review: "@sublang/playbook/review/registry",
+    decide: "@sublang/playbook/decide/registry",
+  };
+
+  for (const [id, from] of Object.entries(builtins)) {
+    const artifacts = await resolveArtifacts({ id, from });
+    const gears = artifacts.gearsItems;
+    assert.ok(gears, `${id} must serve parsed gears items`);
+    assert.ok(gears.items.length > 0, `${id} must serve at least one item`);
+    for (const item of gears.items) {
+      assert.match(item.id, /^[A-Za-z][A-Za-z0-9-]*-\d+$/, `${id}: item id`);
+      assert.ok(item.firstLine.length > 0, `${id}: ${item.id} has a first line`);
+      assert.ok(item.text.length > 0, `${id}: ${item.id} has a body`);
+    }
+    // Document order, and the markdown the rows fall back to stays.
+    assert.match(artifacts.gears ?? "", new RegExp(gears.items[0].id));
+  }
 });
