@@ -128,6 +128,10 @@ export interface AppState {
   history: Record<string, HistoryState>;
   /** Staged dispatches by composer key (session id or "home"). */
   stagedIntents: Record<string, StagedIntent>;
+  /** Per-session collapsed player lanes (run-view-116): this launch's,
+   * never on disk — a lane's rail is a reading posture, not a
+   * preference. */
+  collapsedLanes: Record<string, string[]>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
 
@@ -142,6 +146,7 @@ export interface AppState {
   setRailCollapsed(collapsed: boolean): void;
   setCaptainSplit(percent: number): void;
   toggleProjectExpanded(projectId: string, expanded: boolean): void;
+  setLaneCollapsed(sessionId: string, playerId: string, collapsed: boolean): void;
   /** Register a folder, silently git-initializing non-repos
    * (RUN-27); the palette and any surface share this one action. */
   addProjectByPath(path: string): Promise<ProjectInfo>;
@@ -354,6 +359,23 @@ export const useAppStore = create<AppState>((set, get) => {
       );
   }
 
+  /** Fold one record into a view — and let a collapsed lane whose
+   * call this record opens unfold itself (run-view-117). The rule
+   * lives at the fold, so it holds whether or not the session's tab
+   * is shown; folding a lane whose call is already open stands. */
+  function fold(
+    sessionId: string,
+    view: SessionView,
+    seq: number,
+    record: import("@sublang/spex-core/protocol").TmuxPlayRecord,
+    role?: string,
+  ): void {
+    applyRecord(view, seq, record, role);
+    if (record.type === "player_prompt") {
+      get().setLaneCollapsed(sessionId, String(record.playerId), false);
+    }
+  }
+
   /** Subscribe and backfill a session's view (idempotent). Live
    * records arriving mid-backfill buffer and apply afterwards, so a
    * reconnect can never lose the gap. */
@@ -378,13 +400,13 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!target) return;
       for (const entry of history.records) {
         if (entry.seq > target.lastSeq) {
-          applyRecord(target, entry.seq, entry.record, entry.role);
+          fold(sessionId, target, entry.seq, entry.record, entry.role);
         }
       }
       const buffered = backfilling.get(sessionId) ?? [];
       for (const entry of buffered) {
         if (entry.seq > target.lastSeq) {
-          applyRecord(target, entry.seq, entry.record, entry.role);
+          fold(sessionId, target, entry.seq, entry.record, entry.role);
         }
       }
       target.loading = false;
@@ -473,7 +495,7 @@ export const useAppStore = create<AppState>((set, get) => {
         const view =
           state.views[sessionId] ??
           initialSessionView(session?.players ?? []);
-        applyRecord(view, seq, record, role);
+        fold(sessionId, view, seq, record, role);
 
         const updates: Partial<AppState> = {
           views: { ...state.views, [sessionId]: { ...view } },
@@ -528,6 +550,7 @@ export const useAppStore = create<AppState>((set, get) => {
     homeDraft: "",
     history: {},
     stagedIntents: {},
+    collapsedLanes: {},
 
     connect(url?: string): void {
       const target = url ?? defaultCoreUrl();
@@ -661,6 +684,15 @@ export const useAppStore = create<AppState>((set, get) => {
       const next = { ...get().expandedProjects, [projectId]: expanded };
       set({ expandedProjects: next });
       safeStorageSet(EXPANDED_PROJECTS_KEY, JSON.stringify(next));
+    },
+
+    setLaneCollapsed(sessionId: string, playerId: string, collapsed: boolean): void {
+      const lanes = get().collapsedLanes[sessionId] ?? [];
+      if (lanes.includes(playerId) === collapsed) return;
+      const next = collapsed
+        ? [...lanes, playerId]
+        : lanes.filter((id) => id !== playerId);
+      set({ collapsedLanes: { ...get().collapsedLanes, [sessionId]: next } });
     },
 
     async addProjectByPath(path: string): Promise<ProjectInfo> {
@@ -916,12 +948,14 @@ export const useAppStore = create<AppState>((set, get) => {
       const { [sessionId]: _composer, ...composers } = state.composers;
       const { [sessionId]: _error, ...runErrors } = state.runErrors;
       const { [sessionId]: _staged, ...stagedIntents } = state.stagedIntents;
+      const { [sessionId]: _lanes, ...collapsedLanes } = state.collapsedLanes;
       set({
         sessions: state.sessions.filter((s) => s.id !== sessionId),
         views,
         composers,
         runErrors,
         stagedIntents,
+        collapsedLanes,
         activeSessionId:
           state.activeSessionId === sessionId
             ? undefined

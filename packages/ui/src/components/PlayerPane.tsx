@@ -4,7 +4,7 @@
 // Read-only streaming player transcript (RUN-2/4/5): markdown text,
 // collapsed tool-use cards, collapsed thinking, per-turn usage.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.js";
@@ -283,9 +283,14 @@ function Segment({ segment }: { segment: TranscriptSegment }) {
 export function PlayerPane({
   view,
   meta,
+  collapsed = false,
+  onCollapsedChange,
 }: {
   view: PlayerView;
   meta?: SessionInfo["players"][number];
+  /** The lane stands as a rail (run-view-116). */
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
   const { scrollRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
@@ -297,6 +302,66 @@ export function PlayerPane({
   const call = latestCall(view);
   const who = call?.role ?? view.id;
   const now = useClock(view.running);
+  // The toggle hands focus to its counterpart once the pane has taken
+  // its other form (run-view-116): on the reader's own gesture, or
+  // when the control they were on left with the form — a lane that
+  // opens itself for its call (run-view-117) otherwise steals none.
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!refocus.current && !focused.current) return;
+    refocus.current = false;
+    toggleRef.current?.focus();
+  }, [collapsed]);
+  const toggleProps = {
+    type: "button" as const,
+    ref: toggleRef,
+    onClick: () => {
+      refocus.current = true;
+      onCollapsedChange?.(!collapsed);
+    },
+    onFocus: () => {
+      focused.current = true;
+    },
+    onBlur: () => {
+      focused.current = false;
+    },
+    className:
+      "flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200",
+  };
+
+  if (collapsed) {
+    // The rail (run-view-116): the way back, the lane's running mark,
+    // and its name read down the rail's length — exempt from the pane
+    // floor, since it holds no transcript to fit.
+    return (
+      <section
+        data-testid={`player-pane-${view.id}`}
+        data-collapsed="true"
+        className="flex min-h-0 w-9 flex-none flex-col items-center gap-2 rounded-lg border border-neutral-200 bg-white py-1.5 dark:border-neutral-800 dark:bg-neutral-900"
+      >
+        <button
+          {...toggleProps}
+          title={`Expand ${view.id}`}
+          aria-label={`Expand ${view.id}`}
+          aria-expanded={false}
+        >
+          <span aria-hidden="true">⇥</span>
+        </button>
+        {view.running ? (
+          <RunningMark running data-testid="player-running" title="Running" />
+        ) : null}
+        <span
+          data-testid={`player-name-${view.id}`}
+          title={view.id}
+          className="min-h-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm font-semibold [writing-mode:vertical-rl]"
+        >
+          {view.id}
+        </span>
+      </section>
+    );
+  }
 
   const segments = view.segments.slice(-windowSize);
 
@@ -368,6 +433,14 @@ export function PlayerPane({
             </span>
           ) : null}
         </span>
+        <button
+          {...toggleProps}
+          title={`Collapse ${view.id}`}
+          aria-label={`Collapse ${view.id}`}
+          aria-expanded
+        >
+          <span aria-hidden="true">⇤</span>
+        </button>
       </header>
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div

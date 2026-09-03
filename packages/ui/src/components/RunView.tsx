@@ -162,6 +162,8 @@ export function RunView({
   const queueIntent = useAppStore((state) => state.queueIntent);
   const closeIntent = useAppStore((state) => state.closeIntent);
   const stageDispatch = useAppStore((state) => state.stageDispatch);
+  const collapsedLanes = useAppStore((state) => state.collapsedLanes[session.id]);
+  const setLaneCollapsed = useAppStore((state) => state.setLaneCollapsed);
   const splitRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -339,6 +341,11 @@ export function RunView({
   // bound roster is the pane set for the session's whole life, so a
   // call that ends leaves its transcript where the reader last saw it.
   const lanes = session.players.map((player) => player.id);
+  // The lanes the reader folded to rails (run-view-116): this
+  // session's, kept while the app runs. The store unfolds one whose
+  // call opens as it folds the record (run-view-117), so the pane
+  // that comes into view below is already whole.
+  const collapsed = new Set(collapsedLanes ?? []);
   // A lane whose call just opened comes into view (run-view-7): the
   // grid scrolls only as far as it must and only when the pane is
   // out of sight, so a lane the reader is following never leaves
@@ -566,6 +573,10 @@ export function RunView({
                     }
                   }
                   meta={metaById.get(playerId)}
+                  collapsed={collapsed.has(playerId)}
+                  onCollapsedChange={(next) =>
+                    setLaneCollapsed(session.id, playerId, next)
+                  }
                 />
               ))}
             </div>

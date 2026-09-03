@@ -12,9 +12,13 @@ import { act, cleanup, fireEvent, render, screen,
 afterEach(cleanup);
 
 import { RunView } from "./RunView.js";
-import { toolLabel, unwrapShell } from "./PlayerPane.js";
+import { PlayerPane, toolLabel, unwrapShell } from "./PlayerPane.js";
 import { applyRecords, initialSessionView } from "../state/reducer.js";
-import { setClientForTests, useAppStore } from "../state/store.js";
+import {
+  deliverServerMessageForTests,
+  setClientForTests,
+  useAppStore,
+} from "../state/store.js";
 import type {
   DerivedIntent,
   IntentInfo,
@@ -1676,5 +1680,141 @@ describe("run-view-4: a runner's shell wrapper", () => {
     expect(unwrapShell("ls -la")).toBe("ls -la");
     expect(toolLabel("command_execution")).toBe("shell");
     expect(toolLabel("Bash")).toBe("Bash");
+  });
+});
+
+describe("run-view-116/117: a lane folds to a rail and returns for its call", () => {
+  beforeEach(() => {
+    useAppStore.setState({ collapsedLanes: {} });
+  });
+
+  test("the header's control folds the pane to a rail, focus handed on", () => {
+    renderRun(TURN_ONE);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse dev.reviewer" }));
+    const rail = screen.getByTestId("player-pane-dev.reviewer");
+    expect(rail.dataset.collapsed).toBe("true");
+    // A narrow column exempt from the pane floor, naming the lane and
+    // offering the way back; the other lane keeps its floor and the
+    // slack (run-view-116).
+    expect(rail.className).toContain("w-9");
+    expect(rail.className).not.toContain("min-w-[280px]");
+    const name = within(rail).getByTestId("player-name-dev.reviewer");
+    expect(name.textContent).toBe("dev.reviewer");
+    expect(name.className).toContain("writing-mode:vertical-rl");
+    expect(name.className).toContain("text-ellipsis");
+    expect(within(rail).queryByTestId("player-running")).toBeNull();
+    const expand = within(rail).getByRole("button", { name: "Expand dev.reviewer" });
+    expect(document.activeElement).toBe(expand);
+    expect(screen.getByTestId("player-pane-dev.coder").className).toContain(
+      "min-w-[280px]",
+    );
+    expect(useAppStore.getState().collapsedLanes.s1).toEqual(["dev.reviewer"]);
+
+    fireEvent.click(expand);
+    const pane = screen.getByTestId("player-pane-dev.reviewer");
+    expect(pane.dataset.collapsed).toBeUndefined();
+    expect(document.activeElement).toBe(
+      within(pane).getByRole("button", { name: "Collapse dev.reviewer" }),
+    );
+    expect(useAppStore.getState().collapsedLanes.s1).toEqual([]);
+  });
+
+  test("the rail wears the running mark while the lane's call is open", () => {
+    render(
+      <PlayerPane
+        view={{ id: "dev.reviewer", running: true, segments: [] }}
+        collapsed
+      />,
+    );
+    const rail = screen.getByTestId("player-pane-dev.reviewer");
+    expect(within(rail).getByTestId("player-running").dataset.running).toBe("true");
+  });
+
+  /** The reviewer's call opens (run-view-117): the record that turns
+   * its lane running, delivered as the client would, then the view
+   * the fold produced. */
+  function openReviewerCall(idle: ReturnType<typeof applyRecords>) {
+    act(() => {
+      deliverServerMessageForTests({
+        type: "record",
+        channel: "session",
+        sessionId: "s1",
+        seq: 90,
+        record: {
+          type: "player_prompt",
+          turnId: 2,
+          timestamp: Date.now(),
+          playerId: "dev.reviewer",
+          prompt: "Review the change",
+        },
+      });
+    });
+    return {
+      ...idle,
+      players: {
+        ...idle.players,
+        "dev.reviewer": { ...idle.players["dev.reviewer"], running: true },
+      },
+    };
+  }
+
+  test("a collapsed lane opens itself when its call opens, per session", () => {
+    useAppStore.setState({
+      collapsedLanes: { s1: ["dev.reviewer"], s2: ["dev.reviewer"] },
+    });
+    const idle = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+    const props = {
+      session: SESSION,
+      composer: { queued: [] },
+      connected: true,
+      onSubmit: async () => {},
+      onAbort: () => {},
+      onRemoveQueued: () => {},
+      onDismissError: () => {},
+    };
+    const { rerender } = render(<RunView {...props} view={idle} />);
+    expect(screen.getByTestId("player-pane-dev.reviewer").dataset.collapsed).toBe(
+      "true",
+    );
+    rerender(<RunView {...props} view={openReviewerCall(idle)} />);
+    const pane = screen.getByTestId("player-pane-dev.reviewer");
+    expect(pane.dataset.collapsed).toBeUndefined();
+    const collapse = within(pane).getByRole("button", { name: "Collapse dev.reviewer" });
+    // The other session's set stands; the reader's focus — in the
+    // composer, where the view put it — was not taken (run-view-117).
+    expect(useAppStore.getState().collapsedLanes).toEqual({
+      s1: [],
+      s2: ["dev.reviewer"],
+    });
+    expect(document.activeElement).not.toBe(collapse);
+    // Folding a lane whose call is already open stands: only the
+    // call's opening unfolds it.
+    fireEvent.click(collapse);
+    expect(screen.getByTestId("player-pane-dev.reviewer").dataset.collapsed).toBe(
+      "true",
+    );
+    expect(useAppStore.getState().collapsedLanes.s1).toEqual(["dev.reviewer"]);
+  });
+
+  test("a self-opening lane carries focus from the rail's control it removes", () => {
+    useAppStore.setState({ collapsedLanes: { s1: ["dev.reviewer"] } });
+    const idle = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+    const props = {
+      session: SESSION,
+      composer: { queued: [] },
+      connected: true,
+      onSubmit: async () => {},
+      onAbort: () => {},
+      onRemoveQueued: () => {},
+      onDismissError: () => {},
+    };
+    const { rerender } = render(<RunView {...props} view={idle} />);
+    act(() => {
+      screen.getByRole("button", { name: "Expand dev.reviewer" }).focus();
+    });
+    rerender(<RunView {...props} view={openReviewerCall(idle)} />);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Collapse dev.reviewer" }),
+    );
   });
 });
