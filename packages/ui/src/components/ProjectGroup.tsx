@@ -36,6 +36,7 @@ import { SourcesBand } from "./SourcesTabs.js";
 import { openSourceIntents } from "./ForgeItemRow.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { RecordRow } from "./RecordRow.js";
+import { ResizableFrame } from "./ResizableFrame.js";
 
 // ---------------------------------------------------------------------------
 // Copy and formatting
@@ -362,8 +363,13 @@ function RecordHistoryRow({
 
 /** The History frame's height in rows (dashboard-27): every loaded row
  * lists inside it, and it scrolls once the rows exceed it. Each row is
- * `h-6` (1.5rem), so eight rows are the frame's `max-h-48` (12rem). */
+ * `h-6` (1.5rem) tall, so the frame's height counts in rows exactly —
+ * eight by default, four to twenty-four once the reader has pulled its
+ * bottom edge (DR-030). */
+const HISTORY_ROW = 24;
 const HISTORY_FRAME = 8;
+const HISTORY_MIN = 4;
+const HISTORY_MAX = 24;
 
 function HistoryBand({
   project,
@@ -389,7 +395,10 @@ function HistoryBand({
   // rows wait (dashboard-27): paging keeps its semantics, and the
   // group's height never grows past the frame.
   const older = more || inFlight;
-  const overflowing = rows.length + (older ? 1 : 0) > HISTORY_FRAME;
+  // The cut edges and the frame's own focus stand while the rows run
+  // past it (dashboard-27); the frame measures that and says so, so a
+  // frame the reader resized answers for its new height.
+  const [overflowing, setOverflowing] = useState(false);
   const fetchOlder = () => {
     if (more && !inFlight) void loadHistory(project.id, true);
   };
@@ -405,60 +414,64 @@ function HistoryBand({
         </div>
       ) : (
         // The cut edges draw only where the frame overflows, so a short
-        // history reads as a plain list.
-        <div
-          className={
+        // history reads as a plain list, and the grip beneath them is
+        // the frame's own (DR-030).
+        <ResizableFrame
+          as="ul"
+          frameId={`history:${project.id}`}
+          label="Resize History"
+          unit={HISTORY_ROW}
+          defaultSteps={HISTORY_FRAME}
+          minSteps={HISTORY_MIN}
+          maxSteps={HISTORY_MAX}
+          onOverflow={setOverflowing}
+          data-testid={`history-frame-${project.id}`}
+          aria-label="History"
+          // A frame that scrolls is reachable by keyboard as well as
+          // through the controls it holds (DR-010 §5).
+          tabIndex={overflowing ? 0 : undefined}
+          className={`flex flex-col rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
             overflowing
               ? "border-y border-neutral-200 dark:border-neutral-800"
-              : undefined
-          }
+              : ""
+          }`}
         >
-          <ul
-            data-testid={`history-frame-${project.id}`}
-            data-overflowing={overflowing ? "true" : undefined}
-            aria-label="History"
-            // A frame that scrolls is reachable by keyboard as well as
-            // through the controls it holds (DR-010 §5).
-            tabIndex={overflowing ? 0 : undefined}
-            className="relative flex max-h-48 flex-col overflow-y-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-          >
-            {rows.map((row) =>
-              row.kind === "intent" ? (
-                <IntentHistoryRow
-                  key={`intent:${row.id}`}
-                  intent={row.intent}
-                  now={now}
-                />
-              ) : (
-                <RecordHistoryRow
-                  key={`record:${row.id}`}
-                  record={row.record}
-                  now={now}
-                  onOpen={() =>
-                    onOpenIntent(
-                      project.id,
-                      row.record.path,
-                      `record-row-${row.record.id}`,
-                    )
-                  }
-                />
-              ),
-            )}
-            {older ? (
-              <li className="flex h-6 shrink-0 items-center">
-                <button
-                  type="button"
-                  data-testid={`history-older-${project.id}`}
-                  disabled={inFlight}
-                  onClick={fetchOlder}
-                  className={`${TEXT_LINK} text-xs disabled:opacity-50`}
-                >
-                  {inFlight ? "Loading…" : "Older…"}
-                </button>
-              </li>
-            ) : null}
-          </ul>
-        </div>
+          {rows.map((row) =>
+            row.kind === "intent" ? (
+              <IntentHistoryRow
+                key={`intent:${row.id}`}
+                intent={row.intent}
+                now={now}
+              />
+            ) : (
+              <RecordHistoryRow
+                key={`record:${row.id}`}
+                record={row.record}
+                now={now}
+                onOpen={() =>
+                  onOpenIntent(
+                    project.id,
+                    row.record.path,
+                    `record-row-${row.record.id}`,
+                  )
+                }
+              />
+            ),
+          )}
+          {older ? (
+            <li className="flex h-6 shrink-0 items-center">
+              <button
+                type="button"
+                data-testid={`history-older-${project.id}`}
+                disabled={inFlight}
+                onClick={fetchOlder}
+                className={`${TEXT_LINK} text-xs disabled:opacity-50`}
+              >
+                {inFlight ? "Loading…" : "Older…"}
+              </button>
+            </li>
+          ) : null}
+        </ResizableFrame>
       )}
     </div>
   );

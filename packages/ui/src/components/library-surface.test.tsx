@@ -490,6 +490,98 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
     );
   });
 
+  /** jsdom measures nothing, so the capped box is given its cap and
+   * content taller than it — the state the grip stands in. */
+  function sized(scrollHeight: number): () => void {
+    const prior = (["clientHeight", "scrollHeight"] as const).map(
+      (name) =>
+        [name, Object.getOwnPropertyDescriptor(HTMLElement.prototype, name)] as const,
+    );
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return parseFloat(this.style.maxHeight) || 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.style.maxHeight ? scrollHeight : 0;
+      },
+    });
+    return () => {
+      for (const [name, descriptor] of prior) {
+        if (descriptor) Object.defineProperty(HTMLElement.prototype, name, descriptor);
+        else Reflect.deleteProperty(HTMLElement.prototype, name);
+      }
+      useAppStore.setState({ frameHeights: {} });
+    };
+  }
+
+  test("the open stage's box is a frame the reader sets, one height for the card", async () => {
+    const REM = 16;
+    const restore = sized(1000);
+    try {
+      useAppStore.setState({ frameHeights: {} });
+      withArtifacts(async () => ARTIFACTS);
+      renderLibrary();
+      const row = screen.getByTestId("stages-code");
+      fireEvent.click(within(row).getByRole("button", { name: "Source" }));
+      await vi.waitFor(() =>
+        expect(screen.getByTestId("pipeline-code").textContent).toContain(
+          "The coder writes.",
+        ),
+      );
+      const box = screen.getByTestId("stage-box-code");
+      expect(box.style.maxHeight).toBe(`${24 * REM}px`);
+
+      // The bottom edge is a control naming the stage it caps, and it
+      // reports the height in the box's own unit (DR-010 §7).
+      const grip = screen.getByTestId("stage-box-code-grip");
+      expect(grip.getAttribute("role")).toBe("separator");
+      expect(grip.getAttribute("aria-orientation")).toBe("horizontal");
+      expect(grip.getAttribute("aria-label")).toBe("Resize the Source stage");
+      expect(grip.getAttribute("aria-valuenow")).toBe("24");
+      expect(grip.getAttribute("aria-valuemin")).toBe("8");
+      expect(grip.getAttribute("aria-valuemax")).toBe("48");
+      expect(grip.getAttribute("tabindex")).toBe("0");
+
+      // Dragged, the edge follows the pointer a step at a time.
+      fireEvent.pointerDown(grip, { clientY: 40 });
+      fireEvent.pointerMove(grip, { clientY: 40 + 8 * REM });
+      fireEvent.pointerUp(grip, { clientY: 40 + 8 * REM });
+      expect(box.style.maxHeight).toBe(`${32 * REM}px`);
+
+      // Arrow keys move it a step at a time; neither bound is passed.
+      for (let nudge = 0; nudge < 60; nudge += 1) {
+        fireEvent.keyDown(grip, { key: "ArrowDown" });
+      }
+      expect(box.style.maxHeight).toBe(`${48 * REM}px`);
+      for (let nudge = 0; nudge < 60; nudge += 1) {
+        fireEvent.keyDown(grip, { key: "ArrowUp" });
+      }
+      expect(box.style.maxHeight).toBe(`${8 * REM}px`);
+
+      // A double-click restores the default.
+      fireEvent.doubleClick(grip);
+      expect(box.style.maxHeight).toBe(`${24 * REM}px`);
+
+      // The height is remembered for the playbook, one height serving
+      // its stages (DR-030).
+      fireEvent.keyDown(grip, { key: "ArrowDown" });
+      expect(useAppStore.getState().frameHeights["stage:code"]).toBe(25);
+      fireEvent.click(within(row).getByRole("button", { name: "Gears" }));
+      expect(screen.getByTestId("stage-box-code").style.maxHeight).toBe(
+        `${25 * REM}px`,
+      );
+      expect(
+        screen.getByTestId("stage-box-code-grip").getAttribute("aria-label"),
+      ).toBe("Resize the Gears stage");
+    } finally {
+      restore();
+    }
+  });
+
   test("a failed request leaves its message in the open stage", async () => {
     withArtifacts(async () => {
       throw new Error("no registry beside /tmp/code");

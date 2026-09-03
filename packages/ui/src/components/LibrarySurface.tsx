@@ -25,6 +25,7 @@ import { BindingEditorPopover } from "./BindingEditor.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
+import { ResizableFrame } from "./ResizableFrame.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 
@@ -127,12 +128,38 @@ function StageRow<Key extends string>({
   );
 }
 
-/** The open stage's artifact, in the box beneath the row. */
-function StageBox({ children }: { children: ReactNode }) {
+/** The open stage's box, in rem steps (playbook-library-22): 24rem
+ * standing, 8rem to 48rem once the reader has pulled its bottom edge,
+ * one height serving a card's stages (DR-030). */
+const STAGE_UNIT = 16;
+const STAGE_DEFAULT = 24;
+const STAGE_MIN = 8;
+const STAGE_MAX = 48;
+
+/** The open stage's artifact, in the capped frame beneath the row. */
+function StageBox({
+  id,
+  stage,
+  children,
+}: {
+  id: string;
+  /** The open stage's label, so the grip names what it resizes. */
+  stage: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="relative max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+    <ResizableFrame
+      frameId={`stage:${id}`}
+      label={`Resize the ${stage} stage`}
+      unit={STAGE_UNIT}
+      defaultSteps={STAGE_DEFAULT}
+      minSteps={STAGE_MIN}
+      maxSteps={STAGE_MAX}
+      data-testid={`stage-box-${id}`}
+      className="overflow-x-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950"
+    >
       {children}
-    </div>
+    </ResizableFrame>
   );
 }
 
@@ -174,7 +201,10 @@ function PlaybookPipeline({ playbookId }: { playbookId: string }) {
         testId={`stages-${playbookId}`}
       />
       {open ? (
-        <StageBox>
+        <StageBox
+          id={playbookId}
+          stage={STAGES.find((entry) => entry.key === open)?.label ?? open}
+        >
           <div
             className="flex flex-col gap-2"
             data-testid={`pipeline-${playbookId}`}
@@ -464,7 +494,10 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
         testId="example-stages"
       />
       {content !== undefined ? (
-        <StageBox>
+        <StageBox
+          id="example"
+          stage={EXAMPLE_STAGES.find((entry) => entry.key === stage)?.label ?? ""}
+        >
           {stage === "fsm" || stage === "source" ? (
             <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
               {content}

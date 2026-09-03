@@ -51,6 +51,36 @@ test("playbook-library-41: list, enable a built-in, work the stage row, remove",
   await stage("State machine").click();
   await expect(page.getByTestId("pipeline-code")).toHaveCount(0);
 
+  // The open stage's artifact sits in a frame the reader sets: the
+  // grip names the stage it caps, drags the box taller, and the height
+  // stands after a reload (DR-030).
+  await stage("Source").click();
+  const stageBox = page.getByTestId("stage-box-code");
+  const grip = page.getByTestId("stage-box-code-grip");
+  const heightOf = (el: HTMLElement) => el.getBoundingClientRect().height;
+  await expect(grip).toHaveAttribute("aria-label", "Resize the Source stage");
+  await expect(grip).toHaveAttribute("aria-valuenow", "24");
+  const capped = await stageBox.evaluate(heightOf);
+  await grip.hover();
+  const handle = (await grip.boundingBox())!;
+  const x = handle.x + handle.width / 2;
+  const y = handle.y + handle.height / 2;
+  await page.mouse.down();
+  await page.mouse.move(x, y + 64, { steps: 8 });
+  await page.mouse.up();
+  await expect(grip).toHaveAttribute("aria-valuenow", "28");
+  expect(await stageBox.evaluate(heightOf)).toBeCloseTo(capped + 64, 0);
+
+  await page.reload();
+  await nav(page, "Playbooks").click();
+  await stage("Source").click();
+  await expect(page.getByTestId("stage-box-code-grip")).toHaveAttribute(
+    "aria-valuenow",
+    "28",
+  );
+  await stage("Source").click();
+  await expect(page.getByTestId("pipeline-code")).toHaveCount(0);
+
   // Removing asks once — Remove or Keep — then the config no longer
   // names it.
   await page.getByRole("button", { name: "Remove /review from the config" }).click();

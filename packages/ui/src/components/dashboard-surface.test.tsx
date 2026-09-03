@@ -1568,81 +1568,193 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
       }),
     }));
 
-  test("every loaded row lists inside the frame, which scrolls past eight rows", async () => {
-    commandMock.mockImplementation(async (type: string) => {
-      if (type === "ledger.history") return { intents: manyRows(10), more: false };
-      if (type === "ledger.get") return useAppStore.getState().ledger;
-      return {};
-    });
-    seed({ projects: [PROJECTS[0]], history: {} });
-    renderSurface();
-    await screen.findByTestId("history-row-m0");
-    // Ten loaded rows, all in the frame: none held back for a control.
-    expect(ids()).toHaveLength(10);
-    const frame = screen.getByTestId("history-frame-p1");
-    expect(frame.className).toContain("max-h-48");
-    expect(frame.className).toContain("overflow-y-auto");
-    // Every row is one frame unit tall, so eight rows fill it exactly,
-    // and the overflowing frame draws its cut edges and takes focus.
-    for (const row of screen.getAllByTestId(/^history-row-/)) {
-      expect(row.className).toContain("h-6");
-    }
-    expect(frame.getAttribute("data-overflowing")).toBe("true");
-    expect(frame.getAttribute("tabindex")).toBe("0");
-    expect(frame.parentElement?.className).toContain("border-y");
-    // Nothing waits unfetched: no control, one fetch.
-    expect(screen.queryByTestId("history-older-p1")).toBeNull();
-    expect(callsOf("ledger.history")).toHaveLength(1);
-  });
+  // The frame measures whether content runs past it (dashboard-27),
+  // and jsdom reports every box as zero — so the frame's cap and its
+  // rows are given their real sizes here.
+  const FRAME_ID = "history:p1";
+  const ROW = 24;
 
-  test("a short history is a plain list; Older… at the frame's end fetches the next page", async () => {
-    commandMock.mockImplementation(async (type: string, fields) => {
-      if (type === "ledger.history") {
-        return (fields as { before?: unknown }).before
-          ? { intents: manyRows(20, 20), more: false }
-          : { intents: manyRows(20), more: true };
+  describe("the frame the reader sets", () => {
+    let restore = () => {};
+
+    beforeEach(() => {
+      useAppStore.setState({ frameHeights: {} });
+      const prior = (["clientHeight", "scrollHeight"] as const).map(
+        (name) =>
+          [
+            name,
+            Object.getOwnPropertyDescriptor(HTMLElement.prototype, name),
+          ] as const,
+      );
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+        configurable: true,
+        get(this: HTMLElement) {
+          return parseFloat(this.style.maxHeight) || 0;
+        },
+      });
+      Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+        configurable: true,
+        get(this: HTMLElement) {
+          return this.children.length * ROW;
+        },
+      });
+      restore = () => {
+        for (const [name, descriptor] of prior) {
+          if (descriptor) {
+            Object.defineProperty(HTMLElement.prototype, name, descriptor);
+          } else {
+            Reflect.deleteProperty(HTMLElement.prototype, name);
+          }
+        }
+      };
+    });
+
+    afterEach(() => {
+      restore();
+      useAppStore.setState({ frameHeights: {} });
+    });
+
+    test("every loaded row lists inside the frame, which scrolls past eight rows", async () => {
+      commandMock.mockImplementation(async (type: string) => {
+        if (type === "ledger.history") return { intents: manyRows(10), more: false };
+        if (type === "ledger.get") return useAppStore.getState().ledger;
+        return {};
+      });
+      seed({ projects: [PROJECTS[0]], history: {} });
+      renderSurface();
+      await screen.findByTestId("history-row-m0");
+      // Ten loaded rows, all in the frame: none held back for a control.
+      expect(ids()).toHaveLength(10);
+      const frame = screen.getByTestId("history-frame-p1");
+      // Every row is one frame unit tall, so the frame's cap counts in
+      // rows exactly: eight of them by default.
+      expect(frame.style.maxHeight).toBe(`${8 * ROW}px`);
+      expect(frame.className).toContain("overflow-y-auto");
+      for (const row of screen.getAllByTestId(/^history-row-/)) {
+        expect(row.className).toContain("h-6");
       }
-      if (type === "ledger.get") return useAppStore.getState().ledger;
-      return {};
+      // The overflowing frame draws its cut edges and takes focus.
+      expect(frame.getAttribute("data-overflowing")).toBe("true");
+      expect(frame.getAttribute("tabindex")).toBe("0");
+      expect(frame.className).toContain("border-y");
+      // Nothing waits unfetched: no control, one fetch.
+      expect(screen.queryByTestId("history-older-p1")).toBeNull();
+      expect(callsOf("ledger.history")).toHaveLength(1);
     });
-    seed({ projects: [PROJECTS[0]], history: {} });
-    renderSurface();
-    await screen.findByTestId("history-row-m0");
-    expect(ids()).toHaveLength(20);
-    const frame = screen.getByTestId("history-frame-p1");
-    // The control is the frame's last item, reached by tabbing through
-    // the rows, and it fetches with the cursor of the last served row.
-    const older = screen.getByTestId("history-older-p1");
-    expect(older.textContent).toBe("Older…");
-    expect(frame.lastElementChild?.contains(older)).toBe(true);
-    await act(async () => {
-      fireEvent.click(older);
-    });
-    expect(callsOf("ledger.history")[1]).toEqual({
-      projectId: "p1",
-      before: { closedAt: NOW - 20 * MIN, intentId: "m19" },
-    });
-    expect(await screen.findByTestId("history-row-m39")).toBeTruthy();
-    expect(ids()).toHaveLength(40);
-    // Nothing left behind: the control leaves, the frame stays.
-    expect(screen.queryByTestId("history-older-p1")).toBeNull();
-    expect(frame.getAttribute("data-overflowing")).toBe("true");
-  });
 
-  test("a history within eight rows draws no cut edges and takes no focus", async () => {
-    commandMock.mockImplementation(async (type: string) => {
-      if (type === "ledger.history") return { intents: manyRows(8), more: false };
-      if (type === "ledger.get") return useAppStore.getState().ledger;
-      return {};
+    test("a short history is a plain list; Older… at the frame's end fetches the next page", async () => {
+      commandMock.mockImplementation(async (type: string, fields) => {
+        if (type === "ledger.history") {
+          return (fields as { before?: unknown }).before
+            ? { intents: manyRows(20, 20), more: false }
+            : { intents: manyRows(20), more: true };
+        }
+        if (type === "ledger.get") return useAppStore.getState().ledger;
+        return {};
+      });
+      seed({ projects: [PROJECTS[0]], history: {} });
+      renderSurface();
+      await screen.findByTestId("history-row-m0");
+      expect(ids()).toHaveLength(20);
+      const frame = screen.getByTestId("history-frame-p1");
+      // The control is the frame's last item, reached by tabbing through
+      // the rows, and it fetches with the cursor of the last served row.
+      const older = screen.getByTestId("history-older-p1");
+      expect(older.textContent).toBe("Older…");
+      expect(frame.lastElementChild?.contains(older)).toBe(true);
+      await act(async () => {
+        fireEvent.click(older);
+      });
+      expect(callsOf("ledger.history")[1]).toEqual({
+        projectId: "p1",
+        before: { closedAt: NOW - 20 * MIN, intentId: "m19" },
+      });
+      expect(await screen.findByTestId("history-row-m39")).toBeTruthy();
+      expect(ids()).toHaveLength(40);
+      // Nothing left behind: the control leaves, the frame stays.
+      expect(screen.queryByTestId("history-older-p1")).toBeNull();
+      expect(frame.getAttribute("data-overflowing")).toBe("true");
+      expect(frame.style.maxHeight).toBe(`${8 * ROW}px`);
     });
-    seed({ projects: [PROJECTS[0]], history: {} });
-    renderSurface();
-    await screen.findByTestId("history-row-m7");
-    const frame = screen.getByTestId("history-frame-p1");
-    expect(ids()).toHaveLength(8);
-    expect(frame.getAttribute("data-overflowing")).toBeNull();
-    expect(frame.getAttribute("tabindex")).toBeNull();
-    expect(frame.parentElement?.className ?? "").not.toContain("border-y");
+
+    test("a history within eight rows draws no cut edges, takes no focus, and offers no grip", async () => {
+      commandMock.mockImplementation(async (type: string) => {
+        if (type === "ledger.history") return { intents: manyRows(8), more: false };
+        if (type === "ledger.get") return useAppStore.getState().ledger;
+        return {};
+      });
+      seed({ projects: [PROJECTS[0]], history: {} });
+      renderSurface();
+      await screen.findByTestId("history-row-m7");
+      const frame = screen.getByTestId("history-frame-p1");
+      expect(ids()).toHaveLength(8);
+      expect(frame.getAttribute("data-overflowing")).toBeNull();
+      expect(frame.getAttribute("tabindex")).toBeNull();
+      expect(frame.className).not.toContain("border-y");
+      // Eight rows hold everything: nothing to page through, so no
+      // edge to pull (DR-030).
+      expect(screen.queryByTestId("history-frame-p1-grip")).toBeNull();
+    });
+
+    test("the grip sets the frame between four and twenty-four rows, and it is remembered", async () => {
+      commandMock.mockImplementation(async (type: string) => {
+        if (type === "ledger.history") return { intents: manyRows(30), more: false };
+        if (type === "ledger.get") return useAppStore.getState().ledger;
+        return {};
+      });
+      seed({ projects: [PROJECTS[0]], history: {} });
+      renderSurface();
+      await screen.findByTestId("history-row-m0");
+      const frame = screen.getByTestId("history-frame-p1");
+      const grip = screen.getByTestId("history-frame-p1-grip");
+      // The frame's bottom edge is a control that names itself and
+      // reports the height in the frame's own unit (DR-010 §7).
+      expect(grip.getAttribute("role")).toBe("separator");
+      expect(grip.getAttribute("aria-orientation")).toBe("horizontal");
+      expect(grip.getAttribute("aria-label")).toBe("Resize History");
+      expect(grip.getAttribute("aria-valuenow")).toBe("8");
+      expect(grip.getAttribute("aria-valuemin")).toBe("4");
+      expect(grip.getAttribute("aria-valuemax")).toBe("24");
+      expect(grip.getAttribute("tabindex")).toBe("0");
+
+      // Dragged, the edge follows the pointer a row at a time.
+      fireEvent.pointerDown(grip, { clientY: 200 });
+      fireEvent.pointerMove(grip, { clientY: 200 + 2 * ROW });
+      fireEvent.pointerUp(grip, { clientY: 200 + 2 * ROW });
+      expect(frame.style.maxHeight).toBe(`${10 * ROW}px`);
+      expect(grip.getAttribute("aria-valuenow")).toBe("10");
+
+      // Arrow keys move it a row at a time; neither bound is passed.
+      fireEvent.keyDown(grip, { key: "ArrowUp" });
+      expect(frame.style.maxHeight).toBe(`${9 * ROW}px`);
+      for (let nudge = 0; nudge < 20; nudge += 1) {
+        fireEvent.keyDown(grip, { key: "ArrowUp" });
+      }
+      expect(frame.style.maxHeight).toBe(`${4 * ROW}px`);
+      for (let nudge = 0; nudge < 40; nudge += 1) {
+        fireEvent.keyDown(grip, { key: "ArrowDown" });
+      }
+      expect(frame.style.maxHeight).toBe(`${24 * ROW}px`);
+
+      // A double-click restores the eight.
+      fireEvent.doubleClick(grip);
+      expect(frame.style.maxHeight).toBe(`${8 * ROW}px`);
+
+      // Chrome state is preference, not project state: the height set
+      // here survives a remount (DR-030).
+      fireEvent.keyDown(grip, { key: "ArrowDown" });
+      fireEvent.keyDown(grip, { key: "ArrowDown" });
+      expect(useAppStore.getState().frameHeights[FRAME_ID]).toBe(10);
+      cleanup();
+      renderSurface();
+      await screen.findByTestId("history-row-m0");
+      expect(screen.getByTestId("history-frame-p1").style.maxHeight).toBe(
+        `${10 * ROW}px`,
+      );
+      expect(
+        screen.getByTestId("history-frame-p1-grip").getAttribute("aria-valuenow"),
+      ).toBe("10");
+    });
   });
 
   test("a record orders by the date its status line carries, else file time", () => {

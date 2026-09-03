@@ -271,6 +271,56 @@ test.describe("the History frame", () => {
     expect(await frame.evaluate(heightOf)).toBeCloseTo(frameHeight, 0);
     expect(await frame.evaluate(scrolls)).toBe(true);
   });
+
+  test("dashboard-48: the reader pulls the frame's edge, and it stays pulled", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await nav(page, "Dashboard").click();
+    const projectId = app.projectId!;
+    const frame = page.getByTestId(`history-frame-${projectId}`);
+    const grip = page.getByTestId(`history-frame-${projectId}-grip`);
+    const heightOf = (el: HTMLElement) => el.getBoundingClientRect().height;
+    const scrolls = (el: HTMLElement) => el.scrollHeight > el.clientHeight;
+
+    // The grip stands while the rows run past the frame, names itself,
+    // and reports the height in rows.
+    await expect(grip).toBeVisible();
+    await expect(grip).toHaveAttribute("aria-label", "Resize History");
+    await expect(grip).toHaveAttribute("aria-valuenow", "8");
+    await expect(grip).toHaveAttribute("aria-valuemin", "4");
+    await expect(grip).toHaveAttribute("aria-valuemax", "24");
+    const rowHeight = await frame
+      .getByTestId(/^history-row-/)
+      .first()
+      .evaluate(heightOf);
+    const before = await frame.evaluate(heightOf);
+
+    // Dragged down two rows, the frame is two rows taller and still
+    // scrolls what it cannot show.
+    await grip.hover();
+    const handle = (await grip.boundingBox())!;
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await page.mouse.down();
+    await page.mouse.move(x, y + 2 * rowHeight, { steps: 8 });
+    await page.mouse.up();
+    await expect(grip).toHaveAttribute("aria-valuenow", "10");
+    expect(await frame.evaluate(heightOf)).toBeCloseTo(before + 2 * rowHeight, 0);
+    expect(await frame.evaluate(scrolls)).toBe(true);
+
+    // Chrome state is preference, not project state (DR-030): a reload
+    // finds the frame where the reader left it.
+    await page.reload();
+    await nav(page, "Dashboard").click();
+    await expect(frame).toBeVisible();
+    expect(await frame.evaluate(heightOf)).toBeCloseTo(before + 2 * rowHeight, 0);
+    await expect(page.getByTestId(`history-frame-${projectId}-grip`)).toHaveAttribute(
+      "aria-valuenow",
+      "10",
+    );
+  });
 });
 
 test("dashboard-39: the row menu moves, removes with Undo, and closes on Escape", async ({
