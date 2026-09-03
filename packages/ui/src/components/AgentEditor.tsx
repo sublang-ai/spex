@@ -16,6 +16,7 @@ import {
 } from "@sublang/spex-core/protocol";
 
 import type { AgentPatch } from "../lib/config-ops.js";
+import { useFitInBox } from "../lib/popover-fit.js";
 import { FAST_MODE_MARK, type ChipAgent } from "./AgentChip.js";
 
 export const ADAPTERS = adapterNameSchema.options;
@@ -397,7 +398,9 @@ export interface AgentEditorPopoverProps extends AgentEditorProps {
  * carrying the full editor, so tuning an agent never forces a
  * surface switch. Focus discipline per DR-010 §6: focus moves into
  * the dialog on mount and returns to the opener on unmount; Escape
- * and outside clicks close. */
+ * and outside clicks close. It lies inside the box that must show it
+ * at every width, however small the anchor it hangs from
+ * (settings-33). */
 export function AgentEditorPopover({
   title,
   direction,
@@ -406,6 +409,7 @@ export function AgentEditorPopover({
   ...editorProps
 }: AgentEditorPopoverProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  useFitInBox(rootRef);
 
   useEffect(() => {
     const opener =
@@ -444,7 +448,10 @@ export function AgentEditorPopover({
       role="dialog"
       aria-label={title}
       data-testid="agent-popover"
-      className={`absolute right-0 z-20 w-96 rounded-lg border border-neutral-200 bg-white p-2 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900 ${
+      // The width is a wish, not a demand: the box that must show it
+      // bounds both axes, and the editor scrolls its own content
+      // rather than leaving the box (settings-33, DR-041 §9).
+      className={`absolute right-0 z-20 w-96 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-neutral-200 bg-white p-2 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900 ${
         direction === "down" ? "top-full mt-1" : "bottom-full mb-1"
       }`}
     >

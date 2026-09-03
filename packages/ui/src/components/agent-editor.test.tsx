@@ -385,6 +385,55 @@ describe("DR-019/DR-010 §6: the popover's at-hand discipline", () => {
     fireEvent.mouseDown(document.body);
     expect(onClose).toHaveBeenCalled();
   });
+
+  test("it asks for no more width than the window can show", () => {
+    // The stylesheet's own floor under the measured placement
+    // (settings-33): the dialog never exceeds the window, and it
+    // scrolls its own content rather than leaving its box.
+    renderPopover();
+    const popover = screen.getByTestId("agent-popover");
+    expect(popover.className).toContain("max-w-[calc(100vw-1rem)]");
+    expect(popover.className).toContain("overflow-y-auto");
+  });
+
+  test("a dialog hanging out of its pane is moved inside it", () => {
+    // A simulated document measures nothing, so the boxes are given:
+    // a 264px pane and a dialog pinned to an anchor near its left
+    // edge, the case that clips at every real width (settings-33).
+    const pane = document.createElement("div");
+    pane.style.overflowX = "hidden";
+    pane.style.overflowY = "hidden";
+    document.body.appendChild(pane);
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      const box =
+        this === pane
+          ? { left: 56, top: 0, width: 264, height: 800 }
+          : this.getAttribute("data-testid") === "agent-popover"
+            ? { left: -140, top: 0, width: 248, height: 300 }
+            : { left: 0, top: 0, width: 0, height: 0 };
+      return { ...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top, toJSON: () => ({}) } as DOMRect;
+    };
+    try {
+      render(
+        <AgentEditorPopover
+          title="coder agent"
+          initial={{ adapter: "claude" }}
+          onSave={saver()}
+          onClose={vi.fn()}
+        />,
+        { container: pane },
+      );
+      const popover = screen.getByTestId("agent-popover");
+      expect(popover.style.maxWidth).toBe("248px");
+      expect(popover.style.maxHeight).toBe("784px");
+      // -140 → 64, the pane's left edge plus the inset.
+      expect(popover.style.transform).toBe("translate(204px, 8px)");
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = original;
+      pane.remove();
+    }
+  });
 });
 
 describe("DR-038: fast mode is offered where the runtime declares it", () => {

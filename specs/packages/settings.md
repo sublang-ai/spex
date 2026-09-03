@@ -128,6 +128,13 @@ The Settings surface shall scroll its sections inside its own box, which fills t
 
 - that box and the shortcut sheet's sideways-scrolling table [[settings-10](#settings-10)] are positioned boxes, so the screen-reader-only text they hold — the sheet's own caption — is contained by the box it sits in rather than being carried by the page.
 
+#### settings-33
+
+While the agent editor [[settings-1](#settings-1)] stands open as an anchored popover ([DR-009](../decisions/009-at-hand-interaction.md)), the popover shall lie inside the box that must show it — the nearest box that clips, else the window — at every pane width down to the 320-pixel floor ([DR-041](../decisions/041-chrome-that-fits.md)):
+
+- that box bounds the popover's width and height, and the editor scrolls its own content when the box is the shorter of the two;
+- an anchor too near an edge for the popover's side moves the popover along that edge instead of past it, because what leaves a pane to the left or above it never becomes scrollable.
+
 ## Internal Behavior
 
 ### Validation
@@ -228,14 +235,15 @@ Where the Settings surface renders against fixture state, the test suite shall a
 
 #### settings-29
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a demo config carrying a comment, when the journey edits Settings through the page, the test suite shall assert:
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a demo config carrying a comment, when the journey edits Settings and opens an agent editor through the page, the test suite shall assert:
 
 - the Captain editor shows the config's captain block and saving a changed model writes the file with the comment and key order kept, the surface showing the new value and the Saved status beside Save [[settings-1](#settings-1)] [[settings-4](#settings-4)] [[settings-7](#settings-7)] [[settings-6](#settings-6)];
 - the shortcut sheet lists the palette binding with the platform's modifier [[settings-10](#settings-10)];
 - the surface prints the served shell's version, never "dev" [[settings-31](#settings-31)];
 - an edit the fail-closed rules reject is refused with its message shown and the file left unchanged [[settings-2](#settings-2)];
 - the readiness panel lists one entry per adapter the config names [[settings-5](#settings-5)];
-- an edit made to the file on disk from outside the app is reflected on the surface without a reload [[settings-8](#settings-8)].
+- an edit made to the file on disk from outside the app is reflected on the surface without a reload [[settings-8](#settings-8)];
+- an agent editor opened at a role's control at the 320-pixel viewport floor stands wholly inside its surface's box, leaving the page scrolling in neither direction [[settings-33](#settings-33)].
 
 #### settings-30
 

@@ -117,4 +117,15 @@ describe("playbook-library-4: the binding editor is the house popover", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(anchor);
   });
+
+  test("it asks for no more width than the window can show", () => {
+    // The stylesheet's floor under the measured placement
+    // (playbook-library-43): 18rem is a wish, and the dialog scrolls
+    // its own content rather than widening the Playbooks surface.
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId("anchor"));
+    const dialog = screen.getByTestId("binding-editor-coder");
+    expect(dialog.className).toContain("max-w-[calc(100vw-1rem)]");
+    expect(dialog.className).toContain("overflow-y-auto");
+  });
 });

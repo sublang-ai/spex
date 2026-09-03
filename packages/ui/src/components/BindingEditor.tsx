@@ -12,6 +12,7 @@ import type {
   SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
+import { useFitInBox } from "../lib/popover-fit.js";
 import { usePopover } from "../lib/usePopover.js";
 
 export interface BindingChange {
@@ -96,6 +97,10 @@ export function BindingEditorPopover({
   // returns to the role's control on close; Escape and an outside
   // click close.
   const boxRef = usePopover<HTMLDivElement>(true, { anchorRef, onClose });
+  // And it lies inside the box that must show it, however narrow the
+  // pane or far along the roles row its control sits
+  // (playbook-library-43, DR-041 §9).
+  useFitInBox(boxRef);
   const lane = players.find((player) => player.id === draft.playerId);
   // Every other position this lane already answers: picking it here
   // joins that one conversation rather than opening a new one.
@@ -107,7 +112,7 @@ export function BindingEditorPopover({
       data-testid={`binding-editor-${role}`}
       role="dialog"
       aria-label={`Bind ${role}`}
-      className="absolute left-0 top-7 z-20 flex w-72 flex-col gap-2 rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+      className="absolute left-0 top-7 z-20 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
     >
       <label className="flex flex-col gap-1 text-xs">
         <span className="text-neutral-500 dark:text-neutral-400">

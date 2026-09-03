@@ -40,6 +40,12 @@ When the user edits a role's binding, the Library shall write which session play
 - Choosing a player another binding already names states which bindings those are, because equal ids deliberately share one conversation.
 - The editor is a popover anchored at the role's control, following the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6): focus enters it on open and returns to the control on close, and Escape, an outside click, and Cancel close it.
 
+#### playbook-library-43
+
+While the role-binding editor [[playbook-library-4](#playbook-library-4)] stands open, the Library shall keep it inside the box that must show it — the surface's own scroll box — at every width down to the 320-pixel floor ([DR-041](../decisions/041-chrome-that-fits.md)):
+
+- that box bounds the editor's width, and a control late in a wrapping roles row moves the editor along the box's edge rather than past it, so a form surface never scrolls sideways to reach it.
+
 #### playbook-library-38
 
 Where a role's bound player is named by more than one binding, the Library shall mark that role's binding as shared and name the other positions holding the lane ([DR-032](../decisions/032-session-players.md)), so a shared conversation is never mistaken for two separate ones.
@@ -277,4 +283,5 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - the built-ins absent from the config list beside them, and enabling one writes it to the config and lists it among the configured playbooks, after which the Captain home's slash menu offers its command [[playbook-library-34](#playbook-library-34)];
 - a playbook's stage row opens the stage pressed, swaps to another pressed beside it, and closes on a second press of the open one [[playbook-library-22](#playbook-library-22)];
 - the open stage's box carries a grip that names the stage, and a drag of it leaves the box taller with the height still standing after a reload [[playbook-library-22](#playbook-library-22)];
-- removing a configured playbook asks for the inline confirm — Remove or Keep [[playbook-library-26](#playbook-library-26)] — then leaves the config without it [[playbook-library-16](#playbook-library-16)].
+- removing a configured playbook asks for the inline confirm — Remove or Keep [[playbook-library-26](#playbook-library-26)] — then leaves the config without it [[playbook-library-16](#playbook-library-16)];
+- a role's binding editor opened at the 320-pixel viewport floor stands wholly inside the surface's box, which scrolls in neither direction [[playbook-library-43](#playbook-library-43)].
