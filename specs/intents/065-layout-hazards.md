@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress.
+Done.
 
 ## Intent
 
@@ -26,7 +26,7 @@ A three-lens review of the whole interface (height and scroll chains, width and 
 - [x] The Captain split divider lands where the pointer is, measured against the box the split applies to (run-view).
 - [x] The spec graph's hover card stays inside the graph pane at the minimum split (spec-view).
 - [x] The project palette's message stays reachable in a 400px-tall window (projects).
-- [ ] The fit journey measures the queue and the popovers at its widths and heights.
+- [x] The journeys measure the queue and the home popover at the fit journey's widths and heights, and the anchored editors, the forge row, the hover card, and the palette in their own journey at the floor width and a short window.
 
 ## Tasks
 
