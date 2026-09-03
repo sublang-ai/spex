@@ -46,9 +46,40 @@ test("playbook-library-41: list, enable a built-in, work the stage row, remove",
   await stage("State machine").click();
   await expect(stage("Source")).toHaveAttribute("aria-pressed", "false");
   await expect(stage("State machine")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("pipeline-code")).toContainText("states");
+
+  // The derived state list is the stage's pinned header: it stands
+  // outside the frame, so scrolling the module to its end leaves the
+  // states where they were.
+  const states = page.getByTestId("stage-states-code");
+  await expect(states).toContainText("states");
+  const stateBox = await states.boundingBox();
+  await page.getByTestId("stage-box-code").evaluate((box) => {
+    box.scrollTop = box.scrollHeight;
+  });
+  await expect(states).toBeVisible();
+  expect((await states.boundingBox())!.y).toBeCloseTo(stateBox!.y, 0);
+  expect(
+    await page
+      .getByTestId("stage-box-code")
+      .evaluate((box) => box.scrollTop > 0),
+  ).toBe(true);
 
   await stage("State machine").click();
+  await expect(page.getByTestId("pipeline-code")).toHaveCount(0);
+
+  // The Gears stage is the outline's rows over the artifact's own
+  // items: collapsed on their IDs, one expanding to its body.
+  await stage("Gears").click();
+  const firstRow = page.getByTestId("pipeline-code").getByRole("listitem").first();
+  await expect(firstRow).toBeVisible();
+  const firstToggle = page
+    .getByTestId("pipeline-code")
+    .locator("[data-testid^='item-toggle-']")
+    .first();
+  await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
+  await firstToggle.click();
+  await expect(firstToggle).toHaveAttribute("aria-expanded", "true");
+  await stage("Gears").click();
   await expect(page.getByTestId("pipeline-code")).toHaveCount(0);
 
   // The open stage's artifact sits in a frame the reader sets: the

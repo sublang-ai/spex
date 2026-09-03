@@ -139,30 +139,62 @@ const STAGE_DEFAULT = 24;
 const STAGE_MIN = 8;
 const STAGE_MAX = 48;
 
-/** The open stage's artifact, in the capped frame beneath the row. */
+/** The open stage's artifact, in the capped frame beneath the row —
+ * with what the stage pins standing above the frame, so it holds its
+ * place at every scroll position and every height the reader sets. */
 function StageBox({
   id,
   stage,
+  header,
   children,
 }: {
   id: string;
   /** The open stage's label, so the grip names what it resizes. */
   stage: string;
+  /** The stage's pinned header, outside the scrolling frame. */
+  header?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <ResizableFrame
-      frameId={`stage:${id}`}
-      label={`Resize the ${stage} stage`}
-      unit={STAGE_UNIT}
-      defaultSteps={STAGE_DEFAULT}
-      minSteps={STAGE_MIN}
-      maxSteps={STAGE_MAX}
-      data-testid={`stage-box-${id}`}
-      className="overflow-x-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950"
+    <div className="flex flex-col gap-2">
+      {header}
+      <ResizableFrame
+        frameId={`stage:${id}`}
+        label={`Resize the ${stage} stage`}
+        unit={STAGE_UNIT}
+        defaultSteps={STAGE_DEFAULT}
+        minSteps={STAGE_MIN}
+        maxSteps={STAGE_MAX}
+        data-testid={`stage-box-${id}`}
+        className="overflow-x-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950"
+      >
+        {children}
+      </ResizableFrame>
+    </div>
+  );
+}
+
+/** The State machine stage's derived state list (PBLIB-22), pinned
+ * above the frame: the chips wrap rather than overflow (DR-041 §9), so
+ * the states stay in view at any scroll position and any height. */
+function StateList({ id, states }: { id: string; states: string[] }) {
+  return (
+    <div
+      data-testid={`stage-states-${id}`}
+      className="flex flex-wrap items-center gap-1"
     >
-      {children}
-    </ResizableFrame>
+      <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        states
+      </span>
+      {states.map((state) => (
+        <span
+          key={state}
+          className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+        >
+          {state}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -269,6 +301,14 @@ function PlaybookPipeline({ playbookId }: { playbookId: string }) {
         <StageBox
           id={playbookId}
           stage={STAGES.find((entry) => entry.key === open)?.label ?? open}
+          // The state list is the State machine stage's header: it
+          // names what the code below is made of, so it stands above
+          // the frame rather than scrolling away with the module.
+          header={
+            open === "fsm" && artifacts?.stateIds ? (
+              <StateList id={playbookId} states={artifacts.stateIds} />
+            ) : undefined
+          }
         >
           <div
             className="flex flex-col gap-2"
@@ -288,26 +328,9 @@ function PlaybookPipeline({ playbookId }: { playbookId: string }) {
                 this stage was not found for this playbook
               </div>
             ) : open === "fsm" ? (
-              <>
-                {artifacts.stateIds ? (
-                  <div className="flex flex-wrap items-center gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                      states
-                    </span>
-                    {artifacts.stateIds.map((state) => (
-                      <span
-                        key={state}
-                        className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
-                      >
-                        {state}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
-                  {content}
-                </pre>
-              </>
+              <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
+                {content}
+              </pre>
             ) : open === "gears" && artifacts.gearsItems ? (
               <GearsItems id={playbookId} file={artifacts.gearsItems} />
             ) : (

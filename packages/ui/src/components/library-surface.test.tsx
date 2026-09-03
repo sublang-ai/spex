@@ -481,14 +481,11 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
       ),
     );
 
-    // Another stage swaps to it; the state list sits above the code.
+    // Another stage swaps to it; the code is what scrolls.
     fireEvent.click(within(row).getByRole("button", { name: "State machine" }));
     const box = screen.getByTestId("pipeline-code");
     expect(box.textContent).not.toContain("The coder writes.");
-    expect(box.textContent).toContain("idle");
-    expect(box.textContent!.indexOf("idle")).toBeLessThan(
-      box.textContent!.indexOf("xstate"),
-    );
+    expect(box.textContent).toContain("xstate");
 
     // Pressing the open stage closes it, and reopening reuses what
     // arrived: one request for this card.
@@ -552,6 +549,33 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
       ),
     );
     expect(screen.queryByTestId("item-CODE-1")).toBeNull();
+  });
+
+  test("the State machine's state list is pinned above the frame", async () => {
+    withArtifacts(async () => ARTIFACTS);
+    renderLibrary();
+    fireEvent.click(
+      within(screen.getByTestId("stages-code")).getByRole("button", {
+        name: "State machine",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("stage-states-code")).toBeTruthy(),
+    );
+    const states = screen.getByTestId("stage-states-code");
+    expect(states.textContent).toContain("states");
+    expect(states.textContent).toContain("idle");
+    expect(states.textContent).toContain("coding");
+    // Outside the scrolling frame, and directly above it: the states
+    // cannot scroll away with the module they name.
+    const frame = screen.getByTestId("stage-box-code");
+    expect(frame.contains(states)).toBe(false);
+    expect(
+      states.compareDocumentPosition(frame) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The chips wrap rather than overflow their pane (DR-041 §9).
+    expect(states.className).toContain("flex-wrap");
   });
 
   test("a stage the load cannot locate is struck out, inactive, and named in the box", async () => {
