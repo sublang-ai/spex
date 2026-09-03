@@ -49,6 +49,10 @@ interface SessionConditions {
 
 function foldConditions(records: StoredRecord[]): SessionConditions {
   let question: SessionConditions["question"];
+  // Runs parked on a question, by trace session id: a run disposed
+  // while parked — dismissed by the Captain — takes its question with
+  // it (dashboard-10).
+  const parkedRuns = new Set<string>();
   const permissions = new Map<
     string,
     { since: number; turnId: number | null }
@@ -66,6 +70,21 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
           turnId: number | null;
           timestamp: number;
         };
+        if (telemetry.topic === "playbook.trace") {
+          const trace = telemetry.payload as unknown as {
+            sessionId?: unknown;
+            type?: unknown;
+            payload?: { to?: unknown; from?: unknown };
+          };
+          if (typeof trace?.sessionId !== "string") break;
+          if (trace.type === "fsm.transition") {
+            if (trace.payload?.to === "awaitBossReply") parkedRuns.add(trace.sessionId);
+            else if (trace.payload?.from === "awaitBossReply") parkedRuns.delete(trace.sessionId);
+          } else if (trace.type === "session.disposed" && parkedRuns.delete(trace.sessionId)) {
+            question = undefined;
+          }
+          break;
+        }
         if (telemetry.topic !== "playbook.fsm.state") break;
         const stateText = (value: unknown): string | undefined => {
           if (typeof value === "string") return value;

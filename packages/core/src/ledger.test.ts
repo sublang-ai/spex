@@ -1447,3 +1447,36 @@ test("dashboard-10: the Captain's own machine reporting after a park leaves the 
   assert.equal(ledger.attention.some((entry) => entry.kind === "question"), false);
   store.close();
 });
+
+test("dashboard-10: a run dismissed while parked takes its question with it", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "Q", "i");
+  beginTurn(store, "s1", 1, "plan it", 1000);
+  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  const trace = (type: string, payload: Record<string, unknown>, timestamp: number) =>
+    append(store, "s1", {
+      type: "captain_telemetry",
+      topic: "playbook.trace",
+      payload: { schemaVersion: 3, sessionId: "run-dev", playbookId: "dev", type, payload },
+      turnId: 1,
+      timestamp,
+    });
+  trace("fsm.transition", { from: "planAnalysis", to: "awaitBossReply" }, 1400);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "planAnalysis", to: "awaitBossReply" },
+    turnId: 1,
+    timestamp: 1500,
+  });
+  finishTurn(store, "s1", 1, 2000);
+  assert.equal(stateOf(fold(store, [lane("s1", projectId, false)]), "Q").reason, "question");
+  // The Captain dismisses the parked run on the next turn instead of
+  // answering it: the run is disposed, the question is gone.
+  beginTurn(store, "s1", 2, "/code something else", 3000);
+  trace("session.disposed", {}, 3100);
+  const ledger = fold(store, [lane("s1", projectId, true)]);
+  assert.equal(ledger.attention.some((entry) => entry.kind === "question"), false);
+  store.close();
+});

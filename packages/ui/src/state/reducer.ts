@@ -557,6 +557,12 @@ export function applyRecord(
         );
         view.frames = [...fold.open];
         view.settledRuns = [...fold.settled];
+        if (fold.closed?.active === "awaitBossReply") {
+          // A run dismissed while parked takes its question with it
+          // (run-view-9).
+          view.pendingQuestion = undefined;
+          view.pendingQuestionPlayer = undefined;
+        }
         if (fold.closed) {
           pushCaptain(view, {
             kind: "machine",
