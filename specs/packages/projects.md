@@ -112,6 +112,15 @@ Where the palette's create action offers the specs-scaffold option, the option s
 
 User-facing copy in the palette and the Overview tab shall use plain words — "GitHub" for the forge, "Add" and "Create" for the path actions, sentence case throughout — and shall not use an internal term such as "forge", "stamp", or "ledger" ([DR-010](../decisions/010-interface-craft.md) §2).
 
+### Surface Fit
+
+#### projects-30
+
+While the project palette is open, the palette shall stand inside the window at every window height ([DR-041](../decisions/041-chrome-that-fits.md) §9), the project list yielding so the path row, its options, and any failure message [[projects-1](#projects-1)] keep their place:
+
+- the palette is a fixed overlay that nothing can scroll, so what falls outside the window is unreachable;
+- the gap above the palette is a proportion of a tall window and stops growing in a short one.
+
 ## Internal Behavior
 
 ### Registry
@@ -211,7 +220,8 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - confirming a path that is no git work tree shows the guidance and registers nothing [[projects-1](#projects-1)];
 - confirming an existing repository's path adds it and makes it current, and confirming the same path again switches to it without a duplicate [[projects-1](#projects-1)] [[projects-2](#projects-2)];
 - the Overview tab shows the repository's branch and, for a project with no GitHub origin, the setup guidance naming that condition in GitHub terms [[projects-4](#projects-4)] [[projects-7](#projects-7)] [[projects-25](#projects-25)];
-- confirming removal in the Overview forgets the project, clears it from the sidebar, and leaves the directory in place [[projects-9](#projects-9)].
+- confirming removal in the Overview forgets the project, clears it from the sidebar, and leaves the directory in place [[projects-9](#projects-9)];
+- in a 400-pixel-tall window, a path the palette refuses shows its message inside the window, the palette's own box ending inside it [[projects-30](#projects-30)].
 
 ## References
 

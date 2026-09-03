@@ -247,7 +247,11 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   return (
     <div
       data-testid="project-palette"
-      className="fixed inset-0 z-30 flex items-start justify-center bg-black/20 pt-[18vh]"
+      // The gap above the dialog is a proportion of a tall window and
+      // a fixed inch of a short one, and the overlay's padding is the
+      // dialog's height budget (DR-041 §9): a fixed overlay grows past
+      // the window with nothing able to scroll to what it hides.
+      className="fixed inset-0 z-30 flex items-start justify-center bg-black/20 p-4 pt-[min(18vh,4rem)]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) props.onClose();
       }}
@@ -258,7 +262,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         aria-modal="true"
         aria-label={empty ? "Add a project" : "Choose a project"}
         onKeyDown={dialogKeydown}
-        className="flex w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
+        className="flex max-h-full w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
       >
         {empty ? null : (
           <input
@@ -275,7 +279,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             className="border-b border-neutral-200 bg-transparent px-4 py-3 text-sm outline-none dark:border-neutral-800"
           />
         )}
-        <div className="relative max-h-[40vh] overflow-y-auto py-1">
+        {/* The list is what yields inside the dialog's bound: the
+            path row, its options, and a failure message keep their
+            place at every window height (projects-30). */}
+        <div className="relative min-h-0 flex-1 overflow-y-auto py-1">
           {empty ? (
             <button
               type="button"

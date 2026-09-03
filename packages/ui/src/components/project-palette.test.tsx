@@ -244,3 +244,22 @@ describe("DR-015: the palette offers the Academy example", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe("projects-30: the palette fits a short window", () => {
+  test("the dialog is bounded and its list is what yields", () => {
+    renderPalette();
+    const overlay = screen.getByTestId("project-palette");
+    const dialog = screen.getByRole("dialog", { name: "Choose a project" });
+    // The overlay's padding is the dialog's budget, and the gap above
+    // it stops growing once the window is short.
+    expect(overlay.className).toContain("p-4");
+    expect(overlay.className).toContain("pt-[min(18vh,4rem)]");
+    expect(dialog.className).toContain("max-h-full");
+    // The list is what yields inside that bound, rather than the path
+    // row and its failure message being pushed off the screen.
+    const list = dialog.querySelector("div.overflow-y-auto") as HTMLElement;
+    expect(list.className).toContain("flex-1");
+    expect(list.className).toContain("min-h-0");
+    expect(list.className).not.toContain("max-h-[40vh]");
+  });
+});
