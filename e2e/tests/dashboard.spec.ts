@@ -177,6 +177,67 @@ test("dashboard-39: capture, start, confirm, and History through the page", asyn
   await expect(page.getByTestId("attention-all-clear")).toContainText(/IR-\d+|next up/i);
 });
 
+test.describe("the History frame", () => {
+  // Twenty-five worked, closed intents before boot: one full intent
+  // page, then a second one behind "Older…".
+  test.use({ appOptions: { project: true, history: 25 } });
+
+  test("dashboard-44: History scrolls inside a frame eight rows tall that Older… never grows", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await nav(page, "Dashboard").click();
+    const projectId = app.projectId!;
+    const frame = page.getByTestId(`history-frame-${projectId}`);
+    const rows = frame.getByTestId(/^history-row-/);
+    const older = page.getByTestId(`history-older-${projectId}`);
+    const group = page.getByTestId(`project-group-${projectId}`);
+    const heightOf = (el: HTMLElement) => el.getBoundingClientRect().height;
+    const scrolls = (el: HTMLElement) => el.scrollHeight > el.clientHeight;
+
+    // The first page lists whole inside the frame, which is exactly
+    // eight rows tall and scrolls; the control is its last item.
+    await expect(older).toHaveText("Older…");
+    await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(20);
+    const rowHeight = await rows.first().evaluate(heightOf);
+    const frameHeight = await frame.evaluate(heightOf);
+    expect(frameHeight).toBeCloseTo(rowHeight * 8, 0);
+    expect(await frame.evaluate(scrolls)).toBe(true);
+    await expect(frame).toHaveAttribute("data-overflowing", "true");
+    expect(await frame.evaluate((el) => el.lastElementChild?.textContent)).toBe("Older…");
+    const groupHeight = await group.evaluate(heightOf);
+    const countBefore = await rows.count();
+
+    // Older… appends the next page: the rows grow, the frame and the
+    // group do not, and the control leaves once nothing waits.
+    await older.click();
+    await expect.poll(() => rows.count()).toBeGreaterThan(countBefore);
+    await expect(older).toHaveCount(0);
+    expect(await frame.evaluate(heightOf)).toBeCloseTo(frameHeight, 0);
+    expect(await group.evaluate(heightOf)).toBeCloseTo(groupHeight, 0);
+    expect(await frame.evaluate(scrolls)).toBe(true);
+    // Every row is one frame unit tall.
+    for (const height of await rows.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) {
+      expect(height).toBeCloseTo(rowHeight, 0);
+    }
+
+    // The frame takes keyboard focus and scrolls by arrow key.
+    await frame.focus();
+    await expect(frame).toBeFocused();
+    await page.keyboard.press("End");
+    await expect.poll(() => frame.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+
+    // The Overview draws the same frame for this project.
+    await page.getByRole("button", { name: "Workspace" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await expect(page.getByTestId("overview-tab")).toBeVisible();
+    await expect(frame).toBeVisible();
+    expect(await frame.evaluate(heightOf)).toBeCloseTo(frameHeight, 0);
+    expect(await frame.evaluate(scrolls)).toBe(true);
+  });
+});
+
 test("dashboard-39: the row menu moves, removes with Undo, and closes on Escape", async ({
   page,
   app,

@@ -13,6 +13,8 @@ import { join } from "node:path";
 import type { Captain } from "@sublang/cligent/tmux-play";
 
 import { academyCorpusDir } from "../forge.js";
+import type { TmuxPlayRecord } from "../protocol.js";
+import { Store } from "../store.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
 
@@ -65,6 +67,69 @@ export function seedDemoProject(projectDir: string): void {
     "-m",
     "seed",
   ]);
+}
+
+/** Done work the demo project holds before the app meets it
+ * (dashboard-27): `count` intents, each worked in one finished turn
+ * of one ended session and closed done, written into the state root
+ * the core will serve — a History longer than one intent page with
+ * nothing run. The project registers by its path, so the core's own
+ * registration after boot finds this one. */
+export function seedDemoHistory(
+  dataDir: string,
+  projectDir: string,
+  count: number,
+): void {
+  const store = new Store({ dir: dataDir });
+  try {
+    const project = store.registerProject(projectDir, "demo-project", 1);
+    const sessionId = "history-seed";
+    const minute = 60_000;
+    const base = Date.now() - (count + 1) * minute;
+    store.createSession({
+      id: sessionId,
+      projectId: project.id,
+      projectPath: projectDir,
+      createdAt: base,
+      live: false,
+      endedAt: base + count * minute,
+      players: [{ id: "dev.coder", adapter: "claude" }],
+      initialVisible: ["dev.coder"],
+      turns: 0,
+      failed: false,
+    });
+    const append = (record: Record<string, unknown>) =>
+      store.appendRecord(
+        sessionId,
+        store.maxSeq(sessionId) + 1,
+        record as unknown as TmuxPlayRecord,
+      );
+    for (let i = 1; i <= count; i += 1) {
+      const id = `seeded-${String(i).padStart(3, "0")}`;
+      const text = `Seeded done work ${i}`;
+      const at = base + i * minute;
+      store.addIntent({
+        id,
+        projectId: project.id,
+        text,
+        rank: `${String(i).padStart(3, "0")}i`,
+        createdAt: at - 30_000,
+      });
+      store.startTurn(sessionId, i, text, at - 20_000);
+      append({
+        type: "turn_started",
+        turnId: i,
+        turn: { id: i, prompt: text },
+        timestamp: at - 20_000,
+      });
+      store.endTurn(sessionId, i, "finished", at - 10_000);
+      append({ type: "turn_finished", turnId: i, timestamp: at - 10_000 });
+      store.stampIntentDispatch(id, sessionId, i, at - 20_000);
+      store.closeIntent(id, "done", at);
+    }
+  } finally {
+    store.close();
+  }
 }
 
 /** Fake player adapters: the coder edits and tests, the reviewer

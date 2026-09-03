@@ -30,6 +30,7 @@ import {
   DEMO_CONFIG,
   demoAdapterImports,
   demoCaptain,
+  seedDemoHistory,
   seedDemoProject,
 } from "@sublang/spex-core/testing";
 import {
@@ -56,6 +57,10 @@ export interface AppOptions {
   config?: "demo" | "none";
   /** Seed and register the demo project before the browser opens. */
   project?: boolean;
+  /** With `project`: this many intents already worked and closed
+   * done, written into the state root before boot — a History longer
+   * than one intent page with nothing run. */
+  history?: number;
   /** The core's environment; readiness derives from it. */
   env?: NodeJS.ProcessEnv;
   /**
@@ -180,6 +185,9 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
   }
   const projectDir = join(scratch, "demo-project");
   if (options.project) seedDemoProject(projectDir);
+  if (options.project && options.history) {
+    seedDemoHistory(dataDir, projectDir, options.history);
+  }
   const token = `e2e-${Math.random().toString(36).slice(2, 10)}`;
   // The shared session store resolves under XDG state in both lanes;
   // it exists before boot so the core watches it from the start.
