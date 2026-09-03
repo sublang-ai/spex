@@ -217,6 +217,9 @@ export interface AppState {
   /** Edit a queued intent's text (DR-035: from dispatch on, history). */
   editIntent(intentId: string, text: string): Promise<void>;
   closeIntent(intentId: string, as: "done" | "dropped"): Promise<void>;
+  /** Retire a closed intent from History (core-service-79, DR-038):
+   * the row leaves every loaded page at once. */
+  removeIntent(intentId: string): Promise<void>;
   /** Stage an intent's text into its project's composer (DR-035):
    * the live session's, else the Captain home's. Returns the staged
    * composer key ("home" or the session id). */
@@ -1145,6 +1148,23 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async closeIntent(intentId, as): Promise<void> {
       await getClient().command("intent.close", { intentId, as });
+      await get().loadLedger();
+    },
+
+    async removeIntent(intentId): Promise<void> {
+      await getClient().command("intent.remove", { intentId });
+      // The row leaves at once, from every page already loaded — the
+      // broadcast that follows re-reads the first page anyway.
+      const history = Object.fromEntries(
+        Object.entries(get().history).map(([projectId, page]) => [
+          projectId,
+          {
+            ...page,
+            intents: page.intents.filter((row) => row.intent.id !== intentId),
+          },
+        ]),
+      );
+      set({ history });
       await get().loadLedger();
     },
 

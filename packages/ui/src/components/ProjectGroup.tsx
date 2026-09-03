@@ -35,6 +35,7 @@ import { usePopover } from "../lib/usePopover.js";
 import { RunningMark } from "./RunningMark.js";
 import { SourcesBand } from "./SourcesTabs.js";
 import { openSourceIntents } from "./ForgeItemRow.js";
+import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { RecordRow } from "./RecordRow.js";
 import { ResizableFrame } from "./ResizableFrame.js";
@@ -298,13 +299,23 @@ function Age({ at, now }: { at?: number; now: number }) {
 
 /** The row grammar (dashboard-27): done wears a check; a fixed bug is
  * struck through under the red tag and wears none; work dropped
- * after it ran wears a quiet tag, dimmed, never struck. */
+ * after it ran wears a quiet tag, dimmed, never struck. The row also
+ * carries its way off the record — revealed on hover and on focus,
+ * behind the house confirm (DR-010 §4). */
 function IntentHistoryRow({
   intent,
   now,
+  confirming,
+  onAsk,
+  onKeep,
+  onRemove,
 }: {
   intent: IntentInfo;
   now: number;
+  confirming: boolean;
+  onAsk: () => void;
+  onKeep: () => void;
+  onRemove: () => void;
 }) {
   const verdict =
     intent.closedAs === "dropped"
@@ -318,33 +329,60 @@ function IntentHistoryRow({
       data-testid={`history-row-${intent.id}`}
       data-kind="intent"
       data-verdict={verdict}
-      className={`flex h-6 shrink-0 items-center gap-2 text-sm ${
+      className={`group flex h-6 shrink-0 items-center gap-2 text-sm ${
         verdict === "dropped" ? "text-neutral-500" : ""
       }`}
     >
-      {verdict === "done" ? <Check /> : null}
-      <span className="sr-only">
-        {verdict === "bug" ? "bug fixed" : verdict}
-      </span>
-      {verdict === "bug" ? (
-        <span data-testid="history-tag" className={BUG_TAG}>
-          bug
+      {confirming ? (
+        <span
+          data-testid={`history-remove-confirm-${intent.id}`}
+          className="min-w-0 flex-1"
+        >
+          <InlineConfirm
+            question="Remove this intent from history?"
+            confirmLabel="Remove"
+            cancelLabel="Keep"
+            onConfirm={onRemove}
+            onCancel={onKeep}
+          />
         </span>
-      ) : null}
-      {verdict === "dropped" ? (
-        <span data-testid="history-tag" className={NEUTRAL_TAG}>
-          dropped
-        </span>
-      ) : null}
-      <span
-        className={`min-w-0 flex-1 truncate ${
-          verdict === "bug" ? "line-through" : ""
-        }`}
-        title={title}
-      >
-        {title}
-      </span>
-      <Age at={intent.closedAt} now={now} />
+      ) : (
+        <>
+          {verdict === "done" ? <Check /> : null}
+          <span className="sr-only">
+            {verdict === "bug" ? "bug fixed" : verdict}
+          </span>
+          {verdict === "bug" ? (
+            <span data-testid="history-tag" className={BUG_TAG}>
+              bug
+            </span>
+          ) : null}
+          {verdict === "dropped" ? (
+            <span data-testid="history-tag" className={NEUTRAL_TAG}>
+              dropped
+            </span>
+          ) : null}
+          <span
+            className={`min-w-0 flex-1 truncate ${
+              verdict === "bug" ? "line-through" : ""
+            }`}
+            title={title}
+          >
+            {title}
+          </span>
+          <Age at={intent.closedAt} now={now} />
+          <button
+            type="button"
+            data-testid={`history-remove-${intent.id}`}
+            aria-label={`Remove ${title} from history`}
+            title="Remove this intent from history"
+            onClick={onAsk}
+            className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:text-red-400"
+          >
+            <Icon name="trash" className="h-3.5 w-3.5" />
+          </button>
+        </>
+      )}
     </li>
   );
 }
@@ -413,6 +451,23 @@ function HistoryBand({
 }) {
   const history = useAppStore((state) => state.history[project.id]);
   const loadHistory = useAppStore((state) => state.loadHistory);
+  const removeIntent = useAppStore((state) => state.removeIntent);
+  /** The one row asking to leave the record (DR-010 §4). */
+  const [confirming, setConfirming] = useState<string>();
+  /** Where focus lands once the confirm closes (DR-010 §6): the named
+   * row's control, or — for the empty name — the band itself. */
+  const [refocus, setRefocus] = useState<string>();
+  const band = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (refocus === undefined) return;
+    setRefocus(undefined);
+    const control = refocus
+      ? band.current?.querySelector<HTMLElement>(
+          `[data-testid="history-remove-${refocus}"]`,
+        )
+      : undefined;
+    (control ?? band.current)?.focus();
+  }, [refocus]);
 
   const more = history?.more ?? false;
   const rows = historyRows(history?.intents ?? [], tree?.intents ?? []);
@@ -431,8 +486,23 @@ function HistoryBand({
   const fetchOlder = () => {
     if (more && !inFlight) void loadHistory(project.id, true);
   };
+  /** The row leaves at once, and focus lands where the reader was
+   * working: the next row's control, or the band itself (DR-010 §6). */
+  const remove = (intentId: string): void => {
+    const intentIds = rows
+      .filter((row) => row.kind === "intent")
+      .map((row) => row.id);
+    const next = intentIds[intentIds.indexOf(intentId) + 1] ?? "";
+    setConfirming(undefined);
+    void removeIntent(intentId).finally(() => setRefocus(next));
+  };
   return (
-    <div className="flex flex-col gap-1" data-testid={`history-${project.id}`}>
+    <div
+      ref={band}
+      tabIndex={-1}
+      className="flex flex-col gap-1 focus:outline-none"
+      data-testid={`history-${project.id}`}
+    >
       <BandHeading>History</BandHeading>
       {rows.length === 0 ? (
         <div
@@ -471,6 +541,13 @@ function HistoryBand({
                 key={`intent:${row.id}`}
                 intent={row.intent}
                 now={now}
+                confirming={confirming === row.id}
+                onAsk={() => setConfirming(row.id)}
+                onKeep={() => {
+                  setConfirming(undefined);
+                  setRefocus(row.id);
+                }}
+                onRemove={() => remove(row.id)}
               />
             ) : (
               <RecordHistoryRow

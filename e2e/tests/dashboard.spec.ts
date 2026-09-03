@@ -408,3 +408,57 @@ test("dashboard-39: the row menu moves, removes with Undo, and closes on Escape"
   await expect(rows.nth(1)).toContainText("First");
   await expect(removed).toBeHidden();
 });
+
+test.describe("removing a History row", () => {
+  // Three intents already worked and confirmed before boot.
+  test.use({ appOptions: { project: true, history: 3 } });
+
+  test("dashboard-52: a done intent leaves History behind the confirm and stays gone", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await nav(page, "Dashboard").click();
+    const projectId = app.projectId!;
+    const band = page.getByTestId(`history-${projectId}`);
+    // By id, not by text: the confirm takes the row's place while it
+    // stands, so its title is not there to match on.
+    const row = band.getByTestId("history-row-seeded-003");
+    const neighbour = band.getByTestId("history-row-seeded-002");
+    await expect(row).toContainText("Seeded done work 3");
+    const control = row.getByRole("button", {
+      name: "Remove Seeded done work 3 from history",
+    });
+
+    // Keep backs out: the row stays on the record.
+    await row.hover();
+    await control.click();
+    await expect(row).toContainText("Remove this intent from history?");
+    await row.getByRole("button", { name: "Keep", exact: true }).click();
+    await expect(control).toBeFocused();
+    await expect(row).toBeVisible();
+
+    // Remove takes it out at once; its neighbours stay.
+    await control.click();
+    await row.getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(row).toHaveCount(0);
+    await expect(neighbour).toBeVisible();
+
+    // The act is durable: a reload lists it nowhere.
+    await page.reload();
+    await nav(page, "Dashboard").click();
+    await expect(neighbour).toBeVisible();
+    await expect(row).toHaveCount(0);
+
+    // The Overview draws the same rows with the same control.
+    await page.getByRole("button", { name: "Workspace" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await expect(page.getByTestId("overview-tab")).toBeVisible();
+    await expect(row).toHaveCount(0);
+    await expect(
+      neighbour.getByRole("button", {
+        name: "Remove Seeded done work 2 from history",
+      }),
+    ).toBeVisible();
+  });
+});

@@ -1659,6 +1659,65 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     );
   });
 
+  test("an intent row leaves the record behind the inline confirm; a record row carries no control", async () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "ledger.history") return { ...page1, more: false };
+      if (type === "ledger.get") return useAppStore.getState().ledger;
+      return {};
+    });
+    seed({
+      projects: [PROJECTS[0]],
+      projectMeta: { p1: {} },
+      specTrees: { p1: RECORD_TREE },
+      history: {},
+    });
+    renderSurface();
+    await screen.findByTestId("history-row-h1");
+
+    // Every intent row carries the control, named after its intent; a
+    // record row carries none — a file in the specs tree is not the
+    // ledger's to remove.
+    const control = screen.getByTestId("history-remove-h1");
+    expect(control.getAttribute("aria-label")).toBe(
+      "Remove Newest done from history",
+    );
+    expect(screen.getByTestId("history-remove-h2")).toBeTruthy();
+    expect(screen.queryByTestId("history-remove-IR-4")).toBeNull();
+
+    // The confirm opens in place, naming the act; Keep backs out and
+    // hands focus back to the control, and nothing was sent.
+    fireEvent.click(control);
+    const confirm = screen.getByTestId("history-remove-confirm-h1");
+    expect(confirm.textContent).toContain("Remove this intent from history?");
+    const keep = within(confirm).getByRole("button", { name: "Keep" });
+    expect(document.activeElement).toBe(keep);
+    await act(async () => {
+      fireEvent.click(keep);
+    });
+    expect(document.activeElement).toBe(screen.getByTestId("history-remove-h1"));
+    expect(callsOf("intent.remove")).toEqual([]);
+
+    // Confirming removes the intent over the protocol: the row leaves
+    // at once, and focus lands on the next row's control.
+    fireEvent.click(screen.getByTestId("history-remove-h1"));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByTestId("history-remove-confirm-h1")).getByRole(
+          "button",
+          { name: "Remove" },
+        ),
+      );
+    });
+    expect(callsOf("intent.remove")).toEqual([{ intentId: "h1" }]);
+    expect(screen.queryByTestId("history-row-h1")).toBeNull();
+    expect(ids()).toEqual(["hb", "h2", "hr", "IR-4"]);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByTestId("history-remove-hb"),
+      ),
+    );
+  });
+
   test("an empty band reads Loading… until its first page answers", async () => {
     let answer!: (page: { intents: never[]; more: boolean }) => void;
     commandMock.mockImplementation(async (type: string) => {

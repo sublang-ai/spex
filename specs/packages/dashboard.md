@@ -100,6 +100,8 @@ Where a project has done work — intents closed after a turn of theirs ended fi
 | a finished record | a check before its record row [[dashboard-40](#dashboard-40)]; a "superseded" tag after the title, the row dimmed and no check, where the status classifies so |
 
 - an intent closed before any turn of it ended finished never lists — it left the queue without a trace;
+- an intent row carries a remove control — named "Remove ⟨title⟩ from history", revealed on hover and on focus within the row, reachable by Tab regardless — which asks the inline confirm in the row's place, "Remove this intent from history?" with Remove and Keep ([DR-010](../decisions/010-interface-craft.md) §4): Keep and Escape back out to the control, Remove retires the intent from the ledger [[core-service-79](core-service.md#core-service-79)] so the row leaves at once and focus lands on the next intent row's control, or on the band where none follows ([DR-010](../decisions/010-interface-craft.md) §6);
+- a record row carries no such control — a file in the specs tree is not the ledger's to remove;
 - a finished record already named by a closed intent's provenance lists once, as that intent;
 - a record orders by the date its status line carries ("Done (2026-09-02)"), else by its file's last change; an intent by its close time; and each row shows that time as an age with the absolute moment in its tooltip;
 - every row is one frame unit tall, so the frame's rows fill it exactly and the group's height never grows past it, however many pages load;
@@ -343,7 +345,7 @@ Where a fixture project's `specs/` tree lists one intent record whose status rea
 
 #### dashboard-38
 
-Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — a dated status line placing its record before an undated newer file, and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, the band reads "Loading…" until the first page answers, every loaded row lists inside the frame, which draws its cut edges and takes focus only past eight rows, and the "Older…" control at the frame's end stands only while a page waits and fetches and appends the older intent page with the cursor of the last served row, and the frame's grip — absent while eight rows hold everything — sets the frame between four and twenty-four rows by arrow key, restores the eight on a double-click, and leaves that height remembered for the project's group [[dashboard-27](#dashboard-27)].
+Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — a dated status line placing its record before an undated newer file, and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, the band reads "Loading…" until the first page answers, every loaded row lists inside the frame, which draws its cut edges and takes focus only past eight rows, and the "Older…" control at the frame's end stands only while a page waits and fetches and appends the older intent page with the cursor of the last served row, and the frame's grip — absent while eight rows hold everything — sets the frame between four and twenty-four rows by arrow key, restores the eight on a double-click, and leaves that height remembered for the project's group [[dashboard-27](#dashboard-27)], and each intent row's remove control — the record row carrying none — opens the confirm whose Keep backs out to the control with nothing sent, while Remove retires the intent, drops its row at once, and hands focus to the next row's control [[dashboard-27](#dashboard-27)].
 
 ### Empty-State Coverage
 
@@ -403,6 +405,14 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - while the turn is in flight, the band lists one row naming the session's project, its title, and what it is doing [[dashboard-50](#dashboard-50)];
 - activating that row opens the session [[dashboard-50](#dashboard-50)];
 - once the turn ends, no row stands in the band, which reads its note in place [[dashboard-50](#dashboard-50)] [[dashboard-8](#dashboard-8)].
+
+#### dashboard-52
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and worked, closed intents in its state root, when the journey removes one from History on the Dashboard, the test suite shall assert the removal through the page [[dashboard-27](#dashboard-27)]:
+
+- the row's control opens the confirm, whose Keep leaves the row listed [[dashboard-27](#dashboard-27)];
+- Remove drops that row from History while its neighbours stay, and the reloaded page still lists it nowhere [[dashboard-27](#dashboard-27)] [[dashboard-10](#dashboard-10)];
+- the project's Overview tab draws the same row with the same control [[dashboard-26](#dashboard-26)] [[dashboard-27](#dashboard-27)].
 
 #### dashboard-46
 
