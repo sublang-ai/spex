@@ -74,6 +74,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
   following its end keeps following after a resize, a machine drawing
   scrolled to its end regains its fade when the pane narrows, and the
   split divider lands under the pointer.
+- **Anchored editors stay inside their box.** The agent editor and the
+  role-binding popover are placed by one measured rule that keeps
+  them within the pane at every width from the 320px floor and lets
+  them scroll their own content.
+- **Rows and chips yield before they widen**: a labelled issue or
+  pull-request row folds its tags on a narrow pane, a long spec item
+  id truncates in the outline, the outline keeps a readable height
+  beside the graph, the graph's hover card stays inside its pane, and
+  the project palette fits a short window with its message reachable.
 
 ## [0.3.0] - 2026-09-02
 
