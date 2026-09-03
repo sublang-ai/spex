@@ -145,12 +145,18 @@ test("dashboard-39: capture, start, confirm, and History through the page", asyn
   await expect(group).toContainText(/nothing queued/i);
   await expect(page.getByTestId("attention-all-clear")).toContainText(/all clear/i);
 
-  // Sources: collapsed summary, GitHub guidance in GitHub terms, and
-  // the seeded example's open records with their Queue controls.
+  // Sources stands open (dashboard-20): its summary line heads the
+  // tabs, GitHub guidance speaks in GitHub terms, and the seeded
+  // example's open records carry their Queue controls. The line folds
+  // the band and opens it again.
   const sourcesToggle = page.getByTestId(`sources-toggle-${app.projectId}`);
   await expect(sourcesToggle).toContainText(/open records/i);
-  await sourcesToggle.click();
+  await expect(sourcesToggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId(`sources-guidance-${app.projectId}`)).toContainText(/github/i);
+  await sourcesToggle.click();
+  await expect(sourcesToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByTestId(`sources-guidance-${app.projectId}`)).toHaveCount(0);
+  await sourcesToggle.click();
   await page.getByTestId(`sources-tab-records-${app.projectId}`).click();
   const record = page.getByTestId(new RegExp(`^source-record-${app.projectId}-`)).first();
   await expect(record).toBeVisible();

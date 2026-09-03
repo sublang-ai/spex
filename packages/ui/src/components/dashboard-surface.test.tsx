@@ -96,6 +96,7 @@ function seed(over: Record<string, unknown> = {}) {
     ledger: EMPTY_LEDGER,
     ledgerError: undefined,
     stagedIntents: {},
+    foldedSources: {},
     ...over,
   } as never);
 }
@@ -1145,16 +1146,17 @@ function seedSources(over: Record<string, unknown> = {}) {
 }
 
 describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
-  test("collapsed counts and age, tabs, labels, and queue seeds", async () => {
+  test("the open band's summary line, tabs, labels, and queue seeds", async () => {
     seedSources();
     const { onOpenIntent } = renderSurface();
 
-    // Collapsed line: counts with data age (dashboard-20/14).
+    // The band opens expanded under its summary line: counts with the
+    // data age (dashboard-20/14).
     const toggle = screen.getByTestId("sources-toggle-p1");
     expect(toggle.textContent).toContain("1 issue · 1 PR · 1 open record");
     expect(toggle.textContent).toContain("just now");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
-    fireEvent.click(toggle);
     // Issues tab first: number, title link, forge labels as tags.
     const issue = screen.getByTestId("source-issue-p1-7");
     expect(issue.textContent).toContain("#7");
@@ -1235,7 +1237,8 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
     expect(row.className).not.toContain("underline");
     expect(row.className).not.toContain("brand");
     fireEvent.click(row);
-    // The band collapses on return: its toggle is the origin's control.
+    // The row leaves the surface with its activation, so the band's
+    // toggle — which stands open or folded — is the origin's control.
     expect(onOpenIntent).toHaveBeenCalledWith(
       "p1",
       "intents/003-half.md",
@@ -1262,7 +1265,6 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
       ledger: { intents: [captured], attention: [], badge: 0 },
     });
     renderSurface();
-    fireEvent.click(screen.getByTestId("sources-toggle-p1"));
 
     const issue = screen.getByTestId("source-issue-p1-7");
     const state = within(issue).getByTestId("source-issue-p1-7-state");
@@ -1298,7 +1300,6 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
       projectMeta: { p1: { forge: { ...FORGE, issues: many } }, p2: {} },
     });
     renderSurface();
-    fireEvent.click(screen.getByTestId("sources-toggle-p1"));
 
     expect(screen.getByTestId("source-issue-p1-6")).toBeTruthy();
     expect(screen.queryByTestId("source-issue-p1-7")).toBeNull();
@@ -1330,8 +1331,40 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
     expect(screen.getByTestId("sources-error-p1").textContent).toContain(
       "keeping the last data",
     );
-    fireEvent.click(screen.getByTestId("sources-toggle-p1"));
     expect(screen.getByTestId("source-issue-p1-7")).toBeTruthy();
+  });
+
+  test("the band folds to its summary, per project, for the app's run (dashboard-20)", () => {
+    seedSources();
+    renderSurface();
+
+    const fold = (projectId: string) =>
+      fireEvent.click(screen.getByTestId(`sources-toggle-${projectId}`));
+    const shown = (projectId: string) =>
+      screen
+        .getByTestId(`sources-toggle-${projectId}`)
+        .getAttribute("aria-expanded");
+
+    // Both bands open; folding one leaves the other open.
+    expect(shown("p1")).toBe("true");
+    expect(shown("p2")).toBe("true");
+    fold("p1");
+    expect(shown("p1")).toBe("false");
+    expect(screen.queryByTestId("source-issue-p1-7")).toBeNull();
+    expect(shown("p2")).toBe("true");
+
+    // The fold is the project's, so the Overview's band — the same one
+    // (dashboard-26) — stands folded too, and its line opens it again
+    // for both surfaces.
+    cleanup();
+    renderOverview();
+    expect(shown("p1")).toBe("false");
+    fold("p1");
+    expect(shown("p1")).toBe("true");
+    expect(screen.getByTestId("source-issue-p1-7")).toBeTruthy();
+    cleanup();
+    renderSurface();
+    expect(shown("p1")).toBe("true");
   });
 });
 
@@ -1768,9 +1801,8 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     expect(screen.getByTestId("upnext-p1").textContent).toContain(
       "Nothing queued",
     );
-    // No forge binding: the collapsed line still counts, and the
-    // expanded tab guides to the Workspace.
-    fireEvent.click(screen.getByTestId("sources-toggle-p1"));
+    // No forge binding: the summary line still counts, and the band
+    // guides to the Workspace.
     expect(screen.getByTestId("sources-p1").textContent).toContain(
       "No GitHub connection yet",
     );
@@ -1789,7 +1821,6 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     const line = screen.getByTestId("sources-toggle-p1");
     expect(line.textContent).toContain("Loading GitHub…");
     expect(line.textContent).not.toContain("GitHub not connected");
-    fireEvent.click(line);
     expect(screen.getByTestId("sources-guidance-p1").textContent).toContain(
       "Loading GitHub state…",
     );
@@ -1874,7 +1905,6 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
     // The Sources band carries the one row representation
     // (forge-work-lists-1): labels, Queue with the same seed and the
     // labels kept as provenance.
-    fireEvent.click(within(overview).getByTestId("sources-toggle-p1"));
     const issue = within(overview).getByTestId("source-issue-p1-7");
     expect(issue.textContent).toContain("#7");
     expect(issue.textContent).toContain("bug");
@@ -1993,7 +2023,6 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false);
-    fireEvent.click(within(overview).getByTestId("sources-toggle-p1"));
     expect(
       within(overview).getByTestId("sources-guidance-p1").textContent,
     ).toContain("gh is not installed");

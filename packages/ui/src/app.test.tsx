@@ -561,7 +561,6 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
 
     // The GitHub setup guidance sits in the Sources band (projects-7,
     // dashboard-8), so the Dashboard and the Overview show one thing.
-    fireEvent.click(within(overview).getByTestId("sources-toggle-p1"));
     expect(
       within(overview).getByTestId("sources-guidance-p1").textContent,
     ).toContain("No GitHub origin remote");
