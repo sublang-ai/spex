@@ -4,7 +4,9 @@
 // The Dashboard (DR-035, dashboard-1..38): one question, top to
 // bottom — what needs me, interrupted then finished, and where is
 // each project. The two-band attention queue renders the core's one
-// ledger fold as served; below it, one ledger group per project — the
+// ledger fold as served; under it the Running band answers the other
+// question — what is working right now, with nothing to answer
+// (dashboard-50) — and below both, one ledger group per project, the
 // same component the Overview tab draws (DR-038). Every state here is
 // derived — the surface writes nothing but Boss acts (queue, close).
 
@@ -15,14 +17,20 @@ import type {
   IntentInfo,
   IntentStats,
   ProjectInfo,
+  SessionInfo,
 } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
 import { absoluteTitle, duration, relativeAge } from "../lib/time.js";
+import { RunningMark } from "./RunningMark.js";
 import {
   ProjectGroup,
+  TONE_CHIP,
   firstLine,
   queueOf,
+  runningPlayer,
+  sessionStatus,
+  turnStartedAt,
   useCaptureReveal,
   useForgeAge,
   useGroupInputs,
@@ -192,6 +200,80 @@ function AttentionRow({
 }
 
 // ---------------------------------------------------------------------------
+// Running band
+// ---------------------------------------------------------------------------
+
+/** One live session with a turn in flight and nothing to answer
+ * (dashboard-50): the glance at what is working, in the same status
+ * vocabulary the Now band speaks. */
+function RunningRow({
+  session,
+  projectName,
+  now,
+  onOpen,
+}: {
+  session: SessionInfo;
+  projectName: string;
+  now: number;
+  onOpen: () => void;
+}) {
+  const view = useAppStore((state) => state.views[session.id]);
+  const status = sessionStatus(view);
+  const player = runningPlayer(view);
+  const startedAt = turnStartedAt(view);
+  // The sidebar's title rule: the session's own words, a plain
+  // stand-in until its first Boss turn lands.
+  const title = session.title ?? "no messages yet";
+  return (
+    <button
+      type="button"
+      data-testid={`running-session-${session.id}`}
+      data-project-id={session.projectId}
+      onClick={onOpen}
+      // The name holds still while the run advances (DR-041 §9): the
+      // state is live content, read from the row, not from its name.
+      aria-label={`Open ${title} — running in ${projectName}`}
+      // The row fits its pane (dashboard-1's grammar, DR-041): the
+      // title owns the slack, the state chip truncates beside it, and
+      // the yield ladder drops the running player below @sm, the
+      // project name below @xs, the elapsed span below @md.
+      className="@container flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <RunningMark running />
+      <span
+        className="hidden min-w-0 max-w-40 shrink-0 truncate text-xs text-neutral-500 @xs:inline"
+        title={projectName}
+      >
+        {projectName}
+      </span>
+      {player ? (
+        <span className="hidden shrink-0 text-xs text-neutral-500 @sm:inline">
+          {player}
+        </span>
+      ) : null}
+      <span
+        data-testid={`running-state-${session.id}`}
+        className={`min-w-0 truncate rounded px-1.5 py-0.5 text-xs ${TONE_CHIP[status.tone]}`}
+        title={view?.fsmState}
+      >
+        {status.text}
+      </span>
+      <span className="min-w-0 flex-1 truncate" title={title}>
+        {title}
+      </span>
+      {startedAt !== undefined ? (
+        <span
+          className="hidden shrink-0 text-xs text-neutral-500 @md:inline"
+          title={absoluteTitle(startedAt)}
+        >
+          {duration(Math.max(0, now - startedAt))}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // The surface
 // ---------------------------------------------------------------------------
 
@@ -214,6 +296,8 @@ export function DashboardSurface({
   onNavigate?: (surface: "Workspace") => void;
 }) {
   const projects = useAppStore((state) => state.projects);
+  const sessions = useAppStore((state) => state.sessions);
+  const views = useAppStore((state) => state.views);
   const ledger = useAppStore((state) => state.ledger);
   const ledgerError = useAppStore((state) => state.ledgerError);
   const loadLedger = useAppStore((state) => state.loadLedger);
@@ -233,6 +317,22 @@ export function DashboardSurface({
   const attention = (ledger?.attention ?? []).filter(
     (entry) =>
       projectFilter === "all" || entry.projectId === projectFilter,
+  );
+  // The band is the queue's complement (dashboard-50): a session the
+  // fold already summons belongs to the queue, never to both. The
+  // exclusion reads the unfiltered set, so a filter hides rows and
+  // moves nothing.
+  const summoned = new Set(
+    (ledger?.attention ?? []).map((entry) => entry.sessionId),
+  );
+  const running = filtered.flatMap((project) =>
+    sessions.filter(
+      (session) =>
+        session.live &&
+        session.projectId === project.id &&
+        views[session.id]?.turnActive === true &&
+        !summoned.has(session.id),
+    ),
   );
   const nextHead = nextUnblockedHead(intents, filtered);
   const projectName = (projectId: string) =>
@@ -387,6 +487,31 @@ export function DashboardSurface({
                   All clear — nothing waiting, nothing queued to start.
                 </span>
               )}
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {/* What is working, with nothing to answer (dashboard-50): the
+          band keeps its place whether or not anything runs. */}
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-neutral-500">Running</h2>
+        <div className="flex flex-col gap-2" data-testid="running-band">
+          {running.map((session) => (
+            <RunningRow
+              key={session.id}
+              session={session}
+              projectName={projectName(session.projectId)}
+              now={now}
+              onOpen={() => onOpenSession(session.id)}
+            />
+          ))}
+          {running.length === 0 ? (
+            <div
+              data-testid="running-empty"
+              className="rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-center text-sm text-neutral-500 dark:border-neutral-700"
+            >
+              Nothing running.
             </div>
           ) : null}
         </div>

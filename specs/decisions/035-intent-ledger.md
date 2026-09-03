@@ -9,6 +9,7 @@ Accepted (2026-08-28) after two owner reviews: the first named the outcomes inte
 Extends [DR-009](009-at-hand-interaction.md) and [DR-029](029-session-history-home.md); amends [DR-011](011-project-workspace.md)'s Dashboard content row and the attention queue's kind table; evolves the Dashboard's work lists ([DR-027](027-linked-views-contract.md)'s routing of work to work surfaces stands).
 Storage form amended by [DR-036](036-file-state-store.md): the intents table becomes an append-only act log; the fields, the no-state-column law, and every fold contract stand.
 Amended by [DR-038](038-history-is-done-work.md): an intent dropped before it was worked leaves the ledger without a trace, verdicts confirm on one click, and History lists finished intent records beside worked intents.
+Amended (2026-09-02) on the owner's review: the running sessions list again as their own band below the attention queue — a summons and a glance at what is working are two focuses, so the Now band's absorption of the running-sessions section is reversed for the sessions no entry summons; the attention queue stays the summons and the badge still counts it alone.
 
 ## Context
 

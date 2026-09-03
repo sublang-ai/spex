@@ -28,6 +28,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
+import type { SessionView } from "../state/reducer.js";
 import { stateLabel, type StatusTone } from "../lib/labels.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { usePopover } from "../lib/usePopover.js";
@@ -57,10 +58,38 @@ export function queueOf(
   );
 }
 
+/** What a session is doing, in the one status vocabulary
+ * (dashboard-28, dashboard-50, DR-010 §2): the label the Now band
+ * shows, read from the session's view — a live turn with no leaf
+ * state says "working" while a player runs and "deciding" while the
+ * Captain has the floor (run-view-59). */
+export function sessionStatus(
+  view: SessionView | undefined,
+): { text: string; tone: StatusTone } {
+  return stateLabel(view?.fsmState, {
+    pendingQuestion: view?.pendingQuestion !== undefined,
+    turnActive: view?.turnActive,
+    playersRunning: runningPlayer(view) !== undefined,
+  });
+}
+
+/** The player holding the floor, when one runs: the Running band
+ * names it beside the state (dashboard-50). */
+export function runningPlayer(view: SessionView | undefined): string | undefined {
+  return Object.values(view?.players ?? {}).find((player) => player.running)?.id;
+}
+
+/** When the session's turn in flight began — the first line it drew,
+ * so its span reads without new state (dashboard-50). */
+export function turnStartedAt(view: SessionView | undefined): number | undefined {
+  if (!view?.turnActive) return undefined;
+  return view.captain.find((line) => line.turnId === view.currentTurnId)?.at;
+}
+
 /** Session-state chip classes per tone (DR-013: brand purple stays
  * interactive, so status chips tint amber/red/neutral only; running
  * aliveness is the emerald mark, not a chip hue). */
-const TONE_CHIP: Record<StatusTone, string> = {
+export const TONE_CHIP: Record<StatusTone, string> = {
   amber: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   red: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
   emerald:
@@ -529,13 +558,7 @@ function NowBand({
       </div>
     );
   }
-  const label = stateLabel(view?.fsmState, {
-    pendingQuestion: view?.pendingQuestion !== undefined,
-    turnActive: view?.turnActive,
-    playersRunning: Object.values(view?.players ?? {}).some(
-      (playerView) => playerView.running,
-    ),
-  });
+  const label = sessionStatus(view);
   // The open intent this lane serves: the newest open dispatch into
   // the session owns the conversation (dashboard-28/33).
   const served = intents

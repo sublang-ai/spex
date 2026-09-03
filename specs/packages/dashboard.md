@@ -5,7 +5,7 @@
 
 ## Intent
 
-This spec defines the observable behavior, implementation constraints, and integration coverage of the Dashboard, the one cross-project surface carrying the intent ledger ([DR-035](../decisions/035-intent-ledger.md)): a two-band attention queue over per-project ledger groups.
+This spec defines the observable behavior, implementation constraints, and integration coverage of the Dashboard, the one cross-project surface carrying the intent ledger ([DR-035](../decisions/035-intent-ledger.md)): a two-band attention queue over a band of the sessions running unattended and per-project ledger groups.
 Every visible state derives deterministically from stored intent rows, the session record stream, and review state persisted in the app store, and forge data flows only through the forge adapter.
 Integration coverage drives fixture intent rows, record streams, persisted store state, and stubbed forge adapters through the core and asserts the derived Dashboard state, so that attention bands, intent-state derivation, capture, sources, history paging, and empty states are verified end to end rather than per unit.
 
@@ -65,11 +65,28 @@ The Dashboard shall publish an attention count equal to the number of entries in
 
 - When the queue changes, the published count updates to the new queue size.
 
+### Running Band
+
+#### dashboard-50
+
+While a project's live session holds a turn in flight and no attention entry stands for that session [[dashboard-1](#dashboard-1)], the Dashboard shall list that session in a Running band between the attention queue and the project groups, one row per session in the projects' fixed sidebar order:
+
+| Row part | Content |
+| --- | --- |
+| Project | the session's project name |
+| Title | the session's own words — its first Boss turn, as the sidebar names it, and a plain stand-in while it has none |
+| Doing | its human-readable engagement state label in the Now band's vocabulary [[dashboard-28](#dashboard-28)] — "deciding" or "working" while a turn is active with no leaf state — with the running player named beside it and the turn's elapsed span |
+
+- activating a row opens that session;
+- an attention entry arriving for the session takes its row out of the band, the summons standing in the queue instead [[dashboard-1](#dashboard-1)], and the turn ending takes it out too [[dashboard-4](#dashboard-4)];
+- the project filter hides the other projects' rows, changing nothing derived [[dashboard-32](#dashboard-32)];
+- the band keeps its place while empty, carrying its note there [[dashboard-8](#dashboard-8)].
+
 ### Project Groups
 
 #### dashboard-26
 
-While projects are registered, the Dashboard shall display one ledger group per project below the attention queue, in the projects' fixed sidebar order, each group carrying four bands in order: History [[dashboard-27](#dashboard-27)], Now [[dashboard-28](#dashboard-28)], Up next [[dashboard-29](#dashboard-29)], and Sources [[dashboard-20](#dashboard-20)].
+While projects are registered, the Dashboard shall display one ledger group per project below the attention queue and its Running band [[dashboard-50](#dashboard-50)], in the projects' fixed sidebar order, each group carrying four bands in order: History [[dashboard-27](#dashboard-27)], Now [[dashboard-28](#dashboard-28)], Up next [[dashboard-29](#dashboard-29)], and Sources [[dashboard-20](#dashboard-20)].
 
 #### dashboard-27
 
@@ -186,6 +203,7 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 | Section | Empty condition | Guidance |
 | --- | --- | --- |
 | Attention queue | no entry, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — with Start, or plain all-clear copy when no unblocked head exists |
+| Running | no live session holds a turn in flight unattended by the queue [[dashboard-50](#dashboard-50)] | a quiet note that nothing is running |
 | Project groups | no registered project | how to register a project, with a navigation control to the Workspace |
 | History | no done work, once the first history page has answered | a note that nothing is done here yet — "Loading…" until then |
 | Now | no live session | a quiet idle note |
@@ -284,7 +302,7 @@ Where the Sources band's issue and pull-request tabs are served, the dashboard r
 
 #### dashboard-15
 
-Where fixture intent rows and a fixture record stream span two projects — one intent standing interrupted on a question, one on a `runtime_error`, one finished with reviewer-stamped prompt records, plus an un-ledgered session holding a `permission_request` and a finished turn past its viewed marker, and a `hidden`-visibility record — when Dashboard state is derived, the test suite shall assert that the interrupted band holds the question, failure, and session permission entries while the finished band holds the finished intent and the turn-to-review stand-in [[dashboard-1](#dashboard-1)], that the interrupted band precedes the finished band with longest waiting first within each [[dashboard-2](#dashboard-2)], that the finished entry carries stats whose review rounds equal the reviewer-stamped prompt count [[dashboard-1](#dashboard-1)] [[dashboard-35](#dashboard-35)], that activating the question entry opens its session at the pending question [[dashboard-3](#dashboard-3)], that the hidden record produced no entry [[dashboard-10](#dashboard-10)], that project groups render in sidebar order with the four bands [[dashboard-26](#dashboard-26)], and that selecting a project filter leaves only that project's entries and group visible with the published count unchanged [[dashboard-32](#dashboard-32)].
+Where fixture intent rows and a fixture record stream span two projects — one intent standing interrupted on a question, one on a `runtime_error`, one finished with reviewer-stamped prompt records, plus an un-ledgered session holding a `permission_request` and a finished turn past its viewed marker, a second un-ledgered session running a turn with nothing to answer, and a `hidden`-visibility record — when Dashboard state is derived, the test suite shall assert that the interrupted band holds the question, failure, and session permission entries while the finished band holds the finished intent and the turn-to-review stand-in [[dashboard-1](#dashboard-1)], that the interrupted band precedes the finished band with longest waiting first within each [[dashboard-2](#dashboard-2)], that the finished entry carries stats whose review rounds equal the reviewer-stamped prompt count [[dashboard-1](#dashboard-1)] [[dashboard-35](#dashboard-35)], that activating the question entry opens its session at the pending question [[dashboard-3](#dashboard-3)], that the hidden record produced no entry [[dashboard-10](#dashboard-10)], that project groups render in sidebar order with the four bands [[dashboard-26](#dashboard-26)], that the Running band lists the session running with nothing to answer — its project, title, and state label — and opens it when activated, while the session summoned into the queue stays out of the band [[dashboard-50](#dashboard-50)], and that selecting a project filter leaves only that project's entries, running rows, and group visible with the published count unchanged [[dashboard-32](#dashboard-32)] [[dashboard-50](#dashboard-50)].
 
 #### dashboard-16
 
@@ -376,6 +394,14 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - the grip names itself, reports the frame's height in rows, and stands only while the rows run past the frame [[dashboard-27](#dashboard-27)];
 - the drag leaves the frame exactly two rows taller, still scrolling its rows [[dashboard-27](#dashboard-27)];
 - the reloaded page draws the frame at that height, chrome state being preference rather than project state [[dashboard-27](#dashboard-27)].
+
+#### dashboard-51
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and the scripted Captain holding each call long enough for a turn to be watched, when the journey sends a task and shows the Dashboard, the test suite shall assert the Running band through the page:
+
+- while the turn is in flight, the band lists one row naming the session's project, its title, and what it is doing [[dashboard-50](#dashboard-50)];
+- activating that row opens the session [[dashboard-50](#dashboard-50)];
+- once the turn ends, no row stands in the band, which reads its note in place [[dashboard-50](#dashboard-50)] [[dashboard-8](#dashboard-8)].
 
 #### dashboard-46
 
