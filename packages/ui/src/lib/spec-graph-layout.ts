@@ -459,13 +459,21 @@ export function presentLayout(
   let finalKx = 1;
   let finalKy = 1;
 
+  // The margins never take more than half the padded area: a pane too
+  // short for its marks lets the marks at its edges reach past the
+  // edge rather than collapsing the arrangement onto one point.
+  const spanFloorX = (area.width - 2 * FIT_PADDING) / 2;
+  const spanFloorY = (area.height - 2 * FIT_PADDING) / 2;
+
   for (let pass = 0; pass < 3; pass++) {
     const availableX = Math.max(
       1,
+      spanFloorX,
       area.width - 2 * FIT_PADDING - 2 * marginX,
     );
     const availableY = Math.max(
       1,
+      spanFloorY,
       area.height - 2 * FIT_PADDING - 2 * marginY,
     );
     // A span too small to map keeps the identity scale, centered.

@@ -197,7 +197,7 @@ While the graph renders, the spec view shall move a camera over a fixed layout r
 When the graph builds its picture, the spec view shall settle a deterministic arrangement and solve its presentation rather than tune it ([DR-027](../decisions/027-linked-views-contract.md)):
 
 - the settled arrangement is a pure function of the tree and its rendered label extents — never of the pane — computed to rest before first paint with no opening animation, holding a minimum separation between whole marks, each node's name included;
-- the picture maps the arrangement onto the pane: positions span the drawing area within a bounded aspect relaxation, never beyond the bound;
+- the picture maps the arrangement onto the pane: positions span the drawing area within a bounded aspect relaxation, never beyond the bound, and the room reserved for the marks' own extents never takes more than half of the drawing area on either axis — a pane too short for its marks lets the marks at its edges reach past the edge rather than collapsing the picture onto a point;
 - marks then take the largest single scale at which no circle-and-label mark touches another, solved exactly over pairs, with the 24px activation-target floor winning over overlap, the size cap applying last, and label widths capped with an ellipsis;
 - a span too small to map falls back to the identity scale, centered;
 - a node dragged follows the pointer while the rest adjusts live and comes to rest after release; a release that moved its node moves only that node, leaving the selection where it was [[spec-view-42](#spec-view-42)];
@@ -326,7 +326,7 @@ The core package shall list `specs/decisions/*.md` as decision records and the u
 The spec view shall scroll each of its forms — the outline beside the graph, the records reader [[spec-view-7](#spec-view-7)], and the editor [[spec-view-48](#spec-view-48)] — inside its own box, which fills the surface it is given and never grows past it, however long the tree ([DR-041](../decisions/041-chrome-that-fits.md)):
 
 - each such box is a positioned box, so the screen-reader-only text, the graph's own card [[spec-view-26](#spec-view-26)], and a citation's preview [[spec-view-61](#spec-view-61)] are contained by the box they belong to rather than being carried by the page;
-- each half of the graph split [[spec-view-20](#spec-view-20)] keeps a readable floor — the outline's package tree never squeezed to nothing by its own filter row — and the split scrolls as one where the surface cannot hold both floors, so what does not fit is reached rather than clipped away.
+- each half of the graph split [[spec-view-20](#spec-view-20)] keeps a readable floor — the outline's package tree never squeezed to nothing by its own filter row, the graph half holding one floor beside or below the outline with its drawing surface filling the half rather than resting at an svg's default — and the split scrolls as one where the surface cannot hold both floors, so what does not fit is reached rather than clipped away.
 
 ## Internal Behavior
 
@@ -459,7 +459,7 @@ Where the graph renders in the light and the dark theme, the test suite shall as
 
 #### spec-view-40
 
-Where a fixture tree renders twice in one pane, the test suite shall assert the picture contract of [[spec-view-28](#spec-view-28)]: both renders settle identical node positions, no two circle-and-label marks overlap at the fitted view with every node at or above its activation-target floor [[spec-view-28](#spec-view-28)], a drag moves its node without taking the selection, a dragged node's positions are gone after a remount, and a package no citation reaches still holds a position within the layout.
+Where a fixture tree renders twice in one pane and once in a pane too short for its marks, the test suite shall assert the picture contract of [[spec-view-28](#spec-view-28)]: both renders settle identical node positions, no two circle-and-label marks overlap at the fitted view with every node at or above its activation-target floor [[spec-view-28](#spec-view-28)], a drag moves its node without taking the selection, a dragged node's positions are gone after a remount, a package no citation reaches still holds a position within the layout, and in a pane too short for its marks the positions still span half the drawing area's height [[spec-view-28](#spec-view-28)].
 
 #### spec-view-41
 
@@ -508,4 +508,5 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, when the journey opens the Specs tab with the graph shown and one package expanded at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained [[spec-view-59](#spec-view-59)], within every list row no two visible siblings overlap and every child lies inside its parent [[spec-view-1](#spec-view-1)] [[spec-view-55](#spec-view-55)] [[spec-view-3](#spec-view-3)], and every control keeps its accessible name at every size [[spec-view-1](#spec-view-1)]:
 
 - at the 320-pixel floor in a 400-pixel-tall window, the outline's package tree stands with a height a row can be read in and scrolls to the rest [[spec-view-59](#spec-view-59)];
+- at every size, the graph half stands at least as tall as its floor and, beside the outline, as the split's box, with its drawing surface filling the half less its legend [[spec-view-59](#spec-view-59)];
 - a package node at each edge of the graph pane answers, on taking focus, with a card lying wholly inside that pane [[spec-view-26](#spec-view-26)].

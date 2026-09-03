@@ -1594,16 +1594,22 @@ export function SpecView(props: SpecViewProps) {
           // it. Each half keeps a readable floor and the split itself
           // scrolls when the surface cannot hold both, so neither is
           // squeezed to nothing under the root's clip (spec-view-59).
+          // Beside the outline the split takes the box's own height,
+          // and the graph's half is a column its pane grows in, so the
+          // drawing surface fills the half in either arrangement
+          // instead of resting at an svg's default height. The half's
+          // floor holds in both arrangements: a box shorter than it
+          // scrolls, as it does for the outline's floor.
           <div
             ref={outlineBoxRef}
             className="@container relative flex min-h-0 flex-1 items-start overflow-y-auto"
           >
           <div
             ref={splitRef}
-            className="flex min-h-full w-full flex-col gap-4 @2xl:flex-row @2xl:gap-0"
+            className="flex min-h-full w-full flex-col gap-4 @2xl:h-full @2xl:flex-row @2xl:gap-0"
           >
             <div
-              className="min-h-24 flex-1 @2xl:h-full @2xl:min-h-0 @2xl:w-[var(--graph-share)] @2xl:flex-none"
+              className="flex min-h-72 flex-1 flex-col @2xl:h-full @2xl:w-[var(--graph-share)] @2xl:flex-none"
               style={{ ["--graph-share" as string]: `${share * 100}%` }}
             >
               <SpecGraph

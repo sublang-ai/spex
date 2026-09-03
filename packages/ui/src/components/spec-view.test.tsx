@@ -1387,7 +1387,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
 
   /** A pane with real dimensions, so the camera has something to fit
    * (spec-view-27); jsdom reports zero otherwise. */
-  const sized = () => {
+  const sized = (box = { width: 800, height: 600 }) => {
     const width = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       "clientWidth",
@@ -1409,8 +1409,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const rect = Element.prototype.getBoundingClientRect;
     Element.prototype.getBoundingClientRect = function () {
       return {
-        x: 0, y: 0, left: 0, top: 0, right: 800, bottom: 600,
-        width: 800, height: 600, toJSON: () => ({}),
+        x: 0, y: 0, left: 0, top: 0, right: box.width, bottom: box.height,
+        width: box.width, height: box.height, toJSON: () => ({}),
       } as DOMRect;
     };
     return () => {
@@ -1778,6 +1778,20 @@ describe("spec-view-20: citation graph beside the outline", () => {
     restore();
   });
 
+  // spec-view-40: a pane too short for its marks keeps the picture.
+  test("a short pane keeps the arrangement spread over half its height", () => {
+    const restore = sized({ width: 800, height: 150 });
+    render(<Harness tree={GRAPH_TREE} />);
+    const ys = ["auth", "billing", "session", "glossary"].map((name) =>
+      Number(circleOf(name).getAttribute("cy")),
+    );
+    // Half the padded height: 150 less twice the 14px fit padding,
+    // where the marks' own margins used to eat the whole span
+    // (spec-view-28).
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThanOrEqual(60);
+    restore();
+  });
+
   // spec-view-41: emphasis, keyboard, cards, camera, and scoping.
   test("selection holds through transit, and the keyboard drives the graph", () => {
     const restore = sized();
@@ -1935,7 +1949,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const graphPane = screen.getByTestId("spec-graph").parentElement as HTMLElement;
     const outlinePane = screen.getByTestId("file-toggle-auth").closest("div.flex.min-h-40");
     expect(outlinePane).not.toBeNull();
-    expect(graphPane.className).toContain("min-h-24");
+    expect(graphPane.className).toContain("min-h-72");
     // The stacked split scrolls as one, so a floor that outgrows the
     // surface is reachable instead of clipped by the root.
     const split = graphPane.parentElement as HTMLElement;

@@ -409,7 +409,44 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
         if ((await file.getAttribute("aria-expanded")) !== "true") await file.click();
         await expect(page.getByTestId(/^item-toggle-/).first()).toBeVisible();
       },
-      ready: () => expect(page.getByTestId("specv-live")).toBeVisible(),
+      ready: async () => {
+        await expect(page.getByTestId("specv-live")).toBeVisible();
+        // The graph half fills the split's box beside the outline, or
+        // its own floor where that is taller, and the drawing surface
+        // fills the half less its legend (spec-view-59). A pane whose height
+        // fails to resolve is exactly as tall as its legend plus the
+        // 150px an svg falls back to, so the half is measured against
+        // the box it owes its height to, never against itself.
+        const fill = await page.getByTestId("spec-graph").evaluate((pane) => {
+          const svg = pane.querySelector("svg");
+          const others = Array.from(pane.children)
+            .filter((child) => child !== svg)
+            .reduce((sum, child) => sum + child.getBoundingClientRect().height, 0);
+          const half = pane.parentElement!;
+          const split = half.parentElement!;
+          const box = split.parentElement!;
+          const paneBox = pane.getBoundingClientRect();
+          return {
+            pane: paneBox.height,
+            svg: svg?.getBoundingClientRect().height ?? 0,
+            others,
+            besideOutline: paneBox.width < split.getBoundingClientRect().width - 1,
+            box: box.clientHeight,
+            floor: Number.parseFloat(getComputedStyle(half).minHeight) || 0,
+          };
+        });
+        const owed = Math.max(fill.floor, fill.besideOutline ? fill.box : 0);
+        expect(
+          fill.pane,
+          `the graph half is ${fill.pane}px tall with a ${fill.floor}px floor ${
+            fill.besideOutline ? `beside the outline in a ${fill.box}px box` : "below the outline"
+          }`,
+        ).toBeGreaterThanOrEqual(owed - 1);
+        expect(
+          fill.svg,
+          `the graph's drawing surface is ${fill.svg}px tall in a ${fill.pane}px pane`,
+        ).toBeGreaterThanOrEqual(fill.pane - fill.others - 1);
+      },
     },
     {
       name: "Playbooks",

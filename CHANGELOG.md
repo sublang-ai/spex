@@ -18,6 +18,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 - The player pane's usage line reports tokens only; no monetary figure appears anywhere in the interface, whatever the runtime reported (IR-073).
 
+### Fixed
+
+- The spec graph beside the outline draws at its pane's full height again instead of an svg's 150-pixel default, the stacked graph pane keeps a readable floor, and a pane too short for its marks squashes the picture rather than collapsing every package onto one point (IR-072).
+
 ## [0.4.0] - 2026-09-02
 
 ### Added

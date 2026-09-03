@@ -564,7 +564,7 @@ export function SpecGraph({
     <div
       ref={containerRef}
       data-testid="spec-graph"
-      className="@container relative flex h-full min-h-0 flex-col"
+      className="@container relative flex min-h-0 flex-1 flex-col"
     >
       <svg
         ref={svgRef}
