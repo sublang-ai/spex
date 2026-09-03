@@ -430,7 +430,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             </button>
           )}
           {error ? (
-            <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+            <div
+              data-testid="palette-error"
+              className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+            >
               {error}
             </div>
           ) : null}

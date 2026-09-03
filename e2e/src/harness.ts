@@ -63,12 +63,46 @@ export interface AppOptions {
   history?: number;
   /** The core's environment; readiness derives from it. */
   env?: NodeJS.ProcessEnv;
+  /** Serve the Sources band from a substitute forge adapter instead
+   * of `gh`: open issues and a pull request carrying ordinary GitHub
+   * labels, so a labelled row can be measured hermetically. */
+  forge?: boolean;
   /**
    * How long each fake player call stays in flight; long enough to
    * act during a turn, short enough to keep the journey quick.
    */
   agentDelayMs?: number;
 }
+
+/** The substitute forge's data (dashboard-49): the labels are the
+ * ordinary GitHub words a real repository carries. */
+const FORGE_FIXTURE = {
+  adapter: "github" as const,
+  authenticated: true,
+  repo: "sublang/demo-project",
+  issues: [
+    {
+      number: 7,
+      title: "Token refresh drops the session after ninety seconds",
+      url: "https://github.com/sublang/demo-project/issues/7",
+      labels: ["documentation", "help wanted", "auth"],
+    },
+    {
+      number: 9,
+      title: "The README badge is stale",
+      url: "https://github.com/sublang/demo-project/issues/9",
+      labels: ["good first issue"],
+    },
+  ],
+  prs: [
+    {
+      number: 11,
+      title: "Tighten the expiry tests",
+      url: "https://github.com/sublang/demo-project/pull/11",
+      labels: ["dependencies"],
+    },
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // A protocol client for arranging state (never for asserting the UI)
@@ -223,6 +257,9 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
           captainFactory: async () => demoCaptain(),
           env,
           home,
+          ...(options.forge
+            ? { forgeAdapter: { state: async () => FORGE_FIXTURE } }
+            : {}),
         },
   };
 

@@ -1591,7 +1591,10 @@ export function SpecView(props: SpecViewProps) {
             </div>
             <div className="flex min-h-40 min-w-0 flex-1 flex-col">
               {outlineControls}
-              <ul className="relative flex min-h-0 flex-col overflow-y-auto pr-1">
+              <ul
+                data-testid="specs-outline"
+                className="relative flex min-h-0 flex-col overflow-y-auto pr-1"
+              >
                 {outline}
                 {decisionsBranch}
               </ul>
@@ -1601,7 +1604,7 @@ export function SpecView(props: SpecViewProps) {
         ) : (
           <div className="flex flex-col">
             {outlineControls}
-            <ul className="flex flex-col">
+            <ul data-testid="specs-outline" className="flex flex-col">
               {outline}
               {decisionsBranch}
             </ul>
