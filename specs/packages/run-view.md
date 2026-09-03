@@ -131,10 +131,11 @@ The Boss composer — on the Captain home and in a session alike — shall take 
 
 | Part | Form |
 | --- | --- |
-| Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport and scrolling past that, refitted when the viewport resizes, with no native resize grip |
+| Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport and scrolling past that, refitted whenever the viewport or the field's own box resizes — a divider dragged or a sidebar folded rewraps the draft with no window resize behind it — with no native resize grip |
 | Caption | one line under the field reading "/ for playbooks · Enter sends", which an acknowledgment or the staged intent chip occupies instead of stacking above the box |
 | Action row | beneath, wrapping: the secondary action at the left, then Abort while a turn runs, and the primary control last at the right |
 | Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Sends after this turn…" while a turn runs, "Connecting…" without the core |
+| Queued indicator | above the field, the queued submissions [[run-view-8](#run-view-8)] in their own positioned scrolling frame a few entries tall, kept at its end so the newest shows; the composer yields around it, so the field, the caption, and the action row keep their place at any queue length and the pane the composer sits in is never pushed out of the window |
 
 #### run-view-9
 
@@ -220,7 +221,10 @@ The run view shall present conversations in instant-messaging form:
 
 #### run-view-32
 
-When the user opens the captain identity's editor control (or another agent's editor control elsewhere in the run view), the run view shall show an anchored popover in place — offering the embedded runtime's adapters with their readiness, and editing the agent's model, its adapter's effort vocabulary, and permissions ([DR-019](../decisions/019-inline-agent-configuration.md)) — writing changes as a merge patch through the shared configuration's validated edit path per [DR-009](../decisions/009-at-hand-interaction.md), without leaving the current surface.
+When the user opens the captain identity's editor control (or another agent's editor control elsewhere in the run view), the run view shall show an anchored popover in place — offering the embedded runtime's adapters with their readiness, and editing the agent's model, its adapter's effort vocabulary, and permissions ([DR-019](../decisions/019-inline-agent-configuration.md)) — writing changes as a merge patch through the shared configuration's validated edit path per [DR-009](../decisions/009-at-hand-interaction.md), without leaving the current surface:
+
+- the popover opens on the side of its anchor with the more room and takes at most what the window can show there, scrolling inside that bound, so it never lies past an edge the reader cannot scroll to and never grows the page ([DR-041](../decisions/041-chrome-that-fits.md)) — the Captain home's control sits at the foot of the surface, where the room above and below changes with the window's height;
+- a window resized while the popover is open re-decides its side and its room.
 
 #### run-view-33
 
@@ -274,6 +278,10 @@ The session state chip shall show a human-readable label (amber while waiting on
 #### run-view-46
 
 When new content arrives below the fold of a scrolled-up Captain or player pane, the pane shall show a jump-to-latest pill that scrolls to the bottom and resumes following.
+
+#### run-view-120
+
+While a Captain or player pane is following its end, when the pane's own box changes size, the pane shall stay at its end: chrome moving — the sidebar folding, the divider dragged [[run-view-81](#run-view-81)], panes stacking [[run-view-107](#run-view-107)], a lane unfolding [[run-view-117](#run-view-117)] — is never the reader scrolling away, so the run keeps following itself and no pill is owed ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 ### Machine Cards
 
@@ -417,9 +425,9 @@ While the attention count [[run-view-34](#run-view-34)] exceeds nine, the sideba
 
 The run view shall divide the Captain column from the player panes at a divider the reader sets, persisting across launches ([DR-030](../decisions/030-workspace-chrome.md)):
 
-- the divider drags, nudges by arrow key, and restores its default on a double-click or Home;
+- the divider drags — landing under the pointer, the share read against the same box it resolves against, so the rule never trails the hand that moves it — nudges by arrow key, and restores its default on a double-click or Home;
 - the split is bounded so neither side can be squeezed away;
-- a machine drawing [[run-view-60](#run-view-60)] wider than its column by less than a quarter scales down to the column — the drawing's own container decides, as a container query and never a width hook ([DR-041](../decisions/041-chrome-that-fits.md)) — and one wider than that keeps its size and scrolls, the column showing that more lies beyond its edge — a drawing cut without a sign reads as broken rather than scrollable;
+- a machine drawing [[run-view-60](#run-view-60)] wider than its column by less than a quarter scales down to the column — the drawing's own container decides, as a container query and never a width hook ([DR-041](../decisions/041-chrome-that-fits.md)) — and one wider than that keeps its size and scrolls, the column showing that more lies beyond its edge — a drawing cut without a sign reads as broken rather than scrollable — the sign following the column's width as well as the reader's scrolling, so a drawing read to its end regains it when the column narrows behind more drawing;
 - the default is a 45% share, at which the built-in machines' drawings scale into a 1280px window's Captain column rather than scroll, and it holds whether or not a drawing is up — chrome never moves by itself ([DR-030](../decisions/030-workspace-chrome.md)).
 
 #### run-view-107
@@ -726,7 +734,7 @@ When the Captain home composer and thread render against the fixture playbook, t
 
 #### run-view-35
 
-When the captain editor popover is opened from the Captain home with a fixture captain block, the test suite shall assert it offers the runtime's adapters with their readiness, that changing the adapter or model issues a captain merge patch through the configuration edit path, and that the patch carries the editor's surfaced fields and never a hand-written one — all without a surface change [[run-view-32](#run-view-32)].
+When the captain editor popover is opened from the Captain home with a fixture captain block, the test suite shall assert it offers the runtime's adapters with their readiness, that changing the adapter or model issues a captain merge patch through the configuration edit path, that the patch carries the editor's surfaced fields and never a hand-written one, and that the popover opens on the roomier side of its gear under a cap of the room the window can show there — all without a surface change [[run-view-32](#run-view-32)].
 
 #### run-view-36
 
@@ -742,11 +750,11 @@ Where a fixture stream calls one player under two roles, the test suite shall as
 
 #### run-view-82
 
-Where the run view renders with its default split, the test suite shall assert the divider contract of [[run-view-81](#run-view-81)]: an arrow key moves the split and a double-click restores the default of 45%, the split survives a remount, a nudge past either bound stops at that bound, and a machine drawing carries the scale-or-scroll rule — its natural width, the floor at four fifths of it, and the container query choosing between them — inside a scrolling box that masks its edge.
+Where the run view renders with its default split, the test suite shall assert the divider contract of [[run-view-81](#run-view-81)]: an arrow key moves the split and a double-click restores the default of 45%, the split survives a remount, a nudge past either bound stops at that bound, a drag against a padded container leaves the rule within a pixel of the pointer rather than the padding's width away from it, and a machine drawing carries the scale-or-scroll rule — its natural width, the floor at four fifths of it, and the container query choosing between them — inside a scrolling box that masks its edge, which a box read to its end and then narrowed masks again.
 
 #### run-view-53
 
-While a fixture turn is active, the test suite shall assert the Captain thread shows the working indicator — the Captain thinking while no player runs, and a running player's role with the ticking span since its prompt, the same span in that player's pane header [[run-view-37](#run-view-37)] [[run-view-7](#run-view-7)] — queued entries render in full with the sends-when-this-turn-ends caption [[run-view-38](#run-view-38)], the composer renders a store-provided draft and reports edits to the store [[run-view-39](#run-view-39)], and activating Abort disables it with an "Aborting…" label [[run-view-40](#run-view-40)].
+While a fixture turn is active, the test suite shall assert the Captain thread shows the working indicator — the Captain thinking while no player runs, and a running player's role with the ticking span since its prompt, the same span in that player's pane header [[run-view-37](#run-view-37)] [[run-view-7](#run-view-7)] — queued entries render in full with the sends-when-this-turn-ends caption [[run-view-38](#run-view-38)] inside a frame kept at its end that the composer's own box holds its place beside [[run-view-106](#run-view-106)], the composer renders a store-provided draft and reports edits to the store [[run-view-39](#run-view-39)], and activating Abort disables it with an "Aborting…" label [[run-view-40](#run-view-40)].
 
 #### run-view-54
 
@@ -876,4 +884,10 @@ Where the harness boots with the demo project registered and carrying closed wor
 - the page never scrolls vertically, no scrolling box ends past the bottom of the viewport, and no positioned element lies past it with no scrolling box containing it — at either height, and again after the window is made short and tall within one page life [[run-view-119](#run-view-119)];
 - within every tab list, toolbar, header, list row, and composer box, no two visible siblings overlap and every child lies inside its parent [[run-view-106](#run-view-106)] [[run-view-71](#run-view-71)];
 - every control's accessible name is the same at every width [[run-view-8](#run-view-8)] [[run-view-85](#run-view-85)] [[run-view-47](#run-view-47)];
-- the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)].
+- the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)];
+- the Captain home's agent popover, opened at each height, lies inside the window with its adapter picker reachable and the page unmoved [[run-view-32](#run-view-32)];
+- a composer standing behind six queued submissions keeps its frame a few entries tall and its primary control inside the window at every width and height [[run-view-106](#run-view-106)].
+
+#### run-view-121
+
+Where the harness boots with the demo project registered and the scripted Captain, when the journey types a draft and shows the sidebar in a window too short for the thread — chrome moving with no window resize behind it — the test suite shall assert through the page that the narrowed field still stands as tall as the rewrapped draft needs [[run-view-106](#run-view-106)] and that the Captain thread is still at its end [[run-view-120](#run-view-120)].
