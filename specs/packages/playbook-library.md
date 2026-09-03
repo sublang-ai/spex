@@ -79,11 +79,17 @@ When a compiled playbook is registered, the Library shall list it with its regis
 
 #### playbook-library-22
 
-When the user opens a configured playbook's pipeline view, the Library shall present the playbook's compilation stages as three tabs — Source (the workflow markdown the playbook was compiled from), Gears (the GEARS spec items), and State machine (the compiled FSM with its derived state list) — rendering markdown stages as formatted text and the FSM as code.
+While a configured playbook is listed, the Library shall carry that playbook's compilation stages as a permanent row of toggles — Source (the workflow markdown the playbook was compiled from) → Gears (the GEARS spec items) → State machine (the compiled FSM) — whose pressed stage opens its artifact beneath the row:
+
+- Pressing a closed stage opens it and closes the stage that was open, so one stage at a time stands open for that playbook; pressing the open stage closes it.
+- The first open requests that playbook's artifacts [[playbook-library-24](#playbook-library-24)], which the card holds for its later opens; the open stage reads as loading until they arrive, and a failed request leaves its message in the open stage until a later press asks again.
+- A markdown stage renders as formatted text; the State machine stage renders the FSM as code beneath the derived state list.
 
 #### playbook-library-23
 
-Where a stage artifact cannot be located for a playbook, when the pipeline view is opened, the Library shall show which stages are available and name the missing ones, keeping the available stages readable.
+Where the artifacts a playbook served name a stage absent, the Library shall render that stage struck out and inactive in the playbook's stage row [[playbook-library-22](#playbook-library-22)] — its tooltip saying the stage was not found next to that playbook's registry — and shall name the absent stages inside the open stage, leaving every located stage open-able:
+
+- Until a playbook's artifacts arrive, the row marks no stage absent.
 
 ### Pipeline Artifact Handling
 
@@ -126,7 +132,7 @@ When the Library surface is opened, the Library shall list each known built-in p
 
 #### playbook-library-35
 
-When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the pipeline grammar — source, normalized text, gears, and state machine — and shall offer a prefill action that fills the compile form with the example's normalized text and judgment fields — giving each of the example's roles the default agent block — without starting a compile:
+When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that fills the compile form with the example's normalized text and judgment fields — giving each of the example's roles the default agent block — without starting a compile:
 
 - Sources and gears served for display drop their leading maintainer comment headers.
 
@@ -267,5 +273,5 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 - every configured playbook lists with its command, intent, and role bindings [[playbook-library-1](#playbook-library-1)];
 - the built-ins absent from the config list beside them, and enabling one writes it to the config and lists it among the configured playbooks, after which the Captain home's slash menu offers its command [[playbook-library-34](#playbook-library-34)];
-- opening a playbook's pipeline view shows its stages [[playbook-library-22](#playbook-library-22)];
+- a playbook's stage row opens the stage pressed, swaps to another pressed beside it, and closes on a second press of the open one [[playbook-library-22](#playbook-library-22)];
 - removing a configured playbook asks for the inline confirm — Remove or Keep [[playbook-library-26](#playbook-library-26)] — then leaves the config without it [[playbook-library-16](#playbook-library-16)].

@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Library surface (PBLIB): configured playbooks with per-role inline
-// agents (DR-019) and the pipeline view (Source → Gears → State
-// machine), plus the compile flow driving slc through the core with
-// streamed, persistent progress.
+// agents (DR-019) and the pipeline stage row (Source → Gears →
+// State machine), plus the compile flow driving slc through the
+// core with streamed, persistent progress.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   AgentBlockInput,
   AgentSummary,
@@ -64,96 +64,161 @@ const STAGES = [
 ] as const;
 type StageKey = (typeof STAGES)[number]["key"];
 
-/** Pipeline view (PBLIB-22/23): Source → Gears → State machine. */
-function PipelinePanel({ playbookId }: { playbookId: string }) {
-  const [artifacts, setArtifacts] = useState<PlaybookArtifacts>();
-  const [error, setError] = useState<string>();
-  const [stage, setStage] = useState<StageKey>("source");
-
-  useEffect(() => {
-    getClient()
-      .command("playbook.artifacts", { playbookId })
-      .then((loaded) => {
-        setArtifacts(loaded);
-        // Land on the first stage that actually exists.
-        const first = STAGES.find((entry) => loaded[entry.key] !== null);
-        if (first) setStage(first.key);
-      })
-      .catch((cause: Error) => setError(cause.message));
-  }, [playbookId]);
-
-  if (error) {
-    return <div className="text-xs text-red-500">{error}</div>;
-  }
-  if (!artifacts) {
-    return <div className="text-xs text-neutral-500">loading pipeline…</div>;
-  }
-
-  const content = artifacts[stage];
-
+/** The pipeline as a row (PBLIB-22): a card wears its stages joined
+ * by arrows, each stage a toggle opening its artifact beneath. The
+ * row is a control row on a card, so labels hold the 14-character
+ * budget (DR-041) and every stage keeps a 24px target (DR-010 §7). */
+function StageRow<Key extends string>({
+  stages,
+  open,
+  absent,
+  onPress,
+  testId,
+}: {
+  stages: readonly { key: Key; label: string; hint: string }[];
+  /** The stage standing open, if any — one at a time per card. */
+  open?: Key;
+  /** Stages the load reported missing; empty until it lands. */
+  absent?: readonly string[];
+  onPress: (key: Key) => void;
+  testId: string;
+}) {
   return (
-    <div className="flex flex-col gap-2" data-testid={`pipeline-${playbookId}`}>
-      <div className="flex items-center gap-1">
-        {STAGES.map((entry, index) => (
+    // The row is flush with the card's content: the first label's
+    // own padding is pulled back, and each arrow travels with the
+    // stage before it so a wrapped line starts on a label.
+    <div className="-ml-2 flex flex-wrap items-center gap-1" data-testid={testId}>
+      {stages.map((entry, index) => {
+        const missing = absent?.includes(entry.key) ?? false;
+        return (
           <span key={entry.key} className="flex items-center gap-1">
-            {index > 0 ? (
-              <span className="text-neutral-300 dark:text-neutral-500">→</span>
-            ) : null}
             <button
               type="button"
-              disabled={artifacts[entry.key] === null}
+              aria-pressed={open === entry.key}
+              disabled={missing}
               title={
-                artifacts[entry.key] === null
+                missing
                   ? `${entry.label} not found next to this playbook's registry`
                   : entry.hint
               }
-              onClick={() => setStage(entry.key)}
-              className={`rounded-md px-2 py-0.5 text-xs ${
-                stage === entry.key
+              onClick={() => onPress(entry.key)}
+              className={`inline-flex min-h-6 items-center rounded-md px-2 text-xs ${
+                open === entry.key
                   ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                  : artifacts[entry.key] === null
-                    ? "text-neutral-300 line-through dark:text-neutral-500"
+                  : missing
+                    ? "text-neutral-400 line-through dark:text-neutral-500"
                     : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
               }`}
             >
               {entry.label}
             </button>
+            {index < stages.length - 1 ? (
+              <span
+                aria-hidden="true"
+                className="text-neutral-400 dark:text-neutral-500"
+              >
+                →
+              </span>
+            ) : null}
           </span>
-        ))}
-      </div>
-      {artifacts.stateIds ? (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            states
-          </span>
-          {artifacts.stateIds.map((state) => (
-            <span
-              key={state}
-              className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
-            >
-              {state}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      {artifacts.missing.length > 0 ? (
-        <div className="text-xs text-amber-600 dark:text-amber-400">
-          missing stages: {artifacts.missing.join(", ")}
-        </div>
-      ) : null}
-      <div className="relative max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
-        {content === null ? (
-          <div className="text-xs text-neutral-500">
-            this stage was not found for this playbook
+        );
+      })}
+    </div>
+  );
+}
+
+/** The open stage's artifact, in the box beneath the row. */
+function StageBox({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+      {children}
+    </div>
+  );
+}
+
+/** A configured playbook's pipeline (PBLIB-22/23): the stage row is
+ * permanent, and the artifacts arrive on the card's first open —
+ * one request, held for every later open. */
+function PlaybookPipeline({ playbookId }: { playbookId: string }) {
+  const [artifacts, setArtifacts] = useState<PlaybookArtifacts>();
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState<StageKey>();
+
+  function press(key: StageKey): void {
+    setOpen((current) => (current === key ? undefined : key));
+    // Lazy and once: what arrived stays; a failed request is asked
+    // again by the next open (DR-010 §5).
+    if (artifacts || loading) return;
+    setLoading(true);
+    setError(undefined);
+    getClient()
+      .command("playbook.artifacts", { playbookId })
+      .then((loaded) => setArtifacts(loaded))
+      .catch((cause: Error) => setError(cause.message))
+      .finally(() => setLoading(false));
+  }
+
+  const content = open && artifacts ? artifacts[open] : null;
+  const missingLabels = (artifacts?.missing ?? []).map(
+    (key) => STAGES.find((entry) => entry.key === key)?.label ?? key,
+  );
+
+  return (
+    <div className="flex flex-col gap-2">
+      <StageRow
+        stages={STAGES}
+        open={open}
+        absent={artifacts?.missing}
+        onPress={press}
+        testId={`stages-${playbookId}`}
+      />
+      {open ? (
+        <StageBox>
+          <div
+            className="flex flex-col gap-2"
+            data-testid={`pipeline-${playbookId}`}
+          >
+            {missingLabels.length > 0 ? (
+              <div className="text-xs text-amber-600 dark:text-amber-400">
+                missing stages: {missingLabels.join(", ")}
+              </div>
+            ) : null}
+            {error ? (
+              <div className="text-xs text-red-500">{error}</div>
+            ) : !artifacts ? (
+              <div className="text-xs text-neutral-500">loading…</div>
+            ) : content === null ? (
+              <div className="text-xs text-neutral-500">
+                this stage was not found for this playbook
+              </div>
+            ) : open === "fsm" ? (
+              <>
+                {artifacts.stateIds ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                      states
+                    </span>
+                    {artifacts.stateIds.map((state) => (
+                      <span
+                        key={state}
+                        className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                      >
+                        {state}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
+                  {content}
+                </pre>
+              </>
+            ) : (
+              <Markdown text={content} />
+            )}
           </div>
-        ) : stage === "fsm" ? (
-          <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
-            {content}
-          </pre>
-        ) : (
-          <Markdown text={content} />
-        )}
-      </div>
+        </StageBox>
+      ) : null}
     </div>
   );
 }
@@ -343,8 +408,10 @@ const EXAMPLE_STAGES = [
   { key: "source", label: "Source", hint: "The raw prose the demo starts from" },
   {
     key: "normalized",
-    label: "Normalized text",
-    hint: "slc's normalize phase turns the prose into workflow markdown",
+    // The row is card chrome, so the label holds the 14-character
+    // budget and the full truth lives in the title (DR-041).
+    label: "Normalized",
+    hint: "Normalized text: slc's normalize phase turns the prose into workflow markdown",
   },
   {
     key: "gears",
@@ -359,12 +426,12 @@ const EXAMPLE_STAGES = [
 ] as const;
 type ExampleStageKey = (typeof EXAMPLE_STAGES)[number]["key"];
 
-/** Read-only slc demo card (DR-015): the two-agent workflow in the
- * pipeline grammar, with a compile-form prefill. */
+/** Read-only slc demo card (PBLIB-35, DR-015): the same stage row as
+ * a configured playbook wears, over four in-memory stages, with a
+ * compile-form prefill. */
 function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [stage, setStage] = useState<ExampleStageKey>("source");
-  const content = SLC_DEMO.stages[stage];
+  const [stage, setStage] = useState<ExampleStageKey>();
+  const content = stage ? SLC_DEMO.stages[stage] : undefined;
 
   return (
     <div
@@ -387,50 +454,25 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
         >
           Prefill form
         </button>
-        <button
-          type="button"
-          data-testid="example-toggle"
-          onClick={() => setOpen((current) => !current)}
-          className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-        >
-          {open ? "Hide pipeline" : "Pipeline"}
-        </button>
       </div>
-      {open ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-1">
-            {EXAMPLE_STAGES.map((entry, index) => (
-              <span key={entry.key} className="flex items-center gap-1">
-                {index > 0 ? (
-                  <span className="text-neutral-300 dark:text-neutral-500">
-                    →
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  title={entry.hint}
-                  onClick={() => setStage(entry.key)}
-                  className={`rounded-md px-2 py-0.5 text-xs ${
-                    stage === entry.key
-                      ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                      : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                  }`}
-                >
-                  {entry.label}
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="relative max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
-            {stage === "fsm" || stage === "source" ? (
-              <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
-                {content}
-              </pre>
-            ) : (
-              <Markdown text={content} />
-            )}
-          </div>
-        </div>
+      <StageRow
+        stages={EXAMPLE_STAGES}
+        open={stage}
+        onPress={(key) =>
+          setStage((current) => (current === key ? undefined : key))
+        }
+        testId="example-stages"
+      />
+      {content !== undefined ? (
+        <StageBox>
+          {stage === "fsm" || stage === "source" ? (
+            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
+              {content}
+            </pre>
+          ) : (
+            <Markdown text={content} />
+          )}
+        </StageBox>
       ) : null}
     </div>
   );
@@ -453,7 +495,6 @@ export function LibrarySurface({
 
   const [toolchain, setToolchain] = useState<Toolchain>();
   const [error, setError] = useState<string>();
-  const [openPipeline, setOpenPipeline] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState<string>();
   const [rolePopover, setRolePopover] = useState<{
     playbookId: string;
@@ -630,17 +671,6 @@ export function LibrarySurface({
                 {playbook.intent}
               </span>
               <span className="ml-auto" />
-              <button
-                type="button"
-                onClick={() =>
-                  setOpenPipeline((current) =>
-                    current === playbook.id ? undefined : playbook.id,
-                  )
-                }
-                className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-              >
-                {openPipeline === playbook.id ? "Hide pipeline" : "Pipeline"}
-              </button>
               {confirmDelete === playbook.id ? (
                 <InlineConfirm
                   question="Remove this playbook from the config?"
@@ -764,9 +794,7 @@ export function LibrarySurface({
                 </span>
               </span>
             </div>
-            {openPipeline === playbook.id ? (
-              <PipelinePanel playbookId={playbook.id} />
-            ) : null}
+            <PlaybookPipeline playbookId={playbook.id} />
           </div>
         ))}
         {summary.playbooks.length === 0 ? (
