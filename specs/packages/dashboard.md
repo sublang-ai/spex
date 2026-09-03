@@ -210,7 +210,7 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 | Queued | not closed and not bound: never dispatched, or released [[dashboard-34](#dashboard-34)] |
 | Blocked (a Queued sub-condition) | its after-link names an intent that is still open; the block lifts by derivation when the predecessor closes |
 | Working | bound, and the latest turn in its range is active |
-| Interrupted — question | bound, not closed, captain telemetry `playbook.fsm.state` reached `awaitBossReply` in its range, and no later Boss turn has started in the session |
+| Interrupted — question | bound, not closed, captain telemetry `playbook.fsm.state` reached `awaitBossReply` in its range with no later report of that machine leaving it — another machine's state report, the Captain's own included, leaves the question standing — and no later Boss turn has started in the session |
 | Interrupted — permission | bound, not closed, a player event in its range carried `permission_request` with no later record for that player in the same turn, and the turn has not ended |
 | Interrupted — failure | bound, not closed, a `runtime_error` record — or a turn whose engagement settled failed — lies in its range, and no later Boss turn has started in the session; the Boss's next turn acknowledges it, and a verdict also clears it |
 | Finished | bound, not closed, not interrupted, no turn in its range active, and a turn in its range ended finished — an aborted follow-up does not unseat a standing finish |

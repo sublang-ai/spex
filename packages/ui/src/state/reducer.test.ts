@@ -432,3 +432,52 @@ describe("run-view-2: a failure repeated is one line with a count", () => {
     expect(errors[0].count).toBe(2);
   });
 });
+
+describe("run-view-9: a parked question outlives other machines' reports", () => {
+  const park = {
+    seq: 970,
+    record: {
+      type: "captain_telemetry",
+      turnId: 1,
+      timestamp: 7000,
+      topic: "playbook.fsm.state",
+      payload: {
+        from: "planAnalysis",
+        to: "awaitBossReply",
+        pendingBossQuestion: {
+          questionId: "planAnalysis",
+          asker: { kind: "role", roleId: "analyst" },
+          question: "Which promise should the README make?",
+        },
+      },
+    },
+  };
+  const captainReport = (seq: number, from: string, to: string) => ({
+    seq,
+    record: {
+      type: "captain_telemetry",
+      turnId: 1,
+      timestamp: 7000 + seq,
+      topic: "playbook.fsm.state",
+      payload: { from, to },
+    },
+  });
+
+  test("the Captain's own machine reporting after the park keeps the question", () => {
+    const view = applyRecords(fresh(), [
+      park,
+      captainReport(971, "deciding", "reporting"),
+      captainReport(972, "reporting", "hub"),
+    ] as never);
+    expect(view.pendingQuestion).toBe("Which promise should the README make?");
+  });
+
+  test("the parked machine leaving its park answers the question", () => {
+    const view = applyRecords(fresh(), [
+      park,
+      captainReport(971, "deciding", "reporting"),
+      captainReport(973, "awaitBossReply", "planAnalysis"),
+    ] as never);
+    expect(view.pendingQuestion).toBeUndefined();
+  });
+});

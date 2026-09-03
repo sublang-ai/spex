@@ -125,7 +125,8 @@ While an engagement awaits a Boss reply, the run view shall present the waiting 
 
 - the Captain thread renders the question as a first-class incoming message bubble naming the asking player (one identity: the player's pane id), replacing — not duplicating — the runtime's status-line narration of the same question;
 - a compact banner above the Boss composer names the waiting player without repeating the question;
-- when the Boss submits, the Boss composer sends the submission as the reply to the waiting question — not as a new Boss prompt — and clears the banner.
+- when the Boss submits, the Boss composer sends the submission as the reply to the waiting question — not as a new Boss prompt — and clears the banner;
+- the question stands until the parked machine itself leaves its park — a state report of any other machine, the Captain's own controller machine included, never clears it.
 
 ### Turn Control
 

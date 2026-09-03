@@ -1397,3 +1397,53 @@ test("core-service-54: ledger.get replies identically after a service restart, a
   client2.close();
   await restarted.stop();
 });
+
+test("dashboard-10: the Captain's own machine reporting after a park leaves the question standing", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "Q", "i");
+  beginTurn(store, "s1", 1, "plan it", 1000);
+  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "planAnalysis", to: "awaitBossReply" },
+    turnId: 1,
+    timestamp: 1500,
+  });
+  // The controller Captain's machine reports its own states after
+  // the /dev machine parked — recorded verbatim from a real run.
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "deciding", to: "reporting" },
+    turnId: 1,
+    timestamp: 1600,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "reporting", to: "hub" },
+    turnId: 1,
+    timestamp: 1700,
+  });
+  finishTurn(store, "s1", 1, 2000);
+  let ledger = fold(store, [lane("s1", projectId, false)]);
+  assert.equal(stateOf(ledger, "Q").reason, "question");
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.kind, entry.intentId]),
+    [["question", "Q"]],
+  );
+  // The parked machine leaving its park is what answers it.
+  beginTurn(store, "s1", 2, "only what exists today", 3000);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "awaitBossReply", to: "planAnalysis" },
+    turnId: 2,
+    timestamp: 3100,
+  });
+  ledger = fold(store, [lane("s1", projectId, true)]);
+  assert.equal(ledger.attention.some((entry) => entry.kind === "question"), false);
+  store.close();
+});

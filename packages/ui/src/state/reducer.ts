@@ -493,11 +493,7 @@ export function applyRecord(
     }
     case "captain_telemetry": {
       const topic = String(r.topic);
-      const payload = r.payload as {
-        to?: unknown;
-        state?: unknown;
-        pendingBossQuestion?: unknown;
-      };
+      const payload = r.payload as { from?: unknown; to?: unknown; state?: unknown; pendingBossQuestion?: unknown; };
       // The playbook 2.0 shell reports states as rich objects
       // ({stateId, value, tags, …}); the fake harness and older
       // playbooks report bare strings. Accept both — never hand a
@@ -540,7 +536,10 @@ export function applyRecord(
               at: r.timestamp,
             });
           }
-        } else {
+        } else if (stateText(payload?.from) === "awaitBossReply") {
+          // Only the parked machine leaving its park answers the
+          // question; the Captain's own machine reports its states
+          // after the park and must not clear it (run-view-9).
           view.pendingQuestion = undefined;
           view.pendingQuestionPlayer = undefined;
         }

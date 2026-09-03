@@ -62,7 +62,7 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
       case "captain_telemetry": {
         const telemetry = record as {
           topic?: string;
-          payload?: { to?: unknown; state?: unknown };
+          payload?: { from?: unknown; to?: unknown; state?: unknown };
           turnId: number | null;
           timestamp: number;
         };
@@ -83,7 +83,10 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
             since: telemetry.timestamp,
             turnId: telemetry.turnId,
           };
-        } else if (state !== undefined) {
+        } else if (stateText(telemetry.payload?.from) === "awaitBossReply") {
+          // Only the parked machine leaving its park answers the
+          // question; the Captain's own machine reports its states
+          // after the park and must not clear it (dashboard-10).
           question = undefined;
         }
         break;
