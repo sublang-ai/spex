@@ -10,9 +10,16 @@
 // draw a parsed Gears artifact with nothing but items, an index, and a
 // jump (PBLIB-22).
 
-import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import {
+  useState,
+  type FocusEvent as ReactFocusEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 
 import type { SpecItemInfo } from "@sublang/spex-core/protocol";
+
+import type { CitationAnchors } from "./CitationPreview.js";
 
 import {
   citationSummary,
@@ -75,6 +82,8 @@ export function SpecItemRows({
   onCopy,
   onJump,
   onBodyLinkClick,
+  onBodyLinkPreview,
+  preview,
   onEditItem,
   editFailure,
 }: {
@@ -100,6 +109,16 @@ export function SpecItemRows({
   onCopy?: (id: string) => void;
   onJump: (linkKey: string, targetId: string, originId: string) => void;
   onBodyLinkClick?: (itemId: string, event: ReactMouseEvent) => void;
+  /** Raise the preview for an inline citation, where the host renders
+   * the body's links live (spec-view-61). */
+  onBodyLinkPreview?: (
+    itemId: string,
+    event: ReactMouseEvent | ReactFocusEvent,
+    immediate: boolean,
+  ) => void;
+  /** The card a citation entry raises, where the host holds one
+   * (spec-view-61); without it an entry only jumps. */
+  preview?: CitationAnchors;
   /** Open an item's file in the editor (spec-view-48). */
   onEditItem?: (item: SpecItemInfo) => void;
   /** The last failed open, keyed by the control that asked. */
@@ -156,6 +175,8 @@ export function SpecItemRows({
         onCopy={onCopy ? () => onCopy(item.id) : undefined}
         onJump={onJump}
         onBodyLinkClick={onBodyLinkClick}
+        onBodyLinkPreview={onBodyLinkPreview}
+        preview={preview}
         onEdit={onEditItem ? () => onEditItem(item) : undefined}
         editFailure={
           editFailure?.anchor === `item:${item.id}`
@@ -183,6 +204,8 @@ function ItemRow({
   onCopy,
   onJump,
   onBodyLinkClick,
+  onBodyLinkPreview,
+  preview,
   onEdit,
   editFailure,
 }: {
@@ -202,6 +225,12 @@ function ItemRow({
   onCopy?: () => void;
   onJump: (linkKey: string, targetId: string, originId: string) => void;
   onBodyLinkClick?: (itemId: string, event: ReactMouseEvent) => void;
+  onBodyLinkPreview?: (
+    itemId: string,
+    event: ReactMouseEvent | ReactFocusEvent,
+    immediate: boolean,
+  ) => void;
+  preview?: CitationAnchors;
   /** Open the item's file in the editor with the caret on its heading
    * (spec-view-48); absent where the host wires no write. */
   onEdit?: () => void;
@@ -217,23 +246,28 @@ function ItemRow({
   // complete in both directions, unlike the cross-file file rollup.
   const hint = citationSummary(item.cites.length, inbound.length);
 
-  // Citation entries color by the TARGET's group and preview it in a
-  // title tooltip; a dead target keeps the neutral link style. The
+  // Citation entries color by the TARGET's group and raise the card at
+  // hand instead of the browser's slow native tooltip (spec-view-61);
+  // a dead target keeps the neutral link style. The
   // padding/negative-margin pair grows the hit target past 24px
   // without changing the row's visual density (DR-010 §7).
   const citation = (target: string) => {
     const linkKey = `${item.id}:${target}`;
     const targetGroup = groupOf(itemIndex, target);
-    const targetItem = itemIndex.get(target)?.item;
     return (
       <span key={target} className="inline-flex items-center gap-1">
         <button
           type="button"
           data-testid={`link-${item.id}-${target}`}
-          title={
-            targetItem ? `${target} — ${targetItem.firstLine}` : undefined
-          }
           onClick={() => onJump(linkKey, target, item.id)}
+          onMouseEnter={
+            preview && ((event) => preview.hover(event.currentTarget, target, linkKey))
+          }
+          onMouseLeave={preview?.close}
+          onFocus={
+            preview && ((event) => preview.focus(event.currentTarget, target, linkKey))
+          }
+          onBlur={preview?.close}
           className={`-mx-1 -my-1 rounded px-1 py-1 font-mono text-xs hover:underline ${
             targetGroup ? GROUP_TEXT[targetGroup] : LINK_CLASS
           }`}
@@ -321,6 +355,9 @@ function ItemRow({
       </div>
       {expanded ? (
         <div className="mb-1 ml-2 flex flex-col gap-1 border-l border-neutral-200 pl-3 dark:border-neutral-800">
+          {/* The rendered body's citations are the markdown's own
+              anchors: the row delegates their hover and focus to the
+              same card the citation rows raise (spec-view-61). */}
           <div
             className="relative overflow-x-auto"
             onClick={
@@ -328,6 +365,16 @@ function ItemRow({
                 ? (event) => onBodyLinkClick(item.id, event)
                 : undefined
             }
+            onMouseOver={
+              onBodyLinkPreview &&
+              ((event) => onBodyLinkPreview(item.id, event, false))
+            }
+            onMouseOut={onBodyLinkPreview && preview?.close}
+            onFocus={
+              onBodyLinkPreview &&
+              ((event) => onBodyLinkPreview(item.id, event, true))
+            }
+            onBlur={onBodyLinkPreview && preview?.close}
           >
             <Markdown text={item.text} />
           </div>

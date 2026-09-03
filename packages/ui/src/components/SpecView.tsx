@@ -19,6 +19,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent as ReactFocusEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
@@ -30,6 +31,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 import { SpecEditor } from "./SpecEditor.js";
 import { SpecGraph } from "./SpecGraph.js";
+import { CitationPreview, useCitationPreview } from "./CitationPreview.js";
 
 import {
   ancestorKeys,
@@ -255,6 +257,16 @@ export function SpecView(props: SpecViewProps) {
   const readerBackRef = useRef<HTMLButtonElement | null>(null);
   // DOM id that takes focus back when the reader closes (§6).
   const readerReturnId = useRef<string | null>(null);
+
+  // The citation preview (spec-view-61): one card at a time, laid
+  // inside the box the outline scrolls in — the outline pane with the
+  // graph beside it, the surface root without — so it never carries
+  // width or scroll onto the page (spec-view-59).
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const outlineBoxRef = useRef<HTMLDivElement | null>(null);
+  const preview = useCitationPreview(
+    useCallback(() => outlineBoxRef.current ?? surfaceRef.current, []),
+  );
 
   // The editor (spec-view-48): its draft is lifted state
   // (spec-view-51); what is local here is a failed open, shown beside
@@ -497,6 +509,9 @@ export function SpecView(props: SpecViewProps) {
    * citing item so the floating chip can walk back — never navigate;
    * a dead ID says "not found" next to the clicked link. */
   function jumpTo(linkKey: string, targetId: string, originId: string) {
+    // The jump answers the entry the card was previewing: the card
+    // has nothing left to say (spec-view-61).
+    preview.close();
     if (!revealTarget(targetId)) {
       setNotFoundKey(linkKey);
       setLiveNote(`${targetId} not found`);
@@ -680,6 +695,45 @@ export function SpecView(props: SpecViewProps) {
     }
     // Anything else (sibling spec files, map.md) is inert: no
     // navigation ever happens inside the view.
+  }
+
+  /** The item a body link cites, for the preview: the ID a click
+   * would jump to, an ID absent from the tree included — and nothing
+   * for a record link or a web URL, which a click sends elsewhere
+   * (spec-view-6). */
+  function bodyCitation(itemId: string, anchor: Element): string | undefined {
+    const href = anchor.getAttribute("href") ?? "";
+    if (/^https?:\/\//.test(href)) return undefined;
+    const candidates = linkItemTargets(anchor.textContent ?? "", href);
+    const target = candidates.find((c) => itemIndex.has(c)) ?? candidates[0];
+    if (!target) return undefined;
+    if (itemIndex.has(target)) return target;
+    const sourcePath = itemIndex.get(itemId)?.sourcePath ?? "";
+    return recordForHref(sourcePath, href, [
+      ...tree.decisions,
+      ...tree.intents,
+      META_RECORD,
+      MAP_RECORD,
+    ])
+      ? undefined
+      : target;
+  }
+
+  /** An inline citation raises the same card as a citation row —
+   * settled hover, or focus at once (spec-view-61). A rendered body's
+   * anchors are the markdown's, not React's, so the handler is
+   * delegated from the body's container. */
+  function onBodyLinkPreview(
+    itemId: string,
+    event: ReactMouseEvent | ReactFocusEvent,
+    immediate: boolean,
+  ) {
+    const anchor = (event.target as Element | null)?.closest?.("a");
+    if (!(anchor instanceof HTMLElement)) return;
+    const target = bodyCitation(itemId, anchor);
+    if (!target) return;
+    const raise = immediate ? preview.focus : preview.hover;
+    raise(anchor, target, `body:${itemId}:${target}`);
   }
 
   // One persistent polite live region (DR-010 §7) narrates the
@@ -1218,6 +1272,8 @@ export function SpecView(props: SpecViewProps) {
               onCopy={copyText}
               onJump={jumpTo}
               onBodyLinkClick={onBodyLinkClick}
+              onBodyLinkPreview={onBodyLinkPreview}
+              preview={preview}
             />
             {items.length === 0 ? (
               <div className="text-xs text-neutral-500">
@@ -1295,6 +1351,22 @@ export function SpecView(props: SpecViewProps) {
   // the outline alone keeps a readable document column.
   const graphful = viewState.graph && tree.files.length > 0;
 
+  // The standing card, laid in the box the outline scrolls in — the
+  // outline pane with the graph beside it, the surface root without
+  // (spec-view-61, spec-view-59).
+  const previewLocation = preview.open
+    ? itemIndex.get(preview.open.target)
+    : undefined;
+  const previewCard = preview.open ? (
+    <CitationPreview
+      open={preview.open}
+      item={previewLocation?.item}
+      chipClass={
+        previewLocation ? GROUP_CHIP[previewLocation.group] : undefined
+      }
+    />
+  ) : null;
+
   /** Reveal: the one write a selection is allowed to make beyond its
    * own axis, and additive only — it opens and scrolls, never
    * collapses or clears (spec-view-43). */
@@ -1322,7 +1394,15 @@ export function SpecView(props: SpecViewProps) {
 
   return (
     <div
+      ref={surfaceRef}
       onKeyDown={(event) => {
+        // The citation card is a rung of its own, above the selection
+        // (spec-view-61, spec-view-42).
+        if (event.key === "Escape" && !event.defaultPrevented && preview.open) {
+          event.preventDefault();
+          preview.close();
+          return;
+        }
         // Last rung: whatever had something to dismiss has already
         // claimed the key (spec-view-42).
         if (
@@ -1514,7 +1594,10 @@ export function SpecView(props: SpecViewProps) {
           // it. Each half keeps a readable floor and the split itself
           // scrolls when the surface cannot hold both, so neither is
           // squeezed to nothing under the root's clip (spec-view-59).
-          <div className="@container flex min-h-0 flex-1 items-start overflow-y-auto">
+          <div
+            ref={outlineBoxRef}
+            className="@container relative flex min-h-0 flex-1 items-start overflow-y-auto"
+          >
           <div
             ref={splitRef}
             className="flex min-h-full w-full flex-col gap-4 @2xl:flex-row @2xl:gap-0"
@@ -1583,6 +1666,9 @@ export function SpecView(props: SpecViewProps) {
               </ul>
             </div>
           </div>
+          {/* The card belongs to the box that scrolls the split, so it
+              is placed against what the reader can see (spec-view-61). */}
+          {previewCard}
           </div>
         ) : (
           <div className="flex flex-col">
@@ -1591,6 +1677,7 @@ export function SpecView(props: SpecViewProps) {
               {outline}
               {decisionsBranch}
             </ul>
+            {previewCard}
           </div>
         );
       })()}

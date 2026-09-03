@@ -59,6 +59,18 @@ While an expanded item carries citations or is cited, the spec view shall presen
 - every file node, collapsed included, carries a rollup counting the file's inbound and outbound cross-file item citations — those whose source and target items live in different files, with an outbound citation of an ID absent from the tree counting as cross-file — while item rows and backlink groups keep every citation regardless of file;
 - a record link in an item body stays a plain link, handled per [[spec-view-6](#spec-view-6)].
 
+### Citation Previews
+
+#### spec-view-61
+
+When a citation entry takes a settled hover or keyboard focus — an entry of an item's outbound or backlink rows [[spec-view-19](#spec-view-19)], or an item citation inside a rendered body [[spec-view-6](#spec-view-6)] — the spec view shall answer with one card at hand ([DR-009](../decisions/009-at-hand-interaction.md)) rather than a native tooltip:
+
+- the card carries the cited item's ID chip in its group color [[spec-view-3](#spec-view-3)], its first line, and what the body holds beneath that statement, cut under a fade — the statement itself never repeated — and, for an ID the tree does not carry, that plain fact;
+- hover opens the card only once the pointer has settled on the entry, keyboard focus opens it at once, and a pointer leaving before it settles opens nothing;
+- pointer leave, blur, Escape — the rung above the selection's [[spec-view-42](#spec-view-42)] — and the entry's jump [[spec-view-6](#spec-view-6)] each close it, and one card stands at a time;
+- the standing card is the entry's description for assistive technology and holds nothing focusable, so closing it strands no focus ([DR-010](../decisions/010-interface-craft.md) §6, §7);
+- the card lies inside the box the outline scrolls in [[spec-view-59](#spec-view-59)], below its entry or above it where that box has no room, and never past that box's edges, so it adds neither width nor scroll to the page ([DR-041](../decisions/041-chrome-that-fits.md)).
+
 ### Filters
 
 #### spec-view-4
@@ -91,6 +103,7 @@ When a local link inside the view is activated, the spec view shall resolve it a
 - after an in-view jump, the view offers a one-step return to the citing item, its keyboard reach and announcement already legislated ([DR-010](../decisions/010-interface-craft.md) §6, §7);
 - a cited ID that does not exist in the tree shows a transient "not found" note beside the activated link and does not navigate;
 - a link resolving to a decision or intent record's exact path, or to the tree's own `meta.md`, opens that record in the records reader [[spec-view-7](#spec-view-7)];
+- an item citation inside a rendered body is a focusable link, so the keyboard reaches it and the preview it raises [[spec-view-61](#spec-view-61)] without activating it;
 - any other local link stays inert.
 
 ### Citation Graph
@@ -311,7 +324,7 @@ The core package shall list `specs/decisions/*.md` as decision records and the u
 
 The spec view shall scroll each of its forms — the outline beside the graph, the records reader [[spec-view-7](#spec-view-7)], and the editor [[spec-view-48](#spec-view-48)] — inside its own box, which fills the surface it is given and never grows past it, however long the tree ([DR-041](../decisions/041-chrome-that-fits.md)):
 
-- each such box is a positioned box, so the screen-reader-only text and the graph's own card [[spec-view-26](#spec-view-26)] are contained by the box they belong to rather than being carried by the page;
+- each such box is a positioned box, so the screen-reader-only text, the graph's own card [[spec-view-26](#spec-view-26)], and a citation's preview [[spec-view-61](#spec-view-61)] are contained by the box they belong to rather than being carried by the page;
 - each half of the graph split [[spec-view-20](#spec-view-20)] keeps a readable floor — the outline's package tree never squeezed to nothing by its own filter row — and the split scrolls as one where the surface cannot hold both floors, so what does not fit is reached rather than clipped away.
 
 ## Internal Behavior
@@ -424,6 +437,7 @@ Where a fixture tree contains an unreadable file and unknown entries directly un
 Where a fixture tree carries a package item citing a peer's item, an intra-file citation, a citation of an absent ID, and a test item citing the behavior items it verifies, the test suite shall assert the citation presentation of [[spec-view-19](#spec-view-19)]:
 
 - outbound rows name each cited item in document order, and grouped inbound backlinks sit on each cited target, the intra-file entries included;
+- an entry raises no native tooltip: a settled hover raises the card naming the cited item, its statement carried once, a pointer that leaves first raises nothing, keyboard focus raises it at once and blur drops it, Escape drops it, a second entry leaves one card standing, an ID absent from the tree reads as not in the tree, an inline body citation raises the same card while a record link raises none, and the entry's jump drops it [[spec-view-61](#spec-view-61)];
 - every file node, collapsed included, carries the rollup counting cross-file citations only, with the absent-ID citation counted as outbound;
 - an in-view jump lands from an outbound row and from a backlink, and afterwards the one-step return restores the citing item [[spec-view-6](#spec-view-6)];
 - a jump target excluded by an active search is revealed and marked [[spec-view-6](#spec-view-6)].

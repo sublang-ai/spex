@@ -6,7 +6,14 @@
 // State machine), plus the compile flow driving slc through the
 // core with streamed, persistent progress.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type {
   AgentBlockInput,
   AgentSummary,
@@ -29,7 +36,8 @@ import { Markdown } from "./Markdown.js";
 import { ResizableFrame } from "./ResizableFrame.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
-import { itemDomId, SpecItemRows } from "./SpecItemRows.js";
+import { CitationPreview, useCitationPreview } from "./CitationPreview.js";
+import { GROUP_CHIP, itemDomId, SpecItemRows } from "./SpecItemRows.js";
 import { buildItemIndex } from "../lib/spec-view-model.js";
 
 type Toolchain = CommandResults["compile.check"];
@@ -212,6 +220,13 @@ function GearsItems({ id, file }: { id: string; file: SpecFileInfo }) {
   // it resolves nowhere — the card holds no spec tree.
   const itemIndex = useMemo(() => buildItemIndex([file]), [file]);
   const prefix = `gears-${id}`;
+  // The same card the outline's entries raise (spec-view-61), laid in
+  // this list's own box so the stage frame contains it.
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const preview = useCitationPreview(useCallback(() => boxRef.current, []));
+  const previewed = preview.open
+    ? itemIndex.get(preview.open.target)
+    : undefined;
 
   // The landing waits for the expansion to commit, then scrolls the
   // row into the box, takes focus (DR-010 §6), and flashes it.
@@ -233,30 +248,41 @@ function GearsItems({ id, file }: { id: string; file: SpecFileInfo }) {
   }, [flashId]);
 
   return (
-    <SpecItemRows
-      items={file.items}
-      idPrefix={prefix}
-      itemIndex={itemIndex}
-      expandedItems={expanded}
-      flashId={flashId}
-      notFoundKey={notFoundKey}
-      onToggleItem={(itemId) =>
-        setExpanded((current) => {
-          const next = new Set(current);
-          if (!next.delete(itemId)) next.add(itemId);
-          return next;
-        })
-      }
-      onJump={(linkKey, targetId) => {
-        if (!itemIndex.has(targetId)) {
-          setNotFoundKey(linkKey);
-          return;
+    <div ref={boxRef} className="relative">
+      <SpecItemRows
+        items={file.items}
+        idPrefix={prefix}
+        itemIndex={itemIndex}
+        expandedItems={expanded}
+        flashId={flashId}
+        notFoundKey={notFoundKey}
+        preview={preview}
+        onToggleItem={(itemId) =>
+          setExpanded((current) => {
+            const next = new Set(current);
+            if (!next.delete(itemId)) next.add(itemId);
+            return next;
+          })
         }
-        setNotFoundKey(undefined);
-        setExpanded((current) => new Set(current).add(targetId));
-        setPendingJump(targetId);
-      }}
-    />
+        onJump={(linkKey, targetId) => {
+          preview.close();
+          if (!itemIndex.has(targetId)) {
+            setNotFoundKey(linkKey);
+            return;
+          }
+          setNotFoundKey(undefined);
+          setExpanded((current) => new Set(current).add(targetId));
+          setPendingJump(targetId);
+        }}
+      />
+      {preview.open ? (
+        <CitationPreview
+          open={preview.open}
+          item={previewed?.item}
+          chipClass={previewed ? GROUP_CHIP[previewed.group] : undefined}
+        />
+      ) : null}
+    </div>
   );
 }
 

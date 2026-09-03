@@ -525,9 +525,19 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
       "the review names the commit",
     );
 
+    // A settled hover previews the cited item at hand, the same card
+    // the outline raises (PBLIB-22).
+    fireEvent.mouseEnter(screen.getByTestId("link-CODE-2-CODE-1"));
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("citation-preview").textContent).toContain(
+        "The coder shall write the change.",
+      ),
+    );
+
     // A citation of a sibling lands on it inside the box: the target
     // expands and flashes, with no navigation away from the card.
     fireEvent.click(screen.getByTestId("link-CODE-2-CODE-1"));
+    expect(screen.queryByTestId("citation-preview")).toBeNull();
     expect(
       screen.getByTestId("item-toggle-CODE-1").getAttribute("aria-expanded"),
     ).toBe("true");

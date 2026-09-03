@@ -13,6 +13,7 @@
 import { useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -29,6 +30,7 @@ import {
   type SpecViewState,
 } from "./SpecView.js";
 import { cardPlacement } from "./SpecGraph.js";
+import { HOVER_INTENT_MS, PREVIEW_CARD_ID } from "./CitationPreview.js";
 import { editorDirty } from "../lib/spec-view-model.js";
 import type { SpecTreeState } from "@sublang/spex-core/protocol";
 
@@ -674,17 +676,16 @@ describe("SPECV-19/37: citation rows and backlinks", () => {
   });
 });
 
-describe("citation entries: target-group color, tooltip, hit target", () => {
-  test("entries color by the target's group with a digest tooltip", () => {
+describe("citation entries: target-group color, hit target", () => {
+  test("entries color by the target's group, with no native tooltip", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
     fireEvent.click(screen.getByTestId("item-toggle-GUARD-3"));
     const g1 = screen.getByTestId("link-GUARD-3-GUARD-1");
-    // GUARD-1 is external: sky, with the digest previewed.
+    // GUARD-1 is external: sky. The digest arrives in the card at
+    // hand now, never in a native title (spec-view-61).
     expect(g1.className).toContain("text-sky-600");
-    expect(g1.getAttribute("title")).toBe(
-      "GUARD-1 — The site shall present each surface per the map.",
-    );
+    expect(g1.getAttribute("title")).toBeNull();
     // GUARD-5 is internal: fuchsia.
     expect(
       screen.getByTestId("link-GUARD-3-GUARD-5").className,
@@ -695,7 +696,7 @@ describe("citation entries: target-group color, tooltip, hit target", () => {
     expect(g1.className).toContain("-my-1");
   });
 
-  test("a dead target keeps the neutral link style with no tooltip", () => {
+  test("a dead target keeps the neutral link style", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     fireEvent.click(screen.getByTestId("item-toggle-AUTH-10"));
@@ -712,6 +713,143 @@ describe("citation entries: target-group color, tooltip, hit target", () => {
     expect(
       screen.getByTestId("link-AUTH-8-GUARD-5").className,
     ).toContain("text-fuchsia-600");
+  });
+});
+
+// The card at hand behind every citation entry (spec-view-61): the
+// hover intent and the immediate focus, one card at a time, the
+// dismissals, an absent target, and the three anchors.
+describe("SPECV-61: the citation preview", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const card = () => screen.queryByTestId("citation-preview");
+
+  /** The pointer settles on an entry: hover, then the intent. */
+  const settle = (entry: Element) => {
+    fireEvent.mouseEnter(entry);
+    act(() => vi.advanceTimersByTime(HOVER_INTENT_MS));
+  };
+
+  function openGuard3() {
+    vi.useFakeTimers();
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-3"));
+  }
+
+  test("a settled hover raises the card; leaving first raises nothing", () => {
+    openGuard3();
+    const entry = screen.getByTestId("link-GUARD-3-GUARD-1");
+    // Nothing until the pointer settles: crossing a row of chips
+    // flashes no card.
+    fireEvent.mouseEnter(entry);
+    act(() => vi.advanceTimersByTime(HOVER_INTENT_MS - 20));
+    expect(card()).toBeNull();
+    act(() => vi.advanceTimersByTime(20));
+    // The cited item's chip, its first line, and its body's opening.
+    expect(card()!.textContent).toContain("GUARD-1");
+    expect(card()!.textContent).toContain(
+      "The site shall present each surface per the map",
+    );
+    // The statement heads the card; the body beneath it never
+    // repeats it.
+    expect(
+      card()!.textContent!.match(/The site shall present each surface/g),
+    ).toHaveLength(1);
+    expect(card()!.getAttribute("role")).toBe("tooltip");
+    expect(entry.getAttribute("aria-describedby")).toBe(PREVIEW_CARD_ID);
+
+    // Leaving closes it, and the description goes with it.
+    fireEvent.mouseLeave(entry);
+    expect(card()).toBeNull();
+    expect(entry.getAttribute("aria-describedby")).toBeNull();
+
+    // A pointer that leaves before the intent settles opens nothing.
+    fireEvent.mouseEnter(entry);
+    fireEvent.mouseLeave(entry);
+    act(() => vi.advanceTimersByTime(HOVER_INTENT_MS * 2));
+    expect(card()).toBeNull();
+  });
+
+  test("keyboard focus raises it at once, and blur drops it", () => {
+    openGuard3();
+    const entry = screen.getByTestId("link-GUARD-3-GUARD-5");
+    act(() => (entry as HTMLElement).focus());
+    expect(card()!.textContent).toContain("GUARD-5");
+    act(() => (entry as HTMLElement).blur());
+    expect(card()).toBeNull();
+  });
+
+  test("Escape drops the card without clearing anything else", () => {
+    openGuard3();
+    settle(screen.getByTestId("link-GUARD-3-GUARD-1"));
+    expect(card()).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(card()).toBeNull();
+    // The item the card was raised over is untouched.
+    expect(
+      screen.getByTestId("item-toggle-GUARD-3").getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  test("one card stands at a time", () => {
+    openGuard3();
+    settle(screen.getByTestId("link-GUARD-3-GUARD-1"));
+    settle(screen.getByTestId("link-GUARD-3-CAT-1"));
+    expect(screen.getAllByTestId("citation-preview")).toHaveLength(1);
+    expect(card()!.textContent).toContain("The catalog shall list published");
+    expect(
+      screen.getByTestId("link-GUARD-3-GUARD-1").getAttribute("aria-describedby"),
+    ).toBeNull();
+  });
+
+  test("an ID the tree does not carry reads as not in the tree", () => {
+    vi.useFakeTimers();
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-10"));
+    settle(screen.getByTestId("link-AUTH-10-AUTH-99"));
+    expect(card()!.textContent).toContain("AUTH-99 — not in the tree");
+  });
+
+  test("a backlink entry raises it, and the jump drops it", () => {
+    vi.useFakeTimers();
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
+    fireEvent.click(screen.getByTestId("inbound-AUTH-8"));
+    const entry = screen.getByTestId("link-AUTH-8-GUARD-5");
+    settle(entry);
+    expect(card()!.textContent).toContain(
+      "Eligibility shall be the deployment's answer",
+    );
+    // The jump answers the entry: the card has nothing left to say.
+    fireEvent.click(entry);
+    expect(card()).toBeNull();
+  });
+
+  test("an inline citation in a body raises the same card", () => {
+    vi.useFakeTimers();
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${GUARD}`));
+    fireEvent.click(screen.getByTestId("item-toggle-GUARD-5"));
+    const inline = screen.getByRole("link", { name: "CAT-1" });
+    fireEvent.mouseOver(inline);
+    act(() => vi.advanceTimersByTime(HOVER_INTENT_MS));
+    expect(card()!.textContent).toContain("The catalog shall list published");
+    expect(inline.getAttribute("aria-describedby")).toBe(PREVIEW_CARD_ID);
+    fireEvent.mouseOut(inline);
+    expect(card()).toBeNull();
+
+    // Keyboard focus answers at once, and a link that opens the
+    // records reader instead is no citation to preview.
+    act(() => (inline as HTMLElement).focus());
+    expect(card()!.textContent).toContain("CAT-1");
+    act(() => (inline as HTMLElement).blur());
+    const record = screen.getByRole("link", { name: "index" });
+    fireEvent.mouseOver(record);
+    act(() => vi.advanceTimersByTime(HOVER_INTENT_MS));
+    expect(card()).toBeNull();
   });
 });
 
