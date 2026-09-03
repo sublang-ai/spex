@@ -16,7 +16,7 @@ import {
 
 afterEach(cleanup);
 
-import { CaptainHome, QUICK_START_KEY } from "./CaptainHome.js";
+import { CaptainHome, QUICK_START_KEY, popoverRoom } from "./CaptainHome.js";
 
 const PROJECT = { id: "p1", path: "/tmp/demo", name: "demo", registeredAt: 0 };
 
@@ -604,5 +604,67 @@ describe("run-view-25, DR-038: the Captain chip wears the fast-mode mark", () =>
     expect(
       within(screen.getByTestId("agent-chip")).queryByTitle("fast mode"),
     ).toBeNull();
+  });
+});
+
+describe("run-view-32: the popover opens where the window can show it", () => {
+  /** An anchor whose box the document actually reports. */
+  function place(el: HTMLElement, top: number, bottom: number): void {
+    el.getBoundingClientRect = () =>
+      ({
+        top,
+        bottom,
+        left: 0,
+        right: 24,
+        width: 24,
+        height: bottom - top,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect;
+  }
+
+  test("the roomier side wins, and the room is what the window can show", () => {
+    // jsdom reports a 768px window: a gear near its foot has more room
+    // above it, one near its head more room below.
+    const gear = document.createElement("button");
+    place(gear, 640, 660);
+    expect(popoverRoom(gear)).toEqual({ direction: "up", room: 632 });
+    place(gear, 20, 40);
+    expect(popoverRoom(gear)).toEqual({ direction: "down", room: 720 });
+  });
+
+  test("an unmeasured anchor leaves the popover its natural place", () => {
+    // A simulated or unpainted document measures nothing.
+    expect(popoverRoom(null)).toEqual({ direction: "up" });
+    expect(popoverRoom(document.createElement("button"))).toEqual({
+      direction: "up",
+    });
+  });
+
+  test("a gear with less room above opens downward, capped to the room", () => {
+    renderHome();
+    const gear = screen.getByTestId("captain-settings");
+    place(gear, 340, 360);
+    fireEvent.click(gear);
+    const popover = screen.getByTestId("agent-popover");
+    expect(popover.className).toContain("top-full");
+    expect(popover.className).not.toContain("bottom-full");
+    // The anchor grants the room its dialog may take.
+    expect(popover.parentElement!.style.getPropertyValue("--popover-room")).toBe(
+      "400px",
+    );
+  });
+
+  test("a gear with room above keeps opening upward", () => {
+    renderHome();
+    const gear = screen.getByTestId("captain-settings");
+    place(gear, 600, 620);
+    fireEvent.click(gear);
+    const popover = screen.getByTestId("agent-popover");
+    expect(popover.className).toContain("bottom-full");
+    expect(popover.parentElement!.style.getPropertyValue("--popover-room")).toBe(
+      "592px",
+    );
   });
 });

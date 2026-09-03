@@ -6,7 +6,7 @@
 // git init, a dismissible quick start card, and a "/" slash menu.
 // Props-driven so RUN-29/31 exercise it without a live core.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AgentSummary,
   IntentInfo,
@@ -95,6 +95,33 @@ export interface CaptainHomeProps {
   storage?: Pick<Storage, "getItem" | "setItem">;
 }
 
+/** Breathing room the popover leaves against the window's edge. */
+const POPOVER_MARGIN = 8;
+
+/** Where an anchored popover opens and how tall it may be (DR-009,
+ * DR-041 §9). The gear that opens the Captain editor sits at the foot
+ * of the home, so a dialog that always opened upward ran off the top
+ * of a short window with nothing able to scroll it back. The anchor
+ * grants the room instead: the roomier side wins, and the popover
+ * takes at most what the window can show there — scrolling inside
+ * that bound rather than outside the viewport. */
+export function popoverRoom(
+  anchor: HTMLElement | null | undefined,
+): { direction: "up" | "down"; room?: number } {
+  const height = typeof window === "undefined" ? 0 : window.innerHeight;
+  const rect = anchor?.getBoundingClientRect();
+  // An unpainted or simulated document measures nothing; the popover
+  // then keeps its natural place and size.
+  if (!rect || height === 0 || (rect.top === 0 && rect.bottom === 0)) {
+    return { direction: "up" };
+  }
+  const above = rect.top - POPOVER_MARGIN;
+  const below = height - rect.bottom - POPOVER_MARGIN;
+  return above >= below
+    ? { direction: "up", room: Math.max(above, 0) }
+    : { direction: "down", room: Math.max(below, 0) };
+}
+
 function CaptainBubble({
   children,
   tone = "neutral",
@@ -140,13 +167,24 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [queueing, setQueueing] = useState(false);
   /** Transient queue-instead acknowledgment (run-view-85). */
   const [queueNote, setQueueNote] = useState<string>();
-  const [captainPopover, setCaptainPopover] = useState(false);
+  const [captainPopover, setCaptainPopover] =
+    useState<ReturnType<typeof popoverRoom>>();
   // With nothing registered the greeting itself carries the ways in
   // (run-view-25); seeding is the store action the palette uses.
   const openAcademyExample = useAppStore((state) => state.openAcademyExample);
   const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const gearRef = useRef<HTMLButtonElement>(null);
+
+  // A window resized under an open popover re-decides its side and
+  // its room, so it never ends up outside a window it once fitted.
+  const popoverOpen = captainPopover !== undefined;
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const remeasure = (): void => setCaptainPopover(popoverRoom(gearRef.current));
+    window.addEventListener("resize", remeasure);
+    return () => window.removeEventListener("resize", remeasure);
+  }, [popoverOpen]);
 
   const captainReadiness = captain
     ? readiness.find((entry) => entry.adapter === captain.adapter)
@@ -404,7 +442,19 @@ export function CaptainHome(props: CaptainHomeProps) {
 
       <div className="mt-3 flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
-          <span className="relative ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500">
+          {/* The anchor grants the popover its room (run-view-32):
+              the dialog it holds is capped to what the window can
+              show on the side it opened, and scrolls inside that. */}
+          <span
+            style={
+              captainPopover?.room !== undefined
+                ? ({
+                    "--popover-room": `${captainPopover.room}px`,
+                  } as React.CSSProperties)
+                : undefined
+            }
+            className="relative ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500 [&>[data-testid=agent-popover]]:max-h-(--popover-room) [&>[data-testid=agent-popover]]:overflow-y-auto"
+          >
             Captain:{" "}
             {captain ? (
               <AgentChip
@@ -422,7 +472,10 @@ export function CaptainHome(props: CaptainHomeProps) {
               title="Tweak the Captain agent in place"
               aria-label="Configure the Captain agent"
               disabled={!captain}
-              onClick={() => setCaptainPopover((open) => !open)}
+              onClick={() => {
+                const placed = popoverRoom(gearRef.current);
+                setCaptainPopover((open) => (open ? undefined : placed));
+              }}
               className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
               <Icon name="edit" className="h-3.5 w-3.5" />
@@ -431,17 +484,18 @@ export function CaptainHome(props: CaptainHomeProps) {
               <AgentEditorPopover
                 title="Captain agent"
                 anchorRef={gearRef}
+                direction={captainPopover.direction}
                 initial={captain}
                 readiness={readiness}
                 onSave={(patch) =>
                   Promise.resolve(props.onSaveCaptain(patch)).then(
                     (result) => {
-                      setCaptainPopover(false);
+                      setCaptainPopover(undefined);
                       return result;
                     },
                   )
                 }
-                onClose={() => setCaptainPopover(false)}
+                onClose={() => setCaptainPopover(undefined)}
               />
             ) : null}
           </span>
