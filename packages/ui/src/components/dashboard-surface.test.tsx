@@ -1145,6 +1145,130 @@ function seedSources(over: Record<string, unknown> = {}) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// The Running band
+// ---------------------------------------------------------------------------
+
+describe("dashboard-50: the Running band lists what is working", () => {
+  const RUN_START = NOW - 12 * MIN;
+
+  function live(id: string, projectId: string, title: string) {
+    return {
+      id,
+      projectId,
+      projectPath: `/tmp/${projectId}`,
+      title,
+      createdAt: NOW - 20 * MIN,
+      live: true,
+      endedAt: null,
+      players: [],
+      initialVisible: [],
+      turns: 1,
+      failed: false,
+    };
+  }
+
+  /** A session with a turn in flight, its first line drawn at the
+   * turn's start so the row can read the span. */
+  function inFlight(player?: string) {
+    const view = initialSessionView(player ? [{ id: player }] : []);
+    view.turnActive = true;
+    view.currentTurnId = 1;
+    if (player) view.players[player].running = true;
+    view.captain.push({
+      kind: "boss",
+      text: "Add a README badge",
+      turnId: 1,
+      at: RUN_START,
+    });
+    return view;
+  }
+
+  test("a live turn with nothing to answer lists; a summoned session does not", () => {
+    const asking = inFlight();
+    asking.pendingQuestion = "which branch?";
+    seed({
+      sessions: [
+        live("s-run", "p1", "Add a README badge"),
+        live("s-ask", "p2", "Migrate the DB"),
+      ],
+      views: { "s-run": inFlight("dev.coder"), "s-ask": asking },
+      ledger: {
+        intents: [],
+        attention: [
+          {
+            band: "interrupted",
+            kind: "question",
+            title: "Migrate the DB",
+            projectId: "p2",
+            sessionId: "s-ask",
+            since: NOW - 3 * MIN,
+          },
+        ],
+        badge: 1,
+      },
+    });
+    const { onOpenSession } = renderSurface();
+
+    const band = screen.getByTestId("running-band");
+    const row = within(band).getByTestId("running-session-s-run");
+    // The project, the session's own title, and what it is doing in
+    // the Now band's vocabulary, the running player named beside it.
+    expect(row.textContent).toContain("alpha");
+    expect(row.textContent).toContain("Add a README badge");
+    expect(row.textContent).toContain("dev.coder");
+    expect(screen.getByTestId("running-state-s-run").textContent).toBe(
+      "working",
+    );
+    // The turn's span, with the moment it began in the tooltip.
+    expect(row.textContent).toContain("12m");
+    expect(
+      within(row).getByTitle(new Date(RUN_START).toLocaleString()),
+    ).toBeTruthy();
+
+    // A summoned session stands in the queue, never in both places.
+    expect(within(band).queryByTestId("running-session-s-ask")).toBeNull();
+    expect(screen.getByTestId("attention-s-ask-question")).toBeTruthy();
+
+    // The row opens its session.
+    fireEvent.click(row);
+    expect(onOpenSession).toHaveBeenCalledWith("s-run");
+  });
+
+  test("nothing running keeps the band in place with its note (dashboard-8)", () => {
+    seed({
+      sessions: [live("s-idle", "p1", "Yesterday's work")],
+      views: { "s-idle": initialSessionView([]) },
+    });
+    renderSurface();
+    expect(screen.getByTestId("running-band").textContent).toContain(
+      "Nothing running.",
+    );
+    expect(screen.queryByTestId("running-session-s-idle")).toBeNull();
+  });
+
+  test("rows read in sidebar order, and the filter hides the rest (dashboard-32)", () => {
+    seed({
+      // Served in the other order: the band reads by sidebar order.
+      sessions: [live("s-b", "p2", "Tidy CI"), live("s-a", "p1", "Ship docs")],
+      views: { "s-a": inFlight("dev.coder"), "s-b": inFlight() },
+    });
+    renderSurface();
+    const ids = () =>
+      Array.from(
+        screen.getByTestId("running-band").querySelectorAll("[data-project-id]"),
+      ).map((row) => row.getAttribute("data-testid"));
+    expect(ids()).toEqual(["running-session-s-a", "running-session-s-b"]);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by project" }), {
+      target: { value: "p2" },
+    });
+    expect(ids()).toEqual(["running-session-s-b"]);
+    // Visibility only: no ledger write rode the change.
+    expect(callsOf("intent.close")).toEqual([]);
+  });
+});
+
 describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
   test("the open band's summary line, tabs, labels, and queue seeds", async () => {
     seedSources();

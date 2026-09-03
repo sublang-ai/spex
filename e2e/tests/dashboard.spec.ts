@@ -8,7 +8,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { test, expect, open, nav } from "../src/harness";
+import { test, expect, open, nav, send } from "../src/harness";
 
 test.use({ appOptions: { project: true, agentDelayMs: 2500 } });
 
@@ -319,6 +319,47 @@ test.describe("the History frame", () => {
     await expect(page.getByTestId(`history-frame-${projectId}-grip`)).toHaveAttribute(
       "aria-valuenow",
       "10",
+    );
+  });
+});
+
+test.describe("the Running band", () => {
+  // Long enough that the turn is still in flight while the band is
+  // read, watched, and opened from.
+  test.use({ appOptions: { project: true, agentDelayMs: 8000 } });
+
+  test("dashboard-51: a running session lists in its own band, opens from it, and leaves when its turn ends", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await send(page, "Add a README badge");
+    await expect(page.getByTestId("captain-pane")).toContainText("/code started");
+
+    // The Dashboard: the band names the project, the session's title,
+    // and what it is doing — no summons stands, so the queue is clear.
+    await nav(page, "Dashboard").click();
+    const row = page.getByTestId(/^running-session-/);
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText("demo-project");
+    await expect(row).toContainText("Add a README badge");
+    // What it is doing, in human words: the running player and the
+    // engagement state, never a wire id (the raw id rides the title).
+    const doing = page.getByTestId(/^running-state-/);
+    await expect(doing).toHaveText(/^[a-z][a-z. ]*$/);
+    await expect(page.getByTestId("attention-all-clear")).toBeVisible();
+
+    // The row opens its session.
+    await row.click();
+    await expect(page.getByTestId("captain-pane")).toBeVisible();
+    await expect(page.getByTestId("boss-composer")).toBeVisible();
+
+    // The turn ends: the row leaves, and the band keeps its place
+    // with its note.
+    await nav(page, "Dashboard").click();
+    await expect(row).toHaveCount(0, { timeout: 60_000 });
+    await expect(page.getByTestId("running-band")).toContainText(
+      "Nothing running.",
     );
   });
 });

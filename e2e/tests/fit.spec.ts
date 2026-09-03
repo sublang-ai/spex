@@ -259,10 +259,15 @@ async function measure(page: Page): Promise<Measured> {
 
     // (iv) Accessible names of every button, in document order. The
     // Now row names the live run's current state, which advances
-    // between measurements; its words are live content, not chrome,
-    // so it stays out of the stability check.
+    // between measurements, and a Running row stands only while its
+    // turn is in flight; both are live content, not chrome, so they
+    // stay out of the stability check.
     const names = Array.from(document.querySelectorAll("button"))
-      .filter((button) => !button.closest('[data-testid^="now-session-"]'))
+      .filter(
+        (button) =>
+          !button.closest('[data-testid^="now-session-"]') &&
+          !button.closest('[data-testid^="running-session-"]'),
+      )
       .map((button) => {
         const label = button.getAttribute("aria-label");
         const text = (button.textContent ?? "").trim().replace(/\s+/g, " ");
