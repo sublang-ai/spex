@@ -13,7 +13,7 @@ Ship the app's fourth source release — the defect round the owner named (foldi
 
 ## Deliverables
 
-- [ ] Both shells at 0.4.0 and the changelog section dated.
+- [x] Both shells at 0.4.0 and the changelog section dated.
 - [ ] The gates on the release tree: hermetic smoke with the desktop stage, live desktop smoke, the served-UI pass over the owner's state root, CI green.
 - [ ] The tag pushed and the GitHub release created by the workflow.
 - [ ] The remote instance at the tag with the state root matching the local one file for file.

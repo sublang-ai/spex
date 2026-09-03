@@ -14,6 +14,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-02
+
 ### Added
 
 - **Player lanes fold.** Each pane's header carries a collapse control;
@@ -44,6 +46,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   chip, group, first line, expandable body, in-artifact citation
   jumps — and the State machine stage keeps its state list pinned
   above the scrolling code.
+- **Citations preview at hand.** Every citation in the Specs view —
+  an entry in an item's cites row, a backlink, and a citation inline
+  in a body — shows the cited item's chip, first line, and opening
+  in a card after a short hover intent and at once on keyboard focus,
+  replacing the browser's slow tooltip; the Playbooks Gears rows
+  preview the same way. An item's citations sit in one block and its
+  Edit control moved to the header row.
 - **Running sessions listed again.** A Running band below Needs
   attention lists every live session with a turn in flight that
   needs nothing from the Boss — project, title, what it is doing —
@@ -224,7 +233,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Chromium against a real core with substitute agents, including an
   accessibility scan of every surface in both themes.
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v0.3.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v0.4.0...HEAD
+[0.4.0]: https://github.com/sublang-ai/spex/compare/app-v0.3.0...app-v0.4.0
 [0.3.0]: https://github.com/sublang-ai/spex/compare/app-v0.2.0...app-v0.3.0
 [0.2.0]: https://github.com/sublang-ai/spex/compare/app-v0.1.0...app-v0.2.0
 [0.1.0]: https://github.com/sublang-ai/spex/releases/tag/app-v0.1.0
