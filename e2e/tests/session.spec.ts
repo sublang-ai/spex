@@ -142,3 +142,44 @@ test("run-view-7: a lane's pane scrolls into view when its call opens", async ({
     })
     .toBe(true);
 });
+
+// A lane folds to a rail and returns for its call (run-view-118): the
+// reviewer's idle lane collapses while the session is parked on a
+// question, and unfolds itself when the nested review calls it.
+test("run-view-118: a collapsed lane unfolds when its call opens", async ({
+  page,
+  app,
+}) => {
+  await open(page, app);
+  await send(page, "ask before migrating");
+  await expect(page.getByTestId("question-bubble")).toBeVisible();
+
+  const coder = page.getByTestId("player-pane-dev.coder");
+  const reviewer = page.getByTestId("player-pane-dev.reviewer");
+  const wholeWidth = (await coder.boundingBox())!.width;
+  await page.getByRole("button", { name: "Collapse dev.reviewer" }).click();
+  // The rail: narrow, named within its box, its expand control focused
+  // — and the coder's pane took the freed width (run-view-116).
+  await expect(page.getByRole("button", { name: "Expand dev.reviewer" })).toBeFocused();
+  await expect(reviewer).toHaveAttribute("data-collapsed", "true");
+  const rail = (await reviewer.boundingBox())!;
+  expect(rail.width).toBeLessThanOrEqual(40);
+  const name = (await page.getByTestId("player-name-dev.reviewer").boundingBox())!;
+  expect(name.x).toBeGreaterThanOrEqual(rail.x - 1);
+  expect(name.x + name.width).toBeLessThanOrEqual(rail.x + rail.width + 1);
+  expect(name.y).toBeGreaterThanOrEqual(rail.y - 1);
+  expect(name.y + name.height).toBeLessThanOrEqual(rail.y + rail.height + 1);
+  expect((await coder.boundingBox())!.width).toBeGreaterThan(wholeWidth);
+
+  // The reply runs the code narration: the coder works in view, then
+  // the nested review calls the reviewer and its lane unfolds itself
+  // (run-view-7, run-view-117).
+  await page.getByTestId("boss-composer").fill("Yes, migrate them too");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(coder).toContainText("coder working");
+  await expect(coder).toBeInViewport();
+  await expect(reviewer).not.toHaveAttribute("data-collapsed", "true");
+  await expect(page.getByRole("button", { name: "Collapse dev.reviewer" })).toBeVisible();
+  await expect(reviewer).toContainText(/Review/);
+  await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+});
