@@ -86,10 +86,27 @@ When a player turn completes, that player's pane shall report the turn's usage b
 The run view shall show exactly one player pane per player in the session's bound roster, standing for the session's whole life ([DR-032](../decisions/032-session-players.md)):
 
 - a pane is a player's lane, so it stands whether or not that player is engaged in the call now running, and a finished call's transcript stays where the reader last read it;
+- the pane's header carries a collapse control, and a collapsed pane stands in its place as a rail [[run-view-116](#run-view-116)] that opens itself when its call opens [[run-view-117](#run-view-117)] — a folded lane is still a lane;
 - the runtime's report of which players a call engages adds no pane and removes none — a lane the reader is following never leaves under them — and when a lane's call opens while its pane lies beyond the grid's visible edge, the grid scrolls just far enough to show that pane, side by side or stacked alike, so the working lane never hides behind idle ones;
 - a roster with no players renders no player pane, and the Captain column then stands alone at the Captain home's reading width with no divider — a division with nothing on its far side reads as a pane that failed to load;
 - the pane's header names the lane and, from its first call on, the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the player's model chip beside it, and a lane no call has reached yet reads "Idle until the playbook calls ⟨lane⟩";
 - while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second, hidden first in a narrow pane ([DR-041](../decisions/041-chrome-that-fits.md)) — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5).
+
+#### run-view-116
+
+When the reader activates a player pane's collapse or expand control — an icon button labelled "Collapse ⟨lane⟩" in the pane's header, "Expand ⟨lane⟩" on the rail — the run view shall fold that lane to a rail, or unfold the rail to its pane, remembering the session's collapsed lanes while the app runs ([DR-030](../decisions/030-workspace-chrome.md): collapse never hides a duty):
+
+- the rail is a column about 2.25rem wide at the pane's full height, holding the expand control, the lane's running mark while its call is open, and the lane's name read down its length — truncated with its whole in a tooltip rather than leaving the rail — and is exempt from the pane floor ([DR-041](../decisions/041-chrome-that-fits.md));
+- the remaining panes share the freed width;
+- focus lands on the rail's expand control after a collapse and on the pane's collapse control after an expand, never on the document body;
+- the collapsed set is the session's own, kept across tab switches for the app's run and never persisted, so a new launch opens every lane.
+
+#### run-view-117
+
+While a lane's pane is collapsed, when that lane's call opens, the run view shall unfold the rail to its pane in place — moving focus only when it sat on the rail's control, then to the pane's collapse control — so the working player never hides in a rail ([DR-010](../decisions/010-interface-craft.md) §5):
+
+- the rule holds whether or not the session's tab is shown when the call opens;
+- a lane folded while its call is already open stays folded, its rail wearing the running mark, until its next call opens.
 
 #### run-view-79
 
@@ -835,6 +852,10 @@ Where the live lane runs with the machine's signed-in agents ([DR-039](../decisi
 #### run-view-115
 
 Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the composer [[run-view-113](#run-view-113)].
+
+#### run-view-118
+
+Where the harness boots with the demo project registered and the scripted Captain, when the journey parks a session on a player question, collapses the reviewer's idle lane, and replies so the Captain narrates the code run with its nested review, the test suite shall assert through the page that the reviewer's rail stands at its narrow width with the lane's name inside its box and the expand control focused while the coder's pane widened [[run-view-116](#run-view-116)] [[run-view-7](#run-view-7)], that the coder's pane is in view while its call runs [[run-view-7](#run-view-7)], and that the reviewer's lane unfolded itself when the review's call opened, its transcript then filling [[run-view-117](#run-view-117)].
 
 #### run-view-109
 
