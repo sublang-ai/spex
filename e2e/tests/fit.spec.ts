@@ -277,6 +277,28 @@ async function measure(page: Page): Promise<Measured> {
   });
 }
 
+/** File one measurement's findings against the place it was taken. */
+function record(where: string, found: Measured, defects: string[]): void {
+  for (const line of found.overflow) defects.push(`${where}: overflow — ${line}`);
+  for (const line of found.vertical) defects.push(`${where}: vertical — ${line}`);
+  for (const line of found.overlap) defects.push(`${where}: ${line}`);
+}
+
+/** Put the sidebar in the state to be measured, from a width where
+ * both of its controls are reachable. */
+async function setRail(page: Page, railOpen: boolean): Promise<void> {
+  await page.setViewportSize({ width: 1280, height: TALL });
+  const control = page.getByRole("button", {
+    name: railOpen ? "Show the sidebar" : "Collapse the sidebar",
+  });
+  if (await control.isVisible()) await control.click();
+  await expect(
+    page.getByRole("button", {
+      name: railOpen ? "Collapse the sidebar" : "Show the sidebar",
+    }),
+  ).toBeVisible();
+}
+
 interface Surface {
   name: string;
   /** Bring the surface up once. */
@@ -401,34 +423,18 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
     },
   ];
 
-  const setRail = async (open: boolean) => {
-    await page.setViewportSize({ width: 1280, height: TALL });
-    const control = page.getByRole("button", {
-      name: open ? "Show the sidebar" : "Collapse the sidebar",
-    });
-    if (await control.isVisible()) await control.click();
-    await expect(
-      page.getByRole("button", { name: open ? "Collapse the sidebar" : "Show the sidebar" }),
-    ).toBeVisible();
-  };
-
   const defects: string[] = [];
   const started = Date.now();
   const log = (line: string) => {
     if (!process.env.SPEX_E2E_DEBUG) return;
     console.log(`[fit +${((Date.now() - started) / 1000).toFixed(1)}s] ${line}`);
   };
-  const record = (where: string, found: Measured): void => {
-    for (const line of found.overflow) defects.push(`${where}: overflow — ${line}`);
-    for (const line of found.vertical) defects.push(`${where}: vertical — ${line}`);
-    for (const line of found.overlap) defects.push(`${where}: ${line}`);
-  };
   for (const surface of surfaces) {
     await page.setViewportSize({ width: 1280, height: TALL });
     await surface.show();
     log(`${surface.name}: shown`);
     for (const railOpen of [false, true]) {
-      await setRail(railOpen);
+      await setRail(page, railOpen);
       let reference: string[] | undefined;
       for (const width of WIDTHS) {
         if (railOpen && width < OPEN_RAIL_MIN_WIDTH) continue;
@@ -438,7 +444,7 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
           const where = `${surface.name} · sidebar ${railOpen ? "open" : "collapsed"} · ${width}×${height}`;
           const found = await measure(page);
           log(`${where}: measured`);
-          record(where, found);
+          record(where, found, defects);
           // (iv) Names hold at every size: the first measurement of
           // this sidebar state is the reference.
           if (!reference) {
@@ -463,19 +469,109 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
       await page.setViewportSize({ width: 1280, height });
       await surface.ready();
       const where = `${surface.name} · re-fit after resize · 1280×${height}`;
-      record(where, await measure(page));
+      record(where, await measure(page), defects);
       log(`${where}: measured`);
     }
   }
   // The collapsed rail's badge caps at "9+", the count in the name
   // (run-view-108).
-  await setRail(false);
+  await setRail(page, false);
   await expect(page.getByTestId("nav-attention-badge")).toHaveText("9+");
   await expect(
     page.getByRole("button", { name: /^Dashboard — 10 need your attention$/ }),
   ).toBeVisible();
 
   expect(defects, defects.join("\n")).toEqual([]);
+});
+
+// The at-hand popovers and the composer's queue are chrome the sweep
+// above never opens, and both used to leave the window: the Captain's
+// agent editor above the top edge with nothing able to scroll it back,
+// the queue below the bottom with the page growing behind it. They are
+// measured here at the same widths and heights (run-view-105).
+test.describe("chrome the sweep does not open", () => {
+  test.use({ appOptions: { project: true, agentDelayMs: 120_000 } });
+
+  test("run-view-105: the home's agent popover and the queue stay in the window", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(120_000);
+    const defects: string[] = [];
+    await page.setViewportSize({ width: 1280, height: TALL });
+    await open(page, app);
+    await expect(page.getByTestId("captain-home")).toBeVisible();
+    // The 320px floor is stated with the sidebar collapsed (DR-041).
+    await setRail(page, false);
+
+    // (i) The gear sits at the foot of the home, so the room above it
+    // shrinks with the window (run-view-32).
+    const popover = page.getByTestId("agent-popover");
+    for (const height of HEIGHTS) {
+      for (const width of [320, 900]) {
+        await page.setViewportSize({ width, height });
+        await page.getByTestId("captain-settings").click();
+        await expect(popover).toBeVisible();
+        const where = `agent popover · ${width}×${height}`;
+        const box = (await popover.boundingBox())!;
+        if (box.y < -1) defects.push(`${where}: top at ${Math.round(box.y)}`);
+        if (box.y + box.height > height + 1) {
+          defects.push(`${where}: bottom at ${Math.round(box.y + box.height)} of ${height}`);
+        }
+        // The adapter picker is the first thing the dialog offers, and
+        // was the first thing to go off the top edge.
+        const adapter = (await page
+          .getByTestId("agent-adapter-claude")
+          .boundingBox())!;
+        if (adapter.y < -1 || adapter.y + adapter.height > height + 1) {
+          defects.push(`${where}: the adapter picker is outside the window`);
+        }
+        const page_ = await page.evaluate(() => [
+          document.documentElement.scrollHeight,
+          document.documentElement.clientHeight,
+        ]);
+        if (page_[0] > page_[1] + 1) {
+          defects.push(`${where}: the page grew to ${page_[0]} of ${page_[1]}`);
+        }
+        await page.keyboard.press("Escape");
+        await expect(popover).toHaveCount(0);
+      }
+    }
+
+    // (ii) A queue standing behind a long turn, measured at every
+    // width and height (run-view-106).
+    await page.setViewportSize({ width: 1280, height: TALL });
+    await send(page, TASK);
+    await expect(page.getByTestId("abort-button")).toBeVisible();
+    const queue = page.getByTestId("queue-indicator");
+    const field = page.getByTestId("boss-composer");
+    for (let index = 1; index <= 6; index += 1) {
+      await field.fill(`Queued ${index}: ${TASK}`);
+      await page.getByRole("button", { name: "Send next", exact: true }).click();
+      await expect(queue).toContainText(`Queued ${index}:`);
+    }
+    for (const width of WIDTHS) {
+      for (const height of HEIGHTS) {
+        await page.setViewportSize({ width, height });
+        const where = `queue · ${width}×${height}`;
+        // The frame stays a few entries tall however much is queued;
+        // in a window too short for the composer alone it yields the
+        // rest of the way, which is the ladder, not a defect.
+        const frame = await queue.boundingBox();
+        if (frame && frame.height > 200) {
+          defects.push(`${where}: the queue frame is ${Math.round(frame.height)} tall`);
+        }
+        const primary = (await page.getByTestId("send-button").boundingBox())!;
+        if (primary.y + primary.height > height + 1) {
+          defects.push(
+            `${where}: the send control ends at ${Math.round(primary.y + primary.height)} of ${height}`,
+          );
+        }
+        record(where, await measure(page), defects);
+      }
+    }
+    expect(defects, defects.join("\n")).toEqual([]);
+  });
 });
 
 // A window laid out before it is shown reports no viewport height; the

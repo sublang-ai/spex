@@ -183,3 +183,109 @@ test("run-view-118: a collapsed lane unfolds when its call opens", async ({
   await expect(reviewer).toContainText(/Review/);
   await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
 });
+
+// Chrome that moves with no window resize behind it (run-view-121):
+// showing the sidebar narrows the panes, so the draft rewraps to more
+// lines than the field was fitted for and the transcript's content
+// grows taller than the box it was pinned in.
+test("run-view-121: showing the sidebar keeps the draft whole and the thread at its end", async ({
+  page,
+  app,
+}) => {
+  // Short enough that the thread outgrows its pane and has an end to
+  // keep following.
+  await page.setViewportSize({ width: 1000, height: 420 });
+  await open(page, app);
+  await send(page, "Fix the token refresh in auth.ts");
+  const captain = page.getByTestId("captain-pane");
+  await expect(captain).toContainText("/code finished");
+  await page.getByRole("button", { name: "Collapse the sidebar" }).click();
+
+  const thread = captain.locator("div.overflow-y-auto").first();
+  const bottomGap = () =>
+    thread.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+  await expect.poll(bottomGap).toBeLessThan(40);
+
+  const field = page.getByTestId("boss-composer");
+  // Long enough that the sidebar's 224px costs the draft two lines.
+  await field.fill(
+    "Fix the token refresh in auth.ts and update the docs so the next reader knows why the refresh window is ninety seconds and not five minutes, then note the same reasoning in the migration guide and in the changelog entry so nobody reopens this thread to find it.",
+  );
+  const settle = () =>
+    page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+  await settle();
+  const shortfall = () =>
+    field.evaluate((el) => {
+      const kept = el.style.height;
+      el.style.height = "auto";
+      const needed = el.scrollHeight;
+      el.style.height = kept;
+      return needed - (parseFloat(kept) || 0);
+    });
+  expect(await shortfall()).toBeLessThanOrEqual(1);
+
+  // The one gesture, and no window resize to repair either box.
+  await page.getByRole("button", { name: "Show the sidebar" }).click();
+  await settle();
+  expect(await shortfall()).toBeLessThanOrEqual(1);
+  expect(await bottomGap()).toBeLessThan(40);
+});
+
+// A queue the Boss keeps filling while a turn runs (run-view-106): it
+// used to push the transcript to two pixels and carry the composer out
+// of the window with the page growing behind it. The turn is long
+// enough that every message queues.
+test.describe("a turn long enough to queue behind", () => {
+  test.use({ appOptions: { project: true, agentDelayMs: 120_000 } });
+
+  test("run-view-106: a long queue keeps the composer in the window", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 900, height: 700 });
+    await open(page, app);
+    await send(page, "/code add a hello world function");
+    await expect(page.getByTestId("abort-button")).toBeVisible();
+
+    const queue = page.getByTestId("queue-indicator");
+    const box = page.getByTestId("boss-composer");
+    for (let index = 1; index <= 6; index += 1) {
+      await box.fill(
+        `Queued ${index}: also update the readme, the changelog, and the migration notes so the next reader knows why`,
+      );
+      await page.getByRole("button", { name: "Send next", exact: true }).click();
+      await expect(queue).toContainText(`Queued ${index}:`);
+    }
+
+    // The queue is a frame a few entries tall, showing its end.
+    const frame = (await queue.boundingBox())!;
+    expect(frame.height).toBeLessThanOrEqual(200);
+    const newest = (await queue
+      .locator("> div")
+      .last()
+      .boundingBox())!;
+    expect(newest.y).toBeGreaterThanOrEqual(frame.y - 1);
+    expect(newest.y + newest.height).toBeLessThanOrEqual(frame.y + frame.height + 1);
+
+    // The transcript keeps a readable share, and the action row is
+    // still in the window with the page unmoved (DR-041 §9).
+    const pane = (await page.getByTestId("captain-pane").boundingBox())!;
+    expect(pane.height).toBeGreaterThan(40);
+    for (const control of ["abort-button", "send-button"]) {
+      const rect = (await page.getByTestId(control).boundingBox())!;
+      expect(rect.y + rect.height, control).toBeLessThanOrEqual(700);
+    }
+    expect(
+      await page.evaluate(() => [
+        document.documentElement.scrollHeight,
+        document.documentElement.clientHeight,
+      ]),
+    ).toEqual([700, 700]);
+  });
+});
