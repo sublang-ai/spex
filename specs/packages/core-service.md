@@ -177,6 +177,14 @@ When a client sends `intent.close` for an open intent with a verdict of `done` o
 - `dropped` is legal on any open intent; dropped before any turn the intent attributes [[core-service-47](#core-service-47)] ended finished, the intent is removed — the history read excludes it [[core-service-50](#core-service-50)] and no verdict shows anywhere ([DR-038](../decisions/038-history-is-done-work.md));
 - a close of an already-closed intent is rejected.
 
+#### core-service-79
+
+While an intent is closed [[core-service-46](#core-service-46)], when a client sends `intent.remove` for it, the core service shall append a remove act retiring that intent from every read — no queue row, no source binding, no attention entry [[core-service-49](#core-service-49)], and no history page [[core-service-50](#core-service-50)] — and announce the write [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
+
+- a remove of an open intent is rejected with a `conflict` error: the ledger still owns work that is not ruled on;
+- a remove naming an intent no read knows — never stored, or already removed — is rejected `not_found`;
+- the intent's acts stay in the append-only log [[core-service-52](#core-service-52)], and its dispatch stamp keeps bounding its neighbours' turn ranges [[core-service-47](#core-service-47)], so no other intent's derived state moves.
+
 #### core-service-47
 
 While a session is live, when a client's Boss submission for it [[core-service-5](#core-service-5)] carries an intent id, the core service shall validate the intent at submission — open, of the session's project, queued, and unblocked [[core-service-45](#core-service-45)] — and stamp the dispatch (session, turn, and time) onto the intent when and only when the submitted turn starts, announcing the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
@@ -335,7 +343,7 @@ The core package shall own the file state of [DR-036](../decisions/036-file-stat
 
 #### core-service-52
 
-The core package shall hold intents in one per-project append-only act log of acts and provenance only — no state or status field, every visible state derived at read time by folding the acts [[core-service-49](#core-service-49)] — kept in the state root [[core-service-15](#core-service-15)] and appended solely by the intent commands ([[core-service-42](#core-service-42)] [[core-service-43](#core-service-43)] [[core-service-44](#core-service-44)] [[core-service-45](#core-service-45)] [[core-service-46](#core-service-46)]) and the dispatch stamp [[core-service-47](#core-service-47)] ([DR-035](../decisions/035-intent-ledger.md), [DR-036](../decisions/036-file-state-store.md)):
+The core package shall hold intents in one per-project append-only act log of acts and provenance only — no state or status field, every visible state derived at read time by folding the acts [[core-service-49](#core-service-49)] — kept in the state root [[core-service-15](#core-service-15)] and appended solely by the intent commands ([[core-service-42](#core-service-42)] [[core-service-43](#core-service-43)] [[core-service-44](#core-service-44)] [[core-service-45](#core-service-45)] [[core-service-46](#core-service-46)] [[core-service-79](#core-service-79)]) and the dispatch stamp [[core-service-47](#core-service-47)] ([DR-035](../decisions/035-intent-ledger.md), [DR-036](../decisions/036-file-state-store.md)):
 
 | Field(s) | Content |
 | --- | --- |
@@ -349,7 +357,7 @@ The core package shall hold intents in one per-project append-only act log of ac
 | `dispatched` (`sessionId`, `turnId`, `at`) | the dispatch stamp, re-written by a later dispatch |
 | `closedAt`, `closedAs` | the close time and verdict — `done` or `dropped` |
 
-- An act is never deleted or rewritten: an edit, move, link, dispatch, or close appends, and the fold takes each field's latest act; an intent removed before it was worked keeps its acts in the log while every read excludes it ([DR-038](../decisions/038-history-is-done-work.md)).
+- An act is never deleted or rewritten: an edit, move, link, dispatch, close, or remove appends, and the fold takes each field's latest act; an intent removed before it was worked, and one a remove act retired [[core-service-79](#core-service-79)], keep their acts in the log while every read excludes them ([DR-038](../decisions/038-history-is-done-work.md)).
 
 ### Runtime Composition
 
@@ -530,6 +538,7 @@ Where the core service runs with a valid config and the scripted fake adapter [[
 - an edit lands while the intent is queued, and the same edit after dispatch is rejected [[core-service-43](#core-service-43)];
 - a move reorders the queue within the project, and a move naming another project's intent is rejected [[core-service-44](#core-service-44)];
 - closing the dispatched intent as `done` before its turn finishes is rejected, succeeds after the finish, and `dropped` is accepted on a second, still-queued intent, which then appears in no `ledger.history` page while the done one does [[core-service-46](#core-service-46)] [[core-service-50](#core-service-50)];
+- removing the closed done intent takes it out of every `ledger.history` page and leaves the rest of the ledger as it was, while the same request against a still-open intent is refused `conflict` and against an unknown or already-removed one `not_found` [[core-service-79](#core-service-79)];
 - an `intents.changed` broadcast naming the project arrives for each write and for the turn's start and finish [[core-service-51](#core-service-51)].
 
 #### core-service-54

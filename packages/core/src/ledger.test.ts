@@ -616,6 +616,68 @@ test("DR-035: reopening the store reproduces closed, queued, and finished; a dea
   reopened.close();
 });
 
+test("core-service-79: a remove act retires a closed intent from every read, its acts kept and its neighbours unmoved", () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-ledger-remove-"));
+  const path = join(dir, "state");
+  const { store, projectId } = newProjectStore(path);
+  addSession(store, projectId, "s1");
+
+  // One worked, confirmed intent, a plain chat turn ruled by its
+  // verdict, and a queued bystander.
+  queueIntent(store, projectId, "gone", "3", {
+    source: { kind: "issue", ref: "9" },
+  });
+  beginTurn(store, "s1", 1, "hello hello hello", 1000);
+  store.stampIntentDispatch("gone", "s1", 1, 1000);
+  finishTurn(store, "s1", 1, 2000);
+  beginTurn(store, "s1", 2, "and a word after", 2200);
+  finishTurn(store, "s1", 2, 2300);
+  store.closeIntent("gone", "done", 2500);
+  queueIntent(store, projectId, "kept", "5");
+
+  const lanes = [lane("s1", projectId, false)];
+  const before = fold(store, lanes);
+  assert.deepEqual(
+    store.listClosedIntents(projectId, 20).map((intent) => intent.id),
+    ["gone"],
+  );
+  assert.deepEqual(before.attention, [], "the chat turn is ruled, so it waits on nobody");
+
+  store.removeIntent("gone", 5000);
+
+  // Absent from every read: the History page, the source binding, and
+  // the fold's own rows.
+  assert.equal(store.getIntent("gone"), undefined);
+  assert.deepEqual(store.listClosedIntents(projectId, 20), []);
+  assert.equal(store.openIntentBySource(projectId, "issue", "9"), undefined);
+  const after = fold(store, lanes);
+  assert.ok(
+    !after.intents.some((entry) => entry.intent.id === "gone"),
+    "a removed intent lists in no band",
+  );
+  // Nothing else moves: the removed dispatch still bounds its
+  // neighbours' turn ranges, so the ruled chat turn never re-summons.
+  assert.deepEqual(after.attention, before.attention);
+  assert.equal(stateOf(after, "kept").state, "queued");
+  store.close();
+
+  // Restart: the act log still holds every act of the removed intent,
+  // and the reopened store reads it as absent all the same.
+  const log = readFileSync(join(path, "intents", `${projectId}.jsonl`), "utf8");
+  const acts = log
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { act: string; id?: string })
+    .filter((act) => act.id === "gone" || act.act === "queue")
+    .map((act) => act.act);
+  assert.deepEqual(acts, ["queue", "dispatch", "close", "queue", "remove"]);
+  const reopened = new Store({ dir: path });
+  assert.equal(reopened.getIntent("gone"), undefined);
+  assert.deepEqual(reopened.listClosedIntents(projectId, 20), []);
+  assert.equal(stateOf(fold(reopened, []), "kept").state, "queued");
+  reopened.close();
+});
+
 // ---------------------------------------------------------------------------
 // Specs record status (DR-035: specs.get carries the Status line)
 // ---------------------------------------------------------------------------
@@ -1201,6 +1263,40 @@ test("core-service-57: submission validates the intent, the turn start stamps it
     ],
   );
   assert.equal(history.more, false);
+
+  // Removing takes the closed row out of History and leaves the rest
+  // of the ledger as it was (core-service-79); an open intent, an
+  // unknown one, and one already removed all refuse.
+  const beforeRemove = await client.expectOk("ledger.get", {});
+  const changes = client.messages.filter(
+    (m) => m.type === "intents.changed",
+  ).length;
+  await client.expectOk("intent.remove", { intentId: i1.id });
+  await client.waitFor(
+    (m) => m.type === "intents.changed" && m.projectIds.includes(project.id),
+    changes + 1,
+  );
+  const afterRemove = await client.expectOk("ledger.history", {
+    projectId: project.id,
+  });
+  assert.deepEqual(
+    afterRemove.intents.map((row) => row.intent.id),
+    [i3.id],
+  );
+  const rowStates = (state: LedgerState) =>
+    state.intents.map((entry) => [entry.intent.id, entry.state]);
+  const stillOpen = await client.expectOk("ledger.get", {});
+  assert.deepEqual(rowStates(stillOpen), rowStates(beforeRemove));
+  assert.equal(stillOpen.badge, beforeRemove.badge);
+  const openRemove = await client.command("intent.remove", { intentId: i2.id });
+  assert.ok(!openRemove.ok && openRemove.error.code === "conflict");
+  assert.match(openRemove.error.message, /closed/);
+  const unknownRemove = await client.command("intent.remove", {
+    intentId: "no-such-intent",
+  });
+  assert.ok(!unknownRemove.ok && unknownRemove.error.code === "not_found");
+  const twice = await client.command("intent.remove", { intentId: i1.id });
+  assert.ok(!twice.ok && twice.error.code === "not_found");
 
   client.close();
   await harness.service.stop();

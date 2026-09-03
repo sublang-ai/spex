@@ -10,6 +10,7 @@ Extends [DR-009](009-at-hand-interaction.md) and [DR-029](029-session-history-ho
 Storage form amended by [DR-036](036-file-state-store.md): the intents table becomes an append-only act log; the fields, the no-state-column law, and every fold contract stand.
 Amended by [DR-038](038-history-is-done-work.md): an intent dropped before it was worked leaves the ledger without a trace, verdicts confirm on one click, and History lists finished intent records beside worked intents.
 Amended (2026-09-02) on the owner's review: the running sessions list again as their own band below the attention queue — a summons and a glance at what is working are two focuses, so the Now band's absorption of the running-sessions section is reversed for the sessions no entry summons; the attention queue stays the summons and the badge still counts it alone.
+Amended (2026-09-02): the permanent deletion deferred below is decided — a remove act retires a closed intent from every band, so a row the Boss no longer wants on the record leaves History behind the inline confirm ([DR-010](010-interface-craft.md) §4) while its acts stay in the append-only log and no state column returns.
 
 ## Context
 

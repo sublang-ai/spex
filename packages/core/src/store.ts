@@ -137,7 +137,8 @@ type IntentAct =
   | { act: "move"; id: string; rank: string }
   | { act: "link"; id: string; afterId: string | null }
   | { act: "dispatch"; id: string; sessionId: string; turnId: number; at: number }
-  | { act: "close"; id: string; as: "done" | "dropped"; at: number };
+  | { act: "close"; id: string; as: "done" | "dropped"; at: number }
+  | { act: "remove"; id: string; at: number };
 
 function isHidden(record: TmuxPlayRecord): boolean {
   return (
@@ -337,6 +338,9 @@ export class Store {
   private readonly prefs = new Map<string, unknown>();
   private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
   private readonly intents = new Map<string, IntentInfo>();
+  /** Intents a remove act retired (DR-038): their acts stay in the
+   * log, and every read passes them by. */
+  private readonly removedIntents = new Set<string>();
   private readonly sessions = new Map<string, SessionMeta>();
   private readonly records = new Map<string, StoredRecord[]>();
   private readonly turns = new Map<string, Map<number, TurnRow>>();
@@ -677,6 +681,9 @@ export class Store {
       case "close":
         intent.closedAt = act.at;
         intent.closedAs = act.as;
+        break;
+      case "remove":
+        this.removedIntents.add(act.id);
         break;
     }
   }
@@ -1252,7 +1259,9 @@ export class Store {
   }
 
   getIntent(id: string): IntentInfo | undefined {
-    const intent = this.intents.get(id);
+    const intent = this.removedIntents.has(id)
+      ? undefined
+      : this.intents.get(id);
     return intent ? { ...intent } : undefined;
   }
 
@@ -1266,6 +1275,7 @@ export class Store {
       if (
         intent.projectId === projectId &&
         intent.closedAt === undefined &&
+        !this.removedIntents.has(intent.id) &&
         intent.source?.kind === kind &&
         intent.source.ref === ref
       ) {
@@ -1278,7 +1288,10 @@ export class Store {
   /** Every open intent across projects, in project rank order. */
   listOpenIntents(): IntentInfo[] {
     return [...this.intents.values()]
-      .filter((intent) => intent.closedAt === undefined)
+      .filter(
+        (intent) =>
+          intent.closedAt === undefined && !this.removedIntents.has(intent.id),
+      )
       .sort((a, b) =>
         a.projectId === b.projectId
           ? a.rank < b.rank
@@ -1305,6 +1318,7 @@ export class Store {
         (intent): intent is IntentInfo & { closedAt: number } =>
           intent.projectId === projectId &&
           intent.closedAt !== undefined &&
+          !this.removedIntents.has(intent.id) &&
           include(intent),
       )
       .filter(
@@ -1379,6 +1393,18 @@ export class Store {
     if (!intent) return;
     intent.dispatched = { sessionId, turnId, at };
     this.appendIntentAct(intent.projectId, { act: "dispatch", id, sessionId, turnId, at });
+  }
+
+  /** The remove act (core-service-79, DR-038): a closed intent retires
+   * from every read — History, the queue, the source binding,
+   * attention — while its acts stay in the append-only log and its
+   * dispatch keeps bounding its neighbours' turn ranges, so no other
+   * intent's derived state moves. */
+  removeIntent(id: string, at: number): void {
+    const intent = this.intents.get(id);
+    if (!intent) return;
+    this.removedIntents.add(id);
+    this.appendIntentAct(intent.projectId, { act: "remove", id, at });
   }
 
   closeIntent(id: string, as: "done" | "dropped", at: number): void {

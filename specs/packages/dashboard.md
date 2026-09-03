@@ -249,6 +249,7 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 | Finished | bound, not closed, not interrupted, no turn in its range active, and a turn in its range ended finished — an aborted follow-up does not unseat a standing finish |
 | Done / Dropped | its close verdict is recorded, done requiring a Finished intent and dropped legal on any open one |
 
+- an intent a remove act retired [[core-service-79](core-service.md#core-service-79)] is absent from every state above: no History row, no source artifact held, no attention entry, and no band lists it ([DR-038](../decisions/038-history-is-done-work.md));
 - the fold produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md));
 - where several rows hold at once, the fold ranks failure, then permission, then working, then question, then finished — a standing summons is never masked by the running mark;
 - the per-project next is the first queued, unblocked intent in rank order;

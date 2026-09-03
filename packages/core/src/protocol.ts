@@ -580,6 +580,13 @@ export const commandSchema = z.discriminatedUnion("type", [
     intentId: z.string().min(1),
     as: z.enum(["done", "dropped"]),
   }),
+  z.object({
+    /** Retire a closed intent from History and every other read
+     * (core-service-79, DR-038). */
+    type: z.literal("intent.remove"),
+    id,
+    intentId: z.string().min(1),
+  }),
   z.object({ type: z.literal("ledger.get"), id }),
   z.object({
     type: z.literal("ledger.history"),
@@ -643,6 +650,8 @@ export interface CommandResults {
   "intent.move": IntentInfo;
   "intent.link": IntentInfo;
   "intent.close": IntentInfo;
+  /** The intent is gone from every read, so nothing comes back. */
+  "intent.remove": null;
   "ledger.get": LedgerState;
   "ledger.history": { intents: ClosedIntent[]; more: boolean };
   "session.viewed": null;

@@ -1198,6 +1198,23 @@ export class CoreService {
         this.queueLedgerChange([...affected]);
         return this.store.getIntent(intent.id);
       }
+      case "intent.remove": {
+        // Only done work leaves History (core-service-79): an open
+        // intent is still the ledger's, and its own act closes it.
+        const intent = this.store.getIntent(command.intentId);
+        if (!intent) {
+          throw new CoreError("not_found", `no intent ${command.intentId}`);
+        }
+        if (intent.closedAt === undefined) {
+          throw new CoreError(
+            "conflict",
+            "only a closed intent leaves history",
+          );
+        }
+        this.store.removeIntent(intent.id, Date.now());
+        this.queueLedgerChange([intent.projectId]);
+        return null;
+      }
       case "ledger.get":
         return foldLedger({
           store: this.store,
