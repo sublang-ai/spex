@@ -73,7 +73,7 @@ While projects are registered, the Dashboard shall display one ledger group per 
 
 #### dashboard-27
 
-Where a project has done work — intents closed after a turn of theirs ended finished, and finished intent records in its specs tree [[dashboard-24](#dashboard-24)] — the group's History band shall list it as one timeline newest first, its newest eight rows under an "Older…" control that reveals eight more and fetches the next intent page once the loaded rows run out ([DR-038](../decisions/038-history-is-done-work.md)):
+Where a project has done work — intents closed after a turn of theirs ended finished, and finished intent records in its specs tree [[dashboard-24](#dashboard-24)] — the group's History band shall list it as one timeline newest first, every loaded row inside a frame eight rows tall that scrolls when the rows exceed it, with an "Older…" control at the end of the scrolled list that fetches the next intent page ([DR-038](../decisions/038-history-is-done-work.md)):
 
 | Row | Rendering |
 | --- | --- |
@@ -85,7 +85,9 @@ Where a project has done work — intents closed after a turn of theirs ended fi
 - an intent closed before any turn of it ended finished never lists — it left the queue without a trace;
 - a finished record already named by a closed intent's provenance lists once, as that intent;
 - a record orders by the date its status line carries ("Done (2026-09-02)"), else by its file's last change; an intent by its close time; and each row shows that time as an age with the absolute moment in its tooltip;
-- the control stands only while more rows wait, loaded or unfetched, and reads "Loading…" while a page is in flight — never a scroll box the eye slides past.
+- every row is one frame unit tall, so eight rows fill the frame exactly and the group's height never grows past it, however many pages load;
+- where the rows and the control exceed the frame, its cut edges are drawn and the frame itself takes keyboard focus, so it scrolls by keyboard as well as by tabbing through its rows to the control;
+- the control stands only while unfetched rows wait, and reads "Loading…" while a page is in flight.
 
 #### dashboard-28
 
@@ -309,7 +311,7 @@ Where a fixture project's `specs/` tree lists one intent record whose status rea
 
 #### dashboard-38
 
-Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — a dated status line placing its record before an undated newer file, and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, the band reads "Loading…" until the first page answers, only the newest eight rows show with "Older…" revealing the rest, and the control fetches and appends the older intent page once the loaded rows run out.
+Where a fixture project holds more worked closed intents than one history page, one done intent from a bug-labeled issue, one dropped intent that never ran, and a specs tree with finished and open records, the test suite shall assert the History contract of [[dashboard-27](#dashboard-27)]: rows list newest first with the check, bug, dropped, and record renderings — each record as the record row that opens the reader [[dashboard-40](#dashboard-40)] — a dated status line placing its record before an undated newer file, and their ages with the absolute moment in the tooltip, the never-run drop is absent, the open record is absent, the band reads "Loading…" until the first page answers, every loaded row lists inside the frame, which draws its cut edges and takes focus only past eight rows, and the "Older…" control at the frame's end stands only while a page waits and fetches and appends the older intent page with the cursor of the last served row.
 
 ### Empty-State Coverage
 
@@ -350,3 +352,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### dashboard-43
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, a queued intent with a second queued behind it, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], and every control keeps its accessible name at every width [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
+
+#### dashboard-44
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and more worked, closed intents in its state root than one intent page, when the journey shows the Dashboard and then the project's Overview tab, the test suite shall assert the History frame through the page: the first page's rows all list inside a frame exactly eight rows tall that scrolls, with "Older…" as its last item [[dashboard-27](#dashboard-27)]; "Older…" appends the next page while the frame's and the group's heights stay, the control leaving once nothing waits [[dashboard-27](#dashboard-27)]; every row is one frame unit tall [[dashboard-27](#dashboard-27)]; the frame takes keyboard focus and scrolls by key [[dashboard-27](#dashboard-27)]; and the Overview draws the same frame [[dashboard-26](#dashboard-26)] [[dashboard-27](#dashboard-27)].

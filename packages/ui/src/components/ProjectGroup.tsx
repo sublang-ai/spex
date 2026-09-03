@@ -288,7 +288,7 @@ function IntentHistoryRow({
       data-testid={`history-row-${intent.id}`}
       data-kind="intent"
       data-verdict={verdict}
-      className={`flex items-center gap-2 text-sm ${
+      className={`flex h-6 shrink-0 items-center gap-2 text-sm ${
         verdict === "dropped" ? "text-neutral-500" : ""
       }`}
     >
@@ -337,7 +337,7 @@ function RecordHistoryRow({
       data-testid={`history-row-${record.id}`}
       data-kind="record"
       data-verdict={superseded ? "superseded" : "done"}
-      className={`flex items-center gap-2 text-sm ${
+      className={`flex h-6 shrink-0 items-center gap-2 text-sm ${
         superseded ? "text-neutral-500" : ""
       }`}
     >
@@ -360,8 +360,10 @@ function RecordHistoryRow({
   );
 }
 
-/** How many History rows show before "Older…" (dashboard-27). */
-const HISTORY_PAGE = 8;
+/** The History frame's height in rows (dashboard-27): every loaded row
+ * lists inside it, and it scrolls once the rows exceed it. Each row is
+ * `h-6` (1.5rem), so eight rows are the frame's `max-h-48` (12rem). */
+const HISTORY_FRAME = 8;
 
 function HistoryBand({
   project,
@@ -376,28 +378,20 @@ function HistoryBand({
 }) {
   const history = useAppStore((state) => state.history[project.id]);
   const loadHistory = useAppStore((state) => state.loadHistory);
-  // The newest eight rows, then "Older…" reveals eight more from what
-  // is loaded and fetches the next intent page once that runs out
-  // (dashboard-27) — a control, never a scroll box the eye slides past.
-  const [shown, setShown] = useState(HISTORY_PAGE);
 
   const more = history?.more ?? false;
   const rows = historyRows(history?.intents ?? [], tree?.intents ?? []);
-  const visible = rows.slice(0, shown);
   // Loading reads as loading until the page has answered
   // (dashboard-8): an unread band never claims nothing was done, and
   // the control says a page is in flight while records already show.
   const inFlight = history === undefined || history.loading === true;
-  const older = rows.length > shown || more || inFlight;
-  const reveal = () => {
-    if (rows.length > shown) {
-      setShown((count) => count + HISTORY_PAGE);
-      return;
-    }
-    if (more && !inFlight) {
-      setShown((count) => count + HISTORY_PAGE);
-      void loadHistory(project.id, true);
-    }
+  // "Older…" stands at the end of the scrolled list while unfetched
+  // rows wait (dashboard-27): paging keeps its semantics, and the
+  // group's height never grows past the frame.
+  const older = more || inFlight;
+  const overflowing = rows.length + (older ? 1 : 0) > HISTORY_FRAME;
+  const fetchOlder = () => {
+    if (more && !inFlight) void loadHistory(project.id, true);
   };
   return (
     <div className="flex flex-col gap-1" data-testid={`history-${project.id}`}>
@@ -410,9 +404,25 @@ function HistoryBand({
           {inFlight ? "Loading…" : "Nothing done here yet."}
         </div>
       ) : (
-        <div>
-          <ul className="flex flex-col gap-0.5">
-            {visible.map((row) =>
+        // The cut edges draw only where the frame overflows, so a short
+        // history reads as a plain list.
+        <div
+          className={
+            overflowing
+              ? "border-y border-neutral-200 dark:border-neutral-800"
+              : undefined
+          }
+        >
+          <ul
+            data-testid={`history-frame-${project.id}`}
+            data-overflowing={overflowing ? "true" : undefined}
+            aria-label="History"
+            // A frame that scrolls is reachable by keyboard as well as
+            // through the controls it holds (DR-010 §5).
+            tabIndex={overflowing ? 0 : undefined}
+            className="flex max-h-48 flex-col overflow-y-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            {rows.map((row) =>
               row.kind === "intent" ? (
                 <IntentHistoryRow
                   key={`intent:${row.id}`}
@@ -429,12 +439,12 @@ function HistoryBand({
               ),
             )}
             {older ? (
-              <li>
+              <li className="flex h-6 shrink-0 items-center">
                 <button
                   type="button"
                   data-testid={`history-older-${project.id}`}
                   disabled={inFlight}
-                  onClick={reveal}
+                  onClick={fetchOlder}
                   className={`${TEXT_LINK} text-xs disabled:opacity-50`}
                 >
                   {inFlight ? "Loading…" : "Older…"}
