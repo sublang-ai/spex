@@ -22,31 +22,18 @@ function timeTitle(at: number): string {
   return Number.isFinite(at) ? new Date(at).toLocaleString() : "";
 }
 
-/** Prints only what the call reported. A runtime that told us nothing
- * about tokens gets silence, not a zero it never measured (DR-032). */
+/** Prints only the tokens the call reported. A runtime that told us
+ * nothing about tokens gets silence, not a zero it never measured
+ * (DR-032); a cost it reported is never shown (DR-044). */
 function Usage({ usage }: { usage: UsageView }) {
-  const tokens =
-    usage.inputTokens !== undefined || usage.outputTokens !== undefined
-      ? `${(usage.inputTokens ?? 0).toLocaleString()}→${(
-          usage.outputTokens ?? 0
-        ).toLocaleString()} tok`
-      : undefined;
-  const cost =
-    usage.totalCostUsd !== undefined
-      ? `${usage.costSource === "provider-reported" ? "" : "≈"}$${usage.totalCostUsd.toFixed(2)}`
-      : undefined;
-  const parts = [tokens, cost].filter(Boolean);
-  if (parts.length === 0) return null;
+  if (usage.inputTokens === undefined && usage.outputTokens === undefined) {
+    return null;
+  }
   return (
-    <span
-      className="text-xs text-neutral-500"
-      title={
-        usage.costSource && usage.costSource !== "provider-reported"
-          ? `cost ${usage.costSource.replace("-", " ")}`
-          : undefined
-      }
-    >
-      {parts.join(" · ")}
+    <span className="text-xs text-neutral-500">
+      {`${(usage.inputTokens ?? 0).toLocaleString()}→${(
+        usage.outputTokens ?? 0
+      ).toLocaleString()} tok`}
     </span>
   );
 }

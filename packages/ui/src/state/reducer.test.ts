@@ -44,14 +44,12 @@ describe("RUN-19: fixture stream renders expected pane structure", () => {
     const tool = coder.segments[2];
     expect(tool.kind === "tool" && tool.status).toBe("success");
     const result = coder.segments[5];
-    // The cligent 0.22 shape is read as sent: inclusive totals and a
-    // cost that carries its provenance (DR-032).
-    expect(result.kind === "result" && result.usage).toMatchObject({
+    // The cligent 0.22 shape is read as sent: inclusive totals, and
+    // the cost it carries left out of the view (DR-032, DR-044).
+    expect(result.kind === "result" && result.usage).toEqual({
       inputTokens: 120,
       outputTokens: 30,
       toolUses: 1,
-      totalCostUsd: 0.05,
-      costSource: "provider-reported",
     });
     expect(view.captain.some((line) => line.text === "◇ /code started")).toBe(
       true,
@@ -315,7 +313,7 @@ describe("DR-032: an unreported figure is silence, never zero", () => {
     expect(readDoneUsage({ usage: { toolUses: 3 } })).toEqual({ toolUses: 3 });
   });
 
-  test("a cost without a token report still arrives, with its source", () => {
+  test("a cost without a token report leaves only the tool count", () => {
     expect(
       readDoneUsage({
         usage: {
@@ -323,7 +321,7 @@ describe("DR-032: an unreported figure is silence, never zero", () => {
           cost: { amount: 0.4, currency: "USD", source: "agent-estimate" },
         },
       }),
-    ).toEqual({ toolUses: 0, totalCostUsd: 0.4, costSource: "agent-estimate" });
+    ).toEqual({ toolUses: 0 });
   });
 
   test("no usage at all is no usage view", () => {

@@ -9,30 +9,29 @@ import type { TmuxPlayRecord } from "@sublang/spex-core/protocol";
 
 import { plainFailure } from "../lib/labels.js";
 
-/** What one call reported spending. Every figure is optional because
- * cligent 0.22 reports each independently, and an absent report means
- * unreported — never zero (DR-032). */
+/** What one call reported spending, in tokens and tool uses. Every
+ * figure is optional because cligent 0.22 reports each independently,
+ * and an absent report means unreported — never zero (DR-032). A cost
+ * the runtime reported stays in the record and never reaches the
+ * view (DR-044). */
 export interface UsageView {
   inputTokens?: number;
   outputTokens?: number;
   toolUses: number;
-  totalCostUsd?: number;
-  costSource?: string;
 }
 
 /** Reads a cligent 0.22 `done` usage payload. Totals are inclusive of
- * cached reads, so they are taken as given and never re-added. */
+ * cached reads, so they are taken as given and never re-added; the
+ * payload's cost is left where it lies. */
 export function readDoneUsage(payload: unknown): UsageView | undefined {
   const usage = (payload as { usage?: unknown } | undefined)?.usage as
     | {
         toolUses?: number;
         tokens?: { totals?: { input?: { total?: number }; output?: { total?: number } } };
-        cost?: { amount?: number; source?: string };
       }
     | undefined;
   if (!usage) return undefined;
   const totals = usage.tokens?.totals;
-  const cost = usage.cost;
   return {
     ...(typeof totals?.input?.total === "number"
       ? { inputTokens: totals.input.total }
@@ -41,12 +40,6 @@ export function readDoneUsage(payload: unknown): UsageView | undefined {
       ? { outputTokens: totals.output.total }
       : {}),
     toolUses: usage.toolUses ?? 0,
-    ...(typeof cost?.amount === "number"
-      ? {
-          totalCostUsd: cost.amount,
-          ...(cost.source ? { costSource: cost.source } : {}),
-        }
-      : {}),
   };
 }
 

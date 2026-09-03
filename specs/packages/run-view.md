@@ -71,12 +71,12 @@ When the session record stream delivers thinking content for a visible player, t
 
 #### run-view-6
 
-When a player turn completes, that player's pane shall report the turn's usage by what the turn delivered, reporting each figure only where the turn reported it ([DR-032](../decisions/032-session-players.md)):
+When a player turn completes, that player's pane shall report the turn's usage by what the turn delivered, showing token totals only where the turn reported them and never a monetary figure ([DR-032](../decisions/032-session-players.md), [DR-044](../decisions/044-no-money-in-the-interface.md)):
 
 | The turn reported | The pane shows |
 | --- | --- |
 | tokens | the turn's token totals, taken as given because they are inclusive of cached reads |
-| a cost | that cost, marked as an estimate unless the provider itself reported it |
+| a cost, with or without tokens | nothing for it — no amount in any currency, whatever its provenance |
 | neither | no usage line — an unreported figure is silence, never a zero nobody measured |
 
 ### Pane Visibility
@@ -653,7 +653,7 @@ The start view shall obtain projects, playbooks, captain identity, and readiness
 
 #### run-view-20
 
-Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per roster player and a record narrowing the engaged players removes none [[run-view-7](#run-view-7)], player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards labeled by tool name and input subject, with a subject-less input labeled by name alone, their bodies printing string fields verbatim and other values as JSON with the result's span in the duration vocabulary [[run-view-4](#run-view-4)], each pane's header naming its latest call's role and an unprompted lane saying whom it waits for [[run-view-7](#run-view-7)], a transcript's Markdown link to a target the shell cannot open renders as plain text while an `https` one stays a link [[run-view-83](#run-view-83)], every completed turn with usage data shows its usage [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
+Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per roster player and a record narrowing the engaged players removes none [[run-view-7](#run-view-7)], player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards labeled by tool name and input subject, with a subject-less input labeled by name alone, their bodies printing string fields verbatim and other values as JSON with the result's span in the duration vocabulary [[run-view-4](#run-view-4)], each pane's header naming its latest call's role and an unprompted lane saying whom it waits for [[run-view-7](#run-view-7)], a transcript's Markdown link to a target the shell cannot open renders as plain text while an `https` one stays a link [[run-view-83](#run-view-83)], every completed turn with a token report shows its token totals and no pane shows a monetary figure though the fixture records a cost [[run-view-6](#run-view-6)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
 
 #### run-view-66
 

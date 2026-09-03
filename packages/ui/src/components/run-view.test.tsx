@@ -210,6 +210,13 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     expect(screen.getByText("auth.md").title).toBe(
       "specs/packages/auth.md#auth-3",
     );
+    // The turn's usage is its token totals alone: the fixture records
+    // a provider-reported cost, and no pane shows a currency sign or
+    // an estimate mark (run-view-6, DR-044).
+    const coder = screen.getByTestId("player-pane-dev.coder").textContent ?? "";
+    expect(coder).toContain("120→30 tok");
+    expect(coder).not.toMatch(/[$≈]/);
+    expect(document.body.textContent).not.toMatch(/[$≈]/);
   });
 
   test("a narrowing visibility record takes no pane away", () => {

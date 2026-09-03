@@ -14,6 +14,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Changed
+
+- The player pane's usage line reports tokens only; no monetary figure appears anywhere in the interface, whatever the runtime reported (IR-073).
+
 ## [0.4.0] - 2026-09-02
 
 ### Added
