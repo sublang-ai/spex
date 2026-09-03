@@ -398,33 +398,167 @@ describe("playbook-library-34/26: plain words on the list", () => {
   });
 });
 
-describe("DR-015: the slc demo example card", () => {
-  test("collapsed by default; opening stages all four artifacts", () => {
+const ARTIFACTS = {
+  source: "# Code workflow\n\nThe coder writes.",
+  gears: "### CODE-1\n\nThe coder shall write the change.",
+  fsm: "import { setup } from 'xstate';",
+  stateIds: ["idle", "coding"],
+  machine: null,
+  missing: [] as string[],
+};
+
+/** Answer playbook.artifacts with `load`, leaving the surface's other
+ * commands on the default stub. */
+function withArtifacts(load: () => Promise<unknown>): void {
+  const base = commandMock.getMockImplementation()!;
+  commandMock.mockImplementation(async (type: string, params?: unknown) =>
+    type === "playbook.artifacts" ? load() : base(type, params),
+  );
+}
+
+function artifactCalls(): number {
+  return commandMock.mock.calls.filter(
+    ([type]) => type === "playbook.artifacts",
+  ).length;
+}
+
+describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () => {
+  test("a press opens a stage, a second closes it, another swaps — on one request", async () => {
+    withArtifacts(async () => ARTIFACTS);
+    renderLibrary();
+    const row = screen.getByTestId("stages-code");
+    expect(
+      within(row)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Source", "Gears", "State machine"]);
+    // The row stands before anything is asked for: nothing loads and
+    // no stage is open.
+    expect(artifactCalls()).toBe(0);
+    expect(screen.queryByTestId("pipeline-code")).toBeNull();
+
+    fireEvent.click(within(row).getByRole("button", { name: "Source" }));
+    expect(
+      within(row).getByRole("button", { name: "Source" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    // The first open asks, and says so until the answer lands.
+    expect(artifactCalls()).toBe(1);
+    expect(screen.getByTestId("pipeline-code").textContent).toContain("loading…");
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("pipeline-code").textContent).toContain(
+        "The coder writes.",
+      ),
+    );
+
+    // Another stage swaps to it; the state list sits above the code.
+    fireEvent.click(within(row).getByRole("button", { name: "State machine" }));
+    const box = screen.getByTestId("pipeline-code");
+    expect(box.textContent).not.toContain("The coder writes.");
+    expect(box.textContent).toContain("idle");
+    expect(box.textContent!.indexOf("idle")).toBeLessThan(
+      box.textContent!.indexOf("xstate"),
+    );
+
+    // Pressing the open stage closes it, and reopening reuses what
+    // arrived: one request for this card.
+    fireEvent.click(within(row).getByRole("button", { name: "State machine" }));
+    expect(screen.queryByTestId("pipeline-code")).toBeNull();
+    fireEvent.click(within(row).getByRole("button", { name: "Gears" }));
+    expect(screen.getByTestId("pipeline-code").textContent).toContain("CODE-1");
+    expect(artifactCalls()).toBe(1);
+  });
+
+  test("a stage the load cannot locate is struck out, inactive, and named in the box", async () => {
+    withArtifacts(async () => ({ ...ARTIFACTS, gears: null, missing: ["gears"] }));
+    renderLibrary();
+    const row = screen.getByTestId("stages-code");
+    const gears = () =>
+      within(row).getByRole("button", { name: "Gears" }) as HTMLButtonElement;
+    // Before the load the row knows of no absence and offers it.
+    expect(gears().disabled).toBe(false);
+
+    fireEvent.click(within(row).getByRole("button", { name: "Source" }));
+    await vi.waitFor(() => expect(gears().disabled).toBe(true));
+    // Struck out as well as quiet: never colour alone (DR-010 §7).
+    expect(gears().className).toContain("line-through");
+    expect(gears().title).toBe(
+      "Gears not found next to this playbook's registry",
+    );
+    // The absence is named in the open stage, not on the card.
+    expect(screen.getByTestId("pipeline-code").textContent).toContain(
+      "missing stages: Gears",
+    );
+  });
+
+  test("a failed request leaves its message in the open stage", async () => {
+    withArtifacts(async () => {
+      throw new Error("no registry beside /tmp/code");
+    });
+    renderLibrary();
+    fireEvent.click(
+      within(screen.getByTestId("stages-code")).getByRole("button", {
+        name: "Source",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("pipeline-code").textContent).toContain(
+        "no registry beside /tmp/code",
+      ),
+    );
+  });
+});
+
+describe("PBLIB-35: the slc demo example card", () => {
+  test("the row stands on the card and opens all four in-memory stages", () => {
     renderLibrary();
     const card = screen.getByTestId("example-card");
     expect(card.textContent).toContain("Example: Two-Agent Change-and-Review Workflow");
     expect(card.textContent).toContain("from the slc demo");
-    // Collapsed: no stage rail yet.
-    expect(card.textContent).not.toContain("Normalized text");
 
-    fireEvent.click(screen.getByTestId("example-toggle"));
-    for (const label of ["Source", "Normalized text", "Gears", "State machine"]) {
-      expect(within(card).getByRole("button", { name: label })).toBeTruthy();
+    // The row is permanent — no toggle stands between card and stages.
+    const row = within(card).getByTestId("example-stages");
+    for (const label of ["Source", "Normalized", "Gears", "State machine"]) {
+      expect(within(row).getByRole("button", { name: label })).toBeTruthy();
     }
-    // Source opens first: the raw prose, pre-normalization.
-    expect(card.textContent).toContain(
+    // Nothing is open until a stage is pressed.
+    expect(
+      within(row)
+        .getAllByRole("button")
+        .every((button) => button.getAttribute("aria-pressed") === "false"),
+    ).toBe(true);
+    expect(card.textContent).not.toContain(
       "handing them back to the first agent to judge",
     );
 
-    fireEvent.click(within(card).getByRole("button", { name: "Normalized text" }));
-    expect(card.textContent).toContain("Use two agents, Coder and Reviewer");
+    fireEvent.click(within(row).getByRole("button", { name: "Source" }));
+    // The raw prose, pre-normalization.
+    expect(card.textContent).toContain(
+      "handing them back to the first agent to judge",
+    );
+    expect(
+      within(row).getByRole("button", { name: "Source" }).getAttribute("aria-pressed"),
+    ).toBe("true");
 
-    fireEvent.click(within(card).getByRole("button", { name: "Gears" }));
+    // Another stage swaps; the label holds the budget, the title
+    // carries the longer truth (DR-041).
+    const normalized = within(row).getByRole("button", { name: "Normalized" });
+    expect(normalized.title).toContain("Normalized text");
+    fireEvent.click(normalized);
+    expect(card.textContent).toContain("Use two agents, Coder and Reviewer");
+    expect(card.textContent).not.toContain(
+      "handing them back to the first agent to judge",
+    );
+
+    fireEvent.click(within(row).getByRole("button", { name: "Gears" }));
     // Gears render as markdown: the item heading becomes an <h3>.
     expect(within(card).getByText("WORKFLOW-1").tagName).toBe("H3");
 
-    fireEvent.click(within(card).getByRole("button", { name: "State machine" }));
+    fireEvent.click(within(row).getByRole("button", { name: "State machine" }));
     expect(card.textContent).toContain("from 'xstate'");
+
+    // Pressing the open stage closes it.
+    fireEvent.click(within(row).getByRole("button", { name: "State machine" }));
+    expect(card.textContent).not.toContain("from 'xstate'");
   });
 
   test("prefill copies the normalized text and suggestions into the form", () => {

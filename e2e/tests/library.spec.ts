@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Playbooks surface as a user works it (playbook-library-41):
-// what is configured, enabling a built-in, reading a pipeline, and
-// removing a playbook — each landing in the shared config.
+// what is configured, enabling a built-in, working a card's stage
+// row, and removing a playbook — each landing in the shared config.
 
 import { test, expect, open, nav } from "../src/harness";
 
 test.use({ appOptions: { project: true } });
 
-test("playbook-library-41: list, enable a built-in, read a pipeline, remove", async ({
+test("playbook-library-41: list, enable a built-in, work the stage row, remove", async ({
   page,
   app,
 }) => {
@@ -31,11 +31,25 @@ test("playbook-library-41: list, enable a built-in, read a pipeline, remove", as
   await expect(page.getByText("/decide", { exact: true }).first()).toBeVisible();
   await expect(builtins.getByTestId("builtin-decide")).toHaveCount(0);
 
-  // The pipeline view names its stages.
-  await page.getByRole("button", { name: "Pipeline" }).first().click();
-  const pipeline = page.getByTestId(/^pipeline-/).first();
-  await expect(pipeline).toBeVisible();
-  await expect(pipeline).toContainText("Source");
+  // The stage row stands on the card: a press opens that stage, a
+  // press beside it swaps, a second press closes.
+  const row = page.getByTestId("stages-code");
+  const stage = (name: string) => row.getByRole("button", { name });
+  await expect(stage("Source")).toBeVisible();
+  await expect(page.getByTestId("pipeline-code")).toHaveCount(0);
+
+  await stage("Source").click();
+  await expect(page.getByTestId("pipeline-code")).toBeVisible();
+  await expect(stage("Source")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("pipeline-code")).not.toContainText("loading…");
+
+  await stage("State machine").click();
+  await expect(stage("Source")).toHaveAttribute("aria-pressed", "false");
+  await expect(stage("State machine")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("pipeline-code")).toContainText("states");
+
+  await stage("State machine").click();
+  await expect(page.getByTestId("pipeline-code")).toHaveCount(0);
 
   // Removing asks once — Remove or Keep — then the config no longer
   // names it.
