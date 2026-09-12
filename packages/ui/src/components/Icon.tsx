@@ -52,6 +52,18 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M6.5 3v10" />
     </>
   ),
+  // The authoring workspace's tabs below the @xs step
+  // (playbook-library-52): a page for Source, rows for Gears, a
+  // hexagon for Machine, a check for Register.
+  file: (
+    <>
+      <path d="M4.5 2.5h5l3 3v8a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1Z" />
+      <path d="M9.5 2.5v3h3M6 8.5h4M6 11h4" />
+    </>
+  ),
+  list: <path d="M3 4.5h10M3 8h10M3 11.5h10" />,
+  hexagon: <path d="M8 2 13.2 5v6L8 14 2.8 11V5Z" />,
+  check: <path d="M3 8.5l3.2 3L13 4.5" />,
 };
 
 export type IconName = keyof typeof PATHS;

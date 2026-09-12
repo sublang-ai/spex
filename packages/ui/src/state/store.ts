@@ -16,10 +16,13 @@ import type {
   BuiltinPlaybookInfo,
   ClosedIntent,
   ConfigState,
+  DraftInfo,
+  DraftRecord,
   ForgeState,
   IntentInfo,
   IntentSource,
   LedgerState,
+  PlaybookArtifacts,
   ProjectInfo,
   ReadinessEntry,
   RepoStatusInfo,
@@ -32,11 +35,59 @@ import type {
 
 import { SpexClient, defaultCoreUrl, type ConnectionStatus } from "../lib/client.js";
 import { currentSessionOf } from "../lib/sessions.js";
+import type { SpecEditorState } from "../lib/spec-view-model.js";
 import {
   applyRecord,
   initialSessionView,
   type SessionView,
 } from "./reducer.js";
+
+/** A draft's transcript (DR-058, playbook-library-53): the stored
+ * records folded by the run view's own reducer over a session-shaped
+ * view whose one player is the authoring agent, `author`. The thread
+ * interleaves the Boss and system lines with the agent's segments in
+ * record order, so beside the view stands the sequence number of the
+ * record that pushed each Captain line — the segments carry their own. */
+export interface DraftView {
+  view: SessionView;
+  /** `lineSeqs[i]` is the seq of the record behind `view.captain[i]`. */
+  lineSeqs: number[];
+  /** True while the stored records are being replayed after open. */
+  loading?: boolean;
+  /** An unreadable transcript: the scoped diagnostic shown in place
+   * of the thread (playbook-library-62). */
+  loadError?: string;
+}
+
+/** The draft's `<id>.md` as last streamed, with who changed it when
+ * the app saw the change happen: the agent while its turn ran, else
+ * the Boss; a restored source says only when. */
+export interface DraftSourceState {
+  markdown: string;
+  version: string;
+  mtime: number;
+  by?: "agent" | "you";
+}
+
+/** The Source tab's mode and the paste form's fields, kept while the
+ * app runs so leaving the workspace loses nothing (DR-043). */
+export interface DraftSourceMode {
+  mode: "view" | "edit" | "paste";
+  pasteText: string;
+  pastePath: string;
+}
+
+/** The Boss's own edits to the Register tab (playbook-library-61):
+ * they take precedence over the agent's proposal and the derived
+ * defaults, so a proposal landing later never overwrites them. */
+export interface DraftRegisterForm {
+  command?: string;
+  intent?: string;
+  /** Role → the chosen player id, or `new:<id>` for a lane to mint. */
+  players: Record<string, string>;
+  /** The agent block each new lane carries, once edited. */
+  newPlayers: Record<string, AgentBlockInput>;
+}
 
 export interface ComposerState {
   /** Submissions waiting for the turn to end (RUN-8). A staged
@@ -146,6 +197,92 @@ export interface AppState {
   foldedSources: Record<string, boolean>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
+
+  // Playbook drafts (DR-058). Drafts never enter the session folds:
+  // they are the Library's, keyed by the draft's id throughout.
+  /** Every draft the core lists, by id, as draft.state last said. */
+  drafts: Record<string, DraftInfo>;
+  /** True once draft.list has answered, so the Library can tell an
+   * empty section from one not yet loaded. */
+  draftsLoaded: boolean;
+  /** Transcripts of the drafts opened this launch. */
+  draftViews: Record<string, DraftView>;
+  /** Sources as last streamed; null records a draft known to have
+   * no source yet. */
+  draftSources: Record<string, DraftSourceState | null>;
+  /** The compiled artifacts of a draft, once asked for. */
+  draftArtifacts: Record<string, PlaybookArtifacts>;
+  /** The draft whose workspace replaces the list (playbook-library-52). */
+  openDraftId?: string;
+  /** Unsent composer text per draft (playbook-library-54). */
+  draftComposers: Record<string, { draft: string }>;
+  /** The Source tab's mode and paste fields per draft. */
+  draftSourceModes: Record<string, DraftSourceMode>;
+  /** The whole-file editor's lifted state per draft (spec-view-51's
+   * idiom): the draft survives the workspace's own navigation. */
+  draftEditors: Record<string, SpecEditorState>;
+  /** The Boss's Register-tab edits per draft. */
+  draftForms: Record<string, DraftRegisterForm>;
+  /** Per-draft command refusals shown above the composer. */
+  draftErrors: Record<string, string>;
+  /** The conversation pane's share of the side-by-side workspace, as a
+   * percentage — an app preference (playbook-library-52, DR-030). */
+  draftSplit: number;
+  /** The conversation pane's share of the stacked workspace's height. */
+  draftStackSplit: number;
+  /** Arrival time of each compile.progress line, parallel to
+   * compileProgress, so the band can tick "last output ⟨age⟩ ago". */
+  compileProgressAt: Record<string, number[]>;
+  /** The Captain home's slash menu asked for a new playbook: the
+   * Library focuses its id field on arrival (playbook-library-51). */
+  newPlaybookRequested: boolean;
+  /** A playbook the Library should bring into view on its next render —
+   * the one a registration just made (playbook-library-61). */
+  revealPlaybook?: string;
+
+  listDrafts(): Promise<void>;
+  /** Create a draft and open its workspace; the core refuses an id a
+   * configured playbook or built-in holds. */
+  createDraft(draftId: string): Promise<DraftInfo>;
+  /** Open a draft's workspace: subscribe, replay its records and
+   * source, then stream (playbook-library-62). */
+  openDraft(draftId: string): Promise<void>;
+  /** Show the list again; the draft stays open in the core. */
+  closeDraft(): void;
+  /** Send a Boss message; the core dispatches or queues it. */
+  sendDraft(draftId: string, text: string): Promise<{ queued: boolean }>;
+  abortDraft(draftId: string): Promise<void>;
+  writeDraftSource(
+    draftId: string,
+    input: { content?: string; sourcePath?: string; baseVersion?: string },
+  ): Promise<{ version: string; mtime: number }>;
+  /** Re-read the source from the core, for a conflict's Reload. */
+  refreshDraftSource(draftId: string): Promise<DraftSourceState | null>;
+  compileDraft(draftId: string): Promise<void>;
+  abortDraftCompile(draftId: string): Promise<void>;
+  registerDraft(
+    draftId: string,
+    input: {
+      command: string;
+      intent: string;
+      bindings: Record<string, string>;
+      newPlayers?: Record<string, AgentBlockInput>;
+    },
+  ): Promise<void>;
+  setDraftPlayer(draftId: string, playerId: string | null): Promise<void>;
+  deleteDraft(draftId: string): Promise<void>;
+  loadDraftArtifacts(draftId: string): Promise<PlaybookArtifacts>;
+  setDraftComposer(draftId: string, draft: string): void;
+  setDraftSourceMode(draftId: string, mode: Partial<DraftSourceMode>): void;
+  setDraftEditor(draftId: string, editor: SpecEditorState | undefined): void;
+  setDraftForm(draftId: string, form: DraftRegisterForm): void;
+  clearDraftError(draftId: string): void;
+  setDraftSplit(percent: number): void;
+  setDraftStackSplit(percent: number): void;
+  requestNewPlaybook(): void;
+  /** Take the pending request, if any; true once per request. */
+  consumeNewPlaybookRequest(): boolean;
+  consumeRevealPlaybook(): string | undefined;
 
   loadAgentOptions(adapter: AdapterName): Promise<AgentOptions>;
   connect(url?: string): void;
@@ -275,6 +412,31 @@ function readCaptainSplit(): number {
     : CAPTAIN_SPLIT_DEFAULT;
 }
 
+/** The authoring workspace's two splits (playbook-library-52): the
+ * conversation pane's width share beside the artifacts, and its height
+ * share above them once the panes stack. Both are the reader's to set
+ * and are remembered across launches (DR-030). */
+const DRAFT_SPLIT_KEY = "spex.draftSplit";
+const DRAFT_STACK_SPLIT_KEY = "spex.draftStackSplit";
+export const DRAFT_SPLIT_DEFAULT = 45;
+export const DRAFT_SPLIT_MIN = 22;
+export const DRAFT_SPLIT_MAX = 70;
+export const DRAFT_STACK_DEFAULT = 55;
+export const DRAFT_STACK_MIN = 25;
+export const DRAFT_STACK_MAX = 75;
+
+function readPercent(key: string, min: number, max: number, fallback: number): number {
+  const stored = Number(safeStorageGet(key));
+  return Number.isFinite(stored) && stored >= min && stored <= max ? stored : fallback;
+}
+
+/** The authoring agent's one lane in a draft's view (playbook-library-64). */
+export const AUTHOR_PLAYER = "author";
+
+function emptyDraftView(): DraftView {
+  return { view: initialSessionView([{ id: AUTHOR_PLAYER }]), lineSeqs: [] };
+}
+
 /** One key per capped frame, so a frame's height is remembered under
  * its own identity beside the other chrome preferences (DR-030). */
 export const frameKey = (frameId: string): string => `spex.frame:${frameId}`;
@@ -332,6 +494,10 @@ const backfilling = new Map<
     role?: string;
   }[]
 >();
+
+/** Drafts with a draft.open replay in flight: live draft.record
+ * messages buffer here and apply after the replay, in seq order. */
+const draftBackfilling = new Map<string, DraftRecord[]>();
 
 export function getClient(): SpexClient {
   if (!client) throw new Error("client not connected");
@@ -478,6 +644,114 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
+  /** Fold one draft record into its view (playbook-library-53): the
+   * same reducer the run view uses, plus the seq index that lets the
+   * thread interleave lines and segments in record order. A record at
+   * or before the view's last seq is a replay and folds nothing. */
+  function foldDraftRecord(draftId: string, entry: DraftRecord): void {
+    const current = get().draftViews[draftId] ?? emptyDraftView();
+    if (entry.seq <= current.view.lastSeq) return;
+    const before = current.view.captain.length;
+    applyRecord(current.view, entry.seq, entry.record);
+    if (current.view.captain.length > before) current.lineSeqs.push(entry.seq);
+    // A new outer object each fold: the view mutates in place, so the
+    // identity a selector compares must move for the pane to redraw.
+    set({ draftViews: { ...get().draftViews, [draftId]: { ...current } } });
+  }
+
+  /** Subscribe to a draft and replay its stored records and source
+   * after the view's last seq (playbook-library-62); live records
+   * arriving meanwhile buffer and apply afterwards, so a reconnect can
+   * never lose the gap. */
+  async function ensureDraftSubscribed(draftId: string): Promise<void> {
+    const current = get().draftViews[draftId] ?? emptyDraftView();
+    set({
+      draftViews: {
+        ...get().draftViews,
+        [draftId]: { ...current, loading: true, loadError: undefined },
+      },
+    });
+    const pending: DraftRecord[] = [];
+    draftBackfilling.set(draftId, pending);
+    try {
+      await getClient().subscribe({ kind: "draft", draftId });
+      const reply = await getClient().command("draft.open", {
+        draftId,
+        afterSeq: current.view.lastSeq,
+      });
+      if (draftBackfilling.get(draftId) !== pending) return;
+      for (const entry of reply.records) foldDraftRecord(draftId, entry);
+      for (const entry of pending) foldDraftRecord(draftId, entry);
+      const view = get().draftViews[draftId] ?? emptyDraftView();
+      const source = reply.source;
+      const known = get().draftSources[draftId];
+      set({
+        drafts: { ...get().drafts, [draftId]: reply.draft },
+        draftViews: {
+          ...get().draftViews,
+          [draftId]: { ...view, loading: false, loadError: undefined },
+        },
+        draftSources: {
+          ...get().draftSources,
+          // A restored source says only when it changed; who changed it
+          // is known only for a change the app watched happen.
+          [draftId]: source
+            ? {
+                ...source,
+                ...(known && known.version === source.version && known.by
+                  ? { by: known.by }
+                  : {}),
+              }
+            : null,
+        },
+      });
+    } catch (cause) {
+      if (draftBackfilling.get(draftId) !== pending) return;
+      const view = get().draftViews[draftId] ?? emptyDraftView();
+      set({
+        draftViews: {
+          ...get().draftViews,
+          [draftId]: {
+            ...view,
+            loading: false,
+            loadError: `The conversation could not be loaded: ${(cause as Error).message}`,
+          },
+        },
+      });
+      throw cause;
+    } finally {
+      if (draftBackfilling.get(draftId) === pending) draftBackfilling.delete(draftId);
+    }
+  }
+
+  function setDraftError(draftId: string, message: string): void {
+    set({ draftErrors: { ...get().draftErrors, [draftId]: message } });
+  }
+
+  /** Forget a draft everywhere once the core has retired or deleted it. */
+  function forgetDraft(draftId: string): void {
+    draftBackfilling.delete(draftId);
+    const state = get();
+    const drop = <T,>(record: Record<string, T>): Record<string, T> => {
+      const { [draftId]: _dropped, ...rest } = record;
+      return rest;
+    };
+    set({
+      drafts: drop(state.drafts),
+      draftViews: drop(state.draftViews),
+      draftSources: drop(state.draftSources),
+      draftArtifacts: drop(state.draftArtifacts),
+      draftComposers: drop(state.draftComposers),
+      draftSourceModes: drop(state.draftSourceModes),
+      draftEditors: drop(state.draftEditors),
+      draftForms: drop(state.draftForms),
+      draftErrors: drop(state.draftErrors),
+      compileProgress: drop(state.compileProgress),
+      compileProgressAt: drop(state.compileProgressAt),
+      openDraftId: state.openDraftId === draftId ? undefined : state.openDraftId,
+    });
+  }
+
   function handleMessage(message: ServerMessage): void {
     switch (message.type) {
       case "config.state":
@@ -495,6 +769,7 @@ export const useAppStore = create<AppState>((set, get) => {
         break;
       case "compile.progress": {
         const progress = get().compileProgress;
+        const times = get().compileProgressAt;
         set({
           compileProgress: {
             ...progress,
@@ -502,6 +777,58 @@ export const useAppStore = create<AppState>((set, get) => {
               ...(progress[message.playbookId] ?? []),
               message.line,
             ],
+          },
+          compileProgressAt: {
+            ...times,
+            [message.playbookId]: [
+              ...(times[message.playbookId] ?? []),
+              Date.now(),
+            ],
+          },
+        });
+        break;
+      }
+      case "draft.record": {
+        const buffer = draftBackfilling.get(message.draftId);
+        const entry: DraftRecord = { seq: message.seq, record: message.record };
+        if (buffer) {
+          buffer.push(entry);
+          break;
+        }
+        foldDraftRecord(message.draftId, entry);
+        break;
+      }
+      case "draft.state": {
+        const draft = message.draft;
+        const previous = get().drafts[draft.id];
+        const updates: Partial<AppState> = {
+          drafts: { ...get().drafts, [draft.id]: draft },
+        };
+        // A compile that just started opens a fresh log: the band folds
+        // this compile's lines, never the last one's under them.
+        if (
+          draft.compile?.outcome === "running" &&
+          previous?.compile?.at !== draft.compile.at
+        ) {
+          updates.compileProgress = { ...get().compileProgress, [draft.id]: [] };
+          updates.compileProgressAt = { ...get().compileProgressAt, [draft.id]: [] };
+        }
+        set(updates);
+        break;
+      }
+      case "draft.source": {
+        // Who changed it: the agent while its turn runs, else the Boss.
+        const by =
+          get().drafts[message.draftId]?.activity === "turn" ? "agent" : "you";
+        set({
+          draftSources: {
+            ...get().draftSources,
+            [message.draftId]: {
+              markdown: message.markdown,
+              version: message.version,
+              mtime: message.mtime,
+              by,
+            },
           },
         });
         break;
@@ -616,6 +943,30 @@ export const useAppStore = create<AppState>((set, get) => {
     stagedIntents: {},
     collapsedLanes: {},
     foldedSources: {},
+    drafts: {},
+    draftsLoaded: false,
+    draftViews: {},
+    draftSources: {},
+    draftArtifacts: {},
+    draftComposers: {},
+    draftSourceModes: {},
+    draftEditors: {},
+    draftForms: {},
+    draftErrors: {},
+    draftSplit: readPercent(
+      DRAFT_SPLIT_KEY,
+      DRAFT_SPLIT_MIN,
+      DRAFT_SPLIT_MAX,
+      DRAFT_SPLIT_DEFAULT,
+    ),
+    draftStackSplit: readPercent(
+      DRAFT_STACK_SPLIT_KEY,
+      DRAFT_STACK_MIN,
+      DRAFT_STACK_MAX,
+      DRAFT_STACK_DEFAULT,
+    ),
+    compileProgressAt: {},
+    newPlaybookRequested: false,
 
     connect(url?: string): void {
       const target = url ?? defaultCoreUrl();
@@ -663,6 +1014,14 @@ export const useAppStore = create<AppState>((set, get) => {
       const live = sessions.filter((session) => session.live);
       for (const session of sessions.filter((item) => item.live || loaded.has(item.id))) {
         await ensureSubscribed(session.id).catch(() => {});
+      }
+      // Drafts opened this launch re-subscribe and backfill the same
+      // way (playbook-library-62); the list itself re-pulls.
+      void get()
+        .listDrafts()
+        .catch(() => {});
+      for (const draftId of Object.keys(get().draftViews)) {
+        await ensureDraftSubscribed(draftId).catch(() => {});
       }
       // Boot the project context (DR-011): the persisted project when
       // it still exists, else the first live session's project, else
@@ -1309,6 +1668,224 @@ export const useAppStore = create<AppState>((set, get) => {
           },
         });
       }
+    },
+
+    // -----------------------------------------------------------------
+    // Playbook drafts (DR-058)
+    // -----------------------------------------------------------------
+
+    async listDrafts(): Promise<void> {
+      const listed = await getClient().command("draft.list", {});
+      const drafts = Object.fromEntries(
+        (Array.isArray(listed) ? listed : []).map((draft) => [draft.id, draft]),
+      );
+      set({ drafts, draftsLoaded: true });
+    },
+
+    async createDraft(draftId: string): Promise<DraftInfo> {
+      const draft = await getClient().command("draft.create", { draftId });
+      set({ drafts: { ...get().drafts, [draft.id]: draft } });
+      await get().openDraft(draft.id);
+      return draft;
+    },
+
+    async openDraft(draftId: string): Promise<void> {
+      set({ openDraftId: draftId });
+      // A draft opened this launch keeps its thread; the replay from
+      // its last seq brings only what it missed.
+      await ensureDraftSubscribed(draftId).catch(() => {
+        // The scoped diagnostic stands in place of the thread.
+      });
+    },
+
+    closeDraft(): void {
+      set({ openDraftId: undefined });
+    },
+
+    async sendDraft(draftId: string, text: string): Promise<{ queued: boolean }> {
+      try {
+        const reply = await getClient().command("draft.send", { draftId, text });
+        get().clearDraftError(draftId);
+        return { queued: reply.queued };
+      } catch (cause) {
+        setDraftError(draftId, (cause as Error).message);
+        throw cause;
+      }
+    },
+
+    async abortDraft(draftId: string): Promise<void> {
+      try {
+        await getClient().command("draft.abort", { draftId });
+      } catch (cause) {
+        setDraftError(draftId, `abort failed: ${(cause as Error).message}`);
+      }
+    },
+
+    async writeDraftSource(draftId, input) {
+      const reply = await getClient().command("draft.source.write", {
+        draftId,
+        ...(input.content !== undefined ? { content: input.content } : {}),
+        ...(input.sourcePath !== undefined ? { sourcePath: input.sourcePath } : {}),
+        ...(input.baseVersion !== undefined ? { baseVersion: input.baseVersion } : {}),
+      });
+      // The broadcast follows; the Boss's own write is known to be theirs.
+      const current = get().draftSources[draftId];
+      if (input.content !== undefined || current) {
+        set({
+          draftSources: {
+            ...get().draftSources,
+            [draftId]: {
+              markdown: input.content ?? current?.markdown ?? "",
+              version: reply.version,
+              mtime: reply.mtime,
+              by: "you",
+            },
+          },
+        });
+      }
+      return reply;
+    },
+
+    async refreshDraftSource(draftId: string): Promise<DraftSourceState | null> {
+      const view = get().draftViews[draftId];
+      const reply = await getClient().command("draft.open", {
+        draftId,
+        // Only the source is wanted: records after the last seq are
+        // those the stream is already delivering.
+        afterSeq: view?.view.lastSeq ?? 0,
+      });
+      const source = reply.source
+        ? { markdown: reply.source.markdown, version: reply.source.version, mtime: reply.source.mtime }
+        : null;
+      set({
+        drafts: { ...get().drafts, [draftId]: reply.draft },
+        draftSources: { ...get().draftSources, [draftId]: source },
+      });
+      return source;
+    },
+
+    async compileDraft(draftId: string): Promise<void> {
+      set({
+        compileProgress: { ...get().compileProgress, [draftId]: [] },
+        compileProgressAt: { ...get().compileProgressAt, [draftId]: [] },
+      });
+      try {
+        // Compiles run for minutes: no client timeout (DR-010 §5).
+        await getClient().command("draft.compile", { draftId }, { timeoutMs: 0 });
+      } catch (cause) {
+        const error = cause as { code?: string; message: string };
+        // A failed phase and a cancel are told by the band from the
+        // draft's state; a refusal is a message to show.
+        if (error.code !== "aborted" && error.code !== "invalid_request") {
+          setDraftError(draftId, error.message);
+        }
+      }
+    },
+
+    async abortDraftCompile(draftId: string): Promise<void> {
+      try {
+        await getClient().command("compile.abort", { playbookId: draftId });
+      } catch (cause) {
+        setDraftError(draftId, `cancel failed: ${(cause as Error).message}`);
+      }
+    },
+
+    async registerDraft(draftId, input): Promise<void> {
+      const configState = await getClient().command("draft.register", {
+        draftId,
+        command: input.command,
+        intent: input.intent,
+        bindings: input.bindings,
+        ...(input.newPlayers ? { newPlayers: input.newPlayers } : {}),
+      });
+      // The draft is retired: the playbook is configured, the record is
+      // gone, and the list opens with the new card in view.
+      set({ configState, revealPlaybook: draftId });
+      forgetDraft(draftId);
+      void getClient().unsubscribe({ kind: "draft", draftId }).catch(() => {});
+    },
+
+    async setDraftPlayer(draftId, playerId): Promise<void> {
+      const draft = await getClient().command("draft.player.set", { draftId, playerId });
+      set({ drafts: { ...get().drafts, [draftId]: draft } });
+    },
+
+    async deleteDraft(draftId: string): Promise<void> {
+      await getClient().command("draft.delete", { draftId });
+      forgetDraft(draftId);
+      void getClient().unsubscribe({ kind: "draft", draftId }).catch(() => {});
+    },
+
+    async loadDraftArtifacts(draftId: string): Promise<PlaybookArtifacts> {
+      const artifacts = await getClient().command("draft.artifacts", { draftId });
+      set({ draftArtifacts: { ...get().draftArtifacts, [draftId]: artifacts } });
+      return artifacts;
+    },
+
+    setDraftComposer(draftId: string, draft: string): void {
+      set({ draftComposers: { ...get().draftComposers, [draftId]: { draft } } });
+    },
+
+    setDraftSourceMode(draftId: string, mode: Partial<DraftSourceMode>): void {
+      const current = get().draftSourceModes[draftId] ?? {
+        mode: "view",
+        pasteText: "",
+        pastePath: "",
+      };
+      set({
+        draftSourceModes: {
+          ...get().draftSourceModes,
+          [draftId]: { ...current, ...mode },
+        },
+      });
+    },
+
+    setDraftEditor(draftId: string, editor: SpecEditorState | undefined): void {
+      const { [draftId]: _dropped, ...rest } = get().draftEditors;
+      set({ draftEditors: editor ? { ...rest, [draftId]: editor } : rest });
+    },
+
+    setDraftForm(draftId: string, form: DraftRegisterForm): void {
+      set({ draftForms: { ...get().draftForms, [draftId]: form } });
+    },
+
+    clearDraftError(draftId: string): void {
+      const { [draftId]: _dropped, ...rest } = get().draftErrors;
+      set({ draftErrors: rest });
+    },
+
+    setDraftSplit(percent: number): void {
+      const clamped = Math.min(
+        DRAFT_SPLIT_MAX,
+        Math.max(DRAFT_SPLIT_MIN, Math.round(percent)),
+      );
+      set({ draftSplit: clamped });
+      safeStorageSet(DRAFT_SPLIT_KEY, String(clamped));
+    },
+
+    setDraftStackSplit(percent: number): void {
+      const clamped = Math.min(
+        DRAFT_STACK_MAX,
+        Math.max(DRAFT_STACK_MIN, Math.round(percent)),
+      );
+      set({ draftStackSplit: clamped });
+      safeStorageSet(DRAFT_STACK_SPLIT_KEY, String(clamped));
+    },
+
+    requestNewPlaybook(): void {
+      set({ newPlaybookRequested: true });
+    },
+
+    consumeNewPlaybookRequest(): boolean {
+      const requested = get().newPlaybookRequested;
+      if (requested) set({ newPlaybookRequested: false });
+      return requested;
+    },
+
+    consumeRevealPlaybook(): string | undefined {
+      const reveal = get().revealPlaybook;
+      if (reveal !== undefined) set({ revealPlaybook: undefined });
+      return reveal;
     },
 
     async runCompile(input): Promise<void> {

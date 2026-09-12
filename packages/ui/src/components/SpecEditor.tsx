@@ -37,6 +37,10 @@ export interface SpecEditorProps {
   onSaved: (content: string, version: string) => void;
   /** Close without writing; the editor has already asked when dirty. */
   onCancel: () => void;
+  /** Why a save must wait, when it must: the file's other writer is at
+   * work (playbook-library-56). Save stands disabled with this in its
+   * tooltip, and the shortcut and Overwrite hold too. */
+  saveBlocked?: string;
 }
 
 /** Which discard is awaiting its confirm (spec-view-49). */
@@ -59,6 +63,7 @@ export function SpecEditor({
   onRead,
   onSaved,
   onCancel,
+  saveBlocked,
 }: SpecEditorProps) {
   const dirty = state.draft !== state.original;
   const [busy, setBusy] = useState(false);
@@ -94,7 +99,7 @@ export function SpecEditor({
   }, [state.preview]);
 
   const save = async (baseVersion: string | undefined) => {
-    if (busy) return;
+    if (busy || saveBlocked) return;
     setBusy(true);
     setError(undefined);
     setConflict(false);
@@ -225,8 +230,8 @@ export function SpecEditor({
           type="button"
           data-testid="editor-save"
           onClick={() => void save(state.version)}
-          disabled={!dirty || busy}
-          title={`Save (${keyLabel("S")})`}
+          disabled={!dirty || busy || saveBlocked !== undefined}
+          title={saveBlocked ?? `Save (${keyLabel("S")})`}
           className={BUTTON_CLASS}
         >
           {busy ? "Saving…" : "Save"}
@@ -276,7 +281,8 @@ export function SpecEditor({
             type="button"
             data-testid="editor-overwrite"
             onClick={() => void save(undefined)}
-            disabled={busy}
+            disabled={busy || saveBlocked !== undefined}
+            title={saveBlocked}
             className="rounded-md border border-amber-400 px-2 py-0.5 text-xs hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
           >
             Overwrite

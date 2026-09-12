@@ -38,7 +38,10 @@ export interface ReadinessHint {
   onOpenSettings(): void;
 }
 
-function Line({
+/** One Captain line as the thread draws it (run-view-1): exported so
+ * the authoring thread interleaves the same bubbles and lines with the
+ * agent's segments (playbook-library-53). */
+export function ThreadLine({
   line,
   graphs,
   source,
@@ -208,7 +211,7 @@ const NARRATION_GLYPH = /^([\u25c7\u25c6\u25b8\u2b95\u2937\u2192])\s?/u;
  * glyph standing as an icon in a fixed slot — never a centered grey
  * mono whisper the room cannot read. The text keeps its glyph, so the
  * line reads the same to a screen reader and a test. */
-function SystemLine({ text, title }: { text: string; title: string }) {
+export function SystemLine({ text, title }: { text: string; title: string }) {
   const match = NARRATION_GLYPH.exec(text);
   const glyph = match?.[1];
   const body = glyph ? text.slice(glyph.length) : text;
@@ -429,7 +432,7 @@ export function CaptainPane({
                   data-focused={lineFocus["data-focused"]}
                   className={lineFocus.className}
                 >
-                  <Line
+                  <ThreadLine
                     line={line}
                     graphs={machineGraphs}
                     source={

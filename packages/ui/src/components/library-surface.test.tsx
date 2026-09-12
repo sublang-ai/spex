@@ -5,8 +5,8 @@
 // player that answers them and are rebound in place (PBLIB-4),
 // unconfigured built-ins render from the catalog with browsable
 // sources and an add flow that mints a lane per role (PBLIB-34), and the
-// slc demo example card stages the pipeline and prefills the compile
-// form with the normalized text and the neutral block (PBLIB-35).
+// slc demo example card stages the pipeline (PBLIB-35); its prefill into
+// a draft's paste mode is covered with the workspace (DR-058).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -36,7 +36,6 @@ vi.mock("../state/store.js", async (importOriginal) => {
 import { LibrarySurface, NEUTRAL_BLOCK } from "./LibrarySurface.js";
 import { agentChipText } from "./AgentChip.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
-import { SLC_DEMO } from "../examples/slc-demo.js";
 import type {
   BuiltinPlaybookInfo,
   ConfigState,
@@ -458,7 +457,7 @@ describe("playbook-library-34/26: plain words on the list", () => {
     });
     render(<LibrarySurface />);
     expect(screen.getByTestId("playbooks-empty").textContent).toBe(
-      "No playbooks enabled yet — enable a built-in below, or compile your own.",
+      "No playbooks enabled yet — enable a built-in below, or make your own with New playbook.",
     );
   });
 });
@@ -838,69 +837,6 @@ describe("PBLIB-35: the slc demo example card", () => {
     expect(card.textContent).not.toContain("from 'xstate'");
   });
 
-  test("prefill copies the normalized text and suggestions into the form", () => {
-    renderLibrary();
-    fireEvent.change(screen.getByTestId("compile-source-path"), {
-      target: { value: "/tmp/other.md" },
-    });
-    fireEvent.click(screen.getByTestId("example-prefill"));
-
-    const id = screen.getByTestId("compile-playbook-id") as HTMLInputElement;
-    const command = screen.getByTestId("compile-command") as HTMLInputElement;
-    const intent = screen.getByTestId("compile-intent") as HTMLInputElement;
-    const roles = screen.getByTestId("compile-roles") as HTMLInputElement;
-    const source = screen.getByTestId(
-      "compile-source-text",
-    ) as HTMLTextAreaElement;
-    const path = screen.getByTestId("compile-source-path") as HTMLInputElement;
-
-    expect(id.value).toBe("workflow");
-    expect(command.value).toBe("workflow");
-    expect(intent.value).toBe(
-      "Two-Agent Change-and-Review Workflow — Use two agents to carry out the input task.",
-    );
-    expect(roles.value).toBe("Coder, Reviewer");
-    // The NORMALIZED text, never the raw prose (DR-015): the compile
-    // pipeline skips slc's normalize phase.
-    expect(source.value).toBe(SLC_DEMO.stages.normalized);
-    expect(source.value).toContain("# Two-Agent Change-and-Review Workflow");
-    expect(source.value).not.toBe(SLC_DEMO.stages.source);
-    // A stale source path would override the text: prefill clears it.
-    expect(path.value).toBe("");
-
-    // The demo roles are pre-mapped onto the fixed neutral block
-    // (DR-019) so the chips show a deliberate choice, not a blank.
-    for (const role of ["Coder", "Reviewer"]) {
-      const row = screen.getByTestId(`compile-player-${role}`).parentElement!;
-      expect(within(row).getByTestId("agent-chip").textContent).toContain(
-        agentChipText(NEUTRAL_BLOCK),
-      );
-    }
-  });
-
-  test("a compile role's agent is chosen in place before compiling", async () => {
-    renderLibrary();
-    fireEvent.click(screen.getByTestId("example-prefill"));
-    fireEvent.click(screen.getByTestId("compile-player-Reviewer"));
-    const popover = screen.getByTestId("agent-popover");
-    // The compile form knows the Captain, so copying from it is offered.
-    expect(within(popover).getByTestId("agent-same-as-captain")).toBeTruthy();
-    fireEvent.click(within(popover).getByTestId("agent-adapter-gemini"));
-    await within(popover).findByText("Model list unavailable: Fixture");
-    fireEvent.change(within(popover).getByTestId("agent-model"), { target: { value: "gemini-3-pro" } });
-    fireEvent.change(within(popover).getByTestId("agent-effort"), { target: { value: "high" } });
-    fireEvent.click(within(popover).getByTestId("agent-save"));
-
-    const row = screen.getByTestId("compile-player-Reviewer").parentElement!;
-    expect(within(row).getByTestId("agent-chip").textContent).toContain(
-      "gemini · gemini-3-pro @ high",
-    );
-    // The untouched role keeps the neutral block.
-    const coderRow = screen.getByTestId("compile-player-Coder").parentElement!;
-    expect(within(coderRow).getByTestId("agent-chip").textContent).toContain(
-      agentChipText(NEUTRAL_BLOCK),
-    );
-  });
 });
 
 describe("DR-015: repeated Academy seeding opens the existing project", () => {

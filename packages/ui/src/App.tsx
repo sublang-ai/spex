@@ -50,7 +50,12 @@ function pinnedTab(tab: string | undefined): "start" | "specs" | "overview" | un
 
 declare global {
   interface Window {
-    spexNative?: { pickDirectory(): Promise<string | null> };
+    spexNative?: {
+      pickDirectory(): Promise<string | null>;
+      /** An OS file picker, where the shell offers one (DR-008): the
+       * Source tab's Pick file (playbook-library-56). */
+      pickFile?(): Promise<string | null>;
+    };
   }
 }
 

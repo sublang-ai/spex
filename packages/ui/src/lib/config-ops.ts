@@ -69,3 +69,30 @@ export function bindRole(
     },
   });
 }
+
+/** Fixed neutral default for a new role assignment (DR-019); the
+ * "Same as Captain" action in the editor copies the Captain's
+ * adapter, model, effort, and permissions instead. */
+export const NEUTRAL_BLOCK: AgentBlockInput = {
+  adapter: "claude",
+  model: "claude-opus-5",
+  effort: "high",
+  permissions: { mode: "auto" },
+};
+
+/** Apply an editor patch to a local (not yet registered) block with
+ * the same semantics the core uses: provided keys change, absent
+ * keys survive, an explicit null unsets, permissions replace
+ * wholesale. */
+export function applyLocalPatch(
+  base: AgentBlockInput,
+  patch: AgentPatch,
+): AgentBlockInput {
+  const next: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (value === null) delete next[key];
+    else next[key] = value;
+  }
+  return next as AgentBlockInput;
+}

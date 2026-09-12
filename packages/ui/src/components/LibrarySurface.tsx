@@ -3,288 +3,60 @@
 
 // Library surface (PBLIB): configured playbooks with per-role inline
 // agents (DR-019) and the pipeline stage row (Source → Gears →
-// State machine), plus the compile flow driving slc through the
-// core with streamed, persistent progress.
+// State machine), the drafts in progress with the way to a new one
+// (DR-058), the built-ins catalog, and the slc demo example. A draft
+// opened here replaces the list with its authoring workspace.
 
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
-  type ReactNode,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import type {
   AgentBlockInput,
   AgentSummary,
   BuiltinPlaybookInfo,
-  CommandResults,
   ConfigEditOpInput,
+  DraftInfo,
   PlaybookArtifacts,
   ReadinessEntry,
   SessionPlayerSummary,
-  SpecFileInfo,
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
-import { bindRole, type AgentPatch } from "../lib/config-ops.js";
+import {
+  NEUTRAL_BLOCK,
+  applyLocalPatch,
+  bindRole,
+} from "../lib/config-ops.js";
+import {
+  DRAFT_ID_CAPTION,
+  DRAFT_ID_RULE,
+  DRAFT_ID_RULE_TEXT,
+} from "../lib/drafts.js";
+import { phaseLabel } from "../lib/compile-log.js";
+import { absoluteTitle, relativeAge } from "../lib/time.js";
+import { useClock } from "../lib/useClock.js";
+import { AuthoringWorkspace, DraftStateChip } from "./AuthoringWorkspace.js";
 import { BindingEditorPopover } from "./BindingEditor.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
-import { ResizableFrame } from "./ResizableFrame.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
-import { CitationPreview, useCitationPreview } from "./CitationPreview.js";
-import { GROUP_CHIP, itemDomId, SpecItemRows } from "./SpecItemRows.js";
-import { buildItemIndex } from "../lib/spec-view-model.js";
+import {
+  GearsItems,
+  STAGES,
+  StageBox,
+  StageRow,
+  StateList,
+  type StageKey,
+} from "./PlaybookStages.js";
 
-type Toolchain = CommandResults["compile.check"];
-
-/** Fixed neutral default for a new role assignment (DR-019); the
- * "Same as Captain" action in the editor copies the Captain's
- * adapter, model, effort, and permissions instead. */
-export const NEUTRAL_BLOCK: AgentBlockInput = {
-  adapter: "claude",
-  model: "claude-opus-5",
-  effort: "high",
-  permissions: { mode: "auto" },
-};
-
-/** Apply an editor patch to a local (not yet registered) block with
- * the same semantics the core uses: provided keys change, absent
- * keys survive, an explicit null unsets, permissions replace
- * wholesale. */
-function applyLocalPatch(
-  base: AgentBlockInput,
-  patch: AgentPatch,
-): AgentBlockInput {
-  const next: Record<string, unknown> = { ...base };
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) continue;
-    if (value === null) delete next[key];
-    else next[key] = value;
-  }
-  return next as AgentBlockInput;
-}
-
-const STAGES = [
-  { key: "source", label: "Source", hint: "The workflow markdown the playbook was compiled from" },
-  { key: "gears", label: "Gears", hint: "One normative spec item per state behavior — the compiler's middle stage" },
-  { key: "fsm", label: "State machine", hint: "The compiled XState machine that drives the players" },
-] as const;
-type StageKey = (typeof STAGES)[number]["key"];
-
-/** The pipeline as a row (PBLIB-22): a card wears its stages joined
- * by arrows, each stage a toggle opening its artifact beneath. The
- * row is a control row on a card, so labels hold the 14-character
- * budget (DR-041) and every stage keeps a 24px target (DR-010 §7). */
-function StageRow<Key extends string>({
-  stages,
-  open,
-  absent,
-  onPress,
-  testId,
-}: {
-  stages: readonly { key: Key; label: string; hint: string }[];
-  /** The stage standing open, if any — one at a time per card. */
-  open?: Key;
-  /** Stages the load reported missing; empty until it lands. */
-  absent?: readonly string[];
-  onPress: (key: Key) => void;
-  testId: string;
-}) {
-  return (
-    // The row is flush with the card's content: the first label's
-    // own padding is pulled back, and each arrow travels with the
-    // stage before it so a wrapped line starts on a label.
-    <div className="-ml-2 flex flex-wrap items-center gap-1" data-testid={testId}>
-      {stages.map((entry, index) => {
-        const missing = absent?.includes(entry.key) ?? false;
-        return (
-          <span key={entry.key} className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-pressed={open === entry.key}
-              disabled={missing}
-              title={
-                missing
-                  ? `${entry.label} not found next to this playbook's registry`
-                  : entry.hint
-              }
-              onClick={() => onPress(entry.key)}
-              className={`inline-flex min-h-6 items-center rounded-md px-2 text-xs ${
-                open === entry.key
-                  ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                  : missing
-                    ? "text-neutral-400 line-through dark:text-neutral-500"
-                    : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-              }`}
-            >
-              {entry.label}
-            </button>
-            {index < stages.length - 1 ? (
-              <span
-                aria-hidden="true"
-                className="text-neutral-400 dark:text-neutral-500"
-              >
-                →
-              </span>
-            ) : null}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-/** The open stage's box, in rem steps (playbook-library-22): 24rem
- * standing, 8rem to 48rem once the reader has pulled its bottom edge,
- * one height serving a card's stages (DR-030). */
-const STAGE_UNIT = 16;
-const STAGE_DEFAULT = 24;
-const STAGE_MIN = 8;
-const STAGE_MAX = 48;
-
-/** The open stage's artifact, in the capped frame beneath the row —
- * with what the stage pins standing above the frame, so it holds its
- * place at every scroll position and every height the reader sets. */
-function StageBox({
-  id,
-  stage,
-  header,
-  children,
-}: {
-  id: string;
-  /** The open stage's label, so the grip names what it resizes. */
-  stage: string;
-  /** The stage's pinned header, outside the scrolling frame. */
-  header?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      {header}
-      <ResizableFrame
-        frameId={`stage:${id}`}
-        label={`Resize the ${stage} stage`}
-        unit={STAGE_UNIT}
-        defaultSteps={STAGE_DEFAULT}
-        minSteps={STAGE_MIN}
-        maxSteps={STAGE_MAX}
-        data-testid={`stage-box-${id}`}
-        className="overflow-x-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950"
-      >
-        {children}
-      </ResizableFrame>
-    </div>
-  );
-}
-
-/** The State machine stage's derived state list (PBLIB-22), pinned
- * above the frame: the chips wrap rather than overflow (DR-041 §9), so
- * the states stay in view at any scroll position and any height. */
-function StateList({ id, states }: { id: string; states: string[] }) {
-  return (
-    <div
-      data-testid={`stage-states-${id}`}
-      className="flex flex-wrap items-center gap-1"
-    >
-      <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-        states
-      </span>
-      {states.map((state) => (
-        <span
-          key={state}
-          className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
-        >
-          {state}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-/** The Gears stage as the outline's own item rows (PBLIB-22): the
- * artifact is a GEARS package file, so the card draws the parse the
- * core serves — rows collapsed, each expanding to its body, a citation
- * of a sibling landing on it inside the box — never a wall of
- * markdown. Read-only: no filters, no edit, no tree beyond this file. */
-function GearsItems({ id, file }: { id: string; file: SpecFileInfo }) {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const [pendingJump, setPendingJump] = useState<string>();
-  const [flashId, setFlashId] = useState<string>();
-  const [notFoundKey, setNotFoundKey] = useState<string>();
-  // One artifact, one index: a citation resolves within this file or
-  // it resolves nowhere — the card holds no spec tree.
-  const itemIndex = useMemo(() => buildItemIndex([file]), [file]);
-  const prefix = `gears-${id}`;
-  // The same card the outline's entries raise (spec-view-61), laid in
-  // this list's own box so the stage frame contains it.
-  const boxRef = useRef<HTMLDivElement | null>(null);
-  const preview = useCitationPreview(useCallback(() => boxRef.current, []));
-  const previewed = preview.open
-    ? itemIndex.get(preview.open.target)
-    : undefined;
-
-  // The landing waits for the expansion to commit, then scrolls the
-  // row into the box, takes focus (DR-010 §6), and flashes it.
-  useEffect(() => {
-    if (!pendingJump) return;
-    const element = document.getElementById(itemDomId(pendingJump, prefix));
-    if (element && typeof element.scrollIntoView === "function") {
-      element.scrollIntoView({ block: "center" });
-    }
-    element?.focus({ preventScroll: true });
-    setFlashId(pendingJump);
-    setPendingJump(undefined);
-  }, [pendingJump, prefix]);
-
-  useEffect(() => {
-    if (!flashId) return;
-    const timer = setTimeout(() => setFlashId(undefined), 1200);
-    return () => clearTimeout(timer);
-  }, [flashId]);
-
-  return (
-    <div ref={boxRef} className="relative">
-      <SpecItemRows
-        items={file.items}
-        idPrefix={prefix}
-        itemIndex={itemIndex}
-        expandedItems={expanded}
-        flashId={flashId}
-        notFoundKey={notFoundKey}
-        preview={preview}
-        onToggleItem={(itemId) =>
-          setExpanded((current) => {
-            const next = new Set(current);
-            if (!next.delete(itemId)) next.add(itemId);
-            return next;
-          })
-        }
-        onJump={(linkKey, targetId) => {
-          preview.close();
-          if (!itemIndex.has(targetId)) {
-            setNotFoundKey(linkKey);
-            return;
-          }
-          setNotFoundKey(undefined);
-          setExpanded((current) => new Set(current).add(targetId));
-          setPendingJump(targetId);
-        }}
-      />
-      {preview.open ? (
-        <CitationPreview
-          open={preview.open}
-          item={previewed?.item}
-          chipClass={previewed ? GROUP_CHIP[previewed.group] : undefined}
-        />
-      ) : null}
-    </div>
-  );
-}
+export { NEUTRAL_BLOCK };
 
 /** A configured playbook's pipeline (PBLIB-22/23): the stage row is
  * permanent, and the artifacts arrive on the card's first open —
@@ -574,9 +346,16 @@ type ExampleStageKey = (typeof EXAMPLE_STAGES)[number]["key"];
 
 /** Read-only slc demo card (PBLIB-35, DR-015): the same stage row as
  * a configured playbook wears, over four in-memory stages, with a
- * compile-form prefill. */
-function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
+ * prefill that opens a draft workspace in paste mode. */
+function ExampleCard({
+  onPrefill,
+  error,
+}: {
+  onPrefill: () => Promise<void>;
+  error?: string;
+}) {
   const [stage, setStage] = useState<ExampleStageKey>();
+  const [busy, setBusy] = useState(false);
   const content = stage ? SLC_DEMO.stages[stage] : undefined;
 
   return (
@@ -595,12 +374,25 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
         <button
           type="button"
           data-testid="example-prefill"
-          onClick={onPrefill}
-          className="rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+          disabled={busy}
+          title={`Opens a draft named ${SLC_DEMO.playbookId} with the normalized text ready to paste — nothing is written or compiled`}
+          onClick={() => {
+            setBusy(true);
+            void onPrefill().finally(() => setBusy(false));
+          }}
+          className="rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          Prefill form
+          {busy ? "Opening…" : "Prefill"}
         </button>
       </div>
+      {error ? (
+        <div
+          data-testid="example-error"
+          className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+        >
+          {error}
+        </div>
+      ) : null}
       <StageRow
         stages={EXAMPLE_STAGES}
         open={stage}
@@ -627,52 +419,363 @@ function ExampleCard({ onPrefill }: { onPrefill: () => void }) {
   );
 }
 
+/** One draft's row (playbook-library-50): its id, state chip, the
+ * age of its last activity, Open, and Delete behind the inline
+ * confirm (playbook-library-63). A draft whose directory is gone
+ * offers only Delete. */
+function DraftRow({
+  draft,
+  onOpen,
+  onDelete,
+}: {
+  draft: DraftInfo;
+  onOpen: () => void;
+  onDelete: () => Promise<void>;
+}) {
+  const now = useClock(false);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const deleteRef = useRef<HTMLButtonElement>(null);
+  const busyWith =
+    draft.activity === "turn"
+      ? "Delete waits: the draft's turn is running"
+      : draft.activity === "compiling"
+        ? "Delete waits: the draft's compile is running"
+        : undefined;
+
+  async function remove(): Promise<void> {
+    setConfirming(false);
+    // Refused while the draft works, naming which (DR-010 §4).
+    if (busyWith) {
+      setError(busyWith);
+      deleteRef.current?.focus();
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onDelete();
+    } catch (cause) {
+      setError((cause as Error).message);
+      setBusy(false);
+      deleteRef.current?.focus();
+    }
+  }
+
+  return (
+    <div
+      data-testid={`draft-row-${draft.id}`}
+      className="flex flex-col gap-1 rounded-lg border border-neutral-200 bg-white px-4 py-2 dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-sm font-semibold">{draft.id}</span>
+        <DraftStateChip draft={draft} />
+        {draft.firstLine ? (
+          <span className="min-w-0 flex-1 truncate text-xs text-neutral-500" title={draft.firstLine}>
+            {draft.firstLine}
+          </span>
+        ) : null}
+        <span
+          data-testid={`draft-age-${draft.id}`}
+          title={absoluteTitle(draft.touchedAt)}
+          className="ml-auto shrink-0 text-xs text-neutral-500"
+        >
+          {relativeAge(draft.touchedAt, now)}
+        </span>
+        {!draft.sourceMissing ? (
+          <button
+            type="button"
+            data-testid={`draft-open-${draft.id}`}
+            onClick={onOpen}
+            className="rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+          >
+            Open
+          </button>
+        ) : null}
+        {confirming ? (
+          <InlineConfirm
+            question="Delete this draft and its source?"
+            confirmLabel="Delete"
+            cancelLabel="Keep"
+            onConfirm={() => void remove()}
+            onCancel={() => {
+              setConfirming(false);
+              deleteRef.current?.focus();
+            }}
+          />
+        ) : (
+          <button
+            ref={deleteRef}
+            type="button"
+            data-testid={`draft-delete-${draft.id}`}
+            disabled={busy}
+            aria-label={`Delete draft ${draft.id}`}
+            title="Remove the draft, its conversation, and its source"
+            onClick={() => setConfirming(true)}
+            className="rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 hover:text-red-600 disabled:opacity-40 dark:hover:bg-neutral-800"
+          >
+            {busy ? "Deleting…" : "Delete"}
+          </button>
+        )}
+      </div>
+      {error ? (
+        <div
+          role="alert"
+          data-testid={`draft-row-error-${draft.id}`}
+          className="text-xs text-red-600 dark:text-red-400"
+        >
+          {error}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The New playbook field (playbook-library-51): one thing, the id,
+ * checked in place against the rule and the names already taken;
+ * Enter creates the draft and opens its workspace. */
+function NewPlaybookField({
+  takenPlaybooks,
+  takenBuiltins,
+  drafts,
+  onCreate,
+  onOpenExisting,
+  autoFocus,
+  onAutoFocused,
+}: {
+  /** Configured playbook ids. */
+  takenPlaybooks: ReadonlySet<string>;
+  /** Built-in ids the catalog offers. */
+  takenBuiltins: ReadonlySet<string>;
+  drafts: Record<string, DraftInfo>;
+  onCreate: (id: string) => Promise<unknown>;
+  onOpenExisting: (id: string) => void;
+  /** The Captain home's slash menu asked for this field. */
+  autoFocus: boolean;
+  /** The request was honored: focus lands here once, not on every return. */
+  onAutoFocused: () => void;
+}) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    rootRef.current?.scrollIntoView?.({ block: "center" });
+    inputRef.current?.focus();
+    onAutoFocused();
+  }, [autoFocus, onAutoFocused]);
+
+  async function submit(): Promise<void> {
+    const id = value.trim();
+    if (!id || busy) return;
+    if (!DRAFT_ID_RULE.test(id)) {
+      setError(DRAFT_ID_RULE_TEXT);
+      return;
+    }
+    if (takenPlaybooks.has(id)) {
+      setError(`/${id} is already a configured playbook`);
+      return;
+    }
+    if (takenBuiltins.has(id)) {
+      setError(`${id} is a built-in — enable it below instead`);
+      return;
+    }
+    if (drafts[id]) {
+      // An id naming an existing draft opens that draft.
+      setError(undefined);
+      onOpenExisting(id);
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onCreate(id);
+      setValue("");
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void submit();
+    }
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      data-testid="new-playbook"
+      className="flex flex-col gap-1 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900"
+    >
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex min-w-0 flex-1 basis-48 flex-col gap-0.5 text-sm">
+          <span className="text-xs text-neutral-500">Playbook id</span>
+          <input
+            ref={inputRef}
+            data-testid="new-playbook-id"
+            value={value}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setError(undefined);
+            }}
+            onKeyDown={onKeyDown}
+            placeholder="e.g. triage"
+            spellCheck={false}
+            aria-invalid={error !== undefined}
+            aria-describedby="new-playbook-caption"
+            className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950"
+          />
+        </label>
+        <button
+          type="button"
+          data-testid="new-playbook-button"
+          disabled={busy || value.trim().length === 0}
+          onClick={() => void submit()}
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
+        >
+          {busy ? "Opening…" : "New playbook"}
+        </button>
+      </div>
+      <span id="new-playbook-caption" className="text-xs text-neutral-500">
+        {DRAFT_ID_CAPTION}
+      </span>
+      {error ? (
+        <span
+          role="alert"
+          data-testid="new-playbook-error"
+          className="text-xs text-red-600 dark:text-red-400"
+        >
+          {error}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** What the live region says as drafts move (playbook-library-57/58/60). */
+function announcementFor(previous: DraftInfo | undefined, next: DraftInfo): string | undefined {
+  if (previous?.state === next.state) return undefined;
+  switch (next.state) {
+    case "compiling":
+      return `Compiling ${next.id}`;
+    case "failed":
+      return `Compile failed at ${next.compile?.phase ? phaseLabel(next.compile.phase) : "an unknown phase"}`;
+    case "compiled":
+      return `Compiled ${next.id}`;
+    default:
+      return undefined;
+  }
+}
+
 export function LibrarySurface({
   onNavigate,
 }: {
   onNavigate?: (surface: "Settings") => void;
 }) {
   const configState = useAppStore((state) => state.configState);
-  const compileProgress = useAppStore((state) => state.compileProgress);
   const readiness = useAppStore((state) => state.readiness);
-  const activeCompile = useAppStore((state) => state.activeCompile);
-  const runCompile = useAppStore((state) => state.runCompile);
-  const abortCompile = useAppStore((state) => state.abortCompile);
   const connection = useAppStore((state) => state.connection);
   const builtins = useAppStore((state) => state.builtins);
   const loadBuiltins = useAppStore((state) => state.loadBuiltins);
+  const drafts = useAppStore((state) => state.drafts);
+  const draftsLoaded = useAppStore((state) => state.draftsLoaded);
+  const openDraftId = useAppStore((state) => state.openDraftId);
+  const listDrafts = useAppStore((state) => state.listDrafts);
+  const createDraft = useAppStore((state) => state.createDraft);
+  const openDraft = useAppStore((state) => state.openDraft);
+  const closeDraft = useAppStore((state) => state.closeDraft);
+  const deleteDraft = useAppStore((state) => state.deleteDraft);
+  const setDraftSourceMode = useAppStore((state) => state.setDraftSourceMode);
+  const consumeNewPlaybookRequest = useAppStore((state) => state.consumeNewPlaybookRequest);
+  const consumeRevealPlaybook = useAppStore((state) => state.consumeRevealPlaybook);
+  const newPlaybookRequested = useAppStore((state) => state.newPlaybookRequested);
+  const revealPlaybook = useAppStore((state) => state.revealPlaybook);
 
-  const [toolchain, setToolchain] = useState<Toolchain>();
   const [error, setError] = useState<string>();
+  const [exampleError, setExampleError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState<string>();
   const [rolePopover, setRolePopover] = useState<{
     playbookId: string;
     role: string;
   }>();
-
-  // Compile form state.
-  const [playbookId, setPlaybookId] = useState("");
-  const [command, setCommand] = useState("");
-  const [intent, setIntent] = useState("");
-  const [rolesText, setRolesText] = useState("");
-  const [sourceText, setSourceText] = useState("");
-  const [sourcePath, setSourcePath] = useState("");
-  const [playerBlocks, setPlayerBlocks] = useState<
-    Record<string, AgentBlockInput>
-  >({});
-  const [compileRolePopover, setCompileRolePopover] = useState<string>();
-  const compileFormRef = useRef<HTMLElement>(null);
+  const [focusNew, setFocusNew] = useState(false);
+  const [revealed, setRevealed] = useState<string>();
+  const [liveNote, setLiveNote] = useState("");
+  const previousDrafts = useRef<Record<string, DraftInfo>>({});
   const playerGearRef = useRef<HTMLButtonElement>(null);
-  const compileGearRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (connection === "open") {
-      getClient().command("compile.check", {}).then(setToolchain).catch(() => {});
-      // Surface activation refreshes the catalog (DR-015); config
-      // edits refresh it again via the config.state broadcast.
+      // Surface activation refreshes the catalog (DR-015) and the
+      // drafts (playbook-library-50); config edits refresh the catalog
+      // again via the config.state broadcast.
       void loadBuiltins().catch(() => {});
+      void listDrafts().catch(() => {});
     }
-  }, [connection, loadBuiltins]);
+  }, [connection, loadBuiltins, listDrafts]);
+
+  // The slash menu's request lands on the id field (playbook-library-51).
+  useEffect(() => {
+    if (newPlaybookRequested && consumeNewPlaybookRequest()) setFocusNew(true);
+  }, [newPlaybookRequested, consumeNewPlaybookRequest]);
+
+  // A registration brings its card into view (playbook-library-61).
+  useEffect(() => {
+    if (revealPlaybook === undefined) return;
+    const id = consumeRevealPlaybook();
+    if (!id) return;
+    setRevealed(id);
+    setLiveNote(`Registered /${configState?.status === "valid" ? (configState.summary.playbooks.find((entry) => entry.id === id)?.command ?? id) : id}`);
+    document.getElementById(`playbook-card-${id}`)?.scrollIntoView?.({ block: "center" });
+  }, [revealPlaybook, consumeRevealPlaybook, configState]);
+  useEffect(() => {
+    if (revealed === undefined) return;
+    const timer = setTimeout(() => setRevealed(undefined), 2400);
+    return () => clearTimeout(timer);
+  }, [revealed]);
+
+  // The live region narrates the drafts' transitions (DR-010 §7).
+  useEffect(() => {
+    let note: string | undefined;
+    for (const draft of Object.values(drafts)) {
+      note = announcementFor(previousDrafts.current[draft.id], draft) ?? note;
+    }
+    previousDrafts.current = drafts;
+    if (note) setLiveNote(note);
+  }, [drafts]);
+
+  const prefillFromExample = useCallback(async (): Promise<void> => {
+    // The example opens a draft in paste mode with the normalized
+    // text — never the raw prose, since the pipeline skips slc's
+    // normalize phase — and writes nothing (playbook-library-35).
+    setExampleError(undefined);
+    const id = SLC_DEMO.playbookId;
+    setDraftSourceMode(id, {
+      mode: "paste",
+      pasteText: SLC_DEMO.stages.normalized,
+      pastePath: "",
+    });
+    try {
+      if (useAppStore.getState().drafts[id]) await openDraft(id);
+      else await createDraft(id);
+    } catch (cause) {
+      setExampleError((cause as Error).message);
+    }
+  }, [createDraft, openDraft, setDraftSourceMode]);
+
+  const liveRegion = (
+    <div aria-live="polite" role="status" className="sr-only" data-testid="library-live">
+      {liveNote}
+    </div>
+  );
 
   if (!configState || configState.status !== "valid") {
     return (
@@ -697,13 +800,21 @@ export function LibrarySurface({
     );
   }
   const summary = configState.summary;
+
+  // A draft's workspace replaces the list (playbook-library-52); the
+  // draft stays open in the core while the list is shown.
+  if (openDraftId && drafts[openDraftId]) {
+    return (
+      <>
+        {liveRegion}
+        <AuthoringWorkspace draftId={openDraftId} onBack={closeDraft} />
+      </>
+    );
+  }
+
   const readinessByAdapter = new Map<string, ReadinessEntry>(
     readiness.map((entry) => [entry.adapter as string, entry]),
   );
-  const roles = rolesText
-    .split(",")
-    .map((role) => role.trim())
-    .filter(Boolean);
 
   function edit(op: ConfigEditOpInput) {
     setError(undefined);
@@ -712,94 +823,34 @@ export function LibrarySurface({
       .catch((cause: Error) => setError(cause.message));
   }
 
-  const compiling = activeCompile?.running === true;
-  const missingRequirement = !playbookId.trim()
-    ? "give the playbook an id"
-    : !intent.trim()
-      ? "describe the intent — the Captain routes free text with it"
-      : roles.length === 0
-        ? "declare at least one player role"
-        : !sourceText.trim() && !sourcePath.trim()
-          ? "provide the workflow source (text or file path)"
-          : toolchain && !toolchain.node.ok
-            ? "install Node >= 23.6 for the compile toolchain"
-            : undefined;
-
-  function startCompile() {
-    setError(undefined);
-    runCompile({
-      playbookId: playbookId.trim(),
-      ...(sourcePath.trim()
-        ? { sourcePath: sourcePath.trim() }
-        : { sourceText }),
-      roles,
-      command: command.trim() || playbookId.trim(),
-      intent: intent.trim(),
-      // Each derived role binds to a proposed lane; the lane blocks
-      // the form collected are what mints them (DR-032).
-      bindings: Object.fromEntries(roles.map((role) => [role, `dev.${role}`])),
-      newPlayers: Object.fromEntries(
-        roles.map((role) => [`dev.${role}`, playerBlocks[role] ?? NEUTRAL_BLOCK]),
-      ),
-    })
-      .then(() => {
-        setPlaybookId("");
-        setSourceText("");
-        setSourcePath("");
-        setRolesText("");
-        setIntent("");
-        setCommand("");
-      })
-      .catch(() => {
-        // The progress log carries the failure line.
-      });
-  }
-
-  /** Prefill the compile form from the slc demo (DR-015): the
-   * normalized text, never the raw prose — the compile pipeline
-   * skips slc's normalize phase. */
-  function prefillFromExample(): void {
-    setPlaybookId(SLC_DEMO.playbookId);
-    setCommand(SLC_DEMO.command);
-    setIntent(SLC_DEMO.intent);
-    setRolesText(SLC_DEMO.roles);
-    setSourceText(SLC_DEMO.stages.normalized);
-    setSourcePath("");
-    // Seed the demo roles with the fixed neutral block (DR-019) so
-    // the chips show a deliberate choice, not an implicit fallback.
-    setPlayerBlocks((current) => {
-      const next = { ...current };
-      for (const role of SLC_DEMO.roles.split(",")) {
-        const id = role.trim();
-        if (id && !next[id]) next[id] = NEUTRAL_BLOCK;
-      }
-      return next;
-    });
-    compileFormRef.current?.scrollIntoView?.({
-      behavior: "smooth",
-      block: "start",
-    });
-  }
-
   // dev delivers issues through branch and pr (DR-059); a config that
-
   // enables dev without them can still run a plain /dev, so the card
-
   // carries a hint, never an invalid mark (playbook-library-48).
   const configuredIds = new Set(summary.playbooks.map((playbook) => playbook.id));
   const missingDelivery = ["branch", "pr"].filter((id) => !configuredIds.has(id));
   const availableBuiltins = (builtins ?? []).filter(
     (entry) => !entry.configured,
   );
-
-  const progressId = activeCompile?.playbookId;
-  const progressLines = progressId ? (compileProgress[progressId] ?? []) : [];
+  const builtinIds = new Set((builtins ?? []).map((entry) => entry.id));
+  const draftList = Object.values(drafts).sort((a, b) => b.touchedAt - a.touchedAt);
+  const newPlaybook = (
+    <NewPlaybookField
+      takenPlaybooks={configuredIds}
+      takenBuiltins={builtinIds}
+      drafts={drafts}
+      onCreate={createDraft}
+      onOpenExisting={(id) => void openDraft(id)}
+      autoFocus={focusNew}
+      onAutoFocused={() => setFocusNew(false)}
+    />
+  );
 
   return (
     // The surface root is the box Playbooks scrolls in (DR-041 §9):
     // height-constrained, and the containing block for its own
     // positioned content, so the page itself never scrolls.
     <div className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
+      {liveRegion}
       <h1 className="text-lg font-semibold">Playbooks</h1>
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
@@ -814,7 +865,11 @@ export function LibrarySurface({
         {summary.playbooks.map((playbook) => (
           <div
             key={playbook.id}
-            className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900"
+            id={`playbook-card-${playbook.id}`}
+            data-testid={`playbook-card-${playbook.id}`}
+            className={`flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900 ${
+              revealed === playbook.id ? "ring-2 ring-brand-400 dark:ring-brand-500" : ""
+            }`}
           >
             <div className="flex items-center gap-2">
               <span className="font-mono text-sm font-semibold">
@@ -850,6 +905,12 @@ export function LibrarySurface({
                 </button>
               )}
             </div>
+            {revealed === playbook.id ? (
+              <p data-testid="registered-note" className="text-xs text-neutral-500">
+                Registered. Sessions started before this registration must be
+                restarted to use it.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
               {Object.entries(playbook.roles).map(([role, binding]) => {
                 const lane = summary.players.find(
@@ -969,11 +1030,29 @@ export function LibrarySurface({
             data-testid="playbooks-empty"
             className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
           >
-            No playbooks enabled yet — enable a built-in below, or compile
-            your own.
+            No playbooks enabled yet — enable a built-in below, or make your
+            own with New playbook.
           </div>
         ) : null}
       </section>
+
+      {draftList.length > 0 ? (
+        // Drafts stand between the configured playbooks and the
+        // built-ins, the way to a new one at the section's foot
+        // (playbook-library-50/51).
+        <section data-testid="drafts-section" className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-neutral-500">Drafts</h2>
+          {draftList.map((draft) => (
+            <DraftRow
+              key={draft.id}
+              draft={draft}
+              onOpen={() => void openDraft(draft.id)}
+              onDelete={() => deleteDraft(draft.id)}
+            />
+          ))}
+          {newPlaybook}
+        </section>
+      ) : null}
 
       {availableBuiltins.length > 0 ? (
         <section
@@ -995,195 +1074,18 @@ export function LibrarySurface({
         </section>
       ) : null}
 
+      {draftList.length === 0 && draftsLoaded ? (
+        // With no draft the section is absent, and the way to a new
+        // playbook stands below the built-ins (playbook-library-50).
+        <section data-testid="new-playbook-section" className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-neutral-500">New playbook</h2>
+          {newPlaybook}
+        </section>
+      ) : null}
+
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">Example</h2>
-        <ExampleCard onPrefill={prefillFromExample} />
-      </section>
-
-      <section ref={compileFormRef} className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-neutral-500">
-          Compile a new playbook
-        </h2>
-        {toolchain && (!toolchain.node.ok || toolchain.slc.guidance) ? (
-          <div
-            className={`rounded-lg border px-3 py-2 text-xs ${
-              toolchain.node.ok
-                ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
-                : "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-            }`}
-          >
-            {toolchain.node.guidance ?? toolchain.slc.guidance}
-          </div>
-        ) : null}
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-200 bg-white p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <label className="flex flex-col gap-0.5">
-            <span className="text-xs text-neutral-500">Playbook id</span>
-            <input
-              data-testid="compile-playbook-id"
-              value={playbookId}
-              onChange={(event) => setPlaybookId(event.target.value)}
-              placeholder="e.g. triage"
-              className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
-            />
-          </label>
-          <label className="flex flex-col gap-0.5">
-            <span className="text-xs text-neutral-500">
-              Slash command (default: id)
-            </span>
-            <input
-              data-testid="compile-command"
-              value={command}
-              onChange={(event) => setCommand(event.target.value)}
-              placeholder="e.g. triage"
-              className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
-            />
-          </label>
-          <label className="col-span-2 flex flex-col gap-0.5">
-            <span className="text-xs text-neutral-500">
-              Intent (one line; the Captain routes free text with it)
-            </span>
-            <input
-              data-testid="compile-intent"
-              value={intent}
-              onChange={(event) => setIntent(event.target.value)}
-              placeholder="e.g. triage new bug reports into labeled issues"
-              className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
-            />
-          </label>
-          <label className="col-span-2 flex flex-col gap-0.5">
-            <span className="text-xs text-neutral-500">
-              Player roles (comma-separated local role ids)
-            </span>
-            <input
-              data-testid="compile-roles"
-              value={rolesText}
-              onChange={(event) => setRolesText(event.target.value)}
-              placeholder="e.g. triager, verifier"
-              className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
-            />
-          </label>
-          {roles.length > 0 ? (
-            <div className="col-span-2 flex flex-wrap gap-3 text-xs">
-              {roles.map((role) => {
-                const block = playerBlocks[role] ?? NEUTRAL_BLOCK;
-                return (
-                  <span
-                    key={role}
-                    className="relative flex items-center gap-1"
-                  >
-                    <span className="font-mono">{role}:</span>
-                    <AgentChip
-                      agent={block}
-                      readiness={readinessByAdapter.get(block.adapter)}
-                      label={role}
-                    />
-                    <button
-                      type="button"
-                      ref={
-                        compileRolePopover === role ? compileGearRef : undefined
-                      }
-                      data-testid={`compile-player-${role}`}
-                      title={`Choose the ${role} agent`}
-                      aria-label={`Configure ${role}`}
-                      onClick={() =>
-                        setCompileRolePopover((current) =>
-                          current === role ? undefined : role,
-                        )
-                      }
-                      className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                    >
-                      <Icon name="edit" />
-                    </button>
-                    {compileRolePopover === role ? (
-                      <AgentEditorPopover
-                        title={`${role} agent`}
-                        direction="down"
-                        initial={block}
-                        readiness={readiness}
-                        captain={summary.captain}
-                        anchorRef={compileGearRef}
-                        saveLabel="Use"
-                        onSave={(patch) => {
-                          setPlayerBlocks((current) => ({
-                            ...current,
-                            [role]: {
-                              ...(current[role] ?? NEUTRAL_BLOCK),
-                              ...patch,
-                            } as AgentBlockInput,
-                          }));
-                          setCompileRolePopover(undefined);
-                        }}
-                        onClose={() => setCompileRolePopover(undefined)}
-                      />
-                    ) : null}
-                  </span>
-                );
-              })}
-            </div>
-          ) : null}
-          <label className="col-span-2 flex flex-col gap-0.5">
-            <span className="text-xs text-neutral-500">
-              Workflow source (or give a source file path below)
-            </span>
-            <textarea
-              data-testid="compile-source-text"
-              value={sourceText}
-              onChange={(event) => setSourceText(event.target.value)}
-              rows={6}
-              placeholder="Describe the workflow — prose or a pasted skill…"
-              className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950"
-            />
-          </label>
-          <label className="col-span-2 flex flex-col gap-0.5">
-            <span className="text-xs text-neutral-500">
-              Source file path (optional, overrides the text)
-            </span>
-            <input
-              data-testid="compile-source-path"
-              value={sourcePath}
-              onChange={(event) => setSourcePath(event.target.value)}
-              placeholder="/path/to/workflow.md"
-              className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
-            />
-          </label>
-          <div className="col-span-2 flex items-center gap-2">
-            <button
-              type="button"
-              disabled={compiling || missingRequirement !== undefined}
-              onClick={startCompile}
-              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
-            >
-              {compiling ? "Compiling…" : "Compile & register"}
-            </button>
-            <span className="text-xs text-neutral-500">
-              {compiling
-                ? "agent-driven, this takes a while — progress streams below"
-                : (missingRequirement ??
-                  "runs slc with your configured coding agent")}
-            </span>
-          </div>
-          {compiling || progressLines.length > 0 ? (
-            <div className="col-span-2 flex flex-col items-start gap-1.5">
-              {progressLines.length > 0 ? (
-                <pre
-                  data-testid="compile-progress"
-                  className="relative max-h-48 w-full overflow-y-auto rounded bg-neutral-100 p-2 font-mono text-xs text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400"
-                >
-                  {progressLines.join("\n")}
-                </pre>
-              ) : null}
-              {compiling ? (
-                <button
-                  type="button"
-                  onClick={() => void abortCompile()}
-                  className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                >
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        <ExampleCard onPrefill={prefillFromExample} error={exampleError} />
       </section>
     </div>
   );

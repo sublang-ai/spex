@@ -33,82 +33,126 @@ import { PlayerPane } from "./PlayerPane.js";
 import { WorkingLine } from "./WorkingLine.js";
 
 
-/** The Captain/players divider (DR-030). A machine drawing has a
- * natural width that reflowing text does not, so the reader sets the
- * split: drag it, nudge it by arrow key, or double-click to restore
- * the default. */
-function SplitDivider({
+/** The house divider (DR-030): the Captain/players split here, and
+ * the authoring workspace's split elsewhere (playbook-library-52). A
+ * machine drawing has a natural width that reflowing text does not, so
+ * the reader sets the split: drag it, nudge it by arrow key, or
+ * double-click to restore the default. Turned horizontal — between two
+ * stacked boxes — it is drawn as the capped frame's grip (DR-041 §9)
+ * and answers the vertical arrow keys. */
+export function SplitDivider({
   percent,
   onChange,
   containerRef,
+  orientation = "vertical",
+  label = "Resize the Captain pane",
+  testId = "captain-divider",
+  min = CAPTAIN_SPLIT_MIN,
+  max = CAPTAIN_SPLIT_MAX,
+  defaultPercent = CAPTAIN_SPLIT_DEFAULT,
 }: {
   percent: number;
   onChange(next: number): void;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  /** vertical: a rule between side-by-side panes; horizontal: a grip
+   * between stacked ones. */
+  orientation?: "vertical" | "horizontal";
+  /** The separator's accessible name. */
+  label?: string;
+  testId?: string;
+  min?: number;
+  max?: number;
+  defaultPercent?: number;
 }) {
   const [dragging, setDragging] = useState(false);
+  const vertical = orientation === "vertical";
 
-  // The share is a percentage width on a flex child, so it resolves
-  // against the container's content box and is then carried right by
-  // the gap before the divider. Measuring the border box instead left
-  // the rule up to 40px from the hand that was dragging it, which
-  // reads as a control that refuses to follow (DR-030, DR-041 §9).
-  function fromClientX(clientX: number): number | undefined {
+  // The share is a percentage on a flex child, so it resolves against
+  // the container's content box and is then carried along by the gap
+  // before the divider. Measuring the border box instead left the rule
+  // up to 40px from the hand that was dragging it, which reads as a
+  // control that refuses to follow (DR-030, DR-041 §9).
+  function fromClient(clientX: number, clientY: number): number | undefined {
     const el = containerRef.current;
     if (!el) return undefined;
     const box = el.getBoundingClientRect();
     const style = getComputedStyle(el);
-    const padLeft = parseFloat(style.paddingLeft) || 0;
-    const padRight = parseFloat(style.paddingRight) || 0;
-    const gap = parseFloat(style.columnGap) || 0;
-    const content = box.width - padLeft - padRight;
+    if (vertical) {
+      const padLeft = parseFloat(style.paddingLeft) || 0;
+      const padRight = parseFloat(style.paddingRight) || 0;
+      const gap = parseFloat(style.columnGap) || 0;
+      const content = box.width - padLeft - padRight;
+      if (content <= 0) return undefined;
+      return ((clientX - box.left - padLeft - gap) / content) * 100;
+    }
+    const padTop = parseFloat(style.paddingTop) || 0;
+    const padBottom = parseFloat(style.paddingBottom) || 0;
+    const gap = parseFloat(style.rowGap) || 0;
+    const content = box.height - padTop - padBottom;
     if (content <= 0) return undefined;
-    return ((clientX - box.left - padLeft - gap) / content) * 100;
+    return ((clientY - box.top - padTop - gap) / content) * 100;
   }
+
+  const [less, more] = vertical
+    ? ["ArrowLeft", "ArrowRight"]
+    : ["ArrowUp", "ArrowDown"];
 
   return (
     <div
-      data-testid="captain-divider"
+      data-testid={testId}
       data-dragging={dragging ? "1" : "0"}
       role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize the Captain pane"
+      aria-orientation={orientation}
+      aria-label={label}
       aria-valuenow={percent}
-      aria-valuemin={CAPTAIN_SPLIT_MIN}
-      aria-valuemax={CAPTAIN_SPLIT_MAX}
+      aria-valuemin={min}
+      aria-valuemax={max}
       tabIndex={0}
       onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId);
+        event.currentTarget.setPointerCapture?.(event.pointerId);
         setDragging(true);
       }}
       onPointerMove={(event) => {
         if (!dragging) return;
-        const next = fromClientX(event.clientX);
+        const next = fromClient(event.clientX, event.clientY);
         if (next !== undefined) onChange(next);
       }}
       onPointerUp={(event) => {
-        event.currentTarget.releasePointerCapture(event.pointerId);
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
         setDragging(false);
       }}
-      onDoubleClick={() => onChange(CAPTAIN_SPLIT_DEFAULT)}
+      onDoubleClick={() => onChange(defaultPercent)}
       onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") onChange(percent - 2);
-        else if (event.key === "ArrowRight") onChange(percent + 2);
-        else if (event.key === "Home") onChange(CAPTAIN_SPLIT_DEFAULT);
+        if (event.key === less) onChange(percent - 2);
+        else if (event.key === more) onChange(percent + 2);
+        else if (event.key === "Home") onChange(defaultPercent);
         else return;
         event.preventDefault();
       }}
       // A 12px hit target around a 2px rule: reachable without
-      // becoming a visible bar (DR-010 §6).
-      className="group relative -mx-1.5 w-3 shrink-0 cursor-col-resize touch-none focus:outline-none"
+      // becoming a visible bar (DR-010 §6). The horizontal form is the
+      // capped frame's 24px grip carrying a drawn handle (DR-010 §7).
+      className={
+        vertical
+          ? "group relative -mx-1.5 w-3 shrink-0 cursor-col-resize touch-none focus:outline-none"
+          : "group flex h-6 w-full shrink-0 cursor-row-resize touch-none items-center justify-center focus:outline-none"
+      }
     >
       <span
         aria-hidden
-        className={`absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded ${
-          dragging
-            ? "bg-brand-500"
-            : "bg-transparent group-hover:bg-neutral-300 group-focus:bg-brand-500 dark:group-hover:bg-neutral-700"
-        }`}
+        className={
+          vertical
+            ? `absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded ${
+                dragging
+                  ? "bg-brand-500"
+                  : "bg-transparent group-hover:bg-neutral-300 group-focus:bg-brand-500 dark:group-hover:bg-neutral-700"
+              }`
+            : `h-1 w-8 rounded-full ${
+                dragging
+                  ? "bg-brand-500"
+                  : "bg-neutral-300 group-hover:bg-neutral-400 group-focus-visible:bg-brand-500 group-focus-visible:ring-2 group-focus-visible:ring-brand-400 dark:bg-neutral-700 dark:group-hover:bg-neutral-600"
+              }`
+        }
       />
     </div>
   );

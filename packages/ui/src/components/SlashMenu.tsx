@@ -32,7 +32,8 @@ export function SlashMenuList({
   items: PlaybookSummary[];
   activeIndex: number;
   onPick: (playbook: PlaybookSummary) => void;
-  /** Discoverable creation entry (DR-009, RUN-34). */
+  /** Discoverable creation entry (DR-009, RUN-34): opens the Library's
+   * New playbook field (playbook-library-51). */
   onCompileNew?: () => void;
 }) {
   return (
@@ -70,16 +71,16 @@ export function SlashMenuList({
         <button
           type="button"
           role="option"
-          id="slash-option-compile-new"
+          id="slash-option-new-playbook"
           aria-selected={false}
-          data-testid="slash-compile-new"
+          data-testid="slash-new-playbook"
           onMouseDown={(event) => {
             event.preventDefault();
             onCompileNew();
           }}
           className="flex w-full items-baseline gap-2 border-t border-neutral-100 px-3 py-1.5 text-left text-xs text-neutral-500 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800"
         >
-          + Compile a new playbook…
+          <span aria-hidden="true">+</span> New playbook…
         </button>
       ) : null}
     </div>
