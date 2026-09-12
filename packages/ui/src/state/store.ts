@@ -25,6 +25,10 @@ import type {
   RepoStatusInfo,
   ServerMessage,
   SessionInfo,
+  SpaceChoice,
+  SpaceEntry,
+  SpaceReadResult,
+  SpaceState,
   SpecTreeState,
   MachineGraph,
   TmuxPlayRecord,
@@ -146,6 +150,44 @@ export interface AppState {
   foldedSources: Record<string, boolean>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
+  /** The Spex home as the core last described it (space-30, DR-057):
+   * replaced wholesale by every `space.state` and `space.get`. */
+  space?: SpaceState;
+  /** The last `space.get` failure, shown on the surface. */
+  spaceError?: string;
+  /** When the surface last read the core's state (space-2). */
+  spaceReadAt?: number;
+  /** Counts the session, ledger and configuration announcements the
+   * Space surface re-reads on, debounced, while it is shown
+   * (space-2, space-29): a counter, so the surface owns the debounce
+   * and the store never runs a timer of its own. */
+  spaceChangeSeq: number;
+  /** The explorer's tree share of the tree/preview split, as a
+   * percentage — a divider position, so chrome preference (DR-030). */
+  spaceSplit: number;
+  /** Whether the "Stays on this device" panel is folded (space-25),
+   * remembered as chrome preference (DR-030). */
+  spacePrivacyCollapsed: boolean;
+
+  /** Re-pull `space.get` (space-2); the newest read wins. */
+  loadSpace(): Promise<void>;
+  setSpaceSplit(percent: number): void;
+  setSpacePrivacyCollapsed(collapsed: boolean): void;
+  /** Initialize the home as a repository (space-4); the reply is the
+   * new state. */
+  spaceInit(remote?: string): Promise<void>;
+  /** Set or clear `origin` (space-5); the reply is the new state. */
+  spaceSetRemote(url: string | null): Promise<void>;
+  /** Check the remote (space-8): accepted at once, outcome as state. */
+  spaceFetch(): Promise<void>;
+  /** Sync (space-11, space-12), with choices (space-18) or as a join
+   * (space-13): accepted at once, outcome as state. */
+  spaceSync(input: { choices?: Record<string, SpaceChoice>; join?: boolean }): Promise<void>;
+  /** Stop the running transport step (space-16). */
+  spaceCancel(): Promise<boolean>;
+  spaceDiff(unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }>;
+  spaceTree(path?: string): Promise<{ path: string; entries: SpaceEntry[] }>;
+  spaceRead(path: string): Promise<SpaceReadResult>;
 
   loadAgentOptions(adapter: AdapterName): Promise<AgentOptions>;
   connect(url?: string): void;
@@ -275,6 +317,21 @@ function readCaptainSplit(): number {
     : CAPTAIN_SPLIT_DEFAULT;
 }
 
+/** The explorer's split (space-28, DR-030): the tree's share, bounded
+ * so neither the tree nor the preview is squeezed past reading. */
+const SPACE_SPLIT_KEY = "spex.spaceSplit";
+const SPACE_PRIVACY_KEY = "spex.spacePrivacyCollapsed";
+export const SPACE_SPLIT_DEFAULT = 40;
+export const SPACE_SPLIT_MIN = 25;
+export const SPACE_SPLIT_MAX = 70;
+
+function readSpaceSplit(): number {
+  const stored = Number(safeStorageGet(SPACE_SPLIT_KEY));
+  return Number.isFinite(stored) && stored >= SPACE_SPLIT_MIN && stored <= SPACE_SPLIT_MAX
+    ? stored
+    : SPACE_SPLIT_DEFAULT;
+}
+
 /** One key per capped frame, so a frame's height is remembered under
  * its own identity beside the other chrome preferences (DR-030). */
 export const frameKey = (frameId: string): string => `spex.frame:${frameId}`;
@@ -354,6 +411,10 @@ export function deliverServerMessageForTests(message: ServerMessage): void {
 
 /** The newest ledger read's number: only its reply applies. */
 let ledgerReads = 0;
+
+/** The newest Space read's number (space-2): a `space.get` reply older
+ * than a `space.state` broadcast or a newer read is discarded. */
+let spaceReads = 0;
 
 export const useAppStore = create<AppState>((set, get) => {
   /** Records describe the conversation; the listing owns activity,
@@ -478,9 +539,22 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
+  /** A session, ledger or configuration announcement the Space surface
+   * re-reads on while shown (space-2): counted here, debounced there. */
+  function noteSpaceChange(): void {
+    set({ spaceChangeSeq: get().spaceChangeSeq + 1 });
+  }
+
   function handleMessage(message: ServerMessage): void {
     switch (message.type) {
+      case "space.state":
+        // The core's state replaces the last one wholesale (space-29),
+        // and a read still in flight is older than this broadcast.
+        spaceReads += 1;
+        set({ space: message.state, spaceError: undefined, spaceReadAt: Date.now() });
+        break;
       case "config.state":
+        noteSpaceChange();
         set({ configState: message.state });
         // Config edits flip catalog `configured` flags (DR-015):
         // refresh an already-loaded catalog so the Library stays true.
@@ -507,6 +581,7 @@ export const useAppStore = create<AppState>((set, get) => {
         break;
       }
       case "session.state": {
+        noteSpaceChange();
         const sessions = get().sessions.filter(
           (session) => session.id !== message.session.id,
         );
@@ -526,9 +601,11 @@ export const useAppStore = create<AppState>((set, get) => {
         if (get().views[message.sessionId]) void get().loadPastSession(message.sessionId, true).catch((error: Error) => setRunError(message.sessionId, error.message));
         break;
       case "session.removed":
+        noteSpaceChange();
         get().forgetSession(message.sessionId, message.projectId);
         break;
       case "intents.changed": {
+        noteSpaceChange();
         // The one fold moved (DR-035): re-pull it, and refresh any
         // loaded History first page for the named projects.
         void get()
@@ -616,6 +693,78 @@ export const useAppStore = create<AppState>((set, get) => {
     stagedIntents: {},
     collapsedLanes: {},
     foldedSources: {},
+    spaceChangeSeq: 0,
+    spaceSplit: readSpaceSplit(),
+    spacePrivacyCollapsed: safeStorageGet(SPACE_PRIVACY_KEY) !== "0",
+
+    async loadSpace(): Promise<void> {
+      // Replies apply in request order (space-2): a read that a newer
+      // read or a broadcast overtook is discarded, never applied.
+      const read = (spaceReads += 1);
+      try {
+        const space = await getClient().command("space.get", {});
+        if (read !== spaceReads) return;
+        set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+      } catch (cause) {
+        if (read !== spaceReads) return;
+        set({ spaceError: (cause as Error).message, spaceReadAt: Date.now() });
+      }
+    },
+
+    setSpaceSplit(percent: number): void {
+      const clamped = Math.min(
+        SPACE_SPLIT_MAX,
+        Math.max(SPACE_SPLIT_MIN, Math.round(percent)),
+      );
+      set({ spaceSplit: clamped });
+      safeStorageSet(SPACE_SPLIT_KEY, String(clamped));
+    },
+
+    setSpacePrivacyCollapsed(collapsed: boolean): void {
+      set({ spacePrivacyCollapsed: collapsed });
+      safeStorageSet(SPACE_PRIVACY_KEY, collapsed ? "1" : "0");
+    },
+
+    async spaceInit(remote?: string): Promise<void> {
+      const space = await getClient().command("space.init", {
+        ...(remote !== undefined ? { remote } : {}),
+      });
+      spaceReads += 1;
+      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+    },
+
+    async spaceSetRemote(url: string | null): Promise<void> {
+      const space = await getClient().command("space.remote.set", { url });
+      spaceReads += 1;
+      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+    },
+
+    async spaceFetch(): Promise<void> {
+      // Accepted at once; the outcome is state (space-29, DR-010 §5).
+      await getClient().command("space.fetch", {});
+    },
+
+    async spaceSync(input): Promise<void> {
+      await getClient().command("space.sync", {
+        ...(input.choices !== undefined ? { choices: input.choices } : {}),
+        ...(input.join !== undefined ? { join: input.join } : {}),
+      });
+    },
+
+    async spaceCancel(): Promise<boolean> {
+      const { stopped } = await getClient().command("space.cancel", {});
+      return stopped;
+    },
+
+    spaceDiff: (unit, path, side) =>
+      getClient().command("space.diff", { unit, path, side }),
+
+    spaceTree: (path) =>
+      getClient().command("space.tree", {
+        ...(path !== undefined ? { path } : {}),
+      }),
+
+    spaceRead: (path) => getClient().command("space.read", { path }),
 
     connect(url?: string): void {
       const target = url ?? defaultCoreUrl();
