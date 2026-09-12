@@ -463,6 +463,18 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
     await vi.waitFor(() => expect(screen.queryByTestId("draft-row-triage")).toBeNull());
   });
 
+  test("a removal broadcast drops the draft everywhere, closing an open workspace", () => {
+    renderWorkspace(draftInfo(), { view: foldView(THREAD) });
+    expect(screen.getByTestId("authoring-workspace")).toBeTruthy();
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.removed", draftId: "triage" });
+    });
+    expect(screen.queryByTestId("authoring-workspace")).toBeNull();
+    expect(screen.queryByTestId("drafts-section")).toBeNull();
+    expect(useAppStore.getState().draftViews.triage).toBeUndefined();
+    expect(useAppStore.getState().openDraftId).toBeUndefined();
+  });
+
   test("a working draft refuses Delete, naming which activity runs", () => {
     seed({ drafts: { triage: draftInfo({ activity: "compiling", state: "compiling" }) } });
     render(<LibrarySurface />);

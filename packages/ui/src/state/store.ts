@@ -816,6 +816,11 @@ export const useAppStore = create<AppState>((set, get) => {
         set(updates);
         break;
       }
+      case "draft.removed":
+        // Retired by registration or deleted, here or elsewhere: every
+        // trace goes, and an open workspace yields to the list.
+        forgetDraft(message.draftId);
+        break;
       case "draft.source": {
         // Who changed it: the agent while its turn runs, else the Boss.
         const by =
