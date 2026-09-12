@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The sidebar (DR-029, DR-030): the navigator. Surface entries around
-// a Workspace section listing every project and its sessions, so what
+// a Projects section — the internal name stays Workspace (DR-057) —
+// listing every project and its sessions, so what
 // exists is always on screen while the tabs hold only what is open.
 // Two widgets, not one — a navigation list for the surfaces and one
 // ARIA tree for the projects — because "current surface" and
@@ -24,14 +25,32 @@ import logo from "../assets/spex-logo.svg";
  * (run-view-67); the idle window only — a working session always shows. */
 const RECENT_WINDOW = 5;
 
-export type Surface = "Dashboard" | "Workspace" | "Playbooks" | "Settings";
+export type Surface =
+  | "Dashboard"
+  | "Workspace"
+  | "Playbooks"
+  | "Space"
+  | "Settings";
 
+/** The sidebar's order; Cmd/Ctrl+1..5 walk it (run-view-49). */
 export const SURFACES: readonly Surface[] = [
   "Dashboard",
   "Workspace",
   "Playbooks",
+  "Space",
   "Settings",
 ];
+
+/** What each surface is called on screen (DR-057): the Workspace
+ * reads "Projects" while every identifier and state key keeps the
+ * internal name, so nothing stored changes shape. */
+export const SURFACE_LABELS: Record<Surface, string> = {
+  Dashboard: "Dashboard",
+  Workspace: "Projects",
+  Playbooks: "Playbooks",
+  Space: "Space",
+  Settings: "Settings",
+};
 
 // The interaction hue's tinted fill is a hue shift, not a luminance
 // one — measured at 1.01:1 against the rail in dark. So "active" is
@@ -46,6 +65,7 @@ const SURFACE_ICONS: Record<Surface, IconName> = {
   Dashboard: "grid",
   Workspace: "folder",
   Playbooks: "book",
+  Space: "home",
   Settings: "gear",
 };
 
@@ -359,24 +379,25 @@ export function NavRail(props: NavRailProps) {
   const surfaceEntry = (name: Surface) => {
     const active = surface === name;
     const badge = name === "Dashboard" && attentionCount > 0;
+    const label = SURFACE_LABELS[name];
     return (
       <button
         key={name}
         type="button"
         onClick={() => onSurface(name)}
         aria-current={active ? "page" : undefined}
-        title={collapsed ? name : undefined}
+        title={collapsed ? label : undefined}
         aria-label={
           badge
-            ? `${name} — ${attentionCount} need${attentionCount === 1 ? "s" : ""} your attention`
-            : name
+            ? `${label} — ${attentionCount} need${attentionCount === 1 ? "s" : ""} your attention`
+            : label
         }
         className={`relative flex items-center gap-2 rounded-md py-1.5 pr-2.5 pl-2 text-left text-sm ${
           collapsed ? "justify-center" : ""
         } ${active ? ACTIVE : INACTIVE}`}
       >
         <Icon name={SURFACE_ICONS[name]} className="h-4 w-4 shrink-0" />
-        {collapsed ? null : <span className="min-w-0 flex-1">{name}</span>}
+        {collapsed ? null : <span className="min-w-0 flex-1">{label}</span>}
         {badge ? (
           <span
             data-testid="nav-attention-badge"
@@ -400,9 +421,9 @@ export function NavRail(props: NavRailProps) {
   };
 
   // Selection says where the reader is, so it follows the surface
-  // (run-view-67): off the Workspace the surface's own entry is the
-  // only current place, and the remembered project lights again when
-  // the Workspace comes back.
+  // (run-view-67): off Projects the surface's own entry is the only
+  // current place, and the remembered project lights again when
+  // Projects comes back.
   const inWorkspace = surface === "Workspace";
   const selectedProjectId = inWorkspace ? currentProjectId : undefined;
   const shownSessionId = inWorkspace ? activeSessionId : undefined;
@@ -686,8 +707,8 @@ export function NavRail(props: NavRailProps) {
         <>
           {surfaceEntry("Workspace")}
           {paletteControl}
-          {/* Entries keep their places across the fold: Playbooks and
-              Settings stay at the foot in both states. */}
+          {/* Entries keep their places across the fold: Playbooks,
+              Space and Settings stay at the foot in both states. */}
           <div className="flex-1" />
         </>
       ) : (
@@ -704,7 +725,7 @@ export function NavRail(props: NavRailProps) {
                   : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"
               }`}
             >
-              Workspace
+              {SURFACE_LABELS.Workspace}
             </button>
             {paletteControl}
           </div>
@@ -713,6 +734,7 @@ export function NavRail(props: NavRailProps) {
       )}
 
       {surfaceEntry("Playbooks")}
+      {surfaceEntry("Space")}
       {surfaceEntry("Settings")}
 
       <div

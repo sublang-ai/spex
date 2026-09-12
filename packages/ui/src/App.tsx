@@ -19,6 +19,7 @@ import { CaptainHome } from "./components/CaptainHome.js";
 import { DashboardSurface } from "./components/DashboardSurface.js";
 import { LibrarySurface } from "./components/LibrarySurface.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
+import { SpaceSurface } from "./components/SpaceSurface.js";
 import { OverviewTab } from "./components/ProjectsSurface.js";
 import { ProjectPalette } from "./components/ProjectPalette.js";
 import { NavRail, SURFACES, type Surface } from "./components/NavRail.js";
@@ -1143,6 +1144,8 @@ export function App() {
             <LibrarySurface onNavigate={setSurface} />
           ) : surface === "Settings" ? (
             <SettingsSurface />
+          ) : surface === "Space" ? (
+            <SpaceSurface />
           ) : surface === "Dashboard" ? (
             <DashboardSurface
               onOpenSession={openSessionAndShow}

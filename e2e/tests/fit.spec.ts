@@ -392,7 +392,7 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
     {
       name: "Overview",
       show: async () => {
-        await page.getByRole("button", { name: "Workspace" }).click();
+        await nav(page, "Projects").click();
         await page.getByRole("tab", { name: "Overview" }).click();
       },
       ready: () => expect(page.getByTestId("overview-tab")).toBeVisible(),

@@ -17,7 +17,7 @@ A top-level Space surface manages Spex home: what is in it and what is private, 
 - [ ] The core exposes the space commands: status, local and incoming changes, initialize, remote, sync with per-unit choices, tree and file preview, each refusing by name while a turn is in flight.
 - [ ] The Space surface renders status, changes, the sync flow with its conflict picker, and the read-only explorer, fitting at the 320-pixel floor.
 - [ ] The desktop bridge reveals a path in the file manager; the served page shows the path instead.
-- [ ] "Workspace" reads "Projects" everywhere the user sees it, and the specs say so.
+- [x] "Workspace" reads "Projects" everywhere the user sees it, and the specs say so.
 
 ## Tasks
 

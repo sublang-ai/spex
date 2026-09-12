@@ -446,7 +446,7 @@ export async function open(page: Page, app: App, path = ""): Promise<void> {
 /** The sidebar entry for a surface. */
 export function nav(
   page: Page,
-  name: "Dashboard" | "Workspace" | "Playbooks" | "Settings",
+  name: "Dashboard" | "Projects" | "Playbooks" | "Space" | "Settings",
 ) {
   return page.getByRole("button", { name, exact: true });
 }

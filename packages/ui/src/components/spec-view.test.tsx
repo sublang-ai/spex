@@ -56,7 +56,7 @@ const TREE: SpecTreeState = {
   intents: [
     {
       id: "IR-016",
-      title: "Workspace intent",
+      title: "Projects intent",
       path: "intents/016-project-workspace.md",
     },
   ],

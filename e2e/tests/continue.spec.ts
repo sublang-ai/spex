@@ -44,7 +44,7 @@ test("run-view-109: a message continues a settled session on the current setting
   await model.fill("claude-sonnet-5");
   await page.getByTestId("player-row-dev.coder").getByTestId("agent-save").click();
   await expect(page.getByTestId("player-saved-dev.coder")).toHaveText("Saved ✓");
-  await nav(page, "Workspace").click();
+  await nav(page, "Projects").click();
   await expect(box).toBeEnabled();
 
   // A message continues it on the same tab: working again, narrating.

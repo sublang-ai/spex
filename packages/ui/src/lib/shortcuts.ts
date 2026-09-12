@@ -25,7 +25,7 @@ export function keyLabel(...keys: string[]): string {
 }
 
 export interface Shortcut {
-  /** The keys after the modifier, as shown: "P", "⇧S", "1–4". */
+  /** The keys after the modifier, as shown: "P", "⇧S", "1–5". */
   keys: string;
   /** What it does, in the reader's words. */
   does: string;
@@ -35,12 +35,12 @@ export interface Shortcut {
 export const SHORTCUTS: readonly Shortcut[] = [
   { keys: "P", does: "Switch or add a project" },
   { keys: "N", does: "Start a new session in the current project" },
-  { keys: "1–4", does: "Go to Dashboard, Workspace, Playbooks, Settings" },
+  { keys: "1–5", does: "Go to Dashboard, Projects, Playbooks, Space, Settings" },
   { keys: ",", does: "Open Settings" },
   { keys: "B", does: "Collapse or show the sidebar" },
   { keys: "⇧S", does: "Open the project's Specs" },
-  { keys: "⇧[", does: "Previous tab in the Workspace" },
-  { keys: "⇧]", does: "Next tab in the Workspace" },
+  { keys: "⇧[", does: "Previous tab in Projects" },
+  { keys: "⇧]", does: "Next tab in Projects" },
 ];
 
 /** Shortcuts that need no modifier. */
@@ -49,5 +49,5 @@ export const PLAIN_SHORTCUTS: readonly Shortcut[] = [
   { keys: "Escape", does: "Close the menu, palette, or editor at hand" },
   { keys: "Delete", does: "Close the focused session tab" },
   { keys: "Alt+↑ / Alt+↓", does: "Move the focused Up next row" },
-  { keys: "any letter", does: "Start typing in the composer from anywhere in the Workspace" },
+  { keys: "any letter", does: "Start typing in the composer from anywhere in Projects" },
 ];

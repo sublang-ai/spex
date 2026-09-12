@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The sidebar names one place at a time (run-view-122): leaving the
-// Workspace leaves no project row lit beside the surface's own entry,
+// The sidebar names one place at a time (run-view-122): leaving
+// Projects leaves no project row lit beside the surface's own entry,
 // and coming back lights the remembered project again.
 
 import { test, expect, open, nav } from "../src/harness";
@@ -17,8 +17,8 @@ test("run-view-122: the sidebar's selection follows the surface", async ({
   const projectRow = page.getByTestId(`sidebar-project-${app.projectId}`);
   const selectedRows = page.locator('[role="treeitem"][aria-selected="true"]');
 
-  // The Workspace is where the reader is: the project's row says so.
-  await expect(nav(page, "Workspace")).toHaveAttribute("aria-current", "page");
+  // Projects is where the reader is: the project's row says so.
+  await expect(nav(page, "Projects")).toHaveAttribute("aria-current", "page");
   await expect(projectRow).toHaveAttribute("aria-selected", "true");
 
   // The Dashboard and Playbooks are places of their own; neither
@@ -33,8 +33,8 @@ test("run-view-122: the sidebar's selection follows the surface", async ({
   await expect(selectedRows).toHaveCount(0);
   await expect(projectRow).not.toHaveAttribute("aria-selected", "true");
 
-  // The project is still remembered, so the Workspace selects it again.
-  await nav(page, "Workspace").click();
+  // The project is still remembered, so Projects selects it again.
+  await nav(page, "Projects").click();
   await expect(page.getByTestId("captain-home")).toBeVisible();
   await expect(projectRow).toHaveAttribute("aria-selected", "true");
 });

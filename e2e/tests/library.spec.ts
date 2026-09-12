@@ -197,7 +197,7 @@ test("playbook-library-41: list, enable a built-in, work the stage row, remove",
   await expect(builtins.getByTestId("builtin-review")).toBeVisible();
 
   // The Captain home's slash menu follows the config.
-  await page.getByRole("button", { name: "Workspace" }).click();
+  await nav(page, "Projects").click();
   const box = page.getByTestId("start-composer");
   await box.fill("/");
   const menu = page.getByRole("listbox");

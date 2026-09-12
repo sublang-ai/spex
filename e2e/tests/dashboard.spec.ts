@@ -288,7 +288,7 @@ test.describe("the History frame", () => {
     await expect.poll(() => frame.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
 
     // The Overview draws the same frame for this project.
-    await page.getByRole("button", { name: "Workspace" }).click();
+    await nav(page, "Projects").click();
     await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page.getByTestId("overview-tab")).toBeVisible();
     await expect(frame).toBeVisible();
@@ -475,7 +475,7 @@ test.describe("removing a History row", () => {
     await expect(row).toHaveCount(0);
 
     // The Overview draws the same rows with the same control.
-    await page.getByRole("button", { name: "Workspace" }).click();
+    await nav(page, "Projects").click();
     await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page.getByTestId("overview-tab")).toBeVisible();
     await expect(row).toHaveCount(0);

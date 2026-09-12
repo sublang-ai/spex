@@ -2223,7 +2223,7 @@ describe("dashboard-42: ledger reads apply in request order", () => {
 // ---------------------------------------------------------------------------
 
 describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
-  test("no registered project: guidance with Workspace navigation, no takeover", () => {
+  test("no registered project: guidance with Projects navigation, no takeover", () => {
     seed({
       projects: [],
       projectMeta: {},
@@ -2236,7 +2236,7 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     expect(screen.getByTestId("attention-all-clear")).toBeTruthy();
     const empty = screen.getByTestId("projects-empty");
     expect(empty.textContent).toContain("register");
-    fireEvent.click(within(empty).getByRole("button", { name: "Workspace" }));
+    fireEvent.click(within(empty).getByRole("button", { name: "Projects" }));
     expect(onNavigate).toHaveBeenCalledWith("Workspace");
   });
 
@@ -2255,7 +2255,7 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
       "Nothing queued",
     );
     // No forge binding: the summary line still counts, and the band
-    // guides to the Workspace.
+    // guides to Projects.
     expect(screen.getByTestId("sources-p1").textContent).toContain(
       "No GitHub connection yet",
     );

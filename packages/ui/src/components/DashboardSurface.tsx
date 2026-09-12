@@ -290,7 +290,7 @@ export function DashboardSurface({
   /** Stage an intent's dispatch (the App wires this to the store's
    * stageDispatch and switches to the Workspace). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
-  /** Optional Workspace navigation for empty-state guidance
+  /** Optional Projects navigation for empty-state guidance
    * (dashboard-8); plain copy stands in when the App leaves it
    * unwired. */
   onNavigate?: (surface: "Workspace") => void;
@@ -529,7 +529,7 @@ export function DashboardSurface({
             className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
           >
             No projects yet — register a repository in the{" "}
-            {workspaceLink("Workspace")} to put its work here.
+            {workspaceLink("Projects")} to put its work here.
           </div>
         ) : (
           filtered.map((project) => (

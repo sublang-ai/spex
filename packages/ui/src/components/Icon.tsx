@@ -52,6 +52,10 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M6.5 3v10" />
     </>
   ),
+  // The house names the Space surface — the Spex home (DR-057).
+  home: (
+    <path d="M2.5 8.2 8 3.2l5.5 5M4 6.9V13h8V6.9M6.6 13V9.6h2.8V13" />
+  ),
 };
 
 export type IconName = keyof typeof PATHS;

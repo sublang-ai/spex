@@ -304,7 +304,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     expect(useAppStore.getState().currentProjectId).toBe("p1");
   });
 
-  test("selection follows the surface, and the Workspace restores it", () => {
+  test("selection follows the surface, and Projects restores it", () => {
     render(<App />);
     const rail = screen.getByTestId("sidebar");
     const selectedRows = () =>
@@ -312,7 +312,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     const entry = (name: string) =>
       within(rail).getByRole("button", { name });
 
-    // The Workspace is the surface: the current project is selected,
+    // Projects is the surface: the current project is selected,
     // and so is the session whose tab it is showing.
     expect(selectedRows().length).toBe(2);
     expect(
@@ -328,9 +328,9 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     expect(entry("Playbooks").getAttribute("aria-current")).toBe("page");
     expect(selectedRows().length).toBe(0);
 
-    // The store still remembers the project, so choosing the Workspace
+    // The store still remembers the project, so choosing Projects
     // again lights the same rows.
-    fireEvent.click(entry("Workspace"));
+    fireEvent.click(entry("Projects"));
     expect(
       screen.getByTestId("sidebar-project-p1").getAttribute("aria-selected"),
     ).toBe("true");
@@ -457,7 +457,7 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     expect(screen.queryByTestId("sidebar-session-a-live")).toBeNull();
     expect(screen.getByRole("tab", { selected: true })).toBeTruthy();
     // The palette control keeps its icon-only form under the
-    // Workspace entry (DR-030): collapse never hides a duty.
+    // Projects entry (DR-030): collapse never hides a duty.
     const palette = screen.getByLabelText("Switch or add a project");
     expect(palette.title).toBe(`Switch or add a project (${keyLabel("P")})`);
     fireEvent.click(palette);

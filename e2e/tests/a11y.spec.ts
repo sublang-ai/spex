@@ -43,7 +43,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId(`project-group-${app.projectId}`)).toBeVisible();
     found.push(...(await scan(page, "Dashboard")));
 
-    await page.getByRole("button", { name: "Workspace" }).click();
+    await nav(page, "Projects").click();
     await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page.getByTestId("overview-tab")).toBeVisible();
     found.push(...(await scan(page, "Overview")));
