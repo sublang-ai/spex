@@ -57,3 +57,78 @@ test("parseCommand rejects empty submission text", () => {
   });
   assert.ok(!parsed.ok);
 });
+
+// Playbook drafts (DR-058): the draft channel and the draft.* family.
+
+test("parseCommand accepts subscribe with a draft channel", () => {
+  const parsed = parseCommand({
+    type: "subscribe",
+    id: "d1",
+    channel: { kind: "draft", draftId: "triage" },
+  });
+  assert.ok(parsed.ok);
+});
+
+test("parseCommand rejects a draft channel without a draft id", () => {
+  const parsed = parseCommand({ type: "subscribe", id: "d2", channel: { kind: "draft" } });
+  assert.ok(!parsed.ok);
+});
+
+test("parseCommand accepts every draft command", () => {
+  const commands = [
+    { type: "draft.list", id: "d3" },
+    { type: "draft.create", id: "d4", draftId: "triage" },
+    { type: "draft.open", id: "d5", draftId: "triage", afterSeq: 4 },
+    { type: "draft.send", id: "d6", draftId: "triage", text: "Compile it." },
+    { type: "draft.abort", id: "d7", draftId: "triage" },
+    { type: "draft.source.write", id: "d8", draftId: "triage", content: "# Triage", baseVersion: "v1" },
+    { type: "draft.source.write", id: "d9", draftId: "triage", sourcePath: "/tmp/triage.md" },
+    { type: "draft.compile", id: "d10", draftId: "triage" },
+    {
+      type: "draft.register",
+      id: "d11",
+      draftId: "triage",
+      command: "triage",
+      intent: "Triage a new issue",
+      bindings: { Triager: "dev.triager", Verifier: "dev.reviewer" },
+      newPlayers: { "dev.triager": { adapter: "claude", model: "opus" } },
+    },
+    { type: "draft.player.set", id: "d12", draftId: "triage", playerId: "dev.reviewer" },
+    { type: "draft.player.set", id: "d13", draftId: "triage", playerId: null },
+    { type: "draft.delete", id: "d14", draftId: "triage" },
+    { type: "draft.artifacts", id: "d15", draftId: "triage" },
+  ];
+  for (const command of commands) {
+    const parsed = parseCommand(command);
+    assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
+    if (parsed.ok) assert.equal(parsed.command.type, command.type);
+  }
+});
+
+test("parseCommand rejects a draft id outside the lowercase rule", () => {
+  for (const draftId of ["Triage", "1st", "with space", ""]) {
+    const parsed = parseCommand({ type: "draft.create", id: "d16", draftId });
+    assert.ok(!parsed.ok, draftId);
+    if (!parsed.ok) assert.match(parsed.error, /draftId/);
+  }
+});
+
+test("parseCommand rejects an empty draft message", () => {
+  const parsed = parseCommand({ type: "draft.send", id: "d17", draftId: "triage", text: "" });
+  assert.ok(!parsed.ok);
+});
+
+test("parseCommand rejects a draft registration missing its fields", () => {
+  const parsed = parseCommand({
+    type: "draft.register",
+    id: "d18",
+    draftId: "triage",
+    command: "triage",
+    bindings: { Triager: "Not A Player" },
+  });
+  assert.ok(!parsed.ok);
+  if (!parsed.ok) {
+    assert.match(parsed.error, /intent/);
+    assert.match(parsed.error, /bindings/);
+  }
+});

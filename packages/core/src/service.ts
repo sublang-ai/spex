@@ -192,7 +192,9 @@ interface ClientState {
 }
 
 function channelKey(channel: Channel): string {
-  return `${channel.kind}:${channel.sessionId}`;
+  return channel.kind === "draft"
+    ? `draft:${channel.draftId}`
+    : `${channel.kind}:${channel.sessionId}`;
 }
 
 /** Expand a leading ~ so the most natural path spelling works. */
@@ -999,7 +1001,9 @@ export class CoreService {
       case "turn.abort":
         return { aborted: this.sessions.abortTurn(command.sessionId) };
       case "subscribe": {
-        this.requireKnownSession(command.channel.sessionId);
+        if (command.channel.kind !== "draft") {
+          this.requireKnownSession(command.channel.sessionId);
+        }
         client.channels.add(channelKey(command.channel));
         return null;
       }

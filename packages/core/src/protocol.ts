@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 export type TmuxPlayRecord = RuntimeRecord & {contextSeq?: number};
 
@@ -471,10 +471,20 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
 ]);
 export type ConfigEditOpInput = z.infer<typeof configEditOpSchema>;
 
-export const channelSchema = z.object({
-  kind: z.enum(["session", "debug"]),
-  sessionId: z.string().min(1),
-});
+/** A playbook draft id: it names the library directory, the source
+ * file, and the compiled entry (DR-058). */
+export const draftIdSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
+
+/** Session channels carry a session's records; the draft channel
+ * carries one draft's authoring records (DR-058). Drafts never enter
+ * session folds — history, ledger, attention, titles. */
+export const channelSchema = z.union([
+  z.object({
+    kind: z.enum(["session", "debug"]),
+    sessionId: z.string().min(1),
+  }),
+  z.object({ kind: z.literal("draft"), draftId: z.string().min(1) }),
+]);
 export type Channel = z.infer<typeof channelSchema>;
 
 export const commandSchema = z.discriminatedUnion("type", [
@@ -642,6 +652,56 @@ export const commandSchema = z.discriminatedUnion("type", [
     turnId: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal("session.delete"), id, sessionId: z.string().min(1) }),
+  // Playbook drafts (DR-058, core-service-96): one activity per draft,
+  // Boss messages queue while a turn or compile runs.
+  z.object({ type: z.literal("draft.list"), id }),
+  z.object({ type: z.literal("draft.create"), id, draftId: draftIdSchema }),
+  z.object({
+    type: z.literal("draft.open"),
+    id,
+    draftId: draftIdSchema,
+    /** Serve stored records after this sequence; absent serves all. */
+    afterSeq: z.number().int().nonnegative().optional(),
+  }),
+  z.object({
+    type: z.literal("draft.send"),
+    id,
+    draftId: draftIdSchema,
+    text: z.string().min(1),
+  }),
+  z.object({ type: z.literal("draft.abort"), id, draftId: draftIdSchema }),
+  z.object({
+    type: z.literal("draft.source.write"),
+    id,
+    draftId: draftIdSchema,
+    /** In-app markdown text, or a picked file's path — one of the two. */
+    content: z.string().optional(),
+    sourcePath: z.string().min(1).optional(),
+    /** The version token draft.open or draft.source handed out: a
+     * mismatch is a conflict, and no token writes unconditionally. */
+    baseVersion: z.string().min(1).optional(),
+  }),
+  z.object({ type: z.literal("draft.compile"), id, draftId: draftIdSchema }),
+  z.object({
+    type: z.literal("draft.register"),
+    id,
+    draftId: draftIdSchema,
+    command: z.string().min(1),
+    intent: z.string().min(1),
+    /** derived role -> the session player that answers it (DR-032). */
+    bindings: z.record(z.string(), playerIdSchema),
+    /** Lanes to create for bindings naming a player the roster lacks. */
+    newPlayers: z.record(playerIdSchema, agentBlockSchema).optional(),
+  }),
+  z.object({
+    type: z.literal("draft.player.set"),
+    id,
+    draftId: draftIdSchema,
+    /** The roster player answering this draft; null = the Captain's block. */
+    playerId: playerIdSchema.nullable(),
+  }),
+  z.object({ type: z.literal("draft.delete"), id, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.artifacts"), id, draftId: draftIdSchema }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -698,6 +758,121 @@ export interface CommandResults {
   "ledger.get": LedgerState;
   "ledger.history": { intents: ClosedIntent[]; more: boolean };
   "session.viewed": null;
+  "draft.list": DraftInfo[];
+  "draft.create": DraftInfo;
+  "draft.open": { draft: DraftInfo; source: DraftSource | null; records: DraftRecord[] };
+  /** Replies when the message is accepted, never when the turn ends. */
+  "draft.send": { accepted: true; queued: boolean };
+  "draft.abort": { aborted: boolean };
+  /** A stale baseVersion replies with the `conflict` error instead. */
+  "draft.source.write": { version: string; mtime: number };
+  /** Resolves when the compile settles; a failed phase replies
+   * `invalid_request` with the phase, a canceled compile `aborted`. */
+  "draft.compile": { ok: true; roles: string[] };
+  "draft.register": ConfigState;
+  "draft.player.set": DraftInfo;
+  "draft.delete": null;
+  /** Resolved from `<library>/<id>/<id>.registry.mjs`. */
+  "draft.artifacts": PlaybookArtifacts;
+}
+
+// ---------------------------------------------------------------------------
+// Playbook drafts (DR-058)
+// ---------------------------------------------------------------------------
+
+/** One question of slc's `SLC_CLARIFICATION:` report. */
+export interface ClarificationQuestion {
+  id: string;
+  question: string;
+  reason: string;
+  evidence: string;
+  choices?: string[];
+}
+
+export type DraftActivity = "idle" | "turn" | "compiling";
+
+/** The chip's word: derived by the core, never stored. */
+export type DraftState =
+  | "no-source"
+  | "draft"
+  | "compiling"
+  | "failed"
+  | "interrupted"
+  | "compiled"
+  | "changed";
+
+export type DraftCompileOutcome =
+  | "running"
+  | "ok"
+  | "failed"
+  | "canceled"
+  | "interrupted";
+
+/** The draft's last compile (storage-23). */
+export interface DraftCompileInfo {
+  at: number;
+  by: "boss" | "agent";
+  outcome: DraftCompileOutcome;
+  /** The failed phase — the compiler's id, "packaging", or the toolchain. */
+  phase?: string;
+  /** The failed phase's captured output. */
+  output?: string;
+  questions?: ClarificationQuestion[];
+  /** The compiled entry's derived roles, on success. */
+  roles?: string[];
+}
+
+/** The agent's latest register block (playbook-library-66). */
+export interface DraftProposal {
+  command: string;
+  intent: string;
+  /** Role -> player id, as proposed; roles the entry lacks stay as a
+   * mismatch for the form to show. */
+  players: Record<string, string>;
+}
+
+export interface DraftInfo {
+  id: string;
+  createdAt: number;
+  touchedAt: number;
+  /** The source's first line, null with no source. */
+  firstLine: string | null;
+  /** The library directory is gone; the row offers only Delete. */
+  sourceMissing?: boolean;
+  activity: DraftActivity;
+  state: DraftState;
+  /** Boss messages waiting for the draft to go idle, in order. */
+  queued: string[];
+  /** The roster player answering; null = the Captain's block. */
+  player: string | null;
+  /** What effectively answers. */
+  agent: AgentSummary;
+  /** That adapter's readiness (ReadinessEntry.ready). */
+  ready: boolean | null;
+  compile?: DraftCompileInfo;
+  /** Consecutive failed compiles with no Boss message between. */
+  failures: number;
+  proposal?: DraftProposal;
+  /** Fenced spex blocks of the last reply the core could not read. */
+  malformedDirectives?: string[];
+}
+
+/** One stored authoring record. Shapes: turn_started (Boss or system
+ * text — a system turn's prompt starts "Spex:"), player_prompt /
+ * player_event / player_finished with playerId "author", turn_finished,
+ * turn_aborted, captain_status for system lines, runtime_error for
+ * runner failures (playbook-library-64). */
+export interface DraftRecord {
+  seq: number;
+  record: TmuxPlayRecord;
+}
+
+/** The draft's `<id>.md` with its version token — a digest of the
+ * bytes — and last change. */
+export interface DraftSource {
+  markdown: string;
+  version: string;
+  mtime: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -881,6 +1056,31 @@ export interface IntentsChangedMessage {
   projectIds: string[];
 }
 
+/** One authoring record, to the subscribers of the draft's channel. */
+export interface DraftRecordMessage {
+  type: "draft.record";
+  draftId: string;
+  seq: number;
+  record: TmuxPlayRecord;
+}
+
+/** Broadcast to every client on every transition (core-service-96). */
+export interface DraftStateMessage {
+  type: "draft.state";
+  draft: DraftInfo;
+}
+
+/** The draft's source changed on disk — an agent write, a Boss edit,
+ * or a paste — broadcast to every client (playbook-library-71).
+ * compile.progress is reused, keyed by the draft's id. */
+export interface DraftSourceMessage {
+  type: "draft.source";
+  draftId: string;
+  markdown: string;
+  version: string;
+  mtime: number;
+}
+
 export type ServerMessage =
   | HelloMessage
   | ReplyMessage
@@ -891,7 +1091,10 @@ export type ServerMessage =
   | SessionRemovedMessage
   | SessionHistoryReplacedMessage
   | CompileProgressMessage
-  | IntentsChangedMessage;
+  | IntentsChangedMessage
+  | DraftRecordMessage
+  | DraftStateMessage
+  | DraftSourceMessage;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers
