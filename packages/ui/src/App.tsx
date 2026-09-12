@@ -51,7 +51,12 @@ function pinnedTab(tab: string | undefined): "start" | "specs" | "overview" | un
 
 declare global {
   interface Window {
-    spexNative?: { pickDirectory(): Promise<string | null> };
+    /** The native bridge (DR-008): OS pickers and, since DR-057, a
+     * path reveal — feature-detected, absent on the served page. */
+    spexNative?: {
+      pickDirectory(): Promise<string | null>;
+      revealPath?(path: string): Promise<boolean>;
+    };
   }
 }
 
@@ -1145,7 +1150,10 @@ export function App() {
           ) : surface === "Settings" ? (
             <SettingsSurface />
           ) : surface === "Space" ? (
-            <SpaceSurface />
+            <SpaceSurface
+              onOpenSession={openSessionAndShow}
+              onOpenPalette={() => setPaletteOpen(true)}
+            />
           ) : surface === "Dashboard" ? (
             <DashboardSurface
               onOpenSession={openSessionAndShow}

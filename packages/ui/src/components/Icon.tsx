@@ -56,6 +56,26 @@ const PATHS: Record<string, ReactNode> = {
   home: (
     <path d="M2.5 8.2 8 3.2l5.5 5M4 6.9V13h8V6.9M6.6 13V9.6h2.8V13" />
   ),
+  // Two sheets: a copy control's icon-only form (space-26).
+  copy: (
+    <>
+      <rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1" />
+      <path d="M3 10.5V4a1 1 0 0 1 1-1h6.5" />
+    </>
+  ),
+  // An arrow leaving a box: opens something elsewhere in the app — a
+  // session as its tab (space-7) — never the web, which links do.
+  open: (
+    <path d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M11 9v3.5a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1H7" />
+  ),
+  // Two columns of lines: a text diff (space-10).
+  diff: (
+    <path d="M3 3.5v9M13 3.5v9M5.5 5.5h2M5.5 8h2M8.5 10.5h2M8.5 5.5h2" />
+  ),
+  // A square stops the running transport step (space-16).
+  stop: <rect x="3.5" y="3.5" width="9" height="9" rx="1.5" />,
+  // A tick marks a step done (space-12).
+  check: <path d="M3 8.5 6.5 12 13 4.5" />,
 };
 
 export type IconName = keyof typeof PATHS;
