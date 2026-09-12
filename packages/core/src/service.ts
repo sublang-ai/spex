@@ -86,6 +86,8 @@ import {
 } from "./specs.js";
 import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
+import { SpaceManager } from "./space.js";
+import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
@@ -149,7 +151,21 @@ export interface CoreServiceOptions {
   token?: string;
   /** Injectable line-streaming spawner for compile runs (tests). */
   compileSpawner?: LineSpawner;
+  /** Test seam (space-32): the Space transport limit; 120 s by default. */
+  spaceTransportTimeoutMs?: number;
+  /** Test seam: awaited before each Space step runs, so a suite can act
+   * between steps deterministically. */
+  spaceBeforeStep?: (event: { op: SpaceOp; step: SyncStep }) => void | Promise<void>;
 }
+
+/** Commands that write under the home (space-21): refused `busy` while
+ * a Space operation runs, so the core stays the sole writer through it. */
+const SPACE_GATED_COMMANDS = new Set<Command["type"]>([
+  "turn.submit", "session.create", "session.retry", "session.discard", "session.delete", "session.viewed",
+  "project.register", "project.create", "project.rebind", "project.remove",
+  "intent.queue", "intent.edit", "intent.move", "intent.link", "intent.close", "intent.remove",
+  "config.edit", "compile.run",
+]);
 
 // The Sources cache ages out at ten minutes (dashboard-14).
 const FORGE_CACHE_MS = 600_000;
@@ -248,6 +264,10 @@ export class CoreService {
   private readonly advancing = new Set<Promise<void>>();
   /** Manual and automatic sends share one admission per conversation. */
   private readonly submitting = new Map<string, Promise<void>>();
+  /** The Space surface's engine (DR-057); absent without a state root. */
+  private readonly space?: SpaceManager;
+  /** A sync's Apply through Refresh pauses the watchers (space-31). */
+  private watchersPaused = false;
 
   private constructor(options: CoreServiceOptions) {
     this.options = options;
@@ -296,6 +316,64 @@ export class CoreService {
       this.advancing.add(work);
       void work.finally(() => this.advancing.delete(work));
     };
+    if (options.dataDir) {
+      this.space = new SpaceManager({
+        home: options.dataDir,
+        configPath: this.configPath,
+        sessionsDir: () => this.sessionsDir(),
+        env: this.env,
+        store: this.store,
+        diagnostics: () => [...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()],
+        blocker: () => this.spaceBlocker(),
+        broadcast: (state) => this.broadcast({ type: "space.state", state }),
+        pauseWatchers: () => {
+          this.watchersPaused = true;
+          if (this.adoptTimer) { clearTimeout(this.adoptTimer); this.adoptTimer = undefined; }
+          if (this.reloadTimer) { clearTimeout(this.reloadTimer); this.reloadTimer = undefined; }
+        },
+        resumeWatchers: () => { this.watchersPaused = false; },
+        reloadConfig: () => this.reloadConfig(),
+        rescanSessions: () => this.syncForeignSessions(),
+        ledgerChanged: (projectIds) => this.queueLedgerChange(projectIds),
+        ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
+        ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
+      });
+    }
+  }
+
+  /**
+   * The named blocker of a Space operation (space-11): a turn in flight
+   * or being admitted, a session held — or unprovably held — by another
+   * host, observed live through the shared store, or a running compile.
+   */
+  private async spaceBlocker(): Promise<string | undefined> {
+    const sessions = this.sessions.listSessions();
+    for (const session of sessions) {
+      const project = this.store.getProject(session.projectId)?.name ?? "the project";
+      const name = session.title ? `“${session.title}”` : "a new session";
+      if (session.externalWriter === "active") return `${name} is in use elsewhere`;
+      if (session.externalWriter === "unknown") return `${name} ownership cannot be verified`;
+      if (session.live || session.turnActive || this.submitting.has(session.id)) return `Wait for ${name} in ${project}`;
+    }
+    if (this.submitting.size > 0) return "Wait for the turn being submitted";
+    const compiling = this.activeCompiles.keys().next();
+    if (!compiling.done) return `${compiling.value} is compiling`;
+    // A lease taken since the last rescan is still a held session.
+    const shared = this.store.sessionStore();
+    for (const session of sessions) {
+      if (this.sessions.getLive(session.id)) continue;
+      const name = session.title ? `“${session.title}”` : "a session";
+      let lease: "active" | "idle" | "unknown";
+      try { lease = await shared.readLeaseState(session.id); } catch { lease = "unknown"; }
+      if (lease === "active") return `${name} is in use elsewhere`;
+      if (lease === "unknown") return `${name} ownership cannot be verified`;
+    }
+    return undefined;
+  }
+
+  private requireSpace(): SpaceManager {
+    if (!this.space) throw new CoreError("invalid_request", "the core runs without a state root; Space needs one");
+    return this.space;
   }
 
   /** Announce ledger changes debounced (DR-035): session records land
@@ -344,6 +422,9 @@ export class CoreService {
     }
     service.seeded = seedConfig(service.configPath);
     if (service.options.dataDir) migrateManagedLibraryConfig(service.configPath, service.libraryDir(), service.options.dataDir);
+    // An apply a crash interrupted is repaired from its marker before the
+    // home reopens (space-31); a failure stands as a blocking issue.
+    if (service.space) await service.space.repairAtStartup();
     await service.reloadConfig();
     await service.migrateLegacySessionDefault();
     await service.store.initializeSessions(service.sessionsDir());
@@ -438,6 +519,9 @@ export class CoreService {
     const dir = this.sessionsDir();
     if (!existsSync(dir)) return;
     this.sessionsWatcher = watch(dir, (_eventType, filename) => {
+      // A sync's Apply through Refresh writes the directory itself and
+      // ends in one full rescan (space-31).
+      if (this.watchersPaused) return;
       // The CLI can append without replacing its manifest. Our own
       // sidecars are irrelevant, and the store excludes owned sessions
       // when a shared stream changes. A missing filename means scan.
@@ -530,6 +614,8 @@ export class CoreService {
     this.sessionsWatcher?.close();
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
     if (this.adoptTimer) clearTimeout(this.adoptTimer);
+    // A Space transport in flight is stopped; a local step finishes.
+    await this.space?.stop();
     await this.adoptScan;
     if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
     // Kill any in-flight compile child so shutdown never orphans slc.
@@ -622,6 +708,7 @@ export class CoreService {
     const file = basename(this.configPath);
     if (!existsSync(dir)) return;
     this.watcher = watch(dir, (_eventType, filename) => {
+      if (this.watchersPaused) return;
       if (filename && filename !== file) return;
       if (this.reloadTimer) clearTimeout(this.reloadTimer);
       this.reloadTimer = setTimeout(() => {
@@ -803,6 +890,10 @@ export class CoreService {
     client: ClientState,
     command: Command,
   ): Promise<unknown> {
+    // The write gate (space-21): while a Space operation runs, every
+    // command that writes under the home is refused naming the operation.
+    const gate = this.space?.busy();
+    if (gate && SPACE_GATED_COMMANDS.has(command.type)) throw new CoreError("busy", gate);
     if (["project.create", "project.register", "project.rebind", "project.remove"].includes(command.type)) this.store.assertProjectsWritable();
     if (command.type === "session.create" || command.type === "intent.queue") this.store.assertWritable({projectId:command.projectId});
     if (command.type === "session.retry" || command.type === "session.discard" || command.type === "turn.submit") this.store.assertWritable({sessionId:command.sessionId});
@@ -1417,6 +1508,29 @@ export class CoreService {
         }
         return null;
       }
+      // The Space surface (space-29): the core performs every Git
+      // operation; long commands reply accepted and report as state.
+      case "space.get":
+        return this.requireSpace().state();
+      case "space.init":
+        return this.requireSpace().init(command.remote);
+      case "space.remote.set":
+        return this.requireSpace().setRemote(command.url);
+      case "space.fetch":
+        return this.requireSpace().fetch();
+      case "space.sync":
+        return this.requireSpace().sync({
+          ...(command.choices ? { choices: command.choices } : {}),
+          ...(command.join !== undefined ? { join: command.join } : {}),
+        });
+      case "space.cancel":
+        return { stopped: this.requireSpace().cancel() };
+      case "space.diff":
+        return this.requireSpace().diff(command.unit, command.path, command.side);
+      case "space.tree":
+        return this.requireSpace().tree(command.path);
+      case "space.read":
+        return this.requireSpace().read(command.path);
     }
   }
 

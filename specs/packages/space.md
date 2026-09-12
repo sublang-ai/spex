@@ -229,7 +229,7 @@ When a sync's Apply step has changed the working tree — by merge or fast-forwa
 
 #### space-21
 
-While a sync, check, initialize or join is running, the core shall refuse `busy`, naming the operation, every command that writes under the home — turn submission, session creation, retry, discard and deletion, project registration, creation, rebinding and removal, every intent command, configuration edits, and compiles — and a second Space operation, so the sole-writer rule [[storage-14](storage.md#storage-14)] holds through the operation:
+While a sync, check, initialize or join is running, the core shall refuse `busy`, naming the operation, every command that writes under the home — turn submission, session creation, retry, discard, deletion and viewed markers, project registration, creation, rebinding and removal, every intent command, configuration edits, and compiles — and a second Space operation, so the sole-writer rule [[storage-14](storage.md#storage-14)] holds through the operation:
 
 - the gate is set before the admission checks [[space-11](#space-11)], so a turn admitted after it is refused and one admitted before it fails the check;
 - choices needed and stopped are not running states: nothing is refused while the picker waits.
@@ -404,7 +404,7 @@ The core shall invoke Git as a child process per step, never through a shell, fr
 
 - environment: the core's captured environment plus `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, `LANG=C`, and `GIT_SSH_COMMAND=ssh -oBatchMode=yes` only where none is set; `process.umask(0o077)` from `init` and from `apply` through `refresh`, restored after; a 120-second limit on `ls-remote`, `fetch` and `push` after which the child receives `SIGTERM`, then `SIGKILL` after five seconds;
 - commit-writing commands carry `-c commit.gpgsign=false -c core.hooksPath=/dev/null`, and `-c user.name=Spex -c user.email=spex@<hostname>` only where `git var GIT_COMMITTER_IDENT` fails;
-- state: `--version`, `rev-parse --show-toplevel`, `rev-parse --abbrev-ref HEAD`, `rev-parse -q --verify MERGE_HEAD`, `remote get-url origin`, `rev-parse -q --verify refs/remotes/origin/main`, `rev-list --left-right --count main...origin/main`, `status --porcelain=v1 -z -uall`;
+- state: `--version`, `rev-parse --show-toplevel`, `symbolic-ref -q --short HEAD` (no output on a detached or unborn `HEAD`), `rev-parse -q --verify HEAD^{commit}`, `rev-parse -q --verify MERGE_HEAD`, `remote get-url origin`, `config --get branch.main.remote`, `rev-parse -q --verify refs/remotes/origin/main`, `rev-list --left-right --count main...origin/main`, `status --porcelain=v1 -z -uall`;
 - initialize: `init -q -b main`, falling back to `init -q` then `symbolic-ref HEAD refs/heads/main`; `remote add origin <url>`;
 - save: the managed-rules writer, `add -A -- .`, `diff --cached --name-only -z`, `diff --cached --quiet`, `commit -q -m <message>`, `reset -q` on refusal;
 - check: `ls-remote --exit-code --heads origin refs/heads/main` (exit 2 means no `main`), `fetch -q --no-tags origin +refs/heads/main:refs/remotes/origin/main`, `merge-base HEAD origin/main`;
@@ -444,7 +444,7 @@ The core shall build each `space.tree` level by reading one directory of the hom
 
 | Path | Family |
 | --- | --- |
-| `sessions/<uuid>.json` / `.records.jsonl` / `.hints.json` | session manifest / session records / provider hints |
+| `sessions/<uuid>.json` / `.records.jsonl` / `.hints.json` / `.spex.json` | session manifest / session records / provider hints / legacy session sidecar |
 | `.lock*`, `sessions/.<uuid>.lock*`, `*.lock`, `*.lock.*` | lease |
 | `intents/<uuid>.jsonl` | project queue |
 | `projects.json` | project registry |

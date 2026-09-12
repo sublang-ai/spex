@@ -429,6 +429,30 @@ export class Store {
   // -- load (the restart fold, CORE-10/52) ----------------------------------
 
   private load(): void {
+    this.loadApplication();
+    this.loadSidecars();
+  }
+
+  /**
+   * Re-read every application file from disk (space-20): an in-app sync
+   * replaced the registry, intent logs, preferences or cache under this
+   * running store, so the indexes rebuild from the same loaders the
+   * restart fold uses; sessions re-index through their own rescan.
+   */
+  reload(): void {
+    if (!this.dir) return;
+    this.application = new ApplicationRegistry(this.dir, true);
+    this.prefs.clear();
+    this.prefsProblem = undefined;
+    this.forgeCache.clear();
+    this.cacheProblem = undefined;
+    this.intents.clear();
+    this.removedIntents.clear();
+    this.intentProblems.clear();
+    this.loadApplication();
+  }
+
+  private loadApplication(): void {
     const dir = this.dir as string;
     this.refreshProjects();
     const prefsFile = join(dir, "prefs.json");
@@ -466,6 +490,9 @@ export class Store {
         this.intentProblems.set(projectId, {file:error.file, reason:error.reason, blocking:true});
       }
     }
+  }
+
+  private loadSidecars(): void {
     const sessionsDir = this.sessionsDir as string;
     for (const file of readdirSync(sessionsDir)) {
       if (!file.endsWith(".spex.json")) continue;
@@ -624,7 +651,7 @@ export class Store {
       initialVisible = [...ids];
     }
     const prior = this.sessions.get(id);
-    const writer = live ? "idle" : await shared.readLeaseState(id);
+    const writer = live || this.managedSessions.has(id) ? "idle" : await shared.readLeaseState(id);
     if (live === false && this.localSessions.has(id)) return;
     const meta: SessionMeta = {
       id, projectId: project.id,
@@ -668,6 +695,14 @@ export class Store {
   setLocalSession(id: string, owned: boolean): void {
     if (owned) this.localSessions.add(id); else this.localSessions.delete(id);
   }
+
+  /** The sessions whose management lease this core itself holds for a
+   * sync's Apply through Refresh (space-31): its own lease is not an
+   * external writer when the refresh rescans them. */
+  setManagedSessions(ids: ReadonlySet<string> | undefined): void {
+    this.managedSessions = ids ?? new Set();
+  }
+  private managedSessions: ReadonlySet<string> = new Set();
 
   assertProjectsWritable(): void { this.application.assertWritable(); }
 
