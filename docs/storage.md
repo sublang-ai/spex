@@ -26,6 +26,7 @@ Ignored files can contain durable local state.
 | `playbooks/<id>/` | Library sources and generated modules/artifacts. | Sources tracked; outputs omitted only if rebuildable locally |
 | `local/project-paths.json` | Project IDs mapped to local paths and recorded `cwd` aliases. | Ignored |
 | `prefs.json` | Core preferences, including the last viewed turn per session. | Ignored |
+| `local/drafts/<id>/draft.json`, `local/drafts/<id>/records.jsonl` | Playbook draft state, queue, and authoring transcript. | Ignored |
 | `forge-cache.json` | Rebuildable issue and pull-request cache. | Ignored |
 | `meta.json`, `local/migrations/<id>/` | Migration receipts and original inputs. | Ignored |
 | Config backups | Original configuration files. | Ignored |

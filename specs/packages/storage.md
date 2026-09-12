@@ -28,6 +28,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `playbooks/<id>/` | Library sources and outputs [[storage-8](#storage-8)] | Track sources; omit outputs only if rebuildable |
 | `local/project-paths.json` | Local bindings [[storage-3](#storage-3)] | Ignored |
 | `prefs.json` | Core preferences and viewed markers [[storage-5](#storage-5)] | Ignored |
+| `local/drafts/<id>/draft.json`, `local/drafts/<id>/records.jsonl` | Playbook draft state and transcript [[storage-23](#storage-23)] | Ignored |
 | `meta.json`, `local/migrations/` | Migration receipts and retained inputs [[storage-9](#storage-9)] | Ignored |
 | `forge-cache.json` | Rebuildable forge cache | Ignored |
 | `sessions/<id>.hints.json`, leases, retired guards, staging and atomic-write temporary files | Provider hints and writer coordination [[1]] | Ignored |
@@ -70,6 +71,7 @@ The preference store shall encode `prefs.json` as exactly `{v:1,prefs:{...}}`, w
 
 - each preference is a JSON value;
 - `viewed:<sessionId>` stores the last viewed turn as a nonnegative integer and resets when that session's history is replaced.
+- `draft:<id>:player` stores the roster player id answering that draft's authoring conversation; absent means the Captain's block; removed with the draft.
 
 ### storage-6
 
@@ -190,6 +192,14 @@ When continuing after Git selection, the host shall require Playbook's repositor
 
 The core shall remain the sole writer of Spex-owned files, using atomic same-directory replacement or intent-log append under the Spex home lease [[core-service-61](core-service.md#core-service-61)], while session mutations use Playbook's per-session lease and shared store [[1]].
 
+### storage-23
+
+The draft store shall encode `local/drafts/<id>/draft.json` as exactly `{v:1,id,createdAt,touchedAt,queued,failures,compile?,proposal?}` and `records.jsonl` as newline-terminated `{seq,record}` objects in sequence order:
+
+- `queued` is an array of strings; `failures` a nonnegative integer; `compile` is `{at,by:'boss'|'agent',outcome:'running'|'ok'|'failed'|'canceled'|'interrupted',phase?,output?,questions?,roles?,sourceSha256?}`; `proposal` is `{command,intent,players}`;
+- timestamps use the registry's millisecond encoding [[storage-2](#storage-2)]; no provider token enters either file; an incomplete final record line is not a record;
+- the `local/` family is already excluded by the managed ignore block [[storage-17](#storage-17)].
+
 ## Verification
 
 ### storage-15
@@ -206,7 +216,8 @@ When an integration suite migrates a legacy store with writers stopped and opens
 - library rebuilding from retained sources [[storage-8](#storage-8)];
 - restart-safe migration and token-free Git ancestry [[storage-9](#storage-9)];
 - refreshed Git rules after a migration retry [[storage-17](#storage-17)];
-- ordinary-default discovery, retained inputs and explicit-location isolation [[storage-18](#storage-18)].
+- ordinary-default discovery, retained inputs and explicit-location isolation [[storage-18](#storage-18)];
+- exact draft record and transcript encodings written and read back [[storage-23](#storage-23)].
 
 ### storage-16
 

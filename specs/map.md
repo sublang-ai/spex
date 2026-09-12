@@ -30,7 +30,7 @@ meta.md       The spec of specs
 | [DR-002](decisions/002-desktop-app-architecture.md) | 002-desktop-app-architecture.md | Spex desktop app: web-first three-layer architecture, monorepo, release preservation |
 | [DR-003](decisions/003-runtime-reuse.md) | 003-runtime-reuse.md | Embedded headless runtime + captain shell; record-driven read-only panes |
 | [DR-004](decisions/004-config-and-persistence.md) | 004-config-and-persistence.md | Shared playbook config ownership, app-local SQLite store (superseded by DR-036), readiness |
-| [DR-005](decisions/005-compilation-integration.md) | 005-compilation-integration.md | slc as external toolchain; in-app registry generation |
+| [DR-005](decisions/005-compilation-integration.md) | 005-compilation-integration.md | slc as external toolchain; in-app registry generation; draft inputs and two-step registration amended by DR-058 |
 | [DR-006](decisions/006-projects-and-forge.md) | 006-projects-and-forge.md | Projects as local git repos; gh-CLI GitHub forge adapter |
 | [DR-007](decisions/007-conversational-session-start.md) | 007-conversational-session-start.md | Sessions lands on a Captain-first start view; one motion to the first turn |
 | [DR-008](decisions/008-native-shell-bridge.md) | 008-native-shell-bridge.md | Feature-detected `window.spexNative` bridge for OS pickers only |
@@ -40,7 +40,7 @@ meta.md       The spec of specs
 | [DR-012](decisions/012-spec-package-files.md) | 012-spec-package-files.md | One-file spec packages; spec linter; mechanical migration superseded by DR-022 |
 | [DR-013](decisions/013-sublang-brand.md) | 013-sublang-brand.md | SubLang brand adoption: purple interaction hue, warm light neutrals, brand-recolored product logo and app icon |
 | [DR-014](decisions/014-released-toolchain.md) | 014-released-toolchain.md | Released toolchain adoption: playbook 2.0 / cligent 0.16 host boundary (floor superseded by DR-023), effort key, slc-emitted registry wrapper, invalidation, session cwd |
-| [DR-015](decisions/015-reference-content.md) | 015-reference-content.md | Reference content: built-in sources + catalog, slc demo example, Academy seed project, packages-layout spec view |
+| [DR-015](decisions/015-reference-content.md) | 015-reference-content.md | Reference content: built-in sources + catalog, slc demo example (prefill amended by DR-058), Academy seed project, packages-layout spec view |
 | [DR-016](decisions/016-relationship-presentation.md) | 016-relationship-presentation.md | Superseded by DR-000: classified relationship presentation gives way to one citation mechanism |
 | [DR-017](decisions/017-intent-records.md) | 017-intent-records.md | Iterations become intents: disposable intent records, bare `IR-<N>` commit references; mechanical migration superseded by DR-022 |
 | [DR-018](decisions/018-one-contract-per-item.md) | 018-one-contract-per-item.md | One requirement per item: one governing GEARS statement with per-kind attachments; advisory lint |
@@ -82,6 +82,7 @@ meta.md       The spec of specs
 | [DR-054](decisions/054-issue-intent-delivery.md) | 054-issue-intent-delivery.md | Superseded by DR-059: issue seeds ended at PR creation with the Boss merging |
 | [DR-055](decisions/055-queue-advancement.md) | 055-queue-advancement.md | Proven successful queued work advances independently of human confirmation |
 | [DR-056](decisions/056-release-naming.md) | 056-release-naming.md | Unified App and CLI release titles; future CLI tags use `cli-v*`, preserving published tags |
+| [DR-058](decisions/058-chat-assisted-playbook-authoring.md) | 058-chat-assisted-playbook-authoring.md | Chat-assisted playbook authoring: a two-pane draft workspace, the Captain's block run through cligent in the draft directory, fenced directives for compile and registration, bounded failure relay, confirmed registration, drafts that persist |
 | [DR-059](decisions/059-issue-delivery-through-dev.md) | 059-issue-delivery-through-dev.md | Issue delivery through `/dev`: the seed dispatches `/dev` with the issue, `branch` and `pr` join the built-ins, delivery ends at the merged pull request; supersedes DR-054 |
 
 ## Packages
@@ -96,7 +97,7 @@ meta.md       The spec of specs
 | [git.md](packages/git.md) | Commit message format and AI co-authorship trailers |
 | [licensing.md](packages/licensing.md) | SPDX header requirements, file-scope rules, and header presence checks |
 | [lint.md](packages/lint.md) | `spex lint`: structure with the legacy-tree migration prompt pointer, package sections, item IDs, citation form and coverage, citation discipline, reference markers, records, map listing |
-| [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, per-role inline agents, slc compile pipeline, registry validation, comment-preserving config writes |
+| [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, per-role inline agents, chat-assisted authoring drafts with the two-pane workspace and directive-driven compile, slc compile pipeline, registry validation, comment-preserving config writes |
 | [projects.md](packages/projects.md) | Projects: register/create local git repos, repo state, gh forge binding and work lists, safe removal |
 | [release.md](packages/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene, end-user and live migration smokes |
 | [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, paused sessions a message continues, protocol-only rendering, fixture-stream and browser-journey coverage |

@@ -13,7 +13,7 @@ Creating a playbook starts as a conversation: a two-pane authoring workspace on 
 
 ## Deliverables
 
-- [ ] A DR and spec items record the authoring workspace, the conversation runner, the compile request, registration confirmation, and draft persistence.
+- [x] A DR and spec items record the authoring workspace, the conversation runner, the compile request, registration confirmation, and draft persistence.
 - [ ] The core runs an authoring conversation per draft through cligent on the Captain's agent block or a chosen player, streams it over the protocol, relays compile failures, and persists the transcript locally.
 - [ ] The two-pane workspace with its Source, Gears, Machine, and Register tabs, the paste-or-pick mode, and the drafts list.
 - [ ] Hermetic coverage with the fake adapter and a stub compiler; browser journeys.
