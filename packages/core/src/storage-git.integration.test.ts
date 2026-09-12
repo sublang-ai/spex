@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { Store } from "./store.js";
 import { ApplicationRegistry, sha256 } from "./app-storage.js";
-import { planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge, validateStorageTree } from "./storage-git.js";
+import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge, validateStorageTree } from "./storage-git.js";
 
 const git = (home: string, ...args: string[]): string => execFileSync("git", ["-C", home, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 function setup() {
@@ -59,6 +59,78 @@ test("delete versus modify needs explicit bundle choice; active core or CLI leas
   await assert.rejects(() => selectStorageMerge(home, { [`sessions/${sessionId}`]: "ours" }), /held|owner|active|lease/i); await lease.release();
   await selectStorageMerge(home, { [`sessions/${sessionId}`]: "ours" });
   assert.equal(existsSync(join(home, "sessions", `${sessionId}.json`)), false); assert.equal(existsSync(join(home, "sessions", `${sessionId}.records.jsonl`)), false);
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("a playbook directory is one unit chosen whole, and the plan names the ancestor", async () => {
+  const { home, commit } = setup(); git(home, "branch", "other");
+  const source = (text: string) => { mkdirSync(join(home, "playbooks", "demo", "demo.playbook"), { recursive: true }); writeFileSync(join(home, "playbooks", "demo", "demo.md"), text); writeFileSync(join(home, "playbooks", "demo", "demo.playbook", "demo.fsm.ts"), `// ${text}`); };
+  source("ours"); commit("ours");
+  git(home, "checkout", "other"); source("theirs"); writeFileSync(join(home, "playbooks", "demo", "demo.ts"), "export default 1;\n"); commit("theirs"); git(home, "checkout", "main");
+  const plan = planStorageMerge(home, "HEAD", "other");
+  assert.equal(plan.base, git(home, "merge-base", "HEAD", "other")); assert.equal(plan.unrelated, false);
+  const unit = plan.units.find((u) => u.name === "playbooks/demo");
+  assert.equal(unit?.choice, "conflict");
+  assert.deepEqual(unit?.paths, ["playbooks/demo/demo.md", "playbooks/demo/demo.playbook/demo.fsm.ts", "playbooks/demo/demo.ts"]);
+  assert.deepEqual(unit?.changed, { ours: true, theirs: true });
+  assert.ok(!plan.units.some((u) => u.name.startsWith("playbooks/demo/")), "no file of the directory is its own unit");
+  merge(home);
+  await assert.rejects(() => selectStorageMerge(home, { "playbooks/demo/demo.md": "ours" }), /unknown storage unit/);
+  await selectStorageMerge(home, { "playbooks/demo": "theirs" });
+  assert.equal(readFileSync(join(home, "playbooks", "demo", "demo.md"), "utf8"), "theirs");
+  assert.equal(existsSync(join(home, "playbooks", "demo", "demo.ts")), true);
+  assert.equal(git(home, "diff", "--name-only", "--diff-filter=U"), "");
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("unrelated histories refuse selection until joined, whereupon the empty tree is the ancestor", async () => {
+  const { home, sessionId } = setup();
+  const foreign = mkdtempSync(join(tmpdir(), "spex-git-foreign-")); git(foreign, "init", "-b", "main"); git(foreign, "config", "user.name", "Storage Test"); git(foreign, "config", "user.email", "storage@example.test"); git(foreign, "config", "commit.gpgsign", "false");
+  mkdirSync(join(foreign, "sessions"), { mode: 0o700 }); prepareStorageGitFiles(foreign);
+  const otherId = randomUUID(); const records = `${JSON.stringify({ v: 1, seq: 1, record: { futureKind: "foreign" } })}\n`;
+  writeFileSync(join(foreign, "sessions", `${otherId}.records.jsonl`), records, { mode: 0o600 });
+  writeFileSync(join(foreign, "sessions", `${otherId}.json`), JSON.stringify({ schemaVersion: 7, kind: "captain-session", sessionId: otherId, cwd: join(foreign, "project"), createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", state: "history-only", reason: "foreign", replay: { seq: 1, sha256: sha256(records), incomplete: false }, contextSeq: null }, null, 2), { mode: 0o600 });
+  writeFileSync(join(foreign, "projects.json"), JSON.stringify({ v: 2, projects: [] }));
+  git(foreign, "add", "."); git(foreign, "commit", "-m", "foreign base");
+  git(home, "fetch", "-q", foreign, "main:refs/remotes/origin/main");
+  const refused = planStorageMerge(home, "HEAD", "refs/remotes/origin/main");
+  assert.equal(refused.unrelated, true); assert.equal(refused.base, null); assert.deepEqual(refused.units, []);
+  const joined = planStorageMerge(home, "HEAD", "refs/remotes/origin/main", { join: true });
+  assert.equal(joined.unrelated, true); assert.equal(joined.base, EMPTY_TREE);
+  assert.equal(joined.units.find((u) => u.name === `sessions/${sessionId}`)?.choice, "ours");
+  assert.equal(joined.units.find((u) => u.name === `sessions/${otherId}`)?.choice, "theirs");
+  assert.equal(joined.units.find((u) => u.name === "projects.json")?.choice, "conflict", "present on both sides differently");
+  assert.equal(joined.units.find((u) => u.name === ".gitignore")?.choice, "ours", "identical rules agree");
+  try { git(home, "merge", "--no-commit", "--no-ff", "--allow-unrelated-histories", "refs/remotes/origin/main"); } catch { /* conflicts are the subject */ }
+  await assert.rejects(() => selectStorageMerge(home, { "projects.json": "ours" }), /no common ancestor/);
+  const result = await selectStorageMerge(home, { "projects.json": "ours" }, { join: true });
+  assert.equal(result.plan.base, EMPTY_TREE);
+  assert.equal(existsSync(join(home, "sessions", `${otherId}.json`)), true);
+  assert.equal(existsSync(join(home, "sessions", `${sessionId}.json`)), true);
+  assert.equal(git(home, "diff", "--name-only", "--diff-filter=U"), "");
+  rmSync(home, { recursive: true, force: true }); rmSync(foreign, { recursive: true, force: true });
+});
+
+test("the apply seam plans over a caller-supplied ancestor and writes under a lease the caller already holds", async () => {
+  const { home, sessionId, bundle, commit } = setup(); git(home, "branch", "other");
+  bundle("ours"); commit("ours"); const ours = git(home, "rev-parse", "HEAD");
+  git(home, "checkout", "other"); bundle("theirs"); commit("theirs"); const theirs = git(home, "rev-parse", "HEAD");
+  const theirsRecords = readFileSync(join(home, "sessions", `${sessionId}.records.jsonl`), "utf8");
+  git(home, "checkout", "main");
+  assert.notEqual(readFileSync(join(home, "sessions", `${sessionId}.records.jsonl`), "utf8"), theirsRecords);
+  const plan = planStorageMerge(home, ours, theirs);
+  const release = reserveStorageHome(home);
+  try {
+    await assert.rejects(() => selectStorageMerge(home, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/);
+    let marked = false;
+    const applied = await applyStorageSelection(home, plan, { [`sessions/${sessionId}`]: "theirs" }, { beforeWrite: () => { marked = true; } });
+    assert.ok(marked, "the caller's marker runs before the first write");
+    assert.deepEqual(applied.changedSessions, [`sessions/${sessionId}`]);
+    assert.equal(applied.selected.get(`sessions/${sessionId}`), "theirs");
+  } finally { release(); }
+  assert.equal(readFileSync(join(home, "sessions", `${sessionId}.records.jsonl`), "utf8"), theirsRecords);
+  assert.equal(git(home, "diff", "--cached", "--name-only"), [`sessions/${sessionId}.json`, `sessions/${sessionId}.records.jsonl`].join("\n"));
+  assert.equal(git(home, "rev-parse", "HEAD"), ours, "the seam commits nothing itself");
   rmSync(home, { recursive: true, force: true });
 });
 
