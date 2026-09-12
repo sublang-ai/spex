@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 export type TmuxPlayRecord = RuntimeRecord & {contextSeq?: number};
 
@@ -477,6 +477,11 @@ export const channelSchema = z.object({
 });
 export type Channel = z.infer<typeof channelSchema>;
 
+/** A sync's two sides in the reader's words (space-27): this device
+ * or the remote. */
+const spaceChoiceSchema = z.enum(["mine", "remote"]);
+export type SpaceChoice = z.infer<typeof spaceChoiceSchema>;
+
 export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("config.get"), id }),
   z.object({ type: z.literal("readiness.get"), id }),
@@ -642,6 +647,33 @@ export const commandSchema = z.discriminatedUnion("type", [
     turnId: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal("session.delete"), id, sessionId: z.string().min(1) }),
+  // The Space surface (space-29, DR-057): the core performs every Git
+  // operation; long commands reply `accepted` at once and report their
+  // outcome as `space.state`.
+  z.object({ type: z.literal("space.get"), id }).strict(),
+  z.object({ type: z.literal("space.init"), id, remote: z.string().optional() }).strict(),
+  z.object({ type: z.literal("space.remote.set"), id, url: z.string().nullable() }).strict(),
+  z.object({ type: z.literal("space.fetch"), id }).strict(),
+  z
+    .object({
+      type: z.literal("space.sync"),
+      id,
+      choices: z.record(z.string().min(1), spaceChoiceSchema).optional(),
+      join: z.boolean().optional(),
+    })
+    .strict(),
+  z.object({ type: z.literal("space.cancel"), id }).strict(),
+  z
+    .object({
+      type: z.literal("space.diff"),
+      id,
+      unit: z.string().min(1),
+      path: z.string().min(1),
+      side: spaceChoiceSchema,
+    })
+    .strict(),
+  z.object({ type: z.literal("space.tree"), id, path: z.string().optional() }).strict(),
+  z.object({ type: z.literal("space.read"), id, path: z.string().min(1) }).strict(),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -698,6 +730,16 @@ export interface CommandResults {
   "ledger.get": LedgerState;
   "ledger.history": { intents: ClosedIntent[]; more: boolean };
   "session.viewed": null;
+  "space.get": SpaceState;
+  "space.init": SpaceState;
+  "space.remote.set": SpaceState;
+  "space.fetch": { accepted: true };
+  "space.sync": { accepted: true };
+  /** `false` when no transport child was running. */
+  "space.cancel": { stopped: boolean };
+  "space.diff": { patch: string; truncated: boolean };
+  "space.tree": { path: string; entries: SpaceEntry[] };
+  "space.read": SpaceReadResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -801,6 +843,136 @@ export interface BuiltinPlaybookInfo {
 }
 
 // ---------------------------------------------------------------------------
+// Space (space-30, DR-057)
+// ---------------------------------------------------------------------------
+
+export type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push";
+
+export type SyncCause =
+  | "unreachable"
+  | "unauthorized"
+  | "not-found"
+  | "timeout"
+  | "stopped"
+  | "rejected"
+  | "validation"
+  | "lease"
+  | "writer"
+  | "unrelated"
+  | "identity"
+  | "git";
+
+export type SpaceOp = "sync" | "check" | "init";
+
+export type SpaceChange = "new" | "updated" | "deleted";
+
+export type SpaceUnitKind =
+  | "session"
+  | "queue"
+  | "projects"
+  | "settings"
+  | "playbook"
+  | "rules"
+  | "other";
+
+/** One whole-unit selection subject: a session bundle, a
+ * `playbooks/<id>/` directory, or one other tracked file. */
+export interface SpaceUnit {
+  /** "sessions/<id>" | "intents/<pid>.jsonl" | "projects.json" |
+   * "playbook/playbook.config.yaml" | "playbooks/<id>" | ".gitignore" |
+   * path. */
+  unit: string;
+  kind: SpaceUnitKind;
+  label: string;
+  detail?: string;
+  change: SpaceChange;
+  project?: { id: string; name?: string };
+  sessionId?: string;
+  paths: string[];
+  /** Whether `space.diff` can show this unit. */
+  diff: boolean;
+}
+
+export interface SpaceSide {
+  change: SpaceChange;
+  at?: number;
+  detail?: string;
+  diff: boolean;
+}
+
+export interface SpaceConflict {
+  unit: SpaceUnit;
+  mine: SpaceSide;
+  remote: SpaceSide;
+}
+
+export type SpaceSyncPhase =
+  | { phase: "idle" }
+  | {
+      phase: "running";
+      op: SpaceOp;
+      step: SyncStep;
+      since: number;
+      cancelable: boolean;
+    }
+  | { phase: "choices"; savedCommit: string | null }
+  | { phase: "unrelated" }
+  | {
+      phase: "stopped";
+      op: SpaceOp;
+      step: SyncStep;
+      cause: SyncCause;
+      message: string;
+      guidance: string;
+      retry: boolean;
+    }
+  | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
+
+export interface SpaceState {
+  home: string;
+  outside: { what: "config" | "sessions"; path: string }[];
+  git: { ok: true; version: string } | { ok: false; guidance: string };
+  repository: null | {
+    branch: string | null;
+    remote: string | null;
+    upstream: boolean;
+    ahead: number | null;
+    behind: number | null;
+    checkedAt: number | null;
+    remoteEmpty: boolean;
+    unrelated: boolean;
+    mergePending: boolean;
+    identityFallback: boolean;
+  };
+  local: SpaceUnit[];
+  incoming: SpaceUnit[];
+  conflicts: SpaceConflict[];
+  lastSync: { at: number; sent: number; received: number } | null;
+  diagnostics: { file: string; reason: string; blocking: boolean }[];
+  sync: SpaceSyncPhase;
+}
+
+/** One entry of a `space.tree` level, annotated from the catalog
+ * (space-23, space-35). */
+export interface SpaceEntry {
+  name: string;
+  path: string;
+  kind: "file" | "dir" | "git";
+  family: string;
+  sync: "shared" | "pending" | "local" | "git";
+  size?: number;
+  count?: number;
+  mtime?: number;
+  owner?: { sessionId?: string; title?: string; projectId?: string; name?: string };
+  preview: "text" | "withheld" | "binary" | "none";
+}
+
+export type SpaceReadResult =
+  | { kind: "text"; text: string; lines: number; truncated: boolean }
+  | { kind: "withheld"; reason: string }
+  | { kind: "binary"; size: number };
+
+// ---------------------------------------------------------------------------
 // Core → client messages
 // ---------------------------------------------------------------------------
 
@@ -881,6 +1053,14 @@ export interface IntentsChangedMessage {
   projectIds: string[];
 }
 
+/** The Space machine moved, or `space.init`, `space.remote.set` or a
+ * sync's Refresh step landed (space-29): broadcast to every client,
+ * the state replacing the last one wholesale. */
+export interface SpaceStateMessage {
+  type: "space.state";
+  state: SpaceState;
+}
+
 export type ServerMessage =
   | HelloMessage
   | ReplyMessage
@@ -891,7 +1071,8 @@ export type ServerMessage =
   | SessionRemovedMessage
   | SessionHistoryReplacedMessage
   | CompileProgressMessage
-  | IntentsChangedMessage;
+  | IntentsChangedMessage
+  | SpaceStateMessage;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers

@@ -57,3 +57,35 @@ test("parseCommand rejects empty submission text", () => {
   });
   assert.ok(!parsed.ok);
 });
+
+test("parseCommand accepts the space commands and their optional fields", () => {
+  const ok = [
+    { type: "space.get", id: "s1" },
+    { type: "space.init", id: "s2", remote: "/tmp/bare.git" },
+    { type: "space.remote.set", id: "s3", url: null },
+    { type: "space.fetch", id: "s4" },
+    { type: "space.sync", id: "s5", choices: { "sessions/a": "remote" }, join: true },
+    { type: "space.cancel", id: "s6" },
+    { type: "space.diff", id: "s7", unit: ".gitignore", path: ".gitignore", side: "mine" },
+    { type: "space.tree", id: "s8" },
+    { type: "space.read", id: "s9", path: "projects.json" },
+  ];
+  for (const command of ok) {
+    const parsed = parseCommand(command);
+    assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
+  }
+});
+
+test("parseCommand rejects a space command with an unknown field or side", () => {
+  const extra = parseCommand({ type: "space.get", id: "s1", verbose: true });
+  assert.ok(!extra.ok);
+  const side = parseCommand({
+    type: "space.sync",
+    id: "s2",
+    choices: { "sessions/a": "theirs" },
+  });
+  assert.ok(!side.ok);
+  const missing = parseCommand({ type: "space.read", id: "s3" });
+  assert.ok(!missing.ok);
+  if (!missing.ok) assert.match(missing.error, /path/);
+});
