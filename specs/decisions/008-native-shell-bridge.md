@@ -5,7 +5,8 @@
 
 ## Status
 
-Accepted
+Accepted.
+Amended by [DR-057](057-space-surface.md): `revealPath(path)` is the bridge's second capability.
 
 ## Context
 
@@ -20,6 +21,7 @@ Accepted
 | Capability | Contract |
 | --- | --- |
 | `pickDirectory()` | Opens the native directory dialog; resolves to the absolute path or `null` when cancelled |
+| `revealPath(path)` | Reveals a state-root path in the OS file manager; resolves `true`, or `false` outside the root |
 
 - Every app feature (registration, sessions, config, forge) stays on the WebSocket protocol; the bridge result feeds back into ordinary protocol commands.
 - The UI feature-detects the bridge; without it (browser dev, future cloud deployment) it falls back to manual path entry, so the web build keeps working unchanged.

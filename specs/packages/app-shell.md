@@ -45,6 +45,10 @@ When a UI flow requests a file or directory selection (for example, choosing a p
 
 - When the user cancels the dialog, the app delivers no path and changes no state.
 
+#### app-shell-28
+
+When a UI flow asks to reveal a path lying inside the state root, the app shall show that path in the operating system's file manager and change no state ([DR-057](../decisions/057-space-surface.md)): a path outside the state root is ignored, and a deployment without the bridge offers the path itself instead.
+
 ### Quit
 
 #### app-shell-7
@@ -145,7 +149,7 @@ The shell shall start the core against the shared state root of [DR-036](../deci
 
 #### app-shell-20
 
-The desktop package shall expose the native bridge of [DR-008](../decisions/008-native-shell-bridge.md) as a `contextBridge` API from a sandboxed preload, limited to OS affordances impossible from a sandboxed web page (v1: directory picking over one invoke channel), carrying no application feature, and absent by design in non-Electron deployments so the UI's feature detection selects the manual fallback.
+The desktop package shall expose the native bridge of [DR-008](../decisions/008-native-shell-bridge.md) as a `contextBridge` API from a sandboxed preload, limited to OS affordances impossible from a sandboxed web page (directory picking and path reveal, one invoke channel each), carrying no application feature, and absent by design in non-Electron deployments so the UI's feature detection selects the manual fallback.
 
 #### app-shell-22
 
@@ -166,7 +170,9 @@ Where the live-smoke handshake variable names a file ([DR-020](../decisions/020-
 
 #### app-shell-16
 
-Where a packaged macOS arm64 build is installed with a profile backed by a fake adapter that spawns a child process, when the test suite launches the packaged app, the test suite shall assert that a single main window opens with the UI connected to the in-app core [[app-shell-1](#app-shell-1)] over WebSocket [[app-shell-10](#app-shell-10)], and that a Boss turn through the fake adapter's spawned child completes [[app-shell-13](#app-shell-13)] with its records rendered in the session's run view, so packaged spawning and the protocol seam are proven together.
+Where a packaged macOS arm64 build is installed with a profile backed by a fake adapter that spawns a child process, when the test suite launches the packaged app, the test suite shall assert that a single main window opens with the UI connected to the in-app core [[app-shell-1](#app-shell-1)] over WebSocket [[app-shell-10](#app-shell-10)], and that a Boss turn through the fake adapter's spawned child completes [[app-shell-13](#app-shell-13)] with its records rendered in the session's run view, so packaged spawning and the protocol seam are proven together:
+
+- the Space surface's reveal control shows a state-root path in the operating system's file manager, and a path outside the state root changes nothing [[app-shell-28](#app-shell-28)].
 
 #### app-shell-17
 

@@ -72,9 +72,9 @@ Track portable files only after migration removes provider tokens from recovery 
 Original migration inputs and unsupported files remain ignored.
 Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files.
 
-Use one branch per device's Spex home, shared by desktop and CLI and merged to or from `main`.
+The app's Space surface syncs one shared branch, `main`, without stopping the core and never text-merges a file.
+The command-line path below may use one branch per device merged to or from `main`; stop local writers during its commit, checkout and merge.
 The [Git workflow](storage-git.md) gives the selection and validation commands.
-Stop local writers during commit, checkout and merge.
 Run each session on at most one device at a time; leases are local.
 
 Compare each session bundle in both pre-merge revisions with the common ancestor:

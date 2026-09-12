@@ -33,10 +33,10 @@ meta.md       The spec of specs
 | [DR-005](decisions/005-compilation-integration.md) | 005-compilation-integration.md | slc as external toolchain; in-app registry generation |
 | [DR-006](decisions/006-projects-and-forge.md) | 006-projects-and-forge.md | Projects as local git repos; gh-CLI GitHub forge adapter |
 | [DR-007](decisions/007-conversational-session-start.md) | 007-conversational-session-start.md | Sessions lands on a Captain-first start view; one motion to the first turn |
-| [DR-008](decisions/008-native-shell-bridge.md) | 008-native-shell-bridge.md | Feature-detected `window.spexNative` bridge for OS pickers only |
+| [DR-008](decisions/008-native-shell-bridge.md) | 008-native-shell-bridge.md | Feature-detected `window.spexNative` bridge for OS pickers and path reveal only |
 | [DR-009](decisions/009-at-hand-interaction.md) | 009-at-hand-interaction.md | At-hand interaction: no forced surface switches; in-place popovers; global attention badge; browsable history |
 | [DR-010](decisions/010-interface-craft.md) | 010-interface-craft.md | Interface craft: conversation-first, human status, honest async, guardrails, keyboard, accessibility, one visual grammar |
-| [DR-011](decisions/011-project-workspace.md) | 011-project-workspace.md | Project-first workspace: four-surface taxonomy, project palette, per-project tabs + Specs/Repo, interactive spec view |
+| [DR-011](decisions/011-project-workspace.md) | 011-project-workspace.md | Project-first workspace: four-surface taxonomy, project palette, per-project tabs + Specs/Repo, interactive spec view (Workspace reads Projects by DR-057) |
 | [DR-012](decisions/012-spec-package-files.md) | 012-spec-package-files.md | One-file spec packages; spec linter; mechanical migration superseded by DR-022 |
 | [DR-013](decisions/013-sublang-brand.md) | 013-sublang-brand.md | SubLang brand adoption: purple interaction hue, warm light neutrals, brand-recolored product logo and app icon |
 | [DR-014](decisions/014-released-toolchain.md) | 014-released-toolchain.md | Released toolchain adoption: playbook 2.0 / cligent 0.16 host boundary (floor superseded by DR-023), effort key, slc-emitted registry wrapper, invalidation, session cwd |
@@ -68,7 +68,7 @@ meta.md       The spec of specs
 | [DR-042](decisions/042-sessions-continue.md) | 042-sessions-continue.md | Session continuation and lease-checked deletion; sidecar recovery replaced by DR-045's shared lifecycle |
 | [DR-043](decisions/043-minimal-spec-editing.md) | 043-minimal-spec-editing.md | Minimal spec editing: one confined atomic write with digest-token conflicts, a whole-file plain-text editor with preview in the spec view, drafts that survive navigation |
 | [DR-044](decisions/044-no-money-in-the-interface.md) | 044-no-money-in-the-interface.md | No money in the interface: the usage line reports tokens only; a recorded cost is never rendered |
-| [DR-045](decisions/045-unified-session-storage.md) | 045-unified-session-storage.md | Shared desktop/CLI storage: one Spex home, portable history/graphs, local provider hints, Git with whole-session choices |
+| [DR-045](decisions/045-unified-session-storage.md) | 045-unified-session-storage.md | Shared desktop/CLI storage: one Spex home, portable history/graphs, local provider hints, Git with whole-session choices; in-app shared-branch sync by DR-057 |
 | [DR-047](decisions/047-explicit-session-recovery.md) | 047-explicit-session-recovery.md | Explicit desktop Retry/Discard through shared uncertain-turn recovery |
 | [DR-048](decisions/048-failed-session-cleanup.md) | 048-failed-session-cleanup.md | Failed cleanup retains session ownership and project reservation |
 | [DR-049](decisions/049-supported-app-hosts.md) | 049-supported-app-hosts.md | macOS/Linux app hosts with private POSIX storage; Windows scaffold and browser clients |
@@ -82,6 +82,7 @@ meta.md       The spec of specs
 | [DR-054](decisions/054-issue-intent-delivery.md) | 054-issue-intent-delivery.md | Superseded by DR-059: issue seeds ended at PR creation with the Boss merging |
 | [DR-055](decisions/055-queue-advancement.md) | 055-queue-advancement.md | Proven successful queued work advances independently of human confirmation |
 | [DR-056](decisions/056-release-naming.md) | 056-release-naming.md | Unified App and CLI release titles; future CLI tags use `cli-v*`, preserving published tags |
+| [DR-057](decisions/057-space-surface.md) | 057-space-surface.md | The Space surface: home at a glance, Initialize/Join, one shared branch synced by the core with a per-unit picker, read-only catalog explorer, Workspace reads Projects, reveal-in-Finder bridge |
 | [DR-059](decisions/059-issue-delivery-through-dev.md) | 059-issue-delivery-through-dev.md | Issue delivery through `/dev`: the seed dispatches `/dev` with the issue, `branch` and `pr` join the built-ins, delivery ends at the merged pull request; supersedes DR-054 |
 
 ## Packages
@@ -105,4 +106,5 @@ meta.md       The spec of specs
 | [storage.md](packages/storage.md) | Spex home catalog, file encodings, local project bindings, migration and Git selection |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |
+| [space.md](packages/space.md) | Space: home header, Initialize/Join/remote, local and incoming units with human labels, core-driven sync machine with per-unit picker, privacy panel, read-only annotated explorer |
 | [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader, whole-file editor with digest-token saves; specs.get/specs.read/specs.write contract for the packages layout |

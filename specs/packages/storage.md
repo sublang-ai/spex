@@ -69,7 +69,8 @@ The intent store shall encode each newline-terminated act as a closed JSON objec
 The preference store shall encode `prefs.json` as exactly `{v:1,prefs:{...}}`, with these core preference values:
 
 - each preference is a JSON value;
-- `viewed:<sessionId>` stores the last viewed turn as a nonnegative integer and resets when that session's history is replaced.
+- `viewed:<sessionId>` stores the last viewed turn as a nonnegative integer and resets when that session's history is replaced;
+- `space:lastSync` stores the last completed in-app sync as `{at, sent, received}` — Unix milliseconds and unit counts.
 
 ### storage-6
 
@@ -124,11 +125,12 @@ Where no home or session location is explicitly selected, when the ordinary defa
 The storage Git tool shall expose `plan`, `select`, `validate` and `rebind` through `node scripts/storage-git.mjs [--home path] <command>`, using `--home`, then nonempty `SPEX_HOME`, then `~/.spex` to select the home:
 
 - commands report JSON results on stdout; invalid arguments and refused operations report their cause on stderr and exit nonzero;
-- Git transport and committing remain ordinary Git operations; local writers must stop for checkout, merge and mutating storage commands, and each session runs on at most one device at a time.
+- Git transport and committing remain ordinary Git operations; local writers must stop for checkout, merge and mutating storage commands, and each session runs on at most one device at a time;
+- this tool is the stopped-core path; the desktop and server app perform the same plan, validation and application in-process under the running core's lease on one shared branch ([DR-057](../decisions/057-space-surface.md)).
 
 ### storage-19
 
-When invoked as `plan <ours> <theirs>`, the storage Git tool shall report the resolved revisions, common ancestor and every structured-file or session-bundle choice [[storage-11](#storage-11)] without changing files or the Git index.
+When invoked as `plan <ours> <theirs>`, the storage Git tool shall report the resolved revisions, common ancestor and every structured-file or session-bundle choice [[storage-11](#storage-11)] without changing files or the Git index; the report names the ancestor and, where none exists, reports the revisions unrelated.
 
 ### storage-20
 
@@ -157,7 +159,7 @@ When invoked as `rebind <project-id> <path> [--alias path ...] [--revision ances
 When selecting stored data during a Git merge, the validator shall compare both pre-merge revisions with their common ancestor:
 
 - compare complete file bytes and existence;
-- treat the manifest and matching replay stream as one session bundle [[1]], and each other tracked structured file as a separate unit.
+- treat the manifest and matching replay stream as one session bundle [[1]], each `playbooks/<id>/` directory as one unit, and each other tracked file as a separate unit.
 
 | Comparison | Selection |
 | --- | --- |
@@ -166,7 +168,7 @@ When selecting stored data during a Git merge, the validator shall compare both 
 | Both changed differently | Explicit choice of the entire unit from either branch, even after a clean text merge |
 
 - absence means deletion; a present session bundle requires both files from the same selected revision, never a manifest from one branch and replay from another;
-- no common ancestor or unresolved choice refuses selection;
+- an unresolved choice refuses selection; revisions with no common ancestor refuse selection unless the caller explicitly joins them, whereupon the empty tree is the ancestor and every unit present on both sides differently is an explicit choice;
 - unselected history remains recoverable from Git, but its intent changes and project registrations leave current state;
 - hunk-level preferences, record concatenation and automatic intent-log unions do not satisfy this contract.
 
@@ -217,6 +219,7 @@ When an integration suite merges two real Git branches containing sessions, proj
 - stopped writers and reopening after a real Git checkout with umask `022` [[storage-21](#storage-21)];
 - restored identity and aliases through the rebind command [[storage-22](#storage-22)];
 - every whole-unit choice, including clean text merges and deletion [[storage-11](#storage-11)];
+- the playbook-directory unit and the empty-ancestor join [[storage-11](#storage-11)] [[storage-19](#storage-19)];
 - reports of unmatched projects and sessions, and rejection of duplicate sources/ranks, cycles, invalid dispatches and damaged bundles [[storage-12](#storage-12)];
 - no repetition of actions omitted from selected history [[storage-13](#storage-13)];
 - leases blocking competing writes [[storage-14](#storage-14)].

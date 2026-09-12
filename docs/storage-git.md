@@ -3,6 +3,8 @@
 
 # Synchronize Spex home with Git
 
+The desktop and server app perform this workflow from the Space surface on one shared branch. The commands below are the command-line path and require the core stopped.
+
 Use a built Spex checkout and one branch per device. Desktop and CLI on a device share that branch. Complete storage migration before the first commit; Spex writes `.gitignore` and `.gitattributes` for the portable format.
 
 Stop the desktop/server core and all CLI sessions before committing, checking out or merging stored data. Run each session on only one device at a time. The commands below operate locally; use ordinary Git fetch/push for transport.

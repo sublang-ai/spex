@@ -208,7 +208,7 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 | --- | --- | --- |
 | Attention queue | no entry, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — with Start, or plain all-clear copy when no unblocked head exists |
 | Running | no live session holds a turn in flight unattended by the queue [[dashboard-50](#dashboard-50)] | a quiet note that nothing is running |
-| Project groups | no registered project | how to register a project, with a navigation control to the Workspace |
+| Project groups | no registered project | how to register a project, with a navigation control to Projects |
 | History | no done work, once the first history page has answered | a note that nothing is done here yet — "Loading…" until then |
 | Now | no current conversation [[core-service-93](core-service.md#core-service-93)] | a quiet idle note |
 | Up next | no queued intent | the inline add row [[dashboard-29](#dashboard-29)] with capture guidance |
@@ -355,7 +355,7 @@ Where a fixture project holds more worked closed intents than one history page, 
 
 Where Dashboard state is derived across the empty conditions, the test suite shall assert the guidance of [[dashboard-8](#dashboard-8)] case by case:
 
-- with no registered project, the attention queue and projects area render their empty-state guidance with an activatable navigation control to the Workspace [[dashboard-8](#dashboard-8)], and no welcome takeover replaces the surface [[dashboard-21](#dashboard-21)];
+- with no registered project, the attention queue and projects area render their empty-state guidance with an activatable navigation control to Projects [[dashboard-8](#dashboard-8)], and no welcome takeover replaces the surface [[dashboard-21](#dashboard-21)];
 - with a registered project whose ledger is empty, each band renders its guidance in place, the Sources line reading as loading until the project's forge state has been read and as not connected after [[dashboard-8](#dashboard-8)] [[dashboard-20](#dashboard-20)];
 - with one queued unblocked intent and no attention entry, the all-clear names that intent with Start [[dashboard-8](#dashboard-8)];
 - before the ledger is read, the attention queue and the Up next band show their loading notes and no all-clear; with a failed read, the failure strip with Retry stands alone, and Retry reads the ledger again [[dashboard-8](#dashboard-8)].

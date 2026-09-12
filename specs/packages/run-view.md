@@ -198,7 +198,7 @@ The app shell shall fill the window at every size, giving the surface it shows a
 
 #### run-view-25
 
-Where no session tab is active, when the Workspace is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip and player label wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
+Where no session tab is active, when the Projects surface is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip and player label wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
 
 - the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place, and says in one clause what a playbook is — a scripted workflow the AI players run — so the first sentence needs no glossary;
 - with no project current, the greeting names the remedy the workspace actually has — picking one where projects exist, adding one where none do — never sending the reader to a sidebar holding nothing;
@@ -402,16 +402,16 @@ When the session record stream delivers a captain turn result reporting an error
 
 #### run-view-67
 
-While the app is connected, the sidebar shall present navigation as surface entries around a Workspace section listing every registered project ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
+While the app is connected, the sidebar shall present navigation as surface entries around a Projects section listing every registered project ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
 
-- Dashboard stands first, then the Workspace section, then Playbooks and Settings;
+- Dashboard stands first, then the Projects section, then Playbooks, Space and Settings;
 - each project node discloses its sessions on a control of its own, an axis independent of which project is current ([DR-027](../decisions/027-linked-views-contract.md)) — the current project starts disclosed, and thereafter the reader's arrangement stands;
 - activating a project row makes it the current project and changes no disclosure;
 - a disclosed project lists its sessions by last activity, a working one first, the five most recent shown with one control revealing the rest in place and one control opening that project's start tab — a project holds at most one turn in flight [[core-service-4](core-service.md#core-service-4)], so starting a session is a composer away, never a conflict away ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - a project whose sessions need a human carries a dot in the most severe of their colors on its own row, disclosed or not [[run-view-73](#run-view-73)];
 - the section header carries the control that opens the project palette [[run-view-42](#run-view-42)], where projects are added and created;
 - the surface entries are a navigation list publishing the current surface, and the projects and their sessions are one tree publishing disclosure, selection, and a single focus stop;
-- the tree's selection follows the surface: the current project's row and the session row whose tab is shown are selected only while the Workspace is the surface — on the Dashboard, Playbooks, or Settings no row is selected and that surface's entry alone reads as current — and choosing the Workspace again selects the remembered project once more.
+- the tree's selection follows the surface: the current project's row and the session row whose tab is shown are selected only while Projects is the surface — on the Dashboard, Playbooks, Space, or Settings no row is selected and that surface's entry alone reads as current — and choosing Projects again selects the remembered project once more.
 
 
 #### run-view-73
@@ -448,7 +448,7 @@ While a session's tab is shown, the run view shall render it working, idle, or r
 
 The sidebar shall collapse between its two states — the tree, and the icon rail alone — behind a control at its foot and a keyboard binding, persisting across launches ([DR-030](../decisions/030-workspace-chrome.md)):
 
-- collapsed entries keep their accessible names and gain tooltips, the config-and-playbooks foot indicator and the Workspace section's palette control [[run-view-42](#run-view-42)] included — the control stays under the Workspace entry in icon-only form, since collapse never hides a duty;
+- collapsed entries keep their accessible names and gain tooltips, the config-and-playbooks foot indicator and the Projects section's palette control [[run-view-42](#run-view-42)] included — the control stays under the Projects entry in icon-only form, since collapse never hides a duty;
 - the attention count survives on the collapsed Dashboard entry [[run-view-34](#run-view-34)];
 - collapse is chrome only: the open tabs remain the reach [[run-view-48](#run-view-48)], so it makes nothing unreachable;
 - collapsing never strands focus.
@@ -476,7 +476,7 @@ While a session's tab is shown, the run view shall lay the Captain column and th
 
 The project palette shall be fully keyboard-operable ([DR-011](../decisions/011-project-workspace.md)):
 
-- it opens from Cmd/Ctrl+P, the sidebar's Workspace section — in the expanded tree and the collapsed rail alike [[run-view-71](#run-view-71)] — the Captain home's greeting where nothing is registered [[run-view-25](#run-view-25)], or submitting a composer with no project chosen;
+- it opens from Cmd/Ctrl+P, the sidebar's Projects section — in the expanded tree and the collapsed rail alike [[run-view-71](#run-view-71)] — the Captain home's greeting where nothing is registered [[run-view-25](#run-view-25)], or submitting a composer with no project chosen;
 - its filter input holds focus — the path field where no project is registered, the palette then being an add flow [[projects-22](projects.md#projects-22)];
 - arrow keys move the highlight over the Academy row where it leads the list, the project rows, and "Open folder…";
 - Enter picks, in an empty path field too, while a typed path adds;
@@ -503,7 +503,7 @@ The tab strip shall show the current project's open sessions, working and idle a
 
 #### run-view-49
 
-The app shall provide keyboard shortcuts implemented in the web UI (so they work identically in a browser), each preventing the host's own default: Cmd/Ctrl+1..4 switch surfaces in the sidebar's order [[run-view-67](#run-view-67)], Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project palette, Cmd/Ctrl+N opens the new-session tab (or the palette when no project is chosen), Cmd/Ctrl+B collapses and restores the sidebar [[run-view-71](#run-view-71)], Cmd/Ctrl+Shift+S toggles the Specs tab with the previous tab, Cmd/Ctrl+Shift+[ and ] cycle the current project's open tabs including the pinned ones [[run-view-48](#run-view-48)], and a printable key pressed outside any input and outside the sidebar refocuses the Boss composer:
+The app shall provide keyboard shortcuts implemented in the web UI (so they work identically in a browser), each preventing the host's own default: Cmd/Ctrl+1..5 switch surfaces in the sidebar's order [[run-view-67](#run-view-67)], Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project palette, Cmd/Ctrl+N opens the new-session tab (or the palette when no project is chosen), Cmd/Ctrl+B collapses and restores the sidebar [[run-view-71](#run-view-71)], Cmd/Ctrl+Shift+S toggles the Specs tab with the previous tab, Cmd/Ctrl+Shift+[ and ] cycle the current project's open tabs including the pinned ones [[run-view-48](#run-view-48)], and a printable key pressed outside any input and outside the sidebar refocuses the Boss composer:
 
 - every control that names its binding prints the platform's own modifier — ⌘ on a Mac, Ctrl elsewhere — from one shared table of the bindings;
 - that table is listed as a sheet on the Settings surface [[settings-10](settings.md#settings-10)], the modifier bindings and the plain keys alike.
@@ -541,9 +541,9 @@ Where the Captain home has nothing to report (no warnings or errors), it shall c
 
 #### run-view-56
 
-The Workspace shall name the current project in the sidebar's Workspace section rather than in a bar of its own [[run-view-67](#run-view-67)] ([DR-029](../decisions/029-session-history-home.md)):
+The Projects surface shall name the current project in the sidebar's Projects section rather than in a bar of its own [[run-view-67](#run-view-67)] ([DR-029](../decisions/029-session-history-home.md)):
 
-- the project palette opens from its keyboard binding [[run-view-49](#run-view-49)] and from the sidebar's Workspace section;
+- the project palette opens from its keyboard binding [[run-view-49](#run-view-49)] and from the sidebar's Projects section;
 - while no project is chosen, the tab strip (including pinned tabs) is absent and the sidebar plus the Captain home's guidance is the whole surface.
 
 
@@ -722,7 +722,7 @@ Where a fixture machine holds a neighbour edge, a same-rank pair, a rank-skippin
 
 #### run-view-70
 
-Where a fixture store holds two projects — the current one with a titled session awaiting a Boss reply, more idle sessions than the recent window holds (one of them having held a failure), and a session with no turns; the other with a session awaiting a reply and an idle session — the test suite shall assert the sidebar contract: Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)], the current project's rows carry their titles, relative times, and attention-first marks with the turn counts in their accessible descriptions and the settled failure marked as history rather than attention [[run-view-73](#run-view-73)], and the other project's row carries its own attention signal [[run-view-67](#run-view-67)]; disclosing that project leaves the current project unchanged [[run-view-67](#run-view-67)]; activating its session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; a turn settling keeps its transcript on screen with the composer ready and no ended word on its tab or row [[run-view-69](#run-view-69)]; closing that tab leaves the session listed and running nothing [[run-view-68](#run-view-68)]; the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)]; and, with the Workspace showing the waiting session's tab, the current project's row and that session's row are selected, showing Playbooks leaves no row selected with its own entry current, and the Workspace selects the remembered project again [[run-view-67](#run-view-67)].
+Where a fixture store holds two projects — the current one with a titled session awaiting a Boss reply, more idle sessions than the recent window holds (one of them having held a failure), and a session with no turns; the other with a session awaiting a reply and an idle session — the test suite shall assert the sidebar contract: Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)], the current project's rows carry their titles, relative times, and attention-first marks with the turn counts in their accessible descriptions and the settled failure marked as history rather than attention [[run-view-73](#run-view-73)], and the other project's row carries its own attention signal [[run-view-67](#run-view-67)]; disclosing that project leaves the current project unchanged [[run-view-67](#run-view-67)]; activating its session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; a turn settling keeps its transcript on screen with the composer ready and no ended word on its tab or row [[run-view-69](#run-view-69)]; closing that tab leaves the session listed and running nothing [[run-view-68](#run-view-68)]; the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)]; and, with Projects showing the waiting session's tab, the current project's row and that session's row are selected, showing Playbooks leaves no row selected with its own entry current, and Projects selects the remembered project again [[run-view-67](#run-view-67)].
 
 
 #### run-view-84
@@ -759,7 +759,7 @@ While a replayed fixture stream holds a turn active, the test suite shall assert
 
 #### run-view-29
 
-Where no session is live, when the Workspace renders with a fixture config of one project and one playbook, the test suite shall assert the Captain home's one-motion start:
+Where no session is live, when the Projects surface renders with a fixture config of one project and one playbook, the test suite shall assert the Captain home's one-motion start:
 
 - the Captain home shows the greeting naming the current project, the chat composer, and the captain identity [[run-view-25](#run-view-25)];
 - with no project current, the greeting offers picking one where the workspace holds projects and adding one where it holds none [[run-view-25](#run-view-25)];
@@ -899,13 +899,13 @@ Where the harness boots the served shell, the test suite shall assert the page f
 Where the harness boots with the demo project registered, the test suite shall assert the keyboard journey [[run-view-49](#run-view-49)]:
 
 - the platform modifier with P opens the palette, arrow keys move its selection, Enter picks, Escape closes [[run-view-42](#run-view-42)];
-- the modifier with 1 through 4 switches surfaces, and the modifier with B collapses and restores the sidebar [[run-view-71](#run-view-71)];
+- the modifier with 1 through 5 switches surfaces, and the modifier with B collapses and restores the sidebar [[run-view-71](#run-view-71)];
 - in the composer Enter sends while Shift+Enter inserts a line break [[run-view-8](#run-view-8)];
 - a Tab sequence from the page start reaches the composer, and no shortcut leaves focus stranded on the document body.
 
 #### run-view-102
 
-Where the harness boots with the demo project registered and a finished session, when each surface — Captain home, a session, the Dashboard, the Overview, the Specs tab, Playbooks, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
+Where the harness boots with the demo project registered and a finished session, when each surface — Captain home, a session, the Dashboard, the Overview, the Specs tab, Playbooks, Space, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
 
 #### run-view-103
 
@@ -945,4 +945,4 @@ Where the harness boots with the demo project registered and the scripted Captai
 
 #### run-view-122
 
-Where the harness boots with the demo project registered, when the journey leaves the Workspace for the Dashboard and for Playbooks and then returns, the test suite shall assert through the page that the sidebar names one place at a time [[run-view-67](#run-view-67)]: the project's row is selected on the Workspace, neither other surface leaves any row in the tree selected while its own entry reads as current, and the Workspace selects the remembered project's row again.
+Where the harness boots with the demo project registered, when the journey leaves Projects for the Dashboard and for Playbooks and then returns, the test suite shall assert through the page that the sidebar names one place at a time [[run-view-67](#run-view-67)]: the project's row is selected on Projects, neither other surface leaves any row in the tree selected while its own entry reads as current, and Projects selects the remembered project's row again.

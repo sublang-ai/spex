@@ -11,6 +11,7 @@ The spec view's read-only stance is amended by [DR-043](043-minimal-spec-editing
 The project bar, the Captain home's session list, and the live-sessions-only tab strip are amended by [DR-029](029-session-history-home.md) — the sidebar became the navigator; the text below is rewritten where it named them.
 The Dashboard content row is amended by [DR-035](035-intent-ledger.md) — the intent ledger replaced running sessions, work lists, and usage; the taxonomy row below is rewritten.
 The Repo tab is amended by [DR-038](038-history-is-done-work.md) — it becomes the project's Overview, the ledger group under the repository header.
+Amended by [DR-057](057-space-surface.md): the Workspace nav entry and sidebar section read Projects, and the taxonomy gains the Space surface.
 
 ## Context
 
@@ -24,9 +25,10 @@ The Repo tab is amended by [DR-038](038-history-is-done-work.md) — it becomes 
 
 | Nav | Scope | Content |
 | --- | --- | --- |
-| Workspace | current project | open session tabs + "+"; pinned Specs and Repo tabs (project identity moved to the sidebar, [DR-029](029-session-history-home.md)) |
+| Projects (internal `Workspace`) | current project | open session tabs + "+"; pinned Specs and Repo tabs (project identity moved to the sidebar, [DR-029](029-session-history-home.md)) |
 | Dashboard | all projects | attention queue (interrupted, then finished intents) and per-project ledger groups — history, now, up next, sources ([DR-035](035-intent-ledger.md)) |
 | Playbooks | global | configured playbooks + compile (unchanged) |
+| Space | global | the Spex home: explorer, setup, remote, one-branch sync |
 | Settings | global | profiles, captain, notifications, theme (unchanged) |
 
 - The Sessions nav entry is renamed **Workspace**; the standalone Projects surface is dissolved: its per-repo content (git state, GitHub issues/PRs, forge binding) becomes the workspace's **Repo** tab scoped to the current project; registry management (add, create, remove) moves to the project palette and the Repo tab. Dashboard is deliberately the one cross-project surface.

@@ -14,6 +14,24 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Added
+
+- The Space surface: the Spex home at a glance, Initialize and Join a
+  space, the remote, local and incoming changes by unit in human words,
+  a core-driven sync on one shared branch with a per-unit conflict
+  picker, a "Stays on this device" panel, and a read-only annotated
+  explorer with previews.
+- The desktop bridge reveals a state-root path in the OS file manager;
+  the served page offers Copy path instead.
+
+### Changed
+
+- The sidebar's "Workspace" entry and section read "Projects".
+- Cmd/Ctrl+1 through 5 switch surfaces: Dashboard, Projects, Playbooks,
+  Space, Settings.
+- Protocol version 11: the `space.*` commands and the `space.state`
+  message.
+
 ## [0.6.1] - 2026-09-09
 
 ### Fixed

@@ -13,7 +13,7 @@ A top-level Space surface manages Spex home: what is in it and what is private, 
 
 ## Deliverables
 
-- [ ] A DR and a `space` spec package record the surface, its protocol, and the in-app single-branch sync.
+- [x] A DR and a `space` spec package record the surface, its protocol, and the in-app single-branch sync.
 - [ ] The core exposes the space commands: status, local and incoming changes, initialize, remote, sync with per-unit choices, tree and file preview, each refusing by name while a turn is in flight.
 - [ ] The Space surface renders status, changes, the sync flow with its conflict picker, and the read-only explorer, fitting at the 320-pixel floor.
 - [ ] The desktop bridge reveals a path in the file manager; the served page shows the path instead.

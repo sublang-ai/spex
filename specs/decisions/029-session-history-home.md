@@ -8,6 +8,7 @@
 Accepted; session deletion, declined below, is decided by [DR-038](038-history-is-done-work.md); an ended session becomes a paused conversation that a message continues by [DR-042](042-sessions-continue.md).
 Amended by [DR-051](051-runtime-held-for-a-turn.md): the ending control and the "ended" vocabulary retire — closing still files a session away and stops nothing, and a launch still opens the start tab.
 Realizes [DR-009](009-at-hand-interaction.md)'s "nothing the user produced becomes unreachable" as first-class law; extends [DR-007](007-conversational-session-start.md)'s start view into the session home.
+Amended by [DR-057](057-space-surface.md): the sidebar's Workspace section reads Projects.
 
 ## Context
 

@@ -8,6 +8,7 @@
 Accepted (2026-09-05).
 Amended by [DR-047](047-explicit-session-recovery.md) for desktop uncertain-turn recovery.
 Amended by [DR-050](050-shared-storage-cutover.md) for default-store discovery and damage isolation.
+Amended by [DR-057](057-space-surface.md): the app syncs one shared `main` under the running core's lease between turns; per-device branches and stopped writers remain the command-line path.
 Amends:
 
 - [DR-036](036-file-state-store.md): storage ownership, default locations, local data and Git synchronization.
@@ -72,7 +73,7 @@ Amends:
 
 ### Git synchronization
 
-- Use Git with shared ancestry: one branch per device's Spex home, merged to or from `main`; desktop and CLI share the directory and branch.
+- Use Git with shared ancestry: one branch per device's Spex home, merged to or from `main`; desktop and CLI share the directory and branch (command-line path; the app uses one shared `main` — [DR-057](057-space-surface.md)).
 - Stop local writers during commit, checkout and merge; preserve exact file bytes. Reopening tightens session permissions before strict validation and rejects unsafe paths. Execute each session on one device at a time; leases are local.
 - Ignore `local/`, `prefs.json`, provider hints, lease directories, caches and migration inputs/receipts. Files stored outside the Git repository do not participate.
 - Compare complete session bundles at both pre-merge revisions with their common ancestor; absence means deletion:
