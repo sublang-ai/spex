@@ -139,7 +139,10 @@ export function CompileBand({
     <div
       data-testid="compile-band"
       data-outcome={outcome}
-      className="flex shrink-0 flex-col gap-1.5 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800"
+      // In a short pane the band yields inside its own box rather than
+      // pushing the panel out of the pane (DR-041 §9); positioned, so its
+      // screen-reader-only words stay inside that box too.
+      className="relative flex min-h-0 shrink flex-col gap-1.5 overflow-y-auto border-b border-neutral-200 px-3 py-2 dark:border-neutral-800"
     >
       {outcome === "running" ? (
         <>

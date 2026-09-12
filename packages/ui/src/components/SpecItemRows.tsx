@@ -44,9 +44,9 @@ export const GROUP_CHIP: Record<SpecGroup, string> = {
   test: "text-teal-700 bg-teal-50 dark:text-teal-300 dark:bg-teal-950",
 };
 export const GROUP_TEXT: Record<SpecGroup, string> = {
-  external: "text-sky-600 dark:text-sky-400",
-  internal: "text-fuchsia-600 dark:text-fuchsia-400",
-  test: "text-teal-600 dark:text-teal-400",
+  external: "text-sky-700 dark:text-sky-400",
+  internal: "text-fuchsia-700 dark:text-fuchsia-400",
+  test: "text-teal-700 dark:text-teal-400",
 };
 
 export const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";

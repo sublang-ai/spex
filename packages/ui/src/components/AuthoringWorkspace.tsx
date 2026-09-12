@@ -338,13 +338,16 @@ export function AuthoringWorkspace({
           <section
             data-testid="artifacts-pane"
             aria-label="Draft artifacts"
-            className="@container flex min-h-0 min-w-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white @2xl:min-w-[280px] dark:border-neutral-800 dark:bg-neutral-900"
+            className="@container flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white @2xl:min-w-[280px] dark:border-neutral-800 dark:bg-neutral-900"
           >
-            <div
-              role="tablist"
-              aria-label="Draft artifacts"
-              className="flex flex-wrap items-center gap-1 border-b border-neutral-200 px-2 py-1.5 dark:border-neutral-800"
-            >
+            {/* The strip: the tab list, then the Compile control at its
+                right end — a sibling, since a tab list holds tabs alone. */}
+            <div className="flex flex-wrap items-center gap-1 border-b border-neutral-200 px-2 py-1.5 dark:border-neutral-800">
+              <div
+                role="tablist"
+                aria-label="Draft artifacts"
+                className="flex flex-wrap items-center gap-1"
+              >
               {TABS.map((entry) => {
                 const on = tab === entry.key;
                 const dot =
@@ -383,6 +386,7 @@ export function AuthoringWorkspace({
                   </button>
                 );
               })}
+              </div>
               <span className="ml-auto" />
               <button
                 type="button"

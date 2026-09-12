@@ -684,12 +684,12 @@ describe("citation entries: target-group color, hit target", () => {
     const g1 = screen.getByTestId("link-GUARD-3-GUARD-1");
     // GUARD-1 is external: sky. The digest arrives in the card at
     // hand now, never in a native title (spec-view-61).
-    expect(g1.className).toContain("text-sky-600");
+    expect(g1.className).toContain("text-sky-700");
     expect(g1.getAttribute("title")).toBeNull();
     // GUARD-5 is internal: fuchsia.
     expect(
       screen.getByTestId("link-GUARD-3-GUARD-5").className,
-    ).toContain("text-fuchsia-600");
+    ).toContain("text-fuchsia-700");
     // Hit target grows by padding, density kept by negative margin
     // (DR-010 §7).
     expect(g1.className).toContain("py-1");
@@ -712,7 +712,7 @@ describe("citation entries: target-group color, hit target", () => {
     fireEvent.click(screen.getByTestId("inbound-AUTH-8"));
     expect(
       screen.getByTestId("link-AUTH-8-GUARD-5").className,
-    ).toContain("text-fuchsia-600");
+    ).toContain("text-fuchsia-700");
   });
 });
 
