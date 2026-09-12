@@ -1081,6 +1081,13 @@ export interface DraftSourceMessage {
   mtime: number;
 }
 
+/** A draft was retired by registration or deleted (playbook-library-70):
+ * broadcast to every client, which drops every trace of it. */
+export interface DraftRemovedMessage {
+  type: "draft.removed";
+  draftId: string;
+}
+
 export type ServerMessage =
   | HelloMessage
   | ReplyMessage
@@ -1094,7 +1101,8 @@ export type ServerMessage =
   | IntentsChangedMessage
   | DraftRecordMessage
   | DraftStateMessage
-  | DraftSourceMessage;
+  | DraftSourceMessage
+  | DraftRemovedMessage;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers

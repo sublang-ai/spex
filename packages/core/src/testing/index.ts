@@ -4,3 +4,5 @@
 export * from "./fake-adapter.js";
 export * from "./scripted-captain.js";
 export * from "./demo.js";
+export * from "./authoring.js";
+export * from "./stub-slc.js";

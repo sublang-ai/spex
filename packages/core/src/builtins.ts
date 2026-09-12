@@ -22,6 +22,9 @@ const BUILTIN_FROMS: Record<string, string> = {
   pr: "@sublang/playbook/pr/registry",
 };
 
+/** The built-ins' ids: a draft never takes one (playbook-library-70). */
+export const BUILTIN_IDS: readonly string[] = Object.keys(BUILTIN_FROMS);
+
 /**
  * Load the catalog. A built-in whose registry fails to load is
  * omitted (the package may predate it); sources come from the

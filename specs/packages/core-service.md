@@ -223,6 +223,7 @@ The core service shall accept the draft command family — `draft.list`, `draft.
 
 - a draft compile is the playbook id's one compile, canceled by `compile.abort` as any compile is; `compile.run` and `draft.compile` for one id exclude each other;
 - `draft.create` replies `invalid_request` for an id a configured playbook or built-in holds; `draft.open` and every other command reply `not_found` for an unknown draft; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`;
+- a draft retired by registration or deleted is announced to every client as `draft.removed`, so no client keeps a trace of it;
 - `draft.send` replies when the message is accepted, never when the turn ends; the protocol version bumps [[core-service-12](#core-service-12)].
 
 ### Intent Ledger
