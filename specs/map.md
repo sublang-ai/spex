@@ -79,9 +79,10 @@ meta.md       The spec of specs
 | [DR-051](decisions/051-runtime-held-for-a-turn.md) | 051-runtime-held-for-a-turn.md | The runtime is held only for a turn: no ending, every message applies current settings onto the session's stored members, one working turn per project, the current conversation as the lane |
 | [DR-052](decisions/052-runtime-model-options.md) | 052-runtime-model-options.md | Runtime model and tuning choices through Cligent, shared by all agent editors |
 | [DR-053](decisions/053-model-options-adoption.md) | 053-model-options-adoption.md | Published Cligent 0.26 / Playbook 13.1 floors; required discovery export |
-| [DR-054](decisions/054-issue-intent-delivery.md) | 054-issue-intent-delivery.md | Issue seeds end at PR creation; the Boss merges and restores the checkout |
+| [DR-054](decisions/054-issue-intent-delivery.md) | 054-issue-intent-delivery.md | Superseded by DR-059: issue seeds ended at PR creation with the Boss merging |
 | [DR-055](decisions/055-queue-advancement.md) | 055-queue-advancement.md | Proven successful queued work advances independently of human confirmation |
 | [DR-056](decisions/056-release-naming.md) | 056-release-naming.md | Unified App and CLI release titles; future CLI tags use `cli-v*`, preserving published tags |
+| [DR-059](decisions/059-issue-delivery-through-dev.md) | 059-issue-delivery-through-dev.md | Issue delivery through `/dev`: the seed dispatches `/dev` with the issue, `branch` and `pr` join the built-ins, delivery ends at the merged pull request; supersedes DR-054 |
 
 ## Packages
 

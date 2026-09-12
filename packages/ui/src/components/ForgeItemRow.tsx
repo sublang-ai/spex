@@ -55,15 +55,12 @@ export function openSourceIntents(
 
 /** The capture seed the spec table pins (dashboard-30): the title is
  * the first line, the canonical URL rides in the text and again as
- * provenance. */
+ * provenance. An issue dispatches `/dev` (DR-059): the playbooks own
+ * branching, the pull request, and the merge, so the seed carries no
+ * delivery instructions. */
 export function forgeSeedText(kind: "issue" | "pr", item: ForgeItem): string {
   if (kind === "issue") {
-    return [
-      `Address #${item.number}: ${item.title}`,
-      "Read the issue and comments. Work on a new branch from the current default-branch commit, implement the requested change, and run relevant checks. " +
-        `Push the branch and open a PR against the default branch with a summary, test results, and \`Closes #${item.number}\` in its description so merging it closes the issue.`,
-      item.url,
-    ].join("\n\n");
+    return `/dev Address #${item.number}: ${item.title}\n\n${item.url}`;
   }
   return `Review PR #${item.number}: ${item.title}\n${item.url}`;
 }

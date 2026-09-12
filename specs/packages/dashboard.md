@@ -152,12 +152,12 @@ Where a Sources row names an issue, pull request, or open intent record with no 
 
 | Source | First line |
 | --- | --- |
-| Issue #N | `Address #N: <title>` |
+| Issue #N | `/dev Address #N: <title>` |
 | Pull request #N | `Review PR #N: <title>` |
 | Intent record IR-N | `Resume IR-<N>: <title>` |
 
-- an issue seed adds a paragraph after a blank line: ``Read the issue and comments. Work on a new branch from the current default-branch commit, implement the requested change, and run relevant checks. Push the branch and open a PR against the default branch with a summary, test results, and `Closes #N` in its description so merging it closes the issue.`` ([DR-054](../decisions/054-issue-intent-delivery.md));
-- issue and pull-request seeds end with the canonical source URL on its own line, separated from an issue's instruction paragraph by a blank line;
+- an issue seed dispatches `/dev` with the issue, so the playbooks branch, code, open the pull request, and merge ([DR-059](../decisions/059-issue-delivery-through-dev.md)); it carries no delivery instructions;
+- issue and pull-request seeds end with the canonical source URL on its own line, separated from an issue's first line by a blank line;
 - a row whose source artifact already has an open intent shows that intent's derived state in place of the control, and regains the control when that intent closes.
 
 #### dashboard-31

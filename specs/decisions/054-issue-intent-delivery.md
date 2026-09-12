@@ -5,6 +5,7 @@
 
 ## Status
 
+Superseded by [DR-059](059-issue-delivery-through-dev.md) (2026-09-12): the seed dispatches `/dev`, and the playbooks merge.
 Accepted (2026-09-08).
 Amends [DR-035](035-intent-ledger.md)'s issue capture seed only.
 

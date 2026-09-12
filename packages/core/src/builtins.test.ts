@@ -30,10 +30,19 @@ const loader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/decide/registry") {
     return { default: entry("decide", ["coder", "reviewer"]) };
   }
+  if (specifier === "@sublang/playbook/dev/registry") {
+    return { default: entry("dev", ["analyst"]) };
+  }
+  if (specifier === "@sublang/playbook/branch/registry") {
+    return { default: entry("branch", ["coder"]) };
+  }
+  if (specifier === "@sublang/playbook/pr/registry") {
+    return { default: entry("pr", ["coder"]) };
+  }
   throw new Error(`no module ${specifier}`);
 };
 
-test("catalog serves both built-ins with sources from the installed package", async () => {
+test("catalog serves every built-in with sources from the installed package", async () => {
   // The registry entries come through the (stubbed) loader, but the
   // `from` specifiers are the real ones, so packagedSourcePath
   // resolves each source from the installed @sublang/playbook
@@ -46,6 +55,9 @@ test("catalog serves both built-ins with sources from the installed package", as
       ["code", true],
       ["review", false],
       ["decide", false],
+      ["dev", false],
+      ["branch", false],
+      ["pr", false],
     ],
   );
   const code = builtins.find((b) => b.id === "code");

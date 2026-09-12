@@ -18,6 +18,8 @@ const BUILTIN_FROMS: Record<string, string> = {
   review: "@sublang/playbook/review/registry",
   decide: "@sublang/playbook/decide/registry",
   dev: "@sublang/playbook/dev/registry",
+  branch: "@sublang/playbook/branch/registry",
+  pr: "@sublang/playbook/pr/registry",
 };
 
 /**
