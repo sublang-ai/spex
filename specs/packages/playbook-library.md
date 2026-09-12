@@ -143,6 +143,13 @@ When the Library surface is opened, the Library shall list each known built-in p
 - A role's proposed player id is `dev.<role>`, editable before it is written, because the id is the sharing decision ([DR-032](../decisions/032-session-players.md)).
 - A proposed id the roster lacks is written to the roster first, carrying the agent block chosen for that role, so no binding is written dangling.
 
+#### playbook-library-48
+
+While `dev` is listed as configured and `branch` or `pr` is not, the Library shall mark `dev`'s pull-request delivery unavailable on its card, naming each missing built-in ([DR-059](../decisions/059-issue-delivery-through-dev.md)):
+
+- the mark reads as a hint beside the card's roles, not as an invalid entry [[playbook-library-2](#playbook-library-2)], because a plain `/dev` request still runs;
+- the mark disappears once both are listed as configured.
+
 #### playbook-library-35
 
 When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that fills the compile form with the example's normalized text and judgment fields — giving each of the example's roles the default agent block — without starting a compile:
@@ -278,6 +285,10 @@ Where a configured playbook binds two roles, one to a player another playbook al
 #### playbook-library-40
 
 When a built-in whose roles the roster does not cover is added, the test suite shall assert the missing player is written to the roster first, carrying the block chosen for its role, and only then the playbook entry binding that role to it [[playbook-library-34](#playbook-library-34)].
+
+#### playbook-library-49
+
+Where the shared config lists `dev` without `branch` or `pr`, the test suite shall assert that the `dev` card carries the pull-request delivery hint naming each missing built-in, and that a config listing all three renders no hint [[playbook-library-48](#playbook-library-48)].
 
 ### Cancellation and Gate Coverage
 

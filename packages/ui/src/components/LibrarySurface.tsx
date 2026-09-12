@@ -781,6 +781,13 @@ export function LibrarySurface({
     });
   }
 
+  // dev delivers issues through branch and pr (DR-059); a config that
+
+  // enables dev without them can still run a plain /dev, so the card
+
+  // carries a hint, never an invalid mark (playbook-library-48).
+  const configuredIds = new Set(summary.playbooks.map((playbook) => playbook.id));
+  const missingDelivery = ["branch", "pr"].filter((id) => !configuredIds.has(id));
   const availableBuiltins = (builtins ?? []).filter(
     (entry) => !entry.configured,
   );
@@ -943,6 +950,17 @@ export function LibrarySurface({
                 </span>
               </span>
             </div>
+            {playbook.id === "dev" && missingDelivery.length > 0 ? (
+              <p
+                data-testid="dev-delivery-hint"
+                className="text-xs text-amber-700 dark:text-amber-300"
+              >
+                Pull-request delivery is unavailable until{" "}
+                {missingDelivery.map((id) => `/${id}`).join(" and ")}{" "}
+                {missingDelivery.length === 1 ? "is" : "are"} enabled below; a
+                plain /dev request still runs.
+              </p>
+            ) : null}
             <PlaybookPipeline playbookId={playbook.id} />
           </div>
         ))}

@@ -365,6 +365,64 @@ describe("DR-015: built-ins section from the catalog", () => {
   });
 });
 
+describe("playbook-library-48: dev names the delivery built-ins it lacks", () => {
+  const devPlaybook = {
+    id: "dev",
+    from: "@sublang/playbook/dev/registry",
+    command: "dev",
+    intent: "plan a development request",
+    roles: { analyst: { playerId: "dev.coder", display: "claude-opus-5 @ high" } },
+  };
+  const deliveryPlaybook = (id: "branch" | "pr") => ({
+    id,
+    from: `@sublang/playbook/${id}/registry`,
+    command: id,
+    intent: `${id} intent`,
+    roles: { coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" } },
+  });
+
+  test("dev without branch or pr carries the hint naming both", () => {
+    useAppStore.setState({
+      configState: {
+        ...CONFIG_STATE,
+        summary: { ...CONFIG_STATE.summary, playbooks: [devPlaybook] },
+      },
+    });
+    render(<LibrarySurface />);
+    const hint = screen.getByTestId("dev-delivery-hint");
+    expect(hint.textContent).toContain("/branch and /pr are enabled");
+    expect(hint.textContent).toContain("plain /dev request still runs");
+  });
+
+  test("dev with branch but not pr names only pr", () => {
+    useAppStore.setState({
+      configState: {
+        ...CONFIG_STATE,
+        summary: {
+          ...CONFIG_STATE.summary,
+          playbooks: [devPlaybook, deliveryPlaybook("branch")],
+        },
+      },
+    });
+    render(<LibrarySurface />);
+    expect(screen.getByTestId("dev-delivery-hint").textContent).toContain("/pr is enabled");
+  });
+
+  test("dev with both configured carries no hint", () => {
+    useAppStore.setState({
+      configState: {
+        ...CONFIG_STATE,
+        summary: {
+          ...CONFIG_STATE.summary,
+          playbooks: [devPlaybook, deliveryPlaybook("branch"), deliveryPlaybook("pr")],
+        },
+      },
+    });
+    render(<LibrarySurface />);
+    expect(screen.queryByTestId("dev-delivery-hint")).toBeNull();
+  });
+});
+
 describe("playbook-library-34/26: plain words on the list", () => {
   test("a built-in is enabled, not added to a config", () => {
     renderLibrary();
