@@ -24,7 +24,16 @@ import { test, expect, open, nav, send } from "../src/harness";
 // the Dashboard's History band draws rows — with their screen-reader
 // marks — below the fold, where a box that fails to contain them
 // stretches the page.
-test.use({ appOptions: { project: true, history: 25, agentDelayMs: 4000 } });
+test.use({
+  appOptions: {
+    project: true,
+    history: 25,
+    agentDelayMs: 4000,
+    // A draft compiled by the passing stub, measured idle at its
+    // proposal (DR-058).
+    authoring: { slc: "ok" },
+  },
+});
 
 const WIDTHS = [320, 480, 640, 800, 1024, 1280];
 /** An unbroken token longer than any pane (run-view-3): it rides the
@@ -89,10 +98,22 @@ async function measure(page: Page): Promise<Measured> {
       const oy = styleOf(el).overflowY;
       return oy === "auto" || oy === "scroll";
     };
+    // Content behind a closed <details> is not rendered, though the
+    // browser may still report a box for it: chrome no one sees.
+    const folded = (el: Element): boolean => {
+      for (let node = el.parentElement; node; node = node.parentElement) {
+        if (node instanceof HTMLDetailsElement && !node.open) {
+          const summary = node.querySelector(":scope > summary");
+          if (!summary || !summary.contains(el)) return true;
+        }
+      }
+      return false;
+    };
     const shown = (el: Element): boolean => {
       const style = styleOf(el);
       if (style.display === "none" || style.visibility === "hidden") return false;
       if (style.position === "fixed" || style.position === "absolute") return false;
+      if (folded(el)) return false;
       const box = el.getBoundingClientRect();
       return box.width > 0 && box.height > 0;
     };
@@ -134,6 +155,7 @@ async function measure(page: Page): Promise<Measured> {
       const style = styleOf(el);
       if (style.display === "none" || style.display === "inline") continue;
       if (scrolls(el) || style.textOverflow === "ellipsis") continue;
+      if (folded(el)) continue;
       if (el.clientWidth <= 1) continue;
       // A text field scrolls its own value; its box is what counts.
       const field = /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
@@ -196,6 +218,7 @@ async function measure(page: Page): Promise<Measured> {
       if (!(el instanceof HTMLElement)) continue;
       const style = styleOf(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
+      if (folded(el)) continue;
       const box = el.getBoundingClientRect();
       const positioned = style.position === "absolute" || style.position === "fixed";
       if (!positioned && (!scrollsDown(el) || insideScroller(el))) continue;
@@ -251,7 +274,9 @@ async function measure(page: Page): Promise<Measured> {
           }
         }
       }
-      for (const child of children) check(child);
+      // A glyph's own paths overlap by design: the svg is the control's
+      // child, its drawing is not chrome.
+      for (const child of children) if (!(child instanceof SVGElement)) check(child);
     };
     for (const container of containers) {
       if (shown(container)) check(container);
@@ -452,6 +477,28 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
       name: "Playbooks",
       show: () => nav(page, "Playbooks").click(),
       ready: () => expect(page.getByTestId("builtins-section")).toBeVisible(),
+    },
+    {
+      // The authoring workspace at rest after a compile: the thread
+      // with its cards, the band with every phase done, the source,
+      // and the compiled tabs enabled (playbook-library-52).
+      name: "Playbook draft",
+      show: async () => {
+        const idField = page.getByTestId("new-playbook-id");
+        await idField.fill("triage");
+        await idField.press("Enter");
+        await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+        await page.getByTestId("draft-composer").fill("I want a playbook that triages new issues into labels.");
+        await page.getByTestId("draft-send").click();
+        await expect(
+          page.locator('[data-testid="directive-card"][data-kind="register"]'),
+        ).toBeVisible({ timeout: 45_000 });
+        await expect(page.getByTestId("draft-working")).toHaveCount(0);
+      },
+      ready: async () => {
+        await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+        await expect(page.getByTestId("draft-chip")).toContainText("Compiled");
+      },
     },
     {
       name: "Settings",

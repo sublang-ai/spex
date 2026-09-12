@@ -26,10 +26,12 @@ const src = process.argv[3];
 const base = path.basename(src, ".md");
 const srcDir = path.dirname(src);
 function progress(line) { process.stderr.write(line + "\\n"); }
-function phaseLines(upTo) {
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function phaseLines(upTo) {
   for (const phase of PHASES) {
     if (phase === upTo) return;
     progress("→ " + phase + " (writing " + base + ".playbook/" + base + "." + phase + ")");
+    await wait(PHASE_DELAY_MS);
     progress("✓ " + phase + " wrote " + base + ".playbook/" + base + "." + phase + " (1s)");
   }
 }
@@ -117,25 +119,27 @@ function emitArtifacts() {
     ].join("\\n"),
   );
 }
-function runStep(step) {
+async function runStep(step) {
   if (step === "ok") {
-    phaseLines(undefined);
+    await phaseLines(undefined);
     emitArtifacts();
     console.log("stub slc: compiled " + base);
     process.exit(0);
   }
   if (step.startsWith("fail:")) {
     const phase = step.slice(5);
-    phaseLines(phase);
+    await phaseLines(phase);
     progress("→ " + phase + " (writing " + base + ".playbook/" + base + "." + phase + ")");
+    await wait(PHASE_DELAY_MS);
     progress("✗ " + phase + " failed at " + base + ".playbook/" + base + "." + phase + " (2s)");
     progress("slc: phase \\"" + phase + "\\" failed at \\"" + base + ".playbook/" + base + "." + phase + "\\"");
     progress("error: result 'labeled' declared twice in " + base.toUpperCase() + "-2");
     process.exit(1);
   }
   if (step === "clarify") {
-    phaseLines("text2gears");
+    await phaseLines("text2gears");
     progress("→ text2gears (writing " + base + ".playbook/" + base + ".gears.md)");
+    await wait(PHASE_DELAY_MS);
     const report = {
       schema: "sublang.slc.clarification.v1",
       phase: "text2gears",
@@ -157,7 +161,7 @@ function runStep(step) {
     process.exit(2);
   }
   if (step === "block") {
-    phaseLines("gears2fsm");
+    await phaseLines("gears2fsm");
     progress("→ gears2fsm (writing " + base + ".playbook/" + base + ".fsm.ts)");
     setInterval(() => {}, 1000);
     return;
@@ -178,23 +182,26 @@ export function stubSlcSource(rolesLiteral = "['Helper']"): string {
  * A stub whose runs follow `steps` in order — the last step repeating —
  * counted in a `.stub-slc-runs` file beside the source, so one stub
  * fails twice and then passes without the test restarting it. A
- * `delayMs` keeps each run in flight long enough to be observed.
+ * `delayMs` keeps each run in flight long enough to be observed, and
+ * a `phaseDelayMs` holds every phase open that long, so a running
+ * phase can be watched (playbook-library-77).
  */
 export function stubSlcScriptedSource(
   steps: readonly StubSlcStep[],
   rolesLiteral = "['Helper']",
-  options: { delayMs?: number } = {},
+  options: { delayMs?: number; phaseDelayMs?: number } = {},
 ): string {
   return `
 const PHASES = ${JSON.stringify(SLC_PHASES)};
 const REQUIRED_ROLE_IDS = ${rolesLiteral};
 const ARTIFACT_SCHEMA = ${ARTIFACT_SCHEMAS[0]};
 const STEPS = ${JSON.stringify(steps)};
+const PHASE_DELAY_MS = ${options.phaseDelayMs ?? 0};
 ${STUB_RUNTIME}
 const counter = path.join(srcDir, ".stub-slc-runs");
 const run = fs.existsSync(counter) ? Number(fs.readFileSync(counter, "utf8")) : 0;
 fs.writeFileSync(counter, String(run + 1));
-setTimeout(() => runStep(STEPS[Math.min(run, STEPS.length - 1)]), ${options.delayMs ?? 0});
+setTimeout(() => { void runStep(STEPS[Math.min(run, STEPS.length - 1)]); }, ${options.delayMs ?? 0});
 `;
 }
 

@@ -139,9 +139,14 @@ export function fakeAdapterImports(
       });
       const sessionId = randomUUID();
       // `<id>` names the cwd's basename — the draft id — in paths,
-      // deltas, and the result, so one script serves any draft.
+      // deltas, tool inputs, and the result, so one script serves any
+      // draft.
       const id = options?.cwd ? basename(options.cwd) : "<id>";
       const named = (text: string): string => text.replaceAll("<id>", id);
+      const namedInput = (input: Record<string, unknown>): Record<string, unknown> =>
+        Object.fromEntries(
+          Object.entries(input).map(([key, value]) => [key, typeof value === "string" ? named(value) : value]),
+        );
       const picked = pick(script, prompt);
       const response: FakeResponse = {
         ...picked,
@@ -184,7 +189,7 @@ export function fakeAdapterImports(
           ...base,
           type: "tool_use",
           timestamp: Date.now(),
-          payload: { toolName: tool.toolName, toolUseId, input: tool.input },
+          payload: { toolName: tool.toolName, toolUseId, input: namedInput(tool.input) },
         };
         yield {
           ...base,

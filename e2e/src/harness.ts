@@ -29,13 +29,17 @@ import type {
 } from "@sublang/spex-core";
 import {
   DEMO_CONFIG,
-  demoAdapterImports,
+  authoringScript,
   demoCaptain,
+  demoScript,
   seedDemoHistory,
   seedDemoProject,
   seedHistorySession,
   interruptDemoSession,
   fakeAdapterImports,
+  stubSlcScriptedSource,
+  type FakeScript,
+  type StubSlcStep,
 } from "@sublang/spex-core/testing";
 import {
   startServer,
@@ -82,6 +86,72 @@ export interface AppOptions {
   governedCompletion?: boolean;
   /** Substitute task-free model discovery; never start installed providers. */
   discoverAgentModels?: NonNullable<ServerShellOptions["core"]>["discoverAgentModels"];
+  /**
+   * Playbook authoring (DR-058): a stub `slc` on the toolchain path
+   * — passing, failing once at gears2fsm and then passing, asking for
+   * clarification once and then passing, or blocking until canceled
+   * — and the authoring agent's script laid before the demo's, so
+   * sessions still draw the same run. The stub's entry declares the
+   * two roles the authoring source names, and each phase stays open
+   * `phaseDelayMs` so a running phase can be watched.
+   */
+  authoring?: {
+    script?: FakeScript;
+    slc?: "ok" | "fail:gears2fsm" | "clarify" | "block";
+    phaseDelayMs?: number;
+  };
+}
+
+/** The two roles the authoring source names (`AUTHORING_SOURCE`),
+ * as the stub's entry declares them. */
+const AUTHORING_ROLES = "['Triager', 'Verifier']";
+
+/** The stub's scripted runs per `authoring.slc`: the last step repeats. */
+const STUB_STEPS: Record<NonNullable<AppOptions["authoring"]>["slc"] & string, StubSlcStep[]> = {
+  ok: ["ok"],
+  "fail:gears2fsm": ["fail:gears2fsm", "ok"],
+  clarify: ["clarify", "ok"],
+  block: ["block"],
+};
+
+/** A prompt of the authoring runner (playbook-library-65): the
+ * preamble, a later turn's change line, a Boss or system origin, or
+ * the malformed-block notice. Session players never see these. */
+const AUTHORING_PROMPT = /^(You are helping the Boss|Since your last reply:|Boss: |Spex: |Spex could not read)/mu;
+
+/**
+ * The authoring script with its first reply and its relay reply held
+ * in flight `delayMs`: a journey then sees the source land before
+ * the turn ends, and a failed compile stand — its phase red, its line
+ * in the thread — before the relay's own compile replaces it.
+ */
+export function slowAuthoringScript(delayMs = 2500): FakeScript {
+  const script = authoringScript();
+  const slowed = (match: string | RegExp) =>
+    match === "Boss: I want" || String(match).includes("failed at");
+  return {
+    ...script,
+    rules: (script.rules ?? []).map((rule) =>
+      slowed(rule.match) ? { ...rule, response: { ...rule.response, delayMs } } : rule,
+    ),
+  };
+}
+
+/** The fake adapter's script: the demo narration alone, or the
+ * authoring rules first — their fallback answering every other
+ * authoring prompt — and the demo's rules and fallback behind them. */
+function adapterScript(options: AppOptions): FakeScript {
+  const demo = demoScript({ delayMs: options.agentDelayMs ?? 400 });
+  if (!options.authoring) return demo;
+  const author = options.authoring.script ?? authoringScript();
+  return {
+    rules: [
+      ...(author.rules ?? []),
+      ...(author.fallback ? [{ match: AUTHORING_PROMPT, response: author.fallback }] : []),
+      ...(demo.rules ?? []),
+    ],
+    ...(demo.fallback ? { fallback: demo.fallback } : {}),
+  };
 }
 
 /** Deliberately omits the demo's current model, exercising retained custom IDs. */
@@ -213,6 +283,11 @@ export interface App {
   server: RunningServer;
   /** Arrange-only protocol client on the running shell. */
   core: CoreClient;
+  /** A draft's library directory, where the agent writes `<id>.md`
+   * (playbook-library-70). */
+  draftDir(id: string): string;
+  /** The app preferences file's text, empty when none was written. */
+  readPrefs(): string;
   /** Stop the shell, keeping the root; `start` boots it again on the
    * same port so an open page's origin still reaches it. */
   stop(): Promise<void>;
@@ -252,11 +327,25 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
   const sharedSessionsDir = join(dataDir, "sessions");
   mkdirSync(sharedSessionsDir, { recursive: true, mode: 0o700 });
 
-  const env = options.env ?? {
+  const baseEnv = options.env ?? {
     ANTHROPIC_API_KEY: "e2e-fake",
     OPENAI_API_KEY: "e2e-fake",
     SPEX_HOME: dataDir,
   };
+  // The stub slc rides the toolchain path the core resolves
+  // (playbook-library-8): the running Node runs it, and stands in for
+  // the system Node the compile check probes.
+  let env = baseEnv;
+  if (options.authoring) {
+    const stubPath = join(scratch, "stub-slc.cjs");
+    writeFileSync(
+      stubPath,
+      stubSlcScriptedSource(STUB_STEPS[options.authoring.slc ?? "ok"], AUTHORING_ROLES, {
+        phaseDelayMs: options.authoring.phaseDelayMs ?? 800,
+      }),
+    );
+    env = { ...baseEnv, SPEX_SLC: `${process.execPath} ${stubPath}`, SPEX_NODE: process.execPath };
+  }
   const shellOptions: ServerShellOptions = {
     host: "127.0.0.1",
     port: 0,
@@ -275,7 +364,7 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
       : {
           adapterImports: options.realCaptain
             ? fakeAdapterImports({ fallback: { result: JSON.stringify({ action: "respond", text: "Acknowledged by the real Captain." }) } }).imports
-            : demoAdapterImports({ delayMs: options.agentDelayMs ?? 400 }).imports,
+            : fakeAdapterImports(adapterScript(options)).imports,
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
           ...(options.realCaptain ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
@@ -330,6 +419,13 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
     },
     readConfig() {
       return existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
+    },
+    draftDir(id) {
+      return join(dataDir, "playbooks", id);
+    },
+    readPrefs() {
+      const prefs = join(dataDir, "prefs.json");
+      return existsSync(prefs) ? readFileSync(prefs, "utf8") : "";
     },
   };
   if (options.project) {

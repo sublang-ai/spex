@@ -35,6 +35,15 @@ Results:
 
 const COMPILE_BLOCK = "```spex\nkind: compile\n```";
 
+/** A reply as an adapter streams it: the text in deltas — the prose,
+ * then any directive block — and the same text as the done result,
+ * so the transcript draws what the runner parses. */
+function streamed(result: string): { deltas: string[]; result: string } {
+  const at = result.indexOf("```spex");
+  const deltas = at > 0 ? [result.slice(0, at), result.slice(at)] : [result];
+  return { deltas, result };
+}
+
 export function registerBlock(players: Record<string, string>, command = "<id>", intent = "Triage a new issue into the repository's labels"): string {
   const lines = Object.entries(players).map(([role, player]) => `  ${role}: ${player}`);
   return ["```spex", "kind: register", `command: ${command}`, `intent: ${intent}`, "players:", ...lines, "```"].join("\n");
@@ -52,46 +61,37 @@ export function authoringScript(
     rules: [
       {
         match: "Conversation so far",
-        response: {
-          deltas: ["Picking up where we left off."],
-          result: "Picking up where we left off: the source on disk is the design we agreed on. Tell me what to change.",
-        },
+        response: streamed(
+          "Picking up where we left off: the source on disk is the design we agreed on. Tell me what to change.",
+        ),
       },
       {
         // A relayed failure: edit the source, ask for another compile.
         match: /(failed at|asks for clarification)/,
         response: {
-          deltas: ["Fixing the source."],
+          ...streamed(`The compiler rejected the duplicated result; I rewrote the \`Results:\` bullets. Asking for another compile.\n\n${COMPILE_BLOCK}`),
           writes: { "<id>.md": AUTHORING_SOURCE.replace("- `labeled`: the labels were applied.", "- `labeled`: every proposed label was applied.") },
           tools: [{ toolName: "Edit", input: { file_path: "<id>.md" }, output: "ok", durationMs: 120 }],
-          result: `The compiler rejected the duplicated result; I rewrote the \`Results:\` bullets. Asking for another compile.\n\n${COMPILE_BLOCK}`,
         },
       },
       {
         // The compile succeeded: propose the registration.
         match: "succeeded",
-        response: {
-          deltas: ["Registration proposal:"],
-          result: `Registration proposal:\n\n${registerBlock(players)}`,
-        },
+        response: streamed(`Registration proposal:\n\n${registerBlock(players)}`),
       },
       {
         // The first Boss message: write the source and ask to compile.
         match: "Boss: I want",
         response: {
-          deltas: ["Writing the source."],
+          ...streamed(`I wrote \`<id>.md\`: Triager proposes labels, Verifier applies all but security. Compiling now.\n\n${COMPILE_BLOCK}`),
           writes: { "<id>.md": AUTHORING_SOURCE },
           tools: [
             { toolName: "Read", input: { file_path: "reference/sdlc/review.md" }, output: "…", durationMs: 80 },
             { toolName: "Write", input: { file_path: "<id>.md" }, output: "ok", durationMs: 140 },
           ],
-          result: `I wrote \`<id>.md\`: Triager proposes labels, Verifier applies all but security. Compiling now.\n\n${COMPILE_BLOCK}`,
         },
       },
     ],
-    fallback: {
-      deltas: ["Noted."],
-      result: "Noted. Say the word and I will compile.",
-    },
+    fallback: streamed("Noted. Say the word and I will compile."),
   };
 }
