@@ -23,6 +23,7 @@ import { CoreService } from "@sublang/spex-core";
 
 import { captureLoginShellEnv, mergeEnv } from "./shell-env.js";
 import { notificationFor } from "./notifications.js";
+import { resolveRevealTarget } from "./reveal-path.js";
 
 let service: CoreService | undefined;
 let window: BrowserWindow | undefined;
@@ -170,13 +171,23 @@ async function main(): Promise<void> {
     }
   };
 
-  // Native bridge (DR-008): OS pickers only, one invoke channel.
+  // Native bridge (DR-008): OS affordances only, one invoke channel
+  // each — the directory picker, and the path reveal (DR-057).
   ipcMain.handle("spex:pick-directory", async () => {
     if (!window) return null;
     const result = await dialog.showOpenDialog(window, {
       properties: ["openDirectory", "createDirectory"],
     });
     return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+  // A reveal shows a path in the OS file manager and changes no state
+  // (app-shell-28, space-36): only a path resolving inside the state
+  // root the core was started with is shown; anything else is false.
+  ipcMain.handle("spex:reveal-path", async (_event, requested: unknown) => {
+    const target = resolveRevealTarget(dataDir, requested);
+    if (!target) return false;
+    shell.showItemInFolder(target);
+    return true;
   });
 
   window = new BrowserWindow({

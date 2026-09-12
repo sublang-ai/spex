@@ -9,4 +9,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("spexNative", {
   /** Open the native directory picker; absolute path or null. */
   pickDirectory: () => ipcRenderer.invoke("spex:pick-directory"),
+  /** Reveal a state-root path in the OS file manager (DR-057,
+   * space-36): true when shown, false for a path outside the root. */
+  revealPath: (path) => ipcRenderer.invoke("spex:reveal-path", path),
 });
