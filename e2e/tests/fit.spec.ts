@@ -35,7 +35,16 @@ import {
 // the Dashboard's History band draws rows — with their screen-reader
 // marks — below the fold, where a box that fails to contain them
 // stretches the page.
-test.use({ appOptions: { project: true, history: 25, agentDelayMs: 4000 } });
+test.use({
+  appOptions: {
+    project: true,
+    history: 25,
+    agentDelayMs: 4000,
+    // A draft compiled by the passing stub, measured idle at its
+    // proposal (DR-058).
+    authoring: { slc: "ok" },
+  },
+});
 
 /** An unbroken token longer than any pane (run-view-3): it rides the
  * task into the Boss bubble, the coder's prompt, and the tab and row
@@ -197,6 +206,28 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
       name: "Playbooks",
       show: () => nav(page, "Playbooks").click(),
       ready: () => expect(page.getByTestId("builtins-section")).toBeVisible(),
+    },
+    {
+      // The authoring workspace at rest after a compile: the thread
+      // with its cards, the band with every phase done, the source,
+      // and the compiled tabs enabled (playbook-library-52).
+      name: "Playbook draft",
+      show: async () => {
+        const idField = page.getByTestId("new-playbook-id");
+        await idField.fill("triage");
+        await idField.press("Enter");
+        await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+        await page.getByTestId("draft-composer").fill("I want a playbook that triages new issues into labels.");
+        await page.getByTestId("draft-send").click();
+        await expect(
+          page.locator('[data-testid="directive-card"][data-kind="register"]'),
+        ).toBeVisible({ timeout: 45_000 });
+        await expect(page.getByTestId("draft-working")).toHaveCount(0);
+      },
+      ready: async () => {
+        await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+        await expect(page.getByTestId("draft-chip")).toContainText("Compiled");
+      },
     },
     {
       name: "Settings",

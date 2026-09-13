@@ -5,7 +5,7 @@
 
 ## Intent
 
-This spec covers the Spex Library surface — presented to the user as **Playbooks** — across its user-visible behavior, the implementation behind it, and the integration coverage that verifies it: browsing and enabling configured playbooks, mapping playbook roles to player agents, and compiling new playbooks, backed by compile execution, registry generation, and shared-config writes.
+This spec covers the Spex Library surface — presented to the user as **Playbooks** — across its user-visible behavior, the implementation behind it, and the integration coverage that verifies it: browsing and enabling configured playbooks, mapping playbook roles to player agents, and authoring new playbooks as drafts in a chat-assisted workspace that compiles and registers them, backed by an authoring conversation runner, a draft store, compile execution, registry generation, and shared-config writes.
 Playbook entries live in the shared playbook config file, which remains the source of truth under its fail-closed validation rules; compilation runs the external `slc` toolchain with its Node.js version floor and compiled outputs.
 Verification requires integration coverage of the Library surface's compile, registration, and shared-config write paths, where correctness spans the external `slc` process, generated registry artifacts, and the shared config file.
 
@@ -58,9 +58,9 @@ Where a role's bound player is named by more than one binding, the Library shall
 
 #### playbook-library-5
 
-When the user starts the compile flow, the Library shall accept the playbook source as either a picked markdown file or in-app markdown text, and shall require the playbook's role names before compilation starts:
+When the Boss opens the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], the Library shall accept the playbook source as either a picked markdown file or in-app markdown text and write it as the draft's `<id>.md`:
 
-- A role name that does not match `^[a-z][a-z0-9_-]*$` is rejected before compilation starts.
+- An empty text and no file is refused before anything is written.
 
 #### playbook-library-6
 
@@ -68,7 +68,7 @@ While a compile is running, the Library shall display each phase of the compile 
 
 #### playbook-library-7
 
-When the compile pipeline succeeds, the Library shall present a registry form with fields for command, intent, and summary policy, prefilled where derivable from the playbook source and compiled output, and shall resolve each submission of the form by the cases below:
+When a draft's compile succeeds, the Library shall present the Register tab [[playbook-library-61](#playbook-library-61)] as the registry form with fields for command and intent and a player per derived role, prefilled where derivable from the playbook source and compiled output, and shall resolve each submission of the form by the cases below:
 
 - Submission passes registry validation [[playbook-library-15](#playbook-library-15)]: the Library registers the playbook by writing its entry — including a role binding per required role [[playbook-library-4](#playbook-library-4)], with any player the submission names but the roster lacks written first — into the shared config's `playbooks` map.
 - Submission rejected: the rejection names the violated rule and causes no config write.
@@ -84,6 +84,126 @@ While a compile is running, when a pipeline phase fails, the Library shall mark 
 #### playbook-library-10
 
 When a compiled playbook is registered, the Library shall list it with its registry fields and enabled state, and shall indicate that project sessions started before registration must be restarted before the playbook is available in them.
+
+### Authoring Workspace
+
+#### playbook-library-50
+
+When the Library surface is opened, the Library shall list every draft [[playbook-library-70](#playbook-library-70)] in a "Drafts" section between the configured playbooks and the built-ins [[playbook-library-34](#playbook-library-34)], each row carrying the draft's id, its state chip, the age of its last activity, and an "Open" control ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+
+- the chip reads "No source", "Draft", "Compiling", "Failed", "Interrupted", "Compiled", or "Changed" — the failed phase and the compile's age in its title, never in the chip ([DR-041](../decisions/041-chrome-that-fits.md) §9);
+- a draft whose library directory is gone reads "Source missing" and offers only Delete;
+- a draft compiling in the background keeps its row live, and opening it shows the running phases;
+- the section is absent while there is no draft, and the configured list's empty state then points at enabling a built-in or "New playbook".
+
+#### playbook-library-51
+
+When the user activates "New playbook" — at the Drafts section's foot, or from the Captain home's slash menu ([DR-009](../decisions/009-at-hand-interaction.md)) — the Library shall ask for the playbook id in an inline field captioned "Lowercase; it names the file and the /command — the command can change at registration", create the draft [[playbook-library-70](#playbook-library-70)] on Enter, and open its workspace [[playbook-library-52](#playbook-library-52)]:
+
+- an id outside `^[a-z][a-z0-9_-]*$`, or one a configured playbook or a built-in holds, is refused in place naming the rule, and nothing is created;
+- an id naming an existing draft opens that draft;
+- an existing `playbooks/<id>/<id>.md` with no draft record becomes the new draft's source, so a removed playbook's retained source can be worked again.
+
+#### playbook-library-52
+
+When a draft is opened, the Library shall replace the playbook list with the authoring workspace: a header carrying a "Playbooks" control that returns to the list without ending anything, the draft's id, and its state chip [[playbook-library-50](#playbook-library-50)]; the conversation pane on the left [[playbook-library-53](#playbook-library-53)]; and on the right a pane whose tab strip reads Source / Gears / Machine / Register with the Compile control at the strip's right end [[playbook-library-57](#playbook-library-57)] ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+
+- the panes stand side by side with the house divider between them from the `@2xl` container step ([DR-030](../decisions/030-workspace-chrome.md)) and stack — conversation above, artifacts below — beneath it, the divider then turning into the horizontal grip between the two boxes ([DR-041](../decisions/041-chrome-that-fits.md) §9); each pane scrolls inside its own box and the page scrolls in neither direction;
+- the side-by-side split and the stacked split are app preferences remembered across launches;
+- the tab strip wraps, and below `@xs` its tabs collapse to icon plus tooltip with their accessible names unchanged; every control in the header, the tab strip, the compile band, and the composer's action row reads at most 14 characters, its busy form included;
+- the workspace stays open in the core while the list is shown, so returning loses nothing.
+
+#### playbook-library-53
+
+While a draft's workspace is open, the conversation pane shall render the draft's transcript in record order — the Boss's messages as Boss bubbles, the system's lines as ◇ system lines [[run-view-1](run-view.md#run-view-1)], the agent's text as streaming Markdown [[run-view-3](run-view.md#run-view-3)], its tool calls as collapsed cards labeled with the tool and its subject [[run-view-4](run-view.md#run-view-4)], its thinking collapsed, and its failures as failure lines — and shall render a directive block in the agent's reply as a card, never as fence text:
+
+- the cards read "Asked to compile" and "Proposed registration", the latter listing command, intent, and role → player with "Open Register";
+- a malformed directive stays visible as code with a "Spex could not read this block" caption;
+- while a turn runs the pane's header shows the running mark and "working · ⟨elapsed⟩" ticking each second ([DR-010](../decisions/010-interface-craft.md) §5);
+- the pane sticks to its bottom with the jump pill, and mounts only the entries near the viewport.
+
+#### playbook-library-54
+
+While a draft's workspace is open, the composer beneath the conversation — of the house shape [[run-view-106](run-view.md#run-view-106)] with the placeholder "Describe the playbook…" and the caption "Enter sends" — shall dispatch or queue each Boss submission by the draft's published state [[core-service-96](core-service.md#core-service-96)]:
+
+- while the draft is idle a submission dispatches, the primary reading "Send";
+- while a turn or a compile runs a submission queues with the queued indicator, the primary reading "Send next" and the placeholder "Sends after the reply…" or "Sends after the compile…", and the queue dispatches in order when the draft is idle [[playbook-library-68](#playbook-library-68)];
+- "Abort" stands in the action row while a turn runs and ends it, leaving the transcript as far as it got; a canceled turn leaves the queue standing;
+- a refused dispatch keeps the text with the refusal shown; the composer's draft and the queue survive leaving and reopening the workspace while the app runs;
+- an empty transcript shows one caption above the composer: "Tell the agent what the playbook does, who does what, and when it is done" with three starter chips — "Describe a workflow", "Adapt a SKILL.md", "Show me an example" — each placing its text in the field without sending.
+
+#### playbook-library-55
+
+While a draft's workspace is open, the conversation pane's header shall name the agent that answers as an agent chip — "Captain" with the Captain's block [[settings-1](settings.md#settings-1)] by default, else the chosen roster player's id with its block [[settings-26](settings.md#settings-26)] — wearing that adapter's readiness [[core-service-9](core-service.md#core-service-9)], the chip opening a picker of "Captain" and every roster player whose choice is stored as the preference `draft:<id>:player` [[storage-5](storage.md#storage-5)] ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+
+- the picker follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) and is disabled while a turn runs, its tooltip saying so;
+- a not-ready agent disables Send with the unmet requirement in the caption;
+- a switch applies to the next turn, which starts a fresh provider conversation from the transcript [[playbook-library-65](#playbook-library-65)], and a system line says so: "Now answering: dev.reviewer — the conversation so far was replayed to it".
+
+#### playbook-library-56
+
+While a draft's workspace is open, the Source tab shall render the draft's `<id>.md` as formatted markdown [[playbook-library-22](#playbook-library-22)] as it stands on disk — refreshed on every source message [[playbook-library-71](#playbook-library-71)], so text appears while the agent writes — captioned with who changed it last and when, and shall offer "Edit" and "Paste":
+
+- with no source the tab says the agent writes `<id>.md` here as you talk and offers "Paste";
+- "Edit" opens the whole file in the plain-text editor idiom — Cancel, Save, Edit/Preview [[spec-view-48](spec-view.md#spec-view-48)] — whose Save writes under the version token it read and treats a changed file as a conflict offering Reload or Overwrite [[spec-view-50](spec-view.md#spec-view-50)];
+- "Paste" opens the paste mode — a text field, a "Pick file" control, "Use as source", Cancel [[playbook-library-5](#playbook-library-5)];
+- Save and "Use as source" are disabled while a turn runs ("Waits for the reply") and while a compile runs ("Compiling"), because the agent may be editing the same file;
+- a source whose digest differs from the last successful compile's marks the chip "Changed" and captions Gears and Machine "from the compile before this change"; the tab wears a dot while the source changed since the last compile.
+
+#### playbook-library-57
+
+While a draft is idle and has a source, when the Boss activates Compile or the agent's reply carries a compile directive [[playbook-library-66](#playbook-library-66)], the Library shall start the draft's compile [[playbook-library-67](#playbook-library-67)] and show it in the band under the tab strip: a phase row, the age of the compiler's last line, a folded log, and Cancel [[playbook-library-27](#playbook-library-27)]:
+
+- Compile is enabled only with a source, no turn, no compile, and a resolvable toolchain [[playbook-library-8](#playbook-library-8)]; disabled, its tooltip names the reason — "No source yet", "Waits for the reply", "Compiling", or the toolchain guidance; it reads "Compiling…" and stays disabled for the compile's duration;
+- the phase row names the pipeline's phases in human words [[playbook-library-6](#playbook-library-6)] — Normalize, Spec items, Optimize, Machine, Link, Package — the compiler's ids in the tooltips ([DR-010](../decisions/010-interface-craft.md) §2), each waiting, running with its elapsed time, done with its duration, or failed, and a phase the compiler names that the row lacks is appended;
+- "last output ⟨age⟩ ago" ticks beside the running phase from the compiler's last line, heartbeat included, so a silent agent-driven phase reads as alive rather than stuck ([DR-010](../decisions/010-interface-craft.md) §5);
+- the band's caption names who started it — "asked by you" or "asked by the agent" — and a system line in the thread says the same;
+- the row wraps under `@md` and the band keeps the Source, Gears, and Machine tabs readable beneath it.
+
+#### playbook-library-58
+
+While a draft's compile is running, when a phase fails or the compiler asks for clarification [[playbook-library-9](#playbook-library-9)], the Library shall mark that phase failed in the band with its captured output — or the questions with their reasons, evidence, and choices — opened beneath, set the chip "Failed", and show in the thread what the agent was told [[playbook-library-68](#playbook-library-68)]:
+
+- the system line reads "Compile failed at ⟨phase⟩ — sent to the agent", or "Compile failed at ⟨phase⟩ — three in a row; tell the agent how to proceed" when the relay stopped, or "Compile failed at ⟨phase⟩ — waiting for your queued message" when a Boss message carries the output instead — ⟨phase⟩ in the row's human words [[playbook-library-57](#playbook-library-57)];
+- a compile the Boss canceled reads "Compile canceled" and sends nothing;
+- a failure before the compiler ran — the toolchain — shows its guidance in the band and sends nothing;
+- Gears and Machine keep the last successful compile's artifacts, captioned "from the last good compile".
+
+#### playbook-library-59
+
+When a draft's workspace is opened after the core stopped while its compile was running, the Library shall show the chip "Interrupted", the band reading "Compile interrupted when Spex closed" with Compile enabled, and shall relay nothing to the agent, so a compile cut by a restart is restarted by a person ([DR-010](../decisions/010-interface-craft.md) §5).
+
+#### playbook-library-60
+
+When a draft's compile succeeds, the Library shall set the chip "Compiled", fill the Gears tab as the outline's read-only item rows over the parsed gears and the Machine tab as the FSM code under its pinned state list, each in the stage box idiom [[playbook-library-22](#playbook-library-22)] over the draft's artifacts [[playbook-library-24](#playbook-library-24)], enable the Register tab with a dot, and append the system line "Compiled — roles: ⟨roles⟩":
+
+- before a successful compile the Gears, Machine, and Register tabs stand disabled with "Compiles first" in their tooltips;
+- the derived roles are the compiled entry's, never the prose's;
+- the dot on Register stays until the tab is opened after the agent's proposal lands [[playbook-library-68](#playbook-library-68)].
+
+#### playbook-library-61
+
+While a draft's last compile succeeded, the Register tab shall present the registration form [[playbook-library-7](#playbook-library-7)] — command, intent, and one player per derived role — prefilled in this precedence: the Boss's own edits, then the agent's latest proposal [[playbook-library-66](#playbook-library-66)], then derived defaults — and on "Register" shall register the draft [[playbook-library-69](#playbook-library-69)] ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+
+- the id is the draft's and not editable; the command defaults to the id; the intent defaults to the source's first prose paragraph;
+- a role's player row offers the roster [[settings-26](settings.md#settings-26)] and "New player dev.⟨role⟩" carrying the draft's agent block, editable through the agent editor as a built-in's is [[playbook-library-34](#playbook-library-34)]; a proposed player the roster lacks is offered as that new player;
+- a proposal naming a role the entry lacks, or missing a derived role, is shown beside the form as a mismatch with the derived roles authoritative;
+- Register is disabled until every role has a player and command and intent are non-empty, reads "Registering…" while it writes, and is refused while a turn or compile runs;
+- a refusal names the violated rule inline and leaves the form standing; success lists the playbook among the configured [[playbook-library-10](#playbook-library-10)], the draft leaves the Drafts section, and the list opens with the new card in view.
+
+#### playbook-library-62
+
+When a draft's workspace is opened — in the same run or after a restart — the Library shall restore its transcript from the stored records, its source, its queue, its last compile's outcome with the phase output or questions, its compiled tabs where a successful compile is recorded, and its proposal [[playbook-library-70](#playbook-library-70)], so a failed compile is resumed where it stopped ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+
+- the next message continues the conversation as one thread to the Boss, whatever the provider's own continuity did [[playbook-library-65](#playbook-library-65)];
+- a draft whose transcript is unreadable opens with the source intact and a scoped diagnostic in place of the thread.
+
+#### playbook-library-63
+
+When the Boss activates a draft row's Delete, the Library shall ask with the inline confirm — "Delete" and "Keep", the safe default focused [[playbook-library-26](#playbook-library-26)] — and on Delete remove the draft: its record, transcript, preference, and library directory [[playbook-library-70](#playbook-library-70)]:
+
+- Delete is refused while the draft's turn or compile runs, naming which ([DR-010](../decisions/010-interface-craft.md) §4);
+- a registered playbook is never a draft and is never removed by this control.
 
 ### Pipeline Artifacts
 
@@ -126,7 +246,7 @@ When the core package derives the current Library playbook's artifacts from its 
 
 #### playbook-library-26
 
-The Library surface shall be presented to the user as "Playbooks": the navigation entry and the surface's user-facing copy shall say "Playbooks" or "playbook", reserving the word "library" for the on-disk compiled-artifact store, and shall name actions by their outcome — a built-in is enabled, a configured playbook is removed behind a confirm whose choices read "Remove" and "Keep" — never by the config write behind them ([DR-010](../decisions/010-interface-craft.md) §2).
+The Library surface shall be presented to the user as "Playbooks": the navigation entry and the surface's user-facing copy shall say "Playbooks" or "playbook", reserving the word "library" for the on-disk compiled-artifact store, and shall name actions by their outcome — a built-in is enabled, a configured playbook is removed behind a confirm whose choices read "Remove" and "Keep", a draft is deleted behind a confirm whose choices read "Delete" and "Keep", and the creation control reads "New playbook" — never by the config write behind them ([DR-010](../decisions/010-interface-craft.md) §2).
 
 #### playbook-library-29
 
@@ -152,7 +272,7 @@ While `dev` is listed as configured and `branch` or `pr` is not, the Library sha
 
 #### playbook-library-35
 
-When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that fills the compile form with the example's normalized text and judgment fields — giving each of the example's roles the default agent block — without starting a compile:
+When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that opens a new draft workspace [[playbook-library-51](#playbook-library-51)] with the example's normalized text placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], without writing or compiling anything:
 
 - Sources and gears served for display drop their leading maintainer comment headers.
 
@@ -235,6 +355,106 @@ When playbook loading imports a config `from` module that is a file path, and th
 
 When the config writer updates the shared config file — enabled state [[playbook-library-3](#playbook-library-3)], role-binding edits [[playbook-library-4](#playbook-library-4)], or registration [[playbook-library-7](#playbook-library-7)] — it shall preserve comments, key order, and formatting of untouched content byte-for-byte, shall modify only the targeted keys, and shall replace the file atomically so an interrupted write cannot leave a partially written config.
 
+### Authoring Conversation
+
+#### playbook-library-64
+
+When a draft turn starts, the conversation runner shall run the draft's agent block — the Captain's, or the preferred roster player's [[storage-5](storage.md#storage-5)] — through cligent directly, outside the Captain shell, loading the adapter class through the same adapter-import table the session runtime uses, with these options and no others ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+
+| Option | Value |
+| --- | --- |
+| model, effort, fastMode | the block's |
+| cwd | the draft directory `<library-root>/<id>/` [[playbook-library-12](#playbook-library-12)] |
+| permissions | `{ mode: "auto" }` — the block's own policy and `writablePaths` dropped |
+| allowedTools, disallowedTools, maxTurns | absent |
+| resume | the token the previous turn of this run returned, when the agent is unchanged; else none |
+| abortSignal | the turn's, tripped by Abort |
+
+- the block's `instruction` is not carried; the prompt composition carries everything [[playbook-library-65](#playbook-library-65)];
+- no instance outlives the turn ([DR-051](../decisions/051-runtime-held-for-a-turn.md)); the token is held in memory for the app's run and never written;
+- a run ending in an error coded `SESSION_RESUME_REJECTED` is re-run once as a reseed;
+- a `permission_request` event is recorded and shown as a failure line; the runner answers nothing, so the adapter's own headless default applies;
+- the turn is recorded and streamed as `turn_started` carrying the Boss or system text, `player_prompt` with the exact prompt, one `player_event` per event, `player_finished`, and `turn_finished` or `turn_aborted`, every player record naming the player `author`, so the run view's transcript folds read them unchanged [[playbook-library-70](#playbook-library-70)].
+
+#### playbook-library-65
+
+When the conversation runner composes a turn's prompt, it shall compose it by the conversation's case, the file on disk always being the source of truth:
+
+| Case | Prompt |
+| --- | --- |
+| First turn of a provider conversation | the preamble, the shape of a source, the shipped documents by path, the six-line demo, the directive protocol, the working rules, the draft state, then `Boss:` and the message |
+| Later turn of the same provider conversation | a `Since your last reply:` line when the draft changed since the last prompt — the Boss edited or replaced the source, a compile settled — then `Boss:` and the message |
+| Reseed — a restart, a switched agent, a rejected resume | as the first turn, with `Conversation so far:` holding the Boss, system, and agent final texts in order, oldest dropped past 24 KB, before the message |
+| Relay | the failed phase, its elapsed time, the last 200 lines of its output — or the clarification questions with reason, evidence, and choices — then "Fix `<id>.md` and explain the cause; you may ask for another compile" as a system-origin message |
+| Success | "The compile succeeded; the roles are ⟨roles⟩. Propose the registration in a register block" as a system-origin message |
+
+- the preamble names the absolute source path, tells the agent to write and edit only that file, never to run the compiler, git, or npm, and to ask at most one question per reply when the answer changes the roles or the ending;
+- the shape of a source is at most twenty lines: an H1, a `Roles:` list of capitalized unique names, behaviors as `When ⟨condition⟩, Captain shall prompt ⟨Role⟩:` with blockquoted prompts one point per line or a fenced `markdown` instruction block, runtime values relayed in quotes (`>`) as `<placeholders>`, `Results:` bullets only for several outcomes or a consumed value with `<field>: <verbatim final text>` for a relayed whole reply, nested calls as ``Captain shall call playbook `id`:``, at most two or three roles;
+- the documents are the installed package's `slc/text2gears.md`, `reference/sdlc/review.md`, `reference/sdlc/code.md`, and `reference/sdlc/review.playbook/review.gears.md`, resolved from the package the core depends on;
+- the draft state names the id, the source path or "none", the last compile's outcome, and the roster players with adapter and model; a malformed directive from the previous reply is named at the head of the prompt, before anything else;
+- a queued Boss message dispatched after a compile settled carries the relay or success text as its preface instead of a separate turn [[playbook-library-68](#playbook-library-68)].
+
+#### playbook-library-66
+
+When a draft turn ends with status success, the conversation runner shall parse every top-level fenced ```` ```spex ```` block of the reply's final text — the done result, else the concatenated text — as YAML with a `kind` key, act on the last block of each kind, and record each block as a directive:
+
+| `kind` | Keys | Effect |
+| --- | --- | --- |
+| `compile` | none | starts the draft's compile when Compile would be enabled [[playbook-library-57](#playbook-library-57)], else records a system line naming why not |
+| `register` | `command`, `intent`, `players: {⟨Role⟩: ⟨player id⟩}` | replaces the draft's proposal [[playbook-library-61](#playbook-library-61)]; a role the compiled entry lacks is kept as a mismatch |
+
+- a fence opened inside another fence is content, not a directive; a block missing a key, carrying an unknown key or kind, or failing to parse is left as code, recorded as malformed, and named in the next prompt [[playbook-library-65](#playbook-library-65)];
+- a turn ended by Abort or an error acts on nothing.
+
+#### playbook-library-67
+
+When a draft's compile starts, the compile runner shall run the pipeline on the `<id>.md` already in the draft directory [[playbook-library-12](#playbook-library-12)] — copying nothing, packaging and validating the entry with the draft's id as command and a placeholder intent [[playbook-library-14](#playbook-library-14)] [[playbook-library-15](#playbook-library-15)] — as that id's one compile [[core-service-96](core-service.md#core-service-96)], write no config, and record the outcome on the draft [[playbook-library-70](#playbook-library-70)]:
+
+- progress lines broadcast as compile progress for the draft id; the failed phase is the last `✗` line's phase, else the phase the compiler left open when it exited (`slc` when none was), "packaging" for a failure after the compiler finished, and the toolchain for a failure before it ran;
+- an exit status 2 with an `SLC_CLARIFICATION:` line records the report's questions;
+- success records the derived roles and the source's SHA-256, from which the "Changed" state derives.
+
+#### playbook-library-68
+
+When a draft's compile settles, the conversation runner shall start the follow-up by outcome, a queued Boss message always dispatching first and carrying the follow-up text as its preface [[playbook-library-65](#playbook-library-65)]:
+
+| Outcome | Follow-up |
+| --- | --- |
+| Failed phase or clarification | a relay turn — unless the last three compiles failed with no Boss message between them, or the compile was canceled or failed before the compiler ran |
+| Success | one success turn asking for the registration proposal |
+| Canceled, interrupted, toolchain | none |
+
+- a Boss message resets the consecutive-failure count; the count and the queue persist on the draft.
+
+#### playbook-library-69
+
+When a draft is registered, the registration path shall re-package the retained compiler outputs with the confirmed command and intent without rerunning the compiler [[playbook-library-14](#playbook-library-14)], write any player the submission names but the roster lacks first, then write the `playbooks.<id>` entry re-keyed onto the derived role ids [[playbook-library-32](#playbook-library-32)] through the config writer [[playbook-library-16](#playbook-library-16)], reload the config, and retire the draft [[playbook-library-70](#playbook-library-70)]:
+
+- the one-shot `compile.run` is a draft-style compile followed by this same path in one reply, so both share one helper;
+- a refused write leaves the draft standing with its artifacts, so a corrected submission registers without recompiling.
+
+### Draft Store
+
+#### playbook-library-70
+
+When a draft is created, opened, written, recorded, listed, retired, or deleted, the draft store shall keep the source under the tracked library directory [[storage-8](storage.md#storage-8)] and the draft's state, queue, and transcript under the ignored draft record [[storage-1](storage.md#storage-1)] [[storage-23](storage.md#storage-23)], written atomically or appended under the home lease [[storage-14](storage.md#storage-14)]:
+
+| Case | Behavior |
+| --- | --- |
+| create | make `<library-root>/<id>/` and `local/drafts/<id>/draft.json`; refuse an id a configured playbook, a built-in, or a draft holds |
+| open | serve the state, the source with its version token, and the stored records after a given sequence, then stream new ones |
+| write source | replace `<id>.md` atomically under the token; refused while a turn or compile runs |
+| record | append each record as it is streamed; keep the compile outcome, the queue, the failure count, and the proposal in `draft.json`; a compile running at core start is rewritten as interrupted |
+| list | every `draft.json` under `local/drafts/`, with the source's first line and "source missing" when the directory is gone |
+| retire | remove the record and the preference, leaving the directory to the registered playbook |
+| delete | remove the record, the preference, and the library directory |
+
+- an unreadable record or transcript is a scoped diagnostic that blocks that draft alone.
+
+#### playbook-library-71
+
+When the conversation runner observes a `tool_result` event or the turn ends, it shall read `<id>.md`, and when its digest differs from the last one streamed, broadcast the source with its version token to every client, so the Source tab follows the agent's writes at tool-call granularity [[playbook-library-56](#playbook-library-56)].
+
 ## Verification
 
 ### Compile Coverage
@@ -304,6 +524,28 @@ While a compile driven through the app store is running, the test suite shall as
 
 Where the shared config state is missing or invalid, the test suite shall assert that the Library renders the config gate — the Captain-scope explanation and the fix-it-in-Settings direction [[playbook-library-28](#playbook-library-28)] — with "Settings" as an activatable navigation control when a navigation callback is supplied and as plain text when it is not, and that no playbook list or compile form is rendered.
 
+### Authoring Coverage
+
+#### playbook-library-72
+
+Where the core runs with the scripted fake adapter — its first reply writing a `Roles:`-led `<id>.md` into its working directory and ending in a compile block, its next reply a register block — and a stub `slc` on the toolchain path emitting a two-role entry, when a draft is created and one message sent over the protocol, the test suite shall assert that the fake ran with the draft directory as `cwd`, `{ mode: "auto" }` as its permissions, no tool lists, and no resume [[playbook-library-64](#playbook-library-64)]; that the prompt carried the source path, the four document paths, and both directive kinds [[playbook-library-65](#playbook-library-65)]; that the records streamed as `author` player records and a Boss turn [[playbook-library-64](#playbook-library-64)]; that the source broadcast after the write [[playbook-library-71](#playbook-library-71)]; that a compile started without a further command, its progress lines streamed, and no config write occurred [[playbook-library-66](#playbook-library-66)] [[playbook-library-67](#playbook-library-67)]; that the success turn's prompt named the roles and the proposal landed with the block's fields [[playbook-library-68](#playbook-library-68)] [[playbook-library-66](#playbook-library-66)]; and that `draft.register` wrote the new player first, then `playbooks.<id>` keyed by the derived roles with the confirmed command and intent in the wrapper, after which the draft is gone from the list and the playbook is configured [[playbook-library-69](#playbook-library-69)] [[playbook-library-70](#playbook-library-70)].
+
+#### playbook-library-73
+
+Where the stub `slc` fails at `gears2fsm` on its first two runs and exits 2 with a `SLC_CLARIFICATION:` report on the third, and the fake replies with a compile block on every relay, when a draft compile is started, the test suite shall assert that each failure recorded the phase and output [[playbook-library-67](#playbook-library-67)]; that a relay turn followed each of the first two with the phase, elapsed time, and output tail in its prompt, and the third carried the questions with reasons and choices [[playbook-library-65](#playbook-library-65)] [[playbook-library-68](#playbook-library-68)]; that after the third failure no turn started and the draft's state says so [[playbook-library-68](#playbook-library-68)]; that a Boss message reset the count and the next failure relayed again [[playbook-library-68](#playbook-library-68)]; that a `draft.send` queued during a compile dispatched before any relay with the failure as its preface [[playbook-library-65](#playbook-library-65)]; and that no config write occurred throughout [[playbook-library-67](#playbook-library-67)].
+
+#### playbook-library-74
+
+Where the fake's run stays in flight until aborted and the compile spawner blocks until canceled, the test suite shall assert as an explicit matrix that `draft.send` during a turn and during a compile reply queued, `draft.compile` and `draft.delete` and `draft.register` during a turn reply `busy`, `draft.source.write` during a turn and a compile is refused, a second `draft.compile` during a compile replies `busy`, `draft.abort` ends the turn with an aborted record and leaves the queue standing, `compile.abort` cancels the draft compile with the canceled line last and no relay, and the queued message dispatched once the draft was idle [[playbook-library-64](#playbook-library-64)] [[playbook-library-67](#playbook-library-67)] [[playbook-library-68](#playbook-library-68)] [[playbook-library-70](#playbook-library-70)].
+
+#### playbook-library-75
+
+Where a draft holds two turns and a compile was running, when the core is stopped and restarted and the draft reopened, the test suite shall assert that the records replay in sequence and the compile reads interrupted with no relay [[playbook-library-70](#playbook-library-70)]; that the next turn's prompt is a reseed carrying the conversation so far and no resume [[playbook-library-65](#playbook-library-65)] [[playbook-library-64](#playbook-library-64)]; that within one run the second turn passed the first's token as `resume` [[playbook-library-64](#playbook-library-64)]; that `draft.player.set` wrote `draft:<id>:player` to the preferences and the next run used that player's block with a reseed [[playbook-library-64](#playbook-library-64)] [[playbook-library-65](#playbook-library-65)]; that a draft whose transcript is damaged opens after a restart with its source and a diagnostic in place of its records and refuses a message [[playbook-library-70](#playbook-library-70)]; and that `draft.delete` removed the record, the preference, and the directory [[playbook-library-70](#playbook-library-70)].
+
+#### playbook-library-76
+
+Where the fake's reply carries, as an explicit case matrix, a block inside a fenced example, two register blocks, a block with an unknown key, a block that fails to parse, and a register block naming a role the entry lacks, the test suite shall assert that only the second register block became the proposal, the nested block acted as nothing, the malformed blocks were recorded malformed and named at the head of the next prompt, and the unknown role stood as a mismatch beside the derived roles [[playbook-library-66](#playbook-library-66)] [[playbook-library-65](#playbook-library-65)].
+
 ### Browser Journeys
 
 #### playbook-library-41
@@ -322,3 +564,25 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### playbook-library-47
 
 When the integration suite copies a registered library to a differently located Spex root, it shall verify config-relative module and artifact resolution, retained sources and successful local rebuilding or an explicit unavailable result [[playbook-library-46](#playbook-library-46)].
+
+#### playbook-library-77
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the authoring fake script and the stub `slc` on the toolchain path, when the journey works a new playbook through the page, the test suite shall assert:
+
+- "New playbook" asks for the id inline, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the starter chips, and a Drafts row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-54](#playbook-library-54)] [[playbook-library-50](#playbook-library-50)];
+- a sent message stands as a Boss bubble, the agent's write as a tool card, its compile block as the "Asked to compile" card, and the Source tab shows the written markdown before the turn ends [[playbook-library-53](#playbook-library-53)] [[playbook-library-56](#playbook-library-56)];
+- the band lists the phases in human words with the running one's output age, "asked by the agent", and Cancel [[playbook-library-57](#playbook-library-57)];
+- a failing stub leaves a red phase with its output open, a "sent to the agent" system line, and the compiled tabs still disabled, then a second compile turns the chip "Compiled" with Gears rows and the Machine state list [[playbook-library-58](#playbook-library-58)] [[playbook-library-60](#playbook-library-60)];
+- a message sent during the compile queues with "Send next" and dispatches afterwards [[playbook-library-54](#playbook-library-54)];
+- Edit, Save, and a forced conflict behave as specified, and Paste's "Use as source" writes the file [[playbook-library-56](#playbook-library-56)];
+- the Register tab opens prefilled from the proposal and Register lists `/triage` as configured with the Drafts section gone [[playbook-library-61](#playbook-library-61)];
+- the agent picker offers "Captain" and each roster player, and a switch survives a reload with its system line [[playbook-library-55](#playbook-library-55)];
+- a reload restores the transcript, the source, and the compiled tabs [[playbook-library-62](#playbook-library-62)];
+- a draft seeded with a compile still marked running when the shell booted opens with the chip "Interrupted", the band's interrupted line, Compile enabled, and no relay line in the thread [[playbook-library-59](#playbook-library-59)];
+- Delete asks Delete or Keep and removes the row [[playbook-library-63](#playbook-library-63)];
+- the example card's Prefill opens the demo's draft workspace in the Source tab's paste mode with the normalized text placed and nothing written or compiled [[playbook-library-35](#playbook-library-35)];
+- at the 320-pixel viewport with the rail collapsed the panes stack under a horizontal grip with the chip in view, every control keeps its accessible name, and the page scrolls in neither direction [[playbook-library-52](#playbook-library-52)].
+
+#### playbook-library-78
+
+Where the live journey lane is opted in ([DR-039](../decisions/039-browser-acceptance-journeys.md)) with the machine's real sign-in and the released `slc`, when the journey asks for "a two-role changelog playbook: Coder drafts release notes from the commits since the last tag and commits them; Reviewer checks them against the commits" and follows the agent's compile request and registration proposal, the test suite shall assert that a source declaring Coder and Reviewer was written [[playbook-library-56](#playbook-library-56)], that the agent's compile ran to Link [[playbook-library-57](#playbook-library-57)], that the derived roles are those two [[playbook-library-60](#playbook-library-60)], that `/changelog` was registered with a player per role [[playbook-library-61](#playbook-library-61)], and that a new session's slash menu offers it.

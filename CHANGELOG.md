@@ -23,14 +23,29 @@ and `npm start` (desktop) or `npm run start:server` (server).
   explorer with previews.
 - The desktop bridge reveals a state-root path in the OS file manager;
   the served page offers Copy path instead.
+- Chat-assisted playbook authoring (DR-058): "New playbook" takes an id and
+  opens a two-pane draft workspace on the Playbooks surface — a conversation
+  with an authoring agent on the left, and Source, Gears, Machine, and
+  Register tabs with the compile watched in a band on the right. The agent
+  writes `<id>.md` in the draft directory through cligent on the Captain's
+  block or a chosen roster player, asks for compiles and proposes the
+  registration through fenced `spex` blocks, and receives a failed phase's
+  output automatically, bounded to three failures in a row. Registration
+  writes nothing until Register is pressed; drafts persist under
+  `local/drafts/` and list between the configured playbooks and the
+  built-ins.
+- Protocol version 11: the `space.*` and `draft.*` command families, the
+  `draft` channel, and the `space.state`, `draft.record`, `draft.state`,
+  `draft.source`, and `draft.removed` messages.
 
 ### Changed
 
 - The sidebar's "Workspace" entry and section read "Projects".
 - Cmd/Ctrl+1 through 5 switch surfaces: Dashboard, Projects, Playbooks,
   Space, Settings.
-- Protocol version 11: the `space.*` commands and the `space.state`
-  message.
+- The compile form is retired: pasting or picking a source is the Source
+  tab's paste mode, the registry form is the Register tab with a player per
+  derived role, and the slc example's prefill opens a draft in paste mode.
 
 ## [0.6.1] - 2026-09-09
 

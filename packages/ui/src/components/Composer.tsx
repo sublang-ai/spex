@@ -113,10 +113,14 @@ export function ComposerCaption({
   staged,
   onDetachStaged,
   note,
+  hint = COMPOSER_HINT,
 }: {
   staged?: StagedIntent;
   onDetachStaged?: () => void;
   note?: string;
+  /** The line's resting words; a composer without a slash menu says
+   * only how to send (playbook-library-54). */
+  hint?: string;
 }) {
   return (
     <div
@@ -151,7 +155,7 @@ export function ComposerCaption({
           {note}
         </span>
       ) : (
-        <span className="min-w-0 truncate">{COMPOSER_HINT}</span>
+        <span className="min-w-0 truncate">{hint}</span>
       )}
     </div>
   );

@@ -18,6 +18,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
 } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -252,6 +253,18 @@ export function resolveModulePath(
   return undefined;
 }
 
+/** A file URL keyed by the file's last change, so a rewritten module
+ * imports fresh while an unchanged one stays cached. */
+export function freshFileUrl(path: string): string {
+  const url = pathToFileURL(path);
+  try {
+    url.searchParams.set("mtime", String(Math.round(statSync(path).mtimeMs)));
+  } catch {
+    // A missing file fails at import, with the loader's own error.
+  }
+  return url.href;
+}
+
 /**
  * Module loader with local-checkout fallback: when a bare specifier
  * fails to resolve from Spex's own dependencies (e.g. a registry
@@ -269,9 +282,12 @@ export function createModuleLoader(
   return async (specifier: string): Promise<unknown> => {
     try {
       // A compiled registry names its bundle by absolute path; the
-      // ESM loader takes a path only as a file URL on Windows.
+      // ESM loader takes a path only as a file URL on Windows. The
+      // file's last change keys the import, so a bundle re-packaged
+      // in place — a draft registered with its confirmed command and
+      // intent (DR-058) — is never served from the module cache.
       return await import(
-        isAbsolute(specifier) ? pathToFileURL(specifier).href : specifier,
+        isAbsolute(specifier) ? freshFileUrl(specifier) : specifier,
       );
     } catch (error) {
       for (const dir of extraDirs) {

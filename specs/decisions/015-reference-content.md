@@ -6,6 +6,7 @@
 ## Status
 
 Accepted; the built-in catalog is amended by [DR-025](025-playbook-7-adoption.md) — the built-ins are code, review, and decide, with sources shipped in the installed package.
+Amended by [DR-058](058-chat-assisted-playbook-authoring.md) (2026-09-12): the slc example's prefill opens a draft workspace in the Source tab's paste mode instead of filling the compile form.
 
 ## Context
 

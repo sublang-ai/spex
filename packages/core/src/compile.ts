@@ -30,7 +30,7 @@ function bundleNodePaths(): string[] {
   return paths;
 }
 
-import { isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
+import { freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
 
 export const MIN_NODE_MAJOR = 23;
 export const MIN_NODE_MINOR = 6;
@@ -572,7 +572,10 @@ export async function compilePlaybook(
 
   // Fail-closed validation before anything touches the config
   // (PBLIB-14): the bundle must satisfy the captain shell's checks.
-  const moduleValue = (await import(pathToFileURL(registryBundle).href)) as {
+  // The import is keyed by the file's change so a re-packaged bundle
+  // — a draft registered with its confirmed command and intent — is
+  // checked fresh, never served from the module cache.
+  const moduleValue = (await import(freshFileUrl(registryBundle))) as {
     default?: unknown;
     spexRegistryContract?: unknown;
   };

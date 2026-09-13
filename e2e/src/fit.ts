@@ -67,10 +67,22 @@ export async function measure(page: Page, containers: string[] = []): Promise<Me
       const oy = styleOf(el).overflowY;
       return oy === "auto" || oy === "scroll";
     };
+    // Content behind a closed <details> is not rendered, though the
+    // browser may still report a box for it: chrome no one sees.
+    const folded = (el: Element): boolean => {
+      for (let node = el.parentElement; node; node = node.parentElement) {
+        if (node instanceof HTMLDetailsElement && !node.open) {
+          const summary = node.querySelector(":scope > summary");
+          if (!summary || !summary.contains(el)) return true;
+        }
+      }
+      return false;
+    };
     const shown = (el: Element): boolean => {
       const style = styleOf(el);
       if (style.display === "none" || style.visibility === "hidden") return false;
       if (style.position === "fixed" || style.position === "absolute") return false;
+      if (folded(el)) return false;
       const box = el.getBoundingClientRect();
       return box.width > 0 && box.height > 0;
     };
@@ -112,6 +124,7 @@ export async function measure(page: Page, containers: string[] = []): Promise<Me
       const style = styleOf(el);
       if (style.display === "none" || style.display === "inline") continue;
       if (scrolls(el) || style.textOverflow === "ellipsis") continue;
+      if (folded(el)) continue;
       if (el.clientWidth <= 1) continue;
       // A text field scrolls its own value; its box is what counts.
       const field = /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
@@ -174,6 +187,7 @@ export async function measure(page: Page, containers: string[] = []): Promise<Me
       if (!(el instanceof HTMLElement)) continue;
       const style = styleOf(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
+      if (folded(el)) continue;
       const box = el.getBoundingClientRect();
       const positioned = style.position === "absolute" || style.position === "fixed";
       if (!positioned && (!scrollsDown(el) || insideScroller(el))) continue;
@@ -231,7 +245,9 @@ export async function measure(page: Page, containers: string[] = []): Promise<Me
           }
         }
       }
-      for (const child of children) check(child);
+      // A glyph's own paths overlap by design: the svg is the control's
+      // child, its drawing is not chrome.
+      for (const child of children) if (!(child instanceof SVGElement)) check(child);
     };
     for (const container of containers) {
       if (shown(container)) check(container);

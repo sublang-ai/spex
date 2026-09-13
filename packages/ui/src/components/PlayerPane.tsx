@@ -104,7 +104,10 @@ export function toolLabel(name: string): string {
   return name === "command_execution" ? "shell" : name;
 }
 
-function Segment({ segment }: { segment: TranscriptSegment }) {
+/** One transcript segment as the pane draws it (run-view-3/4):
+ * exported so the authoring thread renders the agent's segments with
+ * the same cards (playbook-library-53). */
+export function Segment({ segment }: { segment: TranscriptSegment }) {
   switch (segment.kind) {
     case "prompt":
       return (

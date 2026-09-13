@@ -76,6 +76,17 @@ const PATHS: Record<string, ReactNode> = {
   stop: <rect x="3.5" y="3.5" width="9" height="9" rx="1.5" />,
   // A tick marks a step done (space-12).
   check: <path d="M3 8.5 6.5 12 13 4.5" />,
+  // The authoring workspace's tabs below the @xs step
+  // (playbook-library-52): a page for Source, rows for Gears, a
+  // hexagon for Machine, a check for Register.
+  file: (
+    <>
+      <path d="M4.5 2.5h5l3 3v8a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1Z" />
+      <path d="M9.5 2.5v3h3M6 8.5h4M6 11h4" />
+    </>
+  ),
+  list: <path d="M3 4.5h10M3 8h10M3 11.5h10" />,
+  hexagon: <path d="M8 2 13.2 5v6L8 14 2.8 11V5Z" />,
 };
 
 export type IconName = keyof typeof PATHS;

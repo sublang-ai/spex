@@ -11,6 +11,7 @@
 import {
   cpSync,
   existsSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
@@ -19,7 +20,7 @@ import {
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
@@ -77,14 +78,16 @@ import {
 } from "./config-edit.js";
 import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
-import { loadBuiltinCatalog } from "./builtins.js";
+import { BUILTIN_IDS, loadBuiltinCatalog } from "./builtins.js";
+import { AuthorManager } from "./authoring.js";
+import { DraftStore } from "./drafts.js";
 import {
   parseSpecTree,
   readSpecFile,
   resolveSpecPath,
   writeSpecFile,
 } from "./specs.js";
-import { checkToolchain, compilePlaybook, type LineSpawner } from "./compile.js";
+import { checkToolchain, compilePlaybook, type CompileResult, type LineSpawner } from "./compile.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { SpaceManager } from "./space.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
@@ -208,7 +211,9 @@ interface ClientState {
 }
 
 function channelKey(channel: Channel): string {
-  return `${channel.kind}:${channel.sessionId}`;
+  return channel.kind === "draft"
+    ? `draft:${channel.draftId}`
+    : `${channel.kind}:${channel.sessionId}`;
 }
 
 /** Expand a leading ~ so the most natural path spelling works. */
@@ -235,6 +240,10 @@ export class CoreService {
   private readonly home: string;
   private readonly store: Store;
   private readonly sessions: SessionManager;
+  /** Playbook drafts and their authoring conversations (DR-058). */
+  private readonly authors: AuthorManager;
+  /** The latest readiness verdict per adapter, for the draft chips. */
+  private readonly readinessByAdapter = new Map<AdapterName, boolean | null>();
   private readonly clients = new Set<ClientState>();
   private authToken = "";
   readonly events: CoreServiceEvents = {};
@@ -339,6 +348,33 @@ export class CoreService {
         ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
       });
     }
+    // Drafts live under the state root's ignored `local/` family
+    // (storage-23); a memory-only core keeps them in a scratch root.
+    const draftsRoot = join(options.dataDir ?? mkdtempSync(join(tmpdir(), "spex-memory-drafts-")), "local", "drafts");
+    this.authors = new AuthorManager({
+      store: this.store,
+      drafts: new DraftStore(draftsRoot, this.libraryDir()),
+      configPath: this.configPath,
+      env: this.env,
+      adapterImports: options.adapterImports,
+      compileSpawner: options.compileSpawner,
+      activeCompiles: this.activeCompiles,
+      composed: () => this.composed,
+      readiness: (adapter) => this.readinessByAdapter.get(adapter) ?? null,
+      reservedIds: () => [...(this.composed?.playbooks.map((playbook) => playbook.id) ?? []), ...BUILTIN_IDS],
+    });
+    this.authors.events.onRecord = (draftId, record) => {
+      const key = `draft:${draftId}`;
+      for (const client of this.clients) {
+        if (client.channels.has(key)) {
+          this.send(client.socket, { type: "draft.record", draftId, seq: record.seq, record: record.record });
+        }
+      }
+    };
+    this.authors.events.onState = (draft) => this.broadcast({ type: "draft.state", draft });
+    this.authors.events.onSource = (message) => this.broadcast(message);
+    this.authors.events.onProgress = (draftId, line) => this.broadcast({ type: "compile.progress", playbookId: draftId, line });
+    this.authors.events.onRemoved = (draftId) => this.broadcast({ type: "draft.removed", draftId });
   }
 
   /**
@@ -430,6 +466,9 @@ export class CoreService {
     await service.store.initializeSessions(service.sessionsDir());
     await service.syncForeignSessions();
     service.store.validateStorage();
+    // A compile running when the core last stopped reads as interrupted
+    // (playbook-library-59); a person restarts it.
+    service.authors.start();
     if (options.dataDir) prepareStorageGitFiles(options.dataDir, service.store.untrackedSessionPaths());
     if (options.watchConfig !== false) {
       service.watchConfigFile();
@@ -618,6 +657,10 @@ export class CoreService {
     await this.space?.stop();
     await this.adoptScan;
     if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
+    // A draft compile cut here stays "running" on disk and reads as
+    // interrupted at the next start (playbook-library-59); its turns
+    // abort and are awaited so no Cligent outlives the core (DR-051).
+    this.authors.markStopping();
     // Kill any in-flight compile child so shutdown never orphans slc.
     for (const controller of this.activeCompiles.values()) controller.abort();
     // A disposal failure must not leave the endpoint or the store open
@@ -629,6 +672,7 @@ export class CoreService {
     } catch (error) {
       failure = { error };
     }
+    await this.authors.stopAll();
     for (const client of this.clients) client.socket.close();
     await new Promise<void>((resolveClose) =>
       this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
@@ -748,6 +792,7 @@ export class CoreService {
           this.home,
           this.options.adapterRuntime ?? checkAdapterRuntime,
         );
+        this.readinessByAdapter.set(adapter, readiness.ready);
         return {
           adapter,
           ready: readiness.ready,
@@ -941,7 +986,7 @@ export class CoreService {
         return project;
       }
       case "storage.diagnostics":
-        return [...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()];
+        return [...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()];
       case "project.create": {
         const path = expandPath(command.path, this.home);
         if (this.store.getProjectByPath(path)) {
@@ -1090,7 +1135,15 @@ export class CoreService {
       case "turn.abort":
         return { aborted: this.sessions.abortTurn(command.sessionId) };
       case "subscribe": {
-        this.requireKnownSession(command.channel.sessionId);
+        if (command.channel.kind === "draft") {
+          // An unknown draft is refused as every draft command refuses
+          // it (core-service-96), never subscribed to in advance.
+          if (!this.authors.has(command.channel.draftId)) {
+            throw new CoreError("not_found", `no draft ${command.channel.draftId}`);
+          }
+        } else {
+          this.requireKnownSession(command.channel.sessionId);
+        }
         client.channels.add(channelKey(command.channel));
         return null;
       }
@@ -1214,67 +1267,9 @@ export class CoreService {
               error instanceof Error ? error.message : String(error);
             throw new CoreError("invalid_request", message);
           }
-          // The compiled entry's derived roles are authoritative
-          // (DR-014): re-key the request's role -> player bindings
-          // onto them by case-insensitive name match — slc emits the
-          // ids as the gears declared them (`Coder`), the form may
-          // key them either way — and an unmatched role fails before
-          // any config write, keeping the artifacts for a
-          // re-registration without recompiling (playbook-library-32).
-          const assignments = new Map(
-            Object.entries(command.bindings).map(([role, playerId]) => [
-              role.toLowerCase(),
-              playerId,
-            ]),
-          );
-          const roles: Record<string, string> = {};
-          const unmatched: string[] = [];
-          for (const role of result.roles) {
-            const playerId = assignments.get(role.toLowerCase());
-            if (playerId === undefined) unmatched.push(role);
-            else roles[role] = playerId;
-          }
-          if (unmatched.length > 0) {
-            throw new CoreError(
-              "invalid_request",
-              `compiled, but the playbook's derived roles are [${result.roles.join(", ")}] and no player was bound for: ${unmatched.join(", ")}. Re-submit with a binding per derived role; the compiled artifacts are kept.`,
-            );
-          }
-          // Lanes the bindings name but the roster lacks are created
-          // first, so the binding never dangles (DR-032).
-          for (const [playerId, block] of Object.entries(
-            command.newPlayers ?? {},
-          )) {
-            const minted = await editConfigFile(
-              this.configPath,
-              { kind: "player.set", playerId, patch: block as AgentBlock },
-              this.options.loadModule,
-            );
-            if (!minted.ok) {
-              throw new CoreError(
-                "invalid_config",
-                `compiled, but creating session player "${playerId}" was refused: ${minted.error}`,
-              );
-            }
-          }
-          const edit = await editConfigFile(
-            this.configPath,
-            {
-              kind: "playbook.add",
-              playbookId: command.playbookId,
-              from: result.from,
-              roles,
-            },
-            this.options.loadModule,
-          );
-          if (!edit.ok) {
-            throw new CoreError(
-              "invalid_config",
-              `compiled, but registration was refused: ${edit.error}`,
-            );
-          }
-          await this.reloadConfig();
-          return this.configState;
+          // The one-shot form is a draft-style compile followed by the
+          // registration path a draft takes (playbook-library-69).
+          return await this.registerCompiled(command.playbookId, result, command.bindings, command.newPlayers);
         } finally {
           this.activeCompiles.delete(command.playbookId);
         }
@@ -1531,7 +1526,120 @@ export class CoreService {
         return this.requireSpace().tree(command.path);
       case "space.read":
         return this.requireSpace().read(command.path);
+      // Playbook drafts (DR-058, core-service-96): one activity per
+      // draft, Boss messages queue, the manager holds the matrix.
+      case "draft.list":
+        return this.authors.list();
+      case "draft.create":
+        return this.authors.create(command.draftId);
+      case "draft.open":
+        return this.authors.open(command.draftId, command.afterSeq);
+      case "draft.send":
+        return this.authors.send(command.draftId, command.text);
+      case "draft.abort":
+        return this.authors.abort(command.draftId);
+      case "draft.source.write":
+        return this.authors.writeSource(command.draftId, {
+          ...(command.content !== undefined ? { content: command.content } : {}),
+          ...(command.sourcePath !== undefined ? { sourcePath: command.sourcePath } : {}),
+          ...(command.baseVersion !== undefined ? { baseVersion: command.baseVersion } : {}),
+        });
+      case "draft.compile":
+        return this.authors.compile(command.draftId);
+      case "draft.register": {
+        if (!existsSync(this.configPath)) {
+          throw new CoreError("invalid_config", "config file is missing");
+        }
+        // Re-package with the confirmed command and intent, register
+        // through the shared path, then retire the draft — the draft
+        // held busy throughout, so no message starts a turn on a draft
+        // about to go; a refused write leaves it standing with its
+        // artifacts (playbook-library-69).
+        return await this.authors.register(
+          command.draftId,
+          command.command,
+          command.intent,
+          this.libraryDir(),
+          (result) => this.registerCompiled(command.draftId, result, command.bindings, command.newPlayers),
+        );
+      }
+      case "draft.player.set":
+        return this.authors.setPlayer(command.draftId, command.playerId);
+      case "draft.delete":
+        this.authors.delete(command.draftId);
+        return null;
+      case "draft.artifacts": {
+        if (!this.authors.has(command.draftId)) {
+          throw new CoreError("not_found", `no draft ${command.draftId}`);
+        }
+        return resolveArtifacts(
+          { id: command.draftId, from: join(this.libraryDir(), command.draftId, `${command.draftId}.registry.mjs`) },
+          this.env,
+        );
+      }
     }
+  }
+
+  /**
+   * The tail of a compile (playbook-library-69), shared by the one-shot
+   * `compile.run` and a draft's registration: re-key the bindings onto
+   * the compiled entry's derived roles, create the players the roster
+   * lacks first, write the `playbooks.<id>` entry, reload the config.
+   */
+  private async registerCompiled(
+    playbookId: string,
+    result: CompileResult,
+    bindings: Record<string, string>,
+    newPlayers: Record<string, AgentBlock> | undefined,
+  ): Promise<ConfigState> {
+    // The compiled entry's derived roles are authoritative (DR-014):
+    // re-key the request's role -> player bindings onto them by
+    // case-insensitive name match — slc emits the ids as the gears
+    // declared them (`Coder`), the form may key them either way — and
+    // an unmatched role fails before any config write, keeping the
+    // artifacts for a re-registration without recompiling
+    // (playbook-library-32).
+    const assignments = new Map(
+      Object.entries(bindings).map(([role, playerId]) => [role.toLowerCase(), playerId]),
+    );
+    const roles: Record<string, string> = {};
+    const unmatched: string[] = [];
+    for (const role of result.roles) {
+      const playerId = assignments.get(role.toLowerCase());
+      if (playerId === undefined) unmatched.push(role);
+      else roles[role] = playerId;
+    }
+    if (unmatched.length > 0) {
+      throw new CoreError(
+        "invalid_request",
+        `compiled, but the playbook's derived roles are [${result.roles.join(", ")}] and no player was bound for: ${unmatched.join(", ")}. Re-submit with a binding per derived role; the compiled artifacts are kept.`,
+      );
+    }
+    // Lanes the bindings name but the roster lacks are created first,
+    // so the binding never dangles (DR-032).
+    for (const [playerId, block] of Object.entries(newPlayers ?? {})) {
+      const minted = await editConfigFile(
+        this.configPath,
+        { kind: "player.set", playerId, patch: block },
+        this.options.loadModule,
+      );
+      if (!minted.ok) {
+        throw new CoreError(
+          "invalid_config",
+          `compiled, but creating session player "${playerId}" was refused: ${minted.error}`,
+        );
+      }
+    }
+    const edit = await editConfigFile(
+      this.configPath,
+      { kind: "playbook.add", playbookId, from: result.from, roles },
+      this.options.loadModule,
+    );
+    if (!edit.ok) {
+      throw new CoreError("invalid_config", `compiled, but registration was refused: ${edit.error}`);
+    }
+    await this.reloadConfig();
+    return this.configState;
   }
 
   /** Starting an intent authorizes its same-project successors, not a

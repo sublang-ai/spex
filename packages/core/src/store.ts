@@ -1475,6 +1475,12 @@ export class Store {
     return this.prefs.has(key) ? (this.prefs.get(key) as T) : undefined;
   }
 
+  /** Forget a preference; a key never set is no error. */
+  deletePref(key: string): void {
+    if (this.prefsProblem) throw new StorageFormatError(this.prefsProblem.file, this.prefsProblem.reason);
+    if (this.prefs.delete(key)) this.savePrefs();
+  }
+
   // -- forge cache (dashboard-14) -------------------------------------------
 
   getForgeCache(projectId: string): { at: number; state: ForgeState } | undefined {

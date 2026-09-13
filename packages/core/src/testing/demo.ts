@@ -17,7 +17,7 @@ import type { Captain } from "@sublang/cligent/tmux-play";
 
 import { academyCorpusDir } from "../forge.js";
 import { Store } from "../store.js";
-import { fakeAdapterImports } from "./fake-adapter.js";
+import { fakeAdapterImports, type FakeScript } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
 
 /** A starter config naming two players and the code/review built-ins;
@@ -185,8 +185,16 @@ export async function interruptDemoSession(sessionsDir: string, sessionId: strin
  * inspects and approves — each with tool calls, streamed markdown,
  * usage, and a delay long enough to watch in-flight state. */
 export function demoAdapterImports(options: { delayMs?: number } = {}) {
+  return fakeAdapterImports(demoScript(options));
+}
+
+/** The fake adapter's script behind the demo: the coder's and the
+ * reviewer's replies, each in flight for `delayMs`. Exported so a
+ * harness can lay other rules before it (the authoring agent's) and
+ * still draw the same sessions. */
+export function demoScript(options: { delayMs?: number } = {}): FakeScript {
   const delay = options.delayMs ?? 1;
-  return fakeAdapterImports({
+  return {
     rules: [
       {
         match: "route:",
@@ -228,7 +236,7 @@ export function demoAdapterImports(options: { delayMs?: number } = {}) {
       usage: { inputTokens: 2400, outputTokens: 310, totalCostUsd: 0.12 },
       delayMs: delay,
     },
-  });
+  };
 }
 
 /** The scripted Captain: a prompt starting with "ask" parks the

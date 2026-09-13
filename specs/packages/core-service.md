@@ -209,6 +209,24 @@ When a client sends `session.discard` with only a `sessionId`, the core shall di
 - restore the exact preceding settled checkpoint, or remove a never-settled fresh session when Playbook authorizes removal;
 - publish the restored summary or session removal and refreshed intent state; a refusal preserves evidence and reports its cause.
 
+### Playbook Drafts
+
+#### core-service-96
+
+The core service shall accept the draft command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — validated as every command is [[core-service-13](#core-service-13)], stream a draft's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and hold one activity per draft ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+
+| Command | While a turn runs | While a compile runs |
+| --- | --- | --- |
+| `draft.send` | accepted, queued | accepted, queued |
+| `draft.compile` | `busy` | `busy`, as a duplicate compile |
+| `draft.source.write`, `draft.register`, `draft.delete` | `busy` | `busy` |
+| `draft.abort` | ends the turn | `{aborted: false}` |
+
+- a draft compile is the playbook id's one compile, canceled by `compile.abort` as any compile is; `compile.run` and `draft.compile` for one id exclude each other;
+- `draft.create` replies `invalid_request` for an id a configured playbook or built-in holds; `draft.open` and every other command reply `not_found` for an unknown draft; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`;
+- a draft retired by registration or deleted is announced to every client as `draft.removed`, so no client keeps a trace of it;
+- `draft.send` replies when the message is accepted, never when the turn ends; the protocol version bumps [[core-service-12](#core-service-12)].
+
 ### Intent Ledger
 
 #### core-service-42
@@ -703,6 +721,12 @@ Where the core service runs with an injected compile spawner whose toolchain run
 - `compile.abort` for that id makes the pending `compile.run` reply with an `aborted` error, and the final progress line broadcast for the playbook is the canceled marker [[core-service-25](#core-service-25)];
 - `compile.abort` for a playbook id with no compile in flight is rejected with a `not_found` error;
 - after cancellation, a new `compile.run` for the same id is accepted.
+
+### Playbook Draft Coverage
+
+#### core-service-97
+
+Where the core service runs with the scripted fake adapter and a compile spawner that blocks until canceled, the test suite shall drive the draft command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request`, and `conflict` refusals, that `draft.record` messages arrive in sequence on the draft channel only, that `draft.state` follows every transition, and that a malformed draft command is rejected with no state change [[core-service-96](#core-service-96)].
 
 ### Endpoint Coverage
 

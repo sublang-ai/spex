@@ -3,14 +3,24 @@
 
 // Accessibility as a journey (run-view-102): every surface scanned by
 // axe-core at WCAG 2.1 AA, in both themes; serious and critical
-// violations fail the run.
+// violations fail the run. The authoring workspace is scanned in each
+// of its states (playbook-library-77): empty, paste mode, a turn with
+// the source appearing, compiling, failed, compiled with each tab,
+// the editor, and the agent picker.
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
-import { test, expect, open, nav, send } from "../src/harness";
+import { test, expect, open, nav, send, slowAuthoringScript } from "../src/harness";
 
-test.use({ appOptions: { project: true } });
+test.use({
+  appOptions: {
+    project: true,
+    // The failing-then-passing stub, with the replies and phases held
+    // long enough for a scan inside each state.
+    authoring: { script: slowAuthoringScript(4000), slc: "fail:gears2fsm", phaseDelayMs: 1200 },
+  },
+});
 
 async function scan(page: Page, surface: string): Promise<string[]> {
   const results = await new AxeBuilder({ page })
@@ -29,6 +39,7 @@ for (const theme of ["light", "dark"] as const) {
     page,
     app,
   }) => {
+    test.setTimeout(150_000);
     await page.emulateMedia({ colorScheme: theme });
     await open(page, app);
     const found: string[] = [];
@@ -55,6 +66,57 @@ for (const theme of ["light", "dark"] as const) {
     await nav(page, "Playbooks").click();
     await expect(page.getByTestId("builtins-section")).toBeVisible();
     found.push(...(await scan(page, "Playbooks")));
+
+    // The authoring workspace, state by state (DR-058).
+    const idField = page.getByTestId("new-playbook-id");
+    await idField.fill("triage");
+    await idField.press("Enter");
+    await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (no source)")));
+    await page.getByRole("button", { name: "Paste", exact: true }).click();
+    await expect(page.getByTestId("paste-text")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (paste mode)")));
+    await page.getByTestId("paste-cancel").click();
+    await page.getByTestId("draft-composer").fill("I want a playbook that triages new issues into labels.");
+    await page.getByTestId("draft-send").click();
+    await expect(page.getByTestId("source-markdown")).toContainText("Triager");
+    await expect(page.getByTestId("draft-working")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (turn running, source appearing)")));
+    const band = page.getByTestId("compile-band");
+    await expect(band).toHaveAttribute("data-outcome", "running");
+    found.push(...(await scan(page, "Workspace (compiling)")));
+    await expect(band).toHaveAttribute("data-outcome", "failed");
+    await expect(page.getByTestId("compile-output")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (failed)")));
+    await expect(
+      page.locator('[data-testid="directive-card"][data-kind="register"]'),
+    ).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByTestId("draft-chip")).toContainText("Compiled");
+    await expect(page.getByTestId("draft-working")).toHaveCount(0);
+    found.push(...(await scan(page, "Workspace (compiled)")));
+    const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
+    await tabs.getByRole("tab", { name: "Gears", exact: true }).click();
+    await expect(page.getByTestId("item-toggle-triage-1")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (Gears)")));
+    await tabs.getByRole("tab", { name: "Machine", exact: true }).click();
+    await expect(page.getByTestId("stage-states-draft-triage")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (Machine)")));
+    await tabs.getByRole("tab", { name: "Register", exact: true }).click();
+    await expect(page.getByTestId("register-form")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (Register)")));
+    await tabs.getByRole("tab", { name: "Source", exact: true }).click();
+    await page.getByTestId("source-edit").click();
+    await expect(page.getByTestId("spec-editor")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (editing)")));
+    await page.getByTestId("editor-cancel").click();
+    await page.getByTestId("draft-agent").click();
+    await expect(page.getByTestId("agent-picker")).toBeVisible();
+    found.push(...(await scan(page, "Workspace (agent picker)")));
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("agent-picker")).toHaveCount(0);
+    await page.getByTestId("workspace-back").click();
+    await expect(page.getByTestId("drafts-section")).toBeVisible();
+    found.push(...(await scan(page, "Playbooks (with a draft)")));
 
     // Space before its home is a repository: the setup card stands
     // (space-3); the picker and the tree are scanned by space-44.

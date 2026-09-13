@@ -6,6 +6,8 @@
 // with no network access and no agent credentials.
 
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
 export interface FakeUsage {
@@ -27,6 +29,10 @@ export interface FakeToolCall {
 export interface FakeResponse {
   /** Streamed as text_delta events before the terminal done. */
   deltas?: string[];
+  /** Files written relative to the run's `cwd` before the tool events
+   * — a source-writing authoring agent (DR-058). A `<id>` in a path
+   * names the cwd's basename, the draft id. */
+  writes?: Record<string, string>;
   /** Emitted after the deltas, in order. */
   tools?: FakeToolCall[];
   thinking?: string;
@@ -36,6 +42,13 @@ export interface FakeResponse {
   usage?: FakeUsage;
   /** Sleep before the terminal done, to test in-flight behavior. */
   delayMs?: number;
+  /** Stay in flight until the run's signal aborts. */
+  untilAborted?: boolean;
+  /** End in an error event carrying this code, then done(error) — the
+   * provider refusing a resume (playbook-library-64). With
+   * `onlyResumed` the failure applies only to a run given `resume`;
+   * a fresh run answers normally. */
+  failWith?: { code: string; message?: string; onlyResumed?: boolean };
 }
 
 export interface FakeRule {
@@ -72,9 +85,27 @@ function pick(script: FakeScript, prompt: string): FakeResponse {
   return script.fallback ?? DEFAULT_FALLBACK;
 }
 
+export interface FakeRunOptions {
+  resume?: string;
+  cwd?: string;
+  model?: string;
+  permissions?: Record<string, unknown>;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+  abortSignal?: AbortSignal;
+}
+
 export interface FakeAdapterStats {
   constructed: number;
-  runs: { prompt: string; resume?: string; cwd?: string }[];
+  runs: {
+    prompt: string;
+    resume?: string;
+    cwd?: string;
+    model?: string;
+    permissions?: Record<string, unknown>;
+    allowedTools?: string[];
+    disallowedTools?: string[];
+  }[];
 }
 
 /**
@@ -95,18 +126,62 @@ export function fakeAdapterImports(
 
     async *run(
       prompt: string,
-      options?: { resume?: string; cwd?: string; abortSignal?: AbortSignal },
+      options?: FakeRunOptions,
     ): AsyncGenerator<FakeEvent, void, void> {
       stats.runs.push({
         prompt,
         ...(options?.resume ? { resume: options.resume } : {}),
         ...(options?.cwd ? { cwd: options.cwd } : {}),
+        ...(options?.model ? { model: options.model } : {}),
+        ...(options?.permissions ? { permissions: options.permissions } : {}),
+        ...(options?.allowedTools ? { allowedTools: options.allowedTools } : {}),
+        ...(options?.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),
       });
       const sessionId = randomUUID();
-      const response = pick(script, prompt);
+      // `<id>` names the cwd's basename — the draft id — in paths,
+      // deltas, tool inputs, and the result, so one script serves any
+      // draft.
+      const id = options?.cwd ? basename(options.cwd) : "<id>";
+      const named = (text: string): string => text.replaceAll("<id>", id);
+      const namedInput = (input: Record<string, unknown>): Record<string, unknown> =>
+        Object.fromEntries(
+          Object.entries(input).map(([key, value]) => [key, typeof value === "string" ? named(value) : value]),
+        );
+      const picked = pick(script, prompt);
+      const response: FakeResponse = {
+        ...picked,
+        result: named(picked.result),
+        ...(picked.deltas ? { deltas: picked.deltas.map(named) } : {}),
+      };
       const base = { agent: this.agent, sessionId };
+      if (response.failWith && (!response.failWith.onlyResumed || options?.resume)) {
+        yield {
+          ...base,
+          type: "error",
+          timestamp: Date.now(),
+          payload: {
+            code: response.failWith.code,
+            message: response.failWith.message ?? `the provider refused: ${response.failWith.code}`,
+            recoverable: false,
+          },
+        };
+        yield {
+          ...base,
+          type: "done",
+          timestamp: Date.now(),
+          payload: { status: "error", usage: { toolUses: 0 }, durationMs: 1 },
+        };
+        return;
+      }
       for (const delta of response.deltas ?? []) {
         yield { ...base, type: "text_delta", timestamp: Date.now(), payload: { delta } };
+      }
+      if (response.writes && options?.cwd) {
+        for (const [relative, content] of Object.entries(response.writes)) {
+          const target = join(options.cwd, named(relative));
+          mkdirSync(dirname(target), { recursive: true });
+          writeFileSync(target, named(content));
+        }
       }
       for (const [index, tool] of (response.tools ?? []).entries()) {
         const toolUseId = `fake-tool-${index}`;
@@ -114,7 +189,7 @@ export function fakeAdapterImports(
           ...base,
           type: "tool_use",
           timestamp: Date.now(),
-          payload: { toolName: tool.toolName, toolUseId, input: tool.input },
+          payload: { toolName: tool.toolName, toolUseId, input: namedInput(tool.input) },
         };
         yield {
           ...base,
@@ -141,6 +216,19 @@ export function fakeAdapterImports(
       }
       if (response.delayMs) {
         await new Promise((resolve) => setTimeout(resolve, response.delayMs));
+      }
+      if (response.untilAborted) {
+        // cligent drains the run on abort and synthesizes the
+        // interrupted done itself; the fake only has to wait.
+        await new Promise<void>((resolve) => {
+          const signal = options?.abortSignal;
+          if (!signal || signal.aborted) {
+            resolve();
+            return;
+          }
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return;
       }
       yield {
         ...base,

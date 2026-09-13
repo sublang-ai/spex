@@ -507,7 +507,11 @@ export function CaptainHome(props: CaptainHomeProps) {
               items={slash}
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
-              onCompileNew={() => props.onNavigate("Playbooks")}
+              onCompileNew={() => {
+                // The Library lands on its id field (playbook-library-51).
+                useAppStore.getState().requestNewPlaybook();
+                props.onNavigate("Playbooks");
+              }}
             />
           ) : null}
           {/* The one composer shape (run-view-106): the field on top,

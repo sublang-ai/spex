@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,6 +11,8 @@ import Database from "better-sqlite3";
 import { projectCaptainSessionStructure, type SessionExecutionProjection, type SessionFreshBoundary } from "@sublang/playbook/session-store";
 
 import { StateRootHeldError, Store } from "./store.js";
+import { DraftStore, type StoredDraft } from "./drafts.js";
+import { StorageFormatError } from "./app-storage.js";
 import type { SessionInfo, TmuxPlayRecord } from "./protocol.js";
 
 const PROJECT_PATH = join(tmpdir(), "spex-store-project");
@@ -586,4 +588,55 @@ test("unsupported or damaged migration metadata stays unchanged and releases the
     assert.equal(existsSync(join(dir, ".lock")), false);
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("storage-23: draft record and transcript encodings are written and read back exactly", () => {
+  const dir = tempRoot(); mkdirSync(dir, { recursive: true });
+  const drafts = new DraftStore(join(dir, "local", "drafts"), join(dir, "playbooks"));
+  const draft = drafts.create("triage", 1000);
+  assert.ok(existsSync(join(dir, "playbooks", "triage")), "the library directory is made");
+  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { v: 1, id: "triage", createdAt: 1000, touchedAt: 1000, queued: [], failures: 0 });
+  const full: StoredDraft = {
+    ...draft, touchedAt: 2000, queued: ["next", "after"], failures: 2,
+    compile: { at: 1500, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed at x (2s)", questions: [{ id: "q1", question: "?", reason: "r", evidence: "e", choices: ["a", "b"] }], roles: ["Coder"], sourceSha256: "ab".repeat(32) },
+    proposal: { command: "triage", intent: "Label issues", players: { Coder: "dev.coder" } },
+  };
+  drafts.write(full);
+  const bytes = JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(bytes), ["v", "id", "createdAt", "touchedAt", "queued", "failures", "compile", "proposal"]);
+  assert.deepEqual(bytes, full);
+  assert.deepEqual(drafts.read("triage"), full);
+  assert.deepEqual(drafts.ids(), ["triage"]);
+  // The transcript: newline-terminated {seq,record} lines in order,
+  // no provider token, and an incomplete final line is not a record.
+  const started = { type: "turn_started", turnId: 1, timestamp: 3000, turn: { id: 1, prompt: "hi", timestamp: 3000 } } as unknown as TmuxPlayRecord;
+  drafts.append("triage", 1, started);
+  drafts.append("triage", 2, { type: "player_finished", turnId: 1, timestamp: 3001, playerId: "author", result: { status: "ok", playerId: "author", turnId: 1, resumeToken: "secret-token", finalText: "done" } } as unknown as TmuxPlayRecord);
+  const text = readFileSync(drafts.recordsFile("triage"), "utf8");
+  const finished = { type: "player_finished", turnId: 1, timestamp: 3001, playerId: "author", result: { status: "ok", playerId: "author", turnId: 1, finalText: "done" } };
+  assert.equal(text, `${JSON.stringify({ seq: 1, record: started })}\n${JSON.stringify({ seq: 2, record: finished })}\n`);
+  assert.ok(!text.includes("secret-token"), "no provider token enters the transcript");
+  assert.deepEqual(drafts.records("triage"), { records: [{ seq: 1, record: started }, { seq: 2, record: finished as unknown as TmuxPlayRecord }] });
+  appendFileSync(drafts.recordsFile("triage"), '{"seq":3,"record":{"type":"turn_fin');
+  assert.deepEqual(drafts.records("triage").records.map((r) => r.seq), [1, 2]);
+  assert.equal(drafts.records("triage").incompleteAfterSeq, 2);
+  // Every key is closed: a stray field or a wrong version is a scoped diagnostic.
+  for (const damaged of ['{"v":2,"id":"triage","createdAt":1,"touchedAt":1,"queued":[],"failures":0}', '{"v":1,"id":"triage","createdAt":1,"touchedAt":1,"queued":[],"failures":0,"token":"x"}', '{"v":1,"id":"other","createdAt":1,"touchedAt":1,"queued":[],"failures":0}', "{broken"]) {
+    writeFileSync(drafts.recordFile("triage"), damaged);
+    assert.throws(() => drafts.read("triage"), StorageFormatError);
+  }
+  // The source is versioned by its digest; a stale token conflicts.
+  const first = drafts.writeSource("triage", "# Triage\n");
+  assert.ok(first.ok && first.version.length === 16);
+  const stale = drafts.writeSource("triage", "# Triage 2\n", "0000000000000000");
+  assert.ok(!stale.ok && stale.code === "conflict");
+  const next = drafts.writeSource("triage", "# Triage 2\n", first.ok ? first.version : undefined);
+  assert.ok(next.ok && next.version !== (first.ok ? first.version : ""));
+  assert.equal(drafts.readSource("triage")?.markdown, "# Triage 2\n");
+  // Retire keeps the directory to the registered playbook; delete removes it.
+  drafts.retire("triage");
+  assert.ok(!existsSync(drafts.recordDir("triage")) && existsSync(drafts.sourcePath("triage")));
+  drafts.delete("triage");
+  assert.ok(!existsSync(drafts.draftDir("triage")));
+  rmSync(dir, { recursive: true, force: true });
 });

@@ -905,7 +905,7 @@ Where the harness boots with the demo project registered, the test suite shall a
 
 #### run-view-102
 
-Where the harness boots with the demo project registered and a finished session, when each surface — Captain home, a session, the Dashboard, the Overview, the Specs tab, Playbooks, Space, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
+Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
 
 #### run-view-103
 
@@ -929,7 +929,7 @@ Where the hermetic lane's demo shell has run a task to its end ([DR-039](../deci
 
 #### run-view-105
 
-Where the harness boots with the demo project registered and carrying closed work, the scripted Captain, and ten further projects each holding a session parked on a player question, when the journey shows each surface — the Captain home, a session with a turn in flight, the Dashboard, the project's Overview, the Specs tab with the graph shown, Playbooks, and Settings — at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md): the open sidebar is 224 pixels wide), the test suite shall assert fit through the page, naming every offending element:
+Where the harness boots with the demo project registered and carrying closed work, the scripted Captain, the authoring fake with a passing stub `slc`, and ten further projects each holding a session parked on a player question, when the journey shows each surface — the Captain home, a session with a turn in flight, the Dashboard, the project's Overview, the Specs tab with the graph shown, Playbooks, a playbook draft's workspace at rest after its compile, and Settings — at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md): the open sidebar is 224 pixels wide), the test suite shall assert fit through the page, naming every offending element:
 
 - the page never scrolls sideways, and no element outside a sideways-scrolling canvas is wider than its box [[run-view-106](#run-view-106)] [[run-view-107](#run-view-107)] [[run-view-48](#run-view-48)];
 - the page never scrolls vertically, no scrolling box ends past the bottom of the viewport, and no positioned element lies past it with no scrolling box containing it — at either height, and again after the window is made short and tall within one page life [[run-view-119](#run-view-119)];

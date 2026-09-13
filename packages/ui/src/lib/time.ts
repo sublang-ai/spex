@@ -54,3 +54,11 @@ export function absoluteTitle(at: number): string {
 export function clockTime(at: number): string {
   return new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
+
+/** An age at the duration's own grain — "12s ago", "3m 12s ago" — for
+ * the one place a coarse age would hide a life sign: the compile band's
+ * "last output" clock, where a silent agent-driven phase must read as
+ * alive rather than stuck (DR-010 §5, playbook-library-57). */
+export function preciseAge(at: number, now: number): string {
+  return `${duration(Math.max(0, now - at))} ago`;
+}
