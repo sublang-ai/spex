@@ -30,6 +30,7 @@ import type {
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import type { SessionView } from "../state/reducer.js";
 import { stateLabel, type StatusTone } from "../lib/labels.js";
+import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { usePopover } from "../lib/usePopover.js";
 import { activatedByKeyboard, useUndoLine } from "../lib/useUndoLine.js";
@@ -63,15 +64,19 @@ export function queueOf(
 
 /** What a session is doing, in the one status vocabulary
  * (dashboard-28, dashboard-50, DR-010 §2): the label the Now band
- * shows, with activity supplied by the caller — a live turn with no leaf
- * state says "working" while a player runs and "deciding" while the
- * Captain has the floor (run-view-59). */
+ * shows and the raw state it speaks for, with activity supplied by
+ * the caller — a live turn with no leaf state says "working" while a
+ * player runs and "deciding" while the Captain has the floor, and a
+ * settled session with a run parked in its failure state reads that
+ * run's own state rather than the last one reported (run-view-59,
+ * DR-061). */
 export function sessionStatus(
   view: SessionView | undefined,
   turnActive: boolean | undefined,
-): { text: string; tone: StatusTone } {
+): { text: string; tone: StatusTone; state?: string } {
   return stateLabel(view?.fsmState, {
     pendingQuestion: view?.pendingQuestion !== undefined,
+    parkedFailure: parkedFailure(view?.frames ?? [])?.active ?? undefined,
     turnActive,
     playersRunning: runningPlayer(view) !== undefined,
   });
@@ -708,7 +713,7 @@ function NowBand({
           ) : null}
           <span
             className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${TONE_CHIP[label.tone]}`}
-            title={view?.fsmState}
+            title={label.state}
           >
             {label.text}
           </span>

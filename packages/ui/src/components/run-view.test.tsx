@@ -14,6 +14,7 @@ afterEach(cleanup);
 import { RunView } from "./RunView.js";
 import { PlayerPane, toolLabel, unwrapShell } from "./PlayerPane.js";
 import { applyRecords, initialSessionView } from "../state/reducer.js";
+import type { SessionView } from "../state/reducer.js";
 import {
   deliverServerMessageForTests,
   setClientForTests,
@@ -2722,5 +2723,58 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
     expect(screen.queryByTestId("failed-workflow")).toBeNull();
     expect(screen.queryByRole("region", { name: "Interrupted turn" })).toBeNull();
+  });
+});
+
+describe("run-view-133: at rest the chip reads the leaf, not the last reporter", () => {
+  const CODE: PlaybookSummary = {
+    id: "code",
+    from: "@sublang/playbook/code/registry",
+    command: "code",
+    intent: "Implement a change",
+    roles: {},
+  };
+
+  function props(view: SessionView) {
+    return {
+      session: SESSION,
+      view,
+      composer: { queued: [] },
+      connected: true,
+      playbooks: [CODE],
+      onSubmit: async () => {},
+      onAbort: () => {},
+      onRemoveQueued: () => {},
+      onDismissError: () => {},
+    };
+  }
+
+  function viewOf(...more: FixtureEntry[][]) {
+    return applyRecords(
+      initialSessionView(PLAYERS),
+      [MACHINE_FAILED, ...more].flat(),
+    );
+  }
+
+  test("the parked run holds the chip red with its own state in the tooltip", () => {
+    const view = viewOf();
+    // The stream really did leave the shell's rest state behind: the
+    // Captain's own controller reported last, on the leaf's topic.
+    expect(view.fsmState).toBe("hub");
+    render(<RunView {...props(view)} />);
+    const chip = screen.getByTestId("state-chip");
+    expect(chip.textContent).toBe("needs attention");
+    expect(chip.className).toContain("red");
+    expect(chip.getAttribute("title")).toBe("state: failed");
+  });
+
+  test("a turn that only answers keeps it, and leaving the failure gives the reported state back", () => {
+    const { rerender } = render(<RunView {...props(viewOf(MACHINE_ANSWERED))} />);
+    expect(screen.getByTestId("state-chip").textContent).toBe("needs attention");
+    rerender(<RunView {...props(viewOf(MACHINE_ANSWERED, MACHINE_RECOVERED))} />);
+    const chip = screen.getByTestId("state-chip");
+    expect(chip.textContent).toBe("run first phase");
+    expect(chip.className).not.toContain("red");
+    expect(chip.getAttribute("title")).toBe("state: runFirstPhase");
   });
 });

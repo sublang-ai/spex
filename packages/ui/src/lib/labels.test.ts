@@ -15,10 +15,12 @@ describe("stateLabel", () => {
     expect(stateLabel("anyCustomState", { pendingQuestion: true })).toEqual({
       text: "waiting for your reply",
       tone: "amber",
+      state: "anyCustomState",
     });
     expect(stateLabel("awaitBossReply")).toEqual({
       text: "waiting for your reply",
       tone: "amber",
+      state: "awaitBossReply",
     });
   });
 
@@ -26,6 +28,37 @@ describe("stateLabel", () => {
     expect(stateLabel("failed")).toEqual({
       text: "needs attention",
       tone: "red",
+      state: "failed",
+    });
+  });
+
+  test("at rest the parked run answers, not the last state reported", () => {
+    // The Captain shell's own machine rests in `hub` on the same
+    // topic the leaf just used (run-view-59, DR-061): the leaf's
+    // frames keep the chip red and put the leaf's own id in the
+    // tooltip.
+    expect(stateLabel("hub", { parkedFailure: "failed" })).toEqual({
+      text: "needs attention",
+      tone: "red",
+      state: "failed",
+    });
+    // A live turn keeps its own voice; the parked run waits for the
+    // settlement to speak.
+    expect(
+      stateLabel("hub", {
+        parkedFailure: "failed",
+        turnActive: true,
+        playersRunning: true,
+      }),
+    ).toEqual({ text: "working", tone: "emerald", state: "hub" });
+    // A question outranks the failure, and the tooltip follows the
+    // label rather than the parked run.
+    expect(
+      stateLabel("hub", { parkedFailure: "failed", pendingQuestion: true }),
+    ).toEqual({
+      text: "waiting for your reply",
+      tone: "amber",
+      state: "hub",
     });
   });
 
@@ -39,7 +72,11 @@ describe("stateLabel", () => {
   test("an active turn tints emerald; no state reads idle", () => {
     expect(stateLabel("coding", { turnActive: true }).tone).toBe("emerald");
     expect(stateLabel(undefined)).toEqual({ text: "idle", tone: "neutral" });
-    expect(stateLabel("hub")).toEqual({ text: "idle", tone: "neutral" });
+    expect(stateLabel("hub")).toEqual({
+      text: "idle",
+      tone: "neutral",
+      state: "hub",
+    });
   });
 
   test("a live turn with no leaf state is deciding or working, never idle", () => {
@@ -50,6 +87,7 @@ describe("stateLabel", () => {
     expect(stateLabel("hub", { turnActive: true, playersRunning: true })).toEqual({
       text: "working",
       tone: "emerald",
+      state: "hub",
     });
     expect(stateLabel("idle", { turnActive: true, playersRunning: false }).text).toBe(
       "deciding",

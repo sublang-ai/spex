@@ -7,6 +7,7 @@
 
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 
+import { parkedFailure } from "../lib/machine-frames.js";
 import type { SessionView } from "./reducer.js";
 
 export type AttentionKind = "question" | "failure" | "idle";
@@ -43,15 +44,22 @@ export function deriveAttention(
       });
       continue;
     }
-    // Only errors from the LATEST turn count as failures; a clean
-    // later turn clears the flag instead of pinning it forever.
+    // A run parked in its failure state summons until it leaves that
+    // state — the answer the failed-workflow notice gives, read from
+    // the same frames (run-view-34, DR-061). The session's last
+    // reported state cannot answer: the Captain shell's own machine
+    // writes that topic once the turn settles.
+    const parked = parkedFailure(view.frames) !== undefined;
+    // A failure that parked no machine is carried by its turn: only
+    // errors from the LATEST turn count, so a clean later turn clears
+    // the flag instead of pinning it forever.
     const lastError = [...view.captain]
       .reverse()
       .find(
         (line) =>
           line.kind === "error" && line.turnId === view.currentTurnId,
       );
-    if (view.fsmState === "failed" || (lastError && !view.turnActive)) {
+    if (parked || (lastError && !view.turnActive)) {
       items.push({
         kind: "failure",
         sessionId: session.id,

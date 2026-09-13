@@ -473,9 +473,12 @@ export const MACHINE_ORPHAN: FixtureEntry[] = [
 
 /** A run parked in its recoverable failure state (run-view-128):
  * `failed` is a parked state and not a final one, so the trace leaves
- * the frame open and the fsm telemetry names the state the chip reads.
- * The turn settles with the machine still standing there, waiting for
- * the Boss. */
+ * the frame open and the turn settles with the machine still standing
+ * there, waiting for the Boss. The Captain shell's own controller
+ * then walks hub → deciding → hub on the very topic the leaf just
+ * used, exactly as a real core reports it, so the session's last
+ * reported state is the shell's rest state and only the frames still
+ * name the leaf (run-view-59, DR-061). */
 export const MACHINE_FAILED: FixtureEntry[] = [
   rec(701, {
     type: "turn_started",
@@ -507,46 +510,64 @@ export const MACHINE_FAILED: FixtureEntry[] = [
     topic: "playbook.fsm.state",
     payload: { from: "runFirstPhase", to: "failed", event: "CODE_FAILED" },
   }),
-  rec(708, { type: "turn_finished", turnId: 14, timestamp: 14_013 }),
+  rec(708, {
+    type: "captain_telemetry",
+    turnId: 14,
+    timestamp: 14_013,
+    topic: "playbook.fsm.state",
+    payload: { from: "hub", to: "deciding", event: { type: "BOSS_TURN" } },
+  }),
+  rec(709, {
+    type: "captain_telemetry",
+    turnId: 14,
+    timestamp: 14_014,
+    topic: "playbook.fsm.state",
+    payload: {
+      from: "deciding",
+      to: "hub",
+      event: { type: "xstate.error.actor.0.deciding" },
+    },
+  }),
+  rec(710, { type: "turn_finished", turnId: 14, timestamp: 14_015 }),
 ];
 
 /** The turn that leaves the failure behind (run-view-130): the machine
  * walks out of `failed` and the way back is no longer owed. */
 export const MACHINE_RECOVERED: FixtureEntry[] = [
-  rec(709, {
+  rec(711, {
     type: "turn_started",
     turnId: 15,
     timestamp: 15_000,
     turn: { id: 15, prompt: "recover" },
   }),
-  trace(710, 15_001, "t-fail", "code", "fsm.transition",
+  trace(712, 15_001, "t-fail", "code", "fsm.transition",
     moved("failed", "runFirstPhase", "RETRY", "active", ["playbook.busy"])),
-  rec(711, {
+  rec(713, {
     type: "captain_telemetry",
     turnId: 15,
     timestamp: 15_002,
     topic: "playbook.fsm.state",
     payload: { from: "failed", to: "runFirstPhase", event: "RETRY" },
   }),
-  rec(712, { type: "turn_finished", turnId: 15, timestamp: 15_003 }),
+  rec(714, { type: "turn_finished", turnId: 15, timestamp: 15_003 }),
 ];
 
 /** A turn that answers without recovering (run-view-130): the Captain
  * speaks, the machine stays parked, and the way back stands. */
 export const MACHINE_ANSWERED: FixtureEntry[] = [
-  rec(713, {
+  rec(715, {
     type: "turn_started",
     turnId: 16,
     timestamp: 16_000,
     turn: { id: 16, prompt: "what happened?" },
   }),
-  rec(714, {
+  rec(716, {
     type: "captain_reply",
     turnId: 16,
     timestamp: 16_001,
     text: "The coder could not apply the patch.",
   }),
-  rec(715, { type: "turn_finished", turnId: 16, timestamp: 16_002 }),
+  rec(717, { type: "turn_finished", turnId: 16, timestamp: 16_002 }),
 ];
 
 export const FULL_RUN: FixtureEntry[] = [

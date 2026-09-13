@@ -254,7 +254,7 @@ function RunningRow({
       <span
         data-testid={`running-state-${session.id}`}
         className={`min-w-0 truncate rounded px-1.5 py-0.5 text-xs ${TONE_CHIP[status.tone]}`}
-        title={view?.fsmState}
+        title={status.state}
       >
         {status.text}
       </span>

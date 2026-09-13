@@ -57,6 +57,15 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
   await expect(retry).toBeEnabled();
   await expect(page.getByTestId("boss-composer")).toBeEnabled();
 
+  // The chip beside the thread says what the notice says (run-view-59,
+  // DR-061): the Captain shell's own controller reported its rest
+  // state last, on the very topic the leaf used, so only the run's
+  // frames can still answer for the run.
+  const chip = page.getByTestId("state-chip");
+  await expect(chip).toHaveText("needs attention");
+  await expect(chip).toHaveClass(/red/);
+  await expect(chip).toHaveAttribute("title", "state: failed");
+
   // The busy form never widens the control (DR-041 §2). The reserved
   // width is a layout fact, so it is measured here against the real
   // fonts and rules rather than inferred from a class name: the busy

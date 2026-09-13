@@ -12,6 +12,9 @@ import { applyRecords, initialSessionView } from "./reducer.js";
 import {
   FULL_RUN,
   INITIAL_VISIBLE,
+  MACHINE_ANSWERED,
+  MACHINE_FAILED,
+  MACHINE_RECOVERED,
   PLAYERS,
   TURN_ONE,
   TURN_TWO_QUESTION,
@@ -89,5 +92,33 @@ describe("dead sessions produce no attention", () => {
     );
     const ended = { ...session("s"), live: false };
     expect(deriveAttention([ended], { s: view })).toEqual([]);
+  });
+});
+
+describe("run-view-133: a parked run summons until it leaves its failure state", () => {
+  const kinds = (view: ReturnType<typeof initialSessionView>) =>
+    deriveAttention([session("s")], { s: view }).map((item) => item.kind);
+
+  test("the run's own frames answer, not the session's last reported state", () => {
+    const parked = applyRecords(initialSessionView(PLAYERS), MACHINE_FAILED);
+    // The Captain shell's own machine reported last, on the topic the
+    // leaf had just used (DR-061), and it parked no run.
+    expect(parked.fsmState).toBe("hub");
+    expect(kinds(parked)).toEqual(["failure"]);
+
+    // A later turn settles with no failure of its own: the workflow is
+    // still parked, so the summons stands with the notice.
+    const answered = applyRecords(
+      initialSessionView(PLAYERS),
+      [...MACHINE_FAILED, ...MACHINE_ANSWERED],
+    );
+    expect(kinds(answered)).toEqual(["failure"]);
+
+    // The run leaves `failed`: nothing is owed but a look at the work.
+    const recovered = applyRecords(
+      initialSessionView(PLAYERS),
+      [...MACHINE_FAILED, ...MACHINE_ANSWERED, ...MACHINE_RECOVERED],
+    );
+    expect(kinds(recovered)).toEqual(["idle"]);
   });
 });

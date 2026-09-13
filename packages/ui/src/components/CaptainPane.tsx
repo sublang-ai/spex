@@ -10,6 +10,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
+import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, clockTime, duration } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
@@ -370,6 +371,10 @@ export function CaptainPane({
   const now = useClock(anyPlayerRunning && since !== undefined);
   const status = stateLabel(view.fsmState, {
     pendingQuestion: view.pendingQuestion !== undefined,
+    // The leaf answers for the leaf (DR-061): the reported state is
+    // whichever machine reported it last, and the Captain shell's own
+    // controller writes that topic after the run parks.
+    parkedFailure: parkedFailure(view.frames)?.active ?? undefined,
     turnActive: view.turnActive,
     playersRunning: Object.values(view.players).some(
       (playerView) => playerView.running,
@@ -395,10 +400,10 @@ export function CaptainPane({
           C
         </span>
         <span className="text-sm font-semibold">Captain</span>
-        {view.fsmState || view.turnActive ? (
+        {status.state || view.turnActive ? (
           <span
             data-testid="state-chip"
-            title={view.fsmState ? `state: ${view.fsmState}` : undefined}
+            title={status.state ? `state: ${status.state}` : undefined}
             className={`ml-auto rounded px-1.5 py-0.5 text-xs ${STATE_TONE_CLASSES[status.tone]}`}
           >
             {status.text}

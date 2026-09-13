@@ -30,38 +30,59 @@ export function humanizeId(id: string): string {
     .trim();
 }
 
-/** Human label + tone for a session state. Tone keys off signals the
- * reducer derives (a pending question, failure), not open-ended
- * playbook-authored state names. While a turn is active and the
- * state names no leaf — no state yet, or the shell's own rest states
- * — the label says what the turn is doing: "working" while a player
- * runs, "deciding" while the Captain has the floor; a live turn never
+/** Human label + tone for a session state, with the raw state id the
+ * label speaks for — the tooltip's business, never the copy. Tone
+ * keys off signals the reducer derives (a pending question, a run
+ * parked in its failure state), not open-ended playbook-authored
+ * state names. The reported state belongs to whichever machine
+ * reported it last — the Captain shell's controller writes the same
+ * topic as the leaf — so at rest the leaf's own frames answer for the
+ * leaf (DR-061, run-view-59). While a turn is active and the state
+ * names no leaf — no state yet, or the shell's own rest states — the
+ * label says what the turn is doing: "working" while a player runs,
+ * "deciding" while the Captain has the floor; a live turn never
  * reads "idle" (run-view-59). */
 export function stateLabel(
   fsmState: string | undefined,
   options?: {
     pendingQuestion?: boolean;
+    /** The state id of the run standing parked in its recoverable
+     * failure state, where one stands (run-view-59). */
+    parkedFailure?: string;
     turnActive?: boolean;
     playersRunning?: boolean;
   },
-): { text: string; tone: StatusTone } {
+): { text: string; tone: StatusTone; state?: string } {
   if (options?.pendingQuestion || fsmState === "awaitBossReply") {
-    return { text: STATE_LABELS.awaitBossReply, tone: "amber" };
+    return {
+      text: STATE_LABELS.awaitBossReply,
+      tone: "amber",
+      state: fsmState,
+    };
   }
-  if (fsmState === "failed") {
-    return { text: STATE_LABELS.failed, tone: "red" };
+  // A live turn keeps its own voice, so the parked leaf speaks only
+  // once the turn settles — where the reported state is the shell's.
+  const parked = options?.turnActive ? undefined : options?.parkedFailure;
+  if (fsmState === "failed" || parked) {
+    return {
+      text: STATE_LABELS.failed,
+      tone: "red",
+      state: parked ?? fsmState,
+    };
   }
   const resting = !fsmState || STATE_LABELS[fsmState] === "idle";
   if (resting && options?.turnActive) {
     return {
       text: options.playersRunning ? "working" : "deciding",
       tone: "emerald",
+      state: fsmState,
     };
   }
   if (!fsmState) return { text: "idle", tone: "neutral" };
   return {
     text: STATE_LABELS[fsmState] ?? humanizeId(fsmState),
     tone: options?.turnActive ? "emerald" : "neutral",
+    state: fsmState,
   };
 }
 

@@ -157,6 +157,11 @@ export interface SessionView {
   loading?: boolean;
   /** A failed backfill is separate from a refused session command. */
   loadError?: string;
+  /** The last state the record stream reported, whichever machine
+   * reported it — the Captain shell's own controller writes this
+   * topic beside the leaf's runs, so it rests in the shell's `hub`
+   * once a turn settles. It answers no question about a leaf run:
+   * those are read from the frames below (DR-061). */
   fsmState?: string;
   captainMode?: string;
   /** Live machine frames, parents before children (run-view-60/63). */
