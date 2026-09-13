@@ -43,6 +43,7 @@ import {
   interruptDemoSession,
   fakeAdapterImports,
   prepareStorageGitFiles,
+  STUB_SLC_RELEASE_FILE,
   stubSlcScriptedSource,
   type FakeScript,
   type StubSlcStep,
@@ -123,13 +124,42 @@ export interface AppOptions {
    * — and the authoring agent's script laid before the demo's, so
    * sessions still draw the same run. The stub's entry declares the
    * two roles the authoring source names, and each phase stays open
-   * `phaseDelayMs` so a running phase can be watched.
+   * `phaseDelayMs` so a running phase can be watched. With `hold`,
+   * every run stays in its first phase until `app.releaseCompile(id)`:
+   * a state-by-state walk then asserts the running state and scans it
+   * at its own pace, however slow the machine, and releases the run
+   * when done. The stub runs under the running Node, which stands in
+   * for the system Node the compile floor checks (DR-005: >= 23.6), so
+   * `startApp` refuses an older Node up front rather than letting
+   * every compile fail "at toolchain".
    */
   authoring?: {
     script?: FakeScript;
     slc?: "ok" | "fail:gears2fsm" | "clarify" | "block";
     phaseDelayMs?: number;
+    hold?: boolean;
   };
+}
+
+/** The compile floor of DR-005 (`MIN_NODE_MAJOR.MIN_NODE_MINOR` in the
+ * core's compile module): slc's dynamic import of `.ts` artifacts needs
+ * Node's type stripping. */
+const COMPILE_NODE_FLOOR = { major: 23, minor: 6 };
+
+/** Refuse a running Node below the compile floor when the journey
+ * compiles: the stub `slc` runs under it, and the compile check would
+ * otherwise fail every run before the compiler starts. */
+function assertCompileNode(): void {
+  const match = /^v(\d+)\.(\d+)/.exec(process.version);
+  const major = Number(match?.[1] ?? 0);
+  const minor = Number(match?.[2] ?? 0);
+  const ok = major > COMPILE_NODE_FLOOR.major
+    || (major === COMPILE_NODE_FLOOR.major && minor >= COMPILE_NODE_FLOOR.minor);
+  if (!ok) {
+    throw new Error(
+      `the authoring journeys compile with the stub slc under the running Node (${process.version}), below the compile floor ${COMPILE_NODE_FLOOR.major}.${COMPILE_NODE_FLOOR.minor} (DR-005); run the journeys on a newer Node`,
+    );
+  }
 }
 
 /** The two roles the authoring source names (`AUTHORING_SOURCE`),
@@ -415,6 +445,10 @@ export interface App {
   /** A draft's library directory, where the agent writes `<id>.md`
    * (playbook-library-70). */
   draftDir(id: string): string;
+  /** Let a held stub compile of the draft past its first phase (with
+   * `authoring.hold`): one token per run, consumed when the run reads
+   * it, so a token written before the run starts releases that run. */
+  releaseCompile(id: string): void;
   /** The app preferences file's text, empty when none was written. */
   readPrefs(): string;
   /** Stop the shell, keeping the root; `start` boots it again on the
@@ -490,11 +524,13 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
   // the system Node the compile check probes.
   let env = baseEnv;
   if (options.authoring) {
+    assertCompileNode();
     const stubPath = join(scratch, "stub-slc.cjs");
     writeFileSync(
       stubPath,
       stubSlcScriptedSource(STUB_STEPS[options.authoring.slc ?? "ok"], AUTHORING_ROLES, {
         phaseDelayMs: options.authoring.phaseDelayMs ?? 800,
+        hold: options.authoring.hold ?? false,
       }),
     );
     env = { ...baseEnv, SPEX_SLC: `${process.execPath} ${stubPath}`, SPEX_NODE: process.execPath };
@@ -633,6 +669,10 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
     draftDir(id) {
       return join(dataDir, "playbooks", id);
     },
+    releaseCompile(id) {
+      if (!options.authoring?.hold) throw new Error("releaseCompile needs authoring.hold");
+      writeFileSync(join(app.draftDir(id), STUB_SLC_RELEASE_FILE), "");
+    },
     readPrefs() {
       const prefs = join(dataDir, "prefs.json");
       return existsSync(prefs) ? readFileSync(prefs, "utf8") : "";
@@ -669,6 +709,25 @@ export async function runTurn(app: App, sessionId: string, text: string): Promis
       m.session.turns > before,
     30_000,
   );
+}
+
+/**
+ * Wait until no session holds the runtime or a turn (DR-051): the
+ * Captain's last line shows before the turn settles and the runtime is
+ * released, and a Space operation is refused by name while either
+ * stands (space-11) — a journey that sent a turn through the page
+ * waits here before it syncs.
+ */
+export async function settled(app: App): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        (await app.core.command("session.list", {})).every(
+          (session) => !session.live && !session.turnActive,
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
 }
 
 /**

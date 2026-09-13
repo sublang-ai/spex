@@ -31,4 +31,5 @@ A top-level Space surface manages Spex home: what is in it and what is private, 
 ## Verification
 
 - `npm test -w packages/core`, `npm test -w packages/ui`, `npm run e2e`, `spex lint`.
+- CI's journeys job green on Linux: the first-time setup journey waits for the turn's runtime release before it syncs, since the sync is refused by name while a session is held.
 - Manual: a scratch home initialized from the surface, pushed to a bare remote, diverged from a second home, and merged with an explicit unit choice.

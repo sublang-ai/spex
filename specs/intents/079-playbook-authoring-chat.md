@@ -31,4 +31,5 @@ Creating a playbook starts as a conversation: a two-pane authoring workspace on 
 ## Verification
 
 - `npm test -w packages/core`, `npm test -w packages/ui`, `npm run e2e`, `spex lint`.
+- CI's journeys job green on Linux: the job runs a Node at or above the compile floor, since the stub `slc` runs under it, and the state-by-state walks hold each compile run in its first phase until they release it.
 - Live: the changelog playbook compiled and listed among configured playbooks with its Gears and Machine stages served.

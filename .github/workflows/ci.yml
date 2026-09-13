@@ -67,9 +67,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The authoring journeys compile with a stub slc under this Node,
+      # which stands in for the system Node the compile floor checks
+      # (DR-005: >= 23.6); an older Node fails every compile "at
+      # toolchain" before the compiler runs.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci

@@ -17,7 +17,9 @@ import { test, expect, open, nav, slowAuthoringScript } from "../src/harness";
 test.use({
   appOptions: {
     project: true,
-    authoring: { script: slowAuthoringScript(2500), slc: "fail:gears2fsm" },
+    // Each compile run holds in its first phase until the journey has
+    // asserted the running state, then fails or passes as scripted.
+    authoring: { script: slowAuthoringScript(2500), slc: "fail:gears2fsm", hold: true },
   },
 });
 
@@ -159,6 +161,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   // ── The failing stub: a red phase with its output open, the
   //    "sent to the agent" line, then the relay's compile passes
   //    (playbook-library-58/60).
+  app.releaseCompile("triage");
   await expect(band).toHaveAttribute("data-outcome", "failed");
   await expect(chip).toContainText("Failed");
   await expect(page.getByTestId("phase-gears2fsm")).toHaveAttribute("data-status", "failed");
@@ -200,6 +203,8 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   await expect(queue).toContainText("sends after the compile");
   await expect(composer).toHaveValue("");
 
+  // The relay's held run passes once released.
+  app.releaseCompile("triage");
   await expect(chip).toContainText("Compiled", { timeout: 30_000 });
   await expect(
     thread.getByTestId("system-line").filter({ hasText: "Compiled — roles: Triager, Verifier" }),

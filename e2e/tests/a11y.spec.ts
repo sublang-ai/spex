@@ -16,9 +16,10 @@ import { test, expect, open, nav, send, slowAuthoringScript } from "../src/harne
 test.use({
   appOptions: {
     project: true,
-    // The failing-then-passing stub, with the replies and phases held
-    // long enough for a scan inside each state.
-    authoring: { script: slowAuthoringScript(4000), slc: "fail:gears2fsm", phaseDelayMs: 1200 },
+    // The failing-then-passing stub, with the replies held long enough
+    // for a scan inside each state, and each compile run held in its
+    // first phase until the journey has scanned the compiling state.
+    authoring: { script: slowAuthoringScript(4000), slc: "fail:gears2fsm", hold: true },
   },
 });
 
@@ -85,9 +86,13 @@ for (const theme of ["light", "dark"] as const) {
     const band = page.getByTestId("compile-band");
     await expect(band).toHaveAttribute("data-outcome", "running");
     found.push(...(await scan(page, "Workspace (compiling)")));
+    // The held run moves on to its failure once the scan is done.
+    app.releaseCompile("triage");
     await expect(band).toHaveAttribute("data-outcome", "failed");
     await expect(page.getByTestId("compile-output")).toBeVisible();
     found.push(...(await scan(page, "Workspace (failed)")));
+    // The relay's compile, held the same way, passes once released.
+    app.releaseCompile("triage");
     await expect(
       page.locator('[data-testid="directive-card"][data-kind="register"]'),
     ).toBeVisible({ timeout: 45_000 });

@@ -19,6 +19,11 @@ export const SLC_PHASES = ["normalize", "text2gears", "optimize", "gears2fsm", "
  * clarification, or stay in flight until killed. */
 export type StubSlcStep = "ok" | `fail:${string}` | "clarify" | "block";
 
+/** The release token a held stub waits for, beside the source: a
+ * journey writes it to let the run past its first phase, and the stub
+ * consumes it (playbook-library-77, run-view-102). */
+export const STUB_SLC_RELEASE_FILE = ".stub-slc-release";
+
 const STUB_RUNTIME = `
 const fs = require("node:fs");
 const path = require("node:path");
@@ -27,10 +32,20 @@ const base = path.basename(src, ".md");
 const srcDir = path.dirname(src);
 function progress(line) { process.stderr.write(line + "\\n"); }
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// A held run stays in its first phase until the release token lands,
+// then consumes it, so a journey decides when the compile moves on.
+async function hold() {
+  if (!HOLD) return;
+  const token = path.join(srcDir, RELEASE_FILE);
+  while (!fs.existsSync(token)) await wait(50);
+  fs.rmSync(token, { force: true });
+}
 async function phaseLines(upTo) {
+  let first = true;
   for (const phase of PHASES) {
     if (phase === upTo) return;
     progress("→ " + phase + " (writing " + base + ".playbook/" + base + "." + phase + ")");
+    if (first) { first = false; await hold(); }
     await wait(PHASE_DELAY_MS);
     progress("✓ " + phase + " wrote " + base + ".playbook/" + base + "." + phase + " (1s)");
   }
@@ -184,12 +199,15 @@ export function stubSlcSource(rolesLiteral = "['Helper']"): string {
  * fails twice and then passes without the test restarting it. A
  * `delayMs` keeps each run in flight long enough to be observed, and
  * a `phaseDelayMs` holds every phase open that long, so a running
- * phase can be watched (playbook-library-77).
+ * phase can be watched; `hold` keeps every run in its first phase
+ * until a `STUB_SLC_RELEASE_FILE` token lands beside the source, so
+ * the running state stands however slow the machine, and the journey
+ * releases each run when it has seen enough (playbook-library-77).
  */
 export function stubSlcScriptedSource(
   steps: readonly StubSlcStep[],
   rolesLiteral = "['Helper']",
-  options: { delayMs?: number; phaseDelayMs?: number } = {},
+  options: { delayMs?: number; phaseDelayMs?: number; hold?: boolean } = {},
 ): string {
   return `
 const PHASES = ${JSON.stringify(SLC_PHASES)};
@@ -197,6 +215,8 @@ const REQUIRED_ROLE_IDS = ${rolesLiteral};
 const ARTIFACT_SCHEMA = ${ARTIFACT_SCHEMAS[0]};
 const STEPS = ${JSON.stringify(steps)};
 const PHASE_DELAY_MS = ${options.phaseDelayMs ?? 0};
+const HOLD = ${options.hold === true};
+const RELEASE_FILE = ${JSON.stringify(STUB_SLC_RELEASE_FILE)};
 ${STUB_RUNTIME}
 const counter = path.join(srcDir, ".stub-slc-runs");
 const run = fs.existsSync(counter) ? Number(fs.readFileSync(counter, "utf8")) : 0;

@@ -29,6 +29,7 @@ import {
   open,
   runTurn,
   send,
+  settled,
   test,
   type App,
 } from "../src/harness";
@@ -192,6 +193,9 @@ test.describe("first-time setup", () => {
     await expect(page.getByTestId("captain-home")).toContainText("demo-project");
     await send(page, "Fix the token refresh in auth.ts");
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+    // The turn settles and the runtime is released after that line;
+    // Sync is refused by name until then (space-11).
+    await settled(app);
     await showSpace(page);
     const row = page.getByTestId("space-local-list").locator('[data-testid^="space-unit-mine-sessions/"]');
     await expect(row).toHaveCount(1);
