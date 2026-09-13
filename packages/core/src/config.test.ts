@@ -74,6 +74,26 @@ function decideEntry(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function branchEntry(overrides: Record<string, unknown> = {}) {
+  return registryEntry({
+    id: "branch",
+    command: "branch",
+    intent: "branch workflow: name and open the working branch",
+    requiredRoleIds: ["coder"],
+    ...overrides,
+  });
+}
+
+function prEntry(overrides: Record<string, unknown> = {}) {
+  return registryEntry({
+    id: "pr",
+    command: "pr",
+    intent: "pull-request workflow: describe the committed work",
+    requiredRoleIds: ["coder"],
+    ...overrides,
+  });
+}
+
 const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/code/registry") {
     return { default: registryEntry() };
@@ -93,6 +113,12 @@ const stubLoader: LoadModule = async (specifier) => {
         requiredRoleIds: ["analyst"],
       }),
     };
+  }
+  if (specifier === "@sublang/playbook/branch/registry") {
+    return { default: branchEntry() };
+  }
+  if (specifier === "@sublang/playbook/pr/registry") {
+    return { default: prEntry() };
   }
   throw new Error(`no module ${specifier}`);
 };
