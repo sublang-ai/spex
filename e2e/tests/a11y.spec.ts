@@ -56,6 +56,12 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("builtins-section")).toBeVisible();
     found.push(...(await scan(page, "Playbooks")));
 
+    // Space before its home is a repository: the setup card stands
+    // (space-3); the picker and the tree are scanned by space-44.
+    await nav(page, "Space").click();
+    await expect(page.getByTestId("space-setup")).toBeVisible();
+    found.push(...(await scan(page, "Space")));
+
     await nav(page, "Settings").click();
     await expect(page.getByTestId("captain-section")).toBeVisible();
     // The Captain's editor opens in place; scan the surface with it

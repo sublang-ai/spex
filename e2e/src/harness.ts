@@ -8,7 +8,10 @@
 // machine's agents and sign-in, redirecting only the state it writes.
 
 import { test as base, expect, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -26,6 +29,7 @@ import type {
   Command,
   CommandResults,
   ServerMessage,
+  SpaceState,
 } from "@sublang/spex-core";
 import {
   DEMO_CONFIG,
@@ -34,6 +38,7 @@ import {
   seedDemoHistory,
   seedDemoProject,
   seedHistorySession,
+  appendHistorySession,
   interruptDemoSession,
   fakeAdapterImports,
 } from "@sublang/spex-core/testing";
@@ -82,6 +87,27 @@ export interface AppOptions {
   governedCompletion?: boolean;
   /** Substitute task-free model discovery; never start installed providers. */
   discoverAgentModels?: NonNullable<ServerShellOptions["core"]>["discoverAgentModels"];
+  /**
+   * Write the configuration inside the Spex home, at
+   * `<dataDir>/playbook/playbook.config.yaml`, where the Space
+   * surface shares it (DR-057); the scratch default lies outside the
+   * home and reads "outside the space". Implied by `remote`.
+   */
+  homeConfig?: boolean;
+  /**
+   * A Git remote for the Space journeys (space-40 … space-44): `bare`
+   * creates a bare repository in the scratch root, exposed as
+   * `app.remotePath`, and leaves the home a plain directory; `peer`
+   * also initializes the home (with `project`, one titled session run
+   * through the core), pushes it, then clones the remote as a peer
+   * home that pushes a differing configuration, the same session
+   * changed and one queued intent — and changes the same session and
+   * Settings on this device too, so the next sync asks two choices.
+   * Either sets the core's Git environment: an isolated Git
+   * configuration with no identity, and a sleeping `GIT_SSH_COMMAND`
+   * for `app.sleepingRemote()`.
+   */
+  remote?: "bare" | "peer";
 }
 
 /** Deliberately omits the demo's current model, exercising retained custom IDs. */
@@ -188,7 +214,77 @@ export class CoreClient {
       await new Promise((r) => setTimeout(r, 10));
     }
   }
+
+  /** How many messages have arrived — a mark for `waitSpace`. */
+  mark(): number {
+    return this.messages.length;
+  }
+
+  /** The first `space.state` at or after `from` that `check` accepts. */
+  async waitSpace(
+    from: number,
+    check: (state: SpaceState) => boolean,
+    timeoutMs = 30_000,
+  ): Promise<SpaceState> {
+    const start = Date.now();
+    for (;;) {
+      for (let i = from; i < this.messages.length; i += 1) {
+        const message = this.messages[i];
+        if (message.type === "space.state" && check(message.state)) return message.state;
+      }
+      if (Date.now() - start > timeoutMs) {
+        const seen = this.messages
+          .slice(from)
+          .filter((m) => m.type === "space.state")
+          .map((m) => (m.type === "space.state" ? JSON.stringify(m.state.sync) : ""));
+        throw new Error(`timeout waiting for space state; saw ${seen.join(" | ")}`);
+      }
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
 }
+
+// ---------------------------------------------------------------------------
+// Git for the Space journeys: the test's own, isolated from the machine
+// ---------------------------------------------------------------------------
+
+/** The journey's Git: an isolated configuration and a fixed identity,
+ * for the bare remote and the peer home (never the core's). */
+const peerGitEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_AUTHOR_NAME: "Peer",
+  GIT_AUTHOR_EMAIL: "peer@example.test",
+  GIT_COMMITTER_NAME: "Peer",
+  GIT_COMMITTER_EMAIL: "peer@example.test",
+  LC_ALL: "C",
+};
+
+/** Run Git in a directory and return its trimmed output. */
+export function git(cwd: string, ...args: string[]): string {
+  return execFileSync("git", ["-C", cwd, ...args], {
+    encoding: "utf8",
+    env: peerGitEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+
+/** The peer's differing configuration: the demo config with another
+ * Captain model, so Settings is one whole-file choice (space-17). */
+export const PEER_CONFIG = DEMO_CONFIG.replace(
+  "captain:\n  adapter: claude\n  model: claude-opus-5",
+  "captain:\n  adapter: claude\n  model: claude-opus-5-peer",
+);
+/** The model this device sets before the daily sync, so Settings
+ * differs on both sides. */
+export const LOCAL_MODEL = "claude-opus-5-local";
+/** The peer's prompt in the shared session (space-41). */
+export const PEER_TURN = "Tighten the expiry tests";
+/** This device's own prompt in the shared session. */
+export const LOCAL_TURN = "Add the expiry test";
+/** The shared session's title: its first turn. */
+export const SESSION_TITLE = "Fix the login redirect";
 
 // ---------------------------------------------------------------------------
 // The app under test
@@ -213,6 +309,33 @@ export interface App {
   server: RunningServer;
   /** Arrange-only protocol client on the running shell. */
   core: CoreClient;
+  /** The bare repository standing in for `origin` (with `remote`). */
+  remotePath?: string;
+  /** The peer home's working copy (with `remote: "peer"`). */
+  peerDir?: string;
+  /** The session both homes changed (with `remote: "peer"`). */
+  sessionId?: string;
+  /** Run a long Space command and wait until the machine leaves
+   * `running`, returning the state it settled in (arrange only). */
+  settleSpace<T extends "space.sync" | "space.fetch">(
+    type: T,
+    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+  ): Promise<SpaceState>;
+  /** The peer changes its working copy and pushes to `origin` as
+   * plain Git — the remote "moved" (with `remote`). */
+  peerPush(mutate: (dir: string) => void | Promise<void>): Promise<string>;
+  /**
+   * The remote's `main` moves under the next `times` pushes: a
+   * `pre-receive` hook on the bare repository commits a peer note on
+   * `main` and declines each of those pushes as not fast-forward, so a
+   * sync meets a remote that changed after its check — once for the
+   * automatic re-check, twice for "The remote changed again".
+   */
+  rejectPushes(times: number): void;
+  /** An `ssh://` remote whose transport never answers: the core's
+   * `GIT_SSH_COMMAND` is a sleeping script, so a check against this
+   * URL hangs until Stop or the transport limit (space-16). */
+  sleepingRemote(): string;
   /** Stop the shell, keeping the root; `start` boots it again on the
    * same port so an open page's origin still reaches it. */
   stop(): Promise<void>;
@@ -237,13 +360,16 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
   const home = join(scratch, "home");
   mkdirSync(home, { recursive: true });
   const dataDir = join(scratch, "state");
-  const configPath = join(scratch, "config", "playbook.config.yaml");
+  const projectDir = join(scratch, "demo-project");
+  if (options.project) seedDemoProject(projectDir);
+  const homeConfig = options.homeConfig || options.remote !== undefined;
+  const configPath = homeConfig
+    ? join(dataDir, "playbook", "playbook.config.yaml")
+    : join(scratch, "config", "playbook.config.yaml");
   mkdirSync(dirname(configPath), { recursive: true });
   if ((options.config ?? "demo") === "demo") {
     writeFileSync(configPath, DEMO_CONFIG);
   }
-  const projectDir = join(scratch, "demo-project");
-  if (options.project) seedDemoProject(projectDir);
   if (options.project && options.history) {
     await seedDemoHistory(dataDir, projectDir, options.history);
   }
@@ -252,10 +378,31 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
   const sharedSessionsDir = join(dataDir, "sessions");
   mkdirSync(sharedSessionsDir, { recursive: true, mode: 0o700 });
 
+  // The Space journeys' Git environment (space-32, space-37): Git found
+  // on the PATH, configured only through this environment — no identity,
+  // so the committer fallback engages — and an ssh transport that sleeps,
+  // for `sleepingRemote()`; file-path remotes never reach it.
+  const sleeper = join(scratch, "sleep-ssh.sh");
+  let remotePath: string | undefined;
+  if (options.remote) {
+    writeFileSync(sleeper, "#!/bin/sh\nexec sleep 300\n");
+    chmodSync(sleeper, 0o755);
+    remotePath = join(scratch, "remote.git");
+    git(scratch, "init", "-q", "--bare", "-b", "main", remotePath);
+  }
   const env = options.env ?? {
     ANTHROPIC_API_KEY: "e2e-fake",
     OPENAI_API_KEY: "e2e-fake",
     SPEX_HOME: dataDir,
+    ...(options.remote
+      ? {
+          PATH: process.env.PATH ?? "",
+          HOME: home,
+          GIT_CONFIG_GLOBAL: "/dev/null",
+          GIT_CONFIG_NOSYSTEM: "1",
+          GIT_SSH_COMMAND: sleeper,
+        }
+      : {}),
   };
   const shellOptions: ServerShellOptions = {
     host: "127.0.0.1",
@@ -312,6 +459,63 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
     get core() {
       return live().core;
     },
+    remotePath,
+    async settleSpace(type, fields) {
+      const core = live().core;
+      const from = core.mark();
+      await core.command(type, fields);
+      return core.waitSpace(from, (state) => state.sync.phase !== "running");
+    },
+    async peerPush(mutate) {
+      const dir = app.peerDir ?? clonePeer(app);
+      git(dir, "fetch", "-q", "origin");
+      git(dir, "reset", "-q", "--hard", "origin/main");
+      await mutate(dir);
+      git(dir, "add", "-A", "--", ".");
+      git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "peer change");
+      git(dir, "push", "-q", "origin", "HEAD:main");
+      return git(dir, "rev-parse", "HEAD");
+    },
+    rejectPushes(times) {
+      if (!remotePath) throw new Error("rejectPushes needs a remote");
+      const counter = join(scratch, "rejected-pushes");
+      writeFileSync(counter, "0\n");
+      const hook = join(remotePath, "hooks", "pre-receive");
+      // The hook runs inside the bare repository during the core's
+      // push, before any ref moves: it advances main by one real peer
+      // commit — a note file over the current tree, written outside
+      // the push's quarantine — and declines the push as the remote
+      // would have, had the peer pushed first.
+      writeFileSync(
+        hook,
+        [
+          "#!/bin/sh",
+          "unset GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_INDEX_FILE",
+          'export GIT_DIR="$(pwd)"',
+          `count=$(cat "${counter}")`,
+          "count=$((count + 1))",
+          `echo "$count" > "${counter}"`,
+          `if [ "$count" -le ${times} ]; then`,
+          `  export GIT_INDEX_FILE="${scratch}/peer-index-$count"`,
+          "  git read-tree main",
+          '  blob=$(printf "peer note %s\\n" "$count" | git hash-object -w --stdin)',
+          '  git update-index --add --cacheinfo 100644 "$blob" "peer-note-$count.txt"',
+          "  tree=$(git write-tree)",
+          '  commit=$(git -c user.name=Peer -c user.email=peer@example.test commit-tree "$tree" -p main -m "peer moved $count")',
+          '  git update-ref refs/heads/main "$commit"',
+          '  echo "the peer pushed first: non-fast-forward, fetch first" >&2',
+          "  exit 1",
+          "fi",
+          "exit 0",
+          "",
+        ].join("\n"),
+      );
+      chmodSync(hook, 0o755);
+    },
+    sleepingRemote() {
+      if (!remotePath) throw new Error("sleepingRemote needs a remote");
+      return "ssh://sleepy.invalid/space.git";
+    },
     async stop() {
       if (!running) return;
       const port = running.server.port;
@@ -336,7 +540,74 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
     const info = await app.core.command("project.register", { path: projectDir });
     app.projectId = info.id;
   }
+  if (options.remote === "peer") await arrangePeer(app);
   return app;
+}
+
+/** Clone the bare remote as the peer's working copy. */
+function clonePeer(app: App): string {
+  if (!app.remotePath) throw new Error("the peer needs a remote");
+  const dir = join(dirname(app.dataDir), "peer");
+  git(dirname(app.dataDir), "clone", "-q", app.remotePath, dir);
+  app.peerDir = dir;
+  return dir;
+}
+
+/** Run one turn through the core and wait for the runtime's release. */
+export async function runTurn(app: App, sessionId: string, text: string): Promise<void> {
+  const before =
+    (await app.core.command("session.list", {})).find((s) => s.id === sessionId)?.turns ?? 0;
+  await app.core.command("turn.submit", { sessionId, text });
+  await app.core.waitFor(
+    (m) =>
+      m.type === "session.state" &&
+      m.session.id === sessionId &&
+      !m.session.live &&
+      m.session.turns > before,
+    30_000,
+  );
+}
+
+/**
+ * The two-laptop arrangement (space-41, space-43, space-44): this home
+ * initialized and pushed with one titled session; the peer pushing a
+ * differing configuration, a second turn in that session and one
+ * queued intent; this device then running its own second turn and
+ * changing Settings — two conflicts and one incoming queue.
+ */
+async function arrangePeer(app: App): Promise<void> {
+  if (!app.projectId || !app.remotePath) {
+    throw new Error("remote: \"peer\" needs project: true");
+  }
+  const projectId = app.projectId;
+  const session = await app.core.command("session.create", { projectId });
+  app.sessionId = session.id;
+  await runTurn(app, session.id, SESSION_TITLE);
+  await app.core.command("space.init", {});
+  await app.core.command("space.remote.set", { url: app.remotePath });
+  const pushed = await app.settleSpace("space.sync", {});
+  if (pushed.sync.phase !== "done") {
+    throw new Error(`the first push ended ${JSON.stringify(pushed.sync)}`);
+  }
+  await app.peerPush(async (dir) => {
+    writeFileSync(join(dir, "playbook", "playbook.config.yaml"), PEER_CONFIG);
+    await appendHistorySession(join(dir, "sessions"), session.id, [
+      { type: "turn_started", turnId: 2, turn: { id: 2, prompt: PEER_TURN }, timestamp: Date.now() },
+      { type: "captain_reply", turnId: 2, timestamp: Date.now() + 1, text: "Done on the other laptop." },
+      { type: "turn_finished", turnId: 2, timestamp: Date.now() + 2 },
+    ]);
+    mkdirSync(join(dir, "intents"), { recursive: true });
+    const act = {
+      v: 1,
+      act: "queue",
+      intent: { id: randomUUID(), projectId, text: "Queued on the other laptop", rank: "a", createdAt: Date.now() },
+    };
+    writeFileSync(join(dir, "intents", `${projectId}.jsonl`), `${JSON.stringify(act)}\n`);
+  });
+  await runTurn(app, session.id, LOCAL_TURN);
+  await app.core.command("config.edit", {
+    op: { kind: "captain.set", patch: { model: LOCAL_MODEL } },
+  });
 }
 
 /**

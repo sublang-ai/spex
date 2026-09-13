@@ -32,12 +32,15 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   await expect(palette).toBeHidden();
   expect(await focusedIsBody()).toBe(false);
 
-  // Surfaces by number; the sidebar by B.
+  // Surfaces by number — Dashboard, Projects, Playbooks, Space,
+  // Settings — and the sidebar by B.
   await page.keyboard.press(`${MOD}+1`);
   await expect(page.getByTestId("attention-all-clear")).toBeVisible();
   await page.keyboard.press(`${MOD}+3`);
   await expect(page.getByTestId("builtins-section")).toBeVisible();
   await page.keyboard.press(`${MOD}+4`);
+  await expect(page.getByTestId("space-surface")).toBeVisible();
+  await page.keyboard.press(`${MOD}+5`);
   await expect(page.getByTestId("captain-section")).toBeVisible();
   await page.keyboard.press(`${MOD}+2`);
   await expect(page.getByTestId("captain-home")).toBeVisible();

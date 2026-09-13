@@ -135,6 +135,41 @@ export async function seedHistorySession(
   return sessionId;
 }
 
+/**
+ * Another device's turn on an existing session: the records appended
+ * through the shared store and the settled manifest re-checkpointed
+ * on the longer replay, so the bundle stays continuable (DR-042) and
+ * differs from the ancestor as one unit (space-33). Stands in for a
+ * peer core running the session, so a sync journey can meet the same
+ * session changed on both sides.
+ */
+export async function appendHistorySession(
+  sessionsDir: string,
+  sessionId: string,
+  records: Record<string, unknown>[],
+): Promise<void> {
+  const shared = createSessionStore({ sessionsDir }); await shared.prepare();
+  const manifestPath = join(sessionsDir, `${sessionId}.json`);
+  const prior = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+  const writer = await shared.acquire(sessionId);
+  try { for (const record of records) await writer.append(record); }
+  finally { await writer.release(); }
+  const history = await shared.readHistory(sessionId);
+  const bytes = readFileSync(join(sessionsDir, `${sessionId}.records.jsonl`));
+  const times = records.map((record) => record.timestamp).filter((at): at is number => typeof at === "number" && Number.isFinite(at));
+  const lease = await shared.acquireManagement(sessionId);
+  try {
+    const manifest = validateSessionManifest({
+      ...prior,
+      updatedAt: new Date(Math.max(Date.parse(String(prior.updatedAt)) || 0, times.at(-1) ?? 0)).toISOString(),
+      replay: { seq: history.lastReadableSeq, sha256: sha256(bytes), incomplete: false },
+    });
+    writeApplicationFile(manifestPath, manifest);
+  } finally { await lease.release(); }
+  const checked = await shared.validate(sessionId);
+  if (!checked.resumable) throw new Error(checked.reasons.join("; "));
+}
+
 /** Save the real pre-turn uncertainty boundary; the harness stops its host first. */
 export async function interruptDemoSession(sessionsDir: string, sessionId: string, input: string): Promise<void> {
   const shared = createSessionStore({ sessionsDir });
