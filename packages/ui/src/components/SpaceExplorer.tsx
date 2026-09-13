@@ -323,7 +323,7 @@ function PreviewBody({
   ) : null;
   if (kind === "markdown") {
     return (
-      <div data-testid="space-preview-markdown" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+      <div data-testid="space-preview-markdown" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto" tabIndex={0}>
         <Markdown text={result.text} />
         {cut}
       </div>
@@ -349,7 +349,7 @@ function PreviewBody({
             </>
           ) : null}
         </div>
-        <ol className="min-h-0 flex-1 list-decimal overflow-auto rounded bg-neutral-100 p-2 pl-10 font-mono text-xs leading-5 dark:bg-neutral-950">
+        <ol className="min-h-0 flex-1 list-decimal overflow-auto rounded bg-neutral-100 p-2 pl-10 font-mono text-xs leading-5 dark:bg-neutral-950" tabIndex={0}>
           {records.map((line, index) => (
             <li key={index} className="whitespace-pre">
               {line}
@@ -365,6 +365,7 @@ function PreviewBody({
       <pre
         data-testid="space-preview-text"
         className="min-h-0 flex-1 overflow-auto rounded bg-neutral-100 p-2 font-mono text-xs leading-5 whitespace-pre dark:bg-neutral-950"
+        tabIndex={0}
       >
         {kind === "json" ? prettyJson(result.text) : result.text}
       </pre>

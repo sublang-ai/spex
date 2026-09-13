@@ -99,7 +99,13 @@ function DiffBox({
               {path}
             </span>
           ) : null}
-          <pre className="max-h-64 overflow-auto font-mono text-xs leading-5 whitespace-pre">
+          {/* The box is the canvas (space-28): it scrolls sideways and
+              takes focus for the keyboard; each line is inline text, so
+              nothing but the box itself is wider than its place. */}
+          <pre
+            tabIndex={0}
+            className="max-h-64 overflow-auto font-mono text-xs leading-5 whitespace-pre"
+          >
             {patch === "" ? (
               <span className="text-neutral-500">No difference</span>
             ) : (
@@ -113,8 +119,9 @@ function DiffBox({
                         ? "text-brand-700 dark:text-brand-300"
                         : "";
                 return (
-                  <span key={index} className={`block ${tone}`}>
+                  <span key={index} className={tone}>
                     {line}
+                    {"\n"}
                   </span>
                 );
               })
@@ -329,6 +336,9 @@ function ConflictRow({
             className="accent-brand-600"
           />
           <span className="shrink-0 font-medium">{label}</span>
+          {/* A spoken space: the radio's name reads "Keep mine updated…",
+              never two words run together. */}
+          {" "}
           <span className="min-w-0 truncate text-xs text-neutral-500" title={sideSummary(summary, now)}>
             {sideSummary(summary, now)}
           </span>
@@ -514,6 +524,15 @@ export function SyncTab({
   // The picker's choices outlive a stop and a re-plan: a choice for a
   // unit that is no longer a conflict is dropped, the rest stand.
   const conflictUnits = new Set(space.conflicts.map((conflict) => conflict.unit.unit));
+  // The incoming list carries the conflicts too (space-8): the core
+  // lists a unit changed on both sides under conflicts alone, and its
+  // row here reads the remote's change beside the mark to choose.
+  const incomingUnits: SpaceUnit[] = [
+    ...space.incoming,
+    ...space.conflicts
+      .filter((conflict) => !space.incoming.some((unit) => unit.unit === conflict.unit.unit))
+      .map((conflict) => ({ ...conflict.unit, change: conflict.remote.change })),
+  ];
   const chosen = Object.entries(choices).filter(([unit]) => conflictUnits.has(unit));
   const chosenChoices = Object.fromEntries(chosen) as Record<string, Side>;
   const total = space.conflicts.length;
@@ -753,7 +772,7 @@ export function SyncTab({
       <section aria-labelledby="space-incoming-heading" className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h2 id="space-incoming-heading" className="min-w-0 flex-1 text-sm font-medium">
-            From the remote ({space.incoming.length})
+            From the remote ({incomingUnits.length})
             {repo.checkedAt !== null ? (
               <span className="hidden text-xs font-normal text-neutral-500 @2xl:inline">
                 {" "}
@@ -784,11 +803,11 @@ export function SyncTab({
           <p className="text-sm text-neutral-500">The remote is empty; Sync will send this space</p>
         ) : repo.checkedAt === null ? (
           <p className="text-sm text-neutral-500">Not checked yet</p>
-        ) : space.incoming.length === 0 ? (
+        ) : incomingUnits.length === 0 ? (
           <p className="text-sm text-neutral-500">Nothing new on the remote</p>
         ) : (
           <UnitList
-            units={space.incoming}
+            units={incomingUnits}
             side="remote"
             conflicts={conflictUnits}
             onOpenSession={onOpenSession}

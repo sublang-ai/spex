@@ -281,9 +281,11 @@ function RemoteRow({
       ) : (
         <>
           {remote ? (
-            <span className="min-w-0 truncate text-sm" title={remote}>
-              <span className="text-neutral-500">origin </span>
-              <span className="font-mono text-xs" data-testid="space-remote-url">
+            <span className="flex min-w-0 items-baseline gap-1 text-sm" title={remote}>
+              <span className="shrink-0 text-neutral-500">origin</span>
+              {/* The URL truncates in its own box (DR-041): the text
+                  lies directly in the truncating span. */}
+              <span className="min-w-0 truncate font-mono text-xs" data-testid="space-remote-url">
                 {displayRemote(remote)}
               </span>
             </span>
