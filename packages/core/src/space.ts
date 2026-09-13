@@ -189,6 +189,19 @@ export function spaceFamily(rel: string, isDirectory: boolean): string {
   return isDirectory ? "Not a Spex folder" : "Not a Spex file";
 }
 
+/** Catalog families the home never shares, whatever Git says (storage-1, space-35). */
+const LOCAL_FAMILIES = new Set([
+  "lease", "temporary write", "config backup", "provider hints", "legacy session sidecar",
+  "local data", "local project paths", "sync repair marker", "migration receipts", "migration inputs",
+  "preferences", "forge cache", "migration record",
+]);
+
+/** Whether a path belongs to an ignored catalog family; before Initialize writes the managed
+ * rules, `check-ignore` cannot answer and the family alone decides (space-35, storage-17). */
+function staysHere(rel: string, family: string): boolean {
+  return LOCAL_FAMILIES.has(family) || rel === "local" || rel.startsWith("local/");
+}
+
 function realPath(path: string): string {
   try { return realpathSync.native(path); } catch { return resolve(path); }
 }
@@ -1177,7 +1190,8 @@ export class SpaceManager {
     const family = spaceFamily(rel, directory);
     const under = (set: Set<string>): boolean => { for (const item of set) if (item === rel || item.startsWith(`${rel}/`)) return true; return false; };
     let sync: SpaceEntry["sync"];
-    if (!marks.repo) sync = directory ? (rel === "local" ? "local" : "pending") : portable(rel) ? "pending" : "local";
+    if (staysHere(rel, family)) sync = "local";
+    else if (!marks.repo) sync = "pending";
     else if (marks.ignored.has(rel)) sync = "local";
     else if (directory) sync = under(marks.status) ? "pending" : under(marks.tracked) ? "shared" : "local";
     else sync = marks.status.has(rel) ? "pending" : marks.tracked.has(rel) ? "shared" : "pending";

@@ -458,6 +458,7 @@ The core shall build each `space.tree` level by reading one directory of the hom
 | `*.tmp` | temporary write |
 | other | Not a Spex file |
 
+- a path in an ignored family of the catalog is marked ignored whatever Git reports, and where the home holds no repository the family alone marks every path [[storage-1](storage.md#storage-1)];
 - `space.read` refuses a path resolving outside the home or through a symlink, withholds provider hints, migration inputs and config backups, and caps text at 256 KB or 2,000 lines on complete lines.
 
 ## Verification
