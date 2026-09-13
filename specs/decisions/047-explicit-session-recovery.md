@@ -7,6 +7,7 @@
 
 Accepted (2026-09-05).
 Amends [DR-045](045-unified-session-storage.md) with desktop access to uncertain-turn recovery.
+Extended by [DR-060](060-failed-workflow-control.md) to the workflow parked in its recoverable failure state, a condition that never stands with uncertainty; the uncertain-turn decision below is unchanged.
 
 ## Context
 

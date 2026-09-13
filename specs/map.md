@@ -85,6 +85,7 @@ meta.md       The spec of specs
 | [DR-057](decisions/057-space-surface.md) | 057-space-surface.md | The Space surface: home at a glance, Initialize/Join, one shared branch synced by the core with a per-unit picker, read-only catalog explorer, Workspace reads Projects, reveal-in-Finder bridge |
 | [DR-058](decisions/058-chat-assisted-playbook-authoring.md) | 058-chat-assisted-playbook-authoring.md | Chat-assisted playbook authoring: a two-pane draft workspace, the Captain's block run through cligent in the draft directory, fenced directives for compile and registration, bounded failure relay, confirmed registration, drafts that persist |
 | [DR-059](decisions/059-issue-delivery-through-dev.md) | 059-issue-delivery-through-dev.md | Issue delivery through `/dev`: the seed dispatches `/dev` with the issue, `branch` and `pr` join the built-ins, delivery ends at the merged pull request; supersedes DR-054 |
+| [DR-060](decisions/060-failed-workflow-control.md) | 060-failed-workflow-control.md | A control for a failed workflow: a standing notice with one Retry between pane and composer, submitting one canonical visible Boss turn until Playbook advertises its runtime recovery actions to hosts |
 
 ## Packages
 

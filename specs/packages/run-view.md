@@ -264,6 +264,31 @@ While a stored session is uncertain, the run view shall show "Interrupted turn" 
 
 While a session reports external ownership [[core-service-32](core-service.md#core-service-32)], the run view shall show its history with the loading, failure and retry behavior of stored transcripts [[run-view-33](#run-view-33)] and its ownership reason without session mutation controls, preserving drafts and queued input until ownership is idle.
 
+#### run-view-128
+
+While a session a Boss message continues [[core-service-32](core-service.md#core-service-32)] holds a playbook run its record stream still reports underway [[run-view-14](#run-view-14)] [[run-view-74](#run-view-74)] standing in the recoverable failure state its machine card draws in the failure emphasis [[run-view-61](#run-view-61)], the run view shall stand a failed-workflow notice between the Captain pane and the composer, saying in plain words that the workflow failed and waits for the Boss and what its one recovery control does ([DR-010](../decisions/010-interface-craft.md) §2, [DR-060](../decisions/060-failed-workflow-control.md)):
+
+- the notice names the failed workflow by that run's own command, never by a state id, and carries the raw state in its title;
+- the notice states that its control asks the Captain to run the workflow's advertised recovery, so the control promises only what it performs;
+- the notice wraps its control under its words when its pane is too narrow for both ([DR-041](../decisions/041-chrome-that-fits.md));
+- an uncertain session shows the interrupted-turn controls instead [[run-view-110](#run-view-110)], a session reporting external ownership shows no notice [[run-view-125](#run-view-125)], and history the core cannot continue shows its own notice [[run-view-33](#run-view-33)].
+
+#### run-view-129
+
+When the failed-workflow notice's recovery control is activated [[run-view-128](#run-view-128)], the run view shall submit one fixed Boss turn asking the Captain to run the workflow's advertised recovery, through the same submission the composer uses [[run-view-8](#run-view-8)] [[core-service-5](core-service.md#core-service-5)]:
+
+- the submitted text is the same words on every activation and on every workflow, and is not a registered command;
+- the turn renders in the thread as the Boss's own message carrying exactly the submitted text, so the conversation records what was asked;
+- the submission carries no intent dispatch and stamps none [[core-service-47](core-service.md#core-service-47)] — a staged intent detaches rather than riding it [[run-view-86](#run-view-86)].
+
+#### run-view-130
+
+While a submission made from the failed-workflow notice is in flight [[run-view-129](#run-view-129)], the run view shall show the control's busy form in place without widening it and accept no second activation, and shall present the outcome only as the conversation reports it ([DR-010](../decisions/010-interface-craft.md) §3, §5, [DR-041](../decisions/041-chrome-that-fits.md)):
+
+- the control is disabled while the core connection is down and while a turn is active;
+- a refused submission shows its cause beside the notice with the transcript and draft preserved, as a refused composer submission does [[run-view-8](#run-view-8)];
+- the notice stands until the record stream reports that run left its failure state [[run-view-14](#run-view-14)], so a turn that answers without recovering leaves the way back in place.
+
 #### run-view-34
 
 The run view shall keep cross-project attention and playbook creation at hand:
@@ -809,6 +834,16 @@ The test suite shall assert first-hour failures surface at hand:
 - where a fixture config is invalid, the Captain home thread lists the errors with a Settings link [[run-view-44](#run-view-44)];
 - where a fixture readiness entry is not ready, the heads-up bubble offers a re-check that invokes the readiness refresh [[run-view-45](#run-view-45)].
 
+#### run-view-131
+
+Where a replayed fixture stream ends with a playbook run standing in its recoverable failure state [[run-view-14](#run-view-14)], the test suite shall assert the failed-workflow notice:
+
+- the notice stands between the Captain pane and the composer, naming the failed workflow by its command in plain words with the raw state in its title and stating what its control does [[run-view-128](#run-view-128)];
+- activating the control dispatches exactly one Boss submission over the protocol whose text is the fixed recovery request, which then renders as a Boss bubble carrying those exact words, while a staged intent detaches and no intent id rides the submission [[run-view-129](#run-view-129)];
+- while that submission is in flight the control shows its busy form, keeps the box it held at rest, and cannot be activated again; a refusal shows its cause with the transcript and draft intact [[run-view-130](#run-view-130)];
+- a fixture whose stream then reports the run leaving its failure state removes the notice, while one whose next turn only answers leaves it standing [[run-view-130](#run-view-130)];
+- the same fixture marked uncertain shows the interrupted-turn controls and no failed-workflow notice [[run-view-128](#run-view-128)] [[run-view-110](#run-view-110)], and marked externally owned shows neither [[run-view-125](#run-view-125)].
+
 ### Intent Ledger Coverage
 
 #### run-view-92
@@ -905,7 +940,7 @@ Where the harness boots with the demo project registered, the test suite shall a
 
 #### run-view-102
 
-Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
+Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
 
 #### run-view-103
 
@@ -946,3 +981,7 @@ Where the harness boots with the demo project registered and the scripted Captai
 #### run-view-122
 
 Where the harness boots with the demo project registered, when the journey leaves Projects for the Dashboard and for Playbooks and then returns, the test suite shall assert through the page that the sidebar names one place at a time [[run-view-67](#run-view-67)]: the project's row is selected on Projects, neither other surface leaves any row in the tree selected while its own entry reads as current, and Projects selects the remembered project's row again.
+
+#### run-view-132
+
+Where the harness boots with the demo project registered and a scripted workflow that parks in its recoverable failure state, the test suite shall assert the recovery round trip through the page [[run-view-128](#run-view-128)]: the notice appears naming the failed workflow by its command with the raw state in its title, and stands through the turn's settlement [[run-view-128](#run-view-128)], activating its control sends the fixed request as the next Boss turn and shows those words in the thread [[run-view-129](#run-view-129)], the control is disabled while that turn runs [[run-view-130](#run-view-130)], and the notice leaves once the run leaves its failure state [[run-view-130](#run-view-130)]; and that at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] the notice's control sits under its words, neither overlapping them nor leaving the notice's box [[run-view-128](#run-view-128)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout).
