@@ -39,7 +39,7 @@ The Space surface shall re-read the core's state only on an event, never on a ti
 
 #### space-3
 
-While the home is not the top level of a Git work tree, the Space surface shall offer Initialize for a new space and Join a space for an existing remote, one line of guidance each and a remote URL field between them, and shall show no changes list:
+While the home is not the top level of a Git work tree, the Space surface shall offer Initialize for a new space and Join a space for an existing remote, one line of guidance each and one remote URL field serving both, and shall show no changes list:
 
 - a home lying inside another repository's work tree still reads "Not a repository yet"; only the home's own top level counts;
 - the guidance names what will sync — sessions, queues, projects, Settings, playbook sources — and what stays on this device [[space-25](#space-25)].
@@ -206,7 +206,7 @@ While conflicting units stand, the picker shall present each as one row — its 
 
 #### space-18
 
-When every conflict has a choice and the user activates Apply, the surface shall ask one inline confirm — naming how many units the remote's version replaces, that the other version stays in Git history [[storage-11](storage.md#storage-11)], and that a replaced session loses its local resume hints and viewed position — with Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4), and on confirmation shall start a sync carrying the choices [[space-12](#space-12)]:
+When every conflict has a choice and the user activates Apply, the surface shall ask one inline confirm — naming how many units the remote's version replaces, that the other version stays in Git history [[storage-11](storage.md#storage-11)], and that a replaced session loses its local resume hints and viewed position — with Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4), and on confirmation shall start a sync carrying the choices [[space-12](#space-12)], and the join while the histories are still unrelated [[space-13](#space-13)]:
 
 - Cancel keeps the choices made;
 - a sync whose Compare finds conflicts that no longer match the choices — the remote moved — ends again in choices needed with the new set [[space-14](#space-14)].
@@ -404,12 +404,13 @@ The core shall invoke Git as a child process per step, never through a shell, fr
 
 - environment: the core's captured environment plus `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, `LANG=C`, and `GIT_SSH_COMMAND=ssh -oBatchMode=yes` only where none is set; `process.umask(0o077)` from `init` and from `apply` through `refresh`, restored after; a 120-second limit on `ls-remote`, `fetch` and `push` after which the child receives `SIGTERM`, then `SIGKILL` after five seconds;
 - commit-writing commands carry `-c commit.gpgsign=false -c core.hooksPath=/dev/null`, and `-c user.name=Spex -c user.email=spex@<hostname>` only where `git var GIT_COMMITTER_IDENT` fails;
-- state: `--version`, `rev-parse --show-toplevel`, `symbolic-ref -q --short HEAD` (no output on a detached or unborn `HEAD`), `rev-parse -q --verify HEAD^{commit}`, `rev-parse -q --verify MERGE_HEAD`, `remote get-url origin`, `config --get branch.main.remote`, `rev-parse -q --verify refs/remotes/origin/main`, `rev-list --left-right --count main...origin/main`, `status --porcelain=v1 -z -uall`;
-- initialize: `init -q -b main`, falling back to `init -q` then `symbolic-ref HEAD refs/heads/main`; `remote add origin <url>`;
+- state: `--version`, `rev-parse --show-toplevel`, `rev-parse --git-dir`, `symbolic-ref -q --short HEAD` (no output on a detached or unborn `HEAD`), `rev-parse -q --verify HEAD^{commit}`, `rev-parse -q --verify MERGE_HEAD`, `remote get-url origin`, `config --get branch.main.remote`, `rev-parse -q --verify refs/remotes/origin/main^{commit}`, `rev-list --left-right --count HEAD...refs/remotes/origin/main`, `rev-list --count HEAD` where the remote holds no `main`, `status --porcelain=v1 -z -uall`;
+- initialize and the remote: `init -q -b main`, falling back to `init -q` then `symbolic-ref HEAD refs/heads/main`; `remote add origin <url>`, `remote set-url origin <url>`, `remote remove origin`, and `update-ref -d refs/remotes/origin/main` when the remote changes;
 - save: the managed-rules writer, `add -A -- .`, `diff --cached --name-only -z`, `diff --cached --quiet`, `commit -q -m <message>`, `reset -q` on refusal;
 - check: `ls-remote --exit-code --heads origin refs/heads/main` (exit 2 means no `main`), `fetch -q --no-tags origin +refs/heads/main:refs/remotes/origin/main`, `merge-base HEAD origin/main`;
 - plan: `ls-tree -rz --full-tree <rev>` per revision, and for the working tree `add -A -- .` then `write-tree` under a temporary `GIT_INDEX_FILE`;
-- apply: `cat-file blob <oid>` per selected file into the staging directory, `add -A -- <unit paths>`, `write-tree`, `merge-base --is-ancestor HEAD origin/main`, `commit-tree <tree> -p HEAD -p origin/main -m <message>` or none on a fast-forward, `update-ref refs/heads/main <commit> <old HEAD>`;
+- labels and diffs: `cat-file blob <oid>` per described file, `log -1 --format=%ct <rev> -- <paths>` for a side's change time, `diff --no-color <ancestor> <side> -- <path>` for `space.diff`;
+- apply: `cat-file blob <oid>` per selected file into the staging directory, `add -A -- <unit paths>`, `write-tree`, `merge-base --is-ancestor HEAD origin/main` with `rev-parse origin/main^{tree}`, `commit-tree <tree> -p HEAD -p origin/main -m <message>` or none on a fast-forward, `update-ref refs/heads/main <commit> <old HEAD>`;
 - push: `push -q origin main`, `push -q -u origin main` where no upstream is set;
 - stderr classification under `LC_ALL=C`: "Could not resolve host", "Connection refused", "Network is unreachable" → unreachable; "Permission denied", "Authentication failed", "could not read Username", "terminal prompts disabled", "Host key verification failed" → unauthorized; "Repository not found", "does not appear to be a git repository" → not found; "[rejected]" with "fetch first" or "non-fast-forward" → rejected; a killed child → timeout or stopped; anything else → `git` with the last lines.
 
@@ -459,12 +460,6 @@ The core shall build each `space.tree` level by reading one directory of the hom
 
 - `space.read` refuses a path resolving outside the home or through a symlink, withholds provider hints, migration inputs and config backups, and caps text at 256 KB or 2,000 lines on complete lines.
 
-### Native Bridge
-
-#### space-36
-
-The desktop preload shall expose `revealPath(path)` beside `pickDirectory()` on `window.spexNative` over one invoke channel `spex:reveal-path`, and the main process shall reveal the path in the OS file manager only when it resolves inside the state root the core was started with, returning `false` otherwise.
-
 ## Verification
 
 ### Core Coverage
@@ -478,6 +473,8 @@ When an integration suite starts a real core with substitute agents on a scratch
 - a clean `space.init` yields `main` with one commit tracking no hint, lease, binding, preference or migration file and the managed rules present, the committer reading the fallback identity where none is configured [[space-4](#space-4)];
 - `space.remote.set` accepts the bare path, refuses a blank URL, whitespace and an embedded credential leaving `origin` unchanged, and clears the check time [[space-5](#space-5)];
 - `space.sync` against the empty bare repository pushes `main`, sets the upstream, and ends `done` with `pushed` and `space:lastSync` recorded [[space-12](#space-12)] [[space-22](#space-22)];
+- a join against the empty bare repository — `space.init` with the remote, then a joining `space.sync` — completes as a first push [[space-6](#space-6)];
+- every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `SpaceState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
 - a session with a turn in flight, a session under a management lease taken out of band, and a running compile each make `space.sync` and `space.init` refuse `busy` by name [[space-11](#space-11)] [[space-4](#space-4)];
 - while a check runs against a remote whose `GIT_SSH_COMMAND` sleeps, `turn.submit`, `intent.queue`, `config.edit`, `project.register` and `compile.run` are refused `busy` naming the sync, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-16](#space-16)] [[space-32](#space-32)];
 - a `MERGE_HEAD` planted before start reads as a pending merge and refuses the sync [[space-1](#space-1)] [[space-11](#space-11)].
@@ -494,7 +491,7 @@ When an integration suite runs two real cores on two scratch homes sharing one b
 - a records file appended between Save and Apply restarts the sync once from Save, and a second append stops it [[space-19](#space-19)];
 - a push rejected because the peer advanced after the check re-checks once and succeeds; advanced again, it stops "changed again" with the merge kept and `ahead` reported [[space-15](#space-15)];
 - a fast-forward sync leaves `main` equal to the remote's with no merge commit, clears the hints of its changed session, and, under process umask `022`, leaves no `sessions/` entry wider than `0600` [[space-19](#space-19)] [[space-20](#space-20)] [[space-32](#space-32)];
-- a marker planted with a half-written selection is repaired at startup into the recorded commit before `space.get` answers [[space-31](#space-31)];
+- a marker planted with a half-written selection is repaired at startup into the recorded commit before `space.get` answers, and a marker left standing after its merge or fast-forward landed is cleared with nothing re-applied [[space-31](#space-31)];
 - a remote at a path with no repository stops "not found", an `ssh://127.0.0.1:1/x` remote stops "unreachable", a sleeping `GIT_SSH_COMMAND` stops "timeout" within a test-shortened limit, each carrying its guidance [[space-15](#space-15)] [[space-32](#space-32)].
 
 #### space-39
@@ -513,7 +510,8 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 - Space reads "Not a repository yet" with Initialize and Join a space; Initialize reads "Initializing…", then the header reads `main`, "No remote" and "Never synced" [[space-3](#space-3)] [[space-4](#space-4)];
 - Add remote, the bare path and Save show the remote; Sync reads "Syncing…", the step line names each step, and the line ends "Everything is in sync" with a sync time [[space-5](#space-5)] [[space-12](#space-12)];
-- a session then run from the Captain home appears under local changes by its title and project, its Open session control opens its tab, and Sync sends it, the bare `main` holding its bundle [[space-7](#space-7)] [[space-12](#space-12)].
+- a session then run from the Captain home appears under local changes by its title and project, its Open session control opens its tab, and Sync sends it, the bare `main` holding its bundle [[space-7](#space-7)] [[space-12](#space-12)];
+- an intent queued while Space is shown lists under local changes with Refresh never activated, and Refresh's caption reads the time of the read [[space-2](#space-2)].
 
 #### space-41
 
@@ -541,3 +539,11 @@ Where the harness boots the served shell with a repository home carrying local c
 #### space-44
 
 Where the harness boots the served shell with a repository home whose check ended in choices, when the Space surface is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation, with the picker's radio groups, the tree and the tabs named for assistive technology [[space-17](#space-17)] [[space-23](#space-23)].
+
+#### space-36
+
+Where the harness boots the served shell on an empty home with its configuration inside it and a bare repository a peer home has pushed to — the peer holding a differing configuration, a titled session of the demo project and one queued intent — the test suite shall assert the second device's setup through the page:
+
+- Join a space with an empty URL field marks the field required and focuses it, initializing nothing [[space-6](#space-6)];
+- with the bare path entered, Join a space reads "Joining…" until the sync ends in choices, the header then reading `main` and the remote [[space-6](#space-6)] [[space-4](#space-4)];
+- the join asks one choice, Settings, new on both sides, while the peer's session and queue list as incoming and the header offers Join in place of Sync; "Keep mine" and Apply's confirm end synced with this device's configuration kept, the header reading Sync, and the peer's session listed under its project [[space-13](#space-13)] [[space-9](#space-9)] [[space-17](#space-17)] [[space-18](#space-18)] [[space-20](#space-20)].

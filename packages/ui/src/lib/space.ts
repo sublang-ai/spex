@@ -192,7 +192,7 @@ export function revealLabel(): string {
 }
 
 /** The native bridge's reveal capability, feature-detected
- * (app-shell-28, space-36); absent on the served page. */
+ * (app-shell-28, DR-008); absent on the served page. */
 export function revealBridge(): ((path: string) => Promise<boolean>) | undefined {
   if (typeof window === "undefined") return undefined;
   const native = (window as { spexNative?: { revealPath?: unknown } }).spexNative;

@@ -181,7 +181,7 @@ async function main(): Promise<void> {
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
   // A reveal shows a path in the OS file manager and changes no state
-  // (app-shell-28, space-36): only a path resolving inside the state
+  // (app-shell-28, DR-008): only a path resolving inside the state
   // root the core was started with is shown; anything else is false.
   ipcMain.handle("spex:reveal-path", async (_event, requested: unknown) => {
     const target = resolveRevealTarget(dataDir, requested);

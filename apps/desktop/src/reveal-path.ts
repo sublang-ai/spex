@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The reveal bridge's containment rule (app-shell-28, space-36): the
+// The reveal bridge's containment rule (app-shell-28, DR-008): the
 // main process shows a path in the OS file manager only when it
 // resolves inside the state root the core was started with. Both
 // sides resolve through their real paths, so a symlink out of the root

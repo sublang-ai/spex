@@ -4,11 +4,12 @@
 // The Space surface's journeys (DR-057): first-time setup against a
 // bare remote (space-40), the daily sync with conflicts chosen by
 // keyboard, a remote that moves under the push, and Stop against a
-// sleeping transport (space-41), the explorer with its privacy panel
-// and Copy path (space-42), fit at every width in both sidebar states
-// (space-43), and axe in both themes (space-44). Every remote is a
-// bare repository in the scratch root and every transport a local
-// path or a sleeping script: hermetic, no network, no credentials.
+// sleeping transport (space-41), the second device joining a peer's
+// space (space-36), the explorer with its privacy panel and Copy path
+// (space-42), fit at every width in both sidebar states (space-43),
+// and axe in both themes (space-44). Every remote is a bare repository
+// in the scratch root and every transport a local path or a sleeping
+// script: hermetic, no network, no credentials.
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
@@ -19,6 +20,7 @@ import { seedDemoProject } from "@sublang/spex-core/testing";
 import {
   LOCAL_MODEL,
   LOCAL_TURN,
+  PEER_SESSION_TITLE,
   PEER_TURN,
   SESSION_TITLE,
   expect,
@@ -165,10 +167,9 @@ test.describe("first-time setup", () => {
     await header.getByTestId("space-primary").click();
     const done = page.getByTestId("space-done-line");
     await expect(done).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
-    const labels = await primaryLabels();
-    expect(labels[0]).toBe("Sync");
-    expect(labels, labels.join(" → ")).toContain("Syncing…");
-    expect(labels.at(-1)).toBe("Sync");
+    // The control stays busy from the click to the machine's first
+    // frame and back: never a moment reading "Sync" in between.
+    expect(await primaryLabels()).toEqual(["Sync", "Syncing…", "Sync"]);
     const steps = await stepLines();
     expect(steps, steps.join(" → ")).toContain("Checking remote…");
     expect(steps, steps.join(" → ")).toContain("Pushing…");
@@ -206,6 +207,18 @@ test.describe("first-time setup", () => {
     await header.getByTestId("space-primary").click();
     await expect(done).toHaveText(/^Synced just now · 1 sent · 0 received$/);
     await expect(page.getByTestId("space-sync-tab")).toContainText("Nothing to send from this device");
+
+    // An intent queued while Space is shown lists under local changes
+    // with Refresh never activated — the ledger's announcement re-reads
+    // the state — and Refresh's caption reads the time of the read
+    // (space-2).
+    await app.core.command("intent.queue", { projectId: app.projectId!, text: "Queued while Space is shown" });
+    const queueRow = page.getByTestId("space-local-list").getByTestId(`space-unit-mine-intents/${app.projectId}.jsonl`);
+    await expect(queueRow).toContainText("1 change in demo-project's queue");
+    await expect(header.getByTestId("space-local-count")).toHaveAccessibleName("1 local change");
+    await page.getByTestId("space-refresh").click();
+    await expect(page.getByTestId("space-read-at")).toHaveText("Read just now");
+    await expect(page.getByTestId("space-read-at")).toHaveAttribute("title", /\d/);
     const tracked = git(app.remotePath!, "ls-tree", "-r", "--name-only", "main").split("\n");
     expect(tracked).toContain(`sessions/${sessionId}.json`);
     expect(tracked).toContain(`sessions/${sessionId}.records.jsonl`);
@@ -389,6 +402,90 @@ test.describe("daily sync", () => {
 
     // No visible text on the surface names Git's sides (space-27).
     expect(words, words.join("\n")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// space-36: the second device joins
+// ---------------------------------------------------------------------------
+
+test.describe("joining", () => {
+  test.use({ appOptions: { project: true, remote: "seeded" } });
+
+  test("space-36: Join a space asks one choice and brings the peer's space here", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(120_000);
+    await open(page, app);
+    await showSpace(page);
+    const header = page.getByTestId("space-header");
+    const tab = page.getByTestId("space-sync-tab");
+    const setup = page.getByTestId("space-setup");
+    await expect(header.getByTestId("space-repository")).toContainText("Not a repository yet");
+
+    // An empty URL field takes a required mark and focus; nothing is
+    // initialized (space-6).
+    await setup.getByTestId("space-join-space").click();
+    const field = setup.getByTestId("space-setup-remote");
+    await expect(field).toBeFocused();
+    await expect(field).toHaveAttribute("aria-invalid", "true");
+    await expect(setup).toContainText("Required to join");
+    await expect(header.getByTestId("space-repository")).toContainText("Not a repository yet");
+
+    // Join a space reads "Joining…" until its sync ends in choices; the
+    // header then reads main and the remote (space-6, space-4).
+    const joinLabels = await watch(page, '[data-testid="space-join-space"], [data-testid="space-primary"]');
+    await field.fill(app.remotePath!);
+    await setup.getByTestId("space-join-space").click();
+    const note = tab.getByTestId("space-choices-note");
+    await expect(note.getByTestId("space-step-line")).toHaveText("Needs your choice");
+    // The histories stay unrelated until the join's merge lands, so the
+    // header offers Join in place of Sync meanwhile (space-13).
+    expect(await joinLabels()).toEqual(["Join a space", "Joining…", "Join"]);
+    await expect(header.getByTestId("space-repository")).toContainText("main");
+    await expect(header.getByTestId("space-remote-url")).toHaveText(app.remotePath!);
+
+    // One choice — Settings, new on both sides — while the peer's
+    // session and queue list as incoming (space-13, space-17).
+    const picker = tab.getByTestId("space-picker");
+    await expect(picker).toContainText("Choose for 1 conflict");
+    await expect(picker.getByTestId("space-chosen")).toHaveText("0 of 1 chosen");
+    const settingsGroup = picker.getByRole("radiogroup", { name: "Settings changed" });
+    await expect(settingsGroup).toContainText(/Keep mine\s+new/);
+    await expect(settingsGroup).toContainText(/Take remote\s+new/);
+    await expect(picker.getByRole("radiogroup")).toHaveCount(1);
+    const incoming = tab.getByTestId("space-incoming-list");
+    await expect(incoming.getByTestId(`space-unit-remote-sessions/${app.sessionId}`)).toContainText(PEER_SESSION_TITLE);
+    await expect(incoming.getByTestId(`space-unit-remote-intents/${app.projectId}.jsonl`)).toContainText(
+      "1 change in demo-project's queue",
+    );
+
+    // "Keep mine" and Apply's confirm end synced: this device's
+    // configuration kept, the peer's session listed under its project
+    // (space-20).
+    await settingsGroup.getByRole("radio", { name: /Keep mine/ }).check();
+    await picker.getByTestId("space-apply").click();
+    const confirm = picker.getByTestId("space-apply-confirm");
+    await expect(confirm).toContainText("Keep this device's version of the unit?");
+    await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await confirm.getByRole("button", { name: "Apply" }).click();
+    await expect(tab.getByTestId("space-done-line")).toHaveText(/^Synced just now · [1-9]\d* sent · 2 received$/);
+    await expect(header.getByTestId("space-primary")).toHaveText("Sync");
+    await expect(header.getByTestId("space-ahead-behind")).toContainText(/0 behind/);
+    expect(readFileSync(app.configPath, "utf8")).toContain("model: claude-opus-5\n");
+    expect(readFileSync(app.configPath, "utf8")).not.toContain("claude-opus-5-peer");
+    expect(git(app.remotePath!, "rev-parse", "main")).toBe(git(app.dataDir, "rev-parse", "main"));
+    await nav(page, "Projects").click();
+    await page
+      .getByRole("tree", { name: "Projects and sessions" })
+      .getByRole("treeitem", { name: new RegExp(PEER_SESSION_TITLE, "i") })
+      .click();
+    // The fixture's session is history the core cannot continue: its tab
+    // truncates the title and says so, and its transcript reads the
+    // peer's turn.
+    await expect(page.getByRole("tab", { name: /^Plan the release on the/i })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("main")).toContainText("Planned on the other laptop.");
   });
 });
 

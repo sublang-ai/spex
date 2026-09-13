@@ -1076,8 +1076,12 @@ export class SpaceManager {
     if (!version.ok) throw new Error(version.guidance);
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     if (head !== marker.ours) {
+      // The ref update landed before the marker was removed — a merge
+      // commit whose parents are the recorded sides, or a fast-forward
+      // onto the remote's commit: nothing is re-applied.
       const parents = (await this.git.ok(["log", "-1", "--format=%P", "HEAD"])).split(/\s+/).filter(Boolean);
-      if (parents.includes(marker.ours) && parents.includes(marker.theirs)) { rmSync(this.markerPath(), { force: true }); return; }
+      const landed = head === marker.theirs || (parents.includes(marker.ours) && parents.includes(marker.theirs));
+      if (landed) { rmSync(this.markerPath(), { force: true }); return; }
       throw new Error("main moved since the interrupted sync; resolve it in a terminal");
     }
     const trees: StorageTrees = { ours: readStorageTree(home, marker.ours), theirs: readStorageTree(home, marker.theirs), base: readStorageTree(home, marker.base) };

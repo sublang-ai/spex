@@ -41,6 +41,7 @@ import {
   appendHistorySession,
   interruptDemoSession,
   fakeAdapterImports,
+  prepareStorageGitFiles,
 } from "@sublang/spex-core/testing";
 import {
   startServer,
@@ -95,19 +96,22 @@ export interface AppOptions {
    */
   homeConfig?: boolean;
   /**
-   * A Git remote for the Space journeys (space-40 … space-44): `bare`
+   * A Git remote for the Space journeys (space-36, space-40 … space-44): `bare`
    * creates a bare repository in the scratch root, exposed as
    * `app.remotePath`, and leaves the home a plain directory; `peer`
    * also initializes the home (with `project`, one titled session run
    * through the core), pushes it, then clones the remote as a peer
    * home that pushes a differing configuration, the same session
    * changed and one queued intent — and changes the same session and
-   * Settings on this device too, so the next sync asks two choices.
-   * Either sets the core's Git environment: an isolated Git
+   * Settings on this device too, so the next sync asks two choices;
+   * `seeded` leaves the home a plain directory while a peer home
+   * pushes a differing configuration, a titled session of the demo
+   * project and one queued intent, so Join a space asks one choice.
+   * Each sets the core's Git environment: an isolated Git
    * configuration with no identity, and a sleeping `GIT_SSH_COMMAND`
    * for `app.sleepingRemote()`.
    */
-  remote?: "bare" | "peer";
+  remote?: "bare" | "peer" | "seeded";
 }
 
 /** Deliberately omits the demo's current model, exercising retained custom IDs. */
@@ -285,6 +289,8 @@ export const PEER_TURN = "Tighten the expiry tests";
 export const LOCAL_TURN = "Add the expiry test";
 /** The shared session's title: its first turn. */
 export const SESSION_TITLE = "Fix the login redirect";
+/** The peer's own session in a seeded remote (space-36). */
+export const PEER_SESSION_TITLE = "Plan the release on the other laptop";
 
 // ---------------------------------------------------------------------------
 // The app under test
@@ -541,6 +547,7 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
     app.projectId = info.id;
   }
   if (options.remote === "peer") await arrangePeer(app);
+  else if (options.remote === "seeded") await seedRemote(app);
   return app;
 }
 
@@ -608,6 +615,39 @@ async function arrangePeer(app: App): Promise<void> {
   await app.core.command("config.edit", {
     op: { kind: "captain.set", patch: { model: LOCAL_MODEL } },
   });
+}
+
+/**
+ * The second device's arrangement (space-36): the remote already holds
+ * a peer's space — a differing configuration, a titled session of the
+ * demo project and one queued intent, under the managed rules — while
+ * this home stays a plain directory with its own configuration, so a
+ * Join a space asks exactly one choice, Settings.
+ */
+async function seedRemote(app: App): Promise<void> {
+  if (!app.projectId || !app.remotePath) {
+    throw new Error("remote: \"seeded\" needs project: true");
+  }
+  const projectId = app.projectId;
+  const dir = clonePeer(app);
+  mkdirSync(join(dir, "playbook"), { recursive: true });
+  writeFileSync(join(dir, "playbook", "playbook.config.yaml"), PEER_CONFIG);
+  prepareStorageGitFiles(dir);
+  app.sessionId = await seedHistorySession(join(dir, "sessions"), app.projectDir, [
+    { type: "turn_started", turnId: 1, turn: { id: 1, prompt: PEER_SESSION_TITLE }, timestamp: Date.now() },
+    { type: "captain_reply", turnId: 1, timestamp: Date.now() + 1, text: "Planned on the other laptop." },
+    { type: "turn_finished", turnId: 1, timestamp: Date.now() + 2 },
+  ]);
+  mkdirSync(join(dir, "intents"), { recursive: true });
+  const act = {
+    v: 1,
+    act: "queue",
+    intent: { id: randomUUID(), projectId, text: "Queued on the other laptop", rank: "a", createdAt: Date.now() },
+  };
+  writeFileSync(join(dir, "intents", `${projectId}.jsonl`), `${JSON.stringify(act)}\n`);
+  git(dir, "add", "-A", "--", ".");
+  git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer space");
+  git(dir, "push", "-q", "-u", "origin", "HEAD:main");
 }
 
 /**

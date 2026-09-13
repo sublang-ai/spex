@@ -488,6 +488,11 @@ export function SpaceSurface({ onOpenSession, onOpenPalette }: SpaceSurfaceProps
   const [remoteEditing, setRemoteEditing] = useState(false);
   const [remoteFocus, setRemoteFocus] = useState(0);
   const [busy, setBusy] = useState<"init" | "join" | "sync">();
+  // A long command's reply is only "accepted": its control stays busy
+  // until the machine's state moves — the running frame, or an outcome
+  // that landed first — so nothing re-enables between the reply and
+  // the state (DR-010 §3, space-29).
+  const [accepted, setAccepted] = useState<{ op: "join" | "sync"; key: string }>();
   const [joinAccepted, setJoinAccepted] = useState(false);
   const [joinConfirm, setJoinConfirm] = useState(false);
   const [actionError, setActionError] = useState<{ where: "setup" | "primary"; message: string }>();
@@ -533,6 +538,9 @@ export function SpaceSurface({ onOpenSession, onOpenPalette }: SpaceSurfaceProps
   const sync = space?.sync;
   const syncKey = sync ? JSON.stringify(sync) : "";
   useEffect(() => {
+    if (accepted && accepted.key !== syncKey) setAccepted(undefined);
+  }, [accepted, syncKey]);
+  useEffect(() => {
     if (!sync) return;
     if (sync.phase === "running") setNote(STEP_LINES[sync.step]);
     else if (sync.phase === "choices") setNote("Needs your choice");
@@ -561,11 +569,13 @@ export function SpaceSurface({ onOpenSession, onOpenPalette }: SpaceSurfaceProps
   };
 
   const join = async (remote: string) => {
+    const key = syncKey;
     setBusy("join");
     setActionError(undefined);
     try {
       await spaceInit(remote);
       await spaceSync({ join: true });
+      setAccepted({ op: "join", key });
       setJoinAccepted(true);
     } catch (cause) {
       setActionError({ where: "setup", message: (cause as Error).message });
@@ -575,10 +585,12 @@ export function SpaceSurface({ onOpenSession, onOpenPalette }: SpaceSurfaceProps
   };
 
   const startSync = async (input: { join?: boolean } = {}) => {
+    const key = syncKey;
     setBusy("sync");
     setActionError(undefined);
     try {
       await spaceSync(input);
+      setAccepted({ op: input.join ? "join" : "sync", key });
       if (input.join) setJoinAccepted(true);
     } catch (cause) {
       const message = (cause as Error).message;
@@ -624,6 +636,7 @@ export function SpaceSurface({ onOpenSession, onOpenPalette }: SpaceSurfaceProps
       now={now}
       connected={connected}
       busy={busy}
+      accepted={accepted?.op}
       joinAccepted={joinAccepted}
       joinConfirm={joinConfirm}
       onJoinConfirm={setJoinConfirm}
@@ -738,6 +751,7 @@ function Header({
   now,
   connected,
   busy,
+  accepted,
   joinAccepted,
   joinConfirm,
   onJoinConfirm,
@@ -760,6 +774,8 @@ function Header({
   now: number;
   connected: boolean;
   busy?: "init" | "join" | "sync";
+  /** A join or sync accepted, its first frame still on its way. */
+  accepted?: "join" | "sync";
   joinAccepted: boolean;
   joinConfirm: boolean;
   onJoinConfirm(open: boolean): void;
@@ -783,15 +799,17 @@ function Header({
   const running = sync.phase === "running";
   const disabled = !connected;
   const dot = statusDot(space);
-  const issueCount = space.diagnostics.length + (repo?.mergePending ? 1 : 0);
+  // The core folds a pending Git merge into the diagnostics (space-1).
+  const issueCount = space.diagnostics.length;
   const unrelated = sync.phase === "unrelated" || repo?.unrelated === true;
 
+  const joining = busy === "join" || accepted === "join" || (joinAccepted && running);
+  const pending = busy !== undefined || accepted !== undefined || running;
   const initLabel =
     busy === "init" || (running && sync.op === "init" && !joinAccepted && busy !== "join")
       ? "Initializing…"
       : "Initialize";
-  const joinSpaceLabel =
-    busy === "join" || (joinAccepted && running) ? "Joining…" : "Join a space";
+  const joinSpaceLabel = joining ? "Joining…" : "Join a space";
 
   let primary: ReactNode = null;
   if (!space.git.ok) {
@@ -800,7 +818,7 @@ function Header({
     primary = (
       <SetupCard
         disabled={disabled}
-        busy={busy !== undefined || running}
+        busy={pending}
         initLabel={initLabel}
         joinLabel={joinSpaceLabel}
         error={actionError?.where === "setup" ? actionError.message : undefined}
@@ -825,10 +843,10 @@ function Header({
           type="button"
           data-testid="space-primary"
           className={PRIMARY}
-          disabled={disabled || busy !== undefined || running}
+          disabled={disabled || pending}
           onClick={() => onJoinConfirm(true)}
         >
-          {joinAccepted && running ? "Joining…" : "Join"}
+          {joining ? "Joining…" : "Join"}
         </button>
         {actionError?.where === "primary" ? (
           <span role="alert" className="text-xs text-red-600 dark:text-red-400">
@@ -839,22 +857,22 @@ function Header({
     );
   } else {
     const refusal = syncRefusal(space);
-    // A join reads "Joining…" from its init through its sync (space-6).
-    const label =
-      busy === "join" || (joinAccepted && running)
-        ? "Joining…"
-        : busy === "sync" || (running && sync.op === "sync")
-          ? "Syncing…"
-          : running && sync.op === "init"
-            ? "Initializing…"
-            : "Sync";
+    // A join reads "Joining…" from its init through its sync (space-6);
+    // a sync reads "Syncing…" from the click through its last frame.
+    const label = joining
+      ? "Joining…"
+      : busy === "sync" || accepted === "sync" || (running && sync.op === "sync")
+        ? "Syncing…"
+        : running && sync.op === "init"
+          ? "Initializing…"
+          : "Sync";
     primary = (
       <span className="flex min-w-0 flex-wrap items-center gap-2">
         <button
           type="button"
           data-testid="space-primary"
           className={`${PRIMARY} w-full @xs:w-auto`}
-          disabled={disabled || refusal !== undefined || busy !== undefined || running}
+          disabled={disabled || refusal !== undefined || pending}
           aria-describedby={refusal || actionError ? "space-primary-caption" : undefined}
           onClick={onSync}
         >

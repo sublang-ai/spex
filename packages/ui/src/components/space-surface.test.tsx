@@ -87,13 +87,20 @@ const QUEUE_UNIT: SpaceUnit = {
   paths: ["intents/p1.jsonl"],
   diff: false,
 };
+/** The registry names one difference per line (space-7). */
 const PROJECTS_UNIT: SpaceUnit = {
   unit: "projects.json",
   kind: "projects",
-  label: 'Registered "docs-site"',
+  label: 'Registered "docs-site"\nRemoved "old-site"',
   change: "updated",
   paths: ["projects.json"],
   diff: false,
+};
+/** The pending merge the core folds into the diagnostics (space-1). */
+const MERGE_DIAGNOSTIC = {
+  file: ".git/MERGE_HEAD",
+  reason: "a Git merge is pending; finish or abort it in a terminal before syncing",
+  blocking: false,
 };
 const SETTINGS_UNIT: SpaceUnit = {
   unit: "playbook/playbook.config.yaml",
@@ -322,7 +329,10 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
   test("a repository reads its branch, its remote with the user removed, ahead and behind, the last sync and the counts", async () => {
     await renderSpace(
       repoState({
-        diagnostics: [{ file: "sessions/x.json", reason: "recorded at /Users/jane/code/infra — bind that folder to a project", blocking: false }],
+        diagnostics: [
+          { file: "sessions/x.json", reason: "recorded at /Users/jane/code/infra — bind that folder to a project", blocking: false },
+          MERGE_DIAGNOSTIC,
+        ],
         repository: { ...REPO, mergePending: true, identityFallback: true },
       }),
     );
@@ -343,13 +353,17 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(lastSync.getAttribute("title")).toBe(new Date(NOW - 2 * HOUR).toLocaleString());
     expect(screen.getByTestId("space-local-count").textContent).toBe("8 changes");
     expect(screen.getByTestId("space-local-count").getAttribute("aria-label")).toBe("8 local changes");
-    // Issues count the diagnostics plus the pending merge, and open in place.
+    // Issues count the diagnostics — the pending merge among them, once —
+    // and open in place; the merge reads in plain words (space-27).
     const issues = screen.getByTestId("space-issues");
     expect(issues.textContent).toContain("2 issues");
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
     fireEvent.click(issues);
     const list = screen.getByTestId("space-issues-list");
+    expect(list.textContent).toContain("Issues (2)");
     expect(list.textContent).toContain("A Git merge is pending");
+    expect(list.textContent).not.toContain("MERGE_HEAD");
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(list.textContent).toContain("sessions/x.json");
     expect(within(list).getByRole("button", { name: "Open palette" })).toBeTruthy();
     expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort it there");
@@ -528,7 +542,12 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
     expect(within(deleted).queryByRole("button", { name: "Open session" })).toBeNull();
     expect(within(screen.getByTestId("space-unit-mine-intents/p1.jsonl")).queryByRole("button", { name: "View diff" })).toBeNull();
     expect(screen.getByTestId("space-unit-mine-playbooks/code").textContent).toContain("code.md");
-    expect(screen.getByTestId("space-unit-mine-projects.json").textContent).toContain('Registered "docs-site"');
+    // The registry's label stands one difference per line (space-7).
+    const projects = screen.getByTestId("space-unit-mine-projects.json");
+    expect(projects.textContent).toContain('Registered "docs-site"');
+    expect(within(projects).getByRole("listitem").textContent).toBe('Removed "old-site"');
+    // The first line owns the row; the whole label rides its title.
+    expect(within(projects).getByTitle(/^Registered "docs-site"\s+Removed "old-site"$/).textContent).toBe('Registered "docs-site"');
   });
 
   test("with no local unit the list reads 'Nothing to send from this device'", async () => {
@@ -808,6 +827,30 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
     );
   });
 
+  test("a join waiting for choices lists the incoming units, offers Join in the header, and applies with the join", async () => {
+    await renderSpace(
+      choicesState({
+        repository: { ...REPO, unrelated: true, ahead: null, behind: null },
+        incoming: [INCOMING_SESSION, INCOMING_QUEUE],
+        conflicts: [CONFLICTS[1]],
+      }),
+    );
+    // The incoming list stands above the picker (space-9); the histories
+    // stay unrelated until the merge lands, so the header offers Join.
+    expect(screen.getByTestId("space-incoming-list")).toBeTruthy();
+    expect(screen.getByTestId("space-unit-remote-sessions/s2").textContent).toContain("Tighten the expiry tests");
+    expect(screen.queryByText("Unrelated history")).toBeNull();
+    expect(screen.getByTestId("space-primary").textContent).toBe("Join");
+    expect(screen.queryByTestId("space-ahead-behind")).toBeNull();
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep mine/));
+    fireEvent.click(screen.getByTestId("space-apply"));
+    fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
+    // Apply carries the choices and the join (space-13, space-18).
+    await waitFor(() =>
+      expect(calls("space.sync")).toEqual([{ choices: { "playbook/playbook.config.yaml": "mine" }, join: true }]),
+    );
+  });
+
   test("a deletion against a change reads 'deleted' on the deleting side", async () => {
     await renderSpace(
       choicesState({
@@ -1037,12 +1080,15 @@ describe("SPACE: copy and roles (space-27, space-44)", () => {
       repoState(),
       repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", savedCommit: null } }),
       repoState({ sync: { phase: "running", op: "sync", step: "apply", since: NOW, cancelable: false } }),
-      repoState({ repository: { ...REPO, unrelated: true, mergePending: true }, sync: { phase: "unrelated" } }),
+      repoState({ repository: { ...REPO, unrelated: true, mergePending: true }, diagnostics: [MERGE_DIAGNOSTIC], sync: { phase: "unrelated" } }),
       repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "rejected", message: "The remote changed again", guidance: "Sync again.", retry: true } }),
       repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 2, pushed: true } }),
     ];
     for (const state of states) {
       await renderSpace(state);
+      // The issues list, opened, counts too.
+      const issues = screen.queryByTestId("space-issues");
+      if (issues) fireEvent.click(issues);
       expect(document.body.textContent ?? "").not.toMatch(GIT_WORDS);
       fireEvent.click(screen.getByRole("tab", { name: "Explore" }));
       await screen.findByTestId("space-tree");

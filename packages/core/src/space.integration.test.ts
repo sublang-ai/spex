@@ -107,6 +107,8 @@ class Client {
   async expectOk<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<CommandResults[T]> {
     const reply = await this.command(type, fields);
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
+    // The state-shaped replies carry the SpaceState shape (space-30).
+    if (type === "space.get" || type === "space.init" || type === "space.remote.set") assertSpaceState(reply.result as SpaceState);
     return reply.result;
   }
   async expectError<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, code: string, pattern?: RegExp): Promise<string> {
@@ -131,7 +133,9 @@ class Client {
     for (;;) {
       for (let i = from; i < this.messages.length; i += 1) {
         const message = this.messages[i];
-        if (message.type === "space.state" && check(message.state)) return message.state;
+        if (message.type !== "space.state") continue;
+        assertSpaceState(message.state);
+        if (check(message.state)) return message.state;
       }
       if (Date.now() - start > timeoutMs) {
         const seen = this.messages.slice(from).filter((m): m is SpaceStateMessage => m.type === "space.state").map((m) => JSON.stringify(m.state.sync));
@@ -140,16 +144,37 @@ class Client {
       await sleep(10);
     }
   }
-  /** Run a long Space command and wait until the machine leaves running. */
+  /** Run a long Space command — it replies accepted at once (space-29) —
+   * and wait until the machine leaves running. */
   async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<SpaceState> {
     const from = this.messages.length;
-    await this.expectOk(type, fields);
+    assert.deepEqual(await this.expectOk(type, fields), { accepted: true });
     return this.waitSpace(from, (state) => state.sync.phase !== "running");
   }
   mark(): number { return this.messages.length; }
 }
 
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
+
+const SPACE_KEYS = ["conflicts", "diagnostics", "git", "home", "incoming", "lastSync", "local", "outside", "repository", "sync"];
+const REPOSITORY_KEYS = ["ahead", "behind", "branch", "checkedAt", "identityFallback", "mergePending", "remote", "remoteEmpty", "unrelated", "upstream"];
+const PHASES = new Set(["idle", "running", "choices", "unrelated", "stopped", "done"]);
+const CHANGES = new Set(["new", "updated", "deleted"]);
+
+/** Every reply and broadcast carries the SpaceState shape (space-30). */
+function assertSpaceState(state: SpaceState): void {
+  assert.deepEqual(Object.keys(state).sort(), SPACE_KEYS);
+  assert.ok(PHASES.has(state.sync.phase), `phase ${JSON.stringify(state.sync)}`);
+  assert.ok(typeof state.home === "string" && Array.isArray(state.outside) && Array.isArray(state.diagnostics));
+  if (state.repository !== null) assert.deepEqual(Object.keys(state.repository).sort(), REPOSITORY_KEYS);
+  for (const unit of [...state.local, ...state.incoming, ...state.conflicts.map((c) => c.unit)]) {
+    assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
+  }
+  for (const conflict of state.conflicts) {
+    assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
+  }
+  if (state.lastSync !== null) assert.deepEqual(Object.keys(state.lastSync).sort(), ["at", "received", "sent"]);
+}
 
 /** The pid the sleeping GIT_SSH_COMMAND wrote once Git spawned it. */
 async function sleeperPid(pidFile: string): Promise<number> {
@@ -246,9 +271,15 @@ async function startHome(name: string, options: { model?: string; env?: Record<s
   });
   const client = new Client(service.port());
   await client.open();
+  let stopped = false;
   return {
     service, client, dataDir, projectDir, configPath, hooks,
-    async stop() { client.close(); await service.stop(); },
+    async stop() {
+      if (stopped) return;
+      stopped = true;
+      client.close();
+      await service.stop();
+    },
   };
 }
 
@@ -423,6 +454,18 @@ test("space-37: the first sync pushes main to the empty remote, sets the upstrea
   assert.deepEqual(done.local, []);
   const again = await home.client.settle("space.sync", {});
   assert.ok(again.sync.phase === "done" && !again.sync.pushed && again.sync.sent === 0 && again.sync.received === 0, JSON.stringify(again.sync));
+  // A fresh home's Join against an empty remote — init with the remote,
+  // then a joining sync — completes as a first push (space-6).
+  const joiner = await startHome("joiner");
+  t.after(() => joiner.stop());
+  const empty = bareRepo();
+  const initialized = await joiner.client.expectOk("space.init", { remote: empty });
+  assert.equal(initialized.repository?.remote, empty);
+  assert.equal(initialized.repository?.checkedAt, null);
+  const first = await joiner.client.settle("space.sync", { join: true });
+  assert.ok(first.sync.phase === "done" && first.sync.pushed && first.sync.sent > 0 && first.sync.received === 0, JSON.stringify(first.sync));
+  assert.equal(first.repository?.remoteEmpty, false);
+  assert.equal(git(empty, "rev-parse", "main"), git(joiner.dataDir, "rev-parse", "main"));
 });
 
 test("space-37: a turn in flight, an out-of-band lease and a running compile refuse space.sync and space.init by name", async (t) => {
@@ -856,6 +899,48 @@ test("space-38: a marker with a half-written selection is repaired at startup in
   const listed = (await home.client.expectOk("session.list", {})).length;
   assert.equal(listed, 0, "the session's project is unbound on this home");
   assert.ok(state.diagnostics.some((d) => d.file.includes(sessionId)));
+  // A marker left standing after its merge commit landed is cleared
+  // with nothing re-applied: main stays on the landed commit.
+  await home.stop();
+  writeFileSync(join(dataDir, "local", "space-apply.json"), JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
+  const again = await startHome("repair-again", { dataDir });
+  t.after(() => again.stop());
+  const cleared = await again.client.expectOk("space.get", {});
+  assert.ok(!cleared.diagnostics.some((d) => d.file === "local/space-apply.json"), JSON.stringify(cleared.diagnostics));
+  assert.equal(existsSync(join(dataDir, "local", "space-apply.json")), false);
+  assert.equal(git(dataDir, "rev-parse", "HEAD"), head);
+});
+
+test("space-38: a marker left after a landed fast-forward is cleared at startup with main on the remote's commit", async (t) => {
+  const dataDir = mkdtempSync(join(scratch, "repair-ff-"));
+  mkdirSync(join(dataDir, "playbook"), { recursive: true });
+  writeFileSync(join(dataDir, "playbook", "playbook.config.yaml"), config("claude-test"));
+  git(dataDir, "init", "-q", "-b", "main");
+  prepareStorageGitFiles(dataDir);
+  git(dataDir, "add", "-A", "--", ".");
+  git(dataDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base");
+  const base = git(dataDir, "rev-parse", "HEAD");
+  const remote = bareRepo();
+  git(dataDir, "remote", "add", "origin", remote);
+  git(dataDir, "push", "-q", "-u", "origin", "main");
+  const peer = peerClone(remote);
+  const theirs = await peerPush(peer, (dir) => writeFileSync(join(dir, "notes.txt"), "theirs\n"));
+  // The fast-forward landed — main moved to the remote's commit and the
+  // tree followed — but the marker was never removed.
+  git(dataDir, "fetch", "-q", "origin");
+  git(dataDir, "reset", "-q", "--hard", "refs/remotes/origin/main");
+  assert.equal(git(dataDir, "rev-parse", "HEAD"), theirs);
+  mkdirSync(join(dataDir, "local"), { recursive: true });
+  writeFileSync(join(dataDir, "local", "space-apply.json"), JSON.stringify({ v: 1, ours: base, theirs, base, choices: {}, at: Date.now() }));
+  const home = await startHome("repair-ff", { dataDir });
+  t.after(() => home.stop());
+  const state = await home.client.expectOk("space.get", {});
+  assert.ok(!state.diagnostics.some((d) => d.file === "local/space-apply.json"), JSON.stringify(state.diagnostics));
+  assert.equal(existsSync(join(dataDir, "local", "space-apply.json")), false);
+  assert.equal(git(dataDir, "rev-parse", "HEAD"), theirs);
+  assert.equal(git(dataDir, "log", "-1", "--format=%P").split(" ").length, 1, "no merge commit");
+  assert.equal(git(dataDir, "status", "--porcelain"), "");
+  assert.equal(readFileSync(join(dataDir, "notes.txt"), "utf8"), "theirs\n");
 });
 
 test("space-38: a missing repository, an unreachable host and a sleeping transport stop with their causes", async (t) => {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The reveal bridge's containment (app-shell-28, space-36): a path is
+// The reveal bridge's containment (app-shell-28, DR-008): a path is
 // shown only when its real path lies inside the state root's real
 // path; traversal, symlinks out of the root, absent files and non-
 // string requests reveal nothing.

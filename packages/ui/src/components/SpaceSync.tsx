@@ -153,6 +153,7 @@ function UnitRow({
   const [diffOpen, setDiffOpen] = useState(false);
   const project = unit.project?.name ?? unit.project?.id;
   const detailLines = unit.detail?.split("\n").filter(Boolean) ?? [];
+  const label = labelLines(unit.label);
   // A local session row opens the session as a tab (space-7); an
   // incoming one may not exist on this device yet.
   const canOpen =
@@ -171,7 +172,7 @@ function UnitRow({
           }`}
         />
         <span className="min-w-0 flex-1 truncate" title={unit.label}>
-          {unit.label}
+          {label.first}
         </span>
         {project ? (
           <span
@@ -222,6 +223,15 @@ function UnitRow({
           </button>
         ) : null}
       </div>
+      {label.rest.length > 0 ? (
+        <ul className="pl-3.5 text-sm">
+          {label.rest.map((line) => (
+            <li key={line} className="truncate" title={line}>
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {detailLines.length > 1 ? (
         <ul className="pl-3.5 text-xs text-neutral-500">
           {detailLines.map((line) => (
@@ -273,13 +283,26 @@ function UnitList({
   );
 }
 
-/** A side's summary in the picker (space-17). */
+/** A side's summary in the picker (space-17): its change, when, and its
+ * detail — a deleting side reads "deleted" once, never twice. */
 function sideSummary(side: SpaceSide, now: number): string {
   const parts: string[] = [side.change];
   if (side.at !== undefined) parts.push(relativeAge(side.at, now));
   const text = parts.join(" ");
-  return side.detail ? `${text} · ${side.detail}` : text;
+  return side.detail && side.detail !== side.change ? `${text} · ${side.detail}` : text;
 }
+
+/** A label's lines (space-7): the registry names one difference per
+ * line; the first line owns the row, the rest stand beneath it. */
+function labelLines(label: string): { first: string; rest: string[] } {
+  const [first = "", ...rest] = label.split("\n").filter((line, index) => index === 0 || line.trim() !== "");
+  return { first, rest };
+}
+
+/** The pending-merge diagnostic the core folds into the issues (space-1)
+ * reads in plain words; Git's own file name survives in the title
+ * (space-27). */
+const MERGE_HEAD_FILE = ".git/MERGE_HEAD";
 
 /** One conflict row: a radio group named by the unit's label with two
  * exclusive choices, nothing preselected, arrow keys moving within it
@@ -320,6 +343,7 @@ function ConflictRow({
   };
 
   const project = unit.project?.name ?? unit.project?.id;
+  const label = labelLines(unit.label);
   const option = (side: Side, label: string, summary: SpaceSide) => {
     const id = `space-choice-${side}-${unit.unit}`;
     return (
@@ -375,7 +399,7 @@ function ConflictRow({
       <div className="flex min-w-0 items-center gap-2 text-sm">
         <span className="shrink-0 text-xs text-neutral-500">{KIND_LABELS[unit.kind].replace(/s$/, "")}</span>
         <span className="min-w-0 flex-1 truncate font-medium" title={unit.label}>
-          {unit.label}
+          {label.first}
         </span>
         {project ? (
           <span className="hidden max-w-32 shrink-0 truncate text-xs text-neutral-500 @md:inline" title={project}>
@@ -383,6 +407,15 @@ function ConflictRow({
           </span>
         ) : null}
       </div>
+      {label.rest.length > 0 ? (
+        <ul className="pl-3.5 text-sm">
+          {label.rest.map((line) => (
+            <li key={line} className="truncate" title={line}>
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {option("mine", "Keep mine", conflict.mine)}
       {option("remote", "Take remote", conflict.remote)}
       {diffSide ? (
@@ -517,6 +550,10 @@ export function SyncTab({
   const [choices, setChoices] = useState<Record<string, Side>>({});
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState<"check" | "apply" | "retry" | "stop">();
+  // An accepted long command keeps its control busy until the machine's
+  // state moves (DR-010 §3, space-29): the running frame, or the
+  // outcome that landed first.
+  const [accepted, setAccepted] = useState<{ where: "check" | "apply" | "retry" | "stop"; key: string }>();
   const [error, setError] = useState<{ where: "check" | "apply" | "retry"; message: string }>();
   const [dismissed, setDismissed] = useState<string>();
   const lastSyncInput = useRef<{ choices?: Record<string, Side>; join?: boolean }>({});
@@ -539,6 +576,9 @@ export function SyncTab({
   const remoteCount = chosen.filter(([, side]) => side === "remote").length;
 
   const phaseKey = JSON.stringify(sync);
+  useEffect(() => {
+    if (accepted && accepted.key !== phaseKey) setAccepted(undefined);
+  }, [accepted, phaseKey]);
   const showStopped = sync.phase === "stopped" && dismissed !== phaseKey;
   const showDone = sync.phase === "done" && dismissed !== phaseKey;
   const pickerStands =
@@ -553,10 +593,12 @@ export function SyncTab({
     where: "check" | "apply" | "retry",
     action: () => Promise<unknown>,
   ) => {
+    const key = phaseKey;
     setBusy(where);
     setError(undefined);
     try {
       await action();
+      setAccepted({ where, key });
     } catch (cause) {
       const message = (cause as Error).message;
       setError({ where, message });
@@ -566,10 +608,15 @@ export function SyncTab({
     }
   };
 
+  // While the histories are still unrelated — a join's merge has not
+  // landed — every sync the tab starts is a join (space-13, space-18).
+  const joinNeeded = repo?.unrelated === true;
+
   const apply = () =>
     run("apply", () => {
-      lastSyncInput.current = { choices: chosenChoices };
-      return spaceSync({ choices: chosenChoices });
+      const input = { choices: chosenChoices, ...(joinNeeded ? { join: true } : {}) };
+      lastSyncInput.current = input;
+      return spaceSync(input);
     });
 
   const retry = () => {
@@ -580,14 +627,17 @@ export function SyncTab({
     }
     const input = { ...lastSyncInput.current };
     if (total > 0 && chosen.length === total) input.choices = chosenChoices;
+    if (joinNeeded) input.join = true;
     return run("retry", () => spaceSync(input));
   };
 
   const stop = async () => {
+    const key = phaseKey;
     setBusy("stop");
     try {
       const stopped = await spaceCancel();
-      if (!stopped) onNote("Nothing to stop");
+      if (stopped) setAccepted({ where: "stop", key });
+      else onNote("Nothing to stop");
     } catch (cause) {
       onNote((cause as Error).message);
     } finally {
@@ -596,7 +646,9 @@ export function SyncTab({
   };
 
   const disabled = !connected;
-  const issueCount = space.diagnostics.length + (repo?.mergePending ? 1 : 0);
+  // The core folds a pending Git merge into the diagnostics (space-1):
+  // the count is theirs alone.
+  const issueCount = space.diagnostics.length;
   const blocking = space.diagnostics.some((entry) => entry.blocking);
 
   const issues =
@@ -610,10 +662,12 @@ export function SyncTab({
           Issues ({issueCount})
         </h2>
         <ul className="flex flex-col gap-1">
-          {repo?.mergePending ? (
-            <li>A Git merge is pending; finish or abort it in your terminal.</li>
-          ) : null}
           {space.diagnostics.map((entry) => (
+            entry.file === MERGE_HEAD_FILE ? (
+              <li key={entry.file} title={entry.file}>
+                A Git merge is pending; finish or abort it in your terminal.
+              </li>
+            ) : (
             <li key={`${entry.file}:${entry.reason}`} className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="min-w-0 truncate font-mono text-xs" title={entry.file}>
                 {entry.file}
@@ -628,6 +682,7 @@ export function SyncTab({
                 </button>
               ) : null}
             </li>
+            )
           ))}
         </ul>
       </section>
@@ -646,9 +701,12 @@ export function SyncTab({
     return <div data-testid="space-sync-tab" className="flex flex-col gap-3">{issues}</div>;
   }
 
-  const checkLabel = busy === "check" || (running && sync.op === "check") ? "Checking…" : "Check remote";
-  const checkDisabled =
-    disabled || running || busy !== undefined || !repo.remote || repo.branch !== "main";
+  const pending = busy !== undefined || accepted !== undefined;
+  const checkLabel =
+    busy === "check" || accepted?.where === "check" || (running && sync.op === "check")
+      ? "Checking…"
+      : "Check remote";
+  const checkDisabled = disabled || running || pending || !repo.remote || repo.branch !== "main";
 
   return (
     <div data-testid="space-sync-tab" className="flex flex-col gap-3">
@@ -671,7 +729,7 @@ export function SyncTab({
           cancelable={sync.cancelable}
           op={sync.op}
           onStop={() => void stop()}
-          stopping={busy === "stop"}
+          stopping={busy === "stop" || accepted?.where === "stop"}
         />
       ) : null}
       {sync.phase === "choices" ? (
@@ -709,10 +767,10 @@ export function SyncTab({
                 type="button"
                 data-testid="space-retry"
                 className={SECONDARY}
-                disabled={disabled || busy !== undefined}
+                disabled={disabled || pending}
                 onClick={() => void retry()}
               >
-                {busy === "retry" ? "Retrying…" : "Retry"}
+                {busy === "retry" || accepted?.where === "retry" ? "Retrying…" : "Retry"}
               </button>
             ) : null}
             <button
@@ -797,7 +855,10 @@ export function SyncTab({
         </div>
         {!repo.remote ? (
           <p className="text-sm text-neutral-500">Add a remote to share this space</p>
-        ) : repo.unrelated || sync.phase === "unrelated" ? (
+        ) : sync.phase === "unrelated" || (repo.unrelated && sync.phase !== "choices") ? (
+          // Unrelated histories list nothing (space-8) — until a join has
+          // compared them against the empty tree and asks its choices,
+          // whereupon the incoming list stands above the picker (space-9).
           <p className="text-sm text-neutral-500">Unrelated history</p>
         ) : repo.remoteEmpty ? (
           <p className="text-sm text-neutral-500">The remote is empty; Sync will send this space</p>
@@ -838,7 +899,7 @@ export function SyncTab({
                 choice={chosenChoices[conflict.unit.unit]}
                 marked={marked === conflict.unit.unit}
                 now={now}
-                disabled={disabled || busy === "apply"}
+                disabled={disabled || busy === "apply" || accepted?.where === "apply"}
                 onChoice={(unit, side) => setChoices((current) => ({ ...current, [unit]: side }))}
               />
             ))}
@@ -889,10 +950,10 @@ export function SyncTab({
                 data-testid="space-apply"
                 className={PRIMARY}
                 aria-describedby="space-chosen"
-                disabled={disabled || chosen.length < total || busy !== undefined}
+                disabled={disabled || chosen.length < total || pending}
                 onClick={() => setConfirming(true)}
               >
-                {busy === "apply" ? "Applying…" : "Apply"}
+                {busy === "apply" || accepted?.where === "apply" ? "Applying…" : "Apply"}
               </button>
             )}
             {error?.where === "apply" ? (
