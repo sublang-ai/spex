@@ -8,6 +8,7 @@
 Accepted (2026-09-12) on the owner's report that a `/dev` turn parked in its recoverable failure state offered no way back but prose in the composer.
 Extends [DR-047](047-explicit-session-recovery.md) from the uncertain turn to the settled-but-parked workflow; the two conditions never stand together.
 Extended by [DR-061](061-run-state-from-frames.md), which reads the parked run from the same frames this notice reads for the state chip and the interface's failure attention; the notice's own behavior is unchanged.
+Amended by [DR-062](062-ending-a-failed-workflow.md): Drop stands beside Retry, and Retry becomes the deterministic runtime selection this record deferred until Playbook advertised one; the notice's placement, wording, and busy and disabled forms stand.
 
 ## Context
 

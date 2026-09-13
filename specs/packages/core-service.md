@@ -201,6 +201,20 @@ When a client sends `session.retry` with only a `sessionId`, the core shall retr
 - reject a non-uncertain session or unsafe recovery with its cause, starting no replacement turn;
 - publish records and the resulting session state, retaining uncertainty if the attempt does not settle.
 
+#### core-service-98
+
+When a client sends `session.control` with a `sessionId` and one advertised control, the core shall run that control as the session's next turn through Playbook's shared lifecycle [[1]] under the same project and session admission checks as continuation [[core-service-73](#core-service-73)] ([DR-062](../decisions/062-ending-a-failed-workflow.md)):
+
+| Control | What runs |
+| --- | --- |
+| a recovery | the named action the session's parked run currently advertises |
+| an ending | the shell's own control, which ends the run and spends no model call |
+
+- the session report carries both currently advertised readings, each empty while a turn is active or while nothing is advertised, so a client offers only what the session will accept [[core-service-32](#core-service-32)];
+- a control neither reading advertises is rejected with its cause, starting no turn;
+- the turn carries the control's own Boss-facing label as its text, creates no intent dispatch, and stamps none [[core-service-47](#core-service-47)];
+- records and the resulting session state publish as a continued turn's do [[core-service-5](#core-service-5)].
+
 #### core-service-83
 
 When a client sends `session.discard` with only a `sessionId`, the core shall discard that session's uncertain attempt through Playbook's shared lifecycle [[1]] under its exclusive lease, without loading configuration, modules or agents ([DR-047](../decisions/047-explicit-session-recovery.md)):
@@ -763,6 +777,16 @@ When an integration suite interrupts CLI-created and desktop-created sessions an
 - Discard restores the prior checkpoint or removes a fresh attempt without loading agents, and ledger advancement refuses without evidence loss;
 - competing leases and repeated requests start no duplicate turn;
 - aborted turns require recovery whenever the shared checkpoint remains uncertain [[core-service-6](#core-service-6)].
+
+### core-service-99
+
+When an integration suite parks a real session's run in its recoverable failure state and drives that session's advertised controls through core commands, it shall verify them [[core-service-98](#core-service-98)]:
+
+- the report carries the run's advertised recovery and the ending while no turn is active, and carries neither while one is [[core-service-32](#core-service-32)];
+- a control neither reading advertises is refused with its cause and starts no turn;
+- the recovery runs as one turn whose text is that action's own label, creating no intent dispatch and stamping none [[core-service-47](#core-service-47)];
+- the ending runs as one turn after which the session holds no parked run and offers no resumption of it;
+- a second request while the first turn runs starts no duplicate turn [[core-service-5](#core-service-5)].
 
 ## References
 

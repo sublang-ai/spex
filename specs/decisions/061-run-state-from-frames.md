@@ -7,6 +7,7 @@
 
 Accepted (2026-09-13) on evidence captured against a real core in the hermetic browser harness, where a workflow parked in its failure state read a neutral "idle" the moment the turn settled.
 Extends [DR-060](060-failed-workflow-control.md) from the failed-workflow notice to the state chip and the interface's own attention derivation; the notice, which already reads the frames, is unchanged.
+Failure attention amended by [DR-062](062-ending-a-failed-workflow.md): the divergence scoped as a consequence here closes, the core's ledger holding a parked failure on the same terms the frames do; reading a leaf's state from its own frames stands.
 
 ## Context
 

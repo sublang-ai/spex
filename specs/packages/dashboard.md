@@ -51,7 +51,7 @@ While an attention entry is displayed, when its clearing condition arrives, the 
 | Finished intent | a verdict — Confirm or Drop — closing the intent |
 | Session question | the next Boss turn starting in the session |
 | Session permission | the request being decided, or its turn ending |
-| Session failure | the next Boss turn starting in the session, or another conversation becoming the project's current one [[core-service-93](core-service.md#core-service-93)] |
+| Session failure | where a run stands parked in its failure state, that run leaving the state or its call being disposed within a turn; otherwise the next Boss turn starting in the session — and, either way, another conversation becoming the project's current one [[core-service-93](core-service.md#core-service-93)] ([DR-062](../decisions/062-ending-a-failed-workflow.md)) |
 | Session turn to review | the session's persisted last-viewed marker advancing past the turn |
 
 - Resolving one entry removes no other entry.
@@ -249,7 +249,7 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 | Working | bound, and the latest turn in its range is active |
 | Interrupted — question | bound, not closed, captain telemetry `playbook.fsm.state` reached `awaitBossReply` in its range with no later report of that machine leaving it — another machine's state report, the Captain's own included, leaves the question standing — and no later Boss turn has started in the session |
 | Interrupted — permission | bound, not closed, a player event in its range carried `permission_request` with no later record for that player in the same turn, and the turn has not ended |
-| Interrupted — failure | bound, not closed, a `runtime_error` record — or a turn whose engagement settled failed — lies in its range, and no later Boss turn has started in the session; the Boss's next turn acknowledges it, and a verdict also clears it |
+| Interrupted — failure | bound, not closed, a `runtime_error` record — or a turn whose engagement settled failed — lies in its range, and the failure still stands: while a run of that session is parked in its failure state the entry stands until that run leaves the state or its call is disposed within a turn, and otherwise the Boss's next turn acknowledges it; a verdict clears it either way ([DR-062](../decisions/062-ending-a-failed-workflow.md)) |
 | Finished | bound, not closed, not interrupted, no turn in its range active, and a turn in its range ended finished — an aborted follow-up does not unseat a standing finish |
 | Done / Dropped | its close verdict is recorded, done requiring a Finished intent and dropped legal on any open one |
 
@@ -311,7 +311,7 @@ Where fixture intent rows and a fixture record stream span two projects — one 
 
 #### dashboard-16
 
-While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, a viewed-marker advance past the un-ledgered finished turn, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry even when dispatching another intent before any machine transition [[dashboard-4](#dashboard-4)], that the marker advance cleared the turn-to-review stand-in and no intent entry [[dashboard-4](#dashboard-4)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's Start [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
+While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, a viewed-marker advance past the un-ledgered finished turn, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry even when dispatching another intent before any machine transition [[dashboard-4](#dashboard-4)], that the marker advance cleared the turn-to-review stand-in and no intent entry [[dashboard-4](#dashboard-4)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's Start [[dashboard-4](#dashboard-4)], that a Boss turn taken while a run of the failure intent's session stands parked in its failure state left that failure entry standing where the same turn would have cleared an unparked one, and that the parked run's disposal within a later turn cleared it [[dashboard-10](#dashboard-10)] [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
 
 #### dashboard-17
 

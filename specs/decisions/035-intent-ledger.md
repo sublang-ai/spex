@@ -15,6 +15,7 @@ Amended by [DR-051](051-runtime-held-for-a-turn.md): the lane Start reuses is th
 Amended by [DR-054](054-issue-intent-delivery.md): issue capture seeds include verification and PR delivery instructions, with issue closure on merge.
 
 Amended by [DR-055](055-queue-advancement.md): proven successful queued work advances automatically without a verdict; human confirmations and explicit after-link gates remain.
+Failure acknowledgment amended by [DR-062](062-ending-a-failed-workflow.md): a later Boss turn no longer clears a failure that parked a run, which now stands until that run leaves its failure state; the verdict acts and every other fold contract stand.
 
 ## Context
 
