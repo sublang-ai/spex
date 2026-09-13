@@ -16,19 +16,26 @@ import { RECOVER_FAILED_WORKFLOW } from "../lib/labels.js";
 
 /** The busy form is the longer word, so the control reserves its width
  * once and nothing reflows on activation (DR-041: a busy form never
- * widens its control). */
-const CONTROL_WIDTH = "min-w-[5.5rem]";
+ * widens its control). The reserve is measured against the busy form
+ * in a real browser (run-view-132), which is how 5.5rem was caught
+ * coming up short of "Retrying…" by a pixel and a half. */
+const CONTROL_WIDTH = "min-w-[6rem]";
 
 export function FailedWorkflow({
   command,
+  playbookId,
   state,
   connected,
   turnActive,
   onSubmit,
 }: {
-  /** The command that started the failed run, where the record stream
-   * names that run; absent when it does not (run-view-128). */
+  /** The command that started the failed run, where a configured
+   * playbook names one; absent when none does (run-view-128). */
   command?: string;
+  /** The run's own playbook id, carried only where no command names
+   * it: an identifier belongs in the tooltip, never in the copy
+   * (DR-010 §2). */
+  playbookId?: string;
   /** The raw state id, which rides the notice's tooltip and never the
    * copy (DR-010 §2). */
   state?: string;
@@ -73,7 +80,12 @@ export function FailedWorkflow({
     <section
       aria-label="Failed workflow"
       data-testid="failed-workflow"
-      title={state ? `state: ${state}` : undefined}
+      title={[
+        playbookId ? `playbook: ${playbookId}` : undefined,
+        state ? `state: ${state}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" · ") || undefined}
       className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
     >
       {/* The row yields as the pane narrows (DR-041): the words own

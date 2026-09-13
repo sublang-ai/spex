@@ -57,6 +57,23 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
   await expect(retry).toBeEnabled();
   await expect(page.getByTestId("boss-composer")).toBeEnabled();
 
+  // The busy form never widens the control (DR-041 §2). The reserved
+  // width is a layout fact, so it is measured here against the real
+  // fonts and rules rather than inferred from a class name: the busy
+  // word is put in the control's own box and the box is measured.
+  const widths = await retry.evaluate((el) => {
+    const rest = el.getBoundingClientRect().width;
+    // A copy carries the busy word, so the control the reader is
+    // about to press is never touched.
+    const probe = el.cloneNode(true) as HTMLElement;
+    probe.textContent = "Retrying…";
+    el.parentElement!.append(probe);
+    const busy = probe.getBoundingClientRect().width;
+    probe.remove();
+    return { rest, busy };
+  });
+  expect(widths.busy).toBeLessThanOrEqual(widths.rest + 0.5);
+
   // At the reflow floor the control yields under the words rather
   // than overlapping them or leaving the notice's box (DR-041; the
   // 320px floor holds with the rail collapsed, since the open rail is
@@ -84,6 +101,14 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
       };
     }),
   ).toEqual({ under: true, inside: true, clipped: false });
+  // The yield is a yield, not an overflow: the page itself still does
+  // not scroll sideways at the floor (DR-041).
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+
   await setRail(page, true);
   await settleLayout(page);
 

@@ -268,7 +268,7 @@ While a session reports external ownership [[core-service-32](core-service.md#co
 
 While a session a Boss message continues [[core-service-32](core-service.md#core-service-32)] holds a playbook run its record stream still reports underway [[run-view-14](#run-view-14)] [[run-view-74](#run-view-74)] standing in the recoverable failure state its machine card draws in the failure emphasis [[run-view-61](#run-view-61)], the run view shall stand a failed-workflow notice between the Captain pane and the composer, saying in plain words that the workflow failed and waits for the Boss and what its one recovery control does ([DR-010](../decisions/010-interface-craft.md) §2, [DR-060](../decisions/060-failed-workflow-control.md)):
 
-- the notice names the failed workflow by that run's own command, never by a state id, and carries the raw state in its title;
+- the notice names the failed workflow by the command a configured playbook gives that run, and by no name at all where none does — an identifier is never dressed as a command — with that run's playbook id and the raw state carried in its title;
 - the notice states that its control asks the Captain to run the workflow's advertised recovery, so the control promises only what it performs;
 - the notice wraps its control under its words when its pane is too narrow for both ([DR-041](../decisions/041-chrome-that-fits.md));
 - an uncertain session shows the interrupted-turn controls instead [[run-view-110](#run-view-110)], a session reporting external ownership shows no notice [[run-view-125](#run-view-125)], and history the core cannot continue shows its own notice [[run-view-33](#run-view-33)].
@@ -556,6 +556,7 @@ The app shall fail loudly and stay accessible:
 - icon-only controls carry accessible names and at-least-24px hit targets, and the navigation exposes the current surface and badge meaning to assistive technology;
 - one glyph carries one meaning across the app ([DR-010](../decisions/010-interface-craft.md) §8): the gear names the Settings surface, and an in-place editor wears the pencil;
 - color is never the only channel: a player pane's running mark says "running" in text, a tool card's outcome is a mark with its word — ✓ ok, ✗ failed, ✗ denied — and a failure count and a tab's attention dot each carry their meaning in text;
+- a box the reader can scroll that holds nothing focusable of its own takes the keyboard stop itself, with an accessible name for what it holds, so what a pointer can reach the keyboard reaches too;
 - no action strands focus on the document body: ending a session lands focus on the session's tab, backing out of the end confirm returns it to the end control, and aborting a turn keeps it in the composer.
 
 #### run-view-51
@@ -817,7 +818,7 @@ Where a fixture stream calls one player under two roles, the test suite shall as
 
 #### run-view-82
 
-Where the run view renders with its default split, the test suite shall assert the divider contract of [[run-view-81](#run-view-81)]: an arrow key moves the split and a double-click restores the default of 45%, the split survives a remount, a nudge past either bound stops at that bound, a drag against a padded container leaves the rule within a pixel of the pointer rather than the padding's width away from it, and a machine drawing carries the scale-or-scroll rule — its natural width, the floor at four fifths of it, and the container query choosing between them — inside a scrolling box that masks its edge, which a box read to its end and then narrowed masks again.
+Where the run view renders with its default split, the test suite shall assert the divider contract of [[run-view-81](#run-view-81)]: an arrow key moves the split and a double-click restores the default of 45%, the split survives a remount, a nudge past either bound stops at that bound, a drag against a padded container leaves the rule within a pixel of the pointer rather than the padding's width away from it, and a machine drawing carries the scale-or-scroll rule — its natural width, the floor at four fifths of it, and the container query choosing between them — inside a scrolling box that masks its edge, which a box read to its end and then narrowed masks again, and which is itself the keyboard stop that names the drawing it holds [[run-view-50](#run-view-50)].
 
 #### run-view-53
 
@@ -838,9 +839,9 @@ The test suite shall assert first-hour failures surface at hand:
 
 Where a replayed fixture stream ends with a playbook run standing in its recoverable failure state [[run-view-14](#run-view-14)], the test suite shall assert the failed-workflow notice:
 
-- the notice stands between the Captain pane and the composer, naming the failed workflow by its command in plain words with the raw state in its title and stating what its control does [[run-view-128](#run-view-128)];
-- activating the control dispatches exactly one Boss submission over the protocol whose text is the fixed recovery request, which then renders as a Boss bubble carrying those exact words, while a staged intent detaches and no intent id rides the submission [[run-view-129](#run-view-129)];
-- while that submission is in flight the control shows its busy form, keeps the box it held at rest, and cannot be activated again; a refusal shows its cause with the transcript and draft intact [[run-view-130](#run-view-130)];
+- the notice stands between the Captain pane and the composer, naming the failed workflow by its command in plain words with the raw state in its title and stating what its control does, while a run no configured playbook claims names no command and carries its playbook id in that title instead [[run-view-128](#run-view-128)];
+- activating the control dispatches exactly one Boss submission over the protocol whose text is the fixed recovery request — a request and not command text — which then renders as a Boss bubble carrying those exact words, while a staged intent detaches and no intent id rides the submission [[run-view-129](#run-view-129)];
+- while that submission is in flight the control shows its busy form under the width rule it held at rest and cannot be activated again; a refusal shows its cause with the transcript and draft intact [[run-view-130](#run-view-130)];
 - a fixture whose stream then reports the run leaving its failure state removes the notice, while one whose next turn only answers leaves it standing [[run-view-130](#run-view-130)];
 - the same fixture marked uncertain shows the interrupted-turn controls and no failed-workflow notice [[run-view-128](#run-view-128)] [[run-view-110](#run-view-110)], and marked externally owned shows neither [[run-view-125](#run-view-125)].
 
@@ -984,4 +985,4 @@ Where the harness boots with the demo project registered, when the journey leave
 
 #### run-view-132
 
-Where the harness boots with the demo project registered and a scripted workflow that parks in its recoverable failure state, the test suite shall assert the recovery round trip through the page [[run-view-128](#run-view-128)]: the notice appears naming the failed workflow by its command with the raw state in its title, and stands through the turn's settlement [[run-view-128](#run-view-128)], activating its control sends the fixed request as the next Boss turn and shows those words in the thread [[run-view-129](#run-view-129)], the control is disabled while that turn runs [[run-view-130](#run-view-130)], and the notice leaves once the run leaves its failure state [[run-view-130](#run-view-130)]; and that at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] the notice's control sits under its words, neither overlapping them nor leaving the notice's box [[run-view-128](#run-view-128)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout).
+Where the harness boots with the demo project registered and a scripted workflow that parks in its recoverable failure state, the test suite shall assert the recovery round trip through the page [[run-view-128](#run-view-128)]: the notice appears naming the failed workflow by its command with the raw state in its title, and stands through the turn's settlement [[run-view-128](#run-view-128)], activating its control sends the fixed request as the next Boss turn and shows those words in the thread [[run-view-129](#run-view-129)], the control is disabled while that turn runs and its busy form measures no wider than the control at rest [[run-view-130](#run-view-130)], and the notice leaves once the run leaves its failure state [[run-view-130](#run-view-130)]; and that at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] the notice's control sits under its words, neither overlapping them nor leaving the notice's box [[run-view-128](#run-view-128)], with the page still not scrolling sideways [[run-view-119](#run-view-119)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout).

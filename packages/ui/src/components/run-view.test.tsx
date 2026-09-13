@@ -924,6 +924,10 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
     expect(screen.getByTestId("machine-card-t-code").className).toContain(
       "@container",
     );
+    // A drawing holds nothing focusable, so the box that scrolls it
+    // takes the stop and says what it holds (run-view-50).
+    expect(scroller.getAttribute("tabindex")).toBe("0");
+    expect(scroller.getAttribute("aria-label")).toBe("code machine drawing");
   });
 
   // run-view-81: the fade is a fact about the box as much as about the
@@ -2520,10 +2524,16 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
   });
 
-  test("names the run the trace carried when no configured playbook claims it", () => {
+  test("names no command where none is configured, keeping the run's id in the tooltip", () => {
+    // An identifier is never dressed as a command the reader could
+    // type (run-view-128, DR-010 §2): the words fall back to the plain
+    // sentence and the trace's own id rides the tooltip.
     renderFailed({ playbooks: [] });
     expect(screen.getByTestId("failed-workflow-what").textContent).toBe(
-      "The /code workflow failed and is waiting for you.",
+      "The workflow failed and is waiting for you.",
+    );
+    expect(screen.getByTestId("failed-workflow").getAttribute("title")).toBe(
+      "playbook: code · state: failed",
     );
   });
 
@@ -2550,6 +2560,10 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
         sessionId: "s1",
         text: RECOVER_FAILED_WORKFLOW,
       });
+      // What is asked is a request, not a command: a leading slash
+      // would be parsed as one and never reach the Captain's judgment
+      // (run-view-129).
+      expect(RECOVER_FAILED_WORKFLOW.startsWith("/")).toBe(false);
       // Nothing else rides the recovery request (run-view-129).
       expect(useAppStore.getState().stagedIntents.s1).toBeUndefined();
 
@@ -2608,8 +2622,10 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     expect(retry.textContent).toBe("Retrying…");
     expect(retry.getAttribute("aria-busy")).toBe("true");
     expect(retry.disabled).toBe(true);
-    // The busy form never widens the control (DR-041): the box the
-    // class rules fix is the one it held at rest.
+    // The busy form never widens the control (DR-041): the width rule
+    // it wears is the one it held at rest. A simulated document cannot
+    // measure the box itself, so the browser journey weighs the busy
+    // word against that reserved width (run-view-132).
     expect(retry.className).toBe(shape);
     expect(screen.getByRole("status").textContent).toContain(
       "Asking the Captain",

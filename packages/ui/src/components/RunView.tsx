@@ -445,15 +445,15 @@ export function RunView({
   // The failed-workflow notice (run-view-128, DR-060): the run the
   // stream still reports underway, standing in its recoverable
   // failure state. The way back stands until that run leaves it,
-  // mid-turn included. The notice speaks the run's command, never its
-  // state id (DR-010 §2); a playbook no longer configured keeps the
-  // id the trace carried.
+  // mid-turn included. The notice speaks the run's command and never
+  // an identifier (DR-010 §2): where no configured playbook claims
+  // the run, the trace's id rides the tooltip and the words name no
+  // command at all, rather than dressing an id as one.
   const failedRun = readOnly || uncertain
     ? undefined
     : parkedFailure(activityView.frames);
   const failedCommand = failedRun
     ? playbooks?.find((entry) => entry.id === failedRun.playbookId)?.command
-      ?? failedRun.playbookId
     : undefined;
 
   return (
@@ -552,6 +552,7 @@ export function RunView({
           {failedRun ? (
             <FailedWorkflow
               command={failedCommand}
+              playbookId={failedCommand ? undefined : failedRun.playbookId}
               state={failedRun.active ?? undefined}
               connected={connected}
               turnActive={view.turnActive}
