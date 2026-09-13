@@ -13,9 +13,9 @@ A GitHub issue handed to `/dev` becomes a branch, the planned `decide` and/or `c
 
 ## Deliverables
 
-- [ ] Spex requires the playbook release that ships `branch` and `pr` and the issue-aware `dev`; the built-in catalog offers both new playbooks with `dev.coder` bindings.
-- [ ] A new DR supersedes DR-054's "the Boss merges": an issue seed dispatches `/dev` with the issue, and delivery ends at the merged pull request and the restored default-branch checkout.
-- [ ] The Dashboard's issue seed and its coverage follow the new DR.
+- [x] Spex requires the playbook release that ships `branch` and `pr` and the issue-aware `dev`; the built-in catalog offers both new playbooks with `dev.coder` bindings.
+- [x] A new DR supersedes DR-054's "the Boss merges": an issue seed dispatches `/dev` with the issue, and delivery ends at the merged pull request and the restored default-branch checkout.
+- [x] The Dashboard's issue seed and its coverage follow the new DR.
 - [ ] A real `/dev` run on a throwaway repository's issue produces a branch, a pull request, a green check, a merge commit on the default branch, and the issue closed.
 
 ## Tasks
@@ -27,5 +27,6 @@ A GitHub issue handed to `/dev` becomes a branch, the planned `decide` and/or `c
 
 ## Verification
 
-- `npm test -w packages/core`, `npm test -w packages/ui`, `npm run e2e`, `spex lint`.
+- `npm test -w packages/core`, `npm test -w packages/ui`, `npm run e2e`, `spex lint`: green on Playbook 13.2.0 (core 302, journeys 50).
 - Live: from the Spex app on the throwaway repository, `/dev` with the seeded issue; evidence is the merged pull request URL, the CI run, and the issue's closed state.
+- Live note (2026-09-12): with the Captain on `claude-opus-5`, the Analyst's adjudication call was refused twice by the provider's safeguard classifier ("Opus 5's safeguards flagged this message"); the workflow parked in its recoverable failure, and switching the Captain to `claude-fable-5-1` let "Retry and continue the iteration" proceed — a provider-side false positive, not a playbook defect.
