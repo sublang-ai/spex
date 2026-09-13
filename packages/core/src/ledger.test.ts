@@ -326,6 +326,67 @@ test("DR-035: a runtime_error derives interrupted failure, cleared by a later tu
   store.close();
 });
 
+test("DR-062: a parked failure stands through a later turn, and the run's end clears it", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "P", "i");
+  beginTurn(store, "s1", 1, "run it", 1000);
+  store.stampIntentDispatch("P", "s1", 1, 1000);
+  // The run parks in its failure state. A real stream reports it twice —
+  // the per-run trace that names which machine moved, and the shell's own
+  // state topic — so the fixture carries both.
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-1",
+      type: "fsm.transition",
+      payload: { from: "coding", to: "failed" },
+    },
+    turnId: 1,
+    timestamp: 1390,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { to: "failed" },
+    turnId: 1,
+    timestamp: 1400,
+  });
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1500,
+    message: "The Captain's turn failed: boom",
+  });
+  finishTurn(store, "s1", 1, 2000);
+
+  const parked = fold(store, [lane("s1", projectId, true)]);
+  assert.equal(stateOf(parked, "P").reason, "failure");
+
+  // DR-062: talking about something else is not resolving it. The same turn
+  // would have acknowledged a failure that parked nothing.
+  beginTurn(store, "s1", 2, "something unrelated", 3000);
+  const afterTurn = fold(store, [lane("s1", projectId, true)]);
+  assert.equal(stateOf(afterTurn, "P").state, "interrupted");
+  assert.equal(stateOf(afterTurn, "P").reason, "failure");
+  assert.equal(afterTurn.badge, 1);
+
+  // Ending the run is what clears it — here the Boss's give-up, which
+  // disposes the parked call inside its turn.
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: { sessionId: "run-1", type: "session.disposed" },
+    turnId: 2,
+    timestamp: 3200,
+  });
+  const dropped = fold(store, [lane("s1", projectId, true)]);
+  assert.equal(stateOf(dropped, "P").state, "working");
+  assert.equal(dropped.badge, 0);
+  store.close();
+});
+
 test("DR-035: failure outranks the question and the permission", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");

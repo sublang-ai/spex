@@ -45,14 +45,24 @@ interface SessionConditions {
   question?: { since: number; turnId: number | null };
   /** A player awaits a permission decision in the current turn. */
   permission?: { since: number; turnId: number | null };
+  /**
+   * A run stands parked in its failure state. Unlike a question, a
+   * later Boss turn does not clear this: a failure is resolved by the
+   * run leaving that state — recovered or ended — and not by talking
+   * about something else (DR-062, dashboard-10).
+   */
+  failure?: { since: number; turnId: number | null };
 }
 
 function foldConditions(records: StoredRecord[]): SessionConditions {
   let question: SessionConditions["question"];
+  let failure: SessionConditions["failure"];
   // Runs parked on a question, by trace session id: a run disposed
   // while parked — dismissed by the Captain — takes its question with
   // it (dashboard-10).
   const parkedRuns = new Set<string>();
+  /** Runs parked in their failure state, by trace session id. */
+  const parkedFailures = new Set<string>();
   const permissions = new Map<
     string,
     { since: number; turnId: number | null }
@@ -86,11 +96,21 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
           if (trace.type === "fsm.transition") {
             if (trace.payload?.to === "awaitBossReply") parkedRuns.add(trace.sessionId);
             else if (trace.payload?.from === "awaitBossReply") parkedRuns.delete(trace.sessionId);
+            if (trace.payload?.to === "failed") parkedFailures.add(trace.sessionId);
+            else if (trace.payload?.from === "failed") {
+              if (parkedFailures.delete(trace.sessionId)) failure = undefined;
+            }
           } else if (trace.type === "session.disposed") {
             // Outside a turn — no turn id — the host is releasing the
             // runtime at settlement, a pause the parked run survives
             // (core-service-93); inside one, the Captain dismissed it.
             if (telemetry.turnId !== null && parkedRuns.delete(trace.sessionId)) question = undefined;
+            // A run disposed inside a turn was ended deliberately — the
+            // Captain dismissed it, or the Boss dropped it — which is
+            // one of the two ways a failure stops summoning (DR-062).
+            if (telemetry.turnId !== null && parkedFailures.delete(trace.sessionId)) {
+              failure = undefined;
+            }
           }
           break;
         }
@@ -115,6 +135,17 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
           // The parked machine leaving its park answers the question;
           // unrelated Captain state reports must not clear it.
           question = undefined;
+        }
+        if (state === "failed") {
+          failure = failure ?? {
+            since: telemetry.timestamp,
+            turnId: telemetry.turnId,
+          };
+        } else if (stateText(telemetry.payload?.from) === "failed") {
+          // Only the failing machine leaving its failure state resolves
+          // it; another machine's report, the Captain shell's rest
+          // state included, leaves it standing (DR-061, DR-062).
+          failure = undefined;
         }
         break;
       }
@@ -150,6 +181,7 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
   return {
     ...(question ? { question } : {}),
     ...(first ? { permission: first } : {}),
+    ...(failure ? { failure } : {}),
   };
 }
 
@@ -301,9 +333,16 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     // for exactly as long as they summon the Boss.
     const errors = store.runtimeErrors(bound.sessionId, bound.turnId, endTurnId);
     const lastError = errors[errors.length - 1];
+    // DR-062: where the failure parked a run, only that run leaving its
+    // failure state — recovered or ended — stops the summons. Where it
+    // parked none, nothing is stuck and the next Boss turn acknowledges
+    // it, which is the rule this fold has always had.
+    const parked = laneLive
+      ? sessionConditions(bound.sessionId).failure !== undefined
+      : false;
     const failureStands =
       lastError !== undefined &&
-      !turns.some((turn) => turn.startedAt > lastError.timestamp);
+      (parked || !turns.some((turn) => turn.startedAt > lastError.timestamp));
     if (failureStands) {
       derived.push({
         intent,
