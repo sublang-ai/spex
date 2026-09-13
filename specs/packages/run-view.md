@@ -295,7 +295,7 @@ The run view shall keep cross-project attention and playbook creation at hand:
 
 - while the Dashboard's published attention count [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the sidebar's Dashboard entry shows a badge with that count across all projects ([DR-029](../decisions/029-session-history-home.md)), surviving the sidebar's collapse [[run-view-71](#run-view-71)];
 - while a non-current project needs a human, that project's sidebar row carries a dot in the most severe color [[run-view-67](#run-view-67)];
-- where the run view derives a session's attention itself rather than reading that published count, a failure summons while one of that session's runs stands parked in its recoverable failure state [[run-view-74](#run-view-74)] — the run's own frames answer for it, never the session's last reported state ([DR-061](../decisions/061-run-state-from-frames.md)) — and while no turn is running and the last one held a failure, so a failure that parked no machine summons too;
+- the project palette's rows carry each project's count of sessions summoning a human, derived by the run view itself rather than read from that published count: a failure summons while one of a session's runs stands parked in its recoverable failure state [[run-view-74](#run-view-74)] — the run's own frames answer for it, never the session's last reported state ([DR-061](../decisions/061-run-state-from-frames.md)) — and while no turn is running and the last one held a failure, so a failure that parked no machine summons too;
 - the slash menu ends with a compile-a-new-playbook entry that opens the Playbooks surface's compile flow.
 
 ### Conversation Life (DR-010 §1/§3)
@@ -335,7 +335,7 @@ The Captain thread shall keep every moment legible in time: visible time separat
 The session state chip shall show a human-readable label (amber while waiting on the Boss, red for failure) with the raw state id in its tooltip, never as the primary copy ([DR-010](../decisions/010-interface-craft.md) §2):
 
 - while a turn is active and the state names no leaf — no state yet, or the shell's own rest state — the chip reads "working" while a player runs and "deciding" while the Captain has the floor, never "idle";
-- while no turn is active and a playbook run underway [[run-view-74](#run-view-74)] stands in its recoverable failure state — the deepest such run, the leaf that failed — the chip reads the failure label in red with that run's own state id in its tooltip, the session's last reported state being whichever machine reported it last and never the leaf's answer ([DR-061](../decisions/061-run-state-from-frames.md)).
+- while no turn is active, no reply is owed the Boss [[run-view-9](#run-view-9)], and a playbook run underway [[run-view-74](#run-view-74)] stands in its recoverable failure state — the deepest such run, the leaf that failed — the chip reads the failure label in red with that run's own state id in its tooltip, the session's last reported state being whichever machine reported it last and never the leaf's answer ([DR-061](../decisions/061-run-state-from-frames.md)).
 
 #### run-view-46
 

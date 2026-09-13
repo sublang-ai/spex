@@ -32,14 +32,15 @@ Extends [DR-060](060-failed-workflow-control.md) from the failed-workflow notice
 - The interface reads a leaf run's state from that run's own machine frames, never from the session's last reported state.
   That scalar keeps exactly the meaning it has — the last state the record stream reported, whichever machine reported it — and answers no question about the leaf.
 - The chip's failure tone comes from the run's frames, as its waiting tone already comes from the derived pending question.
-  At rest, a run standing parked in its failure state makes the chip read the failure label in red and carry that run's own state in its tooltip.
+  At rest, a run standing parked in its failure state makes the chip read the failure label in red and carry that run's own state in its tooltip, a reply owed the Boss still speaking first as it does today.
   Every other label stands, the during-turn "working" and "deciding" voices included, and the tooltip carries a raw id and never a phrase.
 - The interface's own attention derivation reads those same frames, so a parked failure keeps summoning until the run leaves that state — the answer the notice already gives.
   The last turn's error keeps covering failures that parked no machine, and the quieter historical mark for a failure that no longer summons is untouched.
 
 ## Consequences
 
-- The chip, the notice and the attention signal answer from one source, so the surfaces cannot disagree about a parked workflow.
-- A failure that parks summons until it is recovered rather than until the next turn succeeds, so asking the Captain a question in between costs neither the summons nor the way back.
+- The chip, the notice and the run view's own attention derivation answer from one source, so those surfaces cannot disagree about a parked workflow.
+- The ledger's published count keeps its own acknowledgment rule ([DR-035](035-intent-ledger.md)), under which the Boss's next turn settles a failure: the Dashboard badge, the sidebar mark and the tab dot therefore still stand down on a workflow the notice, the chip and the palette's count go on reporting as parked.
+- In the interface's own derivation a failure that parks summons until it is recovered rather than until the next turn succeeds, so asking the Captain a question in between costs neither that summons nor the way back.
 - Whatever else the interface wants to know about a leaf run has one place to ask, and the scalar's remaining duty is the chip's during-turn voice.
 - The rule costs one derivation over frames the fold already keeps; no record, protocol, or core behavior changes.
