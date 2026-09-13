@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The thread's reading of the agent's spex blocks (playbook-library-53):
-// top-level fences become directives, nested ones stay content, and a
-// block the core would refuse is named malformed rather than drawn as
-// a card.
+// the core's parser, re-exported — top-level fences become directives,
+// nested ones stay content, and a block the core refuses is named
+// malformed rather than drawn as a card.
 
 import { describe, expect, test } from "vitest";
 
@@ -54,6 +54,15 @@ describe("splitDirectives", () => {
     );
   });
 
+  test("CommonMark fences: indent removed, tildes, a longer info string, any case, CRLF", () => {
+    const parts = splitDirectives(
+      ["  ```Spex yaml", "  kind: compile", "  ```", "~~~markdown", "```spex", "kind: compile", "```", "~~~"].join("\r\n"),
+    );
+    expect(parts[0]).toEqual({ kind: "directive", body: "kind: compile", directive: { kind: "compile" } });
+    expect(parts[1].kind).toBe("prose");
+    expect(parts).toHaveLength(2);
+  });
+
   test("an unclosed fence stays prose", () => {
     const parts = splitDirectives("Working…\n```spex\nkind: comp");
     expect(parts).toEqual([{ kind: "prose", text: "Working…\n```spex\nkind: comp" }]);
@@ -89,11 +98,24 @@ describe("parseSpexBlock", () => {
     expect(parseSpexBlock("kind: deploy")).toEqual({ error: "unknown kind deploy" });
     expect(parseSpexBlock("command: a")).toEqual({ error: "no kind" });
     expect(parseSpexBlock("- just\n- a list")).toMatchObject({
-      error: expect.stringContaining("not a key: value line"),
+      error: expect.stringContaining("not a mapping"),
+    });
+    expect(parseSpexBlock("kind: [unclosed")).toMatchObject({
+      error: expect.stringContaining("not YAML"),
     });
   });
 
-  test("quoted values and a flow players mapping read the same", () => {
+  test("quoted values, a folded intent, and a flow players mapping read the same", () => {
+    expect(
+      parseSpexBlock("kind: register\ncommand: changelog\nintent: >-\n  Draft notes\n  since the last tag\nplayers:\n  Coder: dev.coder"),
+    ).toEqual({
+      directive: {
+        kind: "register",
+        command: "changelog",
+        intent: "Draft notes since the last tag",
+        players: { Coder: "dev.coder" },
+      },
+    });
     expect(
       parseSpexBlock('kind: register\ncommand: "changelog"\nintent: \'Draft notes\'\nplayers: {Coder: dev.coder, Reviewer: dev.reviewer}'),
     ).toEqual({

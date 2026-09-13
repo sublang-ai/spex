@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseDirectives, topLevelFences } from "./directives.js";
+import { parseDirectives, parseSpexBlock, splitDirectives, topLevelFences } from "./directives.js";
 
 test("a compile block and a register block parse; the last per kind wins", () => {
   const parsed = parseDirectives([
@@ -63,6 +63,62 @@ test("malformed blocks stay as code: unknown keys or kinds, missing keys, bad pl
   assert.equal(parsed.register, undefined);
   assert.deepEqual(parsed.malformed, cases);
   assert.ok(parsed.blocks.every((b) => b.malformed));
+});
+
+test("CommonMark fences: up to three spaces of indent, tildes, a longer info string, any case of spex", () => {
+  const text = [
+    "  ```spex",
+    "  kind: compile",
+    "  ```",
+    "~~~Spex yaml",
+    "kind: register",
+    "command: tilde",
+    "intent: Read through a tilde fence",
+    "players:",
+    "  Coder: dev.coder",
+    "~~~",
+  ].join("\n");
+  const parsed = parseDirectives(text);
+  assert.equal(parsed.compile, true);
+  assert.deepEqual(parsed.register, { command: "tilde", intent: "Read through a tilde fence", players: { Coder: "dev.coder" } });
+  assert.deepEqual(parsed.malformed, []);
+  // The opener's indentation comes off the body; CRLF reads the same.
+  assert.deepEqual(topLevelFences(text.split("\n").join("\r\n"))[0], { info: "spex", body: "kind: compile" });
+});
+
+test("the thread's split and the core's parse read one reply alike", () => {
+  const text = "Compiling now.\n```spex\nkind: compile\n```\n```md\n# not a directive\n```\n```spex\nkind: deploy\n```\nDone.";
+  const parts = splitDirectives(text);
+  assert.deepEqual(parts, [
+    { kind: "prose", text: "Compiling now." },
+    { kind: "directive", body: "kind: compile", directive: { kind: "compile" } },
+    { kind: "prose", text: "```md\n# not a directive\n```" },
+    { kind: "directive", body: "kind: deploy", error: "unknown kind deploy" },
+    { kind: "prose", text: "Done." },
+  ]);
+  const parsed = parseDirectives(text);
+  assert.equal(parsed.compile, true);
+  assert.deepEqual(parsed.malformed, ["kind: deploy"]);
+  // YAML the agent may well write reads as the core does, not as a
+  // looser line reader would: a folded intent, a quoted colon.
+  assert.deepEqual(parseSpexBlock("kind: register\ncommand: c\nintent: >-\n  Draft notes\n  since the last tag\nplayers: {Coder: dev.coder}"), {
+    directive: { kind: "register", command: "c", intent: "Draft notes since the last tag", players: { Coder: "dev.coder" } },
+  });
+  assert.match((parseSpexBlock("kind: register\ncommand: c\nintent: Triage: everything\nplayers: {}") as { error: string }).error, /not YAML/);
+  assert.deepEqual(parseSpexBlock("kind: register\ncommand: c\nintent: 'Triage: everything'\nplayers: {}"), {
+    directive: { kind: "register", command: "c", intent: "Triage: everything", players: {} },
+  });
+});
+
+test("a spex fence inside a tilde fence is content; a backtick opener with a backtick in its info string is no fence", () => {
+  const nested = ["~~~markdown", "```spex", "kind: compile", "```", "~~~"].join("\n");
+  assert.deepEqual(topLevelFences(nested).map((f) => f.info), ["markdown"]);
+  assert.equal(parseDirectives(nested).compile, false);
+  // The stray line never opens a fence, so the block after it stands.
+  const stray = ["``` `spex", "```spex", "kind: compile", "```"].join("\n");
+  assert.equal(parseDirectives(stray).compile, true);
+  // An unclosed fence is no block.
+  assert.equal(parseDirectives("```spex\nkind: compile").compile, false);
 });
 
 test("other fences and prose are ignored", () => {
