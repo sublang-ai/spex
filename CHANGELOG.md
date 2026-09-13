@@ -14,8 +14,20 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-12
+
 ### Added
 
+- Issue delivery through `/dev`: the Dashboard's issue seed is
+  `/dev Address #N: <title>` with the issue's URL and no delivery prose,
+  and Playbook 13.2's `dev` composes the `branch` and `pr` built-ins to
+  carry the work to a merged pull request with the default branch checked
+  out again — nothing is merged by hand.
+- The `branch` and `pr` built-ins join the playbook catalog, seeded with
+  their `coder` role bound to `dev.coder`.
+- While `dev` is configured without `branch` or `pr`, its Library card
+  names the built-ins to enable for pull-request delivery; a plain `/dev`
+  keeps working.
 - The Space surface: the Spex home at a glance, Initialize and Join a
   space, the remote, local and incoming changes by unit in human words,
   a core-driven sync on one shared branch with a per-unit conflict
@@ -23,23 +35,23 @@ and `npm start` (desktop) or `npm run start:server` (server).
   explorer with previews.
 - The desktop bridge reveals a state-root path in the OS file manager;
   the served page offers Copy path instead.
-- Chat-assisted playbook authoring (DR-058): "New playbook" takes an id and
-  opens a two-pane draft workspace on the Playbooks surface — a conversation
-  with an authoring agent on the left, and Source, Gears, Machine, and
-  Register tabs with the compile watched in a band on the right. The agent
-  writes `<id>.md` in the draft directory through cligent on the Captain's
-  block or a chosen roster player, asks for compiles and proposes the
-  registration through fenced `spex` blocks, and receives a failed phase's
-  output automatically, bounded to three failures in a row. Registration
-  writes nothing until Register is pressed; drafts persist under
-  `local/drafts/` and list between the configured playbooks and the
-  built-ins.
+- Chat-assisted playbook authoring: "New playbook" takes an id and opens a
+  two-pane draft workspace on the Playbooks surface — a conversation with
+  an authoring agent on the left, and Source, Gears, Machine, and Register
+  tabs with the compile watched in a band on the right. The agent writes
+  `<id>.md` in the draft directory on the Captain's block or a chosen
+  roster player, asks for compiles and proposes the registration through
+  fenced `spex` blocks, and receives a failed phase's output
+  automatically, bounded to three failures in a row. Registration writes
+  nothing until Register is pressed; drafts persist under `local/drafts/`
+  and list between the configured playbooks and the built-ins.
 - Protocol version 11: the `space.*` and `draft.*` command families, the
   `draft` channel, and the `space.state`, `draft.record`, `draft.state`,
   `draft.source`, and `draft.removed` messages.
 
 ### Changed
 
+- Spex requires `@sublang/playbook` 13.2 or later.
 - The sidebar's "Workspace" entry and section read "Projects".
 - Cmd/Ctrl+1 through 5 switch surfaces: Dashboard, Projects, Playbooks,
   Space, Settings.
@@ -390,7 +402,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Chromium against a real core with substitute agents, including an
   accessibility scan of every surface in both themes.
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v0.6.1...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v0.7.0...HEAD
+[0.7.0]: https://github.com/sublang-ai/spex/compare/app-v0.6.1...app-v0.7.0
 [0.6.1]: https://github.com/sublang-ai/spex/compare/app-v0.6.0...app-v0.6.1
 [0.6.0]: https://github.com/sublang-ai/spex/compare/app-v0.5.0...app-v0.6.0
 [0.5.0]: https://github.com/sublang-ai/spex/compare/app-v0.4.0...app-v0.5.0

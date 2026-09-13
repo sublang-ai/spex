@@ -5,7 +5,7 @@
 
 ## Status
 
-Planned (2026-09-12).
+In progress (2026-09-12).
 
 ## Intent
 
@@ -13,7 +13,7 @@ Publish the app release carrying issue delivery through `/dev`, the Space surfac
 
 ## Deliverables
 
-- [ ] The changelog names the three features and the dependency floors.
+- [x] The changelog names the three features and the dependency floors.
 - [ ] App 0.7.0 tagged and published after the release gates pass.
 
 ## Tasks
