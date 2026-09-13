@@ -7,7 +7,27 @@
 // for a compile, fixes the source after a relayed failure, proposes
 // the registration after a success, and proves a reseed reached it.
 
+import { join } from "node:path";
+
+import { DraftStore } from "../drafts.js";
+import type { TmuxPlayRecord } from "../protocol.js";
 import type { FakeScript } from "./fake-adapter.js";
+
+/**
+ * A draft as the core leaves it when it stops mid-compile
+ * (playbook-library-59, storage-23): its record says the compile is
+ * still running, its thread ends on the compile's own line, and its
+ * source stands in the library directory. Written through the draft
+ * store with the core stopped, so the next start reads it as
+ * interrupted and relays nothing.
+ */
+export function seedInterruptedDraft(dataDir: string, id: string, source: string, at = Date.now()): void {
+  const store = new DraftStore(join(dataDir, "local", "drafts"), join(dataDir, "playbooks"));
+  const draft = store.create(id, at - 60_000);
+  store.writeSource(id, source);
+  store.append(id, 1, { type: "captain_status", turnId: null, timestamp: at, message: "◇ Compiling — asked by you" } as TmuxPlayRecord);
+  store.write({ ...draft, touchedAt: at, compile: { at, by: "boss", outcome: "running" } });
+}
 
 /** The source the fake writes: a two-role triage workflow. */
 export const AUTHORING_SOURCE = `# <id>

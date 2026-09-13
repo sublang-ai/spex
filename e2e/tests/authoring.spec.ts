@@ -7,10 +7,10 @@
 // from "New playbook" to a registered `/triage`, with the workspace
 // measured stacked at the 320px floor along the way.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
+import { AUTHORING_SOURCE, seedInterruptedDraft } from "@sublang/spex-core/testing";
 
 import { test, expect, open, nav, slowAuthoringScript } from "../src/harness";
 
@@ -164,8 +164,9 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   await expect(page.getByTestId("phase-gears2fsm")).toHaveAttribute("data-status", "failed");
   await expect(page.getByTestId("compile-output")).toContainText("result 'labeled' declared twice");
   await expect(page.getByTestId("compile-caption")).toHaveText("sent to the agent");
+  // The thread names the phase in the row's human word (DR-010 §2).
   await expect(
-    thread.getByTestId("system-line").filter({ hasText: "Compile failed at gears2fsm — sent to the agent" }),
+    thread.getByTestId("system-line").filter({ hasText: "Compile failed at Machine — sent to the agent" }),
   ).toBeVisible();
   await expect(compile).toBeDisabled();
   await expect(compile).toHaveAttribute("title", "Waits for the reply");
@@ -180,6 +181,13 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   // The relay turn fixes the source and asks again.
   await expect(compileCards).toHaveCount(2);
   await expect(band).toHaveAttribute("data-outcome", "running");
+  // No compile has succeeded yet, whatever the failed one's artifacts
+  // request answered: the compiled tabs stand disabled with their
+  // reason (playbook-library-60).
+  for (const name of ["Gears", "Machine", "Register"]) {
+    await expect(tabs.getByRole("tab", { name, exact: true })).toBeDisabled();
+    await expect(tabs.getByRole("tab", { name, exact: true })).toHaveAttribute("title", "Compiles first");
+  }
 
   // ── A message sent during the compile queues with "Send next" and
   //    dispatches afterwards (playbook-library-54).
@@ -378,4 +386,47 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   await expect(draftRow).toHaveCount(0);
   await expect(page.getByTestId("drafts-section")).toHaveCount(0);
   expect(await app.core.command("draft.list", {})).toEqual([]);
+
+  // ── The example's Prefill opens the demo's draft in the Source tab's
+  //    paste mode with the normalized text placed, writing and
+  //    compiling nothing (playbook-library-35).
+  await page.getByTestId("example-prefill").click();
+  await expect(workspace).toBeVisible();
+  await expect(chip).toContainText("No source");
+  const pasted = page.getByTestId("paste-text");
+  await expect(pasted).toBeVisible();
+  expect(await pasted.inputValue()).toContain("Roles:");
+  await expect(page.getByTestId("paste-use")).toBeEnabled();
+  const demoId = (await app.core.command("draft.list", {})).map((draft) => draft.id);
+  expect(demoId).toHaveLength(1);
+  expect(existsSync(join(app.draftDir(demoId[0]), `${demoId[0]}.md`))).toBe(false);
+  await expect(band).toHaveCount(0);
+  await page.getByTestId("paste-cancel").click();
+  await expect(page.getByTestId("source-empty")).toBeVisible();
+  await page.getByTestId("workspace-back").click();
+  await expect(page.getByTestId(`draft-row-${demoId[0]}`).getByTestId("draft-chip")).toContainText("No source");
+
+  // ── A draft whose compile was still running when the shell booted
+  //    (playbook-library-59): the chip reads Interrupted, the band says
+  //    so with Compile enabled, and the agent was told nothing.
+  await app.stop();
+  seedInterruptedDraft(app.dataDir, "nightly", FIXED_SOURCE.replaceAll("triage", "nightly"));
+  await app.start();
+  await open(page, app);
+  await nav(page, "Playbooks").click();
+  const nightly = page.getByTestId("draft-row-nightly");
+  await expect(nightly.getByTestId("draft-chip")).toContainText("Interrupted");
+  await page.getByTestId("draft-open-nightly").click();
+  await expect(workspace).toBeVisible();
+  await expect(chip).toContainText("Interrupted");
+  await expect(page.getByTestId("compile-interrupted")).toContainText("Compile interrupted when Spex closed");
+  await expect(compile).toBeEnabled();
+  await expect(compile).toHaveText("Compile");
+  await expect(
+    thread.getByTestId("system-line").filter({ hasText: "Compile interrupted when Spex closed" }),
+  ).toBeVisible();
+  await expect(thread.getByTestId("system-turn")).toHaveCount(0);
+  await expect(thread.getByTestId("system-line").filter({ hasText: "sent to the agent" })).toHaveCount(0);
+  await expect(page.getByTestId("draft-working")).toHaveCount(0);
+  await expect(source).toContainText("Triager");
 });

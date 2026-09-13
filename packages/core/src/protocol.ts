@@ -11,6 +11,10 @@ import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play
 
 export const PROTOCOL_VERSION = 11;
 
+/** The compile pipeline's phases and their human names, shared so the
+ * core's thread lines and the UI's band name a phase alike. */
+export { PIPELINE_PHASES, phaseLabel } from "./phases.js";
+
 export type TmuxPlayRecord = RuntimeRecord & {contextSeq?: number};
 
 /** The v1 stream also carries opaque objects. This header gates only
@@ -849,6 +853,10 @@ export interface DraftInfo {
   agent: AgentSummary;
   /** That adapter's readiness (ReadinessEntry.ready). */
   ready: boolean | null;
+  /** The draft's record or transcript is unreadable: the file and the
+   * reason (playbook-library-70). Every command but delete refuses
+   * while it stands, and the workspace shows it in place of the thread. */
+  diagnostic?: string;
   compile?: DraftCompileInfo;
   /** Consecutive failed compiles with no Boss message between. */
   failures: number;

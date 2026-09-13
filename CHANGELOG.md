@@ -28,8 +28,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `local/drafts/` and list between the configured playbooks and the
   built-ins.
 - The `draft.*` command family with the `draft` channel and the
-  `draft.record`, `draft.state`, and `draft.source` messages; the protocol
-  version is 11.
+  `draft.record`, `draft.state`, `draft.source`, and `draft.removed`
+  messages; the protocol version is 11.
 
 ### Changed
 

@@ -157,7 +157,11 @@ export function AuthoringWorkspace({
   }, [connected, draftId, compileAt, compileOutcome, loadDraftArtifacts]);
 
   const compiledOk = draft?.compile?.outcome === "ok";
-  const artifactsReady = compiledOk || artifacts !== undefined;
+  // What the draft holds: a registry never written resolves to every
+  // stage absent, which is no compile to show — the tabs stay disabled
+  // until one succeeds (playbook-library-60).
+  const hasArtifacts = artifacts !== undefined && (artifacts.gears !== null || artifacts.fsm !== null);
+  const artifactsReady = compiledOk || hasArtifacts;
   // The Register tab's dot stays until it is opened after the agent's
   // proposal lands (playbook-library-60).
   const registerKey =
@@ -181,7 +185,9 @@ export function AuthoringWorkspace({
   if (!draft) return null;
   const summary = configState?.status === "valid" ? configState.summary : undefined;
   const compiling = draft.activity === "compiling";
-  const compileReason = !source
+  const compileReason = draft.diagnostic
+    ? draft.diagnostic
+    : !source
     ? "No source yet"
     : draft.activity === "turn"
       ? "Waits for the reply"
@@ -195,7 +201,7 @@ export function AuthoringWorkspace({
   const staleCaption =
     draft.state === "changed"
       ? "from the compile before this change"
-      : !compiledOk && artifacts
+      : !compiledOk && hasArtifacts
         ? "from the last good compile"
         : undefined;
   const sourceDot = Boolean(source) && (!compiledOk || draft.state === "changed");

@@ -303,7 +303,9 @@ beforeEach(() => {
       case "draft.create":
         return draftInfo({ id: String(params?.draftId), state: "no-source", firstLine: null, touchedAt: now, createdAt: now });
       case "draft.artifacts":
-        if (!artifactsAvailable) throw new Error("no registry beside the draft");
+        // A registry never written resolves to every stage absent —
+        // the core answers, never throws.
+        if (!artifactsAvailable) return { source: null, gears: null, fsm: null, stateIds: null, machine: null, missing: ["source", "gears", "fsm"] };
         return ARTIFACTS;
       case "draft.send":
         return { accepted: true, queued: state.drafts[String(params?.draftId)]?.activity !== "idle" };
@@ -341,6 +343,7 @@ describe("playbook-library-50: the Drafts section", () => {
           compile: { at: now - 9 * HOUR, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed" },
         }),
         gone: draftInfo({ id: "gone", sourceMissing: true, firstLine: null }),
+        broken: draftInfo({ id: "broken", diagnostic: "/home/local/drafts/broken/draft.json: expected fields v, id, createdAt, touchedAt, queued, failures" }),
       },
     });
     render(<LibrarySurface />);
@@ -370,6 +373,13 @@ describe("playbook-library-50: the Drafts section", () => {
     expect(within(missing).getByTestId("draft-chip").textContent).toBe("Source missing");
     expect(within(missing).queryByTestId("draft-open-gone")).toBeNull();
     expect(within(missing).getByTestId("draft-delete-gone")).toBeTruthy();
+
+    // A draft whose record the core cannot read lists with its
+    // diagnostic and offers only Delete (playbook-library-70).
+    const damaged = within(section).getByTestId("draft-row-broken");
+    expect(within(damaged).getByTestId("draft-row-diagnostic-broken").textContent).toContain("draft.json: expected fields");
+    expect(within(damaged).queryByTestId("draft-open-broken")).toBeNull();
+    expect(within(damaged).getByTestId("draft-delete-broken")).toBeTruthy();
 
     // The way to a new one stands at the section's foot.
     expect(within(section).getByTestId("new-playbook")).toBeTruthy();
@@ -656,8 +666,13 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
       draftInfo({ state: "failed", compile: { at: now - 60_000, by: "boss", outcome: "failed", phase: "text2gears", output: "bad" } }),
     );
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.artifacts", { draftId: "triage" }));
+    // The all-absent answer has landed, and the tabs still wait for a
+    // success (playbook-library-60).
+    await vi.waitFor(() => expect(useAppStore.getState().draftArtifacts.triage).toBeDefined());
     expect(tab("Gears").disabled).toBe(true);
+    expect(tab("Machine").disabled).toBe(true);
     expect(tab("Machine").title).toBe("Compiles first");
+    expect(tab("Register").disabled).toBe(true);
   });
 });
 
@@ -813,6 +828,39 @@ describe("playbook-library-53: the conversation pane", () => {
     });
     expect(screen.getByTestId("draft-load-error").textContent).toContain("records.jsonl is not JSON");
     expect(screen.getByTestId("source-markdown")).toBeTruthy();
+  });
+
+  test("the core's diagnostic for a damaged draft stands in the thread's place and holds Send and Compile", () => {
+    const diagnostic = "/home/local/drafts/triage/records.jsonl: damaged transcript after record 4";
+    renderWorkspace(draftInfo({ diagnostic }), { view: foldView([]) });
+    expect(screen.getByTestId("draft-load-error").textContent).toBe(diagnostic);
+    expect(screen.queryByTestId("draft-starters")).toBeNull();
+    expect(screen.getByTestId("source-markdown")).toBeTruthy();
+    fireEvent.change(screen.getByTestId("draft-composer"), { target: { value: "hello?" } });
+    const send = screen.getByTestId("draft-send") as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    expect(send.title).toContain("Unreadable draft");
+    const compile = screen.getByTestId("compile-button") as HTMLButtonElement;
+    expect(compile.disabled).toBe(true);
+    expect(compile.title).toBe(diagnostic);
+  });
+
+  test("a permission request the runner answers nothing to reads as a failure line", () => {
+    renderWorkspace(draftInfo({ activity: "turn" }), { view: foldView(THREAD.slice(0, 2)) });
+    act(() => {
+      deliverServerMessageForTests({
+        type: "draft.record",
+        draftId: "triage",
+        seq: 3,
+        record: event(3, t0 + 2, {
+          type: "permission_request",
+          payload: { toolName: "Bash", toolUseId: "p1", input: { command: "git push" }, reason: "runs outside the sandbox" },
+        }).record,
+      });
+    });
+    const failure = within(screen.getByTestId("draft-thread")).getByTestId("player-failure");
+    expect(failure.textContent).toContain("Asked permission to use Bash — runs outside the sandbox");
+    expect(failure.textContent).toContain("Spex answers no permission request");
   });
 });
 
@@ -973,7 +1021,7 @@ describe("playbook-library-56: the Source tab", () => {
     );
   });
 
-  test("Save waits for the reply while a turn runs; Edit and Paste wait while compiling", () => {
+  test("Save waits for the reply while a turn runs; Edit and Paste stay open while compiling, their writes waiting", () => {
     renderWorkspace(draftInfo({ activity: "turn" }));
     fireEvent.click(screen.getByTestId("source-edit"));
     fireEvent.change(screen.getByTestId("editor-text"), { target: { value: "changed" } });
@@ -981,11 +1029,26 @@ describe("playbook-library-56: the Source tab", () => {
     expect(save.disabled).toBe(true);
     expect(save.title).toBe("Waits for the reply");
 
+    // A compile reads the file: the Boss may prepare an edit through it
+    // and paste a replacement, but neither writes until it ends.
     cleanup();
     renderWorkspace(draftInfo({ activity: "compiling", state: "compiling", compile: { at: now, by: "boss", outcome: "running" } }));
-    expect((screen.getByTestId("source-edit") as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId("source-edit") as HTMLButtonElement).title).toBe("Compiling");
-    expect((screen.getByTestId("source-paste") as HTMLButtonElement).title).toBe("Compiling");
+    const edit = screen.getByTestId("source-edit") as HTMLButtonElement;
+    expect(edit.disabled).toBe(false);
+    fireEvent.click(edit);
+    fireEvent.change(screen.getByTestId("editor-text"), { target: { value: "changed while compiling" } });
+    const saveWhileCompiling = screen.getByTestId("editor-save") as HTMLButtonElement;
+    expect(saveWhileCompiling.disabled).toBe(true);
+    expect(saveWhileCompiling.title).toBe("Compiling");
+
+    cleanup();
+    renderWorkspace(draftInfo({ activity: "compiling", state: "compiling", compile: { at: now, by: "boss", outcome: "running" } }));
+    fireEvent.click(screen.getByTestId("source-paste"));
+    fireEvent.change(screen.getByTestId("paste-text"), { target: { value: "# Pasted" } });
+    const use = screen.getByTestId("paste-use") as HTMLButtonElement;
+    expect(use.disabled).toBe(true);
+    expect(use.title).toBe("Compiling");
+    expect(screen.getByTestId("paste-caption").textContent).toBe("Compiling");
   });
 
   test("Paste writes the text, or the picked file's path over it", async () => {

@@ -202,6 +202,9 @@ export class DraftStore {
   /** Make the library directory and the record (playbook-library-70). */
   create(id: string, now: number): StoredDraft {
     mkdirSync(this.draftDir(id), { recursive: true });
+    // A transcript left behind without its record would put the new
+    // draft's first records after a stranger's; it goes first.
+    rmSync(this.recordsFile(id), { force: true });
     const draft: StoredDraft = { v: 1, id, createdAt: now, touchedAt: now, queued: [], failures: 0 };
     this.write(draft);
     return draft;

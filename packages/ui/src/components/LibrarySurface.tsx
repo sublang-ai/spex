@@ -421,8 +421,9 @@ function ExampleCard({
 
 /** One draft's row (playbook-library-50): its id, state chip, the
  * age of its last activity, Open, and Delete behind the inline
- * confirm (playbook-library-63). A draft whose directory is gone
- * offers only Delete. */
+ * confirm (playbook-library-63). A draft whose directory is gone, or
+ * whose record the core cannot read, offers only Delete — the latter
+ * with the core's diagnostic beneath (playbook-library-70). */
 function DraftRow({
   draft,
   onOpen,
@@ -483,7 +484,7 @@ function DraftRow({
         >
           {relativeAge(draft.touchedAt, now)}
         </span>
-        {!draft.sourceMissing ? (
+        {!draft.sourceMissing && !draft.diagnostic ? (
           <button
             type="button"
             data-testid={`draft-open-${draft.id}`}
@@ -519,6 +520,14 @@ function DraftRow({
           </button>
         )}
       </div>
+      {draft.diagnostic ? (
+        <div
+          data-testid={`draft-row-diagnostic-${draft.id}`}
+          className="text-xs text-red-600 [overflow-wrap:anywhere] dark:text-red-400"
+        >
+          {draft.diagnostic} — delete the draft, or repair the file and restart Spex
+        </div>
+      ) : null}
       {error ? (
         <div
           role="alert"

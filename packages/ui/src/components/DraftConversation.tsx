@@ -376,8 +376,11 @@ export function DraftConversation({
     if (error) setAborting(false);
   }, [error]);
 
-  const requirement =
-    draft.ready === false
+  // What holds Send: an unreadable draft (playbook-library-70), else an
+  // agent that is not ready (playbook-library-55).
+  const requirement = draft.diagnostic
+    ? "Unreadable draft — delete it, or repair the file and restart Spex"
+    : draft.ready === false
       ? (readinessOf(draft.agent.adapter)?.requirement ??
         `${draft.agent.adapter} is not ready — check Settings`)
       : undefined;
@@ -406,8 +409,12 @@ export function DraftConversation({
   }
 
   const shown = entries.slice(-windowSize);
+  // The scoped diagnostic stands in the thread's place: the core's,
+  // for a damaged record or transcript, else the open's own failure
+  // (playbook-library-62).
+  const diagnostic = draft.diagnostic ?? draftView?.loadError;
   const empty =
-    entries.length === 0 && !draftView?.loading && !draftView?.loadError && !turnRunning;
+    entries.length === 0 && !draftView?.loading && !diagnostic && !turnRunning;
 
   return (
     <section
@@ -445,13 +452,13 @@ export function DraftConversation({
             data-testid="draft-thread"
             className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
           >
-            {draftView?.loadError ? (
+            {diagnostic ? (
               <div
                 role="alert"
                 data-testid="draft-load-error"
                 className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
               >
-                {draftView.loadError}
+                {diagnostic}
               </div>
             ) : null}
             {draftView?.loading && entries.length === 0 ? (

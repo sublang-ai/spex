@@ -48,22 +48,12 @@ export interface CompileLogFold {
   status: string[];
 }
 
-/** The pipeline in order, with its human names (playbook-library-6). */
-export const PIPELINE_PHASES: readonly { id: string; label: string }[] = [
-  { id: "normalize", label: "Normalize" },
-  { id: "text2gears", label: "Spec items" },
-  { id: "optimize", label: "Optimize" },
-  { id: "gears2fsm", label: "Machine" },
-  { id: "link", label: "Link" },
-  { id: "spex", label: "Package" },
-];
+/** The pipeline in order with its human names, and the name of one
+ * phase id (playbook-library-6): the core's table, so the thread's ◇
+ * lines and the band's row call a phase by one word. */
+import { PIPELINE_PHASES, phaseLabel } from "@sublang/spex-core/protocol";
 
-/** The human name of a compiler phase id; an unknown id reads as
- * itself, so a new phase is never renamed into nonsense. */
-export function phaseLabel(id: string): string {
-  if (id === "packaging") return "Package";
-  return PIPELINE_PHASES.find((phase) => phase.id === id)?.label ?? id;
-}
+export { PIPELINE_PHASES, phaseLabel };
 
 const OPEN = /^→ (\S+)/u;
 const DONE = /^✓ (\S+)(?: .*)?\((\S+)\)\s*$/u;

@@ -437,6 +437,32 @@ function emptyDraftView(): DraftView {
   return { view: initialSessionView([{ id: AUTHOR_PLAYER }]), lineSeqs: [] };
 }
 
+type FoldedRecord = Parameters<typeof applyRecord>[2];
+
+/** A permission request the authoring runner answers nothing to
+ * (playbook-library-64): the thread shows it as a failure line naming
+ * the tool, since the agent's own headless default decided it. Session
+ * players' requests are the Captain's to answer, so only a draft's
+ * records fold this way. */
+function permissionAsFailure(record: FoldedRecord): FoldedRecord {
+  if (record.type !== "player_event") return record;
+  const event = (record as { event?: { type?: string; payload?: { toolName?: string; reason?: string } } }).event;
+  if (event?.type !== "permission_request") return record;
+  const tool = event.payload?.toolName ?? "a tool";
+  const reason = event.payload?.reason ? ` — ${event.payload.reason}` : "";
+  return {
+    ...record,
+    event: {
+      ...event,
+      type: "error",
+      payload: {
+        message: `Asked permission to use ${tool}${reason}; Spex answers no permission request, so the agent's own default decided`,
+        recoverable: true,
+      },
+    },
+  } as FoldedRecord;
+}
+
 /** One key per capped frame, so a frame's height is remembered under
  * its own identity beside the other chrome preferences (DR-030). */
 export const frameKey = (frameId: string): string => `spex.frame:${frameId}`;
@@ -652,7 +678,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const current = get().draftViews[draftId] ?? emptyDraftView();
     if (entry.seq <= current.view.lastSeq) return;
     const before = current.view.captain.length;
-    applyRecord(current.view, entry.seq, entry.record);
+    applyRecord(current.view, entry.seq, permissionAsFailure(entry.record));
     if (current.view.captain.length > before) current.lineSeqs.push(entry.seq);
     // A new outer object each fold: the view mutates in place, so the
     // identity a selector compares must move for the pane to redraw.

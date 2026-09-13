@@ -59,10 +59,10 @@ export function DraftSourceTab({
   const now = useClock(false);
   const [pasteBusy, setPasteBusy] = useState(false);
   const [pasteError, setPasteError] = useState<string>();
+  // Save and Use as source wait while a turn or a compile runs
+  // (playbook-library-56); Edit and Paste stay open, so the Boss can
+  // prepare a change through a long compile and save when it ends.
   const waiting = busyReason(draft);
-  // Writes wait while the agent may be editing the same file
-  // (playbook-library-56); a compile reads it, so nothing opens then.
-  const compiling = draft.activity === "compiling";
   const path = `${draftId}.md`;
 
   if (mode.mode === "edit" && editor) {
@@ -225,8 +225,7 @@ export function DraftSourceTab({
           <button
             type="button"
             data-testid="source-paste"
-            disabled={compiling}
-            title={compiling ? "Compiling" : "Paste a source or pick a file"}
+            title="Paste a source or pick a file"
             onClick={() => onMode({ mode: "paste" })}
             className={BUTTON_CLASS}
           >
@@ -254,8 +253,7 @@ export function DraftSourceTab({
           <button
             type="button"
             data-testid="source-edit"
-            disabled={compiling}
-            title={compiling ? "Compiling" : "Edit the whole file"}
+            title="Edit the whole file"
             onClick={openEditor}
             className={BUTTON_CLASS}
           >
@@ -264,8 +262,7 @@ export function DraftSourceTab({
           <button
             type="button"
             data-testid="source-paste"
-            disabled={compiling}
-            title={compiling ? "Compiling" : "Replace the source with pasted text or a file"}
+            title="Replace the source with pasted text or a file"
             onClick={() => onMode({ mode: "paste" })}
             className={BUTTON_CLASS}
           >

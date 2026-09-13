@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -237,8 +237,9 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   const configBefore = readFileSync(configPath, "utf8");
   const draftDir = join(dataDir, "playbooks", "triage");
 
-  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+  // The channel exists once the draft does (core-service-96).
   const created = await client.expectOk("draft.create", { draftId: "triage" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
   assert.equal(created.state, "no-source");
   assert.equal(created.activity, "idle");
   assert.equal(created.player, null);
@@ -377,8 +378,8 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
   const client = new Client(harness.service.port());
   await client.open();
   const configBefore = readFileSync(configPath, "utf8");
-  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
   await client.expectOk("draft.create", { draftId: "triage" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
   await client.expectOk("draft.source.write", { draftId: "triage", content: SOURCE });
 
   const boss = await client.expectError("draft.compile", { draftId: "triage" }, "invalid_request");
@@ -408,13 +409,16 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
     assert.match(run.prompt, /result 'labeled' declared twice/);
     assert.match(run.prompt, /Fix triage\.md and explain the cause/);
   }
+  // The Boss reads the phase in the row's human words (DR-010 §2); the
+  // agent's relay above carried the compiler's id.
   assert.deepEqual(client.turnStarts("triage"), [
-    "Spex: the compile failed at gears2fsm — asking the agent to fix the source",
-    "Spex: the compile failed at gears2fsm — asking the agent to fix the source",
+    "Spex: the compile failed at Machine — asking the agent to fix the source",
+    "Spex: the compile failed at Machine — asking the agent to fix the source",
   ]);
   const lines = client.statusLines("triage");
-  assert.equal(lines.filter((l) => l === "◇ Compile failed at gears2fsm — sent to the agent").length, 2);
-  assert.ok(lines.includes("◇ Compile failed at text2gears — three in a row; tell the agent how to proceed"));
+  assert.equal(lines.filter((l) => l === "◇ Compile failed at Machine — sent to the agent").length, 2);
+  assert.ok(lines.includes("◇ Compile failed at Spec items — three in a row; tell the agent how to proceed"));
+  assert.ok(!lines.some((l) => /gears2fsm|text2gears/.test(l)), "no compiler id serves as the thread's copy");
   assert.equal(lines.filter((l) => l === "◇ Compiling — asked by you").length, 1);
   assert.equal(lines.filter((l) => l === "◇ Compiling — asked by the agent").length, 2);
 
@@ -446,7 +450,7 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
   const bossAt = prefaced.indexOf("Boss: Also cite the label definitions.");
   assert.ok(failureAt >= 0 && bossAt > failureAt, "the queued message carries the failure as its preface");
   assert.doesNotMatch(prefaced, /You are helping the Boss/);
-  assert.ok(client.statusLines("triage").includes("◇ Compile failed at gears2fsm — waiting for your queued message"));
+  assert.ok(client.statusLines("triage").includes("◇ Compile failed at Machine — waiting for your queued message"));
   assert.ok(client.turnStarts("triage").includes("Also cite the label definitions."));
   assert.equal(client.turnStarts("triage").filter((p) => p.startsWith("Spex: the compile failed")).length, 3);
   assert.equal(client.latest("triage")?.failures, 0);
@@ -466,8 +470,8 @@ test("playbook-library-74: one activity per draft — messages queue, the rest i
   const harness = await startHarness({ script: IN_FLIGHT, slc: stubSlcBlockingSource("['Helper']") });
   const client = new Client(harness.service.port());
   await client.open();
-  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "matrix" } });
   await client.expectOk("draft.create", { draftId: "matrix" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "matrix" } });
 
   // During a turn.
   assert.deepEqual(await client.expectOk("draft.send", { draftId: "matrix", text: "start" }), { accepted: true, queued: false });
@@ -536,8 +540,8 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   const { dir, dataDir } = first;
   const client = new Client(first.service.port());
   await client.open();
-  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
   await client.expectOk("draft.create", { draftId: "persist" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
 
   const idle = async (c: Client, n: number) => until(() => c.latest("persist")?.activity === "idle" && c.records("persist").filter((m) => m.record.type === "turn_finished").length >= n, 20_000, `turn ${n}`);
   await client.expectOk("draft.send", { draftId: "persist", text: "hello" });
@@ -621,18 +625,47 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   assert.equal(unswitched.player, null);
   assert.equal(JSON.parse(readFileSync(join(dataDir, "prefs.json"), "utf8")).prefs["draft:persist:player"], undefined);
 
-  // playbook-library-70: delete removes the record, the preference, and the directory.
+  // playbook-library-70: a transcript damaged behind the core's back
+  // blocks the draft alone — it opens with its source and a diagnostic,
+  // its records withheld, and refuses a message; nothing appends after
+  // the damage, and nothing runs.
   await client2.expectOk("draft.player.set", { draftId: "persist", playerId: "dev.reviewer" });
-  assert.equal(await client2.expectOk("draft.delete", { draftId: "persist" }), null);
-  await client2.waitFor((m) => m.type === "draft.removed" && m.draftId === "persist");
+  client2.close();
+  await second.service.stop();
+  appendFileSync(join(dataDir, "local", "drafts", "persist", "records.jsonl"), '{"seq":999,"record":{"type":"junk"}}\n{not json');
+  const third = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']"), dir });
+  const client3 = new Client(third.service.port());
+  await client3.open();
+  const damaged = await client3.expectOk("draft.open", { draftId: "persist" });
+  assert.match(damaged.draft.diagnostic ?? "", /records\.jsonl: damaged transcript after record \d+$/);
+  assert.deepEqual(damaged.records, [], "the records are withheld");
+  assert.equal(damaged.source?.markdown, "# Persist\n\nRoles:\n\n- Helper\n", "the source stands");
+  // The record still reads: the interrupted compile and the chosen
+  // player stand beside the diagnostic.
+  assert.equal(damaged.draft.state, "interrupted");
+  assert.equal(damaged.draft.player, "dev.reviewer");
+  const listed = await client3.expectOk("draft.list", {});
+  assert.equal(listed.length, 1);
+  assert.ok(listed[0].diagnostic, "the list carries the diagnostic");
+  const refused = await client3.expectError("draft.send", { draftId: "persist", text: "hello?" }, "invalid_request");
+  assert.match(refused.message, /damaged transcript/);
+  await client3.expectError("draft.compile", { draftId: "persist" }, "invalid_request");
+  await client3.expectError("draft.source.write", { draftId: "persist", content: "# Again\n" }, "invalid_request");
+  assert.equal(third.stats.runs.length, 0, "nothing ran on a damaged draft");
+  const transcript = readFileSync(join(dataDir, "local", "drafts", "persist", "records.jsonl"), "utf8");
+  assert.ok(transcript.endsWith("{not json"), "nothing was appended after the damage");
+
+  // playbook-library-70: delete removes the record, the preference, and the directory.
+  assert.equal(await client3.expectOk("draft.delete", { draftId: "persist" }), null);
+  await client3.waitFor((m) => m.type === "draft.removed" && m.draftId === "persist");
   assert.ok(!existsSync(join(dataDir, "local", "drafts", "persist")), "the record is gone");
   assert.ok(!existsSync(join(dataDir, "playbooks", "persist")), "the library directory is gone");
   assert.equal(JSON.parse(readFileSync(join(dataDir, "prefs.json"), "utf8")).prefs["draft:persist:player"], undefined);
-  assert.deepEqual(await client2.expectOk("draft.list", {}), []);
-  await client2.expectError("draft.open", { draftId: "persist" }, "not_found");
+  assert.deepEqual(await client3.expectOk("draft.list", {}), []);
+  await client3.expectError("draft.open", { draftId: "persist" }, "not_found");
 
-  client2.close();
-  await second.service.stop();
+  client3.close();
+  await third.service.stop();
 });
 
 // ---------------------------------------------------------------------------
@@ -689,8 +722,8 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
   const harness = await startHarness({ script, slc: stubSlcSource("['Triager', 'Verifier']") });
   const client = new Client(harness.service.port());
   await client.open();
-  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
   await client.expectOk("draft.create", { draftId: "triage" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
   await client.expectOk("draft.source.write", { draftId: "triage", content: SOURCE });
   const compiled = await client.expectOk("draft.compile", { draftId: "triage" });
   assert.deepEqual(compiled, { ok: true, roles: ["Triager", "Verifier"] });
@@ -738,7 +771,9 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   await a.open();
   await b.open();
 
-  // not_found for an unknown draft, on every command.
+  // not_found for an unknown draft, on every command — the channel
+  // subscription included.
+  await a.expectError("subscribe", { channel: { kind: "draft", draftId: "ghost" } }, "not_found");
   await a.expectError("draft.open", { draftId: "ghost" }, "not_found");
   await a.expectError("draft.send", { draftId: "ghost", text: "x" }, "not_found");
   await a.expectError("draft.abort", { draftId: "ghost" }, "not_found");
@@ -752,8 +787,8 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   await a.expectError("draft.create", { draftId: "review" }, "invalid_request");
   await a.expectError("draft.create", { draftId: "dev" }, "invalid_request");
 
-  await a.expectOk("subscribe", { channel: { kind: "draft", draftId: "iso" } });
   await a.expectOk("draft.create", { draftId: "iso" });
+  await a.expectOk("subscribe", { channel: { kind: "draft", draftId: "iso" } });
   await b.waitFor((m) => m.type === "draft.state" && m.draft.id === "iso");
 
   // A malformed draft command is rejected with no state change.

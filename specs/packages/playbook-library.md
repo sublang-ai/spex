@@ -164,7 +164,7 @@ While a draft is idle and has a source, when the Boss activates Compile or the a
 
 While a draft's compile is running, when a phase fails or the compiler asks for clarification [[playbook-library-9](#playbook-library-9)], the Library shall mark that phase failed in the band with its captured output — or the questions with their reasons, evidence, and choices — opened beneath, set the chip "Failed", and show in the thread what the agent was told [[playbook-library-68](#playbook-library-68)]:
 
-- the system line reads "Compile failed at ⟨phase⟩ — sent to the agent", or "Compile failed at ⟨phase⟩ — three in a row; tell the agent how to proceed" when the relay stopped, or "Compile failed at ⟨phase⟩ — waiting for your queued message" when a Boss message carries the output instead;
+- the system line reads "Compile failed at ⟨phase⟩ — sent to the agent", or "Compile failed at ⟨phase⟩ — three in a row; tell the agent how to proceed" when the relay stopped, or "Compile failed at ⟨phase⟩ — waiting for your queued message" when a Boss message carries the output instead — ⟨phase⟩ in the row's human words [[playbook-library-57](#playbook-library-57)];
 - a compile the Boss canceled reads "Compile canceled" and sends nothing;
 - a failure before the compiler ran — the toolchain — shows its guidance in the band and sends nothing;
 - Gears and Machine keep the last successful compile's artifacts, captioned "from the last good compile".
@@ -391,7 +391,7 @@ When the conversation runner composes a turn's prompt, it shall compose it by th
 - the preamble names the absolute source path, tells the agent to write and edit only that file, never to run the compiler, git, or npm, and to ask at most one question per reply when the answer changes the roles or the ending;
 - the shape of a source is at most twenty lines: an H1, a `Roles:` list of capitalized unique names, behaviors as `When ⟨condition⟩, Captain shall prompt ⟨Role⟩:` with blockquoted prompts one point per line or a fenced `markdown` instruction block, runtime values relayed in quotes (`>`) as `<placeholders>`, `Results:` bullets only for several outcomes or a consumed value with `<field>: <verbatim final text>` for a relayed whole reply, nested calls as ``Captain shall call playbook `id`:``, at most two or three roles;
 - the documents are the installed package's `slc/text2gears.md`, `reference/sdlc/review.md`, `reference/sdlc/code.md`, and `reference/sdlc/review.playbook/review.gears.md`, resolved from the package the core depends on;
-- the draft state names the id, the source path or "none", the last compile's outcome, the roster players with adapter and model, and any malformed directive from the previous reply;
+- the draft state names the id, the source path or "none", the last compile's outcome, and the roster players with adapter and model; a malformed directive from the previous reply is named at the head of the prompt, before anything else;
 - a queued Boss message dispatched after a compile settled carries the relay or success text as its preface instead of a separate turn [[playbook-library-68](#playbook-library-68)].
 
 #### playbook-library-66
@@ -410,7 +410,7 @@ When a draft turn ends with status success, the conversation runner shall parse 
 
 When a draft's compile starts, the compile runner shall run the pipeline on the `<id>.md` already in the draft directory [[playbook-library-12](#playbook-library-12)] — copying nothing, packaging and validating the entry with the draft's id as command and a placeholder intent [[playbook-library-14](#playbook-library-14)] [[playbook-library-15](#playbook-library-15)] — as that id's one compile [[core-service-96](core-service.md#core-service-96)], write no config, and record the outcome on the draft [[playbook-library-70](#playbook-library-70)]:
 
-- progress lines broadcast as compile progress for the draft id; the failed phase is the last `✗` line's phase, "packaging" for a failure after the compiler, and the toolchain for a failure before it;
+- progress lines broadcast as compile progress for the draft id; the failed phase is the last `✗` line's phase, else the phase the compiler left open when it exited (`slc` when none was), "packaging" for a failure after the compiler finished, and the toolchain for a failure before it ran;
 - an exit status 2 with an `SLC_CLARIFICATION:` line records the report's questions;
 - success records the derived roles and the source's SHA-256, from which the "Changed" state derives.
 
@@ -540,7 +540,7 @@ Where the fake's run stays in flight until aborted and the compile spawner block
 
 #### playbook-library-75
 
-Where a draft holds two turns and a compile was running, when the core is stopped and restarted and the draft reopened, the test suite shall assert that the records replay in sequence and the compile reads interrupted with no relay [[playbook-library-70](#playbook-library-70)]; that the next turn's prompt is a reseed carrying the conversation so far and no resume [[playbook-library-65](#playbook-library-65)] [[playbook-library-64](#playbook-library-64)]; that within one run the second turn passed the first's token as `resume` [[playbook-library-64](#playbook-library-64)]; that `draft.player.set` wrote `draft:<id>:player` to the preferences and the next run used that player's block with a reseed [[playbook-library-64](#playbook-library-64)] [[playbook-library-65](#playbook-library-65)]; and that `draft.delete` removed the record, the preference, and the directory [[playbook-library-70](#playbook-library-70)].
+Where a draft holds two turns and a compile was running, when the core is stopped and restarted and the draft reopened, the test suite shall assert that the records replay in sequence and the compile reads interrupted with no relay [[playbook-library-70](#playbook-library-70)]; that the next turn's prompt is a reseed carrying the conversation so far and no resume [[playbook-library-65](#playbook-library-65)] [[playbook-library-64](#playbook-library-64)]; that within one run the second turn passed the first's token as `resume` [[playbook-library-64](#playbook-library-64)]; that `draft.player.set` wrote `draft:<id>:player` to the preferences and the next run used that player's block with a reseed [[playbook-library-64](#playbook-library-64)] [[playbook-library-65](#playbook-library-65)]; that a draft whose transcript is damaged opens after a restart with its source and a diagnostic in place of its records and refuses a message [[playbook-library-70](#playbook-library-70)]; and that `draft.delete` removed the record, the preference, and the directory [[playbook-library-70](#playbook-library-70)].
 
 #### playbook-library-76
 
@@ -572,7 +572,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - "New playbook" asks for the id inline, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the starter chips, and a Drafts row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-54](#playbook-library-54)] [[playbook-library-50](#playbook-library-50)];
 - a sent message stands as a Boss bubble, the agent's write as a tool card, its compile block as the "Asked to compile" card, and the Source tab shows the written markdown before the turn ends [[playbook-library-53](#playbook-library-53)] [[playbook-library-56](#playbook-library-56)];
 - the band lists the phases in human words with the running one's output age, "asked by the agent", and Cancel [[playbook-library-57](#playbook-library-57)];
-- a failing stub leaves a red phase with its output open and a "sent to the agent" system line, then a second compile turns the chip "Compiled" with Gears rows and the Machine state list [[playbook-library-58](#playbook-library-58)] [[playbook-library-60](#playbook-library-60)];
+- a failing stub leaves a red phase with its output open, a "sent to the agent" system line, and the compiled tabs still disabled, then a second compile turns the chip "Compiled" with Gears rows and the Machine state list [[playbook-library-58](#playbook-library-58)] [[playbook-library-60](#playbook-library-60)];
 - a message sent during the compile queues with "Send next" and dispatches afterwards [[playbook-library-54](#playbook-library-54)];
 - Edit, Save, and a forced conflict behave as specified, and Paste's "Use as source" writes the file [[playbook-library-56](#playbook-library-56)];
 - the Register tab opens prefilled from the proposal and Register lists `/triage` as configured with the Drafts section gone [[playbook-library-61](#playbook-library-61)];
@@ -580,6 +580,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - a reload restores the transcript, the source, and the compiled tabs [[playbook-library-62](#playbook-library-62)];
 - a draft seeded with a compile still marked running when the shell booted opens with the chip "Interrupted", the band's interrupted line, Compile enabled, and no relay line in the thread [[playbook-library-59](#playbook-library-59)];
 - Delete asks Delete or Keep and removes the row [[playbook-library-63](#playbook-library-63)];
+- the example card's Prefill opens the demo's draft workspace in the Source tab's paste mode with the normalized text placed and nothing written or compiled [[playbook-library-35](#playbook-library-35)];
 - at the 320-pixel viewport with the rail collapsed the panes stack under a horizontal grip with the chip in view, every control keeps its accessible name, and the page scrolls in neither direction [[playbook-library-52](#playbook-library-52)].
 
 #### playbook-library-78

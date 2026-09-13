@@ -24,10 +24,12 @@ import { compilePlaybook, type CompileResult, type LineSpawner } from "./compile
 import type { ComposedConfig, ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
 import { DraftStore, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
+import { phaseLabel } from "./phases.js";
 import type {
   AdapterName,
   AgentSummary,
   ClarificationQuestion,
+  ConfigState,
   DraftInfo,
   DraftRecord,
   DraftSource,
@@ -93,6 +95,9 @@ interface LiveDraft {
   changes: string[];
   /** The last reply's unreadable spex blocks, named in the next prompt. */
   malformed: string[];
+  /** The transcript is damaged: the diagnostic that blocks this draft
+   * alone — every command but delete refuses (playbook-library-70). */
+  damaged?: string;
 }
 
 type CompileSettled =
@@ -158,6 +163,23 @@ export function failedPhaseOf(lines: readonly string[]): { phase: string; elapse
     if (match) return { phase: match[1], ...(match[2] ? { elapsed: match[2] } : {}) };
   }
   return undefined;
+}
+
+/** The phase the compiler left open — its `→` line with no `✓` or `✗`
+ * after it — when it exited without naming a failure (playbook-library-67). */
+export function openPhaseOf(lines: readonly string[]): string | undefined {
+  let open: string | undefined;
+  for (const raw of lines) {
+    const line = raw.trim();
+    const started = /^→\s+(\S+)/u.exec(line);
+    if (started) {
+      open = started[1];
+      continue;
+    }
+    const ended = /^[✓✗]\s+(\S+)/u.exec(line);
+    if (ended && ended[1] === open) open = undefined;
+  }
+  return open;
 }
 
 /** The compiler's clarification report, when its lines carry one. */
@@ -285,7 +307,7 @@ export class AuthorManager {
         draft.compile = { ...draft.compile, outcome: "interrupted" };
         draft.touchedAt = this.now();
         this.drafts.write(draft);
-        this.status(id, live, "◇ Compile interrupted when Spex closed");
+        if (!live.damaged) this.status(id, live, "◇ Compile interrupted when Spex closed");
       }
     }
   }
@@ -338,18 +360,26 @@ export class AuthorManager {
   }
 
   describe(id: string): DraftInfo {
-    const draft = this.read(id);
-    return this.info(draft);
+    try {
+      return this.info(this.read(id));
+    } catch (error) {
+      // A record that will not read is still a draft: listed with its
+      // diagnostic, refusing everything but Delete (playbook-library-70).
+      if (error instanceof CoreError && error.code === "invalid_request") return this.damagedInfo(id, error.message);
+      throw error;
+    }
   }
 
   open(id: string, afterSeq = 0): { draft: DraftInfo; source: DraftSource | null; records: DraftRecord[] } {
-    const draft = this.read(id);
+    const draft = this.describe(id);
     const live = this.liveOf(id);
     const source = this.drafts.readSource(id);
     if (source) live.lastSourceDigest = source.sha256;
-    const records = this.recordsOf(id, live).filter((entry) => entry.seq > afterSeq);
+    // A damaged record or transcript withholds the records: the
+    // diagnostic stands in the thread's place (playbook-library-62).
+    const records = draft.diagnostic ? [] : this.recordsOf(id, live).filter((entry) => entry.seq > afterSeq);
     return {
-      draft: this.info(draft),
+      draft,
       source: source ? { markdown: source.markdown, version: source.version, mtime: source.mtime } : null,
       records,
     };
@@ -376,7 +406,10 @@ export class AuthorManager {
 
   private info(draft: StoredDraft): DraftInfo {
     const id = draft.id;
-    const live = this.live.get(id);
+    const live = this.liveOf(id);
+    // The transcript's state is part of the draft's: a damaged one is
+    // known before the draft is described.
+    this.recordsOf(id, live);
     const dirExists = existsSync(this.drafts.draftDir(id));
     const source = dirExists ? this.drafts.readSource(id) : undefined;
     const activity = this.activity(id);
@@ -404,7 +437,38 @@ export class AuthorManager {
       ...(compile ? { compile: (({ sourceSha256: _digest, ...rest }) => rest)(compile) } : {}),
       failures: draft.failures,
       ...(draft.proposal ? { proposal: draft.proposal } : {}),
-      ...(live && live.malformed.length > 0 ? { malformedDirectives: [...live.malformed] } : {}),
+      ...(live.malformed.length > 0 ? { malformedDirectives: [...live.malformed] } : {}),
+      ...(live.damaged ? { diagnostic: live.damaged } : {}),
+    };
+  }
+
+  /** The draft as a damaged `draft.json` still lets it be described:
+   * its source and directory as they stand, the record's mtime for
+   * its times, and the diagnostic (playbook-library-70). */
+  private damagedInfo(id: string, diagnostic: string): DraftInfo {
+    const dirExists = existsSync(this.drafts.draftDir(id));
+    const source = dirExists ? this.drafts.readSource(id) : undefined;
+    let at = this.now();
+    try {
+      at = Math.round(statSync(this.drafts.recordFile(id)).mtimeMs);
+    } catch {
+      // The record is unreadable in every way; now stands for its time.
+    }
+    const resolved = this.resolveAgent(id);
+    return {
+      id,
+      createdAt: at,
+      touchedAt: at,
+      firstLine: source ? firstLineOf(source.markdown) : null,
+      ...(dirExists ? {} : { sourceMissing: true }),
+      activity: this.activity(id),
+      state: source ? "draft" : "no-source",
+      queued: [],
+      player: resolved.playerId,
+      agent: agentSummaryOf(resolved.agent),
+      ready: this.options.readiness(resolved.agent.adapter),
+      failures: 0,
+      diagnostic,
     };
   }
 
@@ -423,14 +487,26 @@ export class AuthorManager {
       live.records = read.records;
       live.seq = read.records.at(-1)?.seq ?? 0;
       if (read.incompleteAfterSeq !== undefined) {
+        // Nothing appends after damage: the draft is blocked, alone,
+        // until it is deleted or the file repaired (playbook-library-70).
+        live.damaged = `${this.drafts.recordsFile(id)}: damaged transcript after record ${read.incompleteAfterSeq}`;
         this.problems.set(id, {
           file: this.drafts.recordsFile(id),
-          reason: `damaged transcript after record ${read.incompleteAfterSeq}; the readable prefix is served`,
+          reason: `damaged transcript after record ${read.incompleteAfterSeq}; the draft refuses everything but Delete`,
           blocking: false,
         });
       }
     }
     return live.records;
+  }
+
+  /** A damaged transcript blocks the draft (playbook-library-70). */
+  private assertReadable(id: string): void {
+    const live = this.liveOf(id);
+    this.recordsOf(id, live);
+    if (live.damaged) {
+      throw new CoreError("invalid_request", `${live.damaged}; delete the draft, or repair the file and restart Spex`);
+    }
   }
 
   private publish(id: string): void {
@@ -450,6 +526,7 @@ export class AuthorManager {
 
   private append(id: string, live: LiveDraft, record: TmuxPlayRecord): DraftRecord {
     this.recordsOf(id, live);
+    if (live.damaged) throw new CoreError("invalid_request", live.damaged);
     live.seq += 1;
     const stored = this.drafts.append(id, live.seq, record);
     live.records?.push(stored);
@@ -477,6 +554,7 @@ export class AuthorManager {
    * never shows a run that is not running. */
   private closeDanglingTurn(id: string, live: LiveDraft): void {
     const records = this.recordsOf(id, live);
+    if (live.damaged) return;
     let openTurn: number | undefined;
     let openPlayer = false;
     for (const { record } of records) {
@@ -534,6 +612,7 @@ export class AuthorManager {
    * queued and dispatched in order when it is (core-service-96). */
   send(id: string, text: string): { accepted: true; queued: boolean } {
     const draft = this.read(id);
+    this.assertReadable(id);
     const live = this.liveOf(id);
     // The Boss spoke: the relay count starts over (playbook-library-68).
     draft.failures = 0;
@@ -563,6 +642,7 @@ export class AuthorManager {
     input: { content?: string; sourcePath?: string; baseVersion?: string },
   ): { version: string; mtime: number } {
     this.read(id);
+    this.assertReadable(id);
     this.assertIdle(id);
     if ((input.content === undefined) === (input.sourcePath === undefined)) {
       throw new CoreError("invalid_request", "send either the source text or a file path");
@@ -590,6 +670,7 @@ export class AuthorManager {
   /** The Boss's Compile: resolves when the compile settles. */
   async compile(id: string): Promise<{ ok: true; roles: string[] }> {
     this.read(id);
+    this.assertReadable(id);
     const started = this.beginCompile(id, "boss");
     if (!started.ok) throw new CoreError(started.code, started.message);
     const settled = await started.done;
@@ -598,11 +679,25 @@ export class AuthorManager {
     throw new CoreError("invalid_request", settled.message);
   }
 
-  /** Re-package the last successful compile with the confirmed command
-   * and intent (playbook-library-69); the caller writes the config and
-   * then retires the draft. */
-  async prepareRegistration(id: string, command: string, intent: string, libraryDir: string): Promise<CompileResult> {
+  /**
+   * Register the draft (playbook-library-69): re-package the last
+   * successful compile with the confirmed command and intent, hand the
+   * result to `commit` — the registration path shared with
+   * `compile.run`, which writes the config — and retire the draft. The
+   * id's compile marker is held from the first check to the
+   * retirement, so a Boss message arriving meanwhile queues rather
+   * than starting a turn on a draft about to go (core-service-96); a
+   * refused commit releases it with the draft standing, artifacts kept.
+   */
+  async register(
+    id: string,
+    command: string,
+    intent: string,
+    libraryDir: string,
+    commit: (result: CompileResult) => Promise<ConfigState>,
+  ): Promise<ConfigState> {
     const draft = this.read(id);
+    this.assertReadable(id);
     this.assertIdle(id);
     if (draft.compile?.outcome !== "ok" || !draft.compile.roles) {
       throw new CoreError("invalid_request", "compile the draft successfully before registering it");
@@ -611,21 +706,27 @@ export class AuthorManager {
     const controller = new AbortController();
     this.options.activeCompiles.set(id, controller);
     try {
-      return await compilePlaybook({
-        playbookId: id,
-        configPath: this.options.configPath,
-        source: {},
-        roles: draft.compile.roles,
-        command,
-        intent,
-        libraryDir,
-        env: this.options.env,
-        skipSlc: true,
-        signal: controller.signal,
-        ...(this.options.compileSpawner ? { spawner: this.options.compileSpawner } : {}),
-      });
-    } catch (error) {
-      throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
+      let result: CompileResult;
+      try {
+        result = await compilePlaybook({
+          playbookId: id,
+          configPath: this.options.configPath,
+          source: {},
+          roles: draft.compile.roles,
+          command,
+          intent,
+          libraryDir,
+          env: this.options.env,
+          skipSlc: true,
+          signal: controller.signal,
+          ...(this.options.compileSpawner ? { spawner: this.options.compileSpawner } : {}),
+        });
+      } catch (error) {
+        throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
+      }
+      const state = await commit(result);
+      this.retire(id);
+      return state;
     } finally {
       this.options.activeCompiles.delete(id);
     }
@@ -633,7 +734,7 @@ export class AuthorManager {
 
   /** The draft is registered: its record and preference go, the
    * directory stays with the playbook (playbook-library-70). */
-  retire(id: string): void {
+  private retire(id: string): void {
     this.drafts.retire(id);
     this.options.store.deletePref(`draft:${id}:player`);
     this.live.delete(id);
@@ -643,6 +744,7 @@ export class AuthorManager {
 
   setPlayer(id: string, playerId: string | null): DraftInfo {
     const draft = this.read(id);
+    this.assertReadable(id);
     const live = this.liveOf(id);
     if (live.turn) throw new CoreError("busy", "wait for the reply before switching the agent");
     const key = `draft:${id}:player`;
@@ -663,7 +765,8 @@ export class AuthorManager {
   }
 
   delete(id: string): void {
-    this.read(id);
+    // A damaged draft is still deleted: its record need not read.
+    if (!this.drafts.exists(id)) throw new CoreError("not_found", `no draft ${id}`);
     this.assertIdle(id);
     this.drafts.delete(id);
     this.options.store.deletePref(`draft:${id}:player`);
@@ -732,8 +835,14 @@ export class AuthorManager {
       let resume = live.resume && live.resume.key === resolved.key ? live.resume.token : undefined;
       let mode: "first" | "later" | "reseed" = resume ? "later" : this.hasPriorTurns(id, live, turnId) ? "reseed" : "first";
       let reseeded = false;
+      // What this turn's prompt owes the agent — the changes since the
+      // last prompt and the last reply's unreadable blocks — is taken
+      // once, so a reseed re-run after a rejected resume says it too.
+      const pending = { changes: live.changes, malformed: live.malformed };
+      live.changes = [];
+      live.malformed = [];
       for (;;) {
-        const prompt = this.composePrompt(id, live, draft, resolved, origin, mode);
+        const prompt = this.composePrompt(id, live, draft, resolved, origin, mode, pending);
         const run = await this.runAgent(id, live, turnId, Adapter, resolved.agent, prompt, controller, resume);
         if (run.status === "interrupted") {
           aborted = true;
@@ -757,8 +866,11 @@ export class AuthorManager {
       this.runtimeError(id, live, error instanceof Error ? error.message : String(error), turnId);
     } finally {
       this.refreshSource(id, live);
+      // The Boss's Abort and the core's own stop both end the turn; the
+      // record says which (DR-051).
+      const reason = this.stopping ? "interrupted when Spex closed" : "aborted by the Boss";
       this.append(id, live, aborted
-        ? ({ type: "turn_aborted", turnId, timestamp: this.now(), reason: "aborted by the Boss" } as TmuxPlayRecord)
+        ? ({ type: "turn_aborted", turnId, timestamp: this.now(), reason } as TmuxPlayRecord)
         : ({ type: "turn_finished", turnId, timestamp: this.now() } as TmuxPlayRecord));
       if (live.turn?.controller === controller) live.turn = undefined;
     }
@@ -785,9 +897,9 @@ export class AuthorManager {
   ): Promise<{ status: string; result?: string; text: string; resumeToken?: string; resumeRejected: boolean; error?: string }> {
     this.append(id, live, { type: "player_prompt", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, prompt } as TmuxPlayRecord);
     // The block's model, effort, and fast mode; `{ mode: "auto" }` alone
-    // as permissions; no tool lists, no maxTurns (playbook-library-64).
+    // as permissions; no tool lists, no maxTurns, no role — the records
+    // name the player, not the events (playbook-library-64).
     const options: CligentOptions<string, boolean> = {
-      role: AUTHOR_PLAYER,
       cwd: this.drafts.draftDir(id),
       ...(agent.model !== undefined ? { model: agent.model } : {}),
       ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
@@ -802,23 +914,39 @@ export class AuthorManager {
     let resumeRejected = false;
     let error: string | undefined;
     let errorCode: string | undefined;
-    for await (const event of cligent.run(prompt, { abortSignal: controller.signal, resume: resume ?? false })) {
-      const typed = event as AgentEvent;
-      if (typed.type === "text_delta") text.push(typed.payload.delta);
-      else if (typed.type === "text") text.push(typed.payload.content);
-      else if (typed.type === "error") {
-        error = typed.payload.message;
-        if (typed.payload.code === "SESSION_RESUME_REJECTED") {
-          resumeRejected = true;
-          errorCode = typed.payload.code;
+    try {
+      for await (const event of cligent.run(prompt, { abortSignal: controller.signal, resume: resume ?? false })) {
+        const typed = event as AgentEvent;
+        if (typed.type === "text_delta") text.push(typed.payload.delta);
+        else if (typed.type === "text") text.push(typed.payload.content);
+        else if (typed.type === "error") {
+          error = typed.payload.message;
+          if (typed.payload.code === "SESSION_RESUME_REJECTED") {
+            resumeRejected = true;
+            errorCode = typed.payload.code;
+          }
+        } else if (typed.type === "done") {
+          status = typed.payload.status;
+          result = typed.payload.result;
+          resumeToken = typed.payload.resumeToken;
         }
-      } else if (typed.type === "done") {
-        status = typed.payload.status;
-        result = typed.payload.result;
-        resumeToken = typed.payload.resumeToken;
+        this.append(id, live, { type: "player_event", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, event } as TmuxPlayRecord);
+        if (typed.type === "tool_result") this.refreshSource(id, live);
       }
-      this.append(id, live, { type: "player_event", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, event } as TmuxPlayRecord);
-      if (typed.type === "tool_result") this.refreshSource(id, live);
+    } catch (cause) {
+      // cligent turns an adapter's failure into events; a throw here is
+      // the runner's own (a record that would not write). The prompt
+      // still gets its finished record, so the transcript's folds
+      // never show a call that is not running (playbook-library-64).
+      try {
+        this.append(id, live, {
+          type: "player_finished", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER,
+          result: { status: "error", playerId: AUTHOR_PLAYER, turnId, error: cause instanceof Error ? cause.message : String(cause) },
+        } as TmuxPlayRecord);
+      } catch {
+        // The same failure again; the runtime_error line reports it.
+      }
+      throw cause;
     }
     const finalText = result ?? text.join("");
     this.append(id, live, {
@@ -878,22 +1006,21 @@ export class AuthorManager {
     resolved: ResolvedAuthorAgent,
     origin: TurnOrigin,
     mode: "first" | "later" | "reseed",
+    pending: { changes: readonly string[]; malformed: readonly string[] },
   ): string {
     const parts: string[] = [];
-    if (live.malformed.length > 0) {
+    if (pending.malformed.length > 0) {
       parts.push(
-        `Spex could not read ${live.malformed.length === 1 ? "a spex block" : `${live.malformed.length} spex blocks`} in your last reply; ${live.malformed.length === 1 ? "it was" : "they were"} left as code. Each must be YAML with one \`kind\` — \`compile\` alone, or \`register\` with command, intent, and players — and nothing else:\n` +
-          live.malformed.map((block) => `  > ${block.split("\n").join("\n  > ")}`).join("\n"),
+        `Spex could not read ${pending.malformed.length === 1 ? "a spex block" : `${pending.malformed.length} spex blocks`} in your last reply; ${pending.malformed.length === 1 ? "it was" : "they were"} left as code. Each must be YAML with one \`kind\` — \`compile\` alone, or \`register\` with command, intent, and players — and nothing else:\n` +
+          pending.malformed.map((block) => `  > ${block.split("\n").join("\n  > ")}`).join("\n"),
       );
-      live.malformed = [];
     }
     if (mode === "later") {
-      if (live.changes.length > 0) parts.push(`Since your last reply: ${live.changes.join("; ")}.`);
+      if (pending.changes.length > 0) parts.push(`Since your last reply: ${pending.changes.join("; ")}.`);
     } else {
       parts.push(this.preamble(id, draft, resolved));
       if (mode === "reseed") parts.push(this.conversationSoFar(id, live));
     }
-    live.changes = [];
     if (origin.kind === "boss") {
       parts.push(`${origin.preface ? `${origin.preface}\n\n` : ""}Boss: ${origin.text}`);
     } else {
@@ -985,6 +1112,8 @@ export class AuthorManager {
    */
   beginCompile(id: string, by: "boss" | "agent"): { ok: true; done: Promise<CompileSettled> } | { ok: false; code: CoreError["code"]; message: string } {
     const live = this.liveOf(id);
+    this.recordsOf(id, live);
+    if (live.damaged) return { ok: false, code: "invalid_request", message: live.damaged };
     if (live.turn) return { ok: false, code: "busy", message: "Waits for the reply" };
     if (live.compile || this.options.activeCompiles.has(id)) {
       return { ok: false, code: "busy", message: `a compile is already running for ${id}` };
@@ -1003,6 +1132,7 @@ export class AuthorManager {
     const startedAt = this.now();
     const lines: string[] = [];
     let sawCompiler = false;
+    let sawPackaging = false;
     let settled: CompileSettled;
     try {
       const draft = this.read(id);
@@ -1025,6 +1155,7 @@ export class AuthorManager {
         onProgress: (line) => {
           if (controller.signal.aborted) return;
           if (line.startsWith("running:")) sawCompiler = true;
+          if (line.startsWith("packaging:")) sawPackaging = true;
           lines.push(line);
           this.events.onProgress(id, line);
         },
@@ -1034,9 +1165,15 @@ export class AuthorManager {
       if (controller.signal.aborted) settled = { outcome: "canceled" };
       else {
         const message = error instanceof Error ? error.message : String(error);
+        // The failed phase: the last ✗ line's; else the phase the
+        // compiler left open when it exited, or the compiler itself;
+        // "packaging" once the compiler finished; the toolchain before
+        // it ran (playbook-library-67).
         const clarification = clarificationOf(lines);
         const failed = failedPhaseOf(lines);
-        const phase = clarification?.phase ?? failed?.phase ?? (sawCompiler ? "packaging" : "toolchain");
+        const phase =
+          clarification?.phase ?? failed?.phase ??
+          (sawPackaging ? "packaging" : sawCompiler ? (openPhaseOf(lines) ?? "slc") : "toolchain");
         settled = { outcome: "failed", phase, message: phase === "toolchain" ? message : `compile failed at ${phase}: ${message}` };
       }
     } finally {
@@ -1085,14 +1222,17 @@ export class AuthorManager {
         this.status(id, live, `◇ Compile failed before the compiler ran: ${settled.message}`);
       } else {
         draft.failures += 1;
+        // The agent reads the compiler's own phase id; the Boss reads
+        // the row's human word (DR-010 §2, playbook-library-57).
         live.changes.push(`a compile failed at ${settled.phase}`);
         preface = relayText(id, draft.compile, failed?.elapsed ?? formatElapsed(this.now() - startedAt));
+        const where = phaseLabel(settled.phase);
         if (draft.queued.length > 0) {
-          this.status(id, live, `◇ Compile failed at ${settled.phase} — waiting for your queued message`);
+          this.status(id, live, `◇ Compile failed at ${where} — waiting for your queued message`);
         } else if (draft.failures >= RELAY_BOUND) {
-          this.status(id, live, `◇ Compile failed at ${settled.phase} — three in a row; tell the agent how to proceed`);
+          this.status(id, live, `◇ Compile failed at ${where} — three in a row; tell the agent how to proceed`);
         } else {
-          this.status(id, live, `◇ Compile failed at ${settled.phase} — sent to the agent`);
+          this.status(id, live, `◇ Compile failed at ${where} — sent to the agent`);
           relay = true;
         }
       }
@@ -1109,7 +1249,7 @@ export class AuthorManager {
     if (settled.outcome === "ok") {
       this.startTurn(id, live, { kind: "system", label: "Spex: the compile succeeded — asking for a registration proposal", text: preface });
     } else if (settled.outcome === "failed") {
-      this.startTurn(id, live, { kind: "system", label: `Spex: the compile failed at ${settled.phase} — asking the agent to fix the source`, text: preface });
+      this.startTurn(id, live, { kind: "system", label: `Spex: the compile failed at ${phaseLabel(settled.phase)} — asking the agent to fix the source`, text: preface });
     }
   }
 }

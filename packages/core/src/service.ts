@@ -1044,7 +1044,13 @@ export class CoreService {
       case "turn.abort":
         return { aborted: this.sessions.abortTurn(command.sessionId) };
       case "subscribe": {
-        if (command.channel.kind !== "draft") {
+        if (command.channel.kind === "draft") {
+          // An unknown draft is refused as every draft command refuses
+          // it (core-service-96), never subscribed to in advance.
+          if (!this.authors.has(command.channel.draftId)) {
+            throw new CoreError("not_found", `no draft ${command.channel.draftId}`);
+          }
+        } else {
           this.requireKnownSession(command.channel.sessionId);
         }
         client.channels.add(channelKey(command.channel));
@@ -1431,12 +1437,17 @@ export class CoreService {
           throw new CoreError("invalid_config", "config file is missing");
         }
         // Re-package with the confirmed command and intent, register
-        // through the shared path, then retire the draft; a refused
-        // write leaves it standing with its artifacts (playbook-library-69).
-        const result = await this.authors.prepareRegistration(command.draftId, command.command, command.intent, this.libraryDir());
-        const state = await this.registerCompiled(command.draftId, result, command.bindings, command.newPlayers);
-        this.authors.retire(command.draftId);
-        return state;
+        // through the shared path, then retire the draft — the draft
+        // held busy throughout, so no message starts a turn on a draft
+        // about to go; a refused write leaves it standing with its
+        // artifacts (playbook-library-69).
+        return await this.authors.register(
+          command.draftId,
+          command.command,
+          command.intent,
+          this.libraryDir(),
+          (result) => this.registerCompiled(command.draftId, result, command.bindings, command.newPlayers),
+        );
       }
       case "draft.player.set":
         return this.authors.setPlayer(command.draftId, command.playerId);

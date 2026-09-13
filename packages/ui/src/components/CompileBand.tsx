@@ -111,7 +111,7 @@ export function CompileBand({
   const askedBy = compile ? (compile.by === "agent" ? "asked by the agent" : "asked by you") : undefined;
   // The phases as the lines drew them; a restored failure that kept no
   // lines draws its one failed phase with the output the draft holds.
-  const phases: PhaseView[] =
+  const folded: PhaseView[] =
     lines.length > 0
       ? fold.phases
       : compile?.phase && outcome === "failed" && compile.phase !== "toolchain"
@@ -124,6 +124,21 @@ export function CompileBand({
             },
           ]
         : [];
+  // A compile that failed with no ✗ line — the compiler died in a phase
+  // it left open — names that phase on the draft: it is the failed one,
+  // never drawn as still running (playbook-library-58, DR-010 §5).
+  const named = outcome === "failed" && compile?.phase && compile.phase !== "toolchain" ? compile.phase : undefined;
+  const heldOutput = compile?.output ? compile.output.split("\n") : [];
+  const phases: PhaseView[] =
+    named && !folded.some((phase) => phase.status === "failed")
+      ? folded.some((phase) => phase.id === named)
+        ? folded.map((phase) => {
+            if (phase.id !== named) return phase;
+            const { startedAt: _started, ...rest } = phase;
+            return { ...rest, status: "failed", output: phase.output.length > 0 ? phase.output : heldOutput };
+          })
+        : [...folded, { id: named, label: phaseLabel(named), status: "failed", output: heldOutput }]
+      : folded;
   const failed = fold.failed ?? phases.find((phase) => phase.status === "failed");
   const output =
     failed && failed.output.length > 0
