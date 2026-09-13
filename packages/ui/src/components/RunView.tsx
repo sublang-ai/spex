@@ -26,11 +26,13 @@ import {
   useAppStore,
 } from "../state/store.js";
 import { SessionRecovery } from "./SessionRecovery.js";
+import { FailedWorkflow } from "./FailedWorkflow.js";
 import { Composer } from "./Composer.js";
 import { DeliveryCard } from "./DeliveryCard.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { PlayerPane } from "./PlayerPane.js";
 import { WorkingLine } from "./WorkingLine.js";
+import { parkedFailure } from "../lib/machine-frames.js";
 
 
 /** The house divider (DR-030): the Captain/players split here, and
@@ -440,6 +442,19 @@ export function RunView({
   // history the core cannot continue is named, with when it last spoke.
   const history = !externalWriter && readOnly && !uncertain;
   const loadError = view.loadError ?? (readOnly && !uncertain ? error : undefined);
+  // The failed-workflow notice (run-view-128, DR-060): the run the
+  // stream still reports underway, standing in its recoverable
+  // failure state. The way back stands until that run leaves it,
+  // mid-turn included. The notice speaks the run's command, never its
+  // state id (DR-010 §2); a playbook no longer configured keeps the
+  // id the trace carried.
+  const failedRun = readOnly || uncertain
+    ? undefined
+    : parkedFailure(activityView.frames);
+  const failedCommand = failedRun
+    ? playbooks?.find((entry) => entry.id === failedRun.playbookId)?.command
+      ?? failedRun.playbookId
+    : undefined;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -533,6 +548,21 @@ export function RunView({
                 </button>
               ) : null}
             </div>
+          ) : null}
+          {failedRun ? (
+            <FailedWorkflow
+              command={failedCommand}
+              state={failedRun.active ?? undefined}
+              connected={connected}
+              turnActive={view.turnActive}
+              onSubmit={async (text) => {
+                // Nothing else rides this turn (run-view-129): a
+                // staged intent detaches rather than being stamped by
+                // a recovery request it did not ask for (run-view-86).
+                if (staged) clearStagedIntent(session.id);
+                await onSubmit(text);
+              }}
+            />
           ) : null}
           {history ? (
             <>

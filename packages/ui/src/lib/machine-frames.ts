@@ -70,6 +70,25 @@ export interface MachineHistory {
   frame: MachineFrame;
 }
 
+/** The state a playbook parks in when it fails recoverably: the id
+ * every built-in machine gives it, and the one the card already draws
+ * in the failure emphasis (run-view-61). */
+export const FAILURE_STATE_ID = "failed";
+
+/** The run standing in its recoverable failure state, where one is
+ * underway (run-view-128): the deepest such frame, since the leaf is
+ * the run that failed. The session's state telemetry cannot answer
+ * this — the Captain shell's own controller machine writes the same
+ * topic, so it reads the shell's rest state once a turn settles. */
+export function parkedFailure(
+  frames: readonly MachineFrame[],
+): MachineFrame | undefined {
+  for (let index = frames.length - 1; index >= 0; index -= 1) {
+    if (frames[index].active === FAILURE_STATE_ID) return frames[index];
+  }
+  return undefined;
+}
+
 type TraceLike = {
   schemaVersion?: unknown;
   sessionId?: unknown;

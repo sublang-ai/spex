@@ -201,6 +201,17 @@ export function demoScript(options: { delayMs?: number } = {}): FakeScript {
         response: { result: '{"decision":"dispatch"}' },
       },
       {
+        // The hidden decision a recovery request costs (DR-060): the
+        // Captain reads the parked leaf's control view before it
+        // applies anything, so the machine stays in `failed` for as
+        // long as that call takes.
+        match: "recover:",
+        response: {
+          result: '{"decision":"runtime"}',
+          delayMs: Math.round(delay * 0.5),
+        },
+      },
+      {
         match: "Review the change",
         response: {
           tools: [
@@ -248,6 +259,12 @@ export function demoScript(options: { delayMs?: number } = {}): FakeScript {
  * the reply turn and must still know the park it is leaving. */
 const parkedSessions = new Set<string>();
 
+/** Which demo sessions stand parked in their recoverable failure
+ * state, by session id and by the run that parked there (DR-060): the
+ * recovery turn walks the same machine out of `failed`, so the run's
+ * identity has to outlive the runtime that emitted it. */
+const failedSessions = new Map<string, string>();
+
 export function demoCaptain(
   sessionId?: string,
   options: { governedCompletion?: boolean } = {},
@@ -264,6 +281,15 @@ export function demoCaptain(
       if (value) parkedSessions.add(sessionId);
       else parkedSessions.delete(sessionId);
     }
+  };
+  // The run standing in `failed`, if this session left one there.
+  let failedHere: string | undefined;
+  const failedRun = () => (sessionId ? failedSessions.get(sessionId) : failedHere);
+  const setFailedRun = (runId?: string) => {
+    failedHere = runId;
+    if (!sessionId) return;
+    if (runId) failedSessions.set(sessionId, runId);
+    else failedSessions.delete(sessionId);
   };
   return createScriptedCaptain(async (turn, context, session) => {
     if (isParked() && !turn.prompt.toLowerCase().startsWith("ask")) {
@@ -293,7 +319,10 @@ export function demoCaptain(
       });
       return;
     }
-    const runId = `demo-code-${Date.now()}`;
+    // A recovery turn walks the parked run out of `failed`; anything
+    // else opens a fresh run.
+    const parked = failedRun();
+    const runId = parked ?? `demo-code-${Date.now()}`;
     let sequence = 0;
     const trace = async (
       type: string,
@@ -334,6 +363,24 @@ export function demoCaptain(
       });
     };
 
+    // The parked failure is left the way the runtime leaves it: one
+    // transition out of `failed`, so the way back stops being owed
+    // (run-view-130, DR-060).
+    if (parked) {
+      setFailedRun(undefined);
+      // The decision precedes the action, so the run is still parked
+      // while the Captain reads what the leaf advertises.
+      await context.callCaptain(`recover: ${turn.prompt}`, {
+        visibility: "hidden",
+      });
+      await move("failed", "runFirstPhase", "RETRY_CODE", "active", [
+        "playbook.busy",
+      ]);
+      await session.emitStatus("◇ /code recovery started");
+      await context.emitReply("Retrying the step the workflow failed on.");
+      return;
+    }
+
     await session.emitStatus(`◇ /code started`);
     await context.callCaptain(`route: ${turn.prompt}`, {
       visibility: "hidden",
@@ -347,6 +394,22 @@ export function demoCaptain(
       playerId: "dev.coder",
     });
     await context.callPlayer("dev.coder", `Implement: ${turn.prompt}`);
+    // A prompt starting with "fail" parks the run in its recoverable
+    // failure state: `failed` is a parked state and not a final one,
+    // so the machine stands there waiting for the Boss (DR-060).
+    if (turn.prompt.toLowerCase().startsWith("fail")) {
+      await trace("player.call.finished", {
+        stateId: "runFirstPhase",
+        status: "error",
+      });
+      await session.emitStatus("◆ workflow failed; awaiting Boss recovery.");
+      await move("runFirstPhase", "failed", "CODE_FAILED", "active", [
+        "playbook.parked",
+      ]);
+      setFailedRun(runId);
+      await context.emitReply("The coding workflow failed and is waiting for you.");
+      return;
+    }
     await trace("player.call.finished", {
       stateId: "runFirstPhase",
       status: "ok",

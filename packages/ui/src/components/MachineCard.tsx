@@ -349,6 +349,13 @@ export function MachineCard({
         <div
           ref={scrollBox}
           data-testid={`machine-scroll-${frame.traceSessionId}`}
+          // A box that scrolls must be reachable without a pointer
+          // (run-view-50): the drawing holds nothing focusable of its
+          // own, so the box itself takes the stop and says what it
+          // holds.
+          tabIndex={0}
+          role="group"
+          aria-label={`${frame.playbookId} machine drawing`}
           style={
             {
               "--fit": rule.fit,

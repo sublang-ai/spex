@@ -14,6 +14,23 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Added
+
+- A control for a failed workflow: while a playbook run stands parked in
+  its recoverable failure state, the session shows a notice between the
+  Captain pane and the composer naming the workflow by its command, with
+  one Retry. Retry sends one fixed request — the same words every time —
+  as an ordinary, visible Boss turn asking the Captain to run the
+  workflow's own recovery, and the notice stands until that run leaves
+  its failure state. Until Playbook advertises its runtime recovery
+  actions to hosts, the notice says in words that it asks rather than
+  recovers.
+
+### Fixed
+
+- A machine drawing wide enough to scroll sideways can be scrolled from
+  the keyboard.
+
 ## [0.7.0] - 2026-09-12
 
 ### Added

@@ -33,14 +33,20 @@ import {
   TURN_TWO_QUESTION,
 } from "../fixtures/sample-run.js";
 import type {
+  PlaybookSummary,
   SessionInfo,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
 import {
+  MACHINE_ANSWERED,
+  MACHINE_FAILED,
   MACHINE_ORPHAN,
+  MACHINE_RECOVERED,
   MACHINE_RUN,
   MACHINE_STOPPED,
+  type FixtureEntry,
 } from "../fixtures/sample-run.js";
+import { RECOVER_FAILED_WORKFLOW } from "../lib/labels.js";
 import codeGraph from "../fixtures/machines/code.json";
 import reviewGraph from "../fixtures/machines/review.json";
 import type { MachineGraph } from "@sublang/spex-core/protocol";
@@ -2452,4 +2458,253 @@ test("run-view-123: reconnect and replacement reload history while preserving dr
     expect(useAppStore.getState().composers.s1).toEqual({draft:"Keep draft",queued:[{text:"Keep queue"}]});
     expect(JSON.stringify(useAppStore.getState().views.s1)).not.toContain("Unselected history");
   } finally {setClientForTests(undefined);useAppStore.setState(previous,true);}
+});
+
+describe("run-view-131: the failed-workflow notice and its recovery request", () => {
+  const CODE: PlaybookSummary = {
+    id: "code",
+    from: "@sublang/playbook/code/registry",
+    command: "code",
+    intent: "Implement a change",
+    roles: {},
+  };
+
+  function failedView(...more: FixtureEntry[][]) {
+    return applyRecords(
+      initialSessionView(PLAYERS),
+      [MACHINE_FAILED, ...more].flat(),
+    );
+  }
+
+  function renderFailed(over: Partial<Parameters<typeof RunView>[0]> = {}) {
+    return render(
+      <RunView
+        session={SESSION}
+        view={failedView()}
+        composer={{ queued: [] }}
+        connected
+        playbooks={[CODE]}
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+        {...over}
+      />,
+    );
+  }
+
+  test("stands between the pane and the composer, naming the workflow and its control's promise", () => {
+    renderFailed();
+    const notice = screen.getByTestId("failed-workflow");
+    const pane = screen.getByTestId("captain-pane");
+    const box = screen.getByTestId("boss-composer");
+    expect(
+      pane.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      notice.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Plain words name the workflow by its command; the raw state id
+    // rides the tooltip and never the copy (run-view-128, DR-010 §2).
+    expect(screen.getByTestId("failed-workflow-what").textContent).toBe(
+      "The /code workflow failed and is waiting for you.",
+    );
+    expect(notice.getAttribute("title")).toBe("state: failed");
+    expect(notice.textContent).toContain(
+      "Retry asks the Captain to run its recovery.",
+    );
+    const retry = screen.getByTestId("failed-workflow-retry");
+    expect(retry.textContent).toBe("Retry");
+    expect(retry.getAttribute("title")).toBe(
+      "Send the Captain a request to run the workflow's advertised recovery.",
+    );
+  });
+
+  test("names the run the trace carried when no configured playbook claims it", () => {
+    renderFailed({ playbooks: [] });
+    expect(screen.getByTestId("failed-workflow-what").textContent).toBe(
+      "The /code workflow failed and is waiting for you.",
+    );
+  });
+
+  test("activating dispatches exactly one fixed request, stamping no intent", async () => {
+    const previous = useAppStore.getState();
+    const command = vi.fn(async () => ({}));
+    setClientForTests({ command } as never);
+    useAppStore.setState({
+      sessions: [SESSION],
+      views: { s1: failedView() },
+      composers: { s1: { queued: [] } },
+      stagedIntents: { s1: { intentId: "i1", title: "Address #7" } },
+      specTrees: {},
+      activeSessionId: undefined,
+    });
+    try {
+      const { rerender } = renderFailed({
+        onSubmit: (text) => useAppStore.getState().submitBossText("s1", text),
+      });
+      await act(async () =>
+        fireEvent.click(screen.getByTestId("failed-workflow-retry")),
+      );
+      expect(command).toHaveBeenCalledExactlyOnceWith("turn.submit", {
+        sessionId: "s1",
+        text: RECOVER_FAILED_WORKFLOW,
+      });
+      // Nothing else rides the recovery request (run-view-129).
+      expect(useAppStore.getState().stagedIntents.s1).toBeUndefined();
+
+      // The turn lands in the thread as the Boss's own message, in
+      // exactly the words that were sent.
+      const spoken = failedView([
+        {
+          seq: 800,
+          record: {
+            type: "turn_started",
+            turnId: 17,
+            timestamp: 17_000,
+            turn: { id: 17, prompt: RECOVER_FAILED_WORKFLOW },
+          } as unknown as TmuxPlayRecord,
+        },
+      ]);
+      rerender(
+        <RunView
+          session={SESSION}
+          view={spoken}
+          composer={{ queued: [] }}
+          connected
+          playbooks={[CODE]}
+          onSubmit={async () => {}}
+          onAbort={() => {}}
+          onRemoveQueued={() => {}}
+          onDismissError={() => {}}
+        />,
+      );
+      expect(
+        screen
+          .getAllByTestId("boss-bubble")
+          .some((bubble) => bubble.textContent?.includes(RECOVER_FAILED_WORKFLOW)),
+      ).toBe(true);
+    } finally {
+      setClientForTests(undefined);
+      useAppStore.setState(previous, true);
+    }
+  });
+
+  test("the busy form keeps the control's box, refuses a second activation, and a refusal shows its cause", async () => {
+    let refuse!: (error: Error) => void;
+    const onSubmit = vi.fn(
+      () => new Promise<void>((_resolve, reject) => { refuse = reject; }),
+    );
+    renderFailed({
+      composer: { draft: "Keep my draft", queued: [] },
+      onDraftChange: () => {},
+      onSubmit,
+    });
+    const retry = screen.getByTestId("failed-workflow-retry") as HTMLButtonElement;
+    const shape = retry.className;
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(RECOVER_FAILED_WORKFLOW);
+    expect(retry.textContent).toBe("Retrying…");
+    expect(retry.getAttribute("aria-busy")).toBe("true");
+    expect(retry.disabled).toBe(true);
+    // The busy form never widens the control (DR-041): the box the
+    // class rules fix is the one it held at rest.
+    expect(retry.className).toBe(shape);
+    expect(screen.getByRole("status").textContent).toContain(
+      "Asking the Captain",
+    );
+    await act(async () => refuse(new Error("A turn is already running.")));
+    expect(screen.getByTestId("failed-workflow-error").textContent).toContain(
+      "A turn is already running.",
+    );
+    // The refusal costs neither the transcript nor the draft.
+    expect(systemLine("◇ /code started")).toBeTruthy();
+    expect(screen.getByDisplayValue("Keep my draft")).toBeTruthy();
+    expect(screen.getByTestId("failed-workflow")).toBeTruthy();
+  });
+
+  test("the control is disabled while disconnected and while a turn is active", () => {
+    const { rerender } = renderFailed({ connected: false });
+    const disconnected = screen.getByTestId("failed-workflow-retry") as HTMLButtonElement;
+    expect(disconnected.disabled).toBe(true);
+    expect(disconnected.getAttribute("title")).toBe("Reconnecting…");
+    const working = failedView([
+      {
+        seq: 801,
+        record: {
+          type: "turn_started",
+          turnId: 18,
+          timestamp: 18_000,
+          turn: { id: 18, prompt: "still going" },
+        } as unknown as TmuxPlayRecord,
+      },
+    ]);
+    rerender(
+      <RunView
+        session={SESSION}
+        view={working}
+        composer={{ queued: [] }}
+        connected
+        playbooks={[CODE]}
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    const busy = screen.getByTestId("failed-workflow-retry") as HTMLButtonElement;
+    expect(busy.disabled).toBe(true);
+    expect(busy.getAttribute("title")).toBe("Wait for the running turn");
+  });
+
+  test("the notice leaves when the run leaves its failure state and stands when a turn only answers", () => {
+    const props = {
+      session: SESSION,
+      composer: { queued: [] },
+      connected: true,
+      playbooks: [CODE],
+      onSubmit: async () => {},
+      onAbort: () => {},
+      onRemoveQueued: () => {},
+      onDismissError: () => {},
+    };
+    const { rerender } = render(
+      <RunView {...props} view={failedView(MACHINE_ANSWERED)} />,
+    );
+    // A Captain reply answers without recovering: the way back stands.
+    expect(screen.getByText("The coder could not apply the patch.")).toBeTruthy();
+    expect(screen.getByTestId("failed-workflow")).toBeTruthy();
+    rerender(
+      <RunView {...props} view={failedView(MACHINE_ANSWERED, MACHINE_RECOVERED)} />,
+    );
+    expect(screen.queryByTestId("failed-workflow")).toBeNull();
+  });
+
+  test("an uncertain session shows the interrupted turn instead, and external ownership shows neither", () => {
+    const uncertain = {
+      ...SESSION,
+      live: false,
+      continuable: false,
+      recovery: { state: "uncertain" as const, input: "Saved request" },
+    };
+    const { rerender } = renderFailed({ session: uncertain, readOnly: true });
+    expect(screen.getByRole("region", { name: "Interrupted turn" })).toBeTruthy();
+    expect(screen.queryByTestId("failed-workflow")).toBeNull();
+    rerender(
+      <RunView
+        session={{ ...SESSION, externalWriter: "active" }}
+        view={failedView()}
+        composer={{ queued: [] }}
+        connected
+        playbooks={[CODE]}
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId("failed-workflow")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Interrupted turn" })).toBeNull();
+  });
 });

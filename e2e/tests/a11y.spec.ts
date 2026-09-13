@@ -51,6 +51,13 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
     found.push(...(await scan(page, "Session")));
 
+    // A run parked in its recoverable failure state, where the notice
+    // and its one control stand (run-view-128, DR-060).
+    await page.getByTestId("boss-composer").fill("Fail the follow-up patch");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(page.getByTestId("failed-workflow")).toBeVisible();
+    found.push(...(await scan(page, "Session (failed workflow)")));
+
     await nav(page, "Dashboard").click();
     await expect(page.getByTestId(`project-group-${app.projectId}`)).toBeVisible();
     found.push(...(await scan(page, "Dashboard")));
