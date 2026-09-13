@@ -28,17 +28,22 @@ const STUB_SLC = stubSlcSource();
 
 /** Spawner that fakes a modern node for --version and otherwise
  * delegates to the real spawner (which runs the stub slc). Records
- * each slc invocation's argv when given a sink. */
+ * each slc invocation's argv and environment when given a sink. */
+interface SlcCall {
+  argv: string[];
+  env?: NodeJS.ProcessEnv;
+}
+
 function testSpawner(
   nodeVersion = "v24.1.0",
-  slcCalls?: string[][],
+  slcCalls?: SlcCall[],
 ): LineSpawner {
-  return async (command, args, cwd, onLine) => {
+  return async (command, args, cwd, onLine, signal, env) => {
     if (args[0] === "--version") {
       onLine(nodeVersion);
       return 0;
     }
-    slcCalls?.push([command, ...args]);
+    slcCalls?.push({ argv: [command, ...args], ...(env ? { env } : {}) });
     return defaultSpawner(command, args, cwd, onLine);
   };
 }
@@ -49,7 +54,7 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
   writeFileSync(stubPath, STUB_SLC);
 
   const progress: string[] = [];
-  const slcCalls: string[][] = [];
+  const slcCalls: SlcCall[] = [];
   const result = await compilePlaybook({
     playbookId: "demo",
     source: { text: "# Demo\n\nA one-player demo workflow.\n" },
@@ -65,12 +70,15 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
   // Bare invocation (DR-019): slc >= 0.2 links against the installed
   // runtime contract by default, so the argv carries no --link.
   assert.equal(slcCalls.length, 1);
-  assert.deepEqual(slcCalls[0], [
+  assert.deepEqual(slcCalls[0].argv, [
     process.execPath,
     stubPath,
     "playbook",
     join(dir, "library", "demo", "demo.md"),
   ]);
+  // The agent-driven phases outlast slc's ten-minute silence default, so
+  // the runner grants the longer stall budget (PBLIB-12).
+  assert.equal(slcCalls[0].env?.SLC_STALL_TIMEOUT, "2400");
 
   assert.equal(result.idleStateId, "ready");
   assert.equal(result.finalStateId, "done");
@@ -127,6 +135,30 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
     () => entry.validateOptions({ mystery: 1 }),
     /unknown option "mystery"/,
   );
+});
+
+test("an environment-set stall budget is left alone", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-compile-"));
+  const stubPath = join(dir, "stub-slc.cjs");
+  writeFileSync(stubPath, STUB_SLC);
+
+  const slcCalls: SlcCall[] = [];
+  await compilePlaybook({
+    playbookId: "demo",
+    source: { text: "# Demo\n\nA one-player demo workflow.\n" },
+    roles: ["helper"],
+    command: "demo",
+    intent: "demo workflow for tests",
+    libraryDir: join(dir, "library"),
+    env: {
+      SPEX_SLC: `${process.execPath} ${stubPath}`,
+      SLC_STALL_TIMEOUT: "900",
+    },
+    spawner: testSpawner("v24.1.0", slcCalls),
+  });
+
+  assert.equal(slcCalls.length, 1);
+  assert.equal(slcCalls[0].env?.SLC_STALL_TIMEOUT, "900");
 });
 
 test("an entry with no derived roles is refused with recompile guidance", async () => {

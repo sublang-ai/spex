@@ -46,14 +46,16 @@ export type LineSpawner = (
   cwd: string,
   onLine: (line: string) => void,
   signal?: AbortSignal,
+  env?: NodeJS.ProcessEnv,
 ) => Promise<number>;
 
-export const defaultSpawner: LineSpawner = (command, args, cwd, onLine, signal) =>
+export const defaultSpawner: LineSpawner = (command, args, cwd, onLine, signal, env) =>
   new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(command, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       ...(signal ? { signal } : {}),
+      ...(env ? { env } : {}),
     });
     let buffer = "";
     const feed = (chunk: unknown) => {
@@ -514,12 +516,16 @@ export async function compilePlaybook(
     progress(`running: ${toolchain.slc.command.join(" ")} playbook ${id}.md`);
     // Bare invocation (DR-019): slc >= 0.2 links against the installed
     // @sublang/playbook runtime contract by default.
+    // slc aborts an agent call after its ten-minute default silence; the
+    // agent-driven phases routinely stay quieter, so the runner grants the
+    // 2400s budget IR-053 settled on, unless the env already sets it (DR-005).
     const code = await spawner(
       slcCommand,
       [...slcArgs, "playbook", sourcePath],
       dir,
       progress,
       signal,
+      { ...env, SLC_STALL_TIMEOUT: env.SLC_STALL_TIMEOUT ?? "2400" },
     );
     signal?.throwIfAborted();
     if (code !== 0) {

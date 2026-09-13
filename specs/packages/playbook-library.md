@@ -306,6 +306,7 @@ When toolchain resolution is requested, the toolchain resolver shall locate `slc
 
 When a compile is started for playbook id `<id>`, the compile runner shall run `slc` as an external child process in a per-playbook directory `<library-root>/<id>/` under the app-managed library root ([DR-004](../decisions/004-config-and-persistence.md)) — materializing in-app source text as a markdown file there and linking the app-bundled runtime contract ([DR-005](../decisions/005-compilation-integration.md)) — and shall capture the process output per pipeline phase, reporting phase transitions for progress [[playbook-library-6](#playbook-library-6)] and the failing phase's output on failure [[playbook-library-9](#playbook-library-9)]:
 
+- The runner grants `slc` a stall budget of 2400 seconds through `SLC_STALL_TIMEOUT` unless the environment already sets that variable, because agent-driven phases stay silent longer than `slc`'s ten-minute default.
 - Compiled outputs of a previously successful compile for the same id are replaced only after the new compile succeeds.
 
 ### Registry Generation
