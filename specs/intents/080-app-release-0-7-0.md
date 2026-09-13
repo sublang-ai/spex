@@ -5,6 +5,7 @@
 
 ## Status
 
+Done (2026-09-13): App 0.7.0 was published from commit `c961db2` as `app-v0.7.0` after its release gates passed (https://github.com/sublang-ai/spex/releases/tag/app-v0.7.0).
 In progress (2026-09-12).
 
 ## Intent
@@ -14,7 +15,7 @@ Publish the app release carrying issue delivery through `/dev`, the Space surfac
 ## Deliverables
 
 - [x] The changelog names the three features and the dependency floors.
-- [ ] App 0.7.0 tagged and published after the release gates pass.
+- [x] App 0.7.0 tagged and published after the release gates pass.
 
 ## Tasks
 
