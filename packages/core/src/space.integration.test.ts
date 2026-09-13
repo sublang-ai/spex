@@ -265,7 +265,12 @@ async function startHome(name: string, options: { model?: string; env?: Record<s
     env: coreEnv(options.env),
     home: userHome,
     watchConfig: false,
-    spaceTransportTimeoutMs: 500,
+    // Real Git operations here run against local bare repositories, so
+    // they must never race the transport watchdog: a loaded CI runner
+    // pushed to a local path in more than half a second and the sync
+    // stopped as "timeout", exactly as specified. Tests that assert the
+    // watchdog itself shorten this through `extra`.
+    spaceTransportTimeoutMs: 20_000,
     spaceBeforeStep: (event) => hooks.beforeStep?.(event),
     ...(options.extra ?? {}),
   });
@@ -945,7 +950,7 @@ test("space-38: a marker left after a landed fast-forward is cleared at startup 
 
 test("space-38: a missing repository, an unreachable host and a sleeping transport stop with their causes", async (t) => {
   const { script } = sleepingSsh();
-  const home = await startHome("transport", { env: { GIT_SSH_COMMAND: script } });
+  const home = await startHome("transport", { env: { GIT_SSH_COMMAND: script }, extra: { spaceTransportTimeoutMs: 500 } });
   t.after(() => home.stop());
   await home.client.expectOk("space.init", {});
   const expectStop = async (url: string, cause: string, message: RegExp, retry: boolean): Promise<void> => {
