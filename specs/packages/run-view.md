@@ -295,6 +295,7 @@ The run view shall keep cross-project attention and playbook creation at hand:
 
 - while the Dashboard's published attention count [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the sidebar's Dashboard entry shows a badge with that count across all projects ([DR-029](../decisions/029-session-history-home.md)), surviving the sidebar's collapse [[run-view-71](#run-view-71)];
 - while a non-current project needs a human, that project's sidebar row carries a dot in the most severe color [[run-view-67](#run-view-67)];
+- where the run view derives a session's attention itself rather than reading that published count, a failure summons while one of that session's runs stands parked in its recoverable failure state [[run-view-74](#run-view-74)] — the run's own frames answer for it, never the session's last reported state ([DR-061](../decisions/061-run-state-from-frames.md)) — and while no turn is running and the last one held a failure, so a failure that parked no machine summons too;
 - the slash menu ends with a compile-a-new-playbook entry that opens the Playbooks surface's compile flow.
 
 ### Conversation Life (DR-010 §1/§3)
@@ -333,7 +334,8 @@ The Captain thread shall keep every moment legible in time: visible time separat
 
 The session state chip shall show a human-readable label (amber while waiting on the Boss, red for failure) with the raw state id in its tooltip, never as the primary copy ([DR-010](../decisions/010-interface-craft.md) §2):
 
-- while a turn is active and the state names no leaf — no state yet, or the shell's own rest state — the chip reads "working" while a player runs and "deciding" while the Captain has the floor, never "idle".
+- while a turn is active and the state names no leaf — no state yet, or the shell's own rest state — the chip reads "working" while a player runs and "deciding" while the Captain has the floor, never "idle";
+- while no turn is active and a playbook run underway [[run-view-74](#run-view-74)] stands in its recoverable failure state — the deepest such run, the leaf that failed — the chip reads the failure label in red with that run's own state id in its tooltip, the session's last reported state being whichever machine reported it last and never the leaf's answer ([DR-061](../decisions/061-run-state-from-frames.md)).
 
 #### run-view-46
 
@@ -845,6 +847,14 @@ Where a replayed fixture stream ends with a playbook run standing in its recover
 - a fixture whose stream then reports the run leaving its failure state removes the notice, while one whose next turn only answers leaves it standing [[run-view-130](#run-view-130)];
 - the same fixture marked uncertain shows the interrupted-turn controls and no failed-workflow notice [[run-view-128](#run-view-128)] [[run-view-110](#run-view-110)], and marked externally owned shows neither [[run-view-125](#run-view-125)].
 
+#### run-view-133
+
+Where a replayed fixture stream parks a playbook run in its recoverable failure state and the Captain shell's own machine then reports its rest state on the same telemetry topic [[run-view-14](#run-view-14)], the test suite shall assert that the settled session still reads its leaf:
+
+- the state chip reads the failure label in red carrying the parked run's own state id in its tooltip, not the shell's rest state and not its "idle" label [[run-view-59](#run-view-59)];
+- the derived attention holds a failure for that session, and a later turn that settles with no failure of its own leaves it standing [[run-view-34](#run-view-34)];
+- a stream that then reports the run leaving its failure state returns the chip to the reported state's own label and clears that attention [[run-view-59](#run-view-59)] [[run-view-34](#run-view-34)].
+
 ### Intent Ledger Coverage
 
 #### run-view-92
@@ -985,4 +995,4 @@ Where the harness boots with the demo project registered, when the journey leave
 
 #### run-view-132
 
-Where the harness boots with the demo project registered and a scripted workflow that parks in its recoverable failure state, the test suite shall assert the recovery round trip through the page [[run-view-128](#run-view-128)]: the notice appears naming the failed workflow by its command with the raw state in its title, and stands through the turn's settlement [[run-view-128](#run-view-128)], activating its control sends the fixed request as the next Boss turn and shows those words in the thread [[run-view-129](#run-view-129)], the control is disabled while that turn runs and its busy form measures no wider than the control at rest [[run-view-130](#run-view-130)], and the notice leaves once the run leaves its failure state [[run-view-130](#run-view-130)]; and that at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] the notice's control sits under its words, neither overlapping them nor leaving the notice's box [[run-view-128](#run-view-128)], with the page still not scrolling sideways [[run-view-119](#run-view-119)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout).
+Where the harness boots with the demo project registered and a scripted workflow that parks in its recoverable failure state, the test suite shall assert the recovery round trip through the page [[run-view-128](#run-view-128)]: the notice appears naming the failed workflow by its command with the raw state in its title, and stands through the turn's settlement [[run-view-128](#run-view-128)], the settled turn leaving the state chip reading the failure in red with the parked run's state in its tooltip rather than the Captain shell's rest state [[run-view-59](#run-view-59)], activating its control sends the fixed request as the next Boss turn and shows those words in the thread [[run-view-129](#run-view-129)], the control is disabled while that turn runs and its busy form measures no wider than the control at rest [[run-view-130](#run-view-130)], and the notice leaves once the run leaves its failure state [[run-view-130](#run-view-130)]; and that at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] the notice's control sits under its words, neither overlapping them nor leaving the notice's box [[run-view-128](#run-view-128)], with the page still not scrolling sideways [[run-view-119](#run-view-119)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout).
