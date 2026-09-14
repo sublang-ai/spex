@@ -152,13 +152,13 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
   }
   if (/Repository not found|does not appear to be a git repository|repository '[^']*' not found/i.test(text)) {
     // The host answers alike for a repository that is absent and for a
-    // private one this machine may not see (space-15): so the guidance
-    // leads with the remedies — every one outside the app — and keeps
-    // Retry, the identity line naming how access is presented (space-50).
+    // private one this machine may not see (space-15), so the guidance is
+    // the remedies for both — every one outside the app, hence Retry —
+    // and the identity line says what access means here (space-50).
     return {
       cause: "not-found",
       message: `No repository this machine can see at ${remote ? displayRemote(remote) : host}`,
-      guidance: "Check the URL, create the repository if it is not there yet, or give this machine access if it is private — the host answers alike for all of these. Then Retry.",
+      guidance: "Check the URL, create the repository if it is not there yet, or give this machine access if it is private. Then Retry.",
       retry: true,
       ...(remoteIdentity(remote) ? { identity: remoteIdentity(remote) } : {}),
     };
