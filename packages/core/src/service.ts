@@ -58,7 +58,7 @@ import { CoreError, SessionManager, currentSession, type CaptainFactory, type Re
 import { closedStats, foldLedger, intentTitle, wasWorked } from "./ledger.js";
 import { rankBetween } from "./rank.js";
 import { Store } from "./store.js";
-import { StorageFormatError } from "./app-storage.js";
+import { foldDiagnostics, StorageFormatError } from "./app-storage.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -332,7 +332,7 @@ export class CoreService {
         sessionsDir: () => this.sessionsDir(),
         env: this.env,
         store: this.store,
-        diagnostics: () => [...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()],
+        diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()]),
         blocker: () => this.spaceBlocker(),
         broadcast: (state) => this.broadcast({ type: "space.state", state }),
         pauseWatchers: () => {
@@ -986,7 +986,7 @@ export class CoreService {
         return project;
       }
       case "storage.diagnostics":
-        return [...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()];
+        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()]);
       case "project.create": {
         const path = expandPath(command.path, this.home);
         if (this.store.getProjectByPath(path)) {
@@ -1542,6 +1542,8 @@ export class CoreService {
         return this.requireSpace().tree(command.path);
       case "space.read":
         return this.requireSpace().read(command.path);
+      case "space.seen":
+        return this.requireSpace().seen(command.repair);
       // Playbook drafts (DR-058, core-service-96): one activity per
       // draft, Boss messages queue, the manager holds the matrix.
       case "draft.list":

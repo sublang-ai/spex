@@ -8,7 +8,95 @@ import type { IntentInfo, ProjectInfo } from "./protocol.js";
 
 export interface ProjectIdentity { id: string; name: string; registeredAt: number }
 export interface ProjectBinding { id: string; path: string; aliases: string[] }
-export interface StorageDiagnostic { file: string; reason: string; blocking: boolean }
+/** What a folder on this device would repair (space-46): carried as
+ * facts so a client offers the repair from the data rather than from
+ * the reason's wording. */
+export interface DiagnosticRepair {
+  /** "project": the space carries it and this device has no folder.
+   *  "directory": the space records it and no project here claims it. */
+  kind: "project" | "directory";
+  projectId?: string;
+  /** The registered name — never the identifier (core-service-86). */
+  projectName?: string;
+  directories: string[];
+  sessions: number;
+  /** Stable over the facts this repair names, so a repair whose
+   * project or directories change is another repair (space-49). */
+  key: string;
+  /** Shown on this device already, so it counts as no issue here
+   * while it still stands in the list (space-49). */
+  seen?: boolean;
+}
+
+export interface StorageDiagnostic { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }
+/** A repair's identity is the facts it names (space-49). */
+export function repairKey(projectId: string | undefined, directories: string[]): string {
+  return `${projectId ?? ""}|${[...directories].sort().join(",")}`;
+}
+
+/** Fold every diagnostic a folder would repair into one repair each
+ * and leave the rest alone (space-46). A project the space carries and
+ * a directory the space records are one repair each; where exactly one
+ * unbound project's name equals exactly one recorded directory's last
+ * segment, the two are one repair, the pairing shown in the editor and
+ * never applied unshown. A fault no folder repairs never folds. */
+export function foldDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagnostic[] {
+  const blocking = diagnostics.filter((d) => d.blocking);
+  const plain = diagnostics.filter((d) => !d.blocking && !d.repair);
+  const repairable = diagnostics.filter((d) => !d.blocking && d.repair);
+
+  const byDirectory = new Map<string, { directory: string; sessions: number; file: string }>();
+  const byProject = new Map<string, { id: string; name: string; file: string }>();
+  for (const entry of repairable) {
+    const repair = entry.repair!;
+    if (repair.kind === "directory") {
+      for (const directory of repair.directories) {
+        const seen = byDirectory.get(directory);
+        if (seen) seen.sessions += repair.sessions;
+        else byDirectory.set(directory, { directory, sessions: repair.sessions, file: entry.file });
+      }
+    } else if (repair.projectId) {
+      byProject.set(repair.projectId, { id: repair.projectId, name: repair.projectName ?? repair.projectId, file: entry.file });
+    }
+  }
+
+  const lastSegment = (path: string): string => path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? path;
+  const paired = new Map<string, string>();
+  for (const { directory } of byDirectory.values()) {
+    const segment = lastSegment(directory);
+    const candidates = [...byProject.values()].filter((project) => project.name === segment);
+    const directoriesNamed = [...byDirectory.values()].filter((entry) => lastSegment(entry.directory) === segment);
+    if (candidates.length === 1 && directoriesNamed.length === 1) paired.set(directory, candidates[0].id);
+  }
+
+  const repairs: StorageDiagnostic[] = [];
+  for (const project of byProject.values()) {
+    const directories = [...paired.entries()].filter(([, id]) => id === project.id).map(([directory]) => directory);
+    const sessions = directories.reduce((total, directory) => total + (byDirectory.get(directory)?.sessions ?? 0), 0);
+    repairs.push({
+      file: project.file,
+      reason: `${project.name} has no folder on this device`,
+      blocking: false,
+      repair: { kind: "project", projectId: project.id, projectName: project.name, directories, sessions, key: repairKey(project.id, directories) },
+    });
+  }
+  for (const entry of byDirectory.values()) {
+    if (paired.has(entry.directory)) continue;
+    repairs.push({
+      file: entry.file,
+      reason: `${entry.directory} has no project on this device`,
+      blocking: false,
+      repair: { kind: "directory", directories: [entry.directory], sessions: entry.sessions, key: repairKey(undefined, [entry.directory]) },
+    });
+  }
+  repairs.sort((a, b) =>
+    (b.repair!.sessions - a.repair!.sessions) ||
+    (a.repair!.projectName ?? "").localeCompare(b.repair!.projectName ?? "") ||
+    a.reason.localeCompare(b.reason));
+
+  return [...blocking, ...repairs, ...plain];
+}
+
 export interface RebindProjectOptions { id: string; path: string; aliases?: string[]; revision?: string }
 export type IntentAct =
   | { act: "queue"; intent: IntentInfo }
@@ -268,7 +356,15 @@ export class ApplicationRegistry {
       for (const p of [binding.path, ...binding.aliases]) { const ids = paths.get(p) ?? new Set<string>(); ids.add(binding.id); paths.set(p, ids); }
     }
     for (const [p, ids] of paths) if (ids.size > 1) reports.push({ file: "local/project-paths.json", reason: `ambiguous project path ${p}`, blocking: false });
-    for (const id of this.identities.keys()) if (!this.bindings.has(id)) reports.push({ file: "projects.json", reason: `project ${id} has no local path`, blocking: false });
+    for (const [id, identity] of this.identities) {
+      if (this.bindings.has(id)) continue;
+      reports.push({
+        file: "projects.json",
+        reason: `${identity.name} has no folder on this device`,
+        blocking: false,
+        repair: { kind: "project", projectId: id, projectName: identity.name, directories: [], sessions: 0, key: repairKey(id, []) },
+      });
+    }
     return reports;
   }
   project(id: string): ProjectInfo | undefined {

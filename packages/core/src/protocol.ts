@@ -696,6 +696,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ type: z.literal("space.tree"), id, path: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.read"), id, path: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.seen"), id, repair: z.string().min(1) }).strict(),
   // Playbook drafts (DR-058, core-service-96): one activity per draft,
   // Boss messages queue while a turn or compile runs.
   z.object({ type: z.literal("draft.list"), id }),
@@ -758,7 +759,7 @@ export interface CommandResults {
   "agent.options": AgentOptions;
   "project.list": ProjectInfo[];
   "project.rebind": ProjectInfo;
-  "storage.diagnostics": { file: string; reason: string; blocking: boolean }[];
+  "storage.diagnostics": { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
   "project.register": ProjectInfo;
   "project.remove": null;
   "project.create": ProjectInfo;
@@ -813,6 +814,7 @@ export interface CommandResults {
   "space.diff": { patch: string; truncated: boolean };
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
+  "space.seen": SpaceState;
   "draft.list": DraftInfo[];
   "draft.create": DraftInfo;
   "draft.open": { draft: DraftInfo; source: DraftSource | null; records: DraftRecord[] };
@@ -1038,6 +1040,19 @@ export interface BuiltinPlaybookInfo {
 // Space (space-30, DR-057)
 // ---------------------------------------------------------------------------
 
+/** What a folder on this device would repair (space-46). */
+export interface DiagnosticRepair {
+  kind: "project" | "directory";
+  projectId?: string;
+  projectName?: string;
+  directories: string[];
+  sessions: number;
+  /** Stable over the facts it names (space-49). */
+  key: string;
+  /** Shown on this device already, so it counts as no issue here. */
+  seen?: boolean;
+}
+
 export type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push";
 
 export type SyncCause =
@@ -1142,7 +1157,7 @@ export interface SpaceState {
   incoming: SpaceUnit[];
   conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
-  diagnostics: { file: string; reason: string; blocking: boolean }[];
+  diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
   sync: SpaceSyncPhase;
 }
 

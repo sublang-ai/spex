@@ -235,9 +235,10 @@ async function renderSpace(state: SpaceState) {
   current = state;
   const onOpenSession = vi.fn<(sessionId: string) => void>();
   const onOpenPalette = vi.fn<() => void>();
-  render(<SpaceSurface onOpenSession={onOpenSession} onOpenPalette={onOpenPalette} />);
+  const onOpenProject = vi.fn<(projectId: string) => void>();
+  render(<SpaceSurface onOpenSession={onOpenSession} onOpenPalette={onOpenPalette} onOpenProject={onOpenProject} />);
   await screen.findByTestId("space-header");
-  return { onOpenSession, onOpenPalette };
+  return { onOpenSession, onOpenPalette, onOpenProject };
 }
 
 function deliver(state: SpaceState) {
@@ -311,11 +312,11 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(screen.getByTestId("space-repository").textContent).toContain("Not a repository yet");
     expect(screen.queryByTestId("space-remote")).toBeNull();
     // The header ends with the state's primary control: the setup card
-    // with Initialize and Join a space around the remote field (space-3).
+    // with one setup control over a required remote field (space-3).
     const setup = screen.getByTestId("space-setup");
-    expect(within(setup).getByRole("button", { name: "Initialize" })).toBeTruthy();
-    expect(within(setup).getByRole("button", { name: "Join a space" })).toBeTruthy();
-    expect(within(setup).getByText("Remote (optional)")).toBeTruthy();
+    expect(within(setup).getByRole("button", { name: "Set up space" })).toBeTruthy();
+    expect(within(setup).queryByRole("button", { name: "Initialize" })).toBeNull();
+    expect(within(setup).getByText("Remote")).toBeTruthy();
     expect(setup.textContent).toContain("stay on this device");
     // No changes list stands (space-3).
     expect(screen.queryByText(/^Local changes/)).toBeNull();
@@ -365,7 +366,7 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(list.textContent).not.toContain("MERGE_HEAD");
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(list.textContent).toContain("sessions/x.json");
-    expect(within(list).getByRole("button", { name: "Open palette" })).toBeTruthy();
+    expect(within(list).queryByRole("button", { name: "Open palette" })).toBeNull();
     expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort it there");
   });
 
@@ -437,15 +438,15 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
 });
 
 describe("SPACE: setting up (space-3..6)", () => {
-  test("Initialize reads 'Initializing…' in flight and sends the remote typed beside it", async () => {
+  test("Set up space reads 'Setting up…' in flight and sends the remote typed beside it", async () => {
     await renderSpace(base());
     let release!: () => void;
     initGate = new Promise<void>((resolve) => {
       release = resolve;
     });
     fireEvent.change(screen.getByTestId("space-setup-remote"), { target: { value: "git@github.com:jane/spex-space.git" } });
-    fireEvent.click(screen.getByRole("button", { name: "Initialize" }));
-    expect(await screen.findByRole("button", { name: "Initializing…" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Set up space" }));
+    expect(await screen.findByRole("button", { name: "Setting up…" })).toBeTruthy();
     release();
     await waitFor(() => expect(screen.getByTestId("space-repository").textContent).toContain("main"));
     expect(calls("space.init")).toEqual([{ remote: "git@github.com:jane/spex-space.git" }]);
@@ -454,32 +455,32 @@ describe("SPACE: setting up (space-3..6)", () => {
     expect(screen.getByTestId("space-last-sync").textContent).toContain("Never synced");
   });
 
-  test("Initialize with no remote sends none, and a refusal lands on the card", async () => {
+  test("Set up with no remote marks the field required, and a refusal lands on the card", async () => {
     await renderSpace(base());
-    fireEvent.click(screen.getByRole("button", { name: "Initialize" }));
-    await waitFor(() => expect(calls("space.init")).toEqual([{}]));
+    // No control makes a repository without a remote (space-3).
+    fireEvent.click(screen.getByRole("button", { name: "Set up space" }));
+    expect(screen.getByRole("alert").textContent).toBe("Required");
+    expect(calls("space.init")).toHaveLength(0);
+    expect(document.activeElement).toBe(screen.getByTestId("space-setup-remote"));
     cleanup();
     commandMock.mockImplementation(async (type: string) => {
       if (type === "space.init") throw new Error("intents/p1.jsonl: malformed act on line 3");
       return current;
     });
     await renderSpace(base());
-    fireEvent.click(screen.getByRole("button", { name: "Initialize" }));
+    fireEvent.change(screen.getByTestId("space-setup-remote"), { target: { value: "/srv/spex-space.git" } });
+    fireEvent.click(screen.getByRole("button", { name: "Set up space" }));
     expect((await screen.findByRole("alert")).textContent).toContain("intents/p1.jsonl");
   });
 
-  test("Join a space needs a URL, then initializes, sets the remote and starts a joining sync reading 'Joining…'", async () => {
+  test("Set up initializes, sets the remote and starts a joining sync reading 'Setting up…'", async () => {
     await renderSpace(base());
-    fireEvent.click(screen.getByRole("button", { name: "Join a space" }));
-    expect(screen.getByRole("alert").textContent).toBe("Required to join");
-    expect(document.activeElement).toBe(screen.getByTestId("space-setup-remote"));
-    expect(calls("space.init")).toHaveLength(0);
     fireEvent.change(screen.getByTestId("space-setup-remote"), { target: { value: "/srv/spex-space.git" } });
-    fireEvent.click(screen.getByRole("button", { name: "Join a space" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set up space" }));
     await waitFor(() => expect(calls("space.sync")).toEqual([{ join: true }]));
     expect(calls("space.init")).toEqual([{ remote: "/srv/spex-space.git" }]);
     deliver(repoState({ sync: { phase: "running", op: "sync", step: "save", since: NOW, cancelable: false } }));
-    expect(screen.getByTestId("space-primary").textContent).toBe("Joining…");
+    expect(screen.getByTestId("space-primary").textContent).toBe("Setting up…");
     deliver(repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 3, pushed: true } }));
     expect(screen.getByTestId("space-primary").textContent).toBe("Sync");
   });
@@ -717,7 +718,7 @@ describe("SPACE: syncing (space-11, space-12, space-15, space-16)", () => {
     await renderSpace(repoState({ repository: { ...REPO, unrelated: true }, sync: { phase: "unrelated" } }));
     fireEvent.click(screen.getByRole("button", { name: "Join" }));
     const confirm = screen.getByTestId("space-join-confirm");
-    expect(confirm.textContent).toContain("Join both histories into one space?");
+    expect(confirm.textContent).toContain("Join both spaces into one?");
     expect(confirm.textContent).toContain("will ask you to choose");
     expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
@@ -1108,7 +1109,7 @@ describe("SPACE: copy and roles (space-27, space-44)", () => {
       await renderSpace(state);
       for (const button of screen.getAllByRole("button")) {
         const text = (button.textContent ?? "").trim();
-        if (button.closest('[data-testid="space-setup"]') && !/^(Initialize|Join a space|Initializing…|Joining…)$/.test(text)) continue;
+        if (button.closest('[data-testid="space-setup"]') && !/^(Set up space|Setting up…)$/.test(text)) continue;
         expect(text.length, `"${text}"`).toBeLessThanOrEqual(14);
       }
       cleanup();

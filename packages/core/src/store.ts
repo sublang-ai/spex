@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { execFileSync } from "node:child_process";
 import {
-  ApplicationRegistry, foldIntentActs, parseIntentLog, parsePrefs, parseRegistry,
+  ApplicationRegistry, foldIntentActs, parseIntentLog, parsePrefs, parseRegistry, repairKey,
   readJsonFile, StorageFormatError, validateIntentRelations, validateIntentDispatches,
   type IntentAct, type RebindProjectOptions, type StorageDiagnostic,
 } from "./app-storage.js";
@@ -618,7 +618,7 @@ export class Store {
     }
     const project = this.getProjectByPath(manifest.cwd);
     if (!project) {
-      this.sessionProblems.set(id, problem ?? {file:join(shared.sessionsDir, `${id}.json`), reason:`No project binding for ${manifest.cwd}`, blocking:false});
+      this.sessionProblems.set(id, problem ?? {file:join(shared.sessionsDir, `${id}.json`), reason:`No project binding for ${manifest.cwd}`, blocking:false, repair:{kind:"directory", directories:[manifest.cwd], sessions:1, key:repairKey(undefined,[manifest.cwd])}});
       const prior = this.sessions.get(id);
       if (prior) {
         this.sessions.delete(id);

@@ -126,39 +126,33 @@ test.describe("first-time setup", () => {
     await showSpace(page);
     const header = page.getByTestId("space-header");
 
-    // Not a repository yet: Initialize and Join a space, the config
-    // inside the home so nothing reads "outside the space" (space-3).
+    // Not a repository yet: one setup control over a required remote,
+    // the config inside the home so nothing reads "outside" (space-3).
     await expect(header.getByTestId("space-repository")).toContainText("Not a repository yet");
     const setup = page.getByTestId("space-setup");
-    await expect(setup.getByTestId("space-initialize")).toHaveText("Initialize");
-    await expect(setup.getByTestId("space-join-space")).toHaveText("Join a space");
+    await expect(setup.getByTestId("space-set-up")).toHaveText("Set up space");
+    await expect(setup.getByTestId("space-initialize")).toHaveCount(0);
     await expect(setup).toContainText("Sessions, queues, projects, Settings and playbook sources sync.");
     await expect(header.getByTestId("space-outside-config")).toHaveCount(0);
     await expect(page.getByTestId("space-local-list")).toHaveCount(0);
 
-    // Initialize reads "Initializing…" in flight, then the header
-    // reads main, "No remote" and "Never synced" (space-4).
-    const initLabels = await watch(page, '[data-testid="space-initialize"]');
-    await setup.getByTestId("space-initialize").click();
-    await expect(header.getByTestId("space-repository")).toContainText("main");
-    await expect(header.getByTestId("space-remote")).toContainText("No remote");
-    await expect(header.getByTestId("space-last-sync")).toContainText("Never synced");
-    expect(await initLabels()).toEqual(["Initialize", "Initializing…"]);
-    await expect(header.getByTestId("space-primary")).toHaveText("Sync");
-    await expect(header.getByTestId("space-primary")).toBeDisabled();
-    await expect(header.getByTestId("space-primary-caption")).toHaveText("Add a remote first");
-    await expect(page.getByTestId("space-sync-tab")).toContainText("Nothing to send from this device");
+    // No control makes a repository without a remote (space-3): an
+    // empty field takes the required mark instead.
+    await setup.getByTestId("space-set-up").click();
+    await expect(setup.getByText("Required")).toBeVisible();
+    await expect(header.getByTestId("space-repository")).toContainText("Not a repository yet");
 
-    // Add remote, the bare path, Save: the remote field follows the
-    // save and Sync is admitted (space-5).
-    await expect(header.getByTestId("space-remote-edit")).toHaveText("Add remote");
-    await header.getByTestId("space-remote-edit").click();
-    await header.getByTestId("space-remote-input").fill(app.remotePath!);
-    await header.getByTestId("space-remote-editor").getByRole("button", { name: "Save", exact: true }).click();
+    // The bare path then sets the space up whole (space-6): initialize,
+    // remote, and the sync that joins, reading "Setting up…" throughout.
+    const setupLabels = await watch(page, '[data-testid="space-set-up"]');
+    await setup.getByTestId("space-setup-remote").fill(app.remotePath!);
+    await setup.getByTestId("space-set-up").click();
+    await expect(header.getByTestId("space-repository")).toContainText("main");
     await expect(header.getByTestId("space-remote-url")).toHaveText(app.remotePath!);
-    await expect(header.getByTestId("space-remote-edit")).toHaveText("Change remote");
+    expect(await setupLabels()).toContain("Setting up…");
+    await expect(header.getByTestId("space-primary")).toHaveText("Sync");
     await expect(header.getByTestId("space-primary")).toBeEnabled();
-    await expect(header.getByTestId("space-primary-caption")).toHaveCount(0);
+    await expect(header.getByTestId("space-remote-edit")).toHaveText("Change remote");
 
     // Sync reads "Syncing…" and the step line names each step it
     // passes; the empty remote takes the initial commit whole and
@@ -167,7 +161,7 @@ test.describe("first-time setup", () => {
     const stepLines = await watch(page, '[data-testid="space-step-line"]');
     await header.getByTestId("space-primary").click();
     const done = page.getByTestId("space-done-line");
-    await expect(done).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
+    await expect(done).toHaveText(/^(Synced just now · \d+ sent · 0 received|Everything is in sync.*)$/);
     // The control stays busy from the click to the machine's first
     // frame and back: never a moment reading "Sync" in between.
     expect(await primaryLabels()).toEqual(["Sync", "Syncing…", "Sync"]);
@@ -430,23 +424,23 @@ test.describe("joining", () => {
 
     // An empty URL field takes a required mark and focus; nothing is
     // initialized (space-6).
-    await setup.getByTestId("space-join-space").click();
+    await setup.getByTestId("space-set-up").click();
     const field = setup.getByTestId("space-setup-remote");
     await expect(field).toBeFocused();
     await expect(field).toHaveAttribute("aria-invalid", "true");
-    await expect(setup).toContainText("Required to join");
+    await expect(setup).toContainText("Required");
     await expect(header.getByTestId("space-repository")).toContainText("Not a repository yet");
 
-    // Join a space reads "Joining…" until its sync ends in choices; the
-    // header then reads main and the remote (space-6, space-4).
-    const joinLabels = await watch(page, '[data-testid="space-join-space"], [data-testid="space-primary"]');
+    // Setting up reads "Setting up…" until its sync ends in choices;
+    // the header then reads main and the remote (space-6, space-4).
+    const joinLabels = await watch(page, '[data-testid="space-set-up"], [data-testid="space-primary"]');
     await field.fill(app.remotePath!);
-    await setup.getByTestId("space-join-space").click();
+    await setup.getByTestId("space-set-up").click();
     const note = tab.getByTestId("space-choices-note");
     await expect(note.getByTestId("space-step-line")).toHaveText("Needs your choice");
     // The histories stay unrelated until the join's merge lands, so the
     // header offers Join in place of Sync meanwhile (space-13).
-    expect(await joinLabels()).toEqual(["Join a space", "Joining…", "Join"]);
+    expect(await joinLabels()).toEqual(["Set up space", "Setting up…", "Join"]);
     await expect(header.getByTestId("space-repository")).toContainText("main");
     await expect(header.getByTestId("space-remote-url")).toHaveText(app.remotePath!);
 

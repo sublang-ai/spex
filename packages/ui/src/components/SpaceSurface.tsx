@@ -38,8 +38,12 @@ import { ExploreTab } from "./SpaceExplorer.js";
 export interface SpaceSurfaceProps {
   /** Open a session as its tab (space-7, run-view-68). */
   onOpenSession(sessionId: string): void;
-  /** An unbound project is pointed to the palette, which rebinds. */
+  /** Creating a project identity stays the palette's (DR-011): a row
+   * naming no project offers it there. */
   onOpenPalette(): void;
+  /** Open the repaired project, the one control here that leaves the
+   * surface (space-48). */
+  onOpenProject(projectId: string): void;
 }
 
 export type SpaceTab = "sync" | "explore";
@@ -61,7 +65,7 @@ export type Note = (text: string) => void;
 export function syncRefusal(space: SpaceState): string | undefined {
   if (!space.git.ok) return space.git.guidance;
   const repo = space.repository;
-  if (!repo) return "Initialize the repository first";
+  if (!repo) return "Set this space up first";
   if (!repo.remote) return "Add a remote first";
   if (repo.branch !== "main") {
     return `On ${repo.branch ?? "no branch"}; check out main in a terminal`;
@@ -307,26 +311,23 @@ function RemoteRow({
   );
 }
 
-/** Initialize and Join a space with a remote field between them
- * (space-3): the header's primary control while the home is not a
- * repository. */
+/** One setup control over one required remote field (space-3): a
+ * space is set up by naming where it lives, the remote's own state
+ * deciding whether it is filled or joined (space-6). The app makes no
+ * repository without a remote, which could commit only once. */
 function SetupCard({
   disabled,
-  initLabel,
-  joinLabel,
+  setupLabel,
   busy,
   error,
-  onInitialize,
-  onJoin,
+  onSetUp,
   onExplore,
 }: {
   disabled: boolean;
-  initLabel: string;
-  joinLabel: string;
+  setupLabel: string;
   busy: boolean;
   error?: string;
-  onInitialize(remote: string): void;
-  onJoin(remote: string): void;
+  onSetUp(remote: string): void;
   onExplore(): void;
 }) {
   const [remote, setRemote] = useState("");
@@ -338,8 +339,11 @@ function SetupCard({
       className="flex w-full flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900"
     >
       <p>Keep this space in Git to back it up and use it on another machine.</p>
+      <p className="text-xs text-neutral-500">
+        Nothing is contacted until you set the space up.
+      </p>
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <span className="shrink-0 text-neutral-500">Remote (optional)</span>
+        <span className="shrink-0 text-neutral-500">Remote</span>
         <input
           ref={inputRef}
           data-testid="space-setup-remote"
@@ -365,29 +369,15 @@ function SetupCard({
             role="alert"
             className="text-xs text-red-600 dark:text-red-400"
           >
-            Required to join
+            Required
           </span>
         ) : null}
       </label>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <button
           type="button"
-          data-testid="space-initialize"
+          data-testid="space-set-up"
           className={PRIMARY}
-          disabled={disabled || busy}
-          onClick={() => onInitialize(remote.trim())}
-        >
-          {initLabel}
-        </button>
-        <span className="min-w-0 text-xs text-neutral-500">
-          New space — a repository here, on branch main.
-        </span>
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid="space-join-space"
-          className={SECONDARY}
           disabled={disabled || busy}
           onClick={() => {
             if (!remote.trim()) {
@@ -395,13 +385,14 @@ function SetupCard({
               inputRef.current?.focus();
               return;
             }
-            onJoin(remote.trim());
+            onSetUp(remote.trim());
           }}
         >
-          {joinLabel}
+          {setupLabel}
         </button>
         <span className="min-w-0 text-xs text-neutral-500">
-          Bring an existing space here, keeping what this device has.
+          An empty remote is filled from this device; one that already
+          holds a space is joined with it, anything differing asked.
         </span>
       </div>
       {error ? (
@@ -471,7 +462,7 @@ function statusDot(space: SpaceState): { className: string; word: string } {
   return { className: "bg-neutral-400", word: "idle" };
 }
 
-export function SpaceSurface({ onOpenSession, onOpenPalette }: SpaceSurfaceProps) {
+export function SpaceSurface({ onOpenSession, onOpenPalette, onOpenProject }: SpaceSurfaceProps) {
   const space = useAppStore((state) => state.space);
   const spaceError = useAppStore((state) => state.spaceError);
   const spaceReadAt = useAppStore((state) => state.spaceReadAt);
@@ -655,7 +646,6 @@ export function SpaceSurface({ onOpenSession, onOpenPalette }: SpaceSurfaceProps
         setRemoteEditing(true);
         setRemoteFocus((count) => count + 1);
       }}
-      onInitialize={(remote) => void initialize(remote)}
       onJoinSpace={(remote) => void join(remote)}
       onSync={() => void startSync()}
       onJoin={() => {
@@ -727,6 +717,7 @@ export function SpaceSurface({ onOpenSession, onOpenPalette }: SpaceSurfaceProps
                 issuesOpen={issuesOpen}
                 onOpenSession={onOpenSession}
                 onOpenPalette={onOpenPalette}
+                onOpenProject={onOpenProject}
                 onNote={onNote}
               />
             ) : (
@@ -764,7 +755,6 @@ function Header({
   onRemoteEditing,
   remoteFocus,
   onFocusRemote,
-  onInitialize,
   onJoinSpace,
   onSync,
   onJoin,
@@ -788,7 +778,6 @@ function Header({
   onRemoteEditing(editing: boolean): void;
   remoteFocus: number;
   onFocusRemote(): void;
-  onInitialize(remote: string): void;
   onJoinSpace(remote: string): void;
   onSync(): void;
   onJoin(): void;
@@ -805,11 +794,12 @@ function Header({
 
   const joining = busy === "join" || accepted === "join" || (joinAccepted && running);
   const pending = busy !== undefined || accepted !== undefined || running;
-  const initLabel =
-    busy === "init" || (running && sync.op === "init" && !joinAccepted && busy !== "join")
-      ? "Initializing…"
-      : "Initialize";
-  const joinSpaceLabel = joining ? "Joining…" : "Join a space";
+  // One setup reads "Setting up…" from its init through its sync
+  // (space-6): the whole motion is one control's flight.
+  const setupLabel =
+    joining || busy === "init" || (running && sync.op === "init")
+      ? "Setting up…"
+      : "Set up space";
 
   let primary: ReactNode = null;
   if (!space.git.ok) {
@@ -819,11 +809,9 @@ function Header({
       <SetupCard
         disabled={disabled}
         busy={pending}
-        initLabel={initLabel}
-        joinLabel={joinSpaceLabel}
+        setupLabel={setupLabel}
         error={actionError?.where === "setup" ? actionError.message : undefined}
-        onInitialize={onInitialize}
-        onJoin={onJoinSpace}
+        onSetUp={onJoinSpace}
         onExplore={onShowExplore}
       />
     );
@@ -831,7 +819,7 @@ function Header({
     primary = joinConfirm ? (
       <span data-testid="space-join-confirm">
         <InlineConfirm
-          question="Join both histories into one space? Anything present in both differently will ask you to choose."
+          question="Join both spaces into one? Anything in both will ask you to choose."
           confirmLabel="Join"
           onConfirm={onJoin}
           onCancel={() => onJoinConfirm(false)}
@@ -857,14 +845,15 @@ function Header({
     );
   } else {
     const refusal = syncRefusal(space);
-    // A join reads "Joining…" from its init through its sync (space-6);
-    // a sync reads "Syncing…" from the click through its last frame.
+    // A setup reads "Setting up…" from its init through its sync
+    // (space-6); a sync reads "Syncing…" from the click through its
+    // last frame. A Join begun from the card of space-45 reads its own.
     const label = joining
-      ? "Joining…"
+      ? "Setting up…"
       : busy === "sync" || accepted === "sync" || (running && sync.op === "sync")
         ? "Syncing…"
         : running && sync.op === "init"
-          ? "Initializing…"
+          ? "Setting up…"
           : "Sync";
     primary = (
       <span className="flex min-w-0 flex-wrap items-center gap-2">

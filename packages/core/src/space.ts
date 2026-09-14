@@ -309,9 +309,22 @@ export class SpaceManager {
     return this.snapshot(true);
   }
 
+  /** A repair shown to this device's reader stops counting as an issue
+   * here alone (space-49): the mark is a preference, which never syncs. */
+  async seen(repair: string): Promise<SpaceState> {
+    const marks = this.host.store.getPref<string[]>("space:seen") ?? [];
+    if (!marks.includes(repair)) this.host.store.setPref("space:seen", [...marks, repair]);
+    return this.state();
+  }
+
   private diagnostics(mergePending: boolean): StorageDiagnostic[] {
+    const marks = new Set(this.host.store.getPref<string[]>("space:seen") ?? []);
+    const mark = (entry: StorageDiagnostic): StorageDiagnostic =>
+      entry.repair && marks.has(entry.repair.key)
+        ? { ...entry, repair: { ...entry.repair, seen: true } }
+        : entry;
     return [
-      ...this.host.diagnostics(),
+      ...this.host.diagnostics().map(mark),
       ...(mergePending ? [{ file: ".git/MERGE_HEAD", reason: MERGE_PENDING_REASON, blocking: false }] : []),
       ...(this.refreshProblem ? [this.refreshProblem] : []),
       ...(this.repairProblem ? [this.repairProblem] : []),

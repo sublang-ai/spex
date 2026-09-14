@@ -11,6 +11,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type {
+  DiagnosticRepair,
   SpaceChoice,
   SpaceConflict,
   SpaceSide,
@@ -30,6 +31,7 @@ import {
   plural,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
+import { LINK } from "./SpaceSurface.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
@@ -522,6 +524,161 @@ function Card({
   );
 }
 
+
+/** One repair a folder on this device would make (space-46), repaired
+ * in place through the row editor of space-47 and staying on the
+ * surface afterwards (space-48). Space never creates an identity: a row
+ * naming only a directory offers the palette for that. */
+function RepairRow({
+  repair,
+  reason,
+  disabled,
+  resolved,
+  onOpenPalette,
+  onOpenProject,
+  onResolved,
+  onNote,
+}: {
+  repair: DiagnosticRepair;
+  reason: string;
+  disabled: boolean;
+  resolved?: string;
+  onOpenPalette(): void;
+  onOpenProject(projectId: string): void;
+  onOpenProject(projectId: string): void;
+  onOpenProject(projectId: string): void;
+  onResolved(key: string, summary: string): void;
+  onNote: Note;
+}) {
+  const rebindProject = useAppStore((state) => state.rebindProject);
+  const [editing, setEditing] = useState(false);
+  const [path, setPath] = useState(repair.directories[0] ?? "");
+  const [saving, setSaving] = useState(false);
+  const [refusal, setRefusal] = useState<string>();
+  const fieldRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editing) return;
+    // The recorded path is prefilled and selected, so a second machine
+    // laid out the same way is one Enter (space-47).
+    fieldRef.current?.focus();
+    fieldRef.current?.select();
+  }, [editing]);
+
+  if (resolved) {
+    return (
+      <li data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1">✓ {resolved}</span>
+        {repair.projectId ? (
+          <button type="button" className={LINK} onClick={() => onOpenProject(repair.projectId!)}>
+            Open project
+          </button>
+        ) : null}
+      </li>
+    );
+  }
+
+  const save = async (): Promise<void> => {
+    const chosen = path.trim();
+    if (!chosen) { setRefusal("Choose the project's folder on this device."); return; }
+    if (!repair.projectId) { onOpenPalette(); return; }
+    setSaving(true);
+    setRefusal(undefined);
+    try {
+      const project = await rebindProject(repair.projectId, chosen, repair.directories);
+      const sessions = repair.sessions > 0 ? `, ${plural(repair.sessions, "session")} listed` : "";
+      onResolved(repair.key, `${project.name} — now at ${project.path}${sessions}`);
+      onNote(`${project.name} resolved.`);
+    } catch (cause) {
+      setRefusal((cause as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <li data-testid="space-repair" className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1">{reason}</span>
+        {repair.sessions > 0 ? (
+          <span className="shrink-0 text-xs text-neutral-500">
+            {plural(repair.sessions, "session")} recorded at {repair.directories[0]}
+          </span>
+        ) : null}
+        {!editing ? (
+          <button
+            type="button"
+            data-testid="space-set-folder"
+            className={SECONDARY}
+            disabled={disabled}
+            onClick={() => setEditing(true)}
+          >
+            Set folder
+          </button>
+        ) : null}
+      </div>
+      {editing ? (
+        <div className="flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700">
+          <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+            <span className="shrink-0 text-neutral-500">
+              Where is {repair.projectName ?? repair.directories[0]} on this device?
+            </span>
+            <input
+              ref={fieldRef}
+              data-testid="space-repair-path"
+              value={path}
+              onChange={(event) => setPath(event.target.value)}
+              onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+                if (event.key === "Escape") { event.stopPropagation(); setEditing(false); }
+                if (event.key === "Enter") void save();
+              }}
+              spellCheck={false}
+              disabled={saving}
+              className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900"
+            />
+            {window.spexNative ? (
+              <button
+                type="button"
+                className={SECONDARY}
+                disabled={saving}
+                onClick={async () => {
+                  const picked = await window.spexNative!.pickDirectory();
+                  if (picked) setPath(picked);
+                }}
+              >
+                Open folder…
+              </button>
+            ) : null}
+          </label>
+          <p className="text-xs text-neutral-500">
+            Sessions recorded at {repair.directories[0] ?? "that folder"} will join
+            this project. Where a project lives is recorded on this device only;
+            this never syncs.
+          </p>
+          {!repair.projectId ? (
+            <button type="button" className={LINK} onClick={onOpenPalette}>
+              None of these — add it as a new project
+            </button>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className={SECONDARY} disabled={saving} onClick={() => void save()}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button type="button" className={SECONDARY} disabled={saving} onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+            {refusal ? (
+              <span role="alert" className="text-xs text-red-600 dark:text-red-400">
+                {refusal}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
 export function SyncTab({
   space,
   now,
@@ -529,6 +686,7 @@ export function SyncTab({
   issuesOpen,
   onOpenSession,
   onOpenPalette,
+  onOpenProject,
   onNote,
 }: {
   space: SpaceState;
@@ -537,6 +695,7 @@ export function SyncTab({
   issuesOpen: boolean;
   onOpenSession(sessionId: string): void;
   onOpenPalette(): void;
+  onOpenProject(projectId: string): void;
   onNote: Note;
 }) {
   const spaceFetch = useAppStore((state) => state.spaceFetch);
@@ -556,6 +715,12 @@ export function SyncTab({
   const [accepted, setAccepted] = useState<{ where: "check" | "apply" | "retry" | "stop"; key: string }>();
   const [error, setError] = useState<{ where: "check" | "apply" | "retry"; message: string }>();
   const [dismissed, setDismissed] = useState<string>();
+  // A resolved repair stands where it was until the reader's own
+  // re-read (space-48), so no list reflows under the pointer.
+  const [resolved, setResolved] = useState<Record<string, string>>({});
+  const acknowledged = useRef(new Set<string>());
+  // The first-meeting card holds its own confirm (space-45).
+  const [firstJoin, setFirstJoin] = useState(false);
   const lastSyncInput = useRef<{ choices?: Record<string, Side>; join?: boolean }>({});
 
   // The picker's choices outlive a stop and a re-plan: a choice for a
@@ -645,14 +810,28 @@ export function SyncTab({
     }
   };
 
+  const spaceSeen = useAppStore((state) => state.spaceSeen);
   const disabled = !connected;
-  // The core folds a pending Git merge into the diagnostics (space-1):
-  // the count is theirs alone.
-  const issueCount = space.diagnostics.length;
+  // A repair shown here already counts as no issue (space-49); a
+  // pending merge the core folds in counts as every other does.
+  const issueCount = space.diagnostics.filter((entry) => !entry.repair?.seen).length;
   const blocking = space.diagnostics.some((entry) => entry.blocking);
+  const listOpen = issueCount > 0 && (issuesOpen || blocking);
+
+  // Being shown is the acknowledgement (space-49): a count alone never
+  // acknowledges one, so this waits for the list to actually stand.
+  useEffect(() => {
+    if (!listOpen || !connected) return;
+    for (const entry of space.diagnostics) {
+      const key = entry.repair?.key;
+      if (!key || entry.repair?.seen || acknowledged.current.has(key)) continue;
+      acknowledged.current.add(key);
+      void spaceSeen(key).catch(() => acknowledged.current.delete(key));
+    }
+  }, [listOpen, connected, space.diagnostics, spaceSeen]);
 
   const issues =
-    issueCount > 0 && (issuesOpen || blocking) ? (
+    space.diagnostics.length > 0 && listOpen ? (
       <section
         data-testid="space-issues-list"
         aria-label="Issues"
@@ -667,6 +846,18 @@ export function SyncTab({
               <li key={entry.file} title={entry.file}>
                 A Git merge is pending; finish or abort it in your terminal.
               </li>
+            ) : entry.repair ? (
+              <RepairRow
+                key={entry.repair.key}
+                repair={entry.repair}
+                reason={entry.reason}
+                disabled={disabled || pending}
+                resolved={resolved[entry.repair.key]}
+                onOpenPalette={onOpenPalette}
+                onOpenProject={onOpenProject}
+                onResolved={(key, summary) => setResolved((was) => ({ ...was, [key]: summary }))}
+                onNote={onNote}
+              />
             ) : (
             <li key={`${entry.file}:${entry.reason}`} className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="min-w-0 truncate font-mono text-xs" title={entry.file}>
@@ -675,11 +866,6 @@ export function SyncTab({
               <span className="min-w-0 flex-1">— {entry.reason}</span>
               {entry.blocking ? (
                 <span className="shrink-0 rounded-full border border-current px-1.5 text-xs">blocking</span>
-              ) : null}
-              {/folder|bind|palette|working directory/i.test(entry.reason) ? (
-                <button type="button" className={SECONDARY} onClick={onOpenPalette}>
-                  Open palette
-                </button>
               ) : null}
             </li>
             )
@@ -720,6 +906,39 @@ export function SyncTab({
       {repo.mergePending ? (
         <Card testId="space-merge-note" tone="amber">
           A merge is in progress in your terminal. Finish or abort it there.
+        </Card>
+      ) : null}
+      {/* Before this space has met that remote, Join stands by name
+          (space-45): the join flag is inert where the histories share an
+          ancestor, so offering it costs nothing and needs no transport. */}
+      {repo.remote && repo.branch === "main" && repo.checkedAt === null && !repo.unrelated && !running ? (
+        <Card testId="space-first-meeting" tone="neutral">
+          <span className="font-medium">This space has not met that remote yet.</span>
+          <span className="text-xs">
+            Sync sends what is here and brings back anything new. If that address
+            already holds a space from another machine, Join first — it brings
+            both into one and asks about anything that differs.
+          </span>
+          {firstJoin ? (
+            <InlineConfirm
+              question="Join both spaces into one? Anything in both will ask you to choose."
+              confirmLabel="Join"
+              onConfirm={() => { setFirstJoin(false); void spaceSync({ join: true }); }}
+              onCancel={() => setFirstJoin(false)}
+            />
+          ) : (
+            <span>
+              <button
+                type="button"
+                data-testid="space-first-join"
+                className={SECONDARY}
+                disabled={disabled || pending}
+                onClick={() => setFirstJoin(true)}
+              >
+                Join
+              </button>
+            </span>
+          )}
         </Card>
       ) : null}
 

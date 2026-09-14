@@ -229,6 +229,13 @@ export interface AppState {
   spaceInit(remote?: string): Promise<void>;
   /** Set or clear `origin` (space-5); the reply is the new state. */
   spaceSetRemote(url: string | null): Promise<void>;
+  /** Mark a repair shown on this device, so it counts as no issue here
+   * while it still stands (space-49); the reply is the new state. */
+  spaceSeen(repair: string): Promise<void>;
+  /** Point a project the space carries at a folder on this device
+   * (space-47), preserving its identity: the recorded directories ride
+   * as aliases so every session under them resolves. */
+  rebindProject(projectId: string, path: string, aliases: string[]): Promise<ProjectInfo>;
   /** Check the remote (space-8): accepted at once, outcome as state. */
   spaceFetch(): Promise<void>;
   /** Sync (space-11, space-12), with choices (space-18) or as a join
@@ -1122,6 +1129,19 @@ export const useAppStore = create<AppState>((set, get) => {
       const space = await getClient().command("space.remote.set", { url });
       spaceReads += 1;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+    },
+
+    async spaceSeen(repair: string): Promise<void> {
+      const space = await getClient().command("space.seen", { repair });
+      spaceReads += 1;
+      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+    },
+
+    async rebindProject(projectId: string, path: string, aliases: string[]): Promise<ProjectInfo> {
+      const project = await getClient().command("project.rebind", { projectId, path, aliases });
+      set({ projects: await getClient().command("project.list", {}) });
+      void get().loadProjectMeta(project.id);
+      return project;
     },
 
     async spaceFetch(): Promise<void> {

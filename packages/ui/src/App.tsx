@@ -1156,6 +1156,7 @@ export function App() {
             <SpaceSurface
               onOpenSession={openSessionAndShow}
               onOpenPalette={() => setPaletteOpen(true)}
+              onOpenProject={pickProject}
             />
           ) : surface === "Dashboard" ? (
             <DashboardSurface

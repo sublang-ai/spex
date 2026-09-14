@@ -623,14 +623,30 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   assert.equal(existsSync(join(b.dataDir, "sessions", `${sessionA}.records.jsonl`)), true);
   assert.equal(git(b.dataDir, "log", "-1", "--format=%P").split(" ").length, 2, "one merge commit with two parents");
   assert.equal(git(bare, "rev-parse", "main"), git(b.dataDir, "rev-parse", "main"));
-  assert.ok(joined.diagnostics.some((d) => /unresolved|No project binding/.test(d.reason) && d.file.includes(sessionA)), JSON.stringify(joined.diagnostics));
+  // space-46: the diagnostics fold to one repair per project, named by
+  // the registered name and carrying the directories a rebind resolves.
+  const repair = joined.diagnostics.find((d) => d.repair?.projectId === projectA.id);
+  assert.ok(repair, JSON.stringify(joined.diagnostics));
+  assert.equal(repair.repair?.projectName, projectA.name);
+  assert.ok(!repair.reason.includes(projectA.id), "a repair names the project, never its identifier");
+  assert.ok((repair.repair?.directories ?? []).includes(a.projectDir), JSON.stringify(repair));
+  assert.equal(repair.repair?.sessions, 1);
+  assert.ok(repair.repair?.key.length, "a repair carries its own key (space-49)");
+  assert.equal(repair.repair?.seen, undefined, "unshown, so it still counts (space-49)");
   assert.ok(!(await b.client.expectOk("session.list", {})).some((s) => s.id === sessionA), "unresolved until bound");
   // B binds A's project to a local checkout with A's path as the alias.
   const checkout = join(scratch, "b-checkout");
   mkdirSync(checkout);
   git(checkout, "init", "-q");
+  const acknowledged = await b.client.expectOk("space.seen", { repair: repair.repair!.key });
+  assert.equal(acknowledged.diagnostics.find((d) => d.repair?.projectId === projectA.id)?.repair?.seen, true);
+  assert.equal(git(b.dataDir, "status", "--porcelain"), "", "acknowledgement is a preference, so it never syncs");
   const bound = await b.client.expectOk("project.rebind", { projectId: projectA.id, path: checkout, aliases: [a.projectDir] });
   assert.equal(bound.id, projectA.id);
+  assert.ok(
+    !(await b.client.expectOk("space.get", {})).diagnostics.some((d) => d.repair?.projectId === projectA.id),
+    "one rebind resolves the project and every session recorded under it",
+  );
   const listed = (await b.client.expectOk("session.list", {})).find((s) => s.id === sessionA);
   assert.equal(listed?.title, "Fix the login redirect");
   assert.equal(listed?.projectId, projectA.id);

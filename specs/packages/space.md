@@ -418,7 +418,7 @@ interface SpaceState {
   };
   local: SpaceUnit[]; incoming: SpaceUnit[]; conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
-  diagnostics: { file: string; reason: string; blocking: boolean }[];
+  diagnostics: { file: string; reason: string; blocking: boolean; repair?: { kind: "project" | "directory"; projectId?: string; projectName?: string; directories: string[]; sessions: number } }[];
   sync:
     | { phase: "idle" }
     | { phase: "running"; op: "sync" | "check" | "init"; step: SyncStep; since: number; cancelable: boolean }
