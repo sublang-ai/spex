@@ -678,7 +678,14 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
 
 describe("playbook-library-57/58: the compile band", () => {
   test("phases in human words with the compiler's ids in the tooltips, the last-output clock, the log, Cancel, and who asked", async () => {
-    const t = now - 5 * 60_000;
+    // Fresh from the real clock, not the module-level `now`: this file
+    // runs 41 tests before reaching here, so a shared origin is already
+    // seconds stale by now. The offsets put both clocks mid-minute —
+    // `duration` drops the seconds entirely on a whole minute
+    // (time.ts), so a fixture parked just under one reads `5m` instead
+    // of `4m 56s` the moment a slow runner catches up. That is what
+    // reddened Windows CI on f19f46e.
+    const t = Date.now() - 4 * 60_000 - 48_500;
     renderWorkspace(
       draftInfo({ activity: "compiling", state: "compiling", compile: { at: t, by: "agent", outcome: "running" } }),
       {
@@ -701,7 +708,7 @@ describe("playbook-library-57/58: the compile band", () => {
       .getAllByTestId(/^phase-/)
       .map((entry) => `${entry.textContent!.replace(/running|done|waiting|failed/g, "").replace(/\s+/g, "")}:${entry.getAttribute("data-status")}`);
     expect(cells[0]).toBe("✓Normalize2s:done");
-    expect(cells[1]).toMatch(/^Specitems4m5\ds:running$/);
+    expect(cells[1]).toMatch(/^Specitems4m\d\ds:running$/);
     expect(cells.slice(2)).toEqual([
       "○Optimize:waiting",
       "○Machine:waiting",
@@ -710,7 +717,7 @@ describe("playbook-library-57/58: the compile band", () => {
     ]);
     expect(screen.getByTestId("phase-text2gears").title).toContain("text2gears");
     // The heartbeat moved the clock: silence reads as alive (DR-010 §5).
-    expect(screen.getByTestId("last-output").textContent).toMatch(/^last output 4m 2\ds ago$/);
+    expect(screen.getByTestId("last-output").textContent).toMatch(/^last output 4m \d\ds ago$/);
     expect(screen.getByTestId("compile-by").textContent).toBe("asked by the agent");
     expect(screen.getByTestId("compile-log").textContent).toContain("Show log");
     fireEvent.click(screen.getByTestId("compile-cancel"));
