@@ -52,6 +52,9 @@ export interface GitFailure {
   message: string;
   guidance: string;
   retry: boolean;
+  /** Which identity the remote's own form presents (space-50): read
+   * from the URL, never from a probe or a second tool. */
+  identity?: string;
 }
 
 export const DEFAULT_TRANSPORT_TIMEOUT_MS = 120_000;
@@ -77,6 +80,24 @@ export function remoteHost(url: string | null): string {
   return url;
 }
 
+/** Which identity a remote's form presents (space-50), read from the
+ * URL alone: no probe answers the question the transport already did. */
+export function remoteIdentity(remote: string | null): string | undefined {
+  if (!remote) return undefined;
+  if (/^\//.test(remote) || /^file:\/\//i.test(remote)) {
+    return "A local remote has no account — only the path and its permissions; a repository behind an unreadable folder answers exactly like a missing one.";
+  }
+  if (/^https?:\/\//i.test(remote)) {
+    return /^https?:\/\/(?:[^/@]*@)?(?:[^/:]*\.)?github\.com(?:[:/]|$)/i.test(remote)
+      ? "Over HTTPS the account is whichever one this machine's credential helper presents — with the GitHub CLI as the helper, that is its active account."
+      : "Over HTTPS the account is whichever one this machine's credential helper presents for that host.";
+  }
+  if (/^ssh:\/\//i.test(remote) || /^[^@/:\s]+@[^/:\s]+:/.test(remote)) {
+    return "Over SSH the account is whichever key this machine offers; no credential helper and no GitHub CLI sign-in applies.";
+  }
+  return undefined;
+}
+
 /** The remote URL with any embedded user removed (space-1). */
 export function displayRemote(url: string): string {
   return url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, "$1").replace(/^[^@/:\s]+@([^/:\s]+):/, "$1:");
@@ -87,6 +108,9 @@ export function displayRemote(url: string): string {
 export function validateRemoteUrl(url: string): { ok: true } | { ok: false; reason: string } {
   if (url.length === 0 || /\s/.test(url) || /[\x00-\x1f\x7f]/.test(url)) {
     return { ok: false, reason: "The remote URL is malformed: it must be one word with no spaces or control characters." };
+  }
+  if (/^https?:\/\/[^/]*@/i.test(url)) {
+    return { ok: false, reason: "The app stores no credential: remove everything before the host from the URL and use an SSH key or the machine's credential helper instead." };
   }
   if (/^[a-z][a-z0-9+.-]*:\/\/[^/@]*:[^/@]*@/i.test(url)) {
     return { ok: false, reason: "The app stores no credential: remove the user and secret from the URL and use an SSH key or the machine's credential helper instead." };
@@ -115,16 +139,26 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
   if (/Could not resolve host|Connection refused|Network is unreachable|Connection timed out|No route to host|Could not resolve hostname/i.test(text)) {
     return { cause: "unreachable", message: `Could not reach ${host}`, guidance: "Check the network or the remote URL, then try again.", retry: true };
   }
-  if (/Permission denied|Authentication failed|could not read Username|terminal prompts disabled|Host key verification failed/i.test(text)) {
+  if (/Permission denied|Authentication failed|could not read Username|terminal prompts disabled|Host key verification failed|returned error: 40[13]|HTTP (?:401|403)/i.test(text)) {
     return {
       cause: "unauthorized",
       message: `${host} did not accept this machine's key`,
       guidance: "Set up an SSH key or credential helper for this machine and accept the host key once in a terminal; the app never asks for a password.",
       retry: true,
+      ...(remoteIdentity(remote) ? { identity: remoteIdentity(remote) } : {}),
     };
   }
-  if (/Repository not found|does not appear to be a git repository/i.test(text)) {
-    return { cause: "not-found", message: `No repository at ${remote ?? host}`, guidance: "Check the URL or create the repository.", retry: false };
+  if (/Repository not found|does not appear to be a git repository|repository '[^']*' not found/i.test(text)) {
+    // The host answers alike for a repository that is absent and for a
+    // private one this machine may not see (space-15): name both, claim
+    // neither, and keep Retry — every remedy is outside the app.
+    return {
+      cause: "not-found",
+      message: `No repository this machine can see at ${remote ? displayRemote(remote) : host}`,
+      guidance: "Either nothing is there, or it is private and this machine's identity cannot see it — the host did not say which. Check the URL, then this machine's access for that remote, and Retry.",
+      retry: true,
+      ...(remoteIdentity(remote) ? { identity: remoteIdentity(remote) } : {}),
+    };
   }
   if (/\[rejected\]|non-fast-forward|fetch first/i.test(text)) {
     return { cause: "rejected", message: "The remote changed again", guidance: "Sync again to merge what the remote received meanwhile.", retry: true };

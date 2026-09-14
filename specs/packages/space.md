@@ -64,9 +64,9 @@ When the user saves a remote URL, or clears it, the core shall set or remove `or
 
 | URL | Outcome |
 | --- | --- |
-| `ssh://…`, `git@host:path`, `https://…`, `http://…`, an absolute local path | set as `origin`, replacing any earlier one |
+| `ssh://…`, `git@host:path`, `https://…`, `http://…`, an absolute local path | set as `origin`, replacing any earlier one, an SSH form's user being the transport's own and no credential |
 | blank, or containing whitespace or control characters | refused as malformed |
-| embedding a credential in any form, whether or not it carries a colon (`scheme://user:secret@host`, `scheme://token@host`) | refused naming the rule that the app stores no credential, pointing to SSH keys or the machine's credential helper |
+| carrying anything before the host on `http://` or `https://`, with or without a colon (`https://user:secret@host`, `https://token@host`) | refused naming the rule that the app stores no credential, pointing to SSH keys or the machine's credential helper |
 
 - a changed remote clears the last check, so ahead and behind read as unknown until the next check;
 - the row edits in place with Save and Cancel, Escape cancelling, and the header's remote field follows the save ([DR-010](../decisions/010-interface-craft.md) §3).
@@ -249,7 +249,7 @@ While a sync or check runs a transport step — Check or Push — the surface sh
 
 #### space-50
 
-Where a failure report names a remote, the Space surface shall name the identity that remote's form presents, read from the URL and never from a probe or a second tool ([DR-064](../decisions/064-honest-remote-failure.md)):
+Where a failure could turn on which identity this machine presented — the host answering that no repository is there, or refusing authorization [[space-15](#space-15)] — the Space surface shall name the identity that remote's form presents, read from the URL and never from a probe or a second tool ([DR-064](../decisions/064-honest-remote-failure.md)):
 
 | Remote form | Identity named |
 | --- | --- |
@@ -592,7 +592,7 @@ When an integration suite fails a transport against a path holding no repository
 - the unreadable path reports that no repository is one this machine can see, names both causes and claims neither, and offers Retry [[space-15](#space-15)];
 - a refused host classifies as unauthorized rather than falling through to the tool's own words [[space-15](#space-15)];
 - a report naming a remote prints no embedded user, and a URL carrying a credential in any form is refused before it is stored [[space-5](#space-5)] [[space-15](#space-15)];
-- the report names the identity the remote's form presents, an SSH remote naming a key and an HTTPS remote a credential helper [[space-50](#space-50)].
+- the report names the identity the remote's form presents, a local path naming its permissions rather than an account, and a network failure naming none [[space-50](#space-50)].
 
 ### Browser Journeys
 

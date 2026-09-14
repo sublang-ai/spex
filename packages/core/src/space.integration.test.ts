@@ -962,7 +962,14 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
     assert.ok(stopped.sync.phase === "stopped" && stopped.sync.guidance.length > 0);
     assert.equal(stopped.sync.phase === "stopped" && stopped.sync.retry, retry);
   };
-  await expectStop(join(scratch, "nonexistent", "path"), "not-found", /No repository at/, false);
+  // space-52: the host answers alike for absent and for unreadable, so
+  // the report names both causes, claims neither, and keeps Retry.
+  await expectStop(join(scratch, "nonexistent", "path"), "not-found", /No repository this machine can see at/, true);
+  const localStop = await home.client.expectOk("space.get", {});
+  assert.ok(
+    localStop.sync.phase === "stopped" && /only the path and its permissions/.test(localStop.sync.identity ?? ""),
+    JSON.stringify(localStop.sync),
+  );
   const start = Date.now();
   await expectStop("ssh://localhost/x", "timeout", /No answer from localhost/, true);
   assert.ok(Date.now() - start < 5_000, "the shortened limit ends the sleeping transport");
@@ -976,6 +983,17 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   assert.match(refusedHost.sync.phase === "stopped" ? refusedHost.sync.message : "", /Could not reach 127\.0\.0\.1/);
   const synced = await plain.client.settle("space.sync", {});
   assert.ok(synced.sync.phase === "stopped" && synced.sync.op === "sync" && synced.sync.step === "check" && synced.sync.cause === "unreachable", JSON.stringify(synced.sync));
+  // space-5: nothing stands before the host on http(s), with or without
+  // a colon, so a bare token never reaches .git/config or the screen.
+  for (const url of ["https://user:secret@example.com/x.git", "https://ghp_0123456789abcdef@example.com/x.git"]) {
+    await plain.client.expectError("space.remote.set", { url }, "invalid_request", /stores no credential/);
+  }
+  // An SSH form's user is the transport's own, not a credential; a
+  // network failure turns on no identity, so it names none (space-50).
+  await plain.client.expectOk("space.remote.set", { url: "ssh://git@127.0.0.1:1/x" });
+  const sshStop = await plain.client.settle("space.fetch", {});
+  assert.ok(sshStop.sync.phase === "stopped" && sshStop.sync.cause === "unreachable", JSON.stringify(sshStop.sync));
+  assert.equal(sshStop.sync.phase === "stopped" ? sshStop.sync.identity : "unset", undefined);
 });
 
 // ---------------------------------------------------------------------------

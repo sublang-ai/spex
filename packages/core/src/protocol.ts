@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -1117,6 +1117,8 @@ export type SpaceSyncPhase =
       message: string;
       guidance: string;
       retry: boolean;
+      /** Which identity the remote's form presents (space-50). */
+      identity?: string;
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 
