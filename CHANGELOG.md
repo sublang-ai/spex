@@ -14,17 +14,33 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-14
+
 ### Added
 
 - A control for a failed workflow: while a playbook run stands parked in
   its recoverable failure state, the session shows a notice between the
   Captain pane and the composer naming the workflow by its command, with
-  one Retry. Retry sends one fixed request — the same words every time —
-  as an ordinary, visible Boss turn asking the Captain to run the
-  workflow's own recovery, and the notice stands until that run leaves
-  its failure state. Until Playbook advertises its runtime recovery
-  actions to hosts, the notice says in words that it asks rather than
-  recovers.
+  two controls that say in words what each does. Retry runs the recovery
+  the run itself advertises. Drop ends the run — it asks to confirm in
+  place, and it spends no model call, so the way out still works when a
+  failing provider is what broke the run. A dropped run is not
+  resumable; run the command again to take the work back.
+- Where the dropped session serves an open intent, Drop takes the
+  ledger's Drop verdict in the same gesture — one ruling, not two.
+
+### Changed
+
+- Retry selects the run's own advertised recovery through the runtime
+  instead of sending fixed prose as a Boss turn, and where a run
+  advertises no recovery Retry is absent rather than offered and
+  refused.
+- A failure that parked a run keeps asking for attention — on the
+  Dashboard, in the sidebar and on the tab — until that run leaves its
+  failure state. A later unrelated message no longer stands the summons
+  down while the run is still stuck. A failure that parked no run keeps
+  the rule it had: moving on acknowledges it.
+- The app requires Playbook 13.3 or later.
 
 ### Fixed
 
@@ -419,7 +435,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Chromium against a real core with substitute agents, including an
   accessibility scan of every surface in both themes.
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v0.7.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v0.8.0...HEAD
+[0.8.0]: https://github.com/sublang-ai/spex/compare/app-v0.7.0...app-v0.8.0
 [0.7.0]: https://github.com/sublang-ai/spex/compare/app-v0.6.1...app-v0.7.0
 [0.6.1]: https://github.com/sublang-ai/spex/compare/app-v0.6.0...app-v0.6.1
 [0.6.0]: https://github.com/sublang-ai/spex/compare/app-v0.5.0...app-v0.6.0

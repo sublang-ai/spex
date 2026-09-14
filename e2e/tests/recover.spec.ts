@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The failed-workflow round trip (run-view-132, DR-060): a workflow
+// The failed-workflow round trip (run-view-132, DR-062): a workflow
 // parked in its recoverable failure state used to offer nothing but
-// prose in the composer. The notice stands with one control; pressing
-// it sends the one canonical request as an ordinary, visible Boss
-// turn, and the notice leaves when the run leaves `failed`.
+// prose in the composer. The notice now stands with two controls —
+// Retry runs the recovery the run advertises, Drop ends the run — and
+// neither asks a model to read prose. The served harness continues a
+// session with no engagement restored, so the successful round trips
+// belong to the fixture stream; what this lane can prove is that the
+// notice appears and stands through settlement, that a control the
+// opened run cannot satisfy refuses with its cause and leaves the page
+// intact, that Drop's confirm backs out having sent nothing, and that
+// no control's busy form widens it at a 320-pixel viewport.
 
 import type { Page } from "@playwright/test";
 
@@ -25,7 +31,7 @@ async function settleLayout(page: Page): Promise<void> {
   );
 }
 
-test("run-view-132: the failed workflow offers a way back, and it is an ordinary Boss turn", async ({
+test("run-view-132: the failed workflow's notice stands, refuses with its cause, and fits at 320px", async ({
   page,
   app,
 }) => {
