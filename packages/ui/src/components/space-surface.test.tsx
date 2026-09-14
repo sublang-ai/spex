@@ -384,7 +384,8 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(screen.queryByTestId("space-repository")).toBeNull();
     expect(screen.queryByTestId("space-setup")).toBeNull();
     expect(screen.getByRole("button", { name: "Copy path" })).toBeTruthy();
-    expect(screen.getByTestId("space-sync-tab").textContent).toContain("Install Git, then reopen Space");
+    // The tab shows the core's own install act, not a sentence of its own.
+    expect(screen.getByTestId("space-sync-tab").textContent).toContain("Install Git from git-scm.com, then reopen Space.");
   });
 
   test("Refresh re-reads and prints the time of the last read; window focus re-reads too", async () => {

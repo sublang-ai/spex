@@ -96,7 +96,7 @@ const KNOWN_FAILURES: { test: RegExp; text: (match: RegExpExecArray) => string }
   },
   {
     test: /oauth session expired|not logged in|unauthori[sz]ed|\b401\b|authentication/i,
-    text: () => "The agent's sign-in has expired — sign in again",
+    text: () => "The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI",
   },
   {
     test: /rate limit|\b429\b/i,

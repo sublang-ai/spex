@@ -1221,7 +1221,7 @@ export async function checkAdapterReadiness(
       Boolean(env.ANTHROPIC_API_KEY) || existsSync(join(home, ".claude"));
     if (!credentialReady) {
       faults.push(
-        "set ANTHROPIC_API_KEY or sign in with Claude Code (creates ~/.claude)",
+        "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY",
       );
     }
   } else if (adapter === "codex") {
@@ -1229,7 +1229,7 @@ export async function checkAdapterReadiness(
       Boolean(env.OPENAI_API_KEY) || existsSync(join(home, ".codex"));
     if (!credentialReady) {
       faults.push(
-        "set OPENAI_API_KEY or sign in with the Codex CLI (creates ~/.codex)",
+        "sign in by running codex in a terminal, or set OPENAI_API_KEY",
       );
     }
   }

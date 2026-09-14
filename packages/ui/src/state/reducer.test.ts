@@ -180,7 +180,7 @@ describe("run-view-1: the playbook-7 shell's captain_reply is Captain speech", (
     const errors = view.captain.filter((line) => line.kind === "error");
     expect(errors).toHaveLength(1);
     // The line speaks plain; the runtime's words ride the tooltip.
-    expect(errors[0].text).toBe("The agent's sign-in has expired — sign in again");
+    expect(errors[0].text).toBe("The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI");
     expect(errors[0].raw).toContain("OAuth session expired");
   });
 });
@@ -393,7 +393,7 @@ describe("run-view-2: a failure repeated is one line with a count", () => {
     expect(errors.map((line) => [line.text, line.raw, line.count])).toEqual([
       ["adapter refused.", "Error: adapter refused..", 2],
       [
-        "The Captain's turn failed — The agent's sign-in has expired — sign in again",
+        "The Captain's turn failed — The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI",
         "The Captain's turn failed: OAuth session expired",
         undefined,
       ],
@@ -425,7 +425,7 @@ describe("run-view-2: a failure repeated is one line with a count", () => {
     const view = applyRecords(fresh(), [errored(1), errored(2)]);
     const errors = view.captain.filter((line) => line.kind === "error");
     expect(errors).toHaveLength(1);
-    expect(errors[0].text).toBe("The agent's sign-in has expired — sign in again");
+    expect(errors[0].text).toBe("The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI");
     expect(errors[0].raw).toBe("OAuth session expired");
     expect(errors[0].count).toBe(2);
   });

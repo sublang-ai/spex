@@ -907,7 +907,8 @@ export function SyncTab({
   if (!space.git.ok) {
     return (
       <div data-testid="space-sync-tab" className="flex flex-col gap-3">
-        <p className="text-sm">Git is not installed. Install Git, then reopen Space.</p>
+        {/* The core names the install act for this host (space-1). */}
+        <p className="text-sm">{space.git.guidance}</p>
       </div>
     );
   }
