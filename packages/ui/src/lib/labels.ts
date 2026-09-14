@@ -150,16 +150,6 @@ export function plainFailure(raw: string): { text: string; raw?: string } {
   return text === message ? { text } : { text, raw: message };
 }
 
-/** The one sentence the failed-workflow control sends (run-view-129,
- * DR-060): the same words on every activation and every workflow, so
- * what is asked is chosen once and auditable here rather than
- * improvised per failure. It must not begin with "/" — a registered
- * command would be parsed as one — and it must read as an explicit
- * recovery request, since that is the only footing on which the shell
- * runs a leaf's advertised runtime action. */
-export const RECOVER_FAILED_WORKFLOW =
-  "Retry the failed workflow using the recovery action it offers.";
-
 /** Notification event labels (SET): wire ids stay in tooltips. */
 export const NOTIFICATION_LABELS: Record<string, string> = {
   player_finished: "A player finishes its step",

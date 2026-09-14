@@ -227,6 +227,7 @@ export function RunView({
   const ledger = useAppStore((state) => state.ledger);
   const staged = useAppStore((state) => state.stagedIntents[session.id]);
   const clearStagedIntent = useAppStore((state) => state.clearStagedIntent);
+  const submitSessionControl = useAppStore((state) => state.submitSessionControl);
   const queueIntent = useAppStore((state) => state.queueIntent);
   const closeIntent = useAppStore((state) => state.closeIntent);
   const stageDispatch = useAppStore((state) => state.stageDispatch);
@@ -556,12 +557,15 @@ export function RunView({
               state={failedRun.active ?? undefined}
               connected={connected}
               turnActive={view.turnActive}
-              onSubmit={async (text) => {
-                // Nothing else rides this turn (run-view-129): a
-                // staged intent detaches rather than being stamped by
-                // a recovery request it did not ask for (run-view-86).
+              recovery={session.controls?.recovery[0]}
+              ending={session.controls?.ending[0]}
+              onControl={async (kind, controlId) => {
+                // Nothing else rides this turn (run-view-129,
+                // run-view-112): a staged intent detaches rather than
+                // being stamped by a control it did not ask for
+                // (run-view-86).
                 if (staged) clearStagedIntent(session.id);
-                await onSubmit(text);
+                await submitSessionControl(session.id, kind, controlId);
               }}
             />
           ) : null}

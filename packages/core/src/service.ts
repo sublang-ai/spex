@@ -164,7 +164,7 @@ export interface CoreServiceOptions {
 /** Commands that write under the home (space-21): refused `busy` while
  * a Space operation runs, so the core stays the sole writer through it. */
 const SPACE_GATED_COMMANDS = new Set<Command["type"]>([
-  "turn.submit", "session.create", "session.retry", "session.discard", "session.delete", "session.viewed",
+  "turn.submit", "session.control", "session.create", "session.retry", "session.discard", "session.delete", "session.viewed",
   "project.register", "project.create", "project.rebind", "project.remove",
   "intent.queue", "intent.edit", "intent.move", "intent.link", "intent.close", "intent.remove",
   "config.edit", "compile.run",
@@ -941,7 +941,7 @@ export class CoreService {
     if (gate && SPACE_GATED_COMMANDS.has(command.type)) throw new CoreError("busy", gate);
     if (["project.create", "project.register", "project.rebind", "project.remove"].includes(command.type)) this.store.assertProjectsWritable();
     if (command.type === "session.create" || command.type === "intent.queue") this.store.assertWritable({projectId:command.projectId});
-    if (command.type === "session.retry" || command.type === "session.discard" || command.type === "turn.submit") this.store.assertWritable({sessionId:command.sessionId});
+    if (command.type === "session.retry" || command.type === "session.discard" || command.type === "turn.submit" || command.type === "session.control") this.store.assertWritable({sessionId:command.sessionId});
     switch (command.type) {
       case "config.get":
         return this.configState;
@@ -1128,6 +1128,26 @@ export class CoreService {
             command.sessionId,
             command.text,
             command.intentId,
+          );
+          return { accepted: true };
+        } finally { release(); }
+      }
+      // core-service-98: a control the session already advertises, run as
+      // its next turn. It shares turn.submit's admission and continuation
+      // so a parked run reached after a restart still answers, and stamps
+      // no intent dispatch — the Boss is acting on the run, not sending work.
+      case "session.control": {
+        const release = this.admitSubmission(command.sessionId);
+        try {
+          await this.sessions.settled(command.sessionId);
+          if (!this.sessions.getLive(command.sessionId)) {
+            await this.settledConfig();
+            await this.continueSession(command.sessionId);
+          }
+          this.sessions.submitControl(
+            command.sessionId,
+            command.kind,
+            command.controlId,
           );
           return { accepted: true };
         } finally { release(); }

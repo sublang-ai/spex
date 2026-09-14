@@ -47,7 +47,6 @@ import {
   MACHINE_STOPPED,
   type FixtureEntry,
 } from "../fixtures/sample-run.js";
-import { RECOVER_FAILED_WORKFLOW } from "../lib/labels.js";
 import codeGraph from "../fixtures/machines/code.json";
 import reviewGraph from "../fixtures/machines/review.json";
 import type { MachineGraph } from "@sublang/spex-core/protocol";
@@ -2481,10 +2480,19 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
   }
 
+  // core-service-98: the notice draws what the session advertises.
+  const PARKED: SessionInfo = {
+    ...SESSION,
+    controls: {
+      recovery: [{ id: "retry:START_CODE", label: "Retry the failing step" }],
+      ending: [{ id: "give-up", label: "Stop /code" }],
+    },
+  };
+
   function renderFailed(over: Partial<Parameters<typeof RunView>[0]> = {}) {
     return render(
       <RunView
-        session={SESSION}
+        session={PARKED}
         view={failedView()}
         composer={{ queued: [] }}
         connected
@@ -2516,13 +2524,28 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
     expect(notice.getAttribute("title")).toBe("state: failed");
     expect(notice.textContent).toContain(
-      "Retry asks the Captain to run its recovery.",
+      "Retry runs its recovery. Drop ends the run.",
     );
     const retry = screen.getByTestId("failed-workflow-retry");
     expect(retry.textContent).toBe("Retry");
-    expect(retry.getAttribute("title")).toBe(
-      "Send the Captain a request to run the workflow's advertised recovery.",
-    );
+    // Each control promises only what it performs (run-view-128): the
+    // recovery names the run's own action, and Drop says it ends it.
+    expect(retry.getAttribute("title")).toBe("Run Retry the failing step.");
+    expect(
+      screen.getByTestId("failed-workflow-drop").getAttribute("title"),
+    ).toBe("End this run. It will not be resumed.");
+  });
+
+  test("offers Drop alone where the run advertises no recovery", () => {
+    // Retry stands rather than being offered and refused (run-view-128).
+    renderFailed({
+      session: {
+        ...PARKED,
+        controls: { recovery: [], ending: PARKED.controls!.ending },
+      },
+    });
+    expect(screen.queryByTestId("failed-workflow-retry")).toBeNull();
+    expect(screen.getByTestId("failed-workflow-drop")).toBeTruthy();
   });
 
   test("names no command where none is configured, keeping the run's id in the tooltip", () => {
@@ -2538,12 +2561,12 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
   });
 
-  test("activating dispatches exactly one fixed request, stamping no intent", async () => {
+  test("activating a control runs it as the next turn, stamping no intent", async () => {
     const previous = useAppStore.getState();
     const command = vi.fn(async () => ({}));
     setClientForTests({ command } as never);
     useAppStore.setState({
-      sessions: [SESSION],
+      sessions: [PARKED],
       views: { s1: failedView() },
       composers: { s1: { queued: [] } },
       stagedIntents: { s1: { intentId: "i1", title: "Address #7" } },
@@ -2551,25 +2574,22 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       activeSessionId: undefined,
     });
     try {
-      const { rerender } = renderFailed({
-        onSubmit: (text) => useAppStore.getState().submitBossText("s1", text),
-      });
+      const { rerender } = renderFailed();
       await act(async () =>
         fireEvent.click(screen.getByTestId("failed-workflow-retry")),
       );
-      expect(command).toHaveBeenCalledExactlyOnceWith("turn.submit", {
+      // run-view-129: the run's own advertised recovery, named by id —
+      // no prose for the Captain to interpret.
+      expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
         sessionId: "s1",
-        text: RECOVER_FAILED_WORKFLOW,
+        kind: "recovery",
+        controlId: "retry:START_CODE",
       });
-      // What is asked is a request, not a command: a leading slash
-      // would be parsed as one and never reach the Captain's judgment
-      // (run-view-129).
-      expect(RECOVER_FAILED_WORKFLOW.startsWith("/")).toBe(false);
-      // Nothing else rides the recovery request (run-view-129).
+      // Nothing else rides the control turn (run-view-129).
       expect(useAppStore.getState().stagedIntents.s1).toBeUndefined();
 
-      // The turn lands in the thread as the Boss's own message, in
-      // exactly the words that were sent.
+      // The turn lands in the thread as the Boss's own message, in the
+      // action's own label.
       const spoken = failedView([
         {
           seq: 800,
@@ -2577,13 +2597,13 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
             type: "turn_started",
             turnId: 17,
             timestamp: 17_000,
-            turn: { id: 17, prompt: RECOVER_FAILED_WORKFLOW },
+            turn: { id: 17, prompt: "Retry the failing step" },
           } as unknown as TmuxPlayRecord,
         },
       ]);
       rerender(
         <RunView
-          session={SESSION}
+          session={PARKED}
           view={spoken}
           composer={{ queued: [] }}
           connected
@@ -2597,7 +2617,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       expect(
         screen
           .getAllByTestId("boss-bubble")
-          .some((bubble) => bubble.textContent?.includes(RECOVER_FAILED_WORKFLOW)),
+          .some((bubble) => bubble.textContent?.includes("Retry the failing step")),
       ).toBe(true);
     } finally {
       setClientForTests(undefined);
@@ -2605,40 +2625,96 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     }
   });
 
-  test("the busy form keeps the control's box, refuses a second activation, and a refusal shows its cause", async () => {
-    let refuse!: (error: Error) => void;
-    const onSubmit = vi.fn(
-      () => new Promise<void>((_resolve, reject) => { refuse = reject; }),
-    );
-    renderFailed({
-      composer: { draft: "Keep my draft", queued: [] },
-      onDraftChange: () => {},
-      onSubmit,
+  test("Drop asks its confirm, and Keep backs out having sent nothing", async () => {
+    const previous = useAppStore.getState();
+    const command = vi.fn(async () => ({}));
+    setClientForTests({ command } as never);
+    useAppStore.setState({
+      sessions: [PARKED],
+      views: { s1: failedView() },
+      composers: { s1: { queued: [] } },
+      stagedIntents: {},
+      specTrees: {},
+      activeSessionId: undefined,
     });
-    const retry = screen.getByTestId("failed-workflow-retry") as HTMLButtonElement;
-    const shape = retry.className;
-    fireEvent.click(retry);
-    fireEvent.click(retry);
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(RECOVER_FAILED_WORKFLOW);
-    expect(retry.textContent).toBe("Retrying…");
-    expect(retry.getAttribute("aria-busy")).toBe("true");
-    expect(retry.disabled).toBe(true);
-    // The busy form never widens the control (DR-041): the width rule
-    // it wears is the one it held at rest. A simulated document cannot
-    // measure the box itself, so the browser journey weighs the busy
-    // word against that reserved width (run-view-132).
-    expect(retry.className).toBe(shape);
-    expect(screen.getByRole("status").textContent).toContain(
-      "Asking the Captain",
+    try {
+      renderFailed();
+      // DR-010 §4: ending a run asks in place before it acts.
+      fireEvent.click(screen.getByTestId("failed-workflow-drop"));
+      expect(screen.getByTestId("failed-workflow-confirm-ask")).toBeTruthy();
+      expect(command).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByTestId("failed-workflow-drop-keep"));
+      expect(screen.queryByTestId("failed-workflow-confirm-ask")).toBeNull();
+      expect(command).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByTestId("failed-workflow-drop"));
+      await act(async () =>
+        fireEvent.click(screen.getByTestId("failed-workflow-drop-confirm")),
+      );
+      // run-view-112: the shell's own ending, selected by id.
+      expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
+        sessionId: "s1",
+        kind: "ending",
+        controlId: "give-up",
+      });
+    } finally {
+      setClientForTests(undefined);
+      useAppStore.setState(previous, true);
+    }
+  });
+
+  test("the busy form keeps the control's box, refuses a second activation, and a refusal shows its cause", async () => {
+    const previous = useAppStore.getState();
+    let refuse!: (error: Error) => void;
+    const command = vi.fn(
+      () => new Promise<unknown>((_resolve, reject) => { refuse = reject; }),
     );
-    await act(async () => refuse(new Error("A turn is already running.")));
-    expect(screen.getByTestId("failed-workflow-error").textContent).toContain(
-      "A turn is already running.",
-    );
-    // The refusal costs neither the transcript nor the draft.
-    expect(systemLine("◇ /code started")).toBeTruthy();
-    expect(screen.getByDisplayValue("Keep my draft")).toBeTruthy();
-    expect(screen.getByTestId("failed-workflow")).toBeTruthy();
+    setClientForTests({ command } as never);
+    useAppStore.setState({
+      sessions: [PARKED],
+      views: { s1: failedView() },
+      composers: { s1: { draft: "Keep my draft", queued: [] } },
+      stagedIntents: {},
+      specTrees: {},
+      activeSessionId: undefined,
+    });
+    try {
+      renderFailed({
+        composer: { draft: "Keep my draft", queued: [] },
+        onDraftChange: () => {},
+      });
+      const retry = screen.getByTestId("failed-workflow-retry") as HTMLButtonElement;
+      const shape = retry.className;
+      fireEvent.click(retry);
+      fireEvent.click(retry);
+      expect(command).toHaveBeenCalledOnce();
+      expect(retry.textContent).toBe("Retrying…");
+      expect(retry.getAttribute("aria-busy")).toBe("true");
+      expect(retry.disabled).toBe(true);
+      // run-view-130: neither control may be activated while the turn
+      // this one started is in flight.
+      expect((screen.getByTestId("failed-workflow-drop") as HTMLButtonElement).disabled).toBe(true);
+      // The busy form never widens the control (DR-041): the width rule
+      // it wears is the one it held at rest. A simulated document cannot
+      // measure the box itself, so the browser journey weighs the busy
+      // word against that reserved width (run-view-132).
+      expect(retry.className).toBe(shape);
+      expect(screen.getByRole("status").textContent).toContain("Retrying");
+      await act(async () => {
+        refuse(new Error("A turn is already running."));
+        await Promise.resolve();
+      });
+      expect(screen.getByTestId("failed-workflow-error").textContent).toContain(
+        "A turn is already running.",
+      );
+      // The refusal costs neither the transcript nor the draft.
+      expect(systemLine("◇ /code started")).toBeTruthy();
+      expect(screen.getByDisplayValue("Keep my draft")).toBeTruthy();
+      expect(screen.getByTestId("failed-workflow")).toBeTruthy();
+    } finally {
+      setClientForTests(undefined);
+      useAppStore.setState(previous, true);
+    }
   });
 
   test("the control is disabled while disconnected and while a turn is active", () => {
@@ -2659,7 +2735,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     ]);
     rerender(
       <RunView
-        session={SESSION}
+        session={PARKED}
         view={working}
         composer={{ queued: [] }}
         connected

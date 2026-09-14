@@ -25,9 +25,10 @@ async function settleLayout(page: Page): Promise<void> {
   );
 }
 
-/** The one sentence the control sends, every time (run-view-129). */
-const RECOVERY_REQUEST =
-  "Retry the failed workflow using the recovery action it offers.";
+/** The parked CODE run's own advertised recovery (run-view-129): the
+ * turn carries that action's label, authored by the runtime, not prose
+ * this app invented. */
+const RECOVERY_LABEL = /Retry|retry/;
 
 test("run-view-132: the failed workflow offers a way back, and it is an ordinary Boss turn", async ({
   page,
@@ -46,9 +47,7 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
   await expect(notice).toContainText(
     "The /code workflow failed and is waiting for you.",
   );
-  await expect(notice).toContainText(
-    "Retry asks the Captain to run its recovery.",
-  );
+  await expect(notice).toContainText("Retry runs its recovery. Drop ends the run.");
   await expect(notice).toHaveAttribute("title", "state: failed");
 
   // The turn settled and left the notice standing, so the way back is
@@ -97,15 +96,19 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
       const words = el
         .querySelector('[data-testid="failed-workflow-what"]')!
         .getBoundingClientRect();
-      const control = el
-        .querySelector('[data-testid="failed-workflow-retry"]')!
-        .getBoundingClientRect();
+      // run-view-132: BOTH controls are measured. A pair where only one
+      // is checked leaves the other free to stray out of the box.
+      const controls = [...el.querySelectorAll("button")].map((b) =>
+        b.getBoundingClientRect(),
+      );
       return {
-        under: control.top >= words.bottom - 1,
-        inside:
-          control.left >= box.left - 1 &&
-          control.right <= box.right + 1 &&
-          words.right <= box.right + 1,
+        under: controls.every((c) => c.top >= words.bottom - 1),
+        inside: controls.every(
+          (c) =>
+            c.left >= box.left - 1 &&
+            c.right <= box.right + 1 &&
+            words.right <= box.right + 1,
+        ),
         clipped: el.scrollWidth > el.clientWidth + 1,
       };
     }),
@@ -130,11 +133,44 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
   // Nothing is hidden: the request stands in the thread in the Boss's
   // own words, exactly as sent.
   await expect(
-    captain.getByTestId("boss-bubble").filter({ hasText: RECOVERY_REQUEST }),
+    captain.getByTestId("boss-bubble").filter({ hasText: RECOVERY_LABEL }),
   ).toHaveCount(1);
 
   // The run leaves `failed`: the way back is no longer owed.
   await expect(notice).toHaveCount(0);
   await expect(captain).toContainText("/code recovery started");
+  await expect(page.getByTestId("boss-composer")).toBeEnabled();
+});
+
+test("run-view-112: Drop ends a failed workflow, and the interface stops summoning", async ({
+  page,
+  app,
+}) => {
+  await open(page, app);
+  await send(page, "Fail the token refresh patch");
+
+  const captain = page.getByTestId("captain-pane");
+  await expect(captain).toContainText("workflow failed; awaiting Boss recovery.");
+  const notice = page.getByTestId("failed-workflow");
+  await expect(notice).toBeVisible();
+
+  // DR-062: ending a run is the Boss's ruling, so it asks in place.
+  await page.getByTestId("failed-workflow-drop").click();
+  await expect(page.getByTestId("failed-workflow-confirm-ask")).toBeVisible();
+  // Keep backs out having sent nothing: the notice and the run stand.
+  await page.getByTestId("failed-workflow-drop-keep").click();
+  await expect(page.getByTestId("failed-workflow-confirm-ask")).toHaveCount(0);
+  await expect(notice).toBeVisible();
+  await expect(page.getByTestId("state-chip")).toHaveText("needs attention");
+
+  await page.getByTestId("failed-workflow-drop").click();
+  await page.getByTestId("failed-workflow-drop-confirm").click();
+
+  // The run is gone, so every surface that asked whether it was still
+  // parked now answers no — with no further Boss turn taken.
+  await expect(notice).toHaveCount(0);
+  const chip = page.getByTestId("state-chip");
+  await expect(chip).not.toHaveText("needs attention");
+  await expect(chip).not.toHaveClass(/red/);
   await expect(page.getByTestId("boss-composer")).toBeEnabled();
 });

@@ -313,20 +313,51 @@ playbooks:
   assert.match(smuggled, /effort: high/);
 });
 
+/** The indented block a top-level or nested key owns, read by
+ * indentation rather than by a pattern that has to span it. A regex
+ * like `/key:(?:\n\s+.*)*?\n\s+wanted/` backtracks catastrophically
+ * the moment `wanted` is absent, which turns a plain assertion failure
+ * into a hang — this reads the block first and matches inside it. */
+function block(text: string, key: string): string {
+  const lines = text.split("\n");
+  const start = lines.findIndex((line) => line.trimEnd().endsWith(`${key}:`));
+  if (start < 0) return "";
+  const indent = lines[start]!.length - lines[start]!.trimStart().length;
+  const body: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line.trim() === "") continue;
+    if (line.length - line.trimStart().length <= indent) break;
+    body.push(line);
+  }
+  return body.join("\n");
+}
+
 test("a fastMode patch writes the key, null removes it, comments kept (DR-038)", async () => {
   const path = templateFile();
-  const before = readFileSync(path, "utf8");
-  // The template's dev.coder lane runs in fast mode under a comment
-  // that documents that very key.
-  assert.match(before, /dev\.coder:(?:\n\s+.*)*?\n\s+fastMode: true/);
-  const attached = comments(before).filter(
+  const seeded = readFileSync(path, "utf8");
+  // The starter ships no fastMode of its own — the adapter it seeds is
+  // chosen from what the machine has, so no per-adapter flag is assumed
+  // (PBCLI-11). The comment documenting the key still stands, and the
+  // edit under test is what puts a value under it.
+  assert.doesNotMatch(seeded, /^\s+fastMode:/m);
+  const attached = comments(seeded).filter(
     (comment) =>
       comment.startsWith("# Adapter-scoped fast mode") ||
       comment.startsWith("# omitting it takes the provider default"),
   );
   assert.equal(attached.length, 2);
 
-  // null removes the key; every comment but the two on it survives.
+  // Writing the key puts it in the lane it names.
+  const written = await editConfigFile(
+    path,
+    { kind: "player.set", playerId: "dev.coder", patch: { fastMode: true } },
+    stubLoader,
+  );
+  assert.ok(written.ok, written.error ?? "edit refused");
+  const before = readFileSync(path, "utf8");
+  assert.match(block(before, "dev.coder"), /\n\s+fastMode: true/);
+
+  // null removes it again, and every comment survives the round trip.
   const off = await editConfigFile(
     path,
     { kind: "player.set", playerId: "dev.coder", patch: { fastMode: null } },
@@ -335,11 +366,7 @@ test("a fastMode patch writes the key, null removes it, comments kept (DR-038)",
   assert.ok(off.ok, off.error ?? "edit refused");
   const afterOff = readFileSync(path, "utf8");
   assert.doesNotMatch(afterOff, /^\s+fastMode:/m);
-  const survivors = new Set(comments(afterOff));
-  for (const comment of comments(before)) {
-    if (attached.includes(comment)) continue;
-    assert.ok(survivors.has(comment), `lost comment: ${comment}`);
-  }
+  assertCommentsSurvive(before, afterOff);
 
   // true and false both write the key.
   const on = await editConfigFile(
@@ -355,8 +382,8 @@ test("a fastMode patch writes the key, null removes it, comments kept (DR-038)",
   );
   assert.ok(literalOff.ok, literalOff.error ?? "edit refused");
   const afterOn = readFileSync(path, "utf8");
-  assert.match(afterOn, /captain:(?:\n\s+.*)*?\n\s+fastMode: true/);
-  assert.match(afterOn, /dev\.reviewer:(?:\n\s+.*)*?\n\s+fastMode: false/);
+  assert.match(block(afterOn, "captain"), /\n\s+fastMode: true/);
+  assert.match(block(afterOn, "dev.reviewer"), /\n\s+fastMode: false/);
   assertCommentsSurvive(afterOff, afterOn);
 });
 

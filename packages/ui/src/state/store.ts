@@ -387,6 +387,13 @@ export interface AppState {
    * the delete reply both land here, idempotently. */
   forgetSession(sessionId: string, projectId: string): void;
   submitBossText(sessionId: string, text: string): Promise<void>;
+  /** run-view-129 / run-view-112: run one control the session already
+   * advertises as its next turn. */
+  submitSessionControl(
+    sessionId: string,
+    kind: "recovery" | "ending",
+    controlId: string,
+  ): Promise<void>;
   /** Re-pull the one ledger fold (DR-035). */
   loadLedger(): Promise<void>;
   /** Load (or extend, with `more`) a project's History page. */
@@ -1573,6 +1580,29 @@ export const useAppStore = create<AppState>((set, get) => {
             ? undefined
             : state.activeSessionId,
       });
+    },
+
+    async submitSessionControl(
+      sessionId: string,
+      kind: "recovery" | "ending",
+      controlId: string,
+    ): Promise<void> {
+      const state = get();
+      const session = state.sessions.find((s) => s.id === sessionId);
+      if (session?.externalWriter) throw new Error("Session ownership must be idle before sending a message.");
+      if (session?.recovery && !session.turnActive) {
+        throw new Error("Recover the interrupted turn before sending another message.");
+      }
+      try {
+        if (session && !session.live) await ensureSubscribed(sessionId);
+        await getClient().command("session.control", { sessionId, kind, controlId });
+      } catch (cause) {
+        const error = cause as { code?: string; message: string };
+        // A control turn is never queued: the control it names may not
+        // be advertised by the time a queued turn would run.
+        setRunError(sessionId, error.message);
+        throw cause;
+      }
     },
 
     async submitBossText(sessionId: string, text: string): Promise<void> {

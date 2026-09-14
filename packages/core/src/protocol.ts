@@ -190,6 +190,14 @@ export interface SessionInfo {
   turns: number;
   /** Whether the session carries a failure record. */
   failed: boolean;
+  /** core-service-98: what the session will accept right now — the
+   * recoveries its parked run advertises and the shell's own ending.
+   * Both empty while a turn is active or nothing is offered, so a
+   * client draws only controls the session would take. */
+  controls?: {
+    recovery: { id: string; label: string }[];
+    ending: { id: string; label: string }[];
+  };
   /** Recorded cost, when any usage carried one. */
   costUsd?: number;
   /** Set when a record could not be durably appended: the persisted
@@ -535,6 +543,15 @@ export const commandSchema = z.discriminatedUnion("type", [
      * starts no turn. */
     intentId: z.string().min(1).optional(),
   }),
+  /** core-service-98: one advertised control run as the session's next
+   * turn — a recovery the parked run offers, or the shell's own ending. */
+  z.object({
+    type: z.literal("session.control"),
+    id,
+    sessionId: z.string().min(1),
+    kind: z.enum(["recovery", "ending"]),
+    controlId: z.string().min(1),
+  }).strict(),
   z.object({ type: z.literal("turn.abort"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("subscribe"), id, channel: channelSchema }),
   z.object({ type: z.literal("unsubscribe"), id, channel: channelSchema }),
@@ -763,6 +780,7 @@ export interface CommandResults {
   "session.discard": { removed: boolean };
   "session.delete": null;
   "turn.submit": { accepted: true };
+  "session.control": { accepted: true };
   "turn.abort": { aborted: boolean };
   subscribe: null;
   unsubscribe: null;

@@ -379,6 +379,18 @@ export class SessionManager {
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
 
+  /** core-service-98: run one advertised control as the next turn. */
+  submitControl(sessionId: string, kind: "recovery" | "ending", controlId: string): void {
+    const entry = this.requireLive(sessionId);
+    if (entry.turnActive) throw new CoreError("busy", "a turn is already running in this session");
+    if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", "Recover the interrupted turn with Retry or Discard first");
+    const offered = this.listControls(sessionId)[kind];
+    if (!offered.some((control) => control.id === controlId)) {
+      throw new CoreError("invalid_request", "the session no longer offers that control");
+    }
+    this.startTurn(entry, undefined, false, { kind, controlId });
+  }
+
   submitTurn(sessionId: string, text: string, intentId?: string): void {
     const entry = this.requireLive(sessionId);
     if (entry.turnActive) throw new CoreError("busy", "a turn is already running in this session");
@@ -387,7 +399,7 @@ export class SessionManager {
     this.startTurn(entry, text, false);
   }
 
-  private startTurn(entry: LiveSession, text: string | undefined, retry: boolean): void {
+  private startTurn(entry: LiveSession, text: string | undefined, retry: boolean, control?: { kind: "recovery" | "ending"; controlId: string }): void {
     const owner = this.store.listSessionDispatches(entry.info.id).at(-1);
     entry.turnIntentId = retry && owner?.open ? owner.intentId : undefined;
     entry.turnActive = true;
@@ -396,7 +408,15 @@ export class SessionManager {
       let failed = false;
       try {
         if (retry) await entry.controller.retry();
-        else await entry.controller.handleBossTurn(text!);
+        else if (control) {
+          const controller = entry.controller as {
+            submitRuntimeAction(id: string): Promise<unknown>;
+            submitShellAction(id: string): Promise<unknown>;
+          };
+          await (control.kind === "recovery"
+            ? controller.submitRuntimeAction(control.controlId)
+            : controller.submitShellAction(control.controlId));
+        } else await entry.controller.handleBossTurn(text!);
       } catch (error) {
         failed = true;
         try { await this.appendError(entry, error instanceof Error ? error.message : String(error)); }
@@ -459,7 +479,35 @@ export class SessionManager {
   private publish(sessionId: string): void {
     const session = this.store.describeSession(sessionId);
     const entry = this.live.get(sessionId);
-    if (session) this.onSessionState({...session, ...(entry ? {externalWriter:undefined} : {}), live:!!entry, turnActive:entry?.turnActive ?? false});
+    if (session) this.onSessionState({...session, ...(entry ? {externalWriter:undefined} : {}), live:!!entry, turnActive:entry?.turnActive ?? false, controls:this.listControls(sessionId)});
+  }
+
+  /** core-service-98: what the session would accept as a control turn
+   * right now. Read live from the shell between turns and never stored,
+   * so a stale list cannot outlive what the run offers. */
+  listControls(sessionId: string): NonNullable<SessionInfo["controls"]> {
+    const empty = { recovery: [], ending: [] };
+    const entry = this.live.get(sessionId);
+    if (!entry || entry.turnActive) return empty;
+    const controller = entry.controller as {
+      listRuntimeActions?(): readonly { id: string; label: string }[];
+      listShellActions?(): readonly { id: string; label: string }[];
+    };
+    const read = (
+      list?: () => readonly { id: string; label: string }[],
+    ): { id: string; label: string }[] => {
+      try {
+        return [...(list?.() ?? [])].map(({ id, label }) => ({ id, label }));
+      } catch {
+        // An unreadable control view advertises nothing rather than
+        // failing the report every other pane depends on.
+        return [];
+      }
+    };
+    return {
+      recovery: read(controller.listRuntimeActions?.bind(controller)),
+      ending: read(controller.listShellActions?.bind(controller)),
+    };
   }
   private requireLive(sessionId: string): LiveSession {
     const entry = this.live.get(sessionId);
