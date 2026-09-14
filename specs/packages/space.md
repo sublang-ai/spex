@@ -25,11 +25,11 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | ahead / behind | commits on `main` not on the remote's `main` and the reverse, with the time of the last check; absent until a check has run |
 | last sync | the last completed sync's relative time with the absolute time in its title, or "Never synced" |
 | local changes | the count of local units [[space-7](#space-7)] |
-| issues | the count of storage diagnostics [[core-service-86](core-service.md#core-service-86)] plus a pending Git merge left by a terminal, opening the issues list in place |
+| issues | the count of unacknowledged repairs [[space-49](#space-49)] and of every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)], plus a pending Git merge left by a terminal, opening the issues list in place |
 | outside | each of the configuration file and the sessions directory lying outside the home [[storage-1](storage.md#storage-1)], named "outside the space; not shared" |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
-- the header ends with the primary control for the state — Initialize, Join, or Sync — and the Sync and Explore tabs stand beneath it.
+- the header ends with the primary control for the state — Set up space, or Sync — and the Sync and Explore tabs stand beneath it.
 
 #### space-2
 
@@ -39,23 +39,24 @@ The Space surface shall re-read the core's state only on an event, never on a ti
 
 #### space-3
 
-While the home is not the top level of a Git work tree, the Space surface shall offer Initialize for a new space and Join a space for an existing remote, one line of guidance each and one remote URL field serving both, and shall show no changes list:
+While the home is not the top level of a Git work tree, the Space surface shall offer one setup control over one required remote URL field, and shall show no changes list ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
 - a home lying inside another repository's work tree still reads "Not a repository yet"; only the home's own top level counts;
-- the guidance names what will sync — sessions, queues, projects, Settings, playbook sources — and what stays on this device [[space-25](#space-25)].
+- the guidance says that the remote is where the space will live, that an empty one is filled and an occupied one joined, and that nothing is contacted until the control is activated;
+- the guidance names what will sync — sessions, queues, projects, Settings, playbook sources — and what stays on this device [[space-25](#space-25)];
+- no control makes a repository without a remote, a space that cannot sync being able to record only its first commit [[space-12](#space-12)].
 
 #### space-4
 
-When the user activates Initialize, the core shall make the home a repository on `main` and record its first commit only from validated, token-free files [[storage-9](storage.md#storage-9)]:
+When a setup initializes the home [[space-6](#space-6)], the core shall make the home a repository on `main` and record its first commit only from validated, token-free files [[storage-9](storage.md#storage-9)]:
 
 1. validate the complete home [[storage-12](storage.md#storage-12)]; a blocking diagnostic or an incomplete migration receipt refuses, naming the file and reason, and creates nothing;
 2. `git init` on `main`, then write the managed rules [[storage-17](storage.md#storage-17)] with every unsupported session path ignored;
 3. stage the home and, where any staged path belongs to an ignored family of the catalog [[storage-1](storage.md#storage-1)], remove the new repository and refuse naming the path;
 4. commit, as "Spex" at the machine's host name where Git has no committer identity, saying so in the header.
 
-- a turn in flight refuses Initialize as it refuses Sync [[space-11](#space-11)];
-- the control reads "Initializing…" in flight, and the header then reads `main`, "No remote" and "Never synced";
-- a remote URL entered beside the control is set as `origin` after the commit [[space-5](#space-5)] with no transport.
+- a turn in flight refuses a setup as it refuses Sync [[space-11](#space-11)];
+- the remote is set as `origin` after the commit [[space-5](#space-5)] with no transport, the setup's own sync being the first contact.
 
 #### space-5
 
@@ -65,17 +66,75 @@ When the user saves a remote URL, or clears it, the core shall set or remove `or
 | --- | --- |
 | `ssh://…`, `git@host:path`, `https://…`, `http://…`, an absolute local path | set as `origin`, replacing any earlier one |
 | blank, or containing whitespace or control characters | refused as malformed |
-| embedding a password or token (`scheme://user:secret@host`) | refused naming the rule that the app stores no credential, pointing to SSH keys or the machine's credential helper |
+| embedding a credential in any form, whether or not it carries a colon (`scheme://user:secret@host`, `scheme://token@host`) | refused naming the rule that the app stores no credential, pointing to SSH keys or the machine's credential helper |
 
 - a changed remote clears the last check, so ahead and behind read as unknown until the next check;
 - the row edits in place with Save and Cancel, Escape cancelling, and the header's remote field follows the save ([DR-010](../decisions/010-interface-craft.md) §3).
 
 #### space-6
 
-When the user activates Join a space with a remote URL, the surface shall initialize the home [[space-4](#space-4)], set the remote [[space-5](#space-5)], and start a sync that joins unrelated histories [[space-13](#space-13)], the control reading "Joining…" until that sync ends:
+When the user activates Set up space with a remote URL, the surface shall initialize the home [[space-4](#space-4)], set the remote [[space-5](#space-5)], and start a sync that joins unrelated histories [[space-13](#space-13)], the control reading "Setting up…" until that sync ends ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
 - an empty URL field takes a required mark and focus instead;
-- a remote holding no `main` completes as a first push.
+- a remote holding no `main` completes as a first push;
+- a remote already holding a space is joined, each unit differing on both sides asked as a choice [[space-17](#space-17)];
+- a home that is already a repository is set up no second time, its remote added instead [[space-5](#space-5)].
+
+#### space-45
+
+While the home is a repository on `main` whose `origin` is set and whose remote has never been checked, the Sync tab shall stand a Join card above the changes list offering Join, the join being inert where the histories share an ancestor ([DR-063](../decisions/063-space-setup-and-repair.md)):
+
+- the card says that syncing sends what is here and brings back what is new, and that a remote already holding another space is joined into one, anything differing asked as a choice;
+- Join confirms inline with Cancel focused and Escape cancelling, then starts the joining sync of [[space-13](#space-13)];
+- the header's primary control stays Sync, the card never standing in its place;
+- the card goes after the first check or sync of that remote and returns when the remote changes, a changed remote clearing the last check [[space-5](#space-5)].
+
+### Repairs
+
+#### space-46
+
+When the core reports the home's diagnostics, it shall fold every diagnostic a folder on this device would repair into one repair each, carrying the facts the repair needs, and leave every other diagnostic unfolded [[core-service-86](core-service.md#core-service-86)] ([DR-063](../decisions/063-space-setup-and-repair.md)):
+
+| Repair | Raised by | Named by |
+| --- | --- | --- |
+| a project the space carries with no folder here | that project's identity holding no local binding [[storage-6](storage.md#storage-6)] | the project's registered name, never its identifier |
+| a folder the space records with no project here | a session manifest's working directory resolving to no binding | the recorded directory, with the count of sessions recorded there |
+
+- one project's repair resolves every session recorded under it, however many sessions raised it;
+- where exactly one unbound identity's name equals one recorded directory's last segment, the two are one repair, the pairing shown in its editor [[space-47](#space-47)] and never applied unshown;
+- a fault no folder repairs — a session working directory missing or invalid, a blocking diagnostic, a pending merge — folds into no repair and keeps its own row;
+- repairs stand before unfolded diagnostics, blocking ones first, then by session count descending, then by name, then by path, and no row reorders while an editor is open.
+
+#### space-47
+
+When the user activates Set folder on a repair, the Space surface shall open that row as an in-place editor over the project's folder on this device, saving through an identity-preserving rebind [[storage-6](storage.md#storage-6)] and creating no project ([DR-063](../decisions/063-space-setup-and-repair.md)):
+
+- the editor asks where the project is on this device, its field prefilled with the recorded directory and its text selected, Save and Cancel beside it and Escape cancelling as the remote row's editor does [[space-5](#space-5)];
+- an Open folder… control stands where the running deployment offers a directory picker, a deployment without one taking a typed path instead;
+- the editor says that the sessions recorded at that directory will join the project, and that where a project lives is recorded on this device alone and never syncs [[storage-1](storage.md#storage-1)];
+- a repair naming only a directory asks which project it is, listing the space's unbound projects and an entry that opens the palette to add a new one, Space creating no identity itself;
+- Save reads "Saving…" and rebinds the project to the chosen folder with the repair's recorded directories as aliases, so every session recorded under them resolves [[storage-6](storage.md#storage-6)];
+- a refusal shows in the row with the field kept and Save offered again, in plain words: a folder that is no work tree root, a folder already another project's, and a project whose turn is still running;
+- while any Space operation runs every Set folder is disabled saying the surface is busy, a rebind being refused then [[space-21](#space-21)].
+
+#### space-48
+
+When a repair's rebind succeeds, the Space surface shall replace that row in place with its outcome, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
+
+- the outcome names the project, the folder it now has and the count of sessions that resolved, and offers Open project, which is the only control here that leaves the surface;
+- the issues count falls [[space-1](#space-1)] and the live region says the project resolved and how many issues remain;
+- focus moves to the next repair's Set folder, or stays on Open project where none remains, the live region then saying every issue is resolved;
+- where the chosen folder differs from the recorded one, each later repair prefills that folder's parent joined to its own recorded last segment, labelled as taken from the folder just chosen and editable before Save;
+- the outcome stands until the reader's own re-read [[space-2](#space-2)], so no list reflows under the pointer.
+
+#### space-49
+
+While a repair's row has been shown in an open issues list, the Space surface shall hold that repair acknowledged for this device alone, an acknowledged repair standing in the list while counting as no issue [[space-1](#space-1)] ([DR-063](../decisions/063-space-setup-and-repair.md)):
+
+- acknowledgement is recorded in this device's preferences, which never sync [[storage-5](storage.md#storage-5)];
+- a repair counts until its row is shown, a count alone never acknowledging one;
+- a repair whose project or recorded directories change is another repair, and counts again;
+- a resolved repair leaves the list, its acknowledgement going with it.
 
 ### Changes
 
@@ -123,7 +182,7 @@ When the user activates Sync, the core shall admit it only while every condition
 
 | Condition | Refusal shown |
 | --- | --- |
-| the home is a Git work tree root | "Initialize the repository first" |
+| the home is a Git work tree root | "Set this space up first" |
 | `origin` is set | "Add a remote first", the remote row focused |
 | the current branch is `main` | "On <branch>; check out main in a terminal" |
 | no Git merge is pending from a terminal | "Finish or abort the merge in your terminal" |
@@ -172,8 +231,8 @@ When a sync or check step fails, the core shall stop leaving the home in the sta
 | --- | --- | --- | --- |
 | Save | a staged path of an ignored family, or validation refusing a file | index reset, no commit, files untouched | the path or file and reason; "Nothing was saved" |
 | Check, Push | host unreachable | commits stand | "Could not reach <host>"; check the network or the URL; Retry |
-| Check, Push | not authorized, or host key unknown | commits stand | "<host> did not accept this machine's key"; set up an SSH key or credential helper for this machine and accept the host key once in a terminal; the app never asks for a password; Retry |
-| Check, Push | repository not found | commits stand | "No repository at <URL>"; check the URL or create the repository |
+| Check, Push | not authorized, the host refusing with 401 or 403, or host key unknown | commits stand | "<host> did not accept this machine's key"; set up an SSH key or credential helper for this machine and accept the host key once in a terminal; the app never asks for a password; Retry |
+| Check, Push | the host answering that no repository is there, which it answers alike for one this machine may not see | commits stand | "No repository this machine can see at <URL>"; either nothing is there or it is private and this machine's identity cannot see it, the host not saying which; check the URL, then this machine's access, and Retry |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <host>"; Git runs without prompts, so a helper that prompts fails instead of hanging; Retry |
 | Compare | unrelated history | unchanged | Join [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation, a session lease held elsewhere, or a writer changing the tree twice | nothing written; the Save commit stands | the unit or session and reason; the picker stays with the unit marked; Retry |
@@ -181,11 +240,23 @@ When a sync or check step fails, the core shall stop leaving the home in the sta
 | Push | rejected as not fast-forward | merge committed, ahead shown | one automatic cycle from Check; a second rejection reads "The remote changed again"; Retry |
 | any | Git's own error otherwise | that step's row | Git's last lines; Retry |
 
+- a report naming a remote prints it with any embedded user removed [[space-1](#space-1)], and names the identity its form presents [[space-50](#space-50)];
 - the report stands until the next operation or Dismiss.
 
 #### space-16
 
 While a sync or check runs a transport step — Check or Push — the surface shall offer Stop, which ends the Git child and leaves that step's stopped state [[space-15](#space-15)]; Save, Compare, Apply and Refresh are bounded local steps and offer no Stop.
+
+#### space-50
+
+Where a failure report names a remote, the Space surface shall name the identity that remote's form presents, read from the URL and never from a probe or a second tool ([DR-064](../decisions/064-honest-remote-failure.md)):
+
+| Remote form | Identity named |
+| --- | --- |
+| `ssh://`, `git@host:path` | whichever key this machine offers, no credential helper and no GitHub CLI sign-in applying |
+| `https://`, `http://` on a GitHub host | whichever account this machine's credential helper presents, which for the GitHub CLI is its active account |
+| `https://`, `http://` elsewhere | whichever account this machine's credential helper presents for that host |
+| an absolute local path | no account, only the path and its permissions, an unreadable folder answering as a missing one does |
 
 ### Choices
 
@@ -305,7 +376,7 @@ The Space surface shall fit its pane at every width down to the 320-pixel floor 
 - below 42rem the header's at-a-glance words yield — the check and sync times, then the ahead and behind words, the numbers riding each field's accessible name and title — and below 20rem the header's fields stack with the primary control last and full-width;
 - in each change row the label owns the slack and truncates with its title, the project chip and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sync, Syncing…, Check remote, Checking…, Stop, Initialize, Initializing…, Join a space, Join, Joining…, Apply, Applying…, Cancel, Save, Add remote, Change remote, View diff, Hide diff, Keep mine, Take remote, All mine, All remote, Open session, Open palette, Show in Finder, Show in folder, Copy path, Refresh, Retry, Dismiss;
+- every control reads at most 14 characters, its busy form included: Sync, Syncing…, Check remote, Checking…, Stop, Set up space, Setting up…, Join, Joining…, Apply, Applying…, Cancel, Save, Saving…, Add remote, Change remote, Set folder, Open folder…, Open project, View diff, Hide diff, Keep mine, Take remote, All mine, All remote, Open session, Show in Finder, Show in folder, Copy path, Refresh, Retry, Dismiss;
 - the surface scrolls inside its own box and the page never scrolls.
 
 ## Internal Behavior
@@ -485,7 +556,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 When an integration suite runs two real cores on two scratch homes sharing one bare remote, the second home initialized with its own configuration and session, it shall assert the sync loop:
 
 - the second home's first sync ends `unrelated`, a join ends in choices with the Settings unit as the one conflict and both sides summarized, "Keep mine" leaves this home's file while "Take remote" replaces it, and both homes' sessions are present afterwards [[space-13](#space-13)] [[space-14](#space-14)] [[space-17](#space-17)];
-- a session run on home A lists on home B after B syncs, its history served, the ledger announced, and B's issues naming its unresolved working directory until B binds the project [[space-20](#space-20)] [[space-1](#space-1)];
+- a session run on home A lists on home B after B syncs, its history served, the ledger announced, and B's issues standing one repair for that project however many of its sessions arrived, which one rebind resolves for every one of them, the project keeping the identity the space carries [[space-20](#space-20)] [[space-46](#space-46)] [[space-47](#space-47)];
 - both homes changing the same session yields one conflict whose remote choice replaces both bundle files, clears the planted hints file and the `viewed:` marker, and publishes history-replaced before the summary; a delete-versus-modify row deletes both files when the deleting side is chosen [[space-17](#space-17)] [[space-19](#space-19)] [[space-20](#space-20)];
 - a playbook source changed differently on both sides is one whole-directory conflict and no conflict marker or `MERGE_HEAD` ever appears in either home [[space-19](#space-19)] [[space-33](#space-33)];
 - a chosen unit that fails validation stops at Apply naming the file with every home file byte-identical to before [[space-15](#space-15)];
@@ -503,14 +574,34 @@ When an integration suite writes local changes of every unit kind into a reposit
 - after a peer pushes, `space.fetch` lists the incoming units the same way with conflicts marked and ahead and behind counted, an empty remote reads empty, and `space.diff` returns a patch for Settings on each side and refuses a session unit [[space-8](#space-8)] [[space-10](#space-10)];
 - `space.tree` maps every catalog path to its family and sharing mark with session and project owners, reports `.git` closed and a stray file as not a Spex file, and neither follows nor lists through a planted symlink; `space.read` pretty-prints JSON, returns YAML, Markdown and JSONL text, cuts a long log on a line, withholds a hints file and a migration input, and refuses `../` [[space-23](#space-23)] [[space-24](#space-24)] [[space-35](#space-35)].
 
+#### space-51
+
+When an integration suite reports diagnostics on a home carrying a project with no local binding and sessions recorded under its directory, it shall assert the repair contract:
+
+- the diagnostics fold to one repair naming the project by its registered name and never by its identifier, carrying the recorded directory and the count of sessions there [[space-46](#space-46)];
+- a session working directory that is missing or invalid folds into no repair and keeps its own row [[space-46](#space-46)];
+- a rebind to a chosen folder, carrying the repair's recorded directories as aliases, resolves the project and every session recorded under them while the identity the space carries is unchanged [[space-47](#space-47)];
+- a rebind refused because the folder is no work tree root, because the folder is another project's, or because that project's turn is running leaves the repair standing with its reason [[space-47](#space-47)];
+- a rebind is refused while a Space operation runs [[space-47](#space-47)];
+- the acknowledgement of a shown repair is written to this device's preferences and to no tracked file, and a repair whose recorded directories change counts again [[space-49](#space-49)].
+
+#### space-52
+
+When an integration suite fails a transport against a path holding no repository, and against a host answering 401 or 403, it shall assert the report:
+
+- the unreadable path reports that no repository is one this machine can see, names both causes and claims neither, and offers Retry [[space-15](#space-15)];
+- a refused host classifies as unauthorized rather than falling through to the tool's own words [[space-15](#space-15)];
+- a report naming a remote prints no embedded user, and a URL carrying a credential in any form is refused before it is stored [[space-5](#space-5)] [[space-15](#space-15)];
+- the report names the identity the remote's form presents, an SSH remote naming a key and an HTTPS remote a credential helper [[space-50](#space-50)].
+
 ### Browser Journeys
 
 #### space-40
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on an empty home with its configuration inside it and a bare repository in the scratch root, the test suite shall assert the first-time setup through the page alone:
 
-- Space reads "Not a repository yet" with Initialize and Join a space; Initialize reads "Initializing…", then the header reads `main`, "No remote" and "Never synced" [[space-3](#space-3)] [[space-4](#space-4)];
-- Add remote, the bare path and Save show the remote; Sync reads "Syncing…", the step line names each step, and the line ends "Everything is in sync" with a sync time [[space-5](#space-5)] [[space-12](#space-12)];
+- Space reads "Not a repository yet" with one setup control over a remote field, activating it empty marks the field required rather than making a repository, and the bare path then reads "Setting up…" before the header reads `main`, the remote, and a sync time [[space-3](#space-3)] [[space-4](#space-4)] [[space-6](#space-6)];
+- Sync reads "Syncing…", the step line names each step, and the line ends "Everything is in sync" with a sync time [[space-12](#space-12)];
 - a session then run from the Captain home appears under local changes by its title and project, its Open session control opens its tab, and Sync sends it, the bare `main` holding its bundle [[space-7](#space-7)] [[space-12](#space-12)];
 - an intent queued while Space is shown lists under local changes with Refresh never activated, and Refresh's caption reads the time of the read [[space-2](#space-2)].
 
@@ -540,6 +631,16 @@ Where the harness boots the served shell with a repository home carrying local c
 #### space-44
 
 Where the harness boots the served shell with a repository home whose check ended in choices, when the Space surface is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation, with the picker's radio groups, the tree and the tabs named for assistive technology [[space-17](#space-17)] [[space-23](#space-23)].
+
+#### space-53
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a home joined to a remote carrying a project this device has no folder for, the test suite shall assert the repair through the page alone:
+
+- the issues list stands one repair per project, its control reading "Set folder" [[space-46](#space-46)] [[space-28](#space-28)];
+- activating it opens the row in place with the recorded path prefilled, and Save resolves the repair without leaving Space [[space-47](#space-47)] [[space-48](#space-48)];
+- the outcome stands in the row offering Open project, the issues count falls, and focus moves to the next repair [[space-48](#space-48)];
+- reloading the page leaves an unresolved repair listed and out of the issues count, having been shown [[space-49](#space-49)];
+- a repository home whose remote has never been checked shows the Join card above the changes list with Sync still the header's control [[space-45](#space-45)].
 
 #### space-36
 

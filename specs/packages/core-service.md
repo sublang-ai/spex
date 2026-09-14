@@ -157,9 +157,11 @@ When a client sends `project.rebind` with `projectId`, local `path`, optional re
 
 #### core-service-86
 
-When a client sends `storage.diagnostics`, the core shall report each unresolved binding or invalid stored file as `{file, reason, blocking}`, preserving the data and distinguishing history-only limitations from write-blocking damage [[storage-12](storage.md#storage-12)]:
+When a client sends `storage.diagnostics`, the core shall report each unresolved binding or invalid stored file as `{file, reason, blocking}`, carrying the repair a local folder would make where one would, preserving the data and distinguishing history-only limitations from write-blocking damage [[storage-12](storage.md#storage-12)] ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
-- after verified migration, damaged application or session files do not refuse startup; affected commands return `invalid_request` with the failing file and reason, while unrelated operations remain available.
+- after verified migration, damaged application or session files do not refuse startup; affected commands return `invalid_request` with the failing file and reason, while unrelated operations remain available;
+- a diagnostic a local folder would repair carries that repair's own facts — the project it names with that project's registered name, the working directories recorded for it, and how many sessions record them — so a client offers the repair from the data rather than from the reason's wording;
+- a diagnostic no local folder repairs carries none, and a project is named by its registered name rather than by its identifier wherever a repair names it.
 
 ### Boss Turns
 

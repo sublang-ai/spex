@@ -6,6 +6,9 @@
 ## Status
 
 Accepted (2026-09-12) on the owner's mandate to manage the Spex home from the app.
+Amended by [DR-063](063-space-setup-and-repair.md): a space is set up by naming its remote, in place of Initialize, Join a space, and a remote optional to both; the clause sending an unbound project to the project palette is superseded, that palette path creating an identity rather than rebinding one; and the issues list folds into repairs.
+Every other duty, prohibition and sync rule of this record stands.
+Amended by [DR-064](064-honest-remote-failure.md): a transport failure names the identity mechanism the remote's form presents and claims no cause the host's answer does not support; this record's rule that the app prompts for and stores no credential stands, and its refusal of a credential-bearing URL is enforced for every form.
 Amends ([DR-046](046-decision-record-evolution.md)):
 
 - [DR-045](045-unified-session-storage.md) §Git synchronization: the app syncs one shared branch `main`, the core performs every Git operation under the home lease it holds and between Boss turns, and a home joining an existing remote compares against the empty tree; per-device branches and the stop-the-core rule remain the command-line path.

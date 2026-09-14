@@ -88,6 +88,8 @@ meta.md       The spec of specs
 | [DR-060](decisions/060-failed-workflow-control.md) | 060-failed-workflow-control.md | A control for a failed workflow: a standing notice with one Retry between pane and composer, submitting one canonical visible Boss turn until Playbook advertises its runtime recovery actions to hosts |
 | [DR-061](decisions/061-run-state-from-frames.md) | 061-run-state-from-frames.md | A leaf run's state read from its own machine frames: the chip's failure tone and the interface's failure attention leave the session's shared state scalar |
 | [DR-062](decisions/062-ending-a-failed-workflow.md) | 062-ending-a-failed-workflow.md | Ending a failed workflow: Drop beside a now-deterministic Retry, the run ended through Playbook's model-free give-up, and a parked failure summoning until its run leaves that state |
+| [DR-063](decisions/063-space-setup-and-repair.md) | 063-space-setup-and-repair.md | Space sets up by naming a remote and repairs a project's folder in place, preserving identity; folded repairs acknowledged per device |
+| [DR-064](decisions/064-honest-remote-failure.md) | 064-honest-remote-failure.md | A remote failure claims only what the host said: both causes named, retryable, the identity mechanism read from the URL, every credential form refused |
 
 ## Packages
 
@@ -110,5 +112,5 @@ meta.md       The spec of specs
 | [storage.md](packages/storage.md) | Spex home catalog, file encodings, local project bindings, migration and Git selection |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |
-| [space.md](packages/space.md) | Space: home header, Initialize/Join/remote, local and incoming units with human labels, core-driven sync machine with per-unit picker, privacy panel, read-only annotated explorer |
+| [space.md](packages/space.md) | Space: home header, setup by remote, folded project repairs acknowledged per device, local and incoming units with human labels, core-driven sync machine with per-unit picker, privacy panel, read-only annotated explorer |
 | [spec-view.md](packages/spec-view.md) | Spec view: package tree, filters + search, citation jumps, records reader, whole-file editor with digest-token saves; specs.get/specs.read/specs.write contract for the packages layout |
