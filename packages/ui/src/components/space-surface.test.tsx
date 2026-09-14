@@ -669,15 +669,15 @@ describe("SPACE: syncing (space-11, space-12, space-15, space-16)", () => {
           op: "sync",
           step: "push",
           cause: "unauthorized",
-          message: "github.com did not accept this machine's key",
-          guidance: "Set up an SSH key or credential helper for this machine and accept the host key once in a terminal; the app never asks for a password.",
+          message: "github.com refused this machine's access",
+          guidance: "Add this machine's SSH key to an account that can see it; on a first connection, accept the host key in a terminal. Then Retry.",
           retry: true,
         },
       }),
     );
     const card = screen.getByTestId("space-stopped");
-    expect(screen.getByTestId("space-stopped-title").textContent).toBe("Push stopped — github.com did not accept this machine's key");
-    expect(card.textContent).toContain("never asks for a password");
+    expect(screen.getByTestId("space-stopped-title").textContent).toBe("Push stopped — github.com refused this machine's access");
+    expect(card.textContent).toContain("accept the host key in a terminal");
     expect(card.textContent).toContain("saved locally (3 commits ahead)");
     expect(live()).toContain("Push stopped");
     expect(screen.getByTestId("space-status-dot").getAttribute("data-tone")).toBe("stopped");

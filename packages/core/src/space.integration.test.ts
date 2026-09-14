@@ -982,8 +982,10 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   // the report names both causes, claims neither, and keeps Retry.
   await expectStop(join(scratch, "nonexistent", "path"), "not-found", /No repository this machine can see at/, true);
   const localStop = await home.client.expectOk("space.get", {});
+  // space-50: the act that gives access is the remote form's, named in
+  // the guidance itself — a local path has a folder to read, no account.
   assert.ok(
-    localStop.sync.phase === "stopped" && /must exist and be readable by you/.test(localStop.sync.identity ?? ""),
+    localStop.sync.phase === "stopped" && /Check the path,.*make sure this user can read the folder/.test(localStop.sync.guidance),
     JSON.stringify(localStop.sync),
   );
   const start = Date.now();
@@ -1005,11 +1007,12 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
     await plain.client.expectError("space.remote.set", { url }, "invalid_request", /stores no credential/);
   }
   // An SSH form's user is the transport's own, not a credential; a
-  // network failure turns on no identity, so it names none (space-50).
+  // network failure turns on no identity, so its guidance names no act
+  // of access (space-50).
   await plain.client.expectOk("space.remote.set", { url: "ssh://git@127.0.0.1:1/x" });
   const sshStop = await plain.client.settle("space.fetch", {});
   assert.ok(sshStop.sync.phase === "stopped" && sshStop.sync.cause === "unreachable", JSON.stringify(sshStop.sync));
-  assert.equal(sshStop.sync.phase === "stopped" ? sshStop.sync.identity : "unset", undefined);
+  assert.ok(!/SSH key|gh auth|sign this machine in/.test(sshStop.sync.phase === "stopped" ? sshStop.sync.guidance : ""), JSON.stringify(sshStop.sync));
 });
 
 // ---------------------------------------------------------------------------

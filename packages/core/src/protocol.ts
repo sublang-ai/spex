@@ -1132,8 +1132,6 @@ export type SpaceSyncPhase =
       message: string;
       guidance: string;
       retry: boolean;
-      /** Which identity the remote's form presents (space-50). */
-      identity?: string;
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 

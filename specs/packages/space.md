@@ -231,8 +231,8 @@ When a sync or check step fails, the core shall stop leaving the home in the sta
 | --- | --- | --- | --- |
 | Save | a staged path of an ignored family, or validation refusing a file | index reset, no commit, files untouched | the path or file and reason; "Nothing was saved" |
 | Check, Push | host unreachable | commits stand | "Could not reach <host>"; check the network or the URL; Retry |
-| Check, Push | not authorized, the host refusing with 401 or 403, or host key unknown | commits stand | "<host> did not accept this machine's key"; set up an SSH key or credential helper for this machine and accept the host key once in a terminal; the app never asks for a password; Retry |
-| Check, Push | the host answering that no repository is there, which it answers alike for one this machine may not see | commits stand | "No repository this machine can see at <URL>"; check the URL, create the repository if it is not there yet, or give this machine access if it is private; Retry |
+| Check, Push | not authorized, the host refusing with 401 or 403, or host key unknown | commits stand | "<host> refused this machine's access"; the act that gives it [[space-50](#space-50)], an SSH form adding that a first connection accepts the host key in a terminal; Retry |
+| Check, Push | the host answering that no repository is there, which it answers alike for one this machine may not see | commits stand | "No repository this machine can see at <URL>"; check the URL — the path for a local remote — create the repository if it is not there yet, or the act that gives this machine access [[space-50](#space-50)]; Retry |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <host>"; Git runs without prompts, so a helper that prompts fails instead of hanging; Retry |
 | Compare | unrelated history | unchanged | Join [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation, a session lease held elsewhere, or a writer changing the tree twice | nothing written; the Save commit stands | the unit or session and reason; the picker stays with the unit marked; Retry |
@@ -249,16 +249,17 @@ While a sync or check runs a transport step — Check or Push — the surface sh
 
 #### space-50
 
-Where a failure could turn on which identity this machine presented — the host answering that no repository is there, or refusing authorization [[space-15](#space-15)] — the Space surface shall name the identity that remote's form presents, read from the URL and never from a probe or a second tool ([DR-064](../decisions/064-honest-remote-failure.md)):
+Where a failure could turn on which identity this machine presented — the host answering that no repository is there, or refusing authorization [[space-15](#space-15)] — the core shall name in that failure's guidance the act giving this machine access, the remote's own form saying which act, read from the URL and never from a probe or a second tool ([DR-064](../decisions/064-honest-remote-failure.md)):
 
-| Remote form | Identity named |
+| Remote form | Act named |
 | --- | --- |
-| `ssh://`, `git@host:path` | this machine's SSH key rather than a signed-in account, that key having to sit on an account that can see the repository, added in the host's SSH keys settings |
-| `https://`, `http://` on a GitHub host | the GitHub account this machine signs in as, `gh auth status` showing which and `gh auth login` switching it |
-| `https://`, `http://` elsewhere | the account this machine signs in as at that host, being the sign-in Git has saved for it |
-| an absolute local path | no account, the folder having to exist and be readable by this user, an unreadable one answering as a missing one does |
+| `ssh://`, `git@host:path` | add this machine's SSH key to an account that can see it |
+| `https://`, `http://` on a GitHub host | in a terminal run `gh auth status` to see which GitHub account this machine uses and `gh auth login` to change it |
+| `https://`, `http://` elsewhere | sign this machine in at that host as an account that can see it |
+| an absolute local path | make sure this user can read the folder |
 
-- a named command is the reader's to run in a terminal: the app runs none.
+- a named command is the reader's to run: the app runs none;
+- no other stopped step names an act of access, a failure turning on no identity naming none.
 
 ### Choices
 

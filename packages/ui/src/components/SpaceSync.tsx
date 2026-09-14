@@ -1004,14 +1004,9 @@ export function SyncTab({
           <span className="font-medium" data-testid="space-stopped-title">
             {STEP_NAMES[sync.step]} stopped — {sync.message}
           </span>
+          {/* One block: the guidance names the act that gives access,
+              this remote's form saying which (space-50). */}
           {sync.guidance ? <span className="text-xs">{sync.guidance}</span> : null}
-          {/* Which identity this remote's form presents (space-50): read
-              from the URL, so it stands without asking anything. */}
-          {sync.identity ? (
-            <span className="text-xs text-neutral-500" data-testid="space-stopped-identity">
-              {sync.identity}
-            </span>
-          ) : null}
           {sync.step === "push" && (repo.ahead ?? 0) > 0 ? (
             <span className="text-xs">
               Your changes are saved locally ({plural(repo.ahead ?? 0, "commit")} ahead).

@@ -52,9 +52,6 @@ export interface GitFailure {
   message: string;
   guidance: string;
   retry: boolean;
-  /** Which identity the remote's own form presents (space-50): read
-   * from the URL, never from a probe or a second tool. */
-  identity?: string;
 }
 
 export const DEFAULT_TRANSPORT_TIMEOUT_MS = 120_000;
@@ -80,22 +77,27 @@ export function remoteHost(url: string | null): string {
   return url;
 }
 
-/** Which identity a remote's form presents (space-50), read from the
- * URL alone: no probe answers the question the transport already did. */
-export function remoteIdentity(remote: string | null): string | undefined {
-  if (!remote) return undefined;
-  if (/^\//.test(remote) || /^file:\/\//i.test(remote)) {
-    return "A local remote has no account: the folder must exist and be readable by you — an unreadable one answers exactly like a missing one.";
-  }
+/** What gives this machine access to a remote (space-50), read from the
+ * URL alone: the act the reader performs, with the command where one
+ * serves it — the app runs none, and no probe answers what the
+ * transport already did. */
+export function remoteAccess(remote: string | null): string {
+  if (!remote) return "give this machine access to it";
+  if (/^\//.test(remote) || /^file:\/\//i.test(remote)) return "make sure this user can read the folder";
   if (/^https?:\/\//i.test(remote)) {
     return /^https?:\/\/(?:[^/@]*@)?(?:[^/:]*\.)?github\.com(?:[:/]|$)/i.test(remote)
-      ? "A private repository is visible only to the GitHub account this machine signs in as. In a terminal: gh auth status shows which, gh auth login switches it."
-      : "A private repository is visible only to the account this machine signs in as at that host — the sign-in Git has saved for it, nothing in this app.";
+      ? "in a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it"
+      : "sign this machine in at that host as an account that can see it";
   }
   if (/^ssh:\/\//i.test(remote) || /^[^@/:\s]+@[^/:\s]+:/.test(remote)) {
-    return "Over SSH access comes from this machine's SSH key, not from a signed-in account: that key must sit on an account that can see the repository. Add it in the host's SSH keys settings.";
+    return "add this machine's SSH key to an account that can see it";
   }
-  return undefined;
+  return "give this machine access to it";
+}
+
+/** An SSH form, which alone can stop on an unknown host key. */
+function isSsh(remote: string | null): boolean {
+  return remote !== null && (/^ssh:\/\//i.test(remote) || /^[^@/:\s]+@[^/:\s]+:/.test(remote));
 }
 
 /** The remote URL as the reader set it, with an `http(s)` user removed
@@ -142,25 +144,26 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
     return { cause: "unreachable", message: `Could not reach ${host}`, guidance: "Check the network or the remote URL, then try again.", retry: true };
   }
   if (/Permission denied|Authentication failed|could not read Username|terminal prompts disabled|Host key verification failed|returned error: 40[13]|HTTP (?:401|403)/i.test(text)) {
+    // The act that gives access is the remote form's (space-50), and an
+    // SSH form alone can stop on a host key it has never seen.
+    const act = remoteAccess(remote);
     return {
       cause: "unauthorized",
-      message: `${host} did not accept this machine's key`,
-      guidance: "Set up an SSH key or credential helper for this machine and accept the host key once in a terminal; the app never asks for a password.",
+      message: `${host} refused this machine's access`,
+      guidance: `${act[0].toUpperCase()}${act.slice(1)}${isSsh(remote) ? "; on a first connection, accept the host key in a terminal" : ""}. Then Retry.`,
       retry: true,
-      ...(remoteIdentity(remote) ? { identity: remoteIdentity(remote) } : {}),
     };
   }
   if (/Repository not found|does not appear to be a git repository|repository '[^']*' not found/i.test(text)) {
     // The host answers alike for a repository that is absent and for a
     // private one this machine may not see (space-15), so the guidance is
     // the remedies for both — every one outside the app, hence Retry —
-    // and the identity line says what access means here (space-50).
+    // the access one named as this remote's form gives it (space-50).
     return {
       cause: "not-found",
       message: `No repository this machine can see at ${remote ? displayRemote(remote) : host}`,
-      guidance: "Check the URL, create the repository if it is not there yet, or give this machine access if it is private. Then Retry.",
+      guidance: `Check the ${remote && /^\//.test(remote) ? "path" : "URL"}, create the repository if it is not there yet, or ${remoteAccess(remote)}. Then Retry.`,
       retry: true,
-      ...(remoteIdentity(remote) ? { identity: remoteIdentity(remote) } : {}),
     };
   }
   if (/\[rejected\]|non-fast-forward|fetch first/i.test(text)) {
