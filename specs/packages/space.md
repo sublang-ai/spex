@@ -21,7 +21,7 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | --- | --- |
 | path | the home's absolute path, `~`-shortened under the user's home directory, the full path in its title |
 | repository | "Not a repository yet", or the current branch — marked unsupported when it is not `main` |
-| remote | the `origin` URL with any embedded user removed, or "No remote" |
+| remote | the `origin` URL as set, an `http(s)` user removed and an SSH form's own user kept [[space-5](#space-5)], or "No remote" |
 | ahead / behind | commits on `main` not on the remote's `main` and the reverse, with the time of the last check; absent until a check has run |
 | last sync | the last completed sync's relative time with the absolute time in its title, or "Never synced" |
 | local changes | the count of local units [[space-7](#space-7)] |
@@ -232,7 +232,7 @@ When a sync or check step fails, the core shall stop leaving the home in the sta
 | Save | a staged path of an ignored family, or validation refusing a file | index reset, no commit, files untouched | the path or file and reason; "Nothing was saved" |
 | Check, Push | host unreachable | commits stand | "Could not reach <host>"; check the network or the URL; Retry |
 | Check, Push | not authorized, the host refusing with 401 or 403, or host key unknown | commits stand | "<host> did not accept this machine's key"; set up an SSH key or credential helper for this machine and accept the host key once in a terminal; the app never asks for a password; Retry |
-| Check, Push | the host answering that no repository is there, which it answers alike for one this machine may not see | commits stand | "No repository this machine can see at <URL>"; either nothing is there or it is private and this machine's identity cannot see it, the host not saying which; check the URL, then this machine's access, and Retry |
+| Check, Push | the host answering that no repository is there, which it answers alike for one this machine may not see | commits stand | "No repository this machine can see at <URL>"; check the URL, create the repository if it is not there yet, or give this machine access if it is private — the host answering alike for all of these; Retry |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <host>"; Git runs without prompts, so a helper that prompts fails instead of hanging; Retry |
 | Compare | unrelated history | unchanged | Join [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation, a session lease held elsewhere, or a writer changing the tree twice | nothing written; the Save commit stands | the unit or session and reason; the picker stays with the unit marked; Retry |
@@ -240,7 +240,7 @@ When a sync or check step fails, the core shall stop leaving the home in the sta
 | Push | rejected as not fast-forward | merge committed, ahead shown | one automatic cycle from Check; a second rejection reads "The remote changed again"; Retry |
 | any | Git's own error otherwise | that step's row | Git's last lines; Retry |
 
-- a report naming a remote prints it with any embedded user removed [[space-1](#space-1)], and names the identity its form presents [[space-50](#space-50)];
+- a report naming a remote prints it as the header does [[space-1](#space-1)], and names the identity its form presents [[space-50](#space-50)];
 - the report stands until the next operation or Dismiss.
 
 #### space-16
@@ -253,10 +253,12 @@ Where a failure could turn on which identity this machine presented — the host
 
 | Remote form | Identity named |
 | --- | --- |
-| `ssh://`, `git@host:path` | whichever key this machine offers, no credential helper and no GitHub CLI sign-in applying |
-| `https://`, `http://` on a GitHub host | whichever account this machine's credential helper presents, which for the GitHub CLI is its active account |
-| `https://`, `http://` elsewhere | whichever account this machine's credential helper presents for that host |
-| an absolute local path | no account, only the path and its permissions, an unreadable folder answering as a missing one does |
+| `ssh://`, `git@host:path` | the key this machine offers, the account that may see the repository having to carry it, no credential helper and no GitHub CLI sign-in applying |
+| `https://`, `http://` on a GitHub host | the account this machine's credential helper holds, with the GitHub CLI as that helper naming it by `gh auth status` and changing it by `gh auth login` |
+| `https://`, `http://` elsewhere | whichever account this machine's credential helper holds for that host |
+| an absolute local path | no account, only the path to exist and this user to be able to read it, an unreadable folder answering as a missing one does |
+
+- a named command is the reader's to run: the app runs none.
 
 ### Choices
 

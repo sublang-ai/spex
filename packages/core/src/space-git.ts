@@ -85,22 +85,24 @@ export function remoteHost(url: string | null): string {
 export function remoteIdentity(remote: string | null): string | undefined {
   if (!remote) return undefined;
   if (/^\//.test(remote) || /^file:\/\//i.test(remote)) {
-    return "A local remote has no account — only the path and its permissions; a repository behind an unreadable folder answers exactly like a missing one.";
+    return "A local remote has no account — check that the path exists and this user can read it; an unreadable folder answers exactly like a missing one.";
   }
   if (/^https?:\/\//i.test(remote)) {
     return /^https?:\/\/(?:[^/@]*@)?(?:[^/:]*\.)?github\.com(?:[:/]|$)/i.test(remote)
-      ? "Over HTTPS the account is whichever one this machine's credential helper presents — with the GitHub CLI as the helper, that is its active account."
-      : "Over HTTPS the account is whichever one this machine's credential helper presents for that host.";
+      ? "Over HTTPS this machine presents its credential helper's account — with the GitHub CLI as the helper, gh auth status names it and gh auth login changes it."
+      : "Over HTTPS this machine presents whichever account its credential helper holds for that host.";
   }
   if (/^ssh:\/\//i.test(remote) || /^[^@/:\s]+@[^/:\s]+:/.test(remote)) {
-    return "Over SSH the account is whichever key this machine offers; no credential helper and no GitHub CLI sign-in applies.";
+    return "Over SSH this machine presents a key, not an account — the account that may see the repository must carry that key; no credential helper or GitHub CLI sign-in applies.";
   }
   return undefined;
 }
 
-/** The remote URL with any embedded user removed (space-1). */
+/** The remote URL as the reader set it, with an `http(s)` user removed
+ * (space-1): an SSH form's user is the transport's own (space-5), so it
+ * stays and the printed URL is the one the reader can compare and fix. */
 export function displayRemote(url: string): string {
-  return url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, "$1").replace(/^[^@/:\s]+@([^/:\s]+):/, "$1:");
+  return url.replace(/^(https?:\/\/)[^/@]*@/i, "$1");
 }
 
 /** Validate a remote URL per space-5: the accepted forms, no
@@ -150,12 +152,13 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
   }
   if (/Repository not found|does not appear to be a git repository|repository '[^']*' not found/i.test(text)) {
     // The host answers alike for a repository that is absent and for a
-    // private one this machine may not see (space-15): name both, claim
-    // neither, and keep Retry — every remedy is outside the app.
+    // private one this machine may not see (space-15): so the guidance
+    // leads with the remedies — every one outside the app — and keeps
+    // Retry, the identity line naming how access is presented (space-50).
     return {
       cause: "not-found",
       message: `No repository this machine can see at ${remote ? displayRemote(remote) : host}`,
-      guidance: "Either nothing is there, or it is private and this machine's identity cannot see it — the host did not say which. Check the URL, then this machine's access for that remote, and Retry.",
+      guidance: "Check the URL, create the repository if it is not there yet, or give this machine access if it is private — the host answers alike for all of these. Then Retry.",
       retry: true,
       ...(remoteIdentity(remote) ? { identity: remoteIdentity(remote) } : {}),
     };

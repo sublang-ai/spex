@@ -339,7 +339,7 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     );
     expect(screen.getByTestId("space-repository").textContent).toContain("main");
     expect(screen.getByTestId("space-repository").textContent).toContain("committed as Spex");
-    expect(screen.getByTestId("space-remote-url").textContent).toBe("github.com:jane/spex-space.git");
+    expect(screen.getByTestId("space-remote-url").textContent).toBe("git@github.com:jane/spex-space.git");
     expect(screen.getByRole("button", { name: "Change remote" })).toBeTruthy();
     const counts = screen.getByTestId("space-ahead-behind");
     expect(counts.textContent).toContain("2");
@@ -451,7 +451,7 @@ describe("SPACE: setting up (space-3..6)", () => {
     await waitFor(() => expect(screen.getByTestId("space-repository").textContent).toContain("main"));
     expect(calls("space.init")).toEqual([{ remote: "git@github.com:jane/spex-space.git" }]);
     // The reply is the new state: the header reads main, the remote and Never synced (space-4).
-    expect(screen.getByTestId("space-remote-url").textContent).toBe("github.com:jane/spex-space.git");
+    expect(screen.getByTestId("space-remote-url").textContent).toBe("git@github.com:jane/spex-space.git");
     expect(screen.getByTestId("space-last-sync").textContent).toContain("Never synced");
   });
 

@@ -21,15 +21,13 @@ export function tildify(path: string): string {
   return path.replace(/^(\/Users\/[^/]+|\/home\/[^/]+)(?=\/|$)/, "~");
 }
 
-/** The `origin` URL with any embedded user removed (space-1): a
- * `scheme://user@host/…` loses its user part, a `git@host:path`
- * reads `host:path`; anything else is shown as stored. */
+/** The `origin` URL as set, with an `http(s)` user removed (space-1):
+ * `https://user@host/…` loses its user part, while an SSH form's user is
+ * the transport's own (space-5) and stays, so the URL reads back as the
+ * one to compare and fix; anything else is shown as stored. */
 export function displayRemote(url: string): string {
-  const scheme = /^([a-z][a-z0-9+.-]*:\/\/)([^/@]*@)(.*)$/i.exec(url);
-  if (scheme) return `${scheme[1]}${scheme[3]}`;
-  const scp = /^([^@/:]+)@([^:/]+:.*)$/.exec(url);
-  if (scp) return scp[2];
-  return url;
+  const embedded = /^(https?:\/\/)([^/@]*@)(.*)$/i.exec(url);
+  return embedded ? `${embedded[1]}${embedded[3]}` : url;
 }
 
 /** The kinds in the order the lists group them (space-7). */
