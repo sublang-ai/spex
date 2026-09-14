@@ -85,15 +85,15 @@ export function remoteHost(url: string | null): string {
 export function remoteIdentity(remote: string | null): string | undefined {
   if (!remote) return undefined;
   if (/^\//.test(remote) || /^file:\/\//i.test(remote)) {
-    return "A local remote has no account — check that the path exists and this user can read it; an unreadable folder answers exactly like a missing one.";
+    return "A local remote has no account: the folder must exist and be readable by you — an unreadable one answers exactly like a missing one.";
   }
   if (/^https?:\/\//i.test(remote)) {
     return /^https?:\/\/(?:[^/@]*@)?(?:[^/:]*\.)?github\.com(?:[:/]|$)/i.test(remote)
-      ? "Over HTTPS this machine presents its credential helper's account — with the GitHub CLI as the helper, gh auth status names it and gh auth login changes it."
-      : "Over HTTPS this machine presents whichever account its credential helper holds for that host.";
+      ? "A private repository is visible only to the GitHub account this machine signs in as. In a terminal: gh auth status shows which, gh auth login switches it."
+      : "A private repository is visible only to the account this machine signs in as at that host — the sign-in Git has saved for it, nothing in this app.";
   }
   if (/^ssh:\/\//i.test(remote) || /^[^@/:\s]+@[^/:\s]+:/.test(remote)) {
-    return "Over SSH this machine presents a key, not an account — the account that may see the repository must carry that key; no credential helper or GitHub CLI sign-in applies.";
+    return "Over SSH access comes from this machine's SSH key, not from a signed-in account: that key must sit on an account that can see the repository. Add it in the host's SSH keys settings.";
   }
   return undefined;
 }

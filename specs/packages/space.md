@@ -253,12 +253,12 @@ Where a failure could turn on which identity this machine presented — the host
 
 | Remote form | Identity named |
 | --- | --- |
-| `ssh://`, `git@host:path` | the key this machine offers, the account that may see the repository having to carry it, no credential helper and no GitHub CLI sign-in applying |
-| `https://`, `http://` on a GitHub host | the account this machine's credential helper holds, with the GitHub CLI as that helper naming it by `gh auth status` and changing it by `gh auth login` |
-| `https://`, `http://` elsewhere | whichever account this machine's credential helper holds for that host |
-| an absolute local path | no account, only the path to exist and this user to be able to read it, an unreadable folder answering as a missing one does |
+| `ssh://`, `git@host:path` | this machine's SSH key rather than a signed-in account, that key having to sit on an account that can see the repository, added in the host's SSH keys settings |
+| `https://`, `http://` on a GitHub host | the GitHub account this machine signs in as, `gh auth status` showing which and `gh auth login` switching it |
+| `https://`, `http://` elsewhere | the account this machine signs in as at that host, being the sign-in Git has saved for it |
+| an absolute local path | no account, the folder having to exist and be readable by this user, an unreadable one answering as a missing one does |
 
-- a named command is the reader's to run: the app runs none.
+- a named command is the reader's to run in a terminal: the app runs none.
 
 ### Choices
 

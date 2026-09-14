@@ -983,7 +983,7 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   await expectStop(join(scratch, "nonexistent", "path"), "not-found", /No repository this machine can see at/, true);
   const localStop = await home.client.expectOk("space.get", {});
   assert.ok(
-    localStop.sync.phase === "stopped" && /the path exists and this user can read it/.test(localStop.sync.identity ?? ""),
+    localStop.sync.phase === "stopped" && /must exist and be readable by you/.test(localStop.sync.identity ?? ""),
     JSON.stringify(localStop.sync),
   );
   const start = Date.now();
