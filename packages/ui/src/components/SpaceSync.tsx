@@ -534,6 +534,8 @@ function RepairRow({
   reason,
   disabled,
   resolved,
+  suggestedParent,
+  autoFocus,
   onOpenPalette,
   onOpenProject,
   onResolved,
@@ -543,19 +545,26 @@ function RepairRow({
   reason: string;
   disabled: boolean;
   resolved?: string;
+  suggestedParent?: string;
+  autoFocus?: boolean;
   onOpenPalette(): void;
   onOpenProject(projectId: string): void;
-  onOpenProject(projectId: string): void;
-  onOpenProject(projectId: string): void;
-  onResolved(key: string, summary: string): void;
+  onResolved(key: string, summary: string, chosen: string): void;
   onNote: Note;
 }) {
   const rebindProject = useAppStore((state) => state.rebindProject);
+  const recorded = repair.directories[0] ?? "";
+  const lastSegment = recorded.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? "";
+  const suggested = suggestedParent && lastSegment ? `${suggestedParent}/${lastSegment}` : undefined;
   const [editing, setEditing] = useState(false);
-  const [path, setPath] = useState(repair.directories[0] ?? "");
+  const [path, setPath] = useState(suggested ?? recorded);
   const [saving, setSaving] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const fieldRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) setEditing(true);
+  }, [autoFocus]);
 
   useEffect(() => {
     if (!editing) return;
@@ -587,8 +596,7 @@ function RepairRow({
     try {
       const project = await rebindProject(repair.projectId, chosen, repair.directories);
       const sessions = repair.sessions > 0 ? `, ${plural(repair.sessions, "session")} listed` : "";
-      onResolved(repair.key, `${project.name} — now at ${project.path}${sessions}`);
-      onNote(`${project.name} resolved.`);
+      onResolved(repair.key, `${project.name} — now at ${project.path}${sessions}`, chosen);
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
@@ -650,9 +658,14 @@ function RepairRow({
               </button>
             ) : null}
           </label>
+          {suggested && path === suggested ? (
+            <p className="text-xs text-neutral-500">
+              Suggested from the folder you just chose — check it.
+            </p>
+          ) : null}
           <p className="text-xs text-neutral-500">
-            Sessions recorded at {repair.directories[0] ?? "that folder"} will join
-            this project. Where a project lives is recorded on this device only;
+            Sessions recorded at {recorded || "that folder"} will join this
+            project. Where a project lives is recorded on this device only;
             this never syncs.
           </p>
           {!repair.projectId ? (
@@ -721,6 +734,10 @@ export function SyncTab({
   const acknowledged = useRef(new Set<string>());
   // The first-meeting card holds its own confirm (space-45).
   const [firstJoin, setFirstJoin] = useState(false);
+  // The folder just chosen, so a later repair prefills from its parent
+  // (space-48): a suggestion, visible and editable, never applied.
+  const [chosenParent, setChosenParent] = useState<string>();
+  const [advanceTo, setAdvanceTo] = useState<string>();
   const lastSyncInput = useRef<{ choices?: Record<string, Side>; join?: boolean }>({});
 
   // The picker's choices outlive a stop and a re-plan: a choice for a
@@ -853,9 +870,22 @@ export function SyncTab({
                 reason={entry.reason}
                 disabled={disabled || pending}
                 resolved={resolved[entry.repair.key]}
+                suggestedParent={chosenParent}
+                autoFocus={entry.repair.key === advanceTo}
                 onOpenPalette={onOpenPalette}
                 onOpenProject={onOpenProject}
-                onResolved={(key, summary) => setResolved((was) => ({ ...was, [key]: summary }))}
+                onResolved={(key, summary, chosen) => {
+                  setResolved((was) => ({ ...was, [key]: summary }));
+                  setChosenParent(chosen.replace(/[/\\][^/\\]+[/\\]*$/, ""));
+                  // Focus moves to the next repair still standing.
+                  const standing = space.diagnostics
+                    .map((d) => d.repair?.key)
+                    .filter((k): k is string => Boolean(k) && k !== key && !resolved[k!]);
+                  setAdvanceTo(standing[0]);
+                  onNote(standing.length
+                    ? `${plural(standing.length, "issue")} left.`
+                    : "All issues resolved.");
+                }}
                 onNote={onNote}
               />
             ) : (
