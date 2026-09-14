@@ -253,16 +253,26 @@ export async function measure(page: Page, containers: string[] = []): Promise<Me
       if (shown(container)) check(container);
     }
 
-    // (iv) Accessible names of every button, in document order. The
-    // Now row names the live run's current state, which advances
-    // between measurements, and a Running row stands only while its
-    // turn is in flight; both are live content, not chrome, so they
-    // stay out of the stability check.
+    // (iv) Accessible names of every button, in document order. A
+    // control whose presence or wording follows a run rather than the
+    // window is live content, not chrome, and cannot hold still across
+    // a sweep that outlasts a turn — so it stays out of the stability
+    // check while every other check above still measures it:
+    //   - the Now row names the live run's current state;
+    //   - a Running row stands only while its turn is in flight;
+    //   - a session's delete control appears only once the session is
+    //     no longer live, so a turn settling mid-sweep adds a button
+    //     to every sidebar-open measurement after it;
+    //   - a machine card's disclosure names the frame's current state
+    //     and there is one per frame, so both its wording and its
+    //     count advance as the run does.
     const names = Array.from(document.querySelectorAll("button"))
       .filter(
         (button) =>
           !button.closest('[data-testid^="now-session-"]') &&
-          !button.closest('[data-testid^="running-session-"]'),
+          !button.closest('[data-testid^="running-session-"]') &&
+          !button.matches('[data-testid^="sidebar-delete-"]') &&
+          !button.matches('[data-testid^="machine-disclose-"]'),
       )
       .map((button) => {
         const label = button.getAttribute("aria-label");
@@ -305,8 +315,24 @@ export function compareNames(
 ): string[] {
   if (!reference) return found.names;
   if (found.names.length !== reference.length) {
+    // Name the controls that differ, not just the tally: a bare count
+    // cannot even say which direction the drift ran, and a CI log is
+    // the only place this failure is ever read.
+    const spend = (from: string[], against: string[]): string[] => {
+      const pool = [...against];
+      return from.filter((name) => {
+        const at = pool.indexOf(name);
+        if (at === -1) return true;
+        pool.splice(at, 1);
+        return false;
+      });
+    };
+    const extra = spend(found.names, reference);
+    const missing = spend(reference, found.names);
     defects.push(
-      `${where}: ${found.names.length} buttons, ${reference.length} at the reference size`,
+      `${where}: ${found.names.length} buttons, ${reference.length} at the reference size` +
+        (extra.length ? ` — extra ${JSON.stringify(extra)}` : "") +
+        (missing.length ? ` — missing ${JSON.stringify(missing)}` : ""),
     );
   } else {
     found.names.forEach((name, index) => {
