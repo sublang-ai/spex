@@ -66,18 +66,33 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
   // width is a layout fact, so it is measured here against the real
   // fonts and rules rather than inferred from a class name: the busy
   // word is put in the control's own box and the box is measured.
-  const widths = await drop.evaluate((el) => {
-    const rest = el.getBoundingClientRect().width;
-    // A copy carries the busy word, so the control the reader is
-    // about to press is never touched.
-    const probe = el.cloneNode(true) as HTMLElement;
-    probe.textContent = "Dropping…";
-    el.parentElement!.append(probe);
-    const busy = probe.getBoundingClientRect().width;
-    probe.remove();
-    return { rest, busy };
+  // Both controls are weighed, not just the one this journey presses:
+  // a reserve that holds one busy word and not the other is the reflow
+  // DR-041 forbids, and it differs by platform font.
+  const widths = await notice.evaluate((el) => {
+    const words: Record<string, string> = {
+      Retry: "Retrying…",
+      Drop: "Dropping…",
+    };
+    return [...el.querySelectorAll("button")].map((button) => {
+      const rest = button.getBoundingClientRect().width;
+      // A copy carries the busy word, so the control the reader is
+      // about to press is never touched.
+      const probe = button.cloneNode(true) as HTMLElement;
+      probe.textContent = words[button.textContent?.trim() ?? ""] ?? "Working…";
+      button.parentElement!.append(probe);
+      const busy = probe.getBoundingClientRect().width;
+      probe.remove();
+      return { label: button.textContent?.trim() ?? "", rest, busy };
+    });
   });
-  expect(widths.busy).toBeLessThanOrEqual(widths.rest + 0.5);
+  expect(widths.length).toBeGreaterThan(0);
+  for (const control of widths) {
+    expect(
+      control.busy,
+      `${control.label}: busy ${control.busy} > rest ${control.rest}`,
+    ).toBeLessThanOrEqual(control.rest + 0.5);
+  }
 
   // At the reflow floor the control yields under the words rather
   // than overlapping them or leaving the notice's box (DR-041; the

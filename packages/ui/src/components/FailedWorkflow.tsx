@@ -15,9 +15,12 @@ import { useRef, useState } from "react";
 /** The busy form is the longer word, so each control reserves its width
  * once and nothing reflows on activation (DR-041: a busy form never
  * widens its control). The reserve is measured against the busy form in
- * a real browser (run-view-132), which is how 5.5rem was caught coming
- * up short of "Retrying…" by a pixel and a half. */
-const CONTROL_WIDTH = "min-w-[6rem]";
+ * a real browser (run-view-132) — which is how 5.5rem was caught coming
+ * up short of "Retrying…" by a pixel and a half, and how 6rem was caught
+ * holding "Dropping…" on one platform's fonts but not on the Linux
+ * fonts CI renders with. It must clear the longest busy word on the
+ * widest font the journey runs under, not on the author's. */
+const CONTROL_WIDTH = "min-w-[6.75rem]";
 
 export function FailedWorkflow({
   command,
