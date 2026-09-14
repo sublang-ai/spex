@@ -2480,14 +2480,10 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
   }
 
-  // core-service-98: the notice draws what the session advertises.
-  const PARKED: SessionInfo = {
-    ...SESSION,
-    controls: {
-      recovery: [{ id: "retry:START_CODE", label: "Retry the failing step" }],
-      ending: [{ id: "give-up", label: "Stop /code" }],
-    },
-  };
+  // core-service-98: the runtime is held only for a turn, so the notice
+  // cannot read what a settled run advertises. It offers both controls
+  // and the core resolves each at activation.
+  const PARKED: SessionInfo = SESSION;
 
   function renderFailed(over: Partial<Parameters<typeof RunView>[0]> = {}) {
     return render(
@@ -2524,29 +2520,21 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
     expect(notice.getAttribute("title")).toBe("state: failed");
     expect(notice.textContent).toContain(
-      "Retry runs its recovery. Drop ends the run.",
+      "Retry runs the workflow's own recovery. Drop ends the run.",
     );
     const retry = screen.getByTestId("failed-workflow-retry");
     expect(retry.textContent).toBe("Retry");
     // Each control promises only what it performs (run-view-128): the
     // recovery names the run's own action, and Drop says it ends it.
-    expect(retry.getAttribute("title")).toBe("Run Retry the failing step.");
+    expect(retry.getAttribute("title")).toBe(
+      "Run the recovery this workflow offers.",
+    );
     expect(
       screen.getByTestId("failed-workflow-drop").getAttribute("title"),
     ).toBe("End this run. It will not be resumed.");
   });
 
-  test("offers Drop alone where the run advertises no recovery", () => {
-    // Retry stands rather than being offered and refused (run-view-128).
-    renderFailed({
-      session: {
-        ...PARKED,
-        controls: { recovery: [], ending: PARKED.controls!.ending },
-      },
-    });
-    expect(screen.queryByTestId("failed-workflow-retry")).toBeNull();
-    expect(screen.getByTestId("failed-workflow-drop")).toBeTruthy();
-  });
+
 
   test("names no command where none is configured, keeping the run's id in the tooltip", () => {
     // An identifier is never dressed as a command the reader could
@@ -2583,7 +2571,6 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
         sessionId: "s1",
         kind: "recovery",
-        controlId: "retry:START_CODE",
       });
       // Nothing else rides the control turn (run-view-129).
       expect(useAppStore.getState().stagedIntents.s1).toBeUndefined();
@@ -2655,7 +2642,6 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
         sessionId: "s1",
         kind: "ending",
-        controlId: "give-up",
       });
     } finally {
       setClientForTests(undefined);

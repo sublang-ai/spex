@@ -389,11 +389,7 @@ export interface AppState {
   submitBossText(sessionId: string, text: string): Promise<void>;
   /** run-view-129 / run-view-112: run one control the session already
    * advertises as its next turn. */
-  submitSessionControl(
-    sessionId: string,
-    kind: "recovery" | "ending",
-    controlId: string,
-  ): Promise<void>;
+  submitSessionControl(sessionId: string, kind: "recovery" | "ending"): Promise<void>;
   /** Re-pull the one ledger fold (DR-035). */
   loadLedger(): Promise<void>;
   /** Load (or extend, with `more`) a project's History page. */
@@ -1585,7 +1581,6 @@ export const useAppStore = create<AppState>((set, get) => {
     async submitSessionControl(
       sessionId: string,
       kind: "recovery" | "ending",
-      controlId: string,
     ): Promise<void> {
       const state = get();
       const session = state.sessions.find((s) => s.id === sessionId);
@@ -1595,7 +1590,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       try {
         if (session && !session.live) await ensureSubscribed(sessionId);
-        await getClient().command("session.control", { sessionId, kind, controlId });
+        await getClient().command("session.control", { sessionId, kind });
       } catch (cause) {
         const error = cause as { code?: string; message: string };
         // A control turn is never queued: the control it names may not

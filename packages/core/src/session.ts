@@ -27,6 +27,25 @@ export class CoreError extends Error {
   }
 }
 
+/** core-service-98: the optional control members a Captain shell may
+ * publish, forwarded from a wrapped shell by feature detection. */
+function controlSurfaces(shell: unknown): Record<string, unknown> {
+  const source = shell as Record<string, unknown>;
+  const forwarded: Record<string, unknown> = {};
+  for (const name of [
+    "describeRuntimeActions",
+    "submitRuntimeAction",
+    "describeShellActions",
+    "submitShellAction",
+  ]) {
+    const member = source[name];
+    if (typeof member === "function") {
+      forwarded[name] = (...args: unknown[]) => (member as (...a: unknown[]) => unknown).apply(source, args);
+    }
+  }
+  return forwarded;
+}
+
 /** Deterministic record fixtures; production uses Playbook's Captain
  * shell. The session id lets a fixture keep state across the runtime
  * releases the turn-held lifecycle makes (core-service-91). */
@@ -298,6 +317,12 @@ export class SessionManager {
             },
             async prepareDispose() { await fixture.prepareDispose?.(); await shell.prepareDispose?.(); },
             async dispose() { await fixture.dispose?.(); await shell.dispose?.(); },
+            // core-service-98: the control surfaces are the real shell's,
+            // and a wrapper that forwarded only the turn members hid them
+            // — the notice then drew controls every activation refused.
+            // Forwarded by feature detection, so an older shell that
+            // publishes none still advertises none.
+            ...controlSurfaces(shell),
           }});
         }} : {}),
         onStoredRecord: async (record) => {
@@ -380,15 +405,40 @@ export class SessionManager {
   }
 
   /** core-service-98: run one advertised control as the next turn. */
-  submitControl(sessionId: string, kind: "recovery" | "ending", controlId: string): void {
+  submitControl(sessionId: string, kind: "recovery" | "ending"): void {
     const entry = this.requireLive(sessionId);
     if (entry.turnActive) throw new CoreError("busy", "a turn is already running in this session");
     if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", "Recover the interrupted turn with Retry or Discard first");
-    const offered = this.listControls(sessionId)[kind];
-    if (!offered.some((control) => control.id === controlId)) {
-      throw new CoreError("invalid_request", "the session no longer offers that control");
+    // The runtime is held only for a turn (core-service-91), so what a
+    // run advertises can be read only while the session is open — which
+    // it is by the time this runs. The control is resolved here, at
+    // activation, rather than carried from a reading a client took when
+    // no shell was held.
+    const controller = entry.controller as {
+      listRuntimeActions?(): readonly { id: string; label: string }[];
+      listShellActions?(): readonly { id: string; label: string }[];
+    };
+    let offered: readonly { id: string; label: string }[] = [];
+    try {
+      offered =
+        kind === "recovery"
+          ? (controller.listRuntimeActions?.() ?? [])
+          : (controller.listShellActions?.() ?? []);
+    } catch {
+      // An unreadable control view offers nothing rather than failing
+      // in a way the notice cannot explain.
+      offered = [];
     }
-    this.startTurn(entry, undefined, false, { kind, controlId });
+    const control = offered[0];
+    if (!control) {
+      throw new CoreError(
+        "invalid_request",
+        kind === "recovery"
+          ? "This run offers no recovery to rerun."
+          : "This session offers no way to end its run.",
+      );
+    }
+    this.startTurn(entry, undefined, false, { kind, controlId: control.id });
   }
 
   submitTurn(sessionId: string, text: string, intentId?: string): void {
@@ -479,36 +529,9 @@ export class SessionManager {
   private publish(sessionId: string): void {
     const session = this.store.describeSession(sessionId);
     const entry = this.live.get(sessionId);
-    if (session) this.onSessionState({...session, ...(entry ? {externalWriter:undefined} : {}), live:!!entry, turnActive:entry?.turnActive ?? false, controls:this.listControls(sessionId)});
+    if (session) this.onSessionState({...session, ...(entry ? {externalWriter:undefined} : {}), live:!!entry, turnActive:entry?.turnActive ?? false});
   }
 
-  /** core-service-98: what the session would accept as a control turn
-   * right now. Read live from the shell between turns and never stored,
-   * so a stale list cannot outlive what the run offers. */
-  listControls(sessionId: string): NonNullable<SessionInfo["controls"]> {
-    const empty = { recovery: [], ending: [] };
-    const entry = this.live.get(sessionId);
-    if (!entry || entry.turnActive) return empty;
-    const controller = entry.controller as {
-      listRuntimeActions?(): readonly { id: string; label: string }[];
-      listShellActions?(): readonly { id: string; label: string }[];
-    };
-    const read = (
-      list?: () => readonly { id: string; label: string }[],
-    ): { id: string; label: string }[] => {
-      try {
-        return [...(list?.() ?? [])].map(({ id, label }) => ({ id, label }));
-      } catch {
-        // An unreadable control view advertises nothing rather than
-        // failing the report every other pane depends on.
-        return [];
-      }
-    };
-    return {
-      recovery: read(controller.listRuntimeActions?.bind(controller)),
-      ending: read(controller.listShellActions?.bind(controller)),
-    };
-  }
   private requireLive(sessionId: string): LiveSession {
     const entry = this.live.get(sessionId);
     if (!entry) throw new CoreError("not_found", `no live session ${sessionId}`);

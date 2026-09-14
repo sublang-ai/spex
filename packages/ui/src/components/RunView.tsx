@@ -557,15 +557,13 @@ export function RunView({
               state={failedRun.active ?? undefined}
               connected={connected}
               turnActive={view.turnActive}
-              recovery={session.controls?.recovery[0]}
-              ending={session.controls?.ending[0]}
-              onControl={async (kind, controlId) => {
+              onControl={async (kind) => {
                 // Nothing else rides this turn (run-view-129,
                 // run-view-112): a staged intent detaches rather than
                 // being stamped by a control it did not ask for
                 // (run-view-86).
                 if (staged) clearStagedIntent(session.id);
-                await submitSessionControl(session.id, kind, controlId);
+                await submitSessionControl(session.id, kind);
               }}
             />
           ) : null}

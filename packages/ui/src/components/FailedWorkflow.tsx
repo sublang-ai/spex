@@ -12,11 +12,6 @@
 
 import { useRef, useState } from "react";
 
-export interface SessionControl {
-  readonly id: string;
-  readonly label: string;
-}
-
 /** The busy form is the longer word, so each control reserves its width
  * once and nothing reflows on activation (DR-041: a busy form never
  * widens its control). The reserve is measured against the busy form in
@@ -30,8 +25,6 @@ export function FailedWorkflow({
   state,
   connected,
   turnActive,
-  recovery,
-  ending,
   onControl,
 }: {
   /** The command that started the failed run, where a configured
@@ -46,13 +39,7 @@ export function FailedWorkflow({
   state?: string;
   connected: boolean;
   turnActive: boolean;
-  /** The recovery this run advertises, absent where it advertises none
-   * — Retry then stands rather than being offered and refused
-   * (run-view-128). */
-  recovery?: SessionControl;
-  /** The shell's own ending. Absent only where the session offers none. */
-  ending?: SessionControl;
-  onControl(kind: "recovery" | "ending", controlId: string): Promise<void>;
+  onControl(kind: "recovery" | "ending"): Promise<void>;
 }) {
   const [pending, setPending] = useState<"recovery" | "ending">();
   const [confirming, setConfirming] = useState(false);
@@ -69,14 +56,14 @@ export function FailedWorkflow({
   // activated, so the whole group disables together.
   const disabled = pending !== undefined || blocked !== undefined;
 
-  async function run(kind: "recovery" | "ending", controlId: string): Promise<void> {
+  async function run(kind: "recovery" | "ending"): Promise<void> {
     if (busy.current || disabled) return;
     busy.current = true;
     setPending(kind);
     setError(undefined);
     setConfirming(false);
     try {
-      await onControl(kind, controlId);
+      await onControl(kind);
       // The turn is away and the controls are about to disable
       // themselves: focus belongs where the next thing happens
       // (DR-010 §6).
@@ -98,12 +85,14 @@ export function FailedWorkflow({
     <section
       aria-label="Failed workflow"
       data-testid="failed-workflow"
-      title={[
-        playbookId ? `playbook: ${playbookId}` : undefined,
-        state ? `state: ${state}` : undefined,
-      ]
-        .filter(Boolean)
-        .join(" · ") || undefined}
+      title={
+        [
+          playbookId ? `playbook: ${playbookId}` : undefined,
+          state ? `state: ${state}` : undefined,
+        ]
+          .filter(Boolean)
+          .join(" · ") || undefined
+      }
       className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
     >
       {/* The row yields as the pane narrows (DR-041): the words own the
@@ -118,71 +107,67 @@ export function FailedWorkflow({
               : "The workflow failed and is waiting for you."}
           </p>
           <p className="text-neutral-600 dark:text-neutral-400">
-            {recovery
-              ? "Retry runs its recovery. Drop ends the run."
-              : "Drop ends the run."}
+            Retry runs the workflow&apos;s own recovery. Drop ends the run.
           </p>
         </div>
         <div
           ref={group}
           className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"
         >
-          {recovery ? (
-            <button
-              type="button"
-              data-testid="failed-workflow-retry"
-              disabled={disabled || confirming}
-              aria-busy={pending === "recovery" || undefined}
-              title={blocked ?? `Run ${recovery.label}.`}
-              onClick={() => void run("recovery", recovery.id)}
-              className={controlClass}
-            >
-              {pending === "recovery" ? "Retrying…" : "Retry"}
-            </button>
-          ) : null}
-          {ending ? (
-            confirming ? (
-              // DR-010 §4: ending a run is the Boss's ruling, so it
-              // asks in place. Keep backs out having sent nothing.
-              <>
-                <span data-testid="failed-workflow-confirm-ask">Drop it?</span>
-                <button
-                  type="button"
-                  data-testid="failed-workflow-drop-confirm"
-                  disabled={disabled}
-                  onClick={() => void run("ending", ending.id)}
-                  className={controlClass}
-                >
-                  {pending === "ending" ? "Dropping…" : "Drop"}
-                </button>
-                <button
-                  type="button"
-                  data-testid="failed-workflow-drop-keep"
-                  disabled={disabled}
-                  onClick={() => setConfirming(false)}
-                  className={controlClass}
-                >
-                  Keep
-                </button>
-              </>
-            ) : (
+          <button
+            type="button"
+            data-testid="failed-workflow-retry"
+            disabled={disabled || confirming}
+            aria-busy={pending === "recovery" || undefined}
+            title={blocked ?? "Run the recovery this workflow offers."}
+            onClick={() => void run("recovery")}
+            className={controlClass}
+          >
+            {pending === "recovery" ? "Retrying…" : "Retry"}
+          </button>
+          {confirming ? (
+            // DR-010 §4: ending a run is the Boss's ruling, so it
+            // asks in place. Keep backs out having sent nothing.
+            <>
+              <span data-testid="failed-workflow-confirm-ask">Drop it?</span>
               <button
                 type="button"
-                data-testid="failed-workflow-drop"
+                data-testid="failed-workflow-drop-confirm"
                 disabled={disabled}
-                title={blocked ?? "End this run. It will not be resumed."}
-                onClick={() => setConfirming(true)}
+                onClick={() => void run("ending")}
                 className={controlClass}
               >
-                Drop
+                {pending === "ending" ? "Dropping…" : "Drop"}
               </button>
-            )
-          ) : null}
+              <button
+                type="button"
+                data-testid="failed-workflow-drop-keep"
+                disabled={disabled}
+                onClick={() => setConfirming(false)}
+                className={controlClass}
+              >
+                Keep
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              data-testid="failed-workflow-drop"
+              disabled={disabled}
+              title={blocked ?? "End this run. It will not be resumed."}
+              onClick={() => setConfirming(true)}
+              className={controlClass}
+            >
+              Drop
+            </button>
+          )}
         </div>
       </div>
       {pending !== undefined ? (
         <p className="sr-only" role="status">
-          {pending === "recovery" ? "Retrying the workflow" : "Dropping the workflow"}
+          {pending === "recovery"
+            ? "Retrying the workflow"
+            : "Dropping the workflow"}
         </p>
       ) : null}
       {error ? (

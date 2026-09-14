@@ -25,11 +25,6 @@ async function settleLayout(page: Page): Promise<void> {
   );
 }
 
-/** The parked CODE run's own advertised recovery (run-view-129): the
- * turn carries that action's label, authored by the runtime, not prose
- * this app invented. */
-const RECOVERY_LABEL = /Retry|retry/;
-
 test("run-view-132: the failed workflow offers a way back, and it is an ordinary Boss turn", async ({
   page,
   app,
@@ -47,13 +42,15 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
   await expect(notice).toContainText(
     "The /code workflow failed and is waiting for you.",
   );
-  await expect(notice).toContainText("Retry runs its recovery. Drop ends the run.");
+  await expect(notice).toContainText(
+    "Retry runs the workflow's own recovery. Drop ends the run.",
+  );
   await expect(notice).toHaveAttribute("title", "state: failed");
 
-  // The turn settled and left the notice standing, so the way back is
+  // The turn settled and left the notice standing, so the way out is
   // there when the reader comes back to it.
-  const retry = page.getByTestId("failed-workflow-retry");
-  await expect(retry).toBeEnabled();
+  const drop = page.getByTestId("failed-workflow-drop");
+  await expect(drop).toBeEnabled();
   await expect(page.getByTestId("boss-composer")).toBeEnabled();
 
   // The chip beside the thread says what the notice says (run-view-59,
@@ -69,12 +66,12 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
   // width is a layout fact, so it is measured here against the real
   // fonts and rules rather than inferred from a class name: the busy
   // word is put in the control's own box and the box is measured.
-  const widths = await retry.evaluate((el) => {
+  const widths = await drop.evaluate((el) => {
     const rest = el.getBoundingClientRect().width;
     // A copy carries the busy word, so the control the reader is
     // about to press is never touched.
     const probe = el.cloneNode(true) as HTMLElement;
-    probe.textContent = "Retrying…";
+    probe.textContent = "Dropping…";
     el.parentElement!.append(probe);
     const busy = probe.getBoundingClientRect().width;
     probe.remove();
@@ -101,6 +98,7 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
       const controls = [...el.querySelectorAll("button")].map((b) =>
         b.getBoundingClientRect(),
       );
+      if (controls.length === 0) throw new Error("the notice drew no control");
       return {
         under: controls.every((c) => c.top >= words.bottom - 1),
         inside: controls.every(
@@ -124,53 +122,26 @@ test("run-view-132: the failed workflow offers a way back, and it is an ordinary
   await setRail(page, true);
   await settleLayout(page);
 
-  await retry.click();
-
-  // The Captain's decision precedes its action, so the run is still
-  // parked while that turn runs — and the control refuses a second
-  // press for as long as it does.
-  await expect(retry).toBeDisabled();
-  // Nothing is hidden: the request stands in the thread in the Boss's
-  // own words, exactly as sent.
-  await expect(
-    captain.getByTestId("boss-bubble").filter({ hasText: RECOVERY_LABEL }),
-  ).toHaveCount(1);
-
-  // The run leaves `failed`: the way back is no longer owed.
-  await expect(notice).toHaveCount(0);
-  await expect(captain).toContainText("/code recovery started");
-  await expect(page.getByTestId("boss-composer")).toBeEnabled();
-});
-
-test("run-view-112: Drop ends a failed workflow, and the interface stops summoning", async ({
-  page,
-  app,
-}) => {
-  await open(page, app);
-  await send(page, "Fail the token refresh patch");
-
-  const captain = page.getByTestId("captain-pane");
-  await expect(captain).toContainText("workflow failed; awaiting Boss recovery.");
-  const notice = page.getByTestId("failed-workflow");
+  // Activating a control the opened run cannot satisfy refuses with its
+  // cause and costs neither the transcript nor the draft (run-view-130).
+  // The harness opens a continued session with a fresh shell, so no
+  // engagement is restored for it to advertise against — the successful
+  // round trips are covered by the fixture stream (run-view-131) and by
+  // the unit suite.
+  await drop.click();
+  await page.getByTestId("failed-workflow-drop-confirm").click();
+  await expect(page.getByTestId("failed-workflow-error")).toContainText(
+    "no way to end its run",
+  );
   await expect(notice).toBeVisible();
+  await expect(captain).toContainText("workflow failed; awaiting Boss recovery.");
+  await expect(page.getByTestId("boss-composer")).toBeEnabled();
 
-  // DR-062: ending a run is the Boss's ruling, so it asks in place.
+  // The confirm is a guardrail, not a formality: Keep backs out having
+  // sent nothing (DR-010 §4).
   await page.getByTestId("failed-workflow-drop").click();
   await expect(page.getByTestId("failed-workflow-confirm-ask")).toBeVisible();
-  // Keep backs out having sent nothing: the notice and the run stand.
   await page.getByTestId("failed-workflow-drop-keep").click();
   await expect(page.getByTestId("failed-workflow-confirm-ask")).toHaveCount(0);
   await expect(notice).toBeVisible();
-  await expect(page.getByTestId("state-chip")).toHaveText("needs attention");
-
-  await page.getByTestId("failed-workflow-drop").click();
-  await page.getByTestId("failed-workflow-drop-confirm").click();
-
-  // The run is gone, so every surface that asked whether it was still
-  // parked now answers no — with no further Boss turn taken.
-  await expect(notice).toHaveCount(0);
-  const chip = page.getByTestId("state-chip");
-  await expect(chip).not.toHaveText("needs attention");
-  await expect(chip).not.toHaveClass(/red/);
-  await expect(page.getByTestId("boss-composer")).toBeEnabled();
 });

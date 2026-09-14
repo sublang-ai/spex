@@ -1144,11 +1144,7 @@ export class CoreService {
             await this.settledConfig();
             await this.continueSession(command.sessionId);
           }
-          this.sessions.submitControl(
-            command.sessionId,
-            command.kind,
-            command.controlId,
-          );
+          this.sessions.submitControl(command.sessionId, command.kind);
           return { accepted: true };
         } finally { release(); }
       }

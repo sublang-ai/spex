@@ -190,14 +190,6 @@ export interface SessionInfo {
   turns: number;
   /** Whether the session carries a failure record. */
   failed: boolean;
-  /** core-service-98: what the session will accept right now — the
-   * recoveries its parked run advertises and the shell's own ending.
-   * Both empty while a turn is active or nothing is offered, so a
-   * client draws only controls the session would take. */
-  controls?: {
-    recovery: { id: string; label: string }[];
-    ending: { id: string; label: string }[];
-  };
   /** Recorded cost, when any usage carried one. */
   costUsd?: number;
   /** Set when a record could not be durably appended: the persisted
@@ -550,7 +542,6 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     sessionId: z.string().min(1),
     kind: z.enum(["recovery", "ending"]),
-    controlId: z.string().min(1),
   }).strict(),
   z.object({ type: z.literal("turn.abort"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("subscribe"), id, channel: channelSchema }),

@@ -203,15 +203,15 @@ When a client sends `session.retry` with only a `sessionId`, the core shall retr
 
 #### core-service-98
 
-When a client sends `session.control` with a `sessionId` and one advertised control, the core shall run that control as the session's next turn through Playbook's shared lifecycle [[1]] under the same project and session admission checks as continuation [[core-service-73](#core-service-73)] ([DR-062](../decisions/062-ending-a-failed-workflow.md)):
+When a client sends `session.control` with a `sessionId` and a control kind, the core shall run that kind of control as the session's next turn through Playbook's shared lifecycle [[1]] under the same project and session admission checks as continuation [[core-service-73](#core-service-73)] ([DR-062](../decisions/062-ending-a-failed-workflow.md)):
 
-| Control | What runs |
+| Kind | What runs |
 | --- | --- |
-| a recovery | the named action the session's parked run currently advertises |
+| a recovery | the action the session's parked run advertises |
 | an ending | the shell's own control, which ends the run and spends no model call |
 
-- the session report carries both currently advertised readings, each empty while a turn is active or while nothing is advertised, so a client offers only what the session will accept [[core-service-32](#core-service-32)];
-- a control neither reading advertises is rejected with its cause, starting no turn;
+- the core shall open the session before reading what it advertises, because the runtime is held only for a turn [[core-service-91](#core-service-91)] and a settled session holds no shell to ask;
+- a kind the opened session advertises nothing for shall be refused with its cause, starting no turn;
 - the turn carries the control's own Boss-facing label as its text, creates no intent dispatch, and stamps none [[core-service-47](#core-service-47)];
 - records and the resulting session state publish as a continued turn's do [[core-service-5](#core-service-5)].
 
@@ -780,10 +780,10 @@ When an integration suite interrupts CLI-created and desktop-created sessions an
 
 ### core-service-99
 
-When an integration suite parks a real session's run in its recoverable failure state and drives that session's advertised controls through core commands, it shall verify them [[core-service-98](#core-service-98)]:
+When an integration suite parks a real session's run in its recoverable failure state and drives that session's controls through core commands, it shall verify them [[core-service-98](#core-service-98)]:
 
-- the report carries the run's advertised recovery and the ending while no turn is active, and carries neither while one is [[core-service-32](#core-service-32)];
-- a control neither reading advertises is refused with its cause and starts no turn;
+- each kind opens the settled session before reading what it advertises, so a control activated after the runtime was released still runs [[core-service-91](#core-service-91)];
+- a kind the opened session advertises nothing for is refused with its cause and starts no turn;
 - the recovery runs as one turn whose text is that action's own label, creating no intent dispatch and stamping none [[core-service-47](#core-service-47)];
 - the ending runs as one turn after which the session holds no parked run and offers no resumption of it;
 - a second request while the first turn runs starts no duplicate turn [[core-service-5](#core-service-5)].
