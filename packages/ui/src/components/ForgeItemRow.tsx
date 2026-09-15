@@ -24,11 +24,7 @@ export function intentStateText(derived: DerivedIntent): string {
     case "working":
       return "working";
     case "interrupted":
-      return derived.reason === "failure"
-        ? "failed"
-        : derived.reason === "permission"
-          ? "awaiting permission"
-          : "needs your reply";
+      return derived.reason === "failure" ? "failed" : "needs your reply";
     case "finished":
       return "finished — confirm?";
     default:

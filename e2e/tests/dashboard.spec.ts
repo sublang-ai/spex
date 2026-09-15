@@ -8,7 +8,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { test, expect, open, nav, send } from "../src/harness";
+import { test, expect, open, nav, runTurn, send } from "../src/harness";
 
 test.use({ appOptions: { project: true, agentDelayMs: 2500 } });
 
@@ -485,4 +485,75 @@ test.describe("removing a History row", () => {
       }),
     ).toBeVisible();
   });
+});
+
+test.describe("dashboard-57: a summons written off-screen", () => {
+  // A brisk agent: this journey runs two whole turns before it looks.
+  test.use({ appOptions: { project: true, agentDelayMs: 200 } });
+  test.setTimeout(180_000);
+
+test("dashboard-57: a turn finished off-screen summons, and drains from the row or by showing it", async ({
+  page,
+  app,
+}) => {
+  // A conversation whose turn runs while the reader is on the
+  // Dashboard: no live turn_finished ever reaches a shown session, so
+  // this is the shape a synced or CLI-written session arrives in —
+  // the summons that used to have no exit (DR-066).
+  const first = await app.core.command("session.create", { projectId: app.projectId! });
+  await runTurn(app, first.id, "written while I was elsewhere");
+
+  await open(page, app);
+  await page.getByRole("button", { name: /^Dashboard/ }).click();
+
+  // The summons names its state and the act that ends it.
+  const unread = page.getByTestId(`attention-${first.id}-review`);
+  await expect(unread).toContainText("unread turn", { timeout: 20_000 });
+  await expect(page.getByTestId(`attention-act-${first.id}`)).toHaveText(
+    "Nothing owed — open it, or mark it reviewed.",
+  );
+  await expect(page.getByTestId("nav-attention-badge")).toContainText("1");
+  await expect(page.getByTestId(`sidebar-mark-${first.id}`)).toHaveAttribute(
+    "data-life",
+    "review",
+  );
+  await expect(page.getByTestId(`sidebar-session-${first.id}`)).toHaveAttribute(
+    "aria-label",
+    /unread turn/,
+  );
+  await expect(
+    page.getByTestId(`sidebar-project-attention-${app.projectId}`),
+  ).toHaveAttribute("title", "A session has an unread turn");
+
+  // Reviewed settles it from the row, with the session never opened.
+  await page.getByTestId(`attention-reviewed-${first.id}`).click();
+  await expect(unread).toHaveCount(0);
+  await expect(page.getByTestId("nav-attention-badge")).toHaveCount(0);
+  await expect(page.getByTestId(`sidebar-mark-${first.id}`)).not.toHaveAttribute(
+    "data-life",
+    "review",
+  );
+  await expect(page.getByTestId("attention-all-clear")).toBeVisible();
+
+  // A second conversation, run the same way: showing it settles that
+  // one — the reader's own gesture, no control touched.
+  const second = await app.core.command("session.create", { projectId: app.projectId! });
+  await runTurn(app, second.id, "and this one too");
+  await expect(page.getByTestId(`attention-${second.id}-review`)).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.getByTestId(`sidebar-session-${second.id}`).click();
+  await expect(page.getByTestId("captain-pane")).toContainText("and this one too");
+  await expect(page.getByTestId("nav-attention-badge")).toHaveCount(0);
+  await expect(page.getByTestId(`sidebar-mark-${second.id}`)).not.toHaveAttribute(
+    "data-life",
+    "review",
+  );
+
+  // A reload re-reads the fold from stored state: neither returns.
+  await open(page, app);
+  await page.getByRole("button", { name: /^Dashboard/ }).click();
+  await expect(page.getByTestId("attention-all-clear")).toBeVisible();
+  await expect(page.getByTestId("nav-attention-badge")).toHaveCount(0);
+});
 });

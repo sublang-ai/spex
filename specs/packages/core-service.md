@@ -313,7 +313,10 @@ When a locally owned intent-attributed turn completes full settlement [[core-ser
 
 #### core-service-48
 
-When a client sends `session.viewed` naming a session and a turn, the core service shall persist that turn as the session's last-viewed marker in the state root's preferences file [[core-service-15](#core-service-15)], so review state derives from stored data alone [[core-service-49](#core-service-49)] and survives a restart.
+When a client sends `session.viewed` naming a session and a turn, the core service shall persist that turn as the session's last-viewed marker in the state root's preferences file [[core-service-15](#core-service-15)], so review state derives from stored data alone [[core-service-49](#core-service-49)] and survives a restart:
+
+- a marker naming a turn that has not ended is refused, so no client suppresses the next summons by naming a turn in flight ([DR-066](../decisions/066-every-summons-has-a-door.md));
+- a marker no later than the stored one writes nothing, the act being monotonic and repeatable.
 
 #### core-service-49
 
@@ -321,9 +324,9 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 
 | Part | Content |
 | --- | --- |
-| Attention entries | two bands — intents standing interrupted on the Boss (a pending question, a permission request, or an unacknowledged failure among their turns), then intents finished and awaiting a verdict — each band ordered longest waiting first by condition onset |
+| Attention entries | two bands — intents standing interrupted on the Boss (a pending question or an unacknowledged failure among their turns), then intents finished and awaiting a verdict — each band ordered longest waiting first by condition onset, and no entry from a project whose stored state refuses the acts that would end it [[core-service-86](#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md)) |
 | Run stats | each finished entry carries stats folded from its intent's attributed turns [[core-service-47](#core-service-47)]: turn count, elapsed time, and the review rounds when any |
-| Session stand-ins | a session bound to no intent enters the same bands for its own question, permission request, failure, or finished turn past the viewed marker [[core-service-48](#core-service-48)] |
+| Session stand-ins | a session bound to no intent enters the same bands for its own question, failure, or finished turn past the viewed marker [[core-service-48](#core-service-48)] |
 | Project groups | per project: the current conversation's state [[core-service-93](#core-service-93)], the queue in rank order with each blocked intent marked [[core-service-45](#core-service-45)], and the open intents' source-artifact references [[core-service-42](#core-service-42)] |
 | Badge | the count of all attention entries |
 
@@ -719,7 +722,7 @@ Where a project's store holds twenty-five closed intents, the test suite shall p
 
 #### core-service-59
 
-Where a session finishes a turn bound to no intent, the test suite shall assert the review-state contract of [[core-service-48](#core-service-48)]: `ledger.get` lists a finished-band stand-in entry for the unviewed turn [[core-service-49](#core-service-49)], a `session.viewed` naming that turn clears the entry from the next reply, and the entry stays cleared after a restart on the same store.
+Where a session finishes a turn bound to no intent, the test suite shall assert the review-state contract of [[core-service-48](#core-service-48)]: `ledger.get` lists a finished-band stand-in entry for the unviewed turn [[core-service-49](#core-service-49)], a `session.viewed` naming that turn clears the entry from the next reply, a `session.viewed` naming a turn still in flight is refused and leaves the entry standing, a marker no later than the stored one writing nothing, a player's permission request raises no entry at all [[core-service-49](#core-service-49)], and the entry stays cleared after a restart on the same store.
 
 ### Readiness Coverage
 

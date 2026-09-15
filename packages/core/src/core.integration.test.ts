@@ -2446,7 +2446,6 @@ test("core-service-86: damaged sessions refuse only their own execution and rema
   await client.expectOk("config.edit", {op:{kind:"captain.set",patch:{instruction:"Independent edit"}}});
   await client.expectOk("intent.queue", {projectId:project.id,text:"Healthy queue"});
   const healthy = await client.expectOk("session.create", {projectId:project.id});
-  await client.expectOk("session.viewed", {sessionId:healthy.id,turnId:0});
   await client.expectOk("session.delete", {sessionId:damaged.id});
   assert.equal(existsSync(manifestFile),false);
   assert.equal((await client.expectOk("session.list", {})).find((session) => session.id === healthy.id)?.live,true);
@@ -2485,8 +2484,7 @@ for (const defect of ["completed JSON", "cycle", "duplicate source", "foreign ac
     await client.expectOk("intent.edit",{intentId:healthy.id,text:"Still editable"});
     await client.expectOk("intent.queue",{projectId:good.id,text:"Still queueable"});
     await client.expectOk("config.edit",{op:{kind:"captain.set",patch:{instruction:"Still configurable"}}});
-    const session=await client.expectOk("session.create",{projectId:good.id});
-    await client.expectOk("session.viewed",{sessionId:session.id,turnId:0});
+    await client.expectOk("session.create",{projectId:good.id});
     assert.deepEqual(readFileSync(file),before,"invalid log bytes preserved");
   });
 }
@@ -2497,6 +2495,14 @@ for (const file of ["projects.json", "local/project-paths.json", "prefs.json"]) 
     t.after(async()=>{client.close(); await service.stop(); rmSync(harness.dir,{recursive:true,force:true});});
     const project=await client.expectOk("project.register",{path:harness.projectDir});
     const session=await client.expectOk("session.create",{projectId:project.id});
+    // A marker may name only an ended turn (core-service-48), so the
+    // session runs one: the refusal below must be the damaged file's,
+    // not the guard's.
+    await client.expectOk("subscribe",{channel:{kind:"session",sessionId:session.id}});
+    await client.expectOk("turn.submit",{sessionId:session.id,text:"hello"});
+    const ended=await client.waitFor((m)=>m.type==="record"&&m.sessionId===session.id&&m.record.type==="turn_finished");
+    const turnId=ended.type==="record"?(ended.record.turnId ?? -1):-1;
+    assert.ok(turnId>=0);
     await client.expectOk("session.dispose",{sessionId:session.id});
     client.close(); await service.stop();
     const path=join(harness.dataDir,file); writeFileSync(path,"{bad JSON}");
@@ -2504,7 +2510,7 @@ for (const file of ["projects.json", "local/project-paths.json", "prefs.json"]) 
     client=new Client(service.port()); await client.open();
     assert.ok((await client.expectOk("storage.diagnostics",{})).some((report)=>report.blocking&&report.file.endsWith(file)));
     await client.expectOk("config.edit",{op:{kind:"captain.set",patch:{instruction:"Independent config"}}});
-    const refused=file==="prefs.json" ? await client.command("session.viewed",{sessionId:session.id,turnId:1}) : await client.command("project.register",{path:harness.projectDir});
+    const refused=file==="prefs.json" ? await client.command("session.viewed",{sessionId:session.id,turnId}) : await client.command("project.register",{path:harness.projectDir});
     assert.ok(!refused.ok&&refused.error.code==="invalid_request",JSON.stringify(refused));
     if (file !== "prefs.json") {
       const destination=join(harness.dir,"must-not-be-created");

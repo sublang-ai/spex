@@ -224,8 +224,8 @@ const ATTENTION: AttentionEntry[] = [
   },
   {
     band: "interrupted",
-    kind: "permission",
-    title: "claude wants to push",
+    kind: "failure",
+    title: "tidy the fixtures",
     projectId: "p1",
     sessionId: "s6",
     since: NOW - 6 * MIN,
@@ -233,6 +233,7 @@ const ATTENTION: AttentionEntry[] = [
   {
     band: "interrupted",
     kind: "failure",
+    parked: true,
     intentId: "if",
     title: "Migrate DB",
     projectId: "p2",
@@ -280,7 +281,7 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     const rows = Array.from(queue.querySelectorAll("[data-band]"));
     expect(rows.map((row) => row.getAttribute("data-testid"))).toEqual([
       "attention-iq-question",
-      "attention-s6-permission",
+      "attention-s6-failure",
       "attention-if-failure",
       "attention-id1-finish",
       "attention-id2-finish",
@@ -298,7 +299,7 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     // Amber waits on the human; only the unacknowledged failure is red.
     expect(
       rows.map((row) => row.getAttribute("data-tone")),
-    ).toEqual(["amber", "amber", "red", "amber", "amber", "amber"]);
+    ).toEqual(["amber", "red", "red", "amber", "amber", "amber"]);
 
     // Status speaks human (DR-010 §2), and the row names its project
     // and how long it has waited.
@@ -313,9 +314,9 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
         new Date(ATTENTION[0].since).toLocaleString(),
       ),
     ).toBeTruthy();
-    expect(
-      screen.getByTestId("attention-s6-permission").textContent,
-    ).toContain("awaiting permission");
+    expect(screen.getByTestId("attention-s6-failure").textContent).toContain(
+      "failed",
+    );
     expect(screen.getByTestId("attention-if-failure").textContent).toContain(
       "failed",
     );
@@ -323,8 +324,38 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
       "finished — confirm?",
     );
     expect(screen.getByTestId("attention-s4-review").textContent).toContain(
-      "turn to review",
+      "unread turn",
     );
+
+    // Every row names the act that ends it (dashboard-53): a control
+    // on the row where the act is a ruling, an act line naming the
+    // turn the session must run otherwise.
+    expect(screen.getByTestId("attention-act-iq").textContent).toBe(
+      "Open to reply — the run is waiting.",
+    );
+    expect(screen.getByTestId("attention-act-if").textContent).toBe(
+      "Open to retry or drop the run.",
+    );
+    expect(screen.getByTestId("attention-act-s6").textContent).toBe(
+      "Open and send a message to pick it up.",
+    );
+    expect(screen.getByTestId("attention-act-s4").textContent).toBe(
+      "Nothing owed — open it, or mark it reviewed.",
+    );
+    // The finished intent's own act is its verdict, right here.
+    expect(screen.queryByTestId("attention-act-id1")).toBeNull();
+    expect(screen.getByTestId("attention-confirm-id1")).toBeTruthy();
+    // The unread turn's act is a control too, and it reads within the
+    // label budget (DR-041).
+    const reviewed = screen.getByTestId("attention-reviewed-s4");
+    expect(reviewed.textContent).toBe("Reviewed");
+    expect(reviewed.getAttribute("aria-label")).toBe(
+      "Mark chat about tests reviewed",
+    );
+    // An interrupted intent carries Drop; a session stand-in carries
+    // none, its act being a turn (dashboard-56).
+    expect(screen.getByTestId("attention-drop-if")).toBeTruthy();
+    expect(screen.queryByTestId("attention-drop-s6")).toBeNull();
 
     // Finished stats: review rounds foremost, omitted when zero
     // (dashboard-35).
@@ -340,6 +371,68 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
       within(question).getByRole("button", { name: /Open Fix login/ }),
     );
     expect(onOpenSession).toHaveBeenCalledWith("s1", 4);
+  });
+
+  test("Reviewed clears an unread turn without opening it, and reports a refusal", async () => {
+    seed({ ledger: { intents: [], attention: ATTENTION, badge: 6 } });
+    let refuse = false;
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "session.viewed") {
+        if (refuse) throw new Error("Space is syncing");
+        return null;
+      }
+      if (type === "ledger.get") return useAppStore.getState().ledger;
+      return {};
+    });
+    const { onOpenSession } = renderSurface();
+
+    // The act reads no runtime state of the session and opens nothing
+    // (dashboard-55): the row itself settles it.
+    fireEvent.click(screen.getByTestId("attention-reviewed-s4"));
+    await vi.waitFor(() =>
+      expect(callsOf("session.viewed")).toEqual([
+        { sessionId: "s4", turnId: 2 },
+      ]),
+    );
+    expect(onOpenSession).not.toHaveBeenCalled();
+
+    // A refusal says so on the row, in the act's own words, and the
+    // entry stands (dashboard-53).
+    refuse = true;
+    cleanup();
+    renderSurface();
+    fireEvent.click(screen.getByTestId("attention-reviewed-s4"));
+    await screen.findByText("Couldn't mark it reviewed: Space is syncing");
+    const control = screen.getByTestId("attention-reviewed-s4");
+    expect(control.textContent).toBe("Reviewed");
+    expect((control as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  test("an interrupted intent's Drop asks before it rules", async () => {
+    seed({ ledger: { intents: [], attention: ATTENTION, badge: 6 } });
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? useAppStore.getState().ledger : {},
+    );
+    renderSurface();
+
+    // Its work is still in play, so the ruling is not one click
+    // (dashboard-56).
+    fireEvent.click(screen.getByTestId("attention-drop-if"));
+    expect(callsOf("intent.close")).toEqual([]);
+    const row = screen.getByTestId("attention-if-failure");
+    expect(row.textContent).toContain("Drop this work?");
+
+    fireEvent.click(screen.getByTestId("attention-drop-keep-if"));
+    expect(row.textContent).not.toContain("Drop this work?");
+    expect(callsOf("intent.close")).toEqual([]);
+
+    fireEvent.click(screen.getByTestId("attention-drop-if"));
+    fireEvent.click(screen.getByTestId("attention-drop-confirm-if"));
+    await vi.waitFor(() =>
+      expect(callsOf("intent.close")).toEqual([
+        { intentId: "if", as: "dropped" },
+      ]),
+    );
   });
 
   test("Confirm closes done with an in-frame busy state; Drop acts on the click", async () => {
@@ -1340,7 +1433,7 @@ describe("dashboard-50: the Running band lists what is working", () => {
 
   test.each(
     (["missing", "stale"] as const).flatMap((transcript) =>
-      (["question", "permission", "failure"] as const).map((kind) => ({ transcript, kind })),
+      (["question", "failure"] as const).map((kind) => ({ transcript, kind })),
     ),
   )("summary activity and a standing $kind override a $transcript transcript", ({ transcript, kind }) => {
     const stale = inFlight();

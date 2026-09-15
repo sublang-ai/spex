@@ -11,7 +11,7 @@ import type { IntentInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { ProjectInfo } from "@sublang/spex-core/protocol";
 import { safeStorageGet, safeStorageSet, SURFACE_KEY, useAppStore } from "./state/store.js";
-import type { AttentionItem } from "./state/dashboard.js";
+import { ATTENTION_RANK, type AttentionItem } from "./state/dashboard.js";
 import { setCaptain } from "./lib/config-ops.js";
 import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionView } from "./state/reducer.js";
@@ -43,6 +43,14 @@ export type { Surface };
 /** The pinned project views beside the sessions (run-view-58). "repo"
  * is the retired name of the Overview (DR-038): a remembered value
  * still lands there. */
+/** What a tab's name says about its entry (run-view-48). */
+const TAB_WORDS: Record<AttentionItem["kind"], string> = {
+  failure: "failed",
+  question: "needs your reply",
+  finish: "needs your verdict",
+  review: "unread turn",
+};
+
 function pinnedTab(tab: string | undefined): "start" | "specs" | "overview" | undefined {
   if (tab === "repo") return "overview";
   return tab === "start" || tab === "specs" || tab === "overview"
@@ -66,8 +74,9 @@ declare global {
 
 /** The one attention fold (DR-035, dashboard-10): every dot and badge
  * re-sources from the core-derived ledger, grouped by session — never
- * from a client-side derivation of its own. Failure is the most
- * severe voice and wins a session's dot. */
+ * from a client-side derivation of its own. Where a session carries
+ * several entries the most severe wins its mark, in the one rank
+ * every surface shares. */
 function useLedgerAttention(): Map<string, AttentionItem> {
   const ledger = useAppStore((state) => state.ledger);
   const sessions = useAppStore((state) => state.sessions);
@@ -80,13 +89,15 @@ function useLedgerAttention(): Map<string, AttentionItem> {
       // An earlier delivery still counts on the Dashboard, but does
       // not mean the later work is waiting for a reply.
       if (entry.band === "finished" && (session?.turnActive ?? view?.turnActive)) continue;
-      const kind = entry.kind === "failure" ? "failure" : "question";
+      // The entry's own kind travels (DR-066): a mark that says
+      // "needs your reply" where a turn is merely unread names an act
+      // the reader cannot take.
       const existing = map.get(entry.sessionId);
-      if (existing && (existing.kind === "failure" || kind !== "failure")) {
+      if (existing && ATTENTION_RANK[existing.kind] <= ATTENTION_RANK[entry.kind]) {
         continue;
       }
       map.set(entry.sessionId, {
-        kind,
+        kind: entry.kind,
         sessionId: entry.sessionId,
         projectPath: session?.projectPath ?? "",
         text: entry.title,
@@ -330,6 +341,7 @@ function WorkspaceSurface({
     (state) => state.openAcademyExample,
   );
   const ledger = useAppStore((state) => state.ledger);
+  const markViewed = useAppStore((state) => state.markViewed);
   const stagedIntents = useAppStore((state) => state.stagedIntents);
   const clearStagedIntent = useAppStore((state) => state.clearStagedIntent);
   const queueIntent = useAppStore((state) => state.queueIntent);
@@ -361,6 +373,18 @@ function WorkspaceSurface({
       : (open.find((session) => session.id === activeSessionId)?.id ??
         open[0]?.id ??
         "start"));
+
+  // The last-viewed marker is a standing condition, not an event
+  // (run-view-134): while the workspace shows a session with its
+  // transcript loaded, that session's greatest ended turn is viewed —
+  // however the reader arrived, and whether or not this core could
+  // continue the conversation. Re-asserted whenever the fold moves, so
+  // a write a Space operation refused is simply taken again.
+  const shownView = pinnedTab(tab) ? undefined : views[tab];
+  useEffect(() => {
+    if (!shownView || shownView.loading) return;
+    markViewed(tab);
+  }, [tab, shownView, ledger, markViewed]);
 
   // Keep the active tab reachable when the strip scrolls.
   useEffect(() => {
@@ -545,11 +569,7 @@ function WorkspaceSurface({
           const name =
             title +
             (session.externalWriter === "unknown" ? " — ownership unknown" : session.externalWriter ? " — in use elsewhere" : session.recovery && !session.live ? " — needs recovery" : isHistory(session) ? " — history" : "") +
-            (attentionItem
-              ? attentionItem.kind === "failure"
-                ? " — failed"
-                : " — needs your reply"
-              : "");
+            (attentionItem ? ` — ${TAB_WORDS[attentionItem.kind]}` : "");
           return (
             <span
               key={session.id}
@@ -586,7 +606,7 @@ function WorkspaceSurface({
                 onClick={() => pickTab(session.id)}
                 className="flex min-w-0 items-center gap-1.5 hover:text-neutral-900 dark:hover:text-neutral-100"
               >
-                {attentionItem && !isActive ? (
+                {attentionItem ? (
                   <span
                     data-testid={`tab-attention-${session.id}`}
                     aria-hidden
@@ -766,6 +786,7 @@ function WorkspaceSurface({
             onDraftChange={(draft) => setDraft(activeSession.id, draft)}
             onSubmit={(text) => submitBossText(activeSession.id, text)}
             onAbort={() => void abortTurn(activeSession.id)}
+            attention={attentionBySession.get(activeSession.id)?.kind}
             onRemoveQueued={(index) => removeQueued(activeSession.id, index)}
             onDismissError={() => clearRunError(activeSession.id)}
             focusTurn={
@@ -1117,7 +1138,7 @@ export function App() {
         <ProjectPalette
           projects={projects}
           sessions={sessions}
-          views={views}
+          attention={attentionBySession}
           currentProjectId={currentProjectId}
           onPickFolder={
             window.spexNative

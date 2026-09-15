@@ -75,7 +75,19 @@ function renderPalette(overrides: Partial<Parameters<typeof ProjectPalette>[0]> 
     <ProjectPalette
       projects={PROJECTS}
       sessions={[liveSession("s1", "p2")]}
-      views={{ s1: parkedView() }}
+      attention={
+        new Map([
+          [
+            "s1",
+            {
+              kind: "question" as const,
+              sessionId: "s1",
+              projectPath: "/tmp/p2",
+              text: "Which way?",
+            },
+          ],
+        ])
+      }
       currentProjectId="p1"
       onPick={onPick}
       onAddPath={onAddPath}

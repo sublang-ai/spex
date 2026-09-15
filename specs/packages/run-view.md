@@ -298,13 +298,27 @@ While a turn the failed-workflow notice started is in flight [[run-view-129](#ru
 - a refused submission shows its cause beside the notice with the transcript and draft preserved, as a refused composer submission does [[run-view-8](#run-view-8)];
 - the notice stands until the record stream reports that run left its failure state or ended [[run-view-14](#run-view-14)], so a turn that answers without recovering leaves the way back in place while either control's success takes it away.
 
+#### run-view-135
+
+While the shown session carries a failure entry [[dashboard-1](dashboard.md#dashboard-1)] with no run of its standing parked in a recoverable failure state [[run-view-128](#run-view-128)], no turn in flight, and an ordinary Boss message continuing it [[core-service-32](core-service.md#core-service-32)], the run view shall stand a notice where the failed-workflow notice stands saying that the last turn failed and that a message picks it up, with the composer beneath it ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+
+- nothing is stuck, so the notice carries no control of its own: the act is the composer's, and the notice is void wherever the composer is [[run-view-8](#run-view-8)];
+- the notice leaves when the entry does — the next Boss turn starting [[dashboard-4](dashboard.md#dashboard-4)].
+
+#### run-view-136
+
+When a player's records carry a permission request, that player's pane shall render it as the run's own line saying which tool was asked for and that Spex answers no permission request, so the agent's own default decided ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+
+- the request raises no attention entry [[dashboard-1](dashboard.md#dashboard-1)] and no mark anywhere, because no control in the product answers one;
+- the line stands in the transcript as history, settling nothing and asking nothing.
+
 #### run-view-34
 
 The run view shall keep cross-project attention and playbook creation at hand:
 
 - while the Dashboard's published attention count [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the sidebar's Dashboard entry shows a badge with that count across all projects ([DR-029](../decisions/029-session-history-home.md)), surviving the sidebar's collapse [[run-view-71](#run-view-71)];
 - while a non-current project needs a human, that project's sidebar row carries a dot in the most severe color [[run-view-67](#run-view-67)];
-- the project palette's rows carry each project's count of sessions summoning a human, derived by the run view itself rather than read from that published count: a failure summons while one of a session's runs stands parked in its recoverable failure state [[run-view-74](#run-view-74)] — the run's own frames answer for it, never the session's last reported state ([DR-061](../decisions/061-run-state-from-frames.md)) — and while no turn is running and the last one held a failure, so a failure that parked no machine summons too;
+- the project palette's rows carry each project's count of sessions summoning a human, read from that one published fold [[dashboard-9](dashboard.md#dashboard-9)] and never derived again here, with the most severe of a session's entries naming its mark ([DR-066](../decisions/066-every-summons-has-a-door.md));
 - the slash menu ends with a compile-a-new-playbook entry that opens the Playbooks surface's compile flow.
 
 ### Conversation Life (DR-010 §1/§3)
@@ -455,7 +469,8 @@ While the app is connected, the sidebar shall present navigation as surface entr
 
 Each session row in the sidebar shall read as its conversation — its title (the first Boss turn, or a never-spoken marker), its age in the app's compact form with the exact moment in its tooltip, and a status mark — with its turn count and its age in words in the row's accessible description [[core-service-32](core-service.md#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)):
 
-- the mark speaks attention first and life second, in the app's one status palette: amber while the session waits on the human, red while it holds an unacknowledged failure — the same derivation the Dashboard entry's count uses [[run-view-34](#run-view-34)] — then running while a turn is in flight, then idle ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
+- the mark speaks attention first and life second, in the app's one status palette: red while the session holds an unacknowledged failure and amber for its every other entry — the one published fold naming which [[dashboard-9](dashboard.md#dashboard-9)] — then running while a turn is in flight, then idle ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
+- the description says what the entry asks for in its own words — "failed", "waiting for your reply", "waiting for your verdict", "unread turn" — and a session the core cannot continue keeps that limitation in its description beside them, so a claim that a reply is owed never displaces it;
 - an idle session whose last turn held a failure that no longer summons wears a quieter historical mark that counts toward no attention signal;
 - every mark's meaning is in the row's accessible description, so color is never the only channel;
 - the active session's row carries the app's interaction hue, the treatment the surface entries already use;
@@ -532,7 +547,7 @@ The tab strip shall show the current project's open sessions, working and idle a
 
 - the strip holds the sessions the reader has opened — the working set, not the archive, which the sidebar keeps [[run-view-67](#run-view-67)];
 - session tabs are titled by the session's first Boss turn (truncated; "new session" before the first turn) with the full prompt and start time in the tooltip — never by the project name, which the sidebar carries ([DR-011](../decisions/011-project-workspace.md));
-- tabs carry the shared attention signal: an amber dot for a waiting question and a red dot for a failure on background tabs (the active tab shows the banner instead), with the detail in the tab tooltip and the tab's accessible name ending in "needs your reply" or "failed" so the dot is never the only channel, and a tab of history the core cannot continue says "history" ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
+- tabs carry the shared attention signal [[dashboard-9](dashboard.md#dashboard-9)]: a red dot for a failure and an amber one for every other entry, standing on the active tab as well as a background one — showing a session clears what showing settles [[run-view-134](#run-view-134)], so a dot that stands is one the reader still owes — with the detail in the tab tooltip and the tab's accessible name ending in that entry's own words — "failed", "needs your reply", "needs your verdict", "unread turn" — so the dot is never the only channel, and a tab of history the core cannot continue says "history" ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - each tab's close control files the session out of the working set, stopping nothing and confirming nothing ([DR-029](../decisions/029-session-history-home.md)), and after a tab closes focus moves to a neighboring tab, never to the document body;
 - the strip scrolls horizontally when tabs overflow, keeps the new-session control — a plus glyph, its name in its accessible name and tooltip ([DR-041](../decisions/041-chrome-that-fits.md)) — reachable, exposes tab-list semantics, and keeps the active tab scrolled into view;
 - the strip has one Tab stop — the active tab — and Arrow Left, Arrow Right, Home, and End move focus between session tabs, the new-session control, and the pinned tabs without activating any;
@@ -626,7 +641,7 @@ When a dispatched intent's final turn ends finished, the run view shall render t
 - the provenance chip with a canonical URL is a link that opens outside the page — a new browsing context, with no referrer — so the session never navigates away, and the same chip is the one the bound turn's bubble wears [[run-view-89](#run-view-89)];
 - the card says visibly that a follow-up message continues the intent only while it is the newest open dispatched intent owning the conversation [[run-view-90](#run-view-90)]; an automatic successor leaves this card and its verdict controls in place ([DR-055](../decisions/055-queue-advancement.md));
 - when a verdict is given, the card resolves in place into the project's next queued intent with Start, or into an inline add affordance when the queue holds none;
-- in an ended session the card replays identically from the stored fold [[run-view-14](#run-view-14)], its controls inert.
+- in an ended session the card replays identically from the stored fold [[run-view-14](#run-view-14)], its verdict controls still live wherever the intent is open — the ruling reads no runtime state and the Dashboard row takes the same act [[dashboard-56](dashboard.md#dashboard-56)] — and only the resolved card's Start and add are inert there, a new turn being what they need.
 
 #### run-view-88
 
@@ -645,15 +660,26 @@ While a Boss turn is bound to an intent, that turn's outgoing bubble [[run-view-
 
 While a session's lane holds an open dispatched intent, the run view shall show a slim working line above the Boss composer naming that intent — the newest open intent, which owns the conversation — with Drop beside it [[run-view-113](#run-view-113)], so re-entry is answered where the eye lands ([DR-035](../decisions/035-intent-ledger.md)).
 
+#### run-view-134
+
+While a session is the workspace's shown session with its transcript loaded [[run-view-14](#run-view-14)], the run view shall keep that session's last-viewed marker at that session's greatest ended turn [[core-service-48](core-service.md#core-service-48)] ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+
+- the condition holds however the reader arrived and whether or not this core can continue the conversation, so a session synced from another device or written by the CLI clears like any other;
+- a turn still in flight is never named, so a turn the reader has not seen end still summons [[dashboard-4](dashboard.md#dashboard-4)];
+- a session listed, streamed, prefetched, or restored into a tab the reader has not shown is never marked — being drawn in a list is not a gesture taken on a conversation ([DR-065](../decisions/065-repairs-the-reader-answers.md));
+- a refused write leaves the condition standing, so the next fold the core publishes asserts it again [[space-21](space.md#space-21)];
+- the marker clears the session's unread-turn entry alone and no intent entry, whose verdict is owed regardless of reading [[dashboard-4](dashboard.md#dashboard-4)].
+
 #### run-view-91
 
-When the workspace opens a session from an attention entry [[dashboard-1](dashboard.md#dashboard-1)] bound to an intent [[run-view-57](#run-view-57)], the run view shall focus the intent's place in the thread ([DR-035](../decisions/035-intent-ledger.md)):
+When the workspace opens a session from an attention entry [[dashboard-1](dashboard.md#dashboard-1)], the run view shall focus that entry's place in the thread ([DR-035](../decisions/035-intent-ledger.md)):
 
 | The entry stands on | The focused place |
 | --- | --- |
 | a pending question | the question's incoming bubble [[run-view-9](#run-view-9)] |
 | an unacknowledged failure | the failure's ◆ line [[run-view-2](#run-view-2)] |
 | a finish awaiting its verdict | the delivery card at the intent's final turn [[run-view-87](#run-view-87)] |
+| a turn the reader has not read | the end of that turn [[run-view-134](#run-view-134)] |
 
 #### run-view-113
 
@@ -893,7 +919,7 @@ Where a replayed fixture stream dispatches a queued intent whose turn then ends 
 - while an automatic successor runs, the earlier card retains Confirm and Drop, loses its follow-up note, and confirming it neither starts another turn nor changes the successor's attribution [[run-view-87](#run-view-87)];
 - giving a verdict sends a close command over the protocol and resolves the card in place into the project's next queued intent with Start [[run-view-87](#run-view-87)];
 - with an empty fixture queue, the card resolves into the inline add affordance instead [[run-view-87](#run-view-87)];
-- replaying the same stream as an ended session renders the identical card with its controls inert [[run-view-87](#run-view-87)] [[run-view-14](#run-view-14)].
+- replaying the same stream as an ended session renders the identical card, its verdict controls still live and its resolved card's Start inert [[run-view-87](#run-view-87)] [[run-view-14](#run-view-14)].
 
 #### run-view-95
 
@@ -902,6 +928,16 @@ Where a fixture project holds a queue whose unblocked head intent has more inten
 #### run-view-96
 
 Where fixture streams hold one intent standing on a pending question, one holding an unacknowledged failure, and one finished awaiting its verdict, when each session is opened from its attention entry, the test suite shall assert the run view focuses the question's bubble, the failure's line, and the delivery card respectively [[run-view-91](#run-view-91)].
+
+#### run-view-137
+
+Where a fixture holds a session whose last turn finished before the client learned of it, the fold already naming it unread, the test suite shall assert the marker contract of [[run-view-134](#run-view-134)]:
+
+- showing that session sends the marker naming the fold's own summoning turn, so an entry raised before the client connected clears with no live record arriving;
+- a session listed in the sidebar, subscribed, or held in a background tab is never marked, and neither is a pinned tab that is no conversation;
+- a fold naming no unread turn for the shown session sends nothing, so a turn in flight is never marked, and the marker is sent once per fold rather than on every render;
+- a session carrying a failure entry with no run parked stands the pick-it-up notice above its composer, which a parked run's own notice replaces [[run-view-135](#run-view-135)];
+- a player's permission request renders as its own line in that player's pane and raises no mark on the tab, the sidebar row, or the badge [[run-view-136](#run-view-136)].
 
 ### Protocol Boundary Coverage
 

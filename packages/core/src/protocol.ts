@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 15;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -343,7 +343,7 @@ export interface DerivedIntent {
   /** Present while the after-link's target is still open. */
   blockedBy?: { intentId: string; title: string; projectId: string };
   /** Why an interrupted intent stands stopped on the Boss. */
-  reason?: "question" | "permission" | "failure";
+  reason?: "question" | "failure";
 }
 
 /** One attention entry: an interrupted or finished intent, or a
@@ -351,8 +351,13 @@ export interface DerivedIntent {
 export interface AttentionEntry {
   band: "interrupted" | "finished";
   /** Interruption reason, or "finish" / "review" for band two —
-   * "review" names the un-ledgered turn that clears on viewing. */
-  kind: "question" | "permission" | "failure" | "finish" | "review";
+   * "review" names the un-ledgered turn the reader has not read yet.
+   * Every kind here has an act that ends it (DR-066). */
+  kind: "question" | "failure" | "finish" | "review";
+  /** Set on a failure whose run stands parked in its failure state:
+   * the conversation carries Retry and Drop, so the row can name the
+   * reader's next step honestly (dashboard-53, DR-062). */
+  parked?: true;
   /** Absent for session stand-in entries. */
   intentId?: string;
   /** The intent's title, or the session's latest turn text. */

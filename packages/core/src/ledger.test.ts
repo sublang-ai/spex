@@ -255,7 +255,7 @@ test("DR-035: a parked awaitBossReply derives interrupted question in band one",
   store.close();
 });
 
-test("DR-035: a standing permission interrupts even while its turn is open, and a later record for the player clears it", () => {
+test("DR-066: a permission request raises no entry — nothing answers one", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
   queueIntent(store, projectId, "P", "i");
@@ -269,30 +269,111 @@ test("DR-035: a standing permission interrupts even while its turn is open, and 
     timestamp: 1200,
   });
 
-  // The permission condition only ever stands while the turn runs, so
-  // it must outrank working or it could never summon the Boss.
+  // No command answers a permission request, so summoning the Boss to
+  // one would name an act they cannot take (dashboard-54, DR-066). The
+  // session reads as what it is: a run still working.
   const busy = [lane("s1", projectId, true)];
-  const interrupted = fold(store, busy);
-  const p = stateOf(interrupted, "P");
-  assert.equal(p.state, "interrupted");
-  assert.equal(p.reason, "permission");
-  assert.deepEqual(
-    interrupted.attention.map((entry) => [entry.band, entry.kind, entry.intentId, entry.since]),
-    [["interrupted", "permission", "P", 1200]],
-  );
+  const working = fold(store, busy);
+  assert.equal(stateOf(working, "P").state, "working");
+  assert.deepEqual(working.attention, []);
+  assert.equal(working.badge, 0);
 
-  // A later record for the same player answers the request.
-  append(store, "s1", {
+  // An un-ledgered session raises none either.
+  addSession(store, projectId, "s2");
+  beginTurn(store, "s2", 1, "and this", 2000);
+  append(store, "s2", {
     type: "player_event",
     playerId: "dev.coder",
-    event: { type: "text_delta" },
+    event: { type: "permission_request" },
     turnId: 1,
-    timestamp: 1300,
+    timestamp: 2200,
   });
-  const resumed = fold(store, busy);
-  assert.equal(stateOf(resumed, "P").state, "working");
-  assert.equal(resumed.badge, 0);
+  const standIn = fold(store, [...busy, lane("s2", projectId, true)]);
+  assert.deepEqual(standIn.attention, []);
   store.close();
+});
+
+test("DR-066: a session's own failure honours the parked rule its intent-owned twin does", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  beginTurn(store, "s1", 1, "run it", 1000);
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1100,
+    message: "the workflow failed",
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { to: "failed" },
+    turnId: 1,
+    timestamp: 1150,
+  });
+  finishTurn(store, "s1", 1, 1200);
+
+  const live = [lane("s1", projectId, false)];
+  const parked = fold(store, live);
+  assert.deepEqual(
+    parked.attention.map((entry) => [entry.kind, entry.parked]),
+    [["failure", true]],
+  );
+
+  // A later turn does not answer a parked failure (dashboard-4): only
+  // the run leaving that state does. The stand-in branch used to clear
+  // here, which the intent-owned branch never did.
+  beginTurn(store, "s1", 2, "something else", 2000);
+  finishTurn(store, "s1", 2, 2100);
+  assert.deepEqual(
+    fold(store, live).attention.map((entry) => entry.kind),
+    ["failure"],
+  );
+
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "failed", to: "idle" },
+    turnId: 2,
+    timestamp: 2200,
+  });
+  const cleared = fold(store, live);
+  assert.ok(
+    !cleared.attention.some((entry) => entry.kind === "failure"),
+    "the run leaving its failure state answers it",
+  );
+  store.close();
+});
+
+test("DR-066: a project whose store refuses its acts raises no summons", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ledger-blocked-"));
+  const { store, projectId } = newProjectStore(dir);
+  addSession(store, projectId, "s1");
+  beginTurn(store, "s1", 1, "chat about tests", 1000);
+  finishTurn(store, "s1", 1, 1100);
+  const live = [lane("s1", projectId, false)];
+  assert.deepEqual(
+    fold(store, live).attention.map((entry) => entry.kind),
+    ["review"],
+    "a healthy project summons",
+  );
+  store.close();
+
+  // Damaged preferences fold every marker to -1 while refusing every
+  // write, so the summons would stand with no act able to clear it.
+  writeFileSync(join(dir, "prefs.json"), "{bad JSON}");
+  const reopened = new Store({ dir });
+  const blocked = foldLedger({
+    store: reopened,
+    lanes: live,
+    now: () => NOW,
+  });
+  assert.deepEqual(blocked.attention, []);
+  assert.equal(blocked.badge, 0);
+  assert.ok(
+    reopened.storageDiagnostics().some((report) => report.blocking),
+    "the condition stands as a storage diagnostic, where the repair is",
+  );
+  reopened.close();
 });
 
 test("DR-035: a runtime_error derives interrupted failure, cleared by a later turn start", () => {
@@ -1574,7 +1655,48 @@ test("core-service-59: session.viewed clears the un-ledgered turn's review stand
   assert.equal(review?.intentId, undefined, "a stand-in names no intent");
   assert.equal(ledger.badge, 1);
 
+  // A marker naming a turn still in flight is refused, so no client
+  // suppresses the next summons by naming it (core-service-48).
+  await client.expectOk("turn.submit", {
+    sessionId: session.id,
+    // Slow enough that the marker below reaches a turn still running.
+    text: "slow: and one more",
+  });
+  const started = await client.waitFor(
+    (m) =>
+      m.type === "record" &&
+      m.record.type === "turn_started" &&
+      (m.record.turnId ?? -1) > turnId,
+  );
+  const running =
+    started.type === "record" ? (started.record.turnId ?? -1) : -1;
+  assert.ok(running > turnId);
+  const refused = await client.command("session.viewed", {
+    sessionId: session.id,
+    turnId: running,
+  });
+  assert.ok(
+    !refused.ok && refused.error.code === "invalid_request",
+    JSON.stringify(refused),
+  );
+  await client.waitFor(
+    (m) => m.type === "record" && m.record.type === "turn_finished",
+  );
+
   await client.expectOk("session.viewed", { sessionId: session.id, turnId });
+  const stillSummons = await client.ledgerUntil(
+    (state) => state.attention.some((entry) => entry.kind === "review"),
+    "the newer unread turn to stand",
+  );
+  assert.equal(
+    stillSummons.attention.find((entry) => entry.kind === "review")?.turnId,
+    running,
+    "the older marker leaves the newer turn summoning",
+  );
+  await client.expectOk("session.viewed", {
+    sessionId: session.id,
+    turnId: running,
+  });
   const viewed = await client.expectOk("ledger.get", {});
   assert.deepEqual(viewed.attention, []);
   assert.equal(viewed.badge, 0);

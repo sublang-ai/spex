@@ -14,15 +14,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
-import type { SessionView } from "../state/reducer.js";
-import { deriveAttention } from "../state/dashboard.js";
+import { ATTENTION_RANK, type AttentionItem } from "../state/dashboard.js";
 import { useAppStore } from "../state/store.js";
 import { Icon } from "./Icon.js";
 
 export interface ProjectPaletteProps {
   projects: ProjectInfo[];
   sessions: SessionInfo[];
-  views: Record<string, SessionView>;
+  /** The one ledger-fed attention map every surface shares
+   * (dashboard-9, DR-066) — the palette derives no count of its own. */
+  attention: Map<string, AttentionItem>;
   currentProjectId?: string;
   onPickFolder?: () => Promise<string | null>;
   onPick: (projectId: string) => void;
@@ -35,7 +36,7 @@ export interface ProjectPaletteProps {
 interface ProjectRowState {
   running: number;
   attention: number;
-  worst?: "question" | "failure";
+  worst?: AttentionItem["kind"];
 }
 
 const ROW_ACTIVE = "bg-neutral-100 dark:bg-neutral-800";
@@ -74,9 +75,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   }, []);
 
   const rowState = useMemo(() => {
-    const attention = deriveAttention(props.sessions, props.views).filter(
-      (item) => item.kind !== "idle",
-    );
+    const attention = [...props.attention.values()];
     const byProject = new Map<string, ProjectRowState>();
     for (const project of props.projects) {
       byProject.set(project.id, { running: 0, attention: 0 });
@@ -91,12 +90,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       const row = session && byProject.get(session.projectId);
       if (!row) continue;
       row.attention += 1;
-      if (item.kind === "failure" || !row.worst) {
-        row.worst = item.kind as "question" | "failure";
+      if (!row.worst || ATTENTION_RANK[item.kind] < ATTENTION_RANK[row.worst]) {
+        row.worst = item.kind;
       }
     }
     return byProject;
-  }, [props.projects, props.sessions, props.views]);
+  }, [props.projects, props.sessions, props.attention]);
 
   const filtered = props.projects.filter(
     (project) =>

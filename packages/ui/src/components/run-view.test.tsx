@@ -231,9 +231,11 @@ describe("run-view-14: opaque records in the protocol stream", () => {
       expect(useAppStore.getState().views.s1.turnActive).toBe(false);
       expect(useAppStore.getState().views.s1.lastSeq).toBe(seq);
       expect(useAppStore.getState().composers.s1.queued).toEqual([]);
+      // The marker is the workspace's standing condition now, not the
+      // record handler's event (run-view-134): a turn finishing sends
+      // nothing on its own.
       expect(command.mock.calls).toEqual([
         ["turn.submit", { sessionId: "s1", text: "Queued follow-up" }],
-        ["session.viewed", { sessionId: "s1", turnId: 1 }],
       ]);
     } finally {
       rendered.unmount();
@@ -1502,7 +1504,7 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
     );
   });
 
-  test("a history session's replay renders the card inert", () => {
+  test("a history session's replay keeps the verdict takeable", () => {
     renderRunWith(TURN_ONE, {
       session: { ...SESSION, live: false, endedAt: 5 },
       readOnly: true,
@@ -1510,14 +1512,17 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
     });
     const card = screen.getByTestId("delivery-card-i1");
     expect(card.textContent).toContain("Address #7: fix the login bug");
+    // The verdict rules on the intent, not the session (run-view-87,
+    // DR-066): the Dashboard row takes the very same act, so claiming
+    // it inert here would be the only false statement on screen.
     expect(
       (within(card).getByTestId("delivery-confirm") as HTMLButtonElement)
         .disabled,
-    ).toBe(true);
+    ).toBe(false);
     expect(
       (within(card).getByTestId("delivery-drop") as HTMLButtonElement)
         .disabled,
-    ).toBe(true);
+    ).toBe(false);
     // And a read-only lane shows no working line.
     expect(screen.queryByTestId("working-line")).toBeNull();
   });
@@ -2157,14 +2162,17 @@ describe("run-view-116/117: a lane folds to a rail and returns for its call", ()
 });
 
 describe("run-view-110: explicit uncertain-turn recovery", () => {
-  test("external ownership keeps delivery history without allowing its actions", () => {
+  test("external ownership keeps delivery history with its verdict still owed", () => {
     const previous = useAppStore.getState();
     useAppStore.setState({ledger: {...EMPTY_LEDGER, intents: [FINISHED, QUEUED_NEXT]}});
     try {
       renderRunWith(TURN_ONE, {session: {...SESSION, externalWriter: "active"}});
       expect(screen.getByTestId("delivery-card-i1")).toBeTruthy();
-      expect((screen.getByTestId("delivery-confirm") as HTMLButtonElement).disabled).toBe(true);
-      expect((screen.getByTestId("delivery-drop") as HTMLButtonElement).disabled).toBe(true);
+      // A session another writer owns runs no turn here, and the
+      // verdict needs none: the ruling is the ledger's (run-view-87).
+      expect((screen.getByTestId("delivery-confirm") as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByTestId("delivery-drop") as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.queryByTestId("boss-composer")).toBeNull();
     } finally {useAppStore.setState(previous, true);}
   });
 

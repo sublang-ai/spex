@@ -1581,6 +1581,19 @@ export class CoreService {
       }
       case "session.viewed": {
         this.requireKnownSession(command.sessionId);
+        // A marker may name only a turn that has ended (core-service-48):
+        // naming one still in flight would set the marker to the very id
+        // the fold compares against when it finishes, swallowing the next
+        // summons with no act by the reader (DR-066).
+        const ended = this.store
+          .listTurns(command.sessionId)
+          .some((turn) => turn.turnId === command.turnId && turn.endedAt !== null);
+        if (!ended) {
+          throw new CoreError(
+            "invalid_request",
+            "That turn has not ended, so it cannot be marked as read.",
+          );
+        }
         const key = `viewed:${command.sessionId}`;
         const previous = this.store.getPref<number>(key) ?? -1;
         if (command.turnId > previous) {

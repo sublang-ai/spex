@@ -412,6 +412,10 @@ export interface AppState {
   /** Edit a queued intent's text (DR-035: from dispatch on, history). */
   editIntent(intentId: string, text: string): Promise<void>;
   closeIntent(intentId: string, as: "done" | "dropped"): Promise<void>;
+  /** Mark a session's unread finished turn read, without opening it
+   * (dashboard-55): the act reports its own refusal, so the caller
+   * awaits it. */
+  reviewTurn(sessionId: string, turnId: number): Promise<void>;
   /** Retire a closed intent from History (core-service-79, DR-038):
    * the row leaves every loaded page at once. */
   removeIntent(intentId: string): Promise<void>;
@@ -506,11 +510,12 @@ function emptyDraftView(): DraftView {
 
 type FoldedRecord = Parameters<typeof applyRecord>[2];
 
-/** A permission request the authoring runner answers nothing to
- * (playbook-library-64): the thread shows it as a failure line naming
- * the tool, since the agent's own headless default decided it. Session
- * players' requests are the Captain's to answer, so only a draft's
- * records fold this way. */
+/** A permission request nothing in the product answers (run-view-136,
+ * playbook-library-64): the pane shows it as a line naming the tool,
+ * since the agent's own headless default decided it. No control
+ * answers one and no summons names it (DR-066), so the line is where
+ * the request is true — a draft's runner and a session's players
+ * alike. */
 function permissionAsFailure(record: FoldedRecord): FoldedRecord {
   if (record.type !== "player_event") return record;
   const event = (record as { event?: { type?: string; payload?: { toolName?: string; reason?: string } } }).event;
@@ -618,6 +623,12 @@ export function deliverServerMessageForTests(message: ServerMessage): void {
 /** The newest ledger read's number: only its reply applies. */
 let ledgerReads = 0;
 
+/** Markers already sent, by session: the standing condition
+ * (run-view-134) re-asserts on every fold push, and this keeps that
+ * from re-sending the same marker while the fold catches up. A refused
+ * write drops its entry so the next push takes the act again. */
+const sentMarkers = new Map<string, number>();
+
 /** The newest Space read's number (space-2): a `space.get` reply older
  * than a `space.state` broadcast or a newer read is discarded. */
 let spaceReads = 0;
@@ -686,7 +697,7 @@ export const useAppStore = create<AppState>((set, get) => {
     record: import("@sublang/spex-core/protocol").TmuxPlayRecord,
     role?: string,
   ): void {
-    applyRecord(view, seq, record, role);
+    applyRecord(view, seq, permissionAsFailure(record), role);
     if (hasPresentationHeader(record) && record.type === "player_prompt") {
       get().setLaneCollapsed(sessionId, String(record.playerId), false);
     }
@@ -1021,14 +1032,6 @@ export const useAppStore = create<AppState>((set, get) => {
           // any loaded tree for this project (DR-011 freshness).
           if (session && get().specTrees[session.projectId]) {
             void get().loadSpecs(session.projectId);
-          }
-          // The reader is looking at this session: the finish is seen
-          // the moment it lands, so the review summons clears (DR-035).
-          if (
-            record.type === "turn_finished" &&
-            sessionId === get().activeSessionId
-          ) {
-            get().markViewed(sessionId);
           }
         }
         break;
@@ -1780,6 +1783,12 @@ export const useAppStore = create<AppState>((set, get) => {
       await get().loadLedger();
     },
 
+    async reviewTurn(sessionId, turnId): Promise<void> {
+      await getClient().command("session.viewed", { sessionId, turnId });
+      sentMarkers.set(sessionId, turnId);
+      await get().loadLedger();
+    },
+
     async removeIntent(intentId): Promise<void> {
       await getClient().command("intent.remove", { intentId });
       // The row leaves at once, from every page already loaded — the
@@ -1833,17 +1842,29 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     markViewed(sessionId: string): void {
-      const view = get().views[sessionId];
-      const turnId = view?.currentTurnId;
-      const session = get().sessions.find((s) => s.id === sessionId);
-      const latest =
-        typeof turnId === "number" && turnId >= 0
-          ? turnId
-          : (session?.turns ?? 0) - 1;
-      if (latest < 0) return;
+      // The marker names the very turn that summons (run-view-134).
+      // The fold raises a review entry only for a finished turn past
+      // the marker, so naming that turn is monotonic and can never
+      // name a turn in flight, which the core refuses anyway
+      // (core-service-48). With nothing summoning there is nothing to
+      // mark, and this is a no-op.
+      const entry = (get().ledger?.attention ?? []).find(
+        (item) => item.kind === "review" && item.sessionId === sessionId,
+      );
+      const turnId = entry?.turnId;
+      if (typeof turnId !== "number") return;
+      if (sentMarkers.get(sessionId) === turnId) return;
+      sentMarkers.set(sessionId, turnId);
       void getClient()
-        .command("session.viewed", { sessionId, turnId: latest })
-        .catch(() => {});
+        .command("session.viewed", { sessionId, turnId })
+        .catch(() => {
+          // A refusal — the store held by a Space operation — leaves
+          // the condition standing: the next fold push asserts it
+          // again (space-21).
+          if (sentMarkers.get(sessionId) === turnId) {
+            sentMarkers.delete(sessionId);
+          }
+        });
     },
 
     removeQueued(sessionId: string, index: number): void {

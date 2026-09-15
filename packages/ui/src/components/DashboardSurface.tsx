@@ -41,14 +41,34 @@ import {
 // Copy and formatting
 // ---------------------------------------------------------------------------
 
-/** Human reason labels for attention entries (DR-010 §2). */
+/** Human reason labels for attention entries (DR-010 §2): each names
+ * the state the entry is in, never a band or an activity. */
 const REASON_LABEL: Record<AttentionEntry["kind"], string> = {
   question: "needs your reply",
-  permission: "awaiting permission",
   failure: "failed",
   finish: "finished — confirm?",
-  review: "turn to review",
+  review: "unread turn",
 };
+
+/** What the reader does next, in the row's own words (dashboard-53):
+ * every entry names the act that ends it, whether that act is a
+ * control here or a turn the conversation runs. */
+function actLine(entry: AttentionEntry): string | undefined {
+  switch (entry.kind) {
+    case "review":
+      return "Nothing owed — open it, or mark it reviewed.";
+    case "question":
+      return "Open to reply — the run is waiting.";
+    case "failure":
+      return entry.parked
+        ? "Open to retry or drop the run."
+        : "Open and send a message to pick it up.";
+    default:
+      // A finish carries its stats line instead: the verdict's
+      // controls are right here, and the stats inform it.
+      return undefined;
+  }
+}
 
 /** Band tones (DR-029): amber waits on the human, red means chase
  * this — only the unacknowledged failure wears it. */
@@ -101,6 +121,7 @@ function AttentionRow({
   now,
   onOpen,
   onClose,
+  onReviewed,
   onClosed,
 }: {
   entry: AttentionEntry;
@@ -108,12 +129,14 @@ function AttentionRow({
   now: number;
   onOpen: () => void;
   onClose: (as: "done" | "dropped") => Promise<void>;
-  /** The verdict landed and this row is leaving: the parent hands
-   * focus on (DR-010 §6). */
+  onReviewed: () => Promise<void>;
+  /** An act landed and this row is leaving: the parent hands focus
+   * on (DR-010 §6). */
   onClosed: () => void;
 }) {
-  const [busy, setBusy] = useState<"done" | "dropped">();
+  const [busy, setBusy] = useState<"done" | "dropped" | "reviewed">();
   const [error, setError] = useState<string>();
+  const [confirmDrop, setConfirmDrop] = useState(false);
   const tone = entryTone(entry);
   // A verdict is one click by design (DR-038): Confirm and Drop both
   // act on the click, and the History row is the record of it.
@@ -124,7 +147,22 @@ function AttentionRow({
       .then(onClosed, (cause: Error) => setError(cause.message))
       .finally(() => setBusy(undefined));
   };
+  // Reading is a statement about the ledger, so it acts on the click
+  // exactly as a verdict does (dashboard-55).
+  const review = () => {
+    setBusy("reviewed");
+    setError(undefined);
+    void onReviewed()
+      .then(onClosed, (cause: Error) => setError(cause.message))
+      .finally(() => setBusy(undefined));
+  };
   const finishedIntent = entry.kind === "finish" && entry.intentId;
+  // An interrupted intent's work is still in play, so its Drop asks
+  // first — and dropping it rules on the intent alone: a run still
+  // parked keeps summoning in the session's own words (dashboard-56).
+  const interruptedIntent =
+    entry.band === "interrupted" && entry.intentId !== undefined;
+  const act = actLine(entry);
   return (
     <div
       data-testid={`attention-${entry.intentId ?? entry.sessionId}-${entry.kind}`}
@@ -154,9 +192,19 @@ function AttentionRow({
               {statsLine(entry.stats)}
             </span>
           ) : null}
+          {act ? (
+            <span
+              className="block truncate text-xs opacity-70"
+              data-testid={`attention-act-${entry.intentId ?? entry.sessionId}`}
+            >
+              {act}
+            </span>
+          ) : null}
           {error ? (
             <span className="block truncate text-xs" role="alert">
-              Couldn't record the verdict: {error}
+              {entry.kind === "review"
+                ? `Couldn't mark it reviewed: ${error}`
+                : `Couldn't record the verdict: ${error}`}
             </span>
           ) : null}
         </span>
@@ -173,6 +221,20 @@ function AttentionRow({
           {relativeAge(entry.since, now)}
         </span>
       </button>
+      {entry.kind === "review" ? (
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            disabled={busy !== undefined}
+            data-testid={`attention-reviewed-${entry.sessionId}`}
+            aria-label={`Mark ${entry.title} reviewed`}
+            onClick={review}
+            className="min-h-6 rounded border border-current px-2 py-0.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50 dark:hover:bg-black/20"
+          >
+            {busy === "reviewed" ? "Marking…" : "Reviewed"}
+          </button>
+        </span>
+      ) : null}
       {finishedIntent ? (
         <span className="flex shrink-0 items-center gap-1.5">
           <button
@@ -193,6 +255,44 @@ function AttentionRow({
           >
             {busy === "dropped" ? "Dropping…" : "Drop"}
           </button>
+        </span>
+      ) : null}
+      {interruptedIntent ? (
+        <span className="flex shrink-0 items-center gap-1.5">
+          {confirmDrop ? (
+            <>
+              <span className="text-xs">Drop this work?</span>
+              <button
+                type="button"
+                disabled={busy !== undefined}
+                data-testid={`attention-drop-confirm-${entry.intentId}`}
+                onClick={() => close("dropped")}
+                className="min-h-6 rounded border border-current px-2 py-0.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50 dark:hover:bg-black/20"
+              >
+                {busy === "dropped" ? "Dropping…" : "Drop"}
+              </button>
+              <button
+                type="button"
+                disabled={busy !== undefined}
+                data-testid={`attention-drop-keep-${entry.intentId}`}
+                onClick={() => setConfirmDrop(false)}
+                className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
+              >
+                Keep
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={busy !== undefined}
+              data-testid={`attention-drop-${entry.intentId}`}
+              aria-label={`Drop ${entry.title}`}
+              onClick={() => setConfirmDrop(true)}
+              className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
+            >
+              Drop
+            </button>
+          )}
         </span>
       ) : null}
     </div>
@@ -302,6 +402,14 @@ export function DashboardSurface({
   const ledgerError = useAppStore((state) => state.ledgerError);
   const loadLedger = useAppStore((state) => state.loadLedger);
   const closeIntent = useAppStore((state) => state.closeIntent);
+  const reviewTurn = useAppStore((state) => state.reviewTurn);
+  // Reading is an act on the ledger, so it is takeable from the row
+  // itself — it depends on no runtime state of the session, and works
+  // for a conversation this core could never continue (dashboard-53).
+  const markReviewed = (entry: AttentionEntry): Promise<void> =>
+    entry.turnId === undefined
+      ? Promise.resolve()
+      : reviewTurn(entry.sessionId, entry.turnId);
 
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const now = useNow();
@@ -445,6 +553,7 @@ export function DashboardSurface({
                   ? closeIntent(entry.intentId, as)
                   : Promise.resolve()
               }
+              onReviewed={() => markReviewed(entry)}
               onClosed={() => setHandOff({ index })}
             />
           ))}

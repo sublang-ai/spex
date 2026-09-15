@@ -168,6 +168,7 @@ export function RunView({
   error,
   playbooks,
   readOnly,
+  attention,
   onStartNew,
   onCompileNew,
   onRetryLoad,
@@ -192,6 +193,10 @@ export function RunView({
   readinessHint?: ReadinessHint;
   /** History the core cannot continue (run-view-33): input replaced. */
   readOnly?: boolean;
+  /** The kind of attention entry this session carries, from the one
+   * ledger fold (dashboard-9): the conversation names the act its
+   * summons asks for (run-view-135). */
+  attention?: "question" | "failure" | "finish" | "review";
   onStartNew?: () => void;
   onCompileNew?: () => void;
   /** Retry a failed transcript load (read-only view). */
@@ -548,6 +553,18 @@ export function RunView({
                   Retry
                 </button>
               ) : null}
+            </div>
+          ) : null}
+          {/* A failure that parked no run (run-view-135): nothing is
+              stuck, so the way on is an ordinary message — and until
+              now the summons named no act at all. */}
+          {attention === "failure" && !failedRun && !readOnly && !uncertain && !view.turnActive ? (
+            <div
+              role="status"
+              data-testid="unparked-failure-notice"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+            >
+              The last turn failed. Send a message to pick it up.
             </div>
           ) : null}
           {failedRun ? (

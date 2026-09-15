@@ -94,7 +94,7 @@ describe("forge-work-lists-1: the trailing cluster yields before the row widens"
     const derived = {
       intent: { id: "i1", projectId: "p1", text: "Address #7", rank: "1a", createdAt: 1 },
       state: "interrupted",
-      reason: "permission",
+      reason: "question",
     } as unknown as DerivedIntent;
     render(
       <ul>
@@ -108,10 +108,10 @@ describe("forge-work-lists-1: the trailing cluster yields before the row widens"
       </ul>,
     );
     const state = screen.getByTestId("row-state");
-    expect(state.textContent).toBe("awaiting permission");
+    expect(state.textContent).toBe("needs your reply");
     expect(state.className).toContain("max-w-24");
     expect(state.className).toContain("truncate");
     expect(state.className).not.toContain("shrink-0");
-    expect(state.title).toBe("awaiting permission (interrupted)");
+    expect(state.title).toBe("needs your reply (interrupted)");
   });
 });

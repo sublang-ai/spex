@@ -706,6 +706,21 @@ export class Store {
 
   assertProjectsWritable(): void { this.application.assertWritable(); }
 
+  /** Whether the ledger's own acts can be written for this project
+   * (dashboard-54): a verdict closing an intent goes through
+   * assertWritable, and a viewed marker through the preferences file,
+   * so a blocking problem in either refuses every answer a summons
+   * could have. */
+  ledgerActable(projectId: string): boolean {
+    if (this.prefsProblem) return false;
+    try {
+      this.assertWritable({ projectId });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   assertWritable(scope: {projectId: string; sessionId?: never} | {projectId?: never; sessionId: string}): void {
     this.assertProjectsWritable();
     const sessionProblem = scope.sessionId ? this.sessionProblems.get(scope.sessionId) : undefined;

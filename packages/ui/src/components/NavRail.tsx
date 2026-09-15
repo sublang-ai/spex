@@ -12,7 +12,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
-import type { AttentionItem } from "../state/dashboard.js";
+import { ATTENTION_RANK, type AttentionItem } from "../state/dashboard.js";
 import { useAppStore } from "../state/store.js";
 import { isHistory } from "../lib/sessions.js";
 import { keyLabel } from "../lib/shortcuts.js";
@@ -98,7 +98,7 @@ export interface NavRailProps {
   foot?: ReactNode;
 }
 
-type Life = "question" | "failure" | "running" | "idle-failed" | "idle" | "history" | "external-active" | "external-unknown";
+type Life = "question" | "failure" | "finish" | "review" | "running" | "idle-failed" | "idle" | "history" | "external-active" | "external-unknown";
 
 /** Attention first, life second (run-view-73): the row says "answer
  * me" before it says "I am alive". The runtime is held only for a
@@ -106,8 +106,7 @@ type Life = "question" | "failure" | "running" | "idle-failed" | "idle" | "histo
  * else is idle — or history, where the core cannot continue it. */
 function lifeOf(session: SessionInfo, item: AttentionItem | undefined): Life {
   if (session.externalWriter) return session.externalWriter === "active" ? "external-active" : "external-unknown";
-  if (item?.kind === "question") return "question";
-  if (item?.kind === "failure") return "failure";
+  if (item) return item.kind;
   if (session.live) return "running";
   if (isHistory(session)) return "history";
   return session.failed ? "idle-failed" : "idle";
@@ -116,6 +115,8 @@ function lifeOf(session: SessionInfo, item: AttentionItem | undefined): Life {
 const LIFE_WORDS: Record<Life, string> = {
   question: "waiting for your reply",
   failure: "failed",
+  finish: "waiting for your verdict",
+  review: "unread turn",
   running: "running",
   "idle-failed": "idle, held a failure",
   idle: "idle",
@@ -130,12 +131,22 @@ const LIFE_WORDS: Record<Life, string> = {
 const LIFE_MARKS: Record<Life, string> = {
   question: "bg-amber-500",
   failure: "bg-red-500",
+  finish: "bg-amber-500",
+  review: "bg-amber-500",
   running: "bg-emerald-500",
   "idle-failed": "border-2 border-red-500",
   idle: "border-2 border-neutral-500",
   history: "border-2 border-neutral-300 dark:border-neutral-600",
   "external-active": "bg-emerald-500",
   "external-unknown": "border-2 border-neutral-500",
+};
+
+/** What a project's dot says, in the worst entry's own words. */
+const PROJECT_WORDS: Record<AttentionItem["kind"], string> = {
+  failure: "failed",
+  question: "is waiting for your reply",
+  finish: "is waiting for your verdict",
+  review: "has an unread turn",
 };
 
 function sessionLabel(
@@ -210,13 +221,13 @@ export function NavRail(props: NavRailProps) {
   }, [projects, sessions]);
 
   const projectAttention = useMemo(() => {
-    const map = new Map<string, "question" | "failure">();
+    const map = new Map<string, AttentionItem["kind"]>();
     for (const session of sessions) {
       const item = attention.get(session.id);
-      if (!item || item.kind === "idle") continue;
+      if (!item) continue;
       const worst = map.get(session.projectId);
-      if (item.kind === "failure" || !worst) {
-        map.set(session.projectId, item.kind === "failure" ? "failure" : "question");
+      if (!worst || ATTENTION_RANK[item.kind] < ATTENTION_RANK[worst]) {
+        map.set(session.projectId, item.kind);
       }
     }
     return map;
@@ -402,7 +413,7 @@ export function NavRail(props: NavRailProps) {
           <span
             data-testid="nav-attention-badge"
             aria-hidden
-            title={`${attentionCount} session${attentionCount === 1 ? "" : "s"} need${attentionCount === 1 ? "s" : ""} your reply`}
+            title={`${attentionCount} need${attentionCount === 1 ? "s" : ""} your attention`}
             className={`rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-200 ${
               // Positioned at the entry's corner, beside the glyph,
               // never over it (run-view-108).
@@ -492,7 +503,7 @@ export function NavRail(props: NavRailProps) {
               onFocus={() => setFocusKey(`p:${project.id}`)}
               onClick={() => props.onPickProject(project.id)}
               title={`${project.path}${worst ? ` — needs you` : ""}`}
-              aria-label={`${project.name}${worst ? `, ${worst === "failure" ? "a session failed" : "a session is waiting for your reply"}` : ""}`}
+              aria-label={`${project.name}${worst ? `, a session ${PROJECT_WORDS[worst]}` : ""}`}
               className={`${rowClass(
                 project.id === selectedProjectId && !shownSessionId,
               )} pl-0.5`}
@@ -526,6 +537,7 @@ export function NavRail(props: NavRailProps) {
                   className={`h-2 w-2 shrink-0 rounded-full ${
                     worst === "failure" ? "bg-red-500" : "bg-amber-500"
                   }`}
+                  title={`A session ${PROJECT_WORDS[worst]}`}
                 />
               ) : null}
             </div>

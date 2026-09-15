@@ -91,6 +91,7 @@ meta.md       The spec of specs
 | [DR-063](decisions/063-space-setup-and-repair.md) | 063-space-setup-and-repair.md | Space sets up by naming a remote and repairs a project's folder in place, preserving identity; folded repairs acknowledged per device |
 | [DR-064](decisions/064-honest-remote-failure.md) | 064-honest-remote-failure.md | A remote failure claims only what the host said: both causes named, retryable, the identity mechanism read from the URL, every credential form refused |
 | [DR-065](decisions/065-repairs-the-reader-answers.md) | 065-repairs-the-reader-answers.md | Repairs the reader answers: a repair counts until he acts, set aside stands quietly, folders checked and proposed for one gesture, the palette handing its project back |
+| [DR-066](decisions/066-every-summons-has-a-door.md) | 066-every-summons-has-a-door.md | Every summons has a door: an act on the row that reads no runtime state, the marker the reader's own showing advances, permission unraised |
 
 ## Packages
 

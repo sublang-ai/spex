@@ -43,8 +43,6 @@ interface Turn {
 interface SessionConditions {
   /** The captain parked at awaitBossReply and nothing moved since. */
   question?: { since: number; turnId: number | null };
-  /** A player awaits a permission decision in the current turn. */
-  permission?: { since: number; turnId: number | null };
   /**
    * A run stands parked in its failure state. Unlike a question, a
    * later Boss turn does not clear this: a failure is resolved by the
@@ -63,10 +61,6 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
   const parkedRuns = new Set<string>();
   /** Runs parked in their failure state, by trace session id. */
   const parkedFailures = new Set<string>();
-  const permissions = new Map<
-    string,
-    { since: number; turnId: number | null }
-  >();
   for (const { record } of records) {
     switch (record.type) {
       case "turn_started":
@@ -74,10 +68,6 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
         // even when it dispatches another intent (dashboard-10).
         question = undefined;
         parkedRuns.clear();
-        break;
-      case "turn_finished":
-      case "turn_aborted":
-        permissions.clear();
         break;
       case "captain_telemetry": {
         const telemetry = record as {
@@ -149,38 +139,12 @@ function foldConditions(records: StoredRecord[]): SessionConditions {
         }
         break;
       }
-      case "player_event": {
-        const event = record as {
-          playerId: string;
-          event?: { type?: string };
-          turnId: number | null;
-          timestamp: number;
-        };
-        if (event.event?.type === "permission_request") {
-          if (!permissions.has(event.playerId)) {
-            permissions.set(event.playerId, {
-              since: event.timestamp,
-              turnId: event.turnId,
-            });
-          }
-        } else {
-          // A later record for the same player answers the request
-          // (dashboard-10).
-          permissions.delete(event.playerId);
-        }
-        break;
-      }
-      case "player_finished":
-        permissions.delete((record as { playerId: string }).playerId);
-        break;
       default:
         break;
     }
   }
-  const first = [...permissions.values()].sort((a, b) => a.since - b.since)[0];
   return {
     ...(question ? { question } : {}),
-    ...(first ? { permission: first } : {}),
     ...(failure ? { failure } : {}),
   };
 }
@@ -354,6 +318,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       attention.push({
         band: "interrupted",
         kind: "failure",
+        ...(parked ? { parked: true as const } : {}),
         intentId: intent.id,
         title: intentTitle(intent),
         projectId: intent.projectId,
@@ -368,30 +333,6 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     const owns = (turnId: number | null): boolean =>
       turnId === null ||
       (turnId >= bound.turnId && (endTurnId === null || turnId < endTurnId));
-    if (conditions.permission && owns(conditions.permission.turnId)) {
-      derived.push({
-        intent,
-        state: "interrupted",
-        reason: "permission",
-        stats,
-        ...(blockedBy ? { blockedBy } : {}),
-      });
-      attention.push({
-        band: "interrupted",
-        kind: "permission",
-        intentId: intent.id,
-        title: intentTitle(intent),
-        projectId: intent.projectId,
-        sessionId: bound.sessionId,
-        ...(conditions.permission.turnId !== null
-          ? { turnId: conditions.permission.turnId }
-          : {}),
-        since: conditions.permission.since,
-        stats,
-      });
-      continue;
-    }
-
     const working =
       laneLive && lastTurn !== undefined && lastTurn.endedAt === null;
     if (working) {
@@ -470,31 +411,25 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       turnId === null ? owned.size === 0 : !owned.has(turnId);
     const errors = store.runtimeErrors(lane.sessionId, 0, null);
     const lastError = errors[errors.length - 1];
+    // Where the failure parked a run, only that run leaving its failure
+    // state stops the summons — the rule dashboard-4 already stated for
+    // a session failure, which this branch used to ignore (DR-062).
+    const parked = conditions.failure !== undefined;
     if (
       lastError &&
       standsIn(lastError.turnId) &&
-      !turns.some((turn) => turn.startedAt > lastError.timestamp)
+      (parked ||
+        !turns.some((turn) => turn.startedAt > lastError.timestamp))
     ) {
       attention.push({
         band: "interrupted",
         kind: "failure",
+        ...(parked ? { parked: true as const } : {}),
         title,
         projectId: lane.projectId,
         sessionId: lane.sessionId,
         ...(lastError.turnId !== null ? { turnId: lastError.turnId } : {}),
         since: lastError.timestamp,
-      });
-    } else if (conditions.permission && standsIn(conditions.permission.turnId)) {
-      attention.push({
-        band: "interrupted",
-        kind: "permission",
-        title,
-        projectId: lane.projectId,
-        sessionId: lane.sessionId,
-        ...(conditions.permission.turnId !== null
-          ? { turnId: conditions.permission.turnId }
-          : {}),
-        since: conditions.permission.since,
       });
     } else if (conditions.question && standsIn(conditions.question.turnId)) {
       attention.push({
@@ -534,12 +469,31 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   }
 
   // Two bands, longest waiting first within each (DR-035).
-  attention.sort((a, b) => {
+  // Every summons has a door (DR-066): a project whose stored state
+  // refuses a verdict or a marker write can answer none of its
+  // entries, so it raises none — its conditions stand as storage
+  // diagnostics, where the repair is (dashboard-54).
+  const actable = new Map<string, boolean>();
+  const canAnswer = (projectId: string): boolean => {
+    let known = actable.get(projectId);
+    if (known === undefined) {
+      known = store.ledgerActable(projectId);
+      actable.set(projectId, known);
+    }
+    return known;
+  };
+  const answerable = attention.filter((entry) => canAnswer(entry.projectId));
+
+  answerable.sort((a, b) => {
     if (a.band !== b.band) return a.band === "interrupted" ? -1 : 1;
     return a.since - b.since;
   });
 
-  return { intents: derived, attention, badge: attention.length };
+  return {
+    intents: derived,
+    attention: answerable,
+    badge: answerable.length,
+  };
 }
 
 /** The turns a dispatched intent attributes (DR-035): from its

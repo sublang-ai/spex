@@ -984,3 +984,164 @@ describe("spec-view-7, dashboard-24: a History record opens in the reader", () =
     expect(control.scrollIntoView).toHaveBeenCalled();
   });
 });
+
+describe("run-view-134/137: the marker is the reader's own showing", () => {
+  const UNREAD = {
+    band: "finished",
+    kind: "review",
+    title: "written somewhere else",
+    projectId: "p1",
+    sessionId: "a-unread",
+    turnId: 3,
+    since: NOW - 120_000,
+  };
+
+  /** The owner's own case: a conversation whose turn finished before
+   * this client ever learned of it, so no live record can clear it. */
+  function seedUnread(): void {
+    const fold = { intents: [], attention: [UNREAD], badge: 1 } as never;
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? (fold as object) : {},
+    );
+    useAppStore.setState({
+      sessions: [
+        ...SESSIONS,
+        session({ id: "a-unread", title: "written somewhere else", turns: 4 }),
+      ],
+      views: {
+        ...useAppStore.getState().views,
+        "a-unread": view(),
+      },
+      ledger: fold,
+    });
+  }
+
+  function viewedCalls(): unknown[][] {
+    return commandMock.mock.calls.filter(
+      (call) => call[0] === "session.viewed",
+    );
+  }
+
+  test("a session drawn in a list is never marked; showing it marks it once", async () => {
+    seedUnread();
+    render(<App />);
+    await screen.findByTestId("sidebar-session-a-unread");
+
+    // Listed, subscribed, and counted — and settled by none of that
+    // (DR-065): the row is not a gesture taken on the conversation.
+    expect(viewedCalls()).toEqual([]);
+    expect(screen.getByTestId("nav-attention-badge").textContent).toBe("1");
+    expect(screen.getByTestId("sidebar-mark-a-unread").dataset.life).toBe(
+      "review",
+    );
+    expect(
+      screen.getByTestId("sidebar-session-a-unread").getAttribute("aria-label"),
+    ).toContain("unread turn");
+    expect(
+      screen.getByTestId("sidebar-project-attention-p1").getAttribute("title"),
+    ).toBe("A session has an unread turn");
+
+    // Showing it is the gesture, and it names the fold's own turn.
+    fireEvent.click(screen.getByTestId("sidebar-session-a-unread"));
+    await vi.waitFor(() =>
+      expect(viewedCalls()).toEqual([
+        ["session.viewed", { sessionId: "a-unread", turnId: 3 }],
+      ]),
+    );
+
+    // Standing, not repeating: further renders of the same fold send
+    // nothing more.
+    fireEvent.click(screen.getByTestId("sidebar-session-a-live"));
+    fireEvent.click(screen.getByTestId("sidebar-session-a-unread"));
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: /^written somewhere else/ }),
+      ).toBeTruthy(),
+    );
+    expect(viewedCalls()).toHaveLength(1);
+  });
+
+  test("a shown session the fold names no unread turn for sends nothing", async () => {
+    render(<App />);
+    await screen.findByTestId("sidebar-session-a-live");
+    // a-live carries a question, not an unread turn: its act is a
+    // reply, and nothing here may fake one.
+    expect(viewedCalls()).toEqual([]);
+    // Nor does a pinned tab, which is no conversation at all.
+    fireEvent.click(screen.getByTestId("workspace-tab-specs"));
+    await vi.waitFor(() =>
+      expect(
+        screen.getByTestId("workspace-tab-specs").getAttribute("aria-selected"),
+      ).toBe("true"),
+    );
+    expect(viewedCalls()).toEqual([]);
+  });
+});
+
+describe("run-view-135/136: a summons the session answers names its turn", () => {
+  test("a permission request is a line in its player's pane and a mark nowhere", async () => {
+    render(<App />);
+    await screen.findByTestId("player-pane-dev.coder");
+    act(() => {
+      deliverServerMessageForTests({
+        type: "record",
+        sessionId: "a-live",
+        seq: 900,
+        record: {
+          type: "player_event",
+          playerId: "dev.coder",
+          turnId: 1,
+          timestamp: NOW,
+          event: {
+            type: "permission_request",
+            payload: { toolName: "Bash" },
+          },
+        },
+      } as never);
+    });
+
+    // No control answers one, so the request stands where it is true
+    // and summons nobody (DR-066).
+    const pane = screen.getByTestId("player-pane-dev.coder");
+    expect(pane.textContent).toContain("Asked permission to use Bash");
+    expect(pane.textContent).toContain("the agent's own default decided");
+    expect(screen.getByTestId("nav-attention-badge").textContent).toBe("2");
+  });
+
+  test("a failure that parked no run names the message that picks it up", async () => {
+    const fold = {
+      intents: [],
+      attention: [
+        {
+          band: "interrupted",
+          kind: "failure",
+          title: "chase the flaky test",
+          projectId: "p1",
+          sessionId: "a-idle",
+          since: NOW - 60_000,
+        },
+      ],
+      badge: 1,
+    } as never;
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? (fold as object) : {},
+    );
+    useAppStore.setState({
+      sessions: [
+        ...SESSIONS,
+        session({ id: "a-idle", title: "chase the flaky test", failed: true }),
+      ],
+      views: { ...useAppStore.getState().views, "a-idle": view() },
+      ledger: fold,
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByTestId("sidebar-session-a-idle"));
+
+    // Nothing is stuck, and until now this state named no act at all.
+    const notice = await screen.findByTestId("unparked-failure-notice");
+    expect(notice.textContent).toBe(
+      "The last turn failed. Send a message to pick it up.",
+    );
+    expect(screen.getByTestId("boss-composer")).toBeTruthy();
+  });
+});

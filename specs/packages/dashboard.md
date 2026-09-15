@@ -19,10 +19,10 @@ While at least one attention entry derives across the registered projects' inten
 
 | Band | Entries |
 | --- | --- |
-| Interrupted | one entry per interrupted intent, leading with the intent's title and showing its project, session, and interruption reason — question, permission, or failure — with a one-line summary, the unacknowledged failure in the red chase tone ([DR-029](../decisions/029-session-history-home.md)) |
-| Finished | one entry per finished intent awaiting a verdict, leading with the intent's title and showing its project, session, and the run's stats [[dashboard-35](#dashboard-35)] with review rounds foremost |
+| Interrupted | one entry per interrupted intent, leading with the intent's title and showing its project, session, and interruption reason — question or failure — with the act line its state asks for [[dashboard-53](#dashboard-53)], the unacknowledged failure in the red chase tone ([DR-029](../decisions/029-session-history-home.md)) |
+| Finished | one entry per finished intent awaiting a verdict, leading with the intent's title and showing its project, session, and the run's stats [[dashboard-35](#dashboard-35)] with review rounds foremost, its verdict controls beside it [[dashboard-56](#dashboard-56)] |
 
-- A project's current conversation [[core-service-93](core-service.md#core-service-93)] serving no intent stands in with session-level entries: its question, permission, and failure conditions — the same conditions, holding outside any intent's turn range — join the interrupted band, and at most one turn-to-review entry per session, for a finished Boss turn later than the session's persisted last-viewed marker, joins the finished band ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
+- A project's current conversation [[core-service-93](core-service.md#core-service-93)] serving no intent stands in with session-level entries: its question and failure conditions — the same conditions, holding outside any intent's turn range — join the interrupted band, and at most one unread-turn entry per session, for a finished Boss turn later than the session's persisted last-viewed marker, joins the finished band ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
 - An entry's title owns its row's slack; the project name truncates at 10rem with the full name in its title, and in a row narrower than 28rem the age hides, the project name too below 20rem ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 #### dashboard-2
@@ -33,13 +33,13 @@ While the attention queue contains two or more entries, the Dashboard shall orde
 
 When the user activates an attention entry, the Dashboard shall open the entry's session focused at the entry's place:
 
-| Entry | Place |
-| --- | --- |
-| Interrupted — question | the pending question bubble |
-| Interrupted — permission | the originating player's pending request |
-| Interrupted — failure | the failure record |
-| Finished intent | the end of the intent's final turn |
-| Session turn to review | the end of the finished turn |
+| Entry | Place | Focus lands on |
+| --- | --- | --- |
+| Interrupted — question | the pending question bubble | the Boss composer |
+| Interrupted — failure, a run standing parked | the failure record | the parked run's own controls [[run-view-128](run-view.md#run-view-128)] |
+| Interrupted — failure, no run parked | the failure record | the Boss composer [[run-view-135](run-view.md#run-view-135)] |
+| Finished intent | the end of the intent's final turn | the delivery card's Confirm [[run-view-87](run-view.md#run-view-87)] |
+| Session unread turn | the end of the finished turn | the end of the transcript |
 
 #### dashboard-4
 
@@ -47,15 +47,45 @@ While an attention entry is displayed, when its clearing condition arrives, the 
 
 | Entry | Clears on |
 | --- | --- |
-| Interrupted intent | its interruption resolving [[dashboard-10](#dashboard-10)], or a verdict closing the intent |
+| Interrupted intent | its interruption resolving [[dashboard-10](#dashboard-10)], or a verdict — Drop on its row [[dashboard-56](#dashboard-56)] or in its session — closing the intent |
 | Finished intent | a verdict — Confirm or Drop — closing the intent |
 | Session question | the next Boss turn starting in the session |
-| Session permission | the request being decided, or its turn ending |
 | Session failure | where a run stands parked in its failure state, that run leaving the state or its call being disposed within a turn; otherwise the next Boss turn starting in the session — and, either way, another conversation becoming the project's current one [[core-service-93](core-service.md#core-service-93)] ([DR-062](../decisions/062-ending-a-failed-workflow.md)) |
-| Session turn to review | the session's persisted last-viewed marker advancing past the turn |
+| Session unread turn | the session's persisted last-viewed marker advancing past the turn — the reader having that session in front of them [[run-view-134](run-view.md#run-view-134)], or Reviewed on its row [[dashboard-55](#dashboard-55)] |
 
-- Resolving one entry removes no other entry.
-- A verdict taken on the Dashboard hands focus on as its entry leaves: to the entry now at its place, else the last entry, else the all-clear's Start — never to the page body ([DR-010](../decisions/010-interface-craft.md) §6).
+- Resolving one entry removes no other entry, and viewing alone never clears an intent entry, whose verdict is owed regardless of reading.
+- An act taken on a row hands focus on as its entry leaves: to the entry now at its place, else the last entry, else the all-clear's Start — never to the page body ([DR-010](../decisions/010-interface-craft.md) §6).
+
+#### dashboard-53
+
+While an attention entry is displayed [[dashboard-1](#dashboard-1)], the Dashboard shall carry on that entry's row at least one act that ends it whose admission depends on no runtime state of its session [[dashboard-54](#dashboard-54)], and shall name in the row's own words every act that ends it ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+
+| The act is | Carried as |
+| --- | --- |
+| a statement about the ledger — a verdict, a mark reviewed | a control on the row, acting on the click [[dashboard-55](#dashboard-55)] [[dashboard-56](#dashboard-56)] |
+| a turn the session must run — a reply, a recovery, an ending | the row's one-line act summary naming it, the row's activation landing focus on the control or composer that runs it [[dashboard-3](#dashboard-3)] |
+
+- a row control reads at most 14 characters, its busy form included ([DR-041](../decisions/041-chrome-that-fits.md)), and reports a refusal with its cause on the row, the entry standing until the act lands;
+- a control is offered and its refusal reported, never withheld on a prediction of whether it would be accepted;
+- a spec item naming an entry's clearing condition [[dashboard-4](#dashboard-4)] names the act that produces it.
+
+#### dashboard-55
+
+While an unread-turn entry stands on the Dashboard [[dashboard-1](#dashboard-1)], the Dashboard shall carry a Reviewed control on its row that marks that entry's own turn as the session's last-viewed [[core-service-48](core-service.md#core-service-48)], reading "Reviewed", "Marking…" while it is in flight, and naming the session in its accessible name:
+
+- the act needs no session to be open, live, continuable, or owned by this host, so an entry whose conversation this core could never continue clears from its row alone;
+- a refusal reads "Couldn't mark it reviewed:" with the cause, and the entry stands [[dashboard-53](#dashboard-53)].
+
+#### dashboard-56
+
+While an entry bound to an open intent stands on the Dashboard [[dashboard-1](#dashboard-1)], the Dashboard shall carry Drop on its row, with Confirm beside it where the intent derives finished [[dashboard-10](#dashboard-10)], each closing the intent with that verdict [[core-service-46](core-service.md#core-service-46)] ([DR-038](../decisions/038-history-is-done-work.md)):
+
+| The intent's band | The Drop |
+| --- | --- |
+| finished | acts on the click, the work being done and the verdict a ruling on it |
+| interrupted | asks "Drop this work?" on the row first, offering Drop and Keep, the work being still in play |
+
+- a verdict rules on the intent alone: where the session's run stands parked in its failure state, that run keeps summoning as a session entry in the session's own words [[dashboard-1](#dashboard-1)], the conversation's own control ending it ([DR-062](../decisions/062-ending-a-failed-workflow.md)).
 
 ### Attention Badge
 
@@ -78,7 +108,7 @@ While a project's live session holds a turn in flight and no attention entry for
 | Doing | its human-readable engagement state label in the Now band's vocabulary [[dashboard-28](#dashboard-28)] — "deciding" or "working" while a turn is active with no leaf state — with the running player named beside it and the turn's elapsed span |
 
 - activating a row opens that session;
-- an attention entry for the current work takes its row out of the band, the summons standing in the queue instead [[dashboard-1](#dashboard-1)], and the turn ending takes it out too [[dashboard-4](#dashboard-4)]; an older intent awaiting its verdict keeps its attention entry without hiding the newer running intent ([DR-055](../decisions/055-queue-advancement.md));
+- an attention entry for the current work takes its row out of the band, the summons standing in the queue instead [[dashboard-1](#dashboard-1)] — a session whose runtime waits on a permission request raises none [[dashboard-54](#dashboard-54)] and so keeps its row, and the turn ending takes it out too [[dashboard-4](#dashboard-4)]; an older intent awaiting its verdict keeps its attention entry without hiding the newer running intent ([DR-055](../decisions/055-queue-advancement.md));
 - the project filter hides the other projects' rows, changing nothing derived [[dashboard-32](#dashboard-32)];
 - the band keeps its place while empty, carrying its note there [[dashboard-8](#dashboard-8)].
 
@@ -248,16 +278,27 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 | Blocked (a Queued sub-condition) | its after-link names an intent that is still open; the block lifts by derivation when the predecessor closes |
 | Working | bound, and the latest turn in its range is active |
 | Interrupted — question | bound, not closed, captain telemetry `playbook.fsm.state` reached `awaitBossReply` in its range with no later report of that machine leaving it — another machine's state report, the Captain's own included, leaves the question standing — and no later Boss turn has started in the session |
-| Interrupted — permission | bound, not closed, a player event in its range carried `permission_request` with no later record for that player in the same turn, and the turn has not ended |
 | Interrupted — failure | bound, not closed, a `runtime_error` record — or a turn whose engagement settled failed — lies in its range, and the failure still stands: while a run of that session is parked in its failure state the entry stands until that run leaves the state or its call is disposed within a turn, and otherwise the Boss's next turn acknowledges it; a verdict clears it either way ([DR-062](../decisions/062-ending-a-failed-workflow.md)) |
 | Finished | bound, not closed, not interrupted, no turn in its range active, and a turn in its range ended finished — an aborted follow-up does not unseat a standing finish |
 | Done / Dropped | its close verdict is recorded, done requiring a Finished intent and dropped legal on any open one |
 
 - an intent a remove act retired [[core-service-79](core-service.md#core-service-79)] is absent from every state above: no History row, no source artifact held, no attention entry, and no band lists it ([DR-038](../decisions/038-history-is-done-work.md));
 - the fold produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md));
-- where several rows hold at once, the fold ranks failure, then permission, then working, then question, then finished — a standing summons is never masked by the running mark;
+- where several rows hold at once, the fold ranks failure, then working, then question, then finished — a standing summons is never masked by the running mark;
 - the per-project next is the first queued, unblocked intent in rank order;
 - a consumer reading the fold over the protocol applies replies in request order — an older read's reply landing after a newer one's is discarded — so a stale fold never overwrites a fresh one.
+
+#### dashboard-54
+
+Where the fold derives attention entries [[dashboard-10](#dashboard-10)], it shall derive exactly the kinds below and no other, and shall derive none from a project whose stored state refuses a verdict or a preference write [[core-service-86](core-service.md#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+
+| Band | Kinds |
+| --- | --- |
+| Interrupted | question, failure |
+| Finished | finish, review |
+
+- a permission request raises no entry — nothing in the product answers one — and stands in the asking player's pane instead [[run-view-136](run-view.md#run-view-136)];
+- a project whose acts are refused raises nothing: its conditions stand as storage diagnostics, where the repair is, exactly as a session whose project holds no local binding already does.
 
 #### dashboard-33
 
@@ -307,11 +348,11 @@ Where the Sources band's issue and pull-request tabs are served, the dashboard r
 
 #### dashboard-15
 
-Where fixture intent rows and a fixture record stream span two projects — one intent standing interrupted on a question, one on a `runtime_error`, one finished with reviewer-stamped prompt records, plus an un-ledgered session holding a `permission_request` and a finished turn past its viewed marker, a second un-ledgered session running a turn with nothing to answer, and a `hidden`-visibility record — when Dashboard state is derived, the test suite shall assert that the interrupted band holds the question, failure, and session permission entries while the finished band holds the finished intent and the turn-to-review stand-in [[dashboard-1](#dashboard-1)], that the interrupted band precedes the finished band with longest waiting first within each [[dashboard-2](#dashboard-2)], that the finished entry carries stats whose review rounds equal the reviewer-stamped prompt count [[dashboard-1](#dashboard-1)] [[dashboard-35](#dashboard-35)], that activating the question entry opens its session at the pending question [[dashboard-3](#dashboard-3)], that the hidden record produced no entry [[dashboard-10](#dashboard-10)], that project groups render in sidebar order with the four bands [[dashboard-26](#dashboard-26)], that the Running band lists the session running with nothing to answer — its project, title, and state label — and opens it when activated, while the session summoned into the queue stays out of the band for a question, permission, or failure even with a missing or stale transcript, with session-summary activity controlling whether the row stands and an older finished intent retaining Confirm [[dashboard-50](#dashboard-50)], and that selecting a project filter leaves only that project's entries, running rows, and group visible with the published count unchanged [[dashboard-32](#dashboard-32)] [[dashboard-50](#dashboard-50)].
+Where fixture intent rows and a fixture record stream span two projects — one intent standing interrupted on a question, one on a `runtime_error`, one finished with reviewer-stamped prompt records, plus an un-ledgered session holding a `permission_request` and a finished turn past its viewed marker, a second un-ledgered session running a turn with nothing to answer, a third project whose stored state refuses writes, and a `hidden`-visibility record — when Dashboard state is derived, the test suite shall assert that the interrupted band holds the question and failure entries while the finished band holds the finished intent and the unread-turn stand-in [[dashboard-1](#dashboard-1)], that the permission request and the write-blocked project raised no entry at all [[dashboard-54](#dashboard-54)], that every displayed row names its act — a control acting on the click for a verdict and for Reviewed, an act line naming the turn its session must run otherwise [[dashboard-53](#dashboard-53)], that the interrupted band precedes the finished band with longest waiting first within each [[dashboard-2](#dashboard-2)], that the finished entry carries stats whose review rounds equal the reviewer-stamped prompt count [[dashboard-1](#dashboard-1)] [[dashboard-35](#dashboard-35)], that activating the question entry opens its session at the pending question [[dashboard-3](#dashboard-3)], that the hidden record produced no entry [[dashboard-10](#dashboard-10)], that project groups render in sidebar order with the four bands [[dashboard-26](#dashboard-26)], that the Running band lists the session running with nothing to answer — its project, title, and state label — and opens it when activated, while the session summoned into the queue stays out of the band for a question or failure even with a missing or stale transcript, with session-summary activity controlling whether the row stands and an older finished intent retaining Confirm [[dashboard-50](#dashboard-50)], and that selecting a project filter leaves only that project's entries, running rows, and group visible with the published count unchanged [[dashboard-32](#dashboard-32)] [[dashboard-50](#dashboard-50)].
 
 #### dashboard-16
 
-While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, a viewed-marker advance past the un-ledgered finished turn, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry even when dispatching another intent before any machine transition [[dashboard-4](#dashboard-4)], that the marker advance cleared the turn-to-review stand-in and no intent entry [[dashboard-4](#dashboard-4)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's Start [[dashboard-4](#dashboard-4)], that a Boss turn taken while a run of the failure intent's session stands parked in its failure state left that failure entry standing where the same turn would have cleared an unparked one, and that the parked run's disposal within a later turn cleared it [[dashboard-10](#dashboard-10)] [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
+While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, the unread turn's Reviewed control, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry even when dispatching another intent before any machine transition [[dashboard-4](#dashboard-4)], that Reviewed cleared the unread-turn stand-in and no intent entry with the session never opened [[dashboard-55](#dashboard-55)] [[dashboard-4](#dashboard-4)], that a refused Reviewed left the entry standing and said so on its row [[dashboard-55](#dashboard-55)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's Start [[dashboard-4](#dashboard-4)], that an interrupted intent's Drop asked before acting and then closed the intent, its session's parked run leaving a session-worded entry in its place [[dashboard-56](#dashboard-56)], that a Boss turn taken while a run of the failure intent's session stands parked in its failure state left that failure entry standing where the same turn would have cleared an unparked one, and that the parked run's disposal within a later turn cleared it [[dashboard-10](#dashboard-10)] [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
 
 #### dashboard-17
 
@@ -382,7 +423,14 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)];
 - an intent dropped from its running session leaves the Now band showing the session serving none, with no Drop beside it, and lists in History as dropped once that turn ends finished, no verdict owed [[dashboard-28](#dashboard-28)] [[dashboard-27](#dashboard-27)].
 
-- in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)].
+#### dashboard-57
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and a session written into the shared session store by another writer, its turn already finished before this core read it, when the journey shows the Dashboard and then opens that session, the test suite shall assert that a summons written elsewhere drains ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+
+- the Dashboard lists the session in the finished band reading "unread turn", naming its act, with the sidebar's project and session marks and the Dashboard badge all standing [[dashboard-1](#dashboard-1)] [[dashboard-53](#dashboard-53)] [[dashboard-9](#dashboard-9)];
+- showing that session clears the entry, and every mark and both badges go quiet with no control touched [[dashboard-4](#dashboard-4)];
+- on a second such session, Reviewed on its row clears it without the session ever being opened, and hands focus on [[dashboard-55](#dashboard-55)] [[dashboard-4](#dashboard-4)];
+- a reload re-reads the fold and neither entry returns [[dashboard-11](#dashboard-11)].
 
 #### dashboard-43
 
