@@ -144,29 +144,27 @@ test.describe("first-time setup", () => {
 
     // The bare path then sets the space up whole (space-6): initialize,
     // remote, and the sync that joins, reading "Setting up…" throughout.
+    // The setup's own sync is the first one, so its step line names each
+    // step it passes and its done line counts what the empty remote took
+    // whole (space-6, space-12): no second sync is needed or run.
     const setupLabels = await watch(page, '[data-testid="space-set-up"]');
+    const stepLines = await watch(page, '[data-testid="space-step-line"]');
     await setup.getByTestId("space-setup-remote").fill(app.remotePath!);
     await setup.getByTestId("space-set-up").click();
     await expect(header.getByTestId("space-repository")).toContainText("main");
     await expect(header.getByTestId("space-remote-url")).toHaveText(app.remotePath!);
     expect(await setupLabels()).toContain("Setting up…");
+    const done = page.getByTestId("space-done-line");
+    await expect(done).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
     await expect(header.getByTestId("space-primary")).toHaveText("Sync");
     await expect(header.getByTestId("space-primary")).toBeEnabled();
     await expect(header.getByTestId("space-remote-edit")).toHaveText("Change remote");
-
-    // Sync reads "Syncing…" and the step line names each step it
-    // passes; the empty remote takes the initial commit whole and
-    // the line counts what was sent (space-12).
-    const primaryLabels = await watch(page, '[data-testid="space-primary"]');
-    const stepLines = await watch(page, '[data-testid="space-step-line"]');
-    await header.getByTestId("space-primary").click();
-    const done = page.getByTestId("space-done-line");
-    await expect(done).toHaveText(/^(Synced just now · \d+ sent · 0 received|Everything is in sync.*)$/);
-    // The control stays busy from the click to the machine's first
-    // frame and back: never a moment reading "Sync" in between.
-    expect(await primaryLabels()).toEqual(["Sync", "Syncing…", "Sync"]);
     const steps = await stepLines();
     expect(steps, steps.join(" → ")).toContain("Checking remote…");
+    // The whole motion is one control's flight: it never reads "Set up
+    // space" again between the click and the sync's last frame.
+    expect(await setupLabels()).toEqual(["Set up space", "Setting up…"]);
+    await settled(app);
     expect(steps, steps.join(" → ")).toContain("Pushing…");
     expect(inStepOrder(steps), steps.join(" → ")).toBe(true);
     await expect(header.getByTestId("space-last-sync")).toHaveText(/^Synced just now$/);

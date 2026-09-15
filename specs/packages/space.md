@@ -603,8 +603,8 @@ When an integration suite fails a transport against a path holding no repository
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on an empty home with its configuration inside it and a bare repository in the scratch root, the test suite shall assert the first-time setup through the page alone:
 
-- Space reads "Not a repository yet" with one setup control over a remote field, activating it empty marks the field required rather than making a repository, and the bare path then reads "Setting up…" before the header reads `main`, the remote, and a sync time [[space-3](#space-3)] [[space-4](#space-4)] [[space-6](#space-6)];
-- Sync reads "Syncing…", the step line names each step, and the line ends "Everything is in sync" with a sync time [[space-12](#space-12)];
+- Space reads "Not a repository yet" with one setup control over a remote field, and activating it empty marks the field required rather than making a repository [[space-3](#space-3)];
+- the bare path then sets the space up in one motion — the control reading "Setting up…" from its click to the last frame and never its own name in between — the header ending at `main`, the remote and a sync time, with the setup's own sync naming each step it passes and counting what the empty remote took [[space-4](#space-4)] [[space-6](#space-6)] [[space-12](#space-12)];
 - a session then run from the Captain home appears under local changes by its title and project, its Open session control opens its tab, and Sync sends it, the bare `main` holding its bundle [[space-7](#space-7)] [[space-12](#space-12)];
 - an intent queued while Space is shown lists under local changes with Refresh never activated, and Refresh's caption reads the time of the read [[space-2](#space-2)].
 
@@ -634,16 +634,6 @@ Where the harness boots the served shell with a repository home carrying local c
 #### space-44
 
 Where the harness boots the served shell with a repository home whose check ended in choices, when the Space surface is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation, with the picker's radio groups, the tree and the tabs named for assistive technology [[space-17](#space-17)] [[space-23](#space-23)].
-
-#### space-53
-
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a home joined to a remote carrying a project this device has no folder for, the test suite shall assert the repair through the page alone:
-
-- the issues list stands one repair per project, its control reading "Set folder" [[space-46](#space-46)] [[space-28](#space-28)];
-- activating it opens the row in place with the recorded path prefilled, and Save resolves the repair without leaving Space [[space-47](#space-47)] [[space-48](#space-48)];
-- the outcome stands in the row offering Open project, the issues count falls, and focus moves to the next repair [[space-48](#space-48)];
-- reloading the page leaves an unresolved repair listed and out of the issues count, having been shown [[space-49](#space-49)];
-- a repository home whose remote has never been checked shows the Join card above the changes list with Sync still the header's control [[space-45](#space-45)].
 
 #### space-36
 

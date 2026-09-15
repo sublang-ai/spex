@@ -6,10 +6,10 @@
 // the sessions the reader opened. Keyboard shortcuts live
 // renderer-side so the UI runs unmodified in a browser (SHELL-10).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IntentInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "./state/store.js";
+import { safeStorageGet, safeStorageSet, SURFACE_KEY, useAppStore } from "./state/store.js";
 import type { AttentionItem } from "./state/dashboard.js";
 import { setCaptain } from "./lib/config-ops.js";
 import { keyLabel } from "./lib/shortcuts.js";
@@ -781,7 +781,19 @@ function WorkspaceSurface({
 }
 
 export function App() {
-  const [surface, setSurface] = useState<Surface>("Workspace");
+  // The surface the reader last stood on is remembered across launches
+  // (run-view-67, DR-030), so a reload — after a crash or otherwise —
+  // returns them where they were instead of to Projects.
+  const [surface, setSurfaceState] = useState<Surface>(() => {
+    const stored = safeStorageGet(SURFACE_KEY);
+    return stored && (SURFACES as readonly string[]).includes(stored)
+      ? (stored as Surface)
+      : "Workspace";
+  });
+  const setSurface = useCallback((next: Surface) => {
+    setSurfaceState(next);
+    safeStorageSet(SURFACE_KEY, next);
+  }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const configState = useAppStore((state) => state.configState);
   const sessions = useAppStore((state) => state.sessions);

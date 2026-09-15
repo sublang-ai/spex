@@ -495,12 +495,16 @@ export function SpaceSurface({ onOpenSession, onOpenPalette, onOpenProject }: Sp
   // the window regaining focus, and Refresh; the core's broadcasts
   // land through the store, and the announcements below re-read
   // debounced.
+  // The surface can open before the core is reachable — a launch
+  // restores the surface the reader left (run-view-67) — so the read
+  // waits for the connection rather than reporting it as a failure.
   useEffect(() => {
+    if (!connected) return;
     void loadSpace();
     const onFocus = () => void loadSpace();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [loadSpace]);
+  }, [loadSpace, connected]);
 
   const firstSeq = useRef(spaceChangeSeq);
   useEffect(() => {

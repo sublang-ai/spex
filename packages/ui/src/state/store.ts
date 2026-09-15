@@ -550,8 +550,12 @@ function readFrameHeights(): Record<string, number> {
   return heights;
 }
 
+/** The surface the reader last stood on (run-view-67), so a reload
+ * returns them there rather than to Projects. */
+export const SURFACE_KEY = "spex.surface";
+
 /** localStorage access that tolerates non-browser test environments. */
-function safeStorageGet(key: string): string | undefined {
+export function safeStorageGet(key: string): string | undefined {
   try {
     return window.localStorage.getItem(key) ?? undefined;
   } catch {
@@ -559,7 +563,7 @@ function safeStorageGet(key: string): string | undefined {
   }
 }
 
-function safeStorageSet(key: string, value: string): void {
+export function safeStorageSet(key: string, value: string): void {
   try {
     window.localStorage.setItem(key, value);
   } catch {

@@ -448,6 +448,7 @@ While the app is connected, the sidebar shall present navigation as surface entr
 - the section header carries the control that opens the project palette [[run-view-42](#run-view-42)], where projects are added and created;
 - the surface entries are a navigation list publishing the current surface, and the projects and their sessions are one tree publishing disclosure, selection, and a single focus stop;
 - the tree's selection follows the surface: the current project's row and the session row whose tab is shown are selected only while Projects is the surface — on the Dashboard, Playbooks, Space, or Settings no row is selected and that surface's entry alone reads as current — and choosing Projects again selects the remembered project once more.
+- the surface the reader stands on is remembered across launches ([DR-030](../decisions/030-workspace-chrome.md)), so reopening the app — or reloading the page after a failure — returns them to it rather than to Projects.
 
 
 #### run-view-73
@@ -1002,7 +1003,7 @@ Where the harness boots with the demo project registered and the scripted Captai
 
 #### run-view-122
 
-Where the harness boots with the demo project registered, when the journey leaves Projects for the Dashboard and for Playbooks and then returns, the test suite shall assert through the page that the sidebar names one place at a time [[run-view-67](#run-view-67)]: the project's row is selected on Projects, neither other surface leaves any row in the tree selected while its own entry reads as current, and Projects selects the remembered project's row again.
+Where the harness boots with the demo project registered, when the journey leaves Projects for the Dashboard and for Playbooks and then returns, the test suite shall assert through the page that the sidebar names one place at a time [[run-view-67](#run-view-67)]: the project's row is selected on Projects, neither other surface leaves any row in the tree selected while its own entry reads as current, Projects selects the remembered project's row again, and reloading the page while a surface stands returns to that surface rather than to Projects [[run-view-67](#run-view-67)].
 
 #### run-view-132
 

@@ -37,4 +37,12 @@ test("run-view-122: the sidebar's selection follows the surface", async ({
   await nav(page, "Projects").click();
   await expect(page.getByTestId("captain-home")).toBeVisible();
   await expect(projectRow).toHaveAttribute("aria-selected", "true");
+
+  // The surface itself is remembered across launches (run-view-67):
+  // reloading returns the reader where they stood, not to Projects.
+  await nav(page, "Playbooks").click();
+  await expect(page.getByTestId("builtins-section")).toBeVisible();
+  await page.reload();
+  await expect(nav(page, "Playbooks")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("builtins-section")).toBeVisible();
 });
