@@ -172,6 +172,7 @@ While the issues list stands, the Space surface shall tell a repair's three cond
 | resolved | a check | the project, the folder it is now at and the sessions that resolved, with Open project |
 
 - the list's heading counts the unanswered repairs and names how many stand not added;
+- the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does;
 - a row that changes condition holds its place until the reader's own re-read [[space-48](#space-48)].
 
 ### Changes

@@ -1012,10 +1012,17 @@ function Header({
                   type="button"
                   data-testid="space-issues"
                   aria-expanded={issuesOpen}
-                  className="flex items-center gap-1 text-sm text-amber-700 hover:underline dark:text-amber-300"
+                  // Amber and the warning glyph say attention is owed.
+                  // With nothing unanswered none is, so the control
+                  // stays reachable while reading as settled.
+                  className={`flex items-center gap-1 text-sm hover:underline ${
+                    issueCount > 0
+                      ? "text-amber-700 dark:text-amber-300"
+                      : "text-neutral-500"
+                  }`}
                   onClick={() => onIssuesOpen(!issuesOpen)}
                 >
-                  <span aria-hidden>⚠</span>
+                  {issueCount > 0 ? <span aria-hidden>⚠</span> : null}
                   {issueCount > 0 ? plural(issueCount, "issue") : "issues"}
                 </button>
               ) : null}

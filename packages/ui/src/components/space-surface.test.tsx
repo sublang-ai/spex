@@ -452,10 +452,14 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     await renderSpace(repoState({
       diagnostics: [{ file: "sessions/b.json", reason: "/gone/worktree has no project on this device", blocking: false, repair }],
     }));
-    // It counts as no issue, but the control stays reachable.
+    // It counts as no issue, but the control stays reachable — and
+    // with nothing unanswered it stops wearing attention's colour.
     const issues = screen.getByTestId("space-issues");
     expect(issues.textContent).not.toMatch(/\d/);
+    expect(issues.className).not.toContain("amber");
+    expect(issues.textContent).not.toContain("⚠");
     fireEvent.click(issues);
+    expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
     const row = screen.getByTestId("space-repair-declined");
     expect(row.textContent).toContain("not added");
     expect(row.textContent).toContain("worktree");

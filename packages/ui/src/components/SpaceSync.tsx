@@ -910,9 +910,21 @@ export function SyncTab({
       <section
         data-testid="space-issues-list"
         aria-label="Issues"
-        className="flex flex-col gap-1 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950"
+        // Amber is attention. With nothing unanswered there is none to
+        // pay, so the card stands neutral and the rows stay readable.
+        className={`flex flex-col gap-1 rounded-lg border p-3 text-sm ${
+          issueCount > 0
+            ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
+            : "border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900"
+        }`}
       >
-        <h2 className="text-xs font-medium text-amber-800 dark:text-amber-200">
+        <h2
+          className={`text-xs font-medium ${
+            issueCount > 0
+              ? "text-amber-800 dark:text-amber-200"
+              : "text-neutral-500"
+          }`}
+        >
           Issues ({issueCount})
           {declinedCount > 0 ? ` · ${declinedCount} not added` : ""}
         </h2>
