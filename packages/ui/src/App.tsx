@@ -795,12 +795,7 @@ export function App() {
     setSurfaceState(next);
     safeStorageSet(SURFACE_KEY, next);
   }, []);
-  // The palette is a popover, so opening it never leaves a surface;
-  // only its completion did. An opener may now take the project back
-  // and decide the landing itself (DR-009, space-48).
-  const [paletteOpen, setPaletteOpen] = useState<
-    false | { seed?: string; onAdded?: (project: ProjectInfo) => void }
-  >(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const configState = useAppStore((state) => state.configState);
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
@@ -980,14 +975,14 @@ export function App() {
         }
         if (event.key.toLowerCase() === "p") {
           event.preventDefault();
-          setPaletteOpen((open) => (open ? false : {}));
+          setPaletteOpen((open) => !open);
           return;
         }
         if (event.key.toLowerCase() === "n") {
           event.preventDefault();
           setSurface("Workspace");
           if (projectId) state.setWorkspaceTab(projectId, "start");
-          else setPaletteOpen({});
+          else setPaletteOpen(true);
           return;
         }
         if (event.key.toLowerCase() === "b") {
@@ -1120,8 +1115,6 @@ export function App() {
       <Announcer />
       {paletteOpen ? (
         <ProjectPalette
-          seedPath={paletteOpen.seed}
-          {...(paletteOpen.onAdded ? { onAdded: paletteOpen.onAdded } : {})}
           projects={projects}
           sessions={sessions}
           views={views}
@@ -1164,7 +1157,7 @@ export function App() {
           onDeleteSession={(sessionId) =>
             useAppStore.getState().deleteSession(sessionId)
           }
-          onOpenPalette={() => setPaletteOpen({})}
+          onOpenPalette={() => setPaletteOpen(true)}
           foot={configFoot}
         />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -1175,7 +1168,6 @@ export function App() {
           ) : surface === "Space" ? (
             <SpaceSurface
               onOpenSession={openSessionAndShow}
-              onOpenPalette={(seed, onAdded) => setPaletteOpen({ seed, onAdded })}
               onOpenProject={pickProject}
             />
           ) : surface === "Dashboard" ? (
@@ -1188,7 +1180,7 @@ export function App() {
           ) : (
             <WorkspaceSurface
               onNavigate={setSurface}
-              onOpenPalette={() => setPaletteOpen({})}
+              onOpenPalette={() => setPaletteOpen(true)}
               attentionBySession={attentionBySession}
               pendingFocus={pendingFocus}
               onFocusHandled={() => setPendingFocus(undefined)}

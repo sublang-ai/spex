@@ -632,7 +632,7 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   assert.ok((repair.repair?.directories ?? []).includes(a.projectDir), JSON.stringify(repair));
   assert.equal(repair.repair?.sessions, 1);
   assert.ok(repair.repair?.key.length, "a repair carries its own key (space-54)");
-  assert.equal(repair.repair?.aside, undefined, "unanswered, so it counts (space-54)");
+  assert.equal(repair.repair?.declined, undefined, "unanswered, so it counts (space-54)");
   // space-53: the core checked the folder the repair names — here it
   // stands, a work tree no project on B binds — and proposes that one,
   // reporting every path it checked and searching for none.
@@ -651,17 +651,17 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   // device's alone — a preference, never a tracked file.
   const before = await b.client.expectOk("space.get", {});
   assert.equal(before.issues, before.diagnostics.length, "an unanswered repair counts");
-  const aside = await b.client.expectOk("space.repair.aside", { repair: repair.repair!.key, aside: true });
-  assert.equal(aside.diagnostics.find((d) => d.repair?.projectId === projectA.id)?.repair?.aside !== undefined, true);
-  assert.equal(aside.issues, before.issues - 1, "a repair set aside counts no more");
+  const declined = await b.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: true });
+  assert.equal(declined.diagnostics.find((d) => d.repair?.projectId === projectA.id)?.repair?.declined !== undefined, true);
+  assert.equal(declined.issues, before.issues - 1, "a repair not added counts no more");
   assert.equal(git(b.dataDir, "status", "--porcelain"), "", "the record is a preference, so it never syncs");
-  const restored = await b.client.expectOk("space.repair.aside", { repair: repair.repair!.key, aside: false });
+  const restored = await b.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: false });
   assert.equal(restored.issues, before.issues, "brought back, it counts again");
-  await b.client.expectError("space.repair.aside", { repair: "no-such-repair", aside: true }, "invalid_request");
+  await b.client.expectError("space.repair.decline", { repair: "no-such-repair", declined: true }, "invalid_request");
   // space-54: an answer naming no repair the core still reports is
   // discarded, so records cannot accumulate behind the reader.
-  const aside2 = await b.client.expectOk("space.repair.aside", { repair: repair.repair!.key, aside: true });
-  assert.ok(aside2.diagnostics.some((d) => d.repair?.aside !== undefined));
+  const declined2 = await b.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: true });
+  assert.ok(declined2.diagnostics.some((d) => d.repair?.declined !== undefined));
   const bound = await b.client.expectOk("project.rebind", { projectId: projectA.id, path: checkout, aliases: [a.projectDir] });
   assert.equal(bound.id, projectA.id);
   assert.ok(

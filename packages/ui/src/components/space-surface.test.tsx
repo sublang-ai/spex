@@ -182,7 +182,7 @@ function base(over: Partial<SpaceState> = {}): SpaceState {
     sync: { phase: "idle" },
     ...over,
     ...(over.diagnostics
-      ? { issues: over.issues ?? over.diagnostics.filter((d) => d.repair?.aside === undefined).length }
+      ? { issues: over.issues ?? over.diagnostics.filter((d) => d.repair?.declined === undefined).length }
       : {}),
   };
 }
@@ -240,11 +240,10 @@ const READS: Record<string, SpaceReadResult> = {
 async function renderSpace(state: SpaceState) {
   current = state;
   const onOpenSession = vi.fn<(sessionId: string) => void>();
-  const onOpenPalette = vi.fn<() => void>();
   const onOpenProject = vi.fn<(projectId: string) => void>();
-  render(<SpaceSurface onOpenSession={onOpenSession} onOpenPalette={onOpenPalette} onOpenProject={onOpenProject} />);
+  render(<SpaceSurface onOpenSession={onOpenSession} onOpenProject={onOpenProject} />);
   await screen.findByTestId("space-header");
-  return { onOpenSession, onOpenPalette, onOpenProject };
+  return { onOpenSession, onOpenProject };
 }
 
 function deliver(state: SpaceState) {
@@ -259,7 +258,7 @@ beforeEach(() => {
   commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
     switch (type) {
       case "space.get":
-      case "space.seen":
+      case "space.repair.decline":
         return current;
       case "space.init":
         if (initGate) await initGate;
@@ -395,13 +394,13 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(screen.getByTestId("space-issues").textContent).toContain("1 issue");
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
-    expect(row.textContent).toContain("infra has no folder on this device");
-    expect(row.textContent).toContain("5 sessions recorded there");
-    expect(row.textContent).toContain("That folder is here and is a git repository no project claims.");
+    expect(row.textContent).toContain("infra");
+    expect(row.textContent).toContain("5 sessions ran in /code/infra");
+    expect(row.textContent).toContain("That folder is here and is a git repository. Add it as a project?");
     // The space already carries the identity, so one gesture binds it.
-    expect(within(row).getByRole("button", { name: "Use this" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "Set folder" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "Not here" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Add project" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Choose folder…" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Don't add" })).toBeTruthy();
     // Still counted after standing on screen.
     expect(screen.getByTestId("space-issues").textContent).toContain("1 issue");
   });
@@ -420,8 +419,7 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     }));
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
-    expect(within(row).getByRole("button", { name: "Add project…" })).toBeTruthy();
-    expect(within(row).queryByRole("button", { name: "Use this" })).toBeNull();
+    expect(within(row).getByRole("button", { name: "Add project" })).toBeTruthy();
   });
 
   test("a folder the core did not find proposes nothing and says so (space-53)", async () => {
@@ -437,9 +435,9 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     }));
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
-    expect(row.textContent).toContain("That folder is not on this device.");
-    expect(within(row).queryByRole("button", { name: "Add project…" })).toBeNull();
-    expect(within(row).getByRole("button", { name: "Not here" })).toBeTruthy();
+    expect(row.textContent).toContain("That folder is no longer on this device.");
+    expect(within(row).queryByRole("button", { name: "Add project" })).toBeNull();
+    expect(within(row).getByRole("button", { name: "Don't add" })).toBeTruthy();
   });
 
   test("a repair set aside stands in the list, marked, and counts no more (space-54, space-55)", async () => {
@@ -449,7 +447,7 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
       sessions: 2,
       key: "|/gone/worktree",
       checked: [{ path: "/gone/worktree", here: false, repo: false }],
-      aside: NOW - 60_000,
+      declined: NOW - 60_000,
     };
     await renderSpace(repoState({
       diagnostics: [{ file: "sessions/b.json", reason: "/gone/worktree has no project on this device", blocking: false, repair }],
@@ -458,11 +456,13 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     const issues = screen.getByTestId("space-issues");
     expect(issues.textContent).not.toMatch(/\d/);
     fireEvent.click(issues);
-    const row = screen.getByTestId("space-repair-aside");
-    expect(row.textContent).toContain("Set aside ·");
-    expect(row.textContent).toContain("/gone/worktree has no project on this device");
-    expect(within(row).getByRole("button", { name: "Bring back" })).toBeTruthy();
-    expect(screen.getByTestId("space-issues-list").textContent).toContain("1 set aside");
+    const row = screen.getByTestId("space-repair-declined");
+    expect(row.textContent).toContain("not added");
+    expect(row.textContent).toContain("worktree");
+    // Declining strips nothing: the row still offers what it offered.
+    expect(within(row).getByRole("button", { name: "Choose folder…" })).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: "Don't add" })).toBeNull();
+    expect(screen.getByTestId("space-issues-list").textContent).toContain("1 not added");
   });
 
   test("ahead and behind are absent until a check has run, and 'Never synced' stands with no sync", async () => {

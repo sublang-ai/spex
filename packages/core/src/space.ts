@@ -277,7 +277,7 @@ function registryLines(side: Map<string, string> | undefined, base: Map<string, 
  * answered, and every diagnostic no repair folds. A resolved repair is
  * already gone, because the core stops reporting it. */
 function countIssues(diagnostics: StorageDiagnostic[]): number {
-  return diagnostics.filter((entry) => entry.repair?.aside === undefined).length;
+  return diagnostics.filter((entry) => entry.repair?.declined === undefined).length;
 }
 
 /** One repair's record in this device's preferences (space-54). */
@@ -325,14 +325,14 @@ export class SpaceManager {
     return this.snapshot(true);
   }
 
-  /** Only the reader's own act settles a repair (space-54): setting one
-   * aside says this project does not belong on this device, and is a
-   * preference, which never syncs. Rendering never writes here. */
-  async setAside(repair: string, aside: boolean): Promise<SpaceState> {
+  /** Only the reader's own act settles a repair (space-54): declining
+   * says this is not a project on this device, and is a preference,
+   * which never syncs. Rendering never writes here. */
+  async decline(repair: string, declined: boolean): Promise<SpaceState> {
     const known = this.diagnostics(this.cached?.repository?.mergePending ?? false)
       .some((entry) => entry.repair?.key === repair);
     if (!known) throw new CoreError("invalid_request", `no repair named ${repair} stands`);
-    if (aside) this.host.store.setPref(repairPref(repair), { aside: Date.now() });
+    if (declined) this.host.store.setPref(repairPref(repair), { declined: Date.now() });
     else this.host.store.deletePref(repairPref(repair));
     return this.state();
   }
@@ -343,9 +343,9 @@ export class SpaceManager {
     // is untrustworthy — blocking damage, or a cached in-flight state.
     const mark = (entry: StorageDiagnostic): StorageDiagnostic => {
       if (!entry.repair) return entry;
-      const stored = this.host.store.getPref<{ aside?: unknown }>(repairPref(entry.repair.key));
-      const aside = stored && typeof stored.aside === "number" ? stored.aside : undefined;
-      return aside === undefined ? entry : { ...entry, repair: { ...entry.repair, aside } };
+      const stored = this.host.store.getPref<{ declined?: unknown }>(repairPref(entry.repair.key));
+      const declined = stored && typeof stored.declined === "number" ? stored.declined : undefined;
+      return declined === undefined ? entry : { ...entry, repair: { ...entry.repair, declined } };
     };
     const reported = [
       ...this.host.diagnostics().map(mark),

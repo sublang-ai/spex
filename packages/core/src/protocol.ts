@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -696,7 +696,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ type: z.literal("space.tree"), id, path: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.read"), id, path: z.string().min(1) }).strict(),
-  z.object({ type: z.literal("space.repair.aside"), id, repair: z.string().min(1), aside: z.boolean() }).strict(),
+  z.object({ type: z.literal("space.repair.decline"), id, repair: z.string().min(1), declined: z.boolean() }).strict(),
   // Playbook drafts (DR-058, core-service-96): one activity per draft,
   // Boss messages queue while a turn or compile runs.
   z.object({ type: z.literal("draft.list"), id }),
@@ -814,7 +814,7 @@ export interface CommandResults {
   "space.diff": { patch: string; truncated: boolean };
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
-  "space.repair.aside": SpaceState;
+  "space.repair.decline": SpaceState;
   "draft.list": DraftInfo[];
   "draft.create": DraftInfo;
   "draft.open": { draft: DraftInfo; source: DraftSource | null; records: DraftRecord[] };
@@ -1051,9 +1051,9 @@ export interface DiagnosticRepair {
    * are deliberately outside it, so a folder appearing or vanishing
    * never mints a repair that re-asks an answered question. */
   key: string;
-  /** When this device's reader set it aside, in Unix milliseconds
-   * (space-54); absent while it stands unanswered. */
-  aside?: number;
+  /** When this device's reader declined to add it, in Unix
+   * milliseconds (space-54); absent while it stands unanswered. */
+  declined?: number;
   /** What the core found about each path the repair already names
    * (space-53): checked, never searched for. */
   checked?: RepairChecked[];

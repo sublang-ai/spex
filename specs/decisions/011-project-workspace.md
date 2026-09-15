@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-065](065-repairs-the-reader-answers.md): a Space repair adds the project it names from the folder it has checked, so the palette is no longer the only place a project is added; it remains where projects are browsed, chosen and created.
+
 Accepted; the spec view's data layout and group model are amended by [DR-015](015-reference-content.md) — packages-layout parsing with section-kind groups replaces the user/dev/test triple.
 The Settings surface's profile inventory is amended by [DR-019](019-inline-agent-configuration.md).
 The spec view's read-only stance is amended by [DR-043](043-minimal-spec-editing.md): whole-file editing with a preview.

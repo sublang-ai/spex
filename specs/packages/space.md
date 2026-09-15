@@ -103,16 +103,15 @@ When the core reports the home's diagnostics, it shall fold every diagnostic a f
 - one project's repair resolves every session recorded under it, however many sessions raised it;
 - where exactly one unbound identity's name equals one recorded directory's last segment, the two are one repair, the pairing shown in its editor [[space-47](#space-47)] and never applied unshown;
 - a fault no folder repairs — a session working directory missing or invalid, a blocking diagnostic, a pending merge — folds into no repair and keeps its own row;
-- repairs stand before unfolded diagnostics, blocking ones first, then unanswered repairs before ones set aside [[space-54](#space-54)], then by session count descending, then by name, then by path, and no row reorders while an editor is open.
+- repairs stand before unfolded diagnostics, blocking ones first, then unanswered repairs before declined ones [[space-54](#space-54)], then by session count descending, then by name, then by path, and no row reorders while an editor is open.
 
 #### space-47
 
-When the user accepts a repair's proposal [[space-53](#space-53)], names a folder himself, or sets the repair aside, the Space surface shall settle it in place, creating no project identity itself ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
+When the user adds a repair's project at the folder proposed [[space-53](#space-53)] or at one he names, or declines to add it, the Space surface shall settle that repair in place ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
 
-- accepting a proposal for a project the space already carries rebinds that project to the proposed folder with the repair's recorded directories as aliases, so every session recorded under them resolves and the identity is preserved [[storage-6](storage.md#storage-6)];
-- accepting one for a repair the space carries no identity for opens the project palette seeded with that folder, which creates the identity and hands the project back [[projects-22](projects.md#projects-22)], the reader staying on this surface;
-- where the registered folder is not one the repair records, the surface binds those recorded directories to it as aliases, a refusal there reported as a registration that stands with its binding refused, never as an outcome;
-- naming a folder opens the row as an in-place editor over the proposed or recorded path, with Save, Cancel, Escape cancelling as the remote row's editor does [[space-5](#space-5)], and an Open folder… control where the running deployment offers a directory picker;
+- adding at a folder the space already carries the project for sets that project's folder, carrying the repair's recorded directories as aliases so every session recorded under them resolves and the identity is preserved [[storage-6](storage.md#storage-6)];
+- adding at a folder the space carries no project for registers one there [[projects-1](projects.md#projects-1)], and where that folder is not one the repair records, attaches those recorded directories to it, a refusal there reported as an add that stands with its folders unattached, never as an outcome;
+- naming a different folder opens the row as an in-place editor over the proposed or recorded path, with Add project, Cancel, Escape cancelling as the remote row's editor does [[space-5](#space-5)], and an Open folder… control where the running deployment offers a directory picker;
 - the editor says that where a project lives is recorded on this device alone and never syncs [[storage-1](storage.md#storage-1)];
 - a refusal shows in the row with the path kept and the control offered again: a folder that is no work tree root, a folder already another project's, and a project whose turn is still running;
 - while any Space operation runs every repair control is disabled, a rebind being refused then [[space-21](#space-21)].
@@ -132,7 +131,7 @@ When a repair's rebind succeeds, the Space surface shall replace that row in pla
 While a repair stands unanswered, the Space surface shall count it as an issue [[space-1](#space-1)], only this device's reader's own act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
 
 - drawing a row, opening the list and re-reading the state settle nothing;
-- setting a repair aside says this project does not belong on this device: the row stands in the list and counts no more, and Bring back restores it to counting;
+- declining says this is not a project on this device: the row stands in the list, counts no more, and keeps the controls it had, so changing that answer is adding the project rather than undoing anything;
 - resolving a repair removes it from the list, the core no longer reporting it;
 - an answer lapses only when the repair's own recorded facts change, never because a folder appeared or vanished beneath it.
 
@@ -155,9 +154,9 @@ When the core reports a repair, it shall check the folders that repair already n
 
 #### space-54
 
-While this device's reader has set a repair aside, the core shall hold that answer in this device's preferences alone, keyed by the facts the repair names [[storage-5](storage.md#storage-5)] ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
+While this device's reader has declined to add a repair's project, the core shall hold that answer in this device's preferences alone, keyed by the facts the repair names [[storage-5](storage.md#storage-5)] ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
 
-- the record is written only when he sets the repair aside and removed when he brings it back, never by a read or a render;
+- the record is written only when he declines, and removed when the repair is answered otherwise, never by a read or a render;
 - a repair whose recorded facts change is another repair, so it carries no record and counts afresh;
 - an answer naming no repair the core still reports is discarded, except where the fold carries a blocking diagnostic or is the cached state of an operation in flight;
 - answering a repair the core does not report is refused.
@@ -168,11 +167,11 @@ While the issues list stands, the Space surface shall tell a repair's three cond
 
 | Condition | Mark | Row |
 | --- | --- | --- |
-| unanswered | a filled dot | the fact, its session count, what the core found, and its controls |
-| set aside | a hollow dot | "Set aside" before the fact, in the surface's secondary tone, with Bring back |
-| resolved | a check | "Resolved" before the project, the folder it now has and the sessions that resolved, with Open project |
+| unanswered | a filled dot | the project's name, where its sessions ran, what the core found, and its controls |
+| declined | a hollow dot | "not added" after the fact, in the surface's secondary tone, its controls kept |
+| resolved | a check | the project, the folder it is now at and the sessions that resolved, with Open project |
 
-- the list's heading counts the unanswered repairs and names how many stand set aside;
+- the list's heading counts the unanswered repairs and names how many stand not added;
 - a row that changes condition holds its place until the reader's own re-read [[space-48](#space-48)].
 
 ### Changes
@@ -418,7 +417,7 @@ The Space surface shall fit its pane at every width down to the 320-pixel floor 
 - below 42rem the header's at-a-glance words yield — the check and sync times, then the ahead and behind words, the numbers riding each field's accessible name and title — and below 20rem the header's fields stack with the primary control last and full-width;
 - in each change row the label owns the slack and truncates with its title, the project chip and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sync, Syncing…, Check remote, Checking…, Stop, Set up space, Setting up…, Join, Joining…, Apply, Applying…, Cancel, Save, Saving…, Add remote, Change remote, Use this, Add project…, Set folder, Not here, Bring back, Open folder…, Open project, View diff, Hide diff, Keep mine, Take remote, All mine, All remote, Open session, Show in Finder, Show in folder, Copy path, Refresh, Retry, Dismiss;
+- every control reads at most 14 characters, its busy form included: Sync, Syncing…, Check remote, Checking…, Stop, Set up space, Setting up…, Join, Joining…, Apply, Applying…, Cancel, Save, Saving…, Add remote, Change remote, Add project, Adding…, Choose folder…, Don't add, Open folder…, Open project, View diff, Hide diff, Keep mine, Take remote, All mine, All remote, Open session, Show in Finder, Show in folder, Copy path, Refresh, Retry, Dismiss;
 - the surface scrolls inside its own box and the page never scrolls.
 
 ## Internal Behavior
@@ -440,7 +439,7 @@ The core shall expose Space through these commands and one message, each reply v
 | `space.diff` | `{ unit: string, path: string, side: "mine" \| "remote" }` | `{ patch: string, truncated: boolean }` | `invalid_request` (session or queue unit; unknown unit or path; no check yet for a remote side) |
 | `space.tree` | `{ path?: string }` | `{ path: string, entries: SpaceEntry[] }` | `invalid_request` (path escaping the home), `not_found` |
 | `space.read` | `{ path: string }` | `{ kind: "text", text, lines, truncated } \| { kind: "withheld", reason } \| { kind: "binary", size }` | `invalid_request` (outside the home, a symlink, `.git`, not a file), `not_found` |
-| `space.repair.aside` | `{ repair: string, aside: boolean }` | `SpaceState` | `invalid_request` (no repair of that name stands), `busy` (an operation running) |
+| `space.repair.decline` | `{ repair: string, declined: boolean }` | `SpaceState` | `invalid_request` (no repair of that name stands), `busy` (an operation running) |
 
 - `space.state { state: SpaceState }` is broadcast to every client on each transition of the machine [[space-31](#space-31)] and after `space.init`, `space.remote.set` and the Refresh step; long commands reply `accepted` at once and their outcome is state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5);
 - the interface re-pulls `space.get` when the surface mounts, on window focus, and — debounced — on `session.state`, `session.removed`, `intents.changed` and `config.state` while the surface is shown.
@@ -464,7 +463,7 @@ interface SpaceState {
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: Repair }[];
   issues: number;
   // Repair: { kind: "project" | "directory"; projectId?, projectName?,
-  //   directories: string[]; sessions: number; key: string; aside?: number;
+  //   directories: string[]; sessions: number; key: string; declined?: number;
   //   checked?: { path, here, repo, claimedBy?, unknown? }[];
   //   proposal?: { path: string; from: "recorded" | "beside-projects" } }
   sync:
@@ -631,7 +630,7 @@ When an integration suite reports diagnostics on a home carrying a project with 
 - a rebind to a chosen folder, carrying the repair's recorded directories as aliases, resolves the project and every session recorded under them while the identity the space carries is unchanged [[space-47](#space-47)];
 - a rebind refused because the folder is no work tree root, because the folder is another project's, or because that project's turn is running leaves the repair standing with its reason [[space-47](#space-47)];
 - a rebind is refused while a Space operation runs [[space-47](#space-47)];
-- a repair the core reports still counts while it stands drawn, only the reader's act settling it, and setting one aside writes to this device's preferences and to no tracked file, bringing it back restoring the count [[space-49](#space-49)] [[space-54](#space-54)];
+- a repair the core reports still counts while it stands drawn, only the reader's act settling it, and declining writes to this device's preferences and to no tracked file, adding the project restoring nothing because the repair then leaves [[space-49](#space-49)] [[space-54](#space-54)];
 - answering a repair the core does not report is refused [[space-54](#space-54)];
 - a recorded directory that is here and a work tree root no project binds is proposed, one that is absent is reported absent and proposed not at all, and no directory outside those the repair names and the shared-parent candidate is examined [[space-53](#space-53)].
 

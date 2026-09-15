@@ -229,9 +229,9 @@ export interface AppState {
   spaceInit(remote?: string): Promise<void>;
   /** Set or clear `origin` (space-5); the reply is the new state. */
   spaceSetRemote(url: string | null): Promise<void>;
-  /** Set a repair aside, or bring it back (space-54): the reader's own
-   * act, never rendering; the reply is the new state. */
-  spaceRepairAside(repair: string, aside: boolean): Promise<void>;
+  /** Decline a repair, or undo that (space-54): the reader's own act,
+   * never rendering; the reply is the new state. */
+  spaceRepairDecline(repair: string, declined: boolean): Promise<void>;
   /** Point a project the space carries at a folder on this device
    * (space-47), preserving its identity: the recorded directories ride
    * as aliases so every session under them resolves. */
@@ -1135,8 +1135,8 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 
-    async spaceRepairAside(repair: string, aside: boolean): Promise<void> {
-      const space = await getClient().command("space.repair.aside", { repair, aside });
+    async spaceRepairDecline(repair: string, declined: boolean): Promise<void> {
+      const space = await getClient().command("space.repair.decline", { repair, declined });
       spaceReads += 1;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
@@ -1482,6 +1482,8 @@ export const useAppStore = create<AppState>((set, get) => {
       const project = await getClient().command("project.register", { path });
       set({ projects: await getClient().command("project.list", {}) });
       void get().loadProjectMeta(project.id);
+      // A repair answered from Space must lower its count at once.
+      if (get().space) await get().loadSpace();
       return project;
     },
 

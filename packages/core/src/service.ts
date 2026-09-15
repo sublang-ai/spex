@@ -1613,8 +1613,8 @@ export class CoreService {
         return this.requireSpace().tree(command.path);
       case "space.read":
         return this.requireSpace().read(command.path);
-      case "space.repair.aside":
-        return this.requireSpace().setAside(command.repair, command.aside);
+      case "space.repair.decline":
+        return this.requireSpace().decline(command.repair, command.declined);
       // Playbook drafts (DR-058, core-service-96): one activity per
       // draft, Boss messages queue, the manager holds the matrix.
       case "draft.list":

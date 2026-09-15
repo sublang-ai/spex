@@ -527,34 +527,34 @@ function Card({
 
 
 /**
- * One repair the reader answers (space-53, space-55). The row is an
- * answer, not a form: where the core checked a folder and found it
- * here, unclaimed and a git work tree, the row says so and takes one
- * gesture. Typing is the fallback. Only his answer settles it.
+ * Sessions ran somewhere that is not a project on this device, and the
+ * row asks the one question that follows: add it as a project? Adding
+ * one is picking a folder, so the row speaks of projects and folders
+ * and never of a folder "having" a project (DR-065).
+ *
+ * Declining leaves the row standing and quiet, still offering what it
+ * offered, so changing your mind needs no separate undo.
  */
 function RepairRow({
   repair,
-  reason,
   disabled,
   resolved,
   autoFocus,
-  onOpenPalette,
   onOpenProject,
   onResolved,
   onNote,
 }: {
   repair: DiagnosticRepair;
-  reason: string;
   disabled: boolean;
   resolved?: string;
   autoFocus?: boolean;
-  onOpenPalette(seed: string, done: (project: ProjectInfo) => void): void;
   onOpenProject(projectId: string): void;
   onResolved(key: string, summary: string, projectId: string): void;
   onNote: Note;
 }) {
   const rebindProject = useAppStore((state) => state.rebindProject);
-  const spaceRepairAside = useAppStore((state) => state.spaceRepairAside);
+  const registerProject = useAppStore((state) => state.registerProject);
+  const decline = useAppStore((state) => state.spaceRepairDecline);
   const proposal = repair.proposal;
   const recorded = repair.directories[0] ?? "";
   const [editing, setEditing] = useState(false);
@@ -578,7 +578,7 @@ function RepairRow({
     return (
       <li data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2">
         <span aria-hidden>✓</span>
-        <span className="min-w-0 flex-1">Resolved · {resolved}</span>
+        <span className="min-w-0 flex-1">{resolved}</span>
         {repair.projectId ? (
           <button type="button" className={LINK} onClick={() => onOpenProject(repair.projectId!)}>
             Open project
@@ -588,31 +588,32 @@ function RepairRow({
     );
   }
 
-  const aside = repair.aside !== undefined;
+  const declined = repair.declined !== undefined;
+  const lastSegment = (p: string): string => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? p;
+  const name = repair.projectName ?? (recorded ? lastSegment(recorded) : "these sessions");
 
-  /** Finish a repair once a folder is settled on, keeping the project
-   * the space already carries wherever it carries one (space-48). */
-  const finish = async (chosen: string, project?: ProjectInfo): Promise<void> => {
+  /** Adding a project is picking a folder: where the space already
+   * carries the project, its folder is set here; where it does not, it
+   * is added with that folder. Either way the reader stays put. */
+  const add = async (chosen: string): Promise<void> => {
     setBusy(true);
     setRefusal(undefined);
     try {
-      let bound = project;
-      if (repair.projectId) {
-        bound = await rebindProject(repair.projectId, chosen, repair.directories);
-      } else if (project && repair.directories.length && !repair.directories.includes(project.path)) {
-        // The registered folder is not where the sessions ran, so the
-        // recorded directories ride as aliases or they stay unresolved.
+      const project = repair.projectId
+        ? await rebindProject(repair.projectId, chosen, repair.directories)
+        : await registerProject(chosen);
+      if (!repair.projectId && repair.directories.length && !repair.directories.includes(project.path)) {
+        // The sessions ran somewhere else, so that folder rides along
+        // or they stay unresolved; a half-done add is reported as one.
         try {
-          bound = await rebindProject(project.id, project.path, repair.directories);
+          await rebindProject(project.id, project.path, repair.directories);
         } catch (cause) {
-          // Half-done is reported, never dressed as success.
           setRefusal(`Added ${project.name}, but ${(cause as Error).message}`);
           return;
         }
       }
-      if (!bound) return;
       const sessions = repair.sessions > 0 ? `, ${plural(repair.sessions, "session")} listed` : "";
-      onResolved(repair.key, `${bound.name} — now at ${bound.path}${sessions}`, bound.id);
+      onResolved(repair.key, `${project.name} · now a project at ${project.path}${sessions}`, project.id);
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
@@ -620,11 +621,11 @@ function RepairRow({
     }
   };
 
-  const setAside = async (next: boolean): Promise<void> => {
+  const setDeclined = async (next: boolean): Promise<void> => {
     setBusy(true);
     try {
-      await spaceRepairAside(repair.key, next);
-      onNote(next ? "Set aside." : "Brought back.");
+      await decline(repair.key, next);
+      if (next) onNote(`${name} not added.`);
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
@@ -632,161 +633,132 @@ function RepairRow({
     }
   };
 
-  if (aside) {
-    return (
-      <li data-testid="space-repair-aside" className="flex min-w-0 flex-wrap items-center gap-2 text-neutral-500">
-        <span aria-hidden>○</span>
-        <span className="min-w-0 flex-1">Set aside · {reason}</span>
-        {repair.sessions > 0 ? (
-          <span className="shrink-0 text-xs">{plural(repair.sessions, "session")} recorded there</span>
-        ) : null}
-        <button
-          type="button"
-          data-testid="space-repair-back"
-          className={SECONDARY}
-          disabled={disabled || busy}
-          onClick={() => void setAside(false)}
-        >
-          Bring back
-        </button>
-      </li>
-    );
-  }
-
-  // What the core found, in the words the reader needs (space-53).
   const checkedRecorded = (repair.checked ?? []).find((entry) => entry.path === recorded);
   const evidence = proposal
-    ? proposal.from === "recorded" && proposal.path === recorded
-      ? "That folder is here and is a git repository no project claims."
-      : `Found at ${proposal.path}${proposal.from === "recorded" ? "" : ", beside your other projects"} — a git repository no project claims.`
+    ? `That folder is here and is a git repository. Add it as a project?`
     : checkedRecorded?.here === false
-      ? "That folder is not on this device."
+      ? "That folder is no longer on this device."
       : checkedRecorded?.claimedBy
-        ? `That folder is already ${checkedRecorded.claimedBy}'s.`
+        ? `That folder already belongs to ${checkedRecorded.claimedBy}.`
         : checkedRecorded?.here && !checkedRecorded.repo
           ? "That folder is here but is not a git repository."
           : undefined;
 
-  const accept = proposal ? (repair.projectId ? "Use this" : "Add project…") : undefined;
+  const controls = (
+    <div className="flex flex-wrap items-center gap-2">
+      {proposal ? (
+        <button
+          type="button"
+          ref={firstRef}
+          data-testid="space-repair-add"
+          className={SECONDARY}
+          disabled={disabled || busy}
+          onClick={() => void add(proposal.path)}
+        >
+          {busy ? "Adding…" : "Add project"}
+        </button>
+      ) : null}
+      <button
+        type="button"
+        ref={proposal ? undefined : firstRef}
+        data-testid="space-repair-choose"
+        className={SECONDARY}
+        disabled={disabled || busy}
+        onClick={() => setEditing(true)}
+      >
+        Choose folder…
+      </button>
+      {!declined ? (
+        <button
+          type="button"
+          data-testid="space-repair-decline"
+          className={SECONDARY}
+          disabled={disabled || busy}
+          onClick={() => void setDeclined(true)}
+        >
+          Don&apos;t add
+        </button>
+      ) : null}
+      {refusal ? (
+        <span role="alert" className="text-xs text-red-600 dark:text-red-400">
+          {refusal}
+        </span>
+      ) : null}
+    </div>
+  );
 
-  return (
-    <li data-testid="space-repair" className="flex min-w-0 flex-col gap-1">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span aria-hidden>●</span>
-        <span className="min-w-0 flex-1">{reason}</span>
-        {repair.sessions > 0 ? (
-          <span className="shrink-0 text-xs text-neutral-500">
-            {plural(repair.sessions, "session")} recorded there
+  const editor = (
+    <div className="flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700">
+      <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+        <span className="shrink-0 text-neutral-500">Which folder on this device is {name}?</span>
+        <input
+          ref={fieldRef}
+          data-testid="space-repair-path"
+          value={path}
+          onChange={(event) => setPath(event.target.value)}
+          onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+            if (event.key === "Escape") { event.stopPropagation(); setEditing(false); }
+            if (event.key === "Enter") void submit();
+          }}
+          spellCheck={false}
+          disabled={busy}
+          className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900"
+        />
+        {window.spexNative ? (
+          <button
+            type="button"
+            className={SECONDARY}
+            disabled={busy}
+            onClick={async () => {
+              const picked = await window.spexNative!.pickDirectory();
+              if (picked) setPath(picked);
+            }}
+          >
+            Open folder…
+          </button>
+        ) : null}
+      </label>
+      <p className="text-xs text-neutral-500">
+        Where a project lives is recorded on this device only; this never syncs.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={SECONDARY} disabled={busy} onClick={() => void submit()}>
+          {busy ? "Adding…" : "Add project"}
+        </button>
+        <button type="button" className={SECONDARY} disabled={busy} onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+        {refusal ? (
+          <span role="alert" className="text-xs text-red-600 dark:text-red-400">
+            {refusal}
           </span>
         ) : null}
       </div>
-      {evidence ? <p className="text-xs text-neutral-500">{evidence}</p> : null}
-      {!editing ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {accept && proposal ? (
-            <button
-              type="button"
-              ref={firstRef}
-              data-testid="space-repair-accept"
-              className={SECONDARY}
-              disabled={disabled || busy}
-              onClick={() => {
-                if (repair.projectId) return void finish(proposal.path);
-                // Creating an identity is the palette's (DR-011); it
-                // hands the project back and the reader stays here.
-                onOpenPalette(proposal.path, (project) => void finish(project.path, project));
-              }}
-            >
-              {busy ? "Saving…" : accept}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            ref={accept ? undefined : firstRef}
-            data-testid="space-set-folder"
-            className={SECONDARY}
-            disabled={disabled || busy}
-            onClick={() => setEditing(true)}
-          >
-            Set folder
-          </button>
-          <button
-            type="button"
-            data-testid="space-repair-not-here"
-            className={SECONDARY}
-            disabled={disabled || busy}
-            onClick={() => void setAside(true)}
-          >
-            Not here
-          </button>
-          {refusal ? (
-            <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-              {refusal}
-            </span>
-          ) : null}
-        </div>
-      ) : (
-        <div className="flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700">
-          <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-            <span className="shrink-0 text-neutral-500">
-              {repair.projectName
-                ? `Where is ${repair.projectName} on this device?`
-                : "Which folder on this device holds these sessions?"}
-            </span>
-            <input
-              ref={fieldRef}
-              data-testid="space-repair-path"
-              value={path}
-              onChange={(event) => setPath(event.target.value)}
-              onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                if (event.key === "Escape") { event.stopPropagation(); setEditing(false); }
-                if (event.key === "Enter") void submit();
-              }}
-              spellCheck={false}
-              disabled={busy}
-              className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900"
-            />
-            {window.spexNative ? (
-              <button
-                type="button"
-                className={SECONDARY}
-                disabled={busy}
-                onClick={async () => {
-                  const picked = await window.spexNative!.pickDirectory();
-                  if (picked) setPath(picked);
-                }}
-              >
-                Open folder…
-              </button>
-            ) : null}
-          </label>
-          <p className="text-xs text-neutral-500">
-            Where a project lives is recorded on this device only; this never syncs.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={SECONDARY} disabled={busy} onClick={() => void submit()}>
-              {busy ? "Saving…" : "Save"}
-            </button>
-            <button type="button" className={SECONDARY} disabled={busy} onClick={() => setEditing(false)}>
-              Cancel
-            </button>
-            {refusal ? (
-              <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-                {refusal}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      )}
+    </div>
+  );
+
+  return (
+    <li
+      data-testid={declined ? "space-repair-declined" : "space-repair"}
+      className={`flex min-w-0 flex-col gap-1${declined ? " text-neutral-500" : ""}`}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span aria-hidden>{declined ? "○" : "●"}</span>
+        <span className="min-w-0 flex-1">
+          <span className="font-medium">{name}</span>
+          {repair.sessions > 0 ? ` · ${plural(repair.sessions, "session")} ran in ${recorded}` : ""}
+          {declined ? " · not added" : ""}
+        </span>
+      </div>
+      {!declined && evidence ? <p className="text-xs text-neutral-500">{evidence}</p> : null}
+      {editing ? editor : controls}
     </li>
   );
 
   function submit(): void {
     const chosen = path.trim();
-    if (!chosen) { setRefusal("Choose the project's folder on this device."); return; }
-    if (repair.projectId) { void finish(chosen); return; }
-    // No identity yet: the palette mints it, seeded with this folder.
-    onOpenPalette(chosen, (project) => void finish(project.path, project));
+    if (!chosen) { setRefusal("Name the folder on this device."); return; }
+    void add(chosen);
   }
 }
 
@@ -796,7 +768,6 @@ export function SyncTab({
   connected,
   issuesOpen,
   onOpenSession,
-  onOpenPalette,
   onOpenProject,
   onNote,
 }: {
@@ -805,7 +776,6 @@ export function SyncTab({
   connected: boolean;
   issuesOpen: boolean;
   onOpenSession(sessionId: string): void;
-  onOpenPalette(): void;
   onOpenProject(projectId: string): void;
   onNote: Note;
 }) {
@@ -927,13 +897,13 @@ export function SyncTab({
   // The core carries the count (space-1): what the reader has not
   // answered. Rows he has set aside stand on, quietly.
   const issueCount = space.issues;
-  const asideCount = space.diagnostics.filter((entry) => entry.repair?.aside !== undefined).length;
+  const declinedCount = space.diagnostics.filter((entry) => entry.repair?.declined !== undefined).length;
   const blocking = space.diagnostics.some((entry) => entry.blocking);
   const listOpen = space.diagnostics.length > 0 && (issuesOpen || blocking);
   // Standing rows first; a row that changes condition holds its place
   // until the reader's own re-read (space-48).
   const ordered = [...space.diagnostics].sort((a, b) =>
-    Number(a.repair?.aside !== undefined) - Number(b.repair?.aside !== undefined));
+    Number(a.repair?.declined !== undefined) - Number(b.repair?.declined !== undefined));
 
   const issues =
     space.diagnostics.length > 0 && listOpen ? (
@@ -944,7 +914,7 @@ export function SyncTab({
       >
         <h2 className="text-xs font-medium text-amber-800 dark:text-amber-200">
           Issues ({issueCount})
-          {asideCount > 0 ? ` · ${asideCount} set aside` : ""}
+          {declinedCount > 0 ? ` · ${declinedCount} not added` : ""}
         </h2>
         <ul className="flex flex-col gap-1">
           {/* A repair the core no longer reports is resolved; its
@@ -955,7 +925,7 @@ export function SyncTab({
             .map(([key, summary]) => (
               <li key={key} data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2">
                 <span aria-hidden>✓</span>
-                <span className="min-w-0 flex-1">Resolved · {summary}</span>
+                <span className="min-w-0 flex-1">{summary}</span>
                 {resolvedProjects[key] ? (
                   <button type="button" className={LINK} onClick={() => onOpenProject(resolvedProjects[key]!)}>
                     Open project
@@ -972,11 +942,9 @@ export function SyncTab({
               <RepairRow
                 key={entry.repair.key}
                 repair={entry.repair}
-                reason={entry.reason}
                 disabled={disabled || pending}
                 resolved={resolved[entry.repair.key]}
                 autoFocus={entry.repair.key === advanceTo}
-                onOpenPalette={onOpenPalette}
                 onOpenProject={onOpenProject}
                 onResolved={(key, summary, projectId) => {
                   setResolved((was) => ({ ...was, [key]: summary }));

@@ -26,13 +26,6 @@ export interface ProjectPaletteProps {
   currentProjectId?: string;
   onPickFolder?: () => Promise<string | null>;
   onPick: (projectId: string) => void;
-  /** A folder the opener already knows, so the reader never retypes
-   * what a repair already named (space-48). */
-  seedPath?: string;
-  /** Where a project the palette registers or creates is handed back:
-   * the opener decides the landing, so a palette opened inside a
-   * repair finishes there rather than navigating (DR-009). */
-  onAdded?: (project: ProjectInfo) => void;
   /** Register-or-init by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
@@ -53,7 +46,7 @@ const FOCUSABLE = "button:not([disabled]), input:not([disabled])";
 export function ProjectPalette(props: ProjectPaletteProps) {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
-  const [pathDraft, setPathDraft] = useState(props.seedPath ?? "");
+  const [pathDraft, setPathDraft] = useState("");
   const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -132,8 +125,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       const project = create
         ? await props.onCreatePath(path, scaffold)
         : await props.onAddPath(path);
-      if (props.onAdded) { props.onAdded(project); props.onClose(); }
-      else pick(project.id);
+      pick(project.id);
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -164,10 +156,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       setError(undefined);
       props
         .onAddPath(path)
-        .then((project) => {
-          if (props.onAdded) { props.onAdded(project); props.onClose(); }
-          else pick(project.id);
-        })
+        .then((project) => pick(project.id))
         .catch((cause: Error) => setError(cause.message))
         .finally(() => setBusy(false));
     });

@@ -72,7 +72,7 @@ The preference store shall encode `prefs.json` as exactly `{v:1,prefs:{...}}`, w
 - each preference is a JSON value;
 - `viewed:<sessionId>` stores the last viewed turn as a nonnegative integer and resets when that session's history is replaced;
 - `space:lastSync` stores the last completed in-app sync as `{at, sent, received}` — Unix milliseconds and unit counts;
-- `space:repair:<repair>` records that this device's reader set a folder repair aside, keyed by the project and recorded directories it names, so the repair stands in the list and counts as no issue here alone;
+- `space:repair:<repair>` records that this device's reader declined to add a repair's project, keyed by the project and recorded directories it names, so the repair stands in the list and counts as no issue here alone;
 - `draft:<id>:player` stores the roster player id answering that draft's authoring conversation; absent means the Captain's block; removed with the draft.
 
 ### storage-6

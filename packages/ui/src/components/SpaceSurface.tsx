@@ -18,7 +18,6 @@ import {
 } from "react";
 import type { SpaceState } from "@sublang/spex-core/protocol";
 
-import type { ProjectInfo } from "@sublang/spex-core/protocol";
 import { useAppStore } from "../state/store.js";
 import { useClock } from "../lib/useClock.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
@@ -39,10 +38,6 @@ import { ExploreTab } from "./SpaceExplorer.js";
 export interface SpaceSurfaceProps {
   /** Open a session as its tab (space-7, run-view-68). */
   onOpenSession(sessionId: string): void;
-  /** Creating a project identity stays the palette's (DR-011): a repair
-   * opens it seeded with the folder it named, and takes the project
-   * back so the reader stays here (space-48). */
-  onOpenPalette(seed?: string, onAdded?: (project: ProjectInfo) => void): void;
   /** Open the repaired project, the one control here that leaves the
    * surface (space-48). */
   onOpenProject(projectId: string): void;
@@ -464,7 +459,7 @@ function statusDot(space: SpaceState): { className: string; word: string } {
   return { className: "bg-neutral-400", word: "idle" };
 }
 
-export function SpaceSurface({ onOpenSession, onOpenPalette, onOpenProject }: SpaceSurfaceProps) {
+export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps) {
   const space = useAppStore((state) => state.space);
   const spaceError = useAppStore((state) => state.spaceError);
   const spaceReadAt = useAppStore((state) => state.spaceReadAt);
@@ -722,7 +717,6 @@ export function SpaceSurface({ onOpenSession, onOpenPalette, onOpenProject }: Sp
                 connected={connected}
                 issuesOpen={issuesOpen}
                 onOpenSession={onOpenSession}
-                onOpenPalette={onOpenPalette}
                 onOpenProject={onOpenProject}
                 onNote={onNote}
               />
