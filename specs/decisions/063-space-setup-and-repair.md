@@ -6,6 +6,8 @@
 ## Status
 
 Accepted (2026-09-14) on the owner's review of the first-run and second-device paths.
+Amended by [DR-065](065-repairs-the-reader-answers.md): a repair counts until this device's reader answers it, and one he sets aside stands quietly; the app checks folders a repair already names and proposes one for a single gesture; and the palette hands its project back so a repair finishes in Space.
+That record supersedes this one's declined Dismiss control and its shown-counts rule, and amends its disk-scanning bullet by upholding its ground as a rule; every other decision here stands.
 Amends ([DR-046](046-decision-record-evolution.md)) [DR-057](057-space-surface.md):
 
 - §"One surface, four duties": the clause "no binding controls of its own — an unbound project is pointed to the project palette, which already rebinds" is superseded, its premise being false of the shipped interface; the other four prohibitions stand.

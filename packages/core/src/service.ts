@@ -58,7 +58,7 @@ import { CoreError, SessionManager, currentSession, type CaptainFactory, type Re
 import { closedStats, foldLedger, intentTitle, wasWorked } from "./ledger.js";
 import { rankBetween } from "./rank.js";
 import { Store } from "./store.js";
-import { foldDiagnostics, StorageFormatError } from "./app-storage.js";
+import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -233,6 +233,72 @@ export interface CoreServiceEvents {
   onLedgerChange?: () => void;
 }
 
+
+/**
+ * What the core found about the folders a repair already names, and the
+ * one it proposes (space-53). The bound is a prohibition: the core may
+ * CHECK a path it can already name and must report what it found; it
+ * may never SEARCH for one. It lists no directory and descends none.
+ */
+async function checkRepairs(
+  diagnostics: StorageDiagnostic[],
+  bindings: { id: string; name: string; path: string }[],
+  run: RunCommand,
+): Promise<StorageDiagnostic[]> {
+  const claimed = new Map(bindings.map((b) => [resolve(b.path), b.name]));
+  // The parent the most of this device's projects already share, so a
+  // candidate is named rather than hunted for.
+  const parents = new Map<string, number>();
+  for (const binding of bindings) {
+    const parent = dirname(resolve(binding.path));
+    parents.set(parent, (parents.get(parent) ?? 0) + 1);
+  }
+  const dominant = [...parents.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+
+  const checkOne = async (path: string): Promise<RepairChecked> => {
+    if (!existsSync(path)) return { path, here: false, repo: false };
+    const name = claimed.get(resolve(path));
+    try {
+      // existsSync gates the git call, and the git call is bounded: a
+      // dead mount must never stall the surface's read.
+      const repo = await withTimeout(isWorkTreeRoot(path, run), 3_000);
+      return { path, here: true, repo, ...(name ? { claimedBy: name } : {}) };
+    } catch {
+      return { path, here: true, repo: false, unknown: true, ...(name ? { claimedBy: name } : {}) };
+    }
+  };
+
+  return Promise.all(diagnostics.map(async (entry) => {
+    const repair = entry.repair;
+    if (!repair) return entry;
+    const recorded = repair.directories.slice(0, 4);
+    const lastSegment = (p: string): string => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? p;
+    const named = recorded[0] ?? repair.projectName;
+    const beside = dominant && named ? join(dominant, lastSegment(named)) : undefined;
+    const paths = [...new Set([...recorded, ...(beside && !recorded.includes(beside) ? [beside] : [])])];
+    const checked = await Promise.all(paths.map(checkOne));
+    // Exactly one qualifying folder is a proposal; two is ambiguity,
+    // and the row asks instead.
+    const qualifying = checked.filter((c) => c.here && c.repo && !c.claimedBy && !c.unknown);
+    const proposal = qualifying.length === 1
+      ? {
+          path: qualifying[0].path,
+          from: recorded.includes(qualifying[0].path) ? ("recorded" as const) : ("beside-projects" as const),
+        }
+      : undefined;
+    return { ...entry, repair: { ...repair, checked, ...(proposal ? { proposal } : {}) } };
+  }));
+}
+
+/** A bounded wait, so one unreachable folder cannot hold the surface. */
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timed out")), ms);
+    work.then((value) => { clearTimeout(timer); resolve(value); },
+              (error) => { clearTimeout(timer); reject(error); });
+  });
+}
+
 export class CoreService {
   private readonly options: CoreServiceOptions;
   private readonly configPath: string;
@@ -333,6 +399,11 @@ export class CoreService {
         env: this.env,
         store: this.store,
         diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()]),
+        checkRepairs: (diagnostics) => checkRepairs(
+          diagnostics,
+          this.store.listProjects().map((project) => ({ id: project.id, name: project.name, path: project.path })),
+          this.runCommand,
+        ),
         blocker: () => this.spaceBlocker(),
         broadcast: (state) => this.broadcast({ type: "space.state", state }),
         pauseWatchers: () => {
@@ -1542,8 +1613,8 @@ export class CoreService {
         return this.requireSpace().tree(command.path);
       case "space.read":
         return this.requireSpace().read(command.path);
-      case "space.seen":
-        return this.requireSpace().seen(command.repair);
+      case "space.repair.aside":
+        return this.requireSpace().setAside(command.repair, command.aside);
       // Playbook drafts (DR-058, core-service-96): one activity per
       // draft, Boss messages queue, the manager holds the matrix.
       case "draft.list":

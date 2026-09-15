@@ -98,7 +98,9 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 
 The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, and the palette shall list projects with filter-as-you-type matching on name and path:
 
-- With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, opens with the path field focused and its placeholder saying a project is added by path, and leads its list with the Academy-example action [[projects-27](#projects-27)].
+- With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, opens with the path field focused and its placeholder saying a project is added by path, and leads its list with the Academy-example action [[projects-27](#projects-27)];
+- the path row opens holding a folder its opener supplied, so a flow that already named one never asks for it twice ([DR-065](../decisions/065-repairs-the-reader-answers.md));
+- a project the palette registers or creates is handed to whatever opened it, and that opener decides where the reader lands: the workspace's opener makes it current and shows the projects surface, while an opener that is finishing work of its own keeps the reader where he is ([DR-009](../decisions/009-at-hand-interaction.md)).
 
 #### projects-23
 

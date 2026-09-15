@@ -176,8 +176,14 @@ function base(over: Partial<SpaceState> = {}): SpaceState {
     conflicts: [],
     lastSync: null,
     diagnostics: [],
+    // The core carries the count (space-1); the fixture derives it the
+    // same way, so a test state can never claim an impossible pair.
+    issues: 0,
     sync: { phase: "idle" },
     ...over,
+    ...(over.diagnostics
+      ? { issues: over.issues ?? over.diagnostics.filter((d) => d.repair?.aside === undefined).length }
+      : {}),
   };
 }
 
@@ -371,7 +377,7 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort it there");
   });
 
-  test("a repair row stands with Set folder, and an acknowledged one leaves the count (space-46, space-49)", async () => {
+  test("a repair proposes the folder the core checked, and one gesture takes it (space-53)", async () => {
     const repair = {
       kind: "project" as const,
       projectId: "p1",
@@ -379,41 +385,84 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
       directories: ["/code/infra"],
       sessions: 5,
       key: "p1|/code/infra",
+      checked: [{ path: "/code/infra", here: true, repo: true }],
+      proposal: { path: "/code/infra", from: "recorded" as const },
     };
     await renderSpace(repoState({
       diagnostics: [{ file: "projects.json", reason: "infra has no folder on this device", blocking: false, repair }],
     }));
-    const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toContain("1 issue");
-    fireEvent.click(issues);
-    // Rendering the row is what regressed: it reads the tab's pending
-    // flag, so the row must build after that flag exists.
+    // Displaying it settles nothing: it still counts (space-54).
+    expect(screen.getByTestId("space-issues").textContent).toContain("1 issue");
+    fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
     expect(row.textContent).toContain("infra has no folder on this device");
-    expect(row.textContent).toContain("5 sessions recorded at /code/infra");
+    expect(row.textContent).toContain("5 sessions recorded there");
+    expect(row.textContent).toContain("That folder is here and is a git repository no project claims.");
+    // The space already carries the identity, so one gesture binds it.
+    expect(within(row).getByRole("button", { name: "Use this" })).toBeTruthy();
     expect(within(row).getByRole("button", { name: "Set folder" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Not here" })).toBeTruthy();
+    // Still counted after standing on screen.
+    expect(screen.getByTestId("space-issues").textContent).toContain("1 issue");
   });
 
-  test("an acknowledged repair stands in the list but counts as no issue (space-49)", async () => {
+  test("a repair with no identity offers the palette, not a rebind (space-53, DR-011)", async () => {
     const repair = {
-      kind: "project" as const,
-      projectId: "p1",
-      projectName: "infra",
-      directories: ["/code/infra"],
-      sessions: 5,
-      key: "p1|/code/infra",
-      seen: true,
+      kind: "directory" as const,
+      directories: ["/code/slc"],
+      sessions: 6,
+      key: "|/code/slc",
+      checked: [{ path: "/code/slc", here: true, repo: true }],
+      proposal: { path: "/code/slc", from: "recorded" as const },
     };
     await renderSpace(repoState({
-      diagnostics: [{ file: "projects.json", reason: "infra has no folder on this device", blocking: false, repair }],
+      diagnostics: [{ file: "sessions/a.json", reason: "/code/slc has no project on this device", blocking: false, repair }],
     }));
-    // The repair still stands and stays reachable; only the count drops,
-    // so acknowledging never hides work the reader has not done.
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const row = screen.getByTestId("space-repair");
+    expect(within(row).getByRole("button", { name: "Add project…" })).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: "Use this" })).toBeNull();
+  });
+
+  test("a folder the core did not find proposes nothing and says so (space-53)", async () => {
+    const repair = {
+      kind: "directory" as const,
+      directories: ["/gone/worktree"],
+      sessions: 2,
+      key: "|/gone/worktree",
+      checked: [{ path: "/gone/worktree", here: false, repo: false }],
+    };
+    await renderSpace(repoState({
+      diagnostics: [{ file: "sessions/b.json", reason: "/gone/worktree has no project on this device", blocking: false, repair }],
+    }));
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const row = screen.getByTestId("space-repair");
+    expect(row.textContent).toContain("That folder is not on this device.");
+    expect(within(row).queryByRole("button", { name: "Add project…" })).toBeNull();
+    expect(within(row).getByRole("button", { name: "Not here" })).toBeTruthy();
+  });
+
+  test("a repair set aside stands in the list, marked, and counts no more (space-54, space-55)", async () => {
+    const repair = {
+      kind: "directory" as const,
+      directories: ["/gone/worktree"],
+      sessions: 2,
+      key: "|/gone/worktree",
+      checked: [{ path: "/gone/worktree", here: false, repo: false }],
+      aside: NOW - 60_000,
+    };
+    await renderSpace(repoState({
+      diagnostics: [{ file: "sessions/b.json", reason: "/gone/worktree has no project on this device", blocking: false, repair }],
+    }));
+    // It counts as no issue, but the control stays reachable.
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toContain("issues");
     expect(issues.textContent).not.toMatch(/\d/);
     fireEvent.click(issues);
-    expect(screen.getByTestId("space-repair").textContent).toContain("infra has no folder on this device");
+    const row = screen.getByTestId("space-repair-aside");
+    expect(row.textContent).toContain("Set aside ·");
+    expect(row.textContent).toContain("/gone/worktree has no project on this device");
+    expect(within(row).getByRole("button", { name: "Bring back" })).toBeTruthy();
+    expect(screen.getByTestId("space-issues-list").textContent).toContain("1 set aside");
   });
 
   test("ahead and behind are absent until a check has run, and 'Never synced' stands with no sync", async () => {

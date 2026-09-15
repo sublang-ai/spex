@@ -156,7 +156,7 @@ class Client {
 
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
 
-const SPACE_KEYS = ["conflicts", "diagnostics", "git", "home", "incoming", "lastSync", "local", "outside", "repository", "sync"];
+const SPACE_KEYS = ["conflicts", "diagnostics", "git", "home", "incoming", "issues", "lastSync", "local", "outside", "repository", "sync"];
 const REPOSITORY_KEYS = ["ahead", "behind", "branch", "checkedAt", "identityFallback", "mergePending", "remote", "remoteEmpty", "unrelated", "upstream"];
 const PHASES = new Set(["idle", "running", "choices", "unrelated", "stopped", "done"]);
 const CHANGES = new Set(["new", "updated", "deleted"]);
@@ -631,16 +631,33 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   assert.ok(!repair.reason.includes(projectA.id), "a repair names the project, never its identifier");
   assert.ok((repair.repair?.directories ?? []).includes(a.projectDir), JSON.stringify(repair));
   assert.equal(repair.repair?.sessions, 1);
-  assert.ok(repair.repair?.key.length, "a repair carries its own key (space-49)");
-  assert.equal(repair.repair?.seen, undefined, "unshown, so it still counts (space-49)");
+  assert.ok(repair.repair?.key.length, "a repair carries its own key (space-54)");
+  assert.equal(repair.repair?.aside, undefined, "unanswered, so it counts (space-54)");
+  // space-53: the core checked the folder the repair names — here it
+  // stands, a work tree no project on B binds — and proposes that one,
+  // reporting every path it checked and searching for none.
+  const checked = repair.repair?.checked ?? [];
+  assert.ok(checked.some((c) => c.path === a.projectDir && c.here && c.repo), JSON.stringify(checked));
+  assert.equal(repair.repair?.proposal?.path, a.projectDir);
+  assert.equal(repair.repair?.proposal?.from, "recorded");
+  assert.ok(checked.every((c) => c.path === a.projectDir || repair.repair!.directories.includes(c.path)
+    || c.path.endsWith(a.projectDir.split("/").pop()!)), "only paths the repair names or the shared parent");
   assert.ok(!(await b.client.expectOk("session.list", {})).some((s) => s.id === sessionA), "unresolved until bound");
   // B binds A's project to a local checkout with A's path as the alias.
   const checkout = join(scratch, "b-checkout");
   mkdirSync(checkout);
   git(checkout, "init", "-q");
-  const acknowledged = await b.client.expectOk("space.seen", { repair: repair.repair!.key });
-  assert.equal(acknowledged.diagnostics.find((d) => d.repair?.projectId === projectA.id)?.repair?.seen, true);
-  assert.equal(git(b.dataDir, "status", "--porcelain"), "", "acknowledgement is a preference, so it never syncs");
+  // space-54: only the reader's act settles a repair, and it is this
+  // device's alone — a preference, never a tracked file.
+  const before = await b.client.expectOk("space.get", {});
+  assert.equal(before.issues, before.diagnostics.length, "an unanswered repair counts");
+  const aside = await b.client.expectOk("space.repair.aside", { repair: repair.repair!.key, aside: true });
+  assert.equal(aside.diagnostics.find((d) => d.repair?.projectId === projectA.id)?.repair?.aside !== undefined, true);
+  assert.equal(aside.issues, before.issues - 1, "a repair set aside counts no more");
+  assert.equal(git(b.dataDir, "status", "--porcelain"), "", "the record is a preference, so it never syncs");
+  const restored = await b.client.expectOk("space.repair.aside", { repair: repair.repair!.key, aside: false });
+  assert.equal(restored.issues, before.issues, "brought back, it counts again");
+  await b.client.expectError("space.repair.aside", { repair: "no-such-repair", aside: true }, "invalid_request");
   const bound = await b.client.expectOk("project.rebind", { projectId: projectA.id, path: checkout, aliases: [a.projectDir] });
   assert.equal(bound.id, projectA.id);
   assert.ok(

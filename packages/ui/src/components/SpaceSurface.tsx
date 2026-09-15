@@ -18,6 +18,7 @@ import {
 } from "react";
 import type { SpaceState } from "@sublang/spex-core/protocol";
 
+import type { ProjectInfo } from "@sublang/spex-core/protocol";
 import { useAppStore } from "../state/store.js";
 import { useClock } from "../lib/useClock.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
@@ -38,9 +39,10 @@ import { ExploreTab } from "./SpaceExplorer.js";
 export interface SpaceSurfaceProps {
   /** Open a session as its tab (space-7, run-view-68). */
   onOpenSession(sessionId: string): void;
-  /** Creating a project identity stays the palette's (DR-011): a row
-   * naming no project offers it there. */
-  onOpenPalette(): void;
+  /** Creating a project identity stays the palette's (DR-011): a repair
+   * opens it seeded with the folder it named, and takes the project
+   * back so the reader stays here (space-48). */
+  onOpenPalette(seed?: string, onAdded?: (project: ProjectInfo) => void): void;
   /** Open the repaired project, the one control here that leaves the
    * surface (space-48). */
   onOpenProject(projectId: string): void;
@@ -792,9 +794,9 @@ function Header({
   const running = sync.phase === "running";
   const disabled = !connected;
   const dot = statusDot(space);
-  // The core folds a pending Git merge into the diagnostics (space-1);
-  // a repair already shown on this device counts as no issue (space-49).
-  const issueCount = space.diagnostics.filter((entry) => !entry.repair?.seen).length;
+  // The core carries the count (space-1), so the header and the list
+  // beneath it cannot drift: what the reader has not answered.
+  const issueCount = space.issues;
   const unrelated = sync.phase === "unrelated" || repo?.unrelated === true;
 
   const joining = busy === "join" || accepted === "join" || (joinAccepted && running);

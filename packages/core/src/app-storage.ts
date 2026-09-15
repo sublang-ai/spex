@@ -4,30 +4,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, posix, resolve, win32 } from "node:path";
-import type { IntentInfo, ProjectInfo } from "./protocol.js";
+import type { DiagnosticRepair, IntentInfo, ProjectInfo, RepairChecked } from "./protocol.js";
+
+export type { DiagnosticRepair, RepairChecked };
 
 export interface ProjectIdentity { id: string; name: string; registeredAt: number }
 export interface ProjectBinding { id: string; path: string; aliases: string[] }
-/** What a folder on this device would repair (space-46): carried as
- * facts so a client offers the repair from the data rather than from
- * the reason's wording. */
-export interface DiagnosticRepair {
-  /** "project": the space carries it and this device has no folder.
-   *  "directory": the space records it and no project here claims it. */
-  kind: "project" | "directory";
-  projectId?: string;
-  /** The registered name — never the identifier (core-service-86). */
-  projectName?: string;
-  directories: string[];
-  sessions: number;
-  /** Stable over the facts this repair names, so a repair whose
-   * project or directories change is another repair (space-49). */
-  key: string;
-  /** Shown on this device already, so it counts as no issue here
-   * while it still stands in the list (space-49). */
-  seen?: boolean;
-}
-
 export interface StorageDiagnostic { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }
 /** A repair's identity is the facts it names (space-49). */
 export function repairKey(projectId: string | undefined, directories: string[]): string {

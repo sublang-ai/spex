@@ -58,6 +58,9 @@ export interface SpaceHost {
   store: Store;
   /** Migration, storage and session diagnostics (core-service-86). */
   diagnostics: () => StorageDiagnostic[];
+  /** What the core found about the folders each repair names, and the
+   * one it proposes (space-53): checked, never searched for. */
+  checkRepairs: (diagnostics: StorageDiagnostic[]) => Promise<StorageDiagnostic[]>;
   /** The named blocker of space-11 — a turn in flight, a session held
    * elsewhere, a compile — or undefined when the core is quiet. */
   blocker: () => Promise<string | undefined>;
@@ -270,6 +273,16 @@ function registryLines(side: Map<string, string> | undefined, base: Map<string, 
   return out.length ? out : ["Projects changed"];
 }
 
+/** What the header counts (space-1): a repair the reader has not
+ * answered, and every diagnostic no repair folds. A resolved repair is
+ * already gone, because the core stops reporting it. */
+function countIssues(diagnostics: StorageDiagnostic[]): number {
+  return diagnostics.filter((entry) => entry.repair?.aside === undefined).length;
+}
+
+/** One repair's record in this device's preferences (space-54). */
+const repairPref = (key: string): string => `space:repair:${key}`;
+
 export class SpaceManager {
   private readonly git: SpaceGit;
   private phase: SpaceSyncPhase = { phase: "idle" };
@@ -305,24 +318,35 @@ export class SpaceManager {
   // -- state (space-1, space-29, space-30) -----------------------------------
 
   async state(): Promise<SpaceState> {
-    if (this.phase.phase === "running" && this.cached) return { ...this.cached, sync: this.phase, diagnostics: this.diagnostics(this.cached.repository?.mergePending ?? false) };
+    if (this.phase.phase === "running" && this.cached) {
+      const live = this.diagnostics(this.cached.repository?.mergePending ?? false);
+      return { ...this.cached, sync: this.phase, diagnostics: live, issues: countIssues(live) };
+    }
     return this.snapshot(true);
   }
 
-  /** A repair shown to this device's reader stops counting as an issue
-   * here alone (space-49): the mark is a preference, which never syncs. */
-  async seen(repair: string): Promise<SpaceState> {
-    const marks = this.host.store.getPref<string[]>("space:seen") ?? [];
-    if (!marks.includes(repair)) this.host.store.setPref("space:seen", [...marks, repair]);
+  /** Only the reader's own act settles a repair (space-54): setting one
+   * aside says this project does not belong on this device, and is a
+   * preference, which never syncs. Rendering never writes here. */
+  async setAside(repair: string, aside: boolean): Promise<SpaceState> {
+    const known = this.diagnostics(this.cached?.repository?.mergePending ?? false)
+      .some((entry) => entry.repair?.key === repair);
+    if (!known) throw new CoreError("invalid_request", `no repair named ${repair} stands`);
+    if (aside) this.host.store.setPref(repairPref(repair), { aside: Date.now() });
+    else this.host.store.setPref(repairPref(repair), undefined);
     return this.state();
   }
 
   private diagnostics(mergePending: boolean): StorageDiagnostic[] {
-    const marks = new Set(this.host.store.getPref<string[]>("space:seen") ?? []);
-    const mark = (entry: StorageDiagnostic): StorageDiagnostic =>
-      entry.repair && marks.has(entry.repair.key)
-        ? { ...entry, repair: { ...entry.repair, seen: true } }
-        : entry;
+    // A repair carries only what the reader decided (space-54); a
+    // record naming no standing repair is pruned, except while a fold
+    // is untrustworthy — blocking damage, or a cached in-flight state.
+    const mark = (entry: StorageDiagnostic): StorageDiagnostic => {
+      if (!entry.repair) return entry;
+      const stored = this.host.store.getPref<{ aside?: unknown }>(repairPref(entry.repair.key));
+      const aside = stored && typeof stored.aside === "number" ? stored.aside : undefined;
+      return aside === undefined ? entry : { ...entry, repair: { ...entry.repair, aside } };
+    };
     return [
       ...this.host.diagnostics().map(mark),
       ...(mergePending ? [{ file: ".git/MERGE_HEAD", reason: MERGE_PENDING_REASON, blocking: false }] : []),
@@ -385,6 +409,7 @@ export class SpaceManager {
     const lastSync = stored && typeof stored.at === "number" && typeof stored.sent === "number" && typeof stored.received === "number"
       ? { at: stored.at, sent: stored.sent, received: stored.received }
       : null;
+    const diagnostics = await this.host.checkRepairs(this.diagnostics(repo.root && repo.mergePending));
     const state: SpaceState = {
       home: resolve(this.host.home),
       outside,
@@ -405,7 +430,10 @@ export class SpaceManager {
       incoming: this.lists.incoming,
       conflicts: this.lists.conflicts,
       lastSync,
-      diagnostics: this.diagnostics(repo.root && repo.mergePending),
+      diagnostics,
+      // One number, so the header and the list cannot drift (space-1):
+      // what the reader has not answered, and everything unfolded.
+      issues: countIssues(diagnostics),
       sync: this.phase,
     };
     this.cached = state;

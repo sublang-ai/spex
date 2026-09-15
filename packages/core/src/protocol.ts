@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -696,7 +696,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ type: z.literal("space.tree"), id, path: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.read"), id, path: z.string().min(1) }).strict(),
-  z.object({ type: z.literal("space.seen"), id, repair: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.repair.aside"), id, repair: z.string().min(1), aside: z.boolean() }).strict(),
   // Playbook drafts (DR-058, core-service-96): one activity per draft,
   // Boss messages queue while a turn or compile runs.
   z.object({ type: z.literal("draft.list"), id }),
@@ -814,7 +814,7 @@ export interface CommandResults {
   "space.diff": { patch: string; truncated: boolean };
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
-  "space.seen": SpaceState;
+  "space.repair.aside": SpaceState;
   "draft.list": DraftInfo[];
   "draft.create": DraftInfo;
   "draft.open": { draft: DraftInfo; source: DraftSource | null; records: DraftRecord[] };
@@ -1047,10 +1047,30 @@ export interface DiagnosticRepair {
   projectName?: string;
   directories: string[];
   sessions: number;
-  /** Stable over the facts it names (space-49). */
+  /** Stable over the facts it names (space-54): the checked findings
+   * are deliberately outside it, so a folder appearing or vanishing
+   * never mints a repair that re-asks an answered question. */
   key: string;
-  /** Shown on this device already, so it counts as no issue here. */
-  seen?: boolean;
+  /** When this device's reader set it aside, in Unix milliseconds
+   * (space-54); absent while it stands unanswered. */
+  aside?: number;
+  /** What the core found about each path the repair already names
+   * (space-53): checked, never searched for. */
+  checked?: RepairChecked[];
+  /** The one folder the core proposes, when exactly one qualifies. */
+  proposal?: { path: string; from: "recorded" | "beside-chosen" | "beside-projects" };
+}
+
+/** What the core found about one path it already knew to check
+ * (space-53): it lists no directory and descends none. */
+export interface RepairChecked {
+  path: string;
+  here: boolean;
+  repo: boolean;
+  /** The project already claiming it, where one does. */
+  claimedBy?: string;
+  /** The check could not complete — a slow mount, an error. */
+  unknown?: boolean;
 }
 
 export type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push";
@@ -1156,6 +1176,10 @@ export interface SpaceState {
   conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
+  /** What the header counts (space-1): the repairs this device's
+   * reader has not answered, plus every diagnostic no repair folds.
+   * Carried as one number so header and list cannot disagree. */
+  issues: number;
   sync: SpaceSyncPhase;
 }
 

@@ -90,6 +90,7 @@ meta.md       The spec of specs
 | [DR-062](decisions/062-ending-a-failed-workflow.md) | 062-ending-a-failed-workflow.md | Ending a failed workflow: Drop beside a now-deterministic Retry, the run ended through Playbook's model-free give-up, and a parked failure summoning until its run leaves that state |
 | [DR-063](decisions/063-space-setup-and-repair.md) | 063-space-setup-and-repair.md | Space sets up by naming a remote and repairs a project's folder in place, preserving identity; folded repairs acknowledged per device |
 | [DR-064](decisions/064-honest-remote-failure.md) | 064-honest-remote-failure.md | A remote failure claims only what the host said: both causes named, retryable, the identity mechanism read from the URL, every credential form refused |
+| [DR-065](decisions/065-repairs-the-reader-answers.md) | 065-repairs-the-reader-answers.md | Repairs the reader answers: a repair counts until he acts, set aside stands quietly, folders checked and proposed for one gesture, the palette handing its project back |
 
 ## Packages
 

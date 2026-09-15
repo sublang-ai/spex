@@ -229,9 +229,9 @@ export interface AppState {
   spaceInit(remote?: string): Promise<void>;
   /** Set or clear `origin` (space-5); the reply is the new state. */
   spaceSetRemote(url: string | null): Promise<void>;
-  /** Mark a repair shown on this device, so it counts as no issue here
-   * while it still stands (space-49); the reply is the new state. */
-  spaceSeen(repair: string): Promise<void>;
+  /** Set a repair aside, or bring it back (space-54): the reader's own
+   * act, never rendering; the reply is the new state. */
+  spaceRepairAside(repair: string, aside: boolean): Promise<void>;
   /** Point a project the space carries at a folder on this device
    * (space-47), preserving its identity: the recorded directories ride
    * as aliases so every session under them resolves. */
@@ -1135,16 +1135,23 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 
-    async spaceSeen(repair: string): Promise<void> {
-      const space = await getClient().command("space.seen", { repair });
+    async spaceRepairAside(repair: string, aside: boolean): Promise<void> {
+      const space = await getClient().command("space.repair.aside", { repair, aside });
       spaceReads += 1;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 
     async rebindProject(projectId: string, path: string, aliases: string[]): Promise<ProjectInfo> {
-      const project = await getClient().command("project.rebind", { projectId, path, aliases });
+      const project = await getClient().command("project.rebind", {
+        projectId,
+        path,
+        // A repair naming no directory has no alias to carry.
+        ...(aliases.length ? { aliases } : {}),
+      });
       set({ projects: await getClient().command("project.list", {}) });
       void get().loadProjectMeta(project.id);
+      // The gesture meant to lower the count must lower it (space-1).
+      await get().loadSpace();
       return project;
     },
 
