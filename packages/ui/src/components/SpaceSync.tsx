@@ -829,11 +829,12 @@ export function SyncTab({
 
   const spaceSeen = useAppStore((state) => state.spaceSeen);
   const disabled = !connected;
+  const pending = busy !== undefined || accepted !== undefined;
   // A repair shown here already counts as no issue (space-49); a
   // pending merge the core folds in counts as every other does.
   const issueCount = space.diagnostics.filter((entry) => !entry.repair?.seen).length;
   const blocking = space.diagnostics.some((entry) => entry.blocking);
-  const listOpen = issueCount > 0 && (issuesOpen || blocking);
+  const listOpen = space.diagnostics.length > 0 && (issuesOpen || blocking);
 
   // Being shown is the acknowledgement (space-49): a count alone never
   // acknowledges one, so this waits for the list to actually stand.
@@ -918,7 +919,6 @@ export function SyncTab({
     return <div data-testid="space-sync-tab" className="flex flex-col gap-3">{issues}</div>;
   }
 
-  const pending = busy !== undefined || accepted !== undefined;
   const checkLabel =
     busy === "check" || accepted?.where === "check" || (running && sync.op === "check")
       ? "Checking…"
@@ -942,7 +942,7 @@ export function SyncTab({
       {/* Before this space has met that remote, Join stands by name
           (space-45): the join flag is inert where the histories share an
           ancestor, so offering it costs nothing and needs no transport. */}
-      {repo.remote && repo.branch === "main" && repo.checkedAt === null && !repo.unrelated && !running ? (
+      {repo.remote && repo.branch === "main" && repo.checkedAt === null && !space.lastSync && !repo.unrelated && !running ? (
         <Card testId="space-first-meeting" tone="neutral">
           <span className="font-medium">This space has not met that remote yet.</span>
           <span className="text-xs">

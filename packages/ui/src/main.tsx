@@ -28,13 +28,24 @@ class ErrorBoundary extends React.Component<
           <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-neutral-100 p-2 text-left text-xs text-red-600 dark:bg-neutral-900">
             {this.state.error.message}
           </pre>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500"
-          >
-            Reload
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Recovering in place keeps the surface the reader was on:
+                a reload boots to Projects and loses it (DR-009). */}
+            <button
+              type="button"
+              onClick={() => this.setState({ error: undefined })}
+              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500"
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="text-sm text-brand-600 hover:underline dark:text-brand-300"
+            >
+              Reload the page
+            </button>
+          </div>
         </div>
       );
     }

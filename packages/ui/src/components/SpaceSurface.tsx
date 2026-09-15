@@ -512,7 +512,7 @@ export function SpaceSurface({ onOpenSession, onOpenPalette, onOpenProject }: Sp
   // A join reads "Joining…" until its sync ends (space-6): the flag
   // clears on the first outcome after the run was seen — or on an
   // outcome that landed before a running frame was drawn.
-  const running = space?.sync.phase === "running";
+  const running = space?.sync?.phase === "running";
   const joinRunSeen = useRef(false);
   useEffect(() => {
     if (!joinAccepted) {
@@ -788,8 +788,9 @@ function Header({
   const running = sync.phase === "running";
   const disabled = !connected;
   const dot = statusDot(space);
-  // The core folds a pending Git merge into the diagnostics (space-1).
-  const issueCount = space.diagnostics.length;
+  // The core folds a pending Git merge into the diagnostics (space-1);
+  // a repair already shown on this device counts as no issue (space-49).
+  const issueCount = space.diagnostics.filter((entry) => !entry.repair?.seen).length;
   const unrelated = sync.phase === "unrelated" || repo?.unrelated === true;
 
   const joining = busy === "join" || accepted === "join" || (joinAccepted && running);
@@ -1006,7 +1007,7 @@ function Header({
               >
                 {plural(space.local.length, "change")}
               </button>
-              {issueCount > 0 ? (
+              {space.diagnostics.length > 0 ? (
                 <button
                   type="button"
                   data-testid="space-issues"
@@ -1015,7 +1016,7 @@ function Header({
                   onClick={() => onIssuesOpen(!issuesOpen)}
                 >
                   <span aria-hidden>⚠</span>
-                  {plural(issueCount, "issue")}
+                  {issueCount > 0 ? plural(issueCount, "issue") : "issues"}
                 </button>
               ) : null}
             </div>

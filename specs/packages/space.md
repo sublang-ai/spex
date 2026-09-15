@@ -25,7 +25,7 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | ahead / behind | commits on `main` not on the remote's `main` and the reverse, with the time of the last check; absent until a check has run |
 | last sync | the last completed sync's relative time with the absolute time in its title, or "Never synced" |
 | local changes | the count of local units [[space-7](#space-7)] |
-| issues | the count of unacknowledged repairs [[space-49](#space-49)] and of every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)], plus a pending Git merge left by a terminal, opening the issues list in place |
+| issues | present while any repair or diagnostic stands, counting the unacknowledged repairs [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] plus a pending Git merge left by a terminal, reading without a number where that count is none, and opening the issues list in place |
 | outside | each of the configuration file and the sessions directory lying outside the home [[storage-1](storage.md#storage-1)], named "outside the space; not shared" |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 

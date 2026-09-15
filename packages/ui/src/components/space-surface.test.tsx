@@ -253,6 +253,7 @@ beforeEach(() => {
   commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
     switch (type) {
       case "space.get":
+      case "space.seen":
         return current;
       case "space.init":
         if (initGate) await initGate;
@@ -368,6 +369,51 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(list.textContent).toContain("sessions/x.json");
     expect(within(list).queryByRole("button", { name: "Open palette" })).toBeNull();
     expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort it there");
+  });
+
+  test("a repair row stands with Set folder, and an acknowledged one leaves the count (space-46, space-49)", async () => {
+    const repair = {
+      kind: "project" as const,
+      projectId: "p1",
+      projectName: "infra",
+      directories: ["/code/infra"],
+      sessions: 5,
+      key: "p1|/code/infra",
+    };
+    await renderSpace(repoState({
+      diagnostics: [{ file: "projects.json", reason: "infra has no folder on this device", blocking: false, repair }],
+    }));
+    const issues = screen.getByTestId("space-issues");
+    expect(issues.textContent).toContain("1 issue");
+    fireEvent.click(issues);
+    // Rendering the row is what regressed: it reads the tab's pending
+    // flag, so the row must build after that flag exists.
+    const row = screen.getByTestId("space-repair");
+    expect(row.textContent).toContain("infra has no folder on this device");
+    expect(row.textContent).toContain("5 sessions recorded at /code/infra");
+    expect(within(row).getByRole("button", { name: "Set folder" })).toBeTruthy();
+  });
+
+  test("an acknowledged repair stands in the list but counts as no issue (space-49)", async () => {
+    const repair = {
+      kind: "project" as const,
+      projectId: "p1",
+      projectName: "infra",
+      directories: ["/code/infra"],
+      sessions: 5,
+      key: "p1|/code/infra",
+      seen: true,
+    };
+    await renderSpace(repoState({
+      diagnostics: [{ file: "projects.json", reason: "infra has no folder on this device", blocking: false, repair }],
+    }));
+    // The repair still stands and stays reachable; only the count drops,
+    // so acknowledging never hides work the reader has not done.
+    const issues = screen.getByTestId("space-issues");
+    expect(issues.textContent).toContain("issues");
+    expect(issues.textContent).not.toMatch(/\d/);
+    fireEvent.click(issues);
+    expect(screen.getByTestId("space-repair").textContent).toContain("infra has no folder on this device");
   });
 
   test("ahead and behind are absent until a check has run, and 'Never synced' stands with no sync", async () => {
