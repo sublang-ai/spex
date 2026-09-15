@@ -658,6 +658,10 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   const restored = await b.client.expectOk("space.repair.aside", { repair: repair.repair!.key, aside: false });
   assert.equal(restored.issues, before.issues, "brought back, it counts again");
   await b.client.expectError("space.repair.aside", { repair: "no-such-repair", aside: true }, "invalid_request");
+  // space-54: an answer naming no repair the core still reports is
+  // discarded, so records cannot accumulate behind the reader.
+  const aside2 = await b.client.expectOk("space.repair.aside", { repair: repair.repair!.key, aside: true });
+  assert.ok(aside2.diagnostics.some((d) => d.repair?.aside !== undefined));
   const bound = await b.client.expectOk("project.rebind", { projectId: projectA.id, path: checkout, aliases: [a.projectDir] });
   assert.equal(bound.id, projectA.id);
   assert.ok(

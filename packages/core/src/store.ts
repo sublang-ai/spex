@@ -1475,6 +1475,12 @@ export class Store {
     return this.prefs.has(key) ? (this.prefs.get(key) as T) : undefined;
   }
 
+  /** The preference keys under one prefix, so a family can be pruned
+   * of records naming things that no longer stand (space-54). */
+  prefKeys(prefix: string): string[] {
+    return [...this.prefs.keys()].filter((key) => key.startsWith(prefix));
+  }
+
   /** Forget a preference; a key never set is no error. */
   deletePref(key: string): void {
     if (this.prefsProblem) throw new StorageFormatError(this.prefsProblem.file, this.prefsProblem.reason);

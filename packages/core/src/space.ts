@@ -333,7 +333,7 @@ export class SpaceManager {
       .some((entry) => entry.repair?.key === repair);
     if (!known) throw new CoreError("invalid_request", `no repair named ${repair} stands`);
     if (aside) this.host.store.setPref(repairPref(repair), { aside: Date.now() });
-    else this.host.store.setPref(repairPref(repair), undefined);
+    else this.host.store.deletePref(repairPref(repair));
     return this.state();
   }
 
@@ -347,12 +347,27 @@ export class SpaceManager {
       const aside = stored && typeof stored.aside === "number" ? stored.aside : undefined;
       return aside === undefined ? entry : { ...entry, repair: { ...entry.repair, aside } };
     };
-    return [
+    const reported = [
       ...this.host.diagnostics().map(mark),
       ...(mergePending ? [{ file: ".git/MERGE_HEAD", reason: MERGE_PENDING_REASON, blocking: false }] : []),
       ...(this.refreshProblem ? [this.refreshProblem] : []),
       ...(this.repairProblem ? [this.repairProblem] : []),
     ];
+    this.pruneAnswers(reported);
+    return reported;
+  }
+
+  /** An answer naming no repair the core still reports is discarded
+   * (space-54) — but never on a fold that cannot be trusted to be
+   * complete: blocking damage, or the cached state of an operation in
+   * flight, would drop a record the next honest fold still wants. */
+  private pruneAnswers(reported: StorageDiagnostic[]): void {
+    if (this.phase.phase === "running") return;
+    if (reported.some((entry) => entry.blocking)) return;
+    const standing = new Set(reported.map((entry) => entry.repair?.key).filter(Boolean) as string[]);
+    for (const key of this.host.store.prefKeys("space:repair:")) {
+      if (!standing.has(key.slice("space:repair:".length))) this.host.store.deletePref(key);
+    }
   }
 
   private async readRepository(): Promise<RepositoryInfo> {
