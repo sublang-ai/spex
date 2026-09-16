@@ -92,6 +92,7 @@ meta.md       The spec of specs
 | [DR-064](decisions/064-honest-remote-failure.md) | 064-honest-remote-failure.md | A remote failure claims only what the host said: both causes named, retryable, the identity mechanism read from the URL, every credential form refused |
 | [DR-065](decisions/065-repairs-the-reader-answers.md) | 065-repairs-the-reader-answers.md | Repairs the reader answers: a repair counts until he acts, set aside stands quietly, folders checked and proposed for one gesture, the palette handing its project back |
 | [DR-066](decisions/066-every-summons-has-a-door.md) | 066-every-summons-has-a-door.md | Every summons has a door: an act on the row that reads no runtime state, the marker the reader's own showing advances, permission unraised |
+| [DR-067](decisions/067-tuning-for-one-conversation.md) | 067-tuning-for-one-conversation.md | Tuning for one conversation: a session's own model, effort and fast mode above the config's, the Captain and each player tuned from the agent's own chip, chosen and applied kept apart |
 
 ## Packages
 

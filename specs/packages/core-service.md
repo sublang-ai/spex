@@ -98,7 +98,24 @@ When a session's runtime is opened for a message [[core-service-73](#core-servic
 | A stored playbook disabled, or changed in its source, command, options, or a binding's player; the Captain's or a stored player's adapter, instruction, or permissions changed; a stored player gone | refused `invalid_config` naming each changed field and offering a new session, the runtime never opened |
 
 - a playbook or player the session never had is left out of the projection and changes nothing;
-- a pending config reload is awaited before the projection is taken, so the settings applied are the file's latest.
+- a pending config reload is awaited before the projection is taken, so the settings applied are the file's latest;
+- the session's own tuning is applied onto the projection after the config's [[core-service-100](#core-service-100)] — at the Captain's block, at each tuned player's block, and at every role binding naming a tuned player, since a role's provider call is built from its binding — so a tuned session changes no other session and no config file ([DR-067](../decisions/067-tuning-for-one-conversation.md)).
+
+#### core-service-100
+
+When a client sends `session.tune` naming a session, one of its agents — the reserved `captain`, or a player of its bound roster — and a change to that agent's model, effort, or fast mode, the core service shall accept the change only if the projection the session's next message would open on validates with it applied, then persist the session's tuning [[storage-5](storage.md#storage-5)] and republish the session's summary [[core-service-32](#core-service-32)] ([DR-067](../decisions/067-tuning-for-one-conversation.md)):
+
+| The field's value is | The agent runs |
+| --- | --- |
+| a string | that value, above the config's role binding and player alike |
+| `false` | the provider's current default |
+| `null` | the configured value — the session's tuning of that field is cleared |
+| absent | what the session's tuning already held for it |
+
+- validation composes the projection and applies the shared execution validator's own adapter-scoped rules, so a model, effort, or fast mode the agent's adapter cannot enforce is refused `invalid_config` naming it, with nothing written;
+- an unknown session, or an agent outside the session's stored members, is refused `invalid_request` naming it;
+- runtime discovery narrows a client's choices [[settings-34](settings.md#settings-34)] and gates no save here, so tuning stays available while discovery is unavailable ([DR-052](../decisions/052-runtime-model-options.md));
+- a session whose tuning holds nothing carries none, and deleting a session drops its tuning with the rest of its per-session state [[core-service-70](#core-service-70)].
 
 #### core-service-93
 
@@ -116,7 +133,7 @@ When a Boss turn or live session ends, the core service shall checkpoint through
 
 #### core-service-70
 
-When a client sends `session.delete` for a stored session, the core service shall delete the session's files and every in-memory trace of it — its records, turns, usage, and viewed marker — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
+When a client sends `session.delete` for a stored session, the core service shall delete the session's files and every in-memory trace of it — its records, turns, usage, viewed marker, and tuning [[core-service-100](#core-service-100)] — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
 
 - a live session is refused with a `busy` error naming it: its turn finishes or is aborted first [[core-service-4](#core-service-4)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - a session from either interface is deleted through the same shared-store operation and lease check [[core-service-75](#core-service-75)];
@@ -139,7 +156,8 @@ When a client requests the session list, the core service shall reply with every
 - each uncertain entry carries `recovery: {state: "uncertain", input}` with the exact saved input; uncertainty is never reported as normal continuability;
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
-- each entry carries its turn count and whether it ended holding a failure record.
+- each entry carries its turn count and whether it ended holding a failure record;
+- each entry carries the session's own tuning [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md)).
 
 #### core-service-34
 
@@ -591,6 +609,16 @@ Where a client subscribes to a session that then runs a fake-adapter turn, the t
 #### core-service-40
 
 Where a live session's runtime fails its disposal, the test suite shall request that session's disposal over the protocol during its turn and assert the failing-disposal case of [[core-service-4](#core-service-4)]: the request reports the failure and a fresh session request for the same project remains blocked.
+
+#### core-service-101
+
+Where two sessions of one project share a player and the config pins that player's model and effort, when the test suite tunes that player and the Captain in the first session over the protocol and opens both sessions in turn, the test suite shall assert that a session's tuning reaches its own runtime and nothing else ([DR-067](../decisions/067-tuning-for-one-conversation.md)):
+
+- the first session's projection carries the tuned values at the Captain, at the player's block, and at every role binding naming that player [[core-service-100](#core-service-100)] [[core-service-92](#core-service-92)];
+- the second session's projection carries the config's values at all three [[core-service-92](#core-service-92)];
+- the shared config file's bytes are identical before and after [[core-service-100](#core-service-100)];
+- clearing the tuning returns the first session's projection to the config's values, and deleting the session leaves no tuning behind [[core-service-100](#core-service-100)];
+- a value the player's adapter cannot enforce is refused with the session's tuning unchanged [[core-service-100](#core-service-100)].
 
 ### Shutdown Coverage
 

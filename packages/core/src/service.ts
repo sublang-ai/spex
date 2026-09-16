@@ -43,6 +43,7 @@ import {
   type LoadModule,
 } from "./config.js";
 import {
+  CAPTAIN_AGENT_ID,
   parseCommand,
   PROTOCOL_VERSION,
   type AdapterName,
@@ -52,9 +53,12 @@ import {
   type ErrorCode,
   type ReadinessEntry,
   type ServerMessage,
+  type SessionAgentTuning,
+  type SessionInfo,
+  type SessionTuning,
   type StoredRecord,
 } from "./protocol.js";
-import { CoreError, SessionManager, currentSession, type CaptainFactory, type RecordEnvelope } from "./session.js";
+import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldLedger, intentTitle, wasWorked } from "./ledger.js";
 import { rankBetween } from "./rank.js";
 import { Store } from "./store.js";
@@ -766,6 +770,57 @@ export class CoreService {
   /** A message applies the file's latest settings (core-service-92): a
    * reload the watcher scheduled or started is awaited before a session
    * opens, so the debounce window never applies stale settings. */
+  /** core-service-100: accept a tuning change only if the projection
+   * the session's next message would open on validates with it applied,
+   * then persist it and republish the session (DR-067). */
+  private async tuneSession(command: {sessionId: string; agentId: string; model?: string | false | null; effort?: string | false | null; fastMode?: boolean | null}): Promise<SessionInfo> {
+    const session = this.store.describeSession(command.sessionId);
+    if (!session) throw new CoreError("not_found", `no session ${command.sessionId}`);
+    const project = this.store.getProject(session.projectId);
+    if (!project) throw new CoreError("invalid_request", "bind the existing project before tuning its session");
+    await this.settledConfig();
+    if (this.configState.status !== "valid" || !this.composed) {
+      throw new CoreError("invalid_config", this.configState.status === "invalid" ? `config is invalid: ${this.configState.errors.join("; ")}` : "config file is missing");
+    }
+    const known = command.agentId === CAPTAIN_AGENT_ID || session.players.some(({id}) => id === command.agentId);
+    if (!known) throw new CoreError("invalid_request", `session ${session.id} has no agent "${command.agentId}"`);
+
+    // Every await this change needs happens before the stored tuning is
+    // read, so read, validate and write run without one between them: a
+    // second change arriving meanwhile cannot be clobbered by a value
+    // this one read before it landed.
+    const stored = await this.sessions.storedStructure(session.id).catch(() => undefined);
+    const current = this.store.sessionTuning(session.id) ?? {};
+    const entry: SessionAgentTuning = {...current[command.agentId]};
+    for (const field of ["model", "effort"] as const) {
+      const change = command[field];
+      if (change === undefined) continue;
+      if (change === null) delete entry[field];
+      else entry[field] = change;
+    }
+    if (command.fastMode === null) delete entry.fastMode;
+    else if (command.fastMode !== undefined) entry.fastMode = command.fastMode;
+
+    const next: SessionTuning = {...current};
+    if (Object.keys(entry).length > 0) next[command.agentId] = entry;
+    else delete next[command.agentId];
+
+    // The same rules the open path enforces, run here and locally: a
+    // value the adapter cannot enforce is refused with nothing written,
+    // and runtime discovery gates no save (DR-052).
+    try {
+      executionConfig(this.composed, project.path, stored ? storedMembers(stored) : undefined, next);
+    } catch (cause) {
+      throw new CoreError("invalid_config", cause instanceof Error ? cause.message : String(cause));
+    }
+    this.store.setSessionTuning(session.id, next);
+    const updated = this.sessions.listSessions().find(({id}) => id === session.id) ?? this.store.describeSession(session.id);
+    if (!updated) throw new CoreError("not_found", `no session ${session.id}`);
+    this.broadcast({ type: "session.state", session: updated });
+    this.events.onSessionState?.(updated);
+    return updated;
+  }
+
   private async settledConfig(): Promise<void> {
     if (this.reloadTimer) {
       clearTimeout(this.reloadTimer);
@@ -1142,6 +1197,11 @@ export class CoreService {
       case "session.dispose":
         await this.sessions.disposeSession(command.sessionId);
         return null;
+      // core-service-100: one agent's tuning for one session. It writes
+      // no config — the claim that a default cannot change from here is
+      // kept by there being no path that could (DR-067).
+      case "session.tune":
+        return await this.tuneSession(command);
       case "session.retry": {
         const session = this.store.describeSession(command.sessionId);
         if (!session) throw new CoreError("not_found", `no session ${command.sessionId}`);

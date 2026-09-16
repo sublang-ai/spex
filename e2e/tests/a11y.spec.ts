@@ -51,6 +51,13 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
     found.push(...(await scan(page, "Session")));
 
+    // This session's own tuning, open on an expanded row: three
+    // selects and their rows inside a dialog (run-view-138).
+    await page.getByTestId("tuning-chip-dev.coder").click();
+    await expect(page.getByTestId("session-tuning")).toBeVisible();
+    found.push(...(await scan(page, "Session (tuning panel)")));
+    await page.keyboard.press("Escape");
+
     // A run parked in its recoverable failure state, where the notice
     // and its one control stand (run-view-128, DR-060).
     await page.getByTestId("boss-composer").fill("Fail the follow-up patch");

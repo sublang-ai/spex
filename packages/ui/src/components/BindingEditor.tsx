@@ -9,12 +9,11 @@
 import { useState, type RefObject } from "react";
 import type {
   RoleBindingSummary,
-  AgentModelOption,
   SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
 import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
-import { ModelField } from "./ModelField.js";
+import { TuningField } from "./TuningField.js";
 import { ModelDiscoveryStatus } from "./ModelDiscoveryStatus.js";
 import { useFitInBox } from "../lib/popover-fit.js";
 import { usePopover } from "../lib/usePopover.js";
@@ -24,62 +23,6 @@ export interface BindingChange {
   model?: string | false | null;
   effort?: string | false | null;
   fastMode?: boolean | null;
-}
-
-/** A tuning field is tri-state: inherit the player's default, take the
- * provider's current default, or pin a value (DR-032). */
-function TuningField({
-  label,
-  value,
-  playerDefault,
-  onChange,
-  models,
-  efforts,
-  additionalEfforts,
-}: {
-  label: "model" | "effort";
-  models?: readonly AgentModelOption[];
-  efforts?: readonly string[];
-  additionalEfforts?: readonly string[];
-  value: string | false | undefined;
-  playerDefault: string | undefined;
-  onChange(next: string | false | null): void;
-}) {
-  const mode = value === undefined ? "inherit" : value === false ? "provider" : "pin";
-  return (
-    <label className="flex flex-col gap-1 text-xs">
-      <span className="text-neutral-500 dark:text-neutral-400">{label}</span>
-      <select
-        data-testid={`binding-${label}-mode`}
-        value={mode}
-        onChange={(event) => {
-          const next = event.target.value;
-          if (next === "inherit") onChange(null);
-          else if (next === "provider") onChange(false);
-          else onChange(playerDefault ?? "");
-        }}
-        className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-      >
-        <option value="inherit">
-          inherit the player{playerDefault ? ` (${playerDefault})` : ""}
-        </option>
-        <option value="provider">the provider's default</option>
-        <option value="pin">pin a value…</option>
-      </select>
-      {mode === "pin" && (label === "model" ? (
-        <ModelField value={typeof value === "string" ? value : ""} models={models ?? []}
-          onChange={onChange} allowDefault={false} testId="binding-model-value" />
-      ) : (
-        <select data-testid="binding-effort-value" value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.target.value)}
-          className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900">
-          <option value="">Choose effort…</option>
-          {typeof value === "string" && value && !efforts?.includes(value) && <option value={value}>{value} (current)</option>}
-          {(efforts ?? []).map((effort) => <option key={effort} value={effort}>{effort}{additionalEfforts?.includes(effort) ? " (adapter-wide)" : ""}</option>)}
-        </select>
-      ))}
-    </label>
-  );
 }
 
 export function BindingEditorPopover({

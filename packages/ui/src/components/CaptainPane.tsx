@@ -6,7 +6,7 @@
 // counterpart bubbles, player questions as first-class incoming
 // messages, shell status lines as compact system lines between them.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type RefObject } from "react";
 
 import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
@@ -17,6 +17,8 @@ import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { latestCall } from "./PlayerPane.js";
 import { Markdown } from "./Markdown.js";
 import { MachineCard } from "./MachineCard.js";
+import { TuningChip } from "./SessionTuning.js";
+import type { TuningAgent } from "../lib/session-tuning.js";
 import { SourceChip } from "./DeliveryCard.js";
 import type { IntentSource, MachineGraph } from "@sublang/spex-core/protocol";
 
@@ -282,10 +284,23 @@ export function CaptainPane({
   bossSources,
   extras,
   readiness,
+  tuning,
+  onTune,
+  tuneAnchorRef,
+  tuneOpen = false,
+  tunePopover,
   focusKey,
   onFocusHandled,
 }: {
   view: SessionView;
+  /** What the Captain is set to run, and the door to changing it for
+   * this session alone (run-view-139). */
+  tuning?: TuningAgent;
+  onTune?: () => void;
+  tuneAnchorRef?: RefObject<HTMLButtonElement | null>;
+  tuneOpen?: boolean;
+  /** The one panel, rendered beside the Captain's chip while open. */
+  tunePopover?: ReactNode;
   /** Served machine definitions by playbook id (run-view-64: absent
    * definitions degrade to the observed drawing). */
   machineGraphs?: Record<string, MachineGraph | null>;
@@ -400,6 +415,20 @@ export function CaptainPane({
           C
         </span>
         <span className="text-sm font-semibold">Captain</span>
+        {tuning && onTune ? (
+          // The Captain is an agent like any other here: its chip reads
+          // what it is set to run and opens this session's tuning
+          // (run-view-139), at the chip the reader used.
+          <span className="relative flex min-w-0 shrink">
+            <TuningChip
+              agent={tuning}
+              onOpen={onTune}
+              {...(tuneAnchorRef ? { anchorRef: tuneAnchorRef } : {})}
+              open={tuneOpen}
+            />
+            {tuneOpen ? tunePopover : null}
+          </span>
+        ) : null}
         {status.state || view.turnActive ? (
           <span
             data-testid="state-chip"

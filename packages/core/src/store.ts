@@ -34,7 +34,9 @@ import type {
   IntentSource,
   IntentSourceKind,
   ProjectInfo,
+  SessionAgentTuning,
   SessionInfo,
+  SessionTuning,
   StoredRecord,
   TmuxPlayRecord,
 } from "./protocol.js";
@@ -126,6 +128,7 @@ function sessionInfo(
   turns: number,
   failed: boolean,
   costUsd: number | undefined,
+  tuning: SessionTuning | undefined,
 ): SessionInfo {
   return {
     id: meta.id,
@@ -149,7 +152,24 @@ function sessionInfo(
     ...(meta.externalWriter ? {continuationReason: meta.externalWriter === "active" ? "Session is active in another host" : "Session ownership cannot be verified"}
       : meta.continuationReason ? { continuationReason: meta.continuationReason } : {}),
     ...(meta.recovery && !meta.externalWriter ? { recovery: meta.recovery } : {}),
+    ...(tuning && Object.keys(tuning).length > 0 ? { tuning } : {}),
   };
+}
+
+const tuningKey = (sessionId: string): string => `session:${sessionId}:tuning`;
+
+/** One agent's stored tuning, read defensively: a hand-edited or
+ * older preference file never invalidates the rest of the session. */
+function readAgentTuning(value: unknown): SessionAgentTuning | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  const entry: SessionAgentTuning = {};
+  for (const field of ["model", "effort"] as const) {
+    const held = source[field];
+    if (held === false || (typeof held === "string" && held.length > 0)) entry[field] = held;
+  }
+  if (typeof source.fastMode === "boolean") entry.fastMode = source.fastMode;
+  return Object.keys(entry).length > 0 ? entry : undefined;
 }
 
 /** Atomic whole-file replace: a reader never sees a torn file. */
@@ -1069,7 +1089,7 @@ export class Store {
     this.records.delete(id);
     this.turns.delete(id);
     this.usage.delete(id);
-    if (this.prefs.delete(`viewed:${id}`)) this.savePrefs();
+    if ([this.prefs.delete(`viewed:${id}`), this.prefs.delete(tuningKey(id))].some(Boolean)) this.savePrefs();
   }
 
   /** Local runtime liveness is never restored from stored history. */
@@ -1105,7 +1125,7 @@ export class Store {
       costed.length > 0
         ? costed.reduce((sum, entry) => sum + (entry.totalCostUsd ?? 0), 0)
         : undefined;
-    return sessionInfo(meta, path, turns[0]?.prompt, turns.length, failed, cost);
+    return sessionInfo(meta, path, turns[0]?.prompt, turns.length, failed, cost, this.sessionTuning(meta.id));
   }
 
   listSessions(): SessionInfo[] {
@@ -1494,6 +1514,28 @@ export class Store {
    * of records naming things that no longer stand (space-54). */
   prefKeys(prefix: string): string[] {
     return [...this.prefs.keys()].filter((key) => key.startsWith(prefix));
+  }
+
+  /** A session's own tuning (core-service-100, DR-067): what its
+   * agents are set to run, above everything the config resolves. It is
+   * this host's ad-hoc choice, so it lives with the local preferences
+   * rather than in the config the launcher reads. */
+  sessionTuning(sessionId: string): SessionTuning | undefined {
+    const stored = this.getPref<unknown>(tuningKey(sessionId));
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return undefined;
+    const tuning: SessionTuning = {};
+    for (const [agentId, value] of Object.entries(stored as Record<string, unknown>)) {
+      const entry = readAgentTuning(value);
+      if (entry) tuning[agentId] = entry;
+    }
+    return Object.keys(tuning).length > 0 ? tuning : undefined;
+  }
+
+  /** An empty tuning is no tuning: the key leaves rather than standing
+   * as an empty object nobody can see. */
+  setSessionTuning(sessionId: string, tuning: SessionTuning): void {
+    if (Object.keys(tuning).length === 0) this.deletePref(tuningKey(sessionId));
+    else this.setPref(tuningKey(sessionId), tuning);
   }
 
   /** Forget a preference; a key never set is no error. */

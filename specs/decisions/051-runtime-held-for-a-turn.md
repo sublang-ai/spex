@@ -8,6 +8,9 @@
 Accepted (2026-09-07) on the owner's two questions: why a session must be ended when a message continues it, and how settings can be changed once a session has started.
 Amends [DR-042](042-sessions-continue.md) (ending retires: a session is continued, never ended), [DR-029](029-session-history-home.md) (the ending control and the "ended" vocabulary), [DR-035](035-intent-ledger.md) (the lane Start reuses is the project's current conversation, not a live session), [DR-038](038-history-is-done-work.md) (the delete control waits only on a turn in flight), and [DR-002](002-desktop-app-architecture.md) (one working turn per project replaces one live session per project).
 
+Amended by [DR-067](067-tuning-for-one-conversation.md): a message opens the runtime on the current settings and the session's own tuning.
+The hold lasting a turn, the tuning-versus-structure line, and the refusal by name stand.
+
 ## Context
 
 - Since [DR-042](042-sessions-continue.md) an ended session is a paused conversation a message continues, so "End" kept only two duties: releasing the project's one-live-session slot — a rule Spex enforces itself; Playbook claims a worktree per governed call only — and releasing the Playbook session lease so the terminal can continue the same session.
