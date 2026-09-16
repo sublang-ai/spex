@@ -2,15 +2,14 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // What a session's agents are set to run (DR-067): the session's own
-// tuning read over the configured values. One reading, so the chip in
-// a pane header, the chip on the Captain, and the panel's rows can
-// never disagree about the same agent.
+// settings read over the configured ones. One reading, so a pane's
+// chip and the editor it opens can never disagree about the agent.
 
 import {
   CAPTAIN_AGENT_ID,
   type AdapterName,
   type ConfigSummary,
-  type SessionAgentTuning,
+  type SessionAgentSettings,
   type SessionInfo,
 } from "@sublang/spex-core/protocol";
 
@@ -18,22 +17,22 @@ import {
  * is no id to print, and printing nothing would read as unset. */
 export const PROVIDER_DEFAULT_READING = "provider default";
 
-export interface TuningAgent {
+export interface SessionAgent {
   /** The reserved `captain`, or a player of the session's roster. */
   id: string;
   /** What the reader calls it: "Captain", or the player's own id. */
   name: string;
   adapter: AdapterName;
   configured: { model?: string; effort?: string; fastMode?: boolean };
-  tuning?: SessionAgentTuning;
+  settings?: SessionAgentSettings;
   /** `<playbook>.<role>` for every binding that tunes this player of
    * its own accord — one session tuning runs them all alike. */
   divergentRoles: string[];
 }
 
-/** What this agent is set to run: the session's tuning of a field,
- * else the configured value. A chip is a setting, not a receipt. */
-export function effectiveTuning(agent: TuningAgent): {
+/** What this agent is set to run: this conversation's own value for a
+ * field, else the configured one. A chip is a setting, not a receipt. */
+export function effectiveSettings(agent: SessionAgent): {
   model?: string;
   effort?: string;
   fastMode?: boolean;
@@ -41,29 +40,30 @@ export function effectiveTuning(agent: TuningAgent): {
   const pick = (chosen: string | false | undefined, configured: string | undefined): string | undefined =>
     chosen === false ? PROVIDER_DEFAULT_READING : chosen ?? configured;
   return {
-    ...(pick(agent.tuning?.model, agent.configured.model) !== undefined ? { model: pick(agent.tuning?.model, agent.configured.model) } : {}),
-    ...(pick(agent.tuning?.effort, agent.configured.effort) !== undefined ? { effort: pick(agent.tuning?.effort, agent.configured.effort) } : {}),
-    ...((agent.tuning?.fastMode ?? agent.configured.fastMode) !== undefined ? { fastMode: agent.tuning?.fastMode ?? agent.configured.fastMode } : {}),
+    ...(pick(agent.settings?.model, agent.configured.model) !== undefined ? { model: pick(agent.settings?.model, agent.configured.model) } : {}),
+    ...(pick(agent.settings?.effort, agent.configured.effort) !== undefined ? { effort: pick(agent.settings?.effort, agent.configured.effort) } : {}),
+    ...((agent.settings?.fastMode ?? agent.configured.fastMode) !== undefined ? { fastMode: agent.settings?.fastMode ?? agent.configured.fastMode } : {}),
   };
 }
 
-/** The fields this session tunes on one agent, in the reader's words,
- * so a row says what it departs from rather than only that it does. */
-export function tunedFields(tuning: SessionAgentTuning | undefined): string[] {
-  if (!tuning) return [];
+/** The fields this conversation set on one agent, in the reader's own
+ * words, so a chip and its editor say what departs rather than only
+ * that something does. */
+export function changedFields(settings: SessionAgentSettings | undefined): string[] {
+  if (!settings) return [];
   const named: string[] = [];
-  if (tuning.model !== undefined) named.push("model");
-  if (tuning.effort !== undefined) named.push("effort");
-  if (tuning.fastMode !== undefined) named.push("fast mode");
+  if (settings.model !== undefined) named.push("model");
+  if (settings.effort !== undefined) named.push("effort");
+  if (settings.fastMode !== undefined) named.push("fast mode");
   return named;
 }
 
 /** The session's agents, the Captain first and then its players in
- * pane order — the roster the panel lists and the panes draw. */
+ * pane order — one per pane the view draws. */
 export function sessionAgents(
-  session: Pick<SessionInfo, "players" | "tuning">,
+  session: Pick<SessionInfo, "players" | "agentSettings">,
   summary: ConfigSummary | undefined,
-): TuningAgent[] {
+): SessionAgent[] {
   if (!summary) return [];
   const divergentFor = (playerId: string): string[] =>
     (summary.playbooks ?? []).flatMap((playbook) =>
@@ -72,7 +72,7 @@ export function sessionAgents(
           binding.playerId === playerId &&
           (binding.model !== undefined || binding.effort !== undefined || binding.fastMode !== undefined))
         .map(([role]) => `${playbook.id}.${role}`));
-  const agentOf = (id: string, name: string, block: ConfigSummary["captain"] | undefined, adapter: AdapterName, divergentRoles: string[]): TuningAgent => ({
+  const agentOf = (id: string, name: string, block: ConfigSummary["captain"] | undefined, adapter: AdapterName, divergentRoles: string[]): SessionAgent => ({
     id,
     name,
     adapter,
@@ -81,7 +81,7 @@ export function sessionAgents(
       ...(block?.effort !== undefined ? { effort: block.effort } : {}),
       ...(block?.fastMode !== undefined ? { fastMode: block.fastMode } : {}),
     },
-    ...(session.tuning?.[id] ? { tuning: session.tuning[id] } : {}),
+    ...(session.agentSettings?.[id] ? { settings: session.agentSettings[id] } : {}),
     divergentRoles,
   });
   // A summary without a captain block — a partial config a client has
@@ -99,8 +99,3 @@ export function sessionAgents(
   return agents;
 }
 
-/** How many of a session's agents it tunes — the standing answer to
- * "is this conversation running my defaults?". */
-export function tunedCount(session: Pick<SessionInfo, "tuning">): number {
-  return Object.keys(session.tuning ?? {}).length;
-}

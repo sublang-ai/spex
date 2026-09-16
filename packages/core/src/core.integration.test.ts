@@ -2710,9 +2710,9 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   const configBefore = readFileSync(configPath);
 
   // The Captain and the player are tuned for this session alone.
-  const afterCaptain = await client.expectOk("session.tune", { sessionId: tuned.id, agentId: "captain", model: "claude-captain-tuned" });
-  assert.deepEqual(afterCaptain.tuning?.captain, { model: "claude-captain-tuned" }, "the reply carries the session's own tuning");
-  await client.expectOk("session.tune", { sessionId: tuned.id, agentId: "dev.coder", model: "claude-coder-tuned", effort: "high" });
+  const afterCaptain = await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", model: "claude-captain-tuned" });
+  assert.deepEqual(afterCaptain.agentSettings?.captain, { model: "claude-captain-tuned" }, "the reply carries the session's own agent settings");
+  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", model: "claude-coder-tuned", effort: "high" });
 
   // The projection the next message opens on carries it at all three
   // sites: the Captain, the player's block, and the role binding the
@@ -2749,20 +2749,20 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   assert.deepEqual(readFileSync(configPath), configBefore, "the shared config file is byte-identical");
 
   // A value the adapter cannot enforce is refused with nothing written.
-  const refused = await client.command("session.tune", { sessionId: tuned.id, agentId: "dev.coder", effort: "not-an-effort" });
+  const refused = await client.command("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", effort: "not-an-effort" });
   assert.ok(!refused.ok && refused.error.code === "invalid_config", `refused: ${JSON.stringify(refused)}`);
   const unchanged = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === tuned.id);
-  assert.equal(unchanged?.tuning?.["dev.coder"]?.effort, "high", "the refusal left the session's tuning as it was");
+  assert.equal(unchanged?.agentSettings?.["dev.coder"]?.effort, "high", "the refusal left the session's tuning as it was");
 
   // An agent the session does not hold is refused as a request.
-  const unknown = await client.command("session.tune", { sessionId: tuned.id, agentId: "dev.nobody", model: "x" });
+  const unknown = await client.command("session.agent.set", { sessionId: tuned.id, agentId: "dev.nobody", model: "x" });
   assert.ok(!unknown.ok && unknown.error.code === "invalid_request", `unknown agent refused: ${JSON.stringify(unknown)}`);
 
   // Clearing returns the session to the config's values, and deleting
   // it leaves no tuning behind (core-service-70).
-  const cleared = await client.expectOk("session.tune", { sessionId: tuned.id, agentId: "dev.coder", model: null, effort: null, fastMode: null });
-  assert.equal(cleared.tuning?.["dev.coder"], undefined, "the agent's tuning is gone");
-  await client.expectOk("session.tune", { sessionId: tuned.id, agentId: "captain", model: null });
+  const cleared = await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", model: null, effort: null, fastMode: null });
+  assert.equal(cleared.agentSettings?.["dev.coder"], undefined, "the agent's tuning is gone");
+  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", model: null });
   const bare = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === tuned.id);
-  assert.equal(bare?.tuning, undefined, "a session tuning nothing carries none");
+  assert.equal(bare?.agentSettings, undefined, "a session tuning nothing carries none");
 });

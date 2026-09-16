@@ -34,9 +34,9 @@ import type {
   IntentSource,
   IntentSourceKind,
   ProjectInfo,
-  SessionAgentTuning,
+  SessionAgentSettings,
   SessionInfo,
-  SessionTuning,
+  SessionAgentSettingsMap,
   StoredRecord,
   TmuxPlayRecord,
 } from "./protocol.js";
@@ -128,7 +128,7 @@ function sessionInfo(
   turns: number,
   failed: boolean,
   costUsd: number | undefined,
-  tuning: SessionTuning | undefined,
+  agentSettings: SessionAgentSettingsMap | undefined,
 ): SessionInfo {
   return {
     id: meta.id,
@@ -152,18 +152,18 @@ function sessionInfo(
     ...(meta.externalWriter ? {continuationReason: meta.externalWriter === "active" ? "Session is active in another host" : "Session ownership cannot be verified"}
       : meta.continuationReason ? { continuationReason: meta.continuationReason } : {}),
     ...(meta.recovery && !meta.externalWriter ? { recovery: meta.recovery } : {}),
-    ...(tuning && Object.keys(tuning).length > 0 ? { tuning } : {}),
+    ...(agentSettings && Object.keys(agentSettings).length > 0 ? { agentSettings } : {}),
   };
 }
 
-const tuningKey = (sessionId: string): string => `session:${sessionId}:tuning`;
+const agentSettingsKey = (sessionId: string): string => `session:${sessionId}:agents`;
 
 /** One agent's stored tuning, read defensively: a hand-edited or
  * older preference file never invalidates the rest of the session. */
-function readAgentTuning(value: unknown): SessionAgentTuning | undefined {
+function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const source = value as Record<string, unknown>;
-  const entry: SessionAgentTuning = {};
+  const entry: SessionAgentSettings = {};
   for (const field of ["model", "effort"] as const) {
     const held = source[field];
     if (held === false || (typeof held === "string" && held.length > 0)) entry[field] = held;
@@ -1089,7 +1089,7 @@ export class Store {
     this.records.delete(id);
     this.turns.delete(id);
     this.usage.delete(id);
-    if ([this.prefs.delete(`viewed:${id}`), this.prefs.delete(tuningKey(id))].some(Boolean)) this.savePrefs();
+    if ([this.prefs.delete(`viewed:${id}`), this.prefs.delete(agentSettingsKey(id))].some(Boolean)) this.savePrefs();
   }
 
   /** Local runtime liveness is never restored from stored history. */
@@ -1125,7 +1125,7 @@ export class Store {
       costed.length > 0
         ? costed.reduce((sum, entry) => sum + (entry.totalCostUsd ?? 0), 0)
         : undefined;
-    return sessionInfo(meta, path, turns[0]?.prompt, turns.length, failed, cost, this.sessionTuning(meta.id));
+    return sessionInfo(meta, path, turns[0]?.prompt, turns.length, failed, cost, this.sessionAgentSettings(meta.id));
   }
 
   listSessions(): SessionInfo[] {
@@ -1520,12 +1520,12 @@ export class Store {
    * agents are set to run, above everything the config resolves. It is
    * this host's ad-hoc choice, so it lives with the local preferences
    * rather than in the config the launcher reads. */
-  sessionTuning(sessionId: string): SessionTuning | undefined {
-    const stored = this.getPref<unknown>(tuningKey(sessionId));
+  sessionAgentSettings(sessionId: string): SessionAgentSettingsMap | undefined {
+    const stored = this.getPref<unknown>(agentSettingsKey(sessionId));
     if (!stored || typeof stored !== "object" || Array.isArray(stored)) return undefined;
-    const tuning: SessionTuning = {};
+    const tuning: SessionAgentSettingsMap = {};
     for (const [agentId, value] of Object.entries(stored as Record<string, unknown>)) {
-      const entry = readAgentTuning(value);
+      const entry = readAgentSettings(value);
       if (entry) tuning[agentId] = entry;
     }
     return Object.keys(tuning).length > 0 ? tuning : undefined;
@@ -1533,9 +1533,9 @@ export class Store {
 
   /** An empty tuning is no tuning: the key leaves rather than standing
    * as an empty object nobody can see. */
-  setSessionTuning(sessionId: string, tuning: SessionTuning): void {
-    if (Object.keys(tuning).length === 0) this.deletePref(tuningKey(sessionId));
-    else this.setPref(tuningKey(sessionId), tuning);
+  setSessionAgentSettingsMap(sessionId: string, tuning: SessionAgentSettingsMap): void {
+    if (Object.keys(tuning).length === 0) this.deletePref(agentSettingsKey(sessionId));
+    else this.setPref(agentSettingsKey(sessionId), tuning);
   }
 
   /** Forget a preference; a key never set is no error. */

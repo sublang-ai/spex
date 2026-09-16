@@ -18,6 +18,9 @@ The at-hand rule itself is upheld, not narrowed — this record puts one more pr
 
 Cites [DR-052](052-runtime-model-options.md) for where the model, effort, and fast-mode choices come from, and [DR-038](038-history-is-done-work.md) for the mark fast mode wears.
 
+Amended by [DR-068](068-an-agents-settings-where-the-agent-is.md) in §"Where it is shown and changed" alone: one agent's control opens that agent's own settings, there is no session-wide panel and no count, and the act carries no name of its own.
+The scope, the precedence, the storage, the three application sites, the discovery-free validation, and §"A chip is a setting, not a receipt" stand as written.
+
 ## Context
 
 Model, effort, and fast mode live in Settings, where they are defaults for every session of every project.

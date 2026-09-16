@@ -297,55 +297,49 @@ test.describe("a turn long enough to queue behind", () => {
   });
 });
 
-test.describe("run-view-141: a session's own tuning", () => {
-  test("tuning runs where it was made and stays there", async ({ page, app }) => {
+test.describe("run-view-141: an agent's settings for one conversation", () => {
+  test("each agent is changed from its own chip, and stays where it was changed", async ({ page, app }) => {
     await open(page, app);
     await send(page, "Fix the token refresh in auth.ts");
     await expect(page.getByTestId("player-pane-dev.coder")).toBeVisible();
     await settled(app);
 
     const configBefore = app.readConfig();
-    const header = page.getByTestId("session-tuning-control");
-    await expect(header).toBeVisible();
-    await expect(header).not.toContainText("·");
+    // Nothing offers a roster, a count, or a name for the act.
+    await expect(page.getByTestId("session-tuning-control")).toHaveCount(0);
 
-    // The coder's own chip opens the panel at its row (run-view-138).
-    await page.getByTestId("tuning-chip-dev.coder").click();
-    const panel = page.getByTestId("session-tuning");
-    await expect(panel).toBeVisible();
-    await expect(panel).toContainText("Applies from your next message");
-    await panel.getByTestId("tuning-dev.coder-model-mode").selectOption("pin");
-    await panel.getByTestId("tuning-dev.coder-model-value").fill("claude-tuned-coder");
-    await panel.getByTestId("tuning-apply-dev.coder").click();
+    // The coder's own chip opens the coder's own settings.
+    await page.getByTestId("agent-chip-dev.coder").click();
+    const coder = page.getByTestId("agent-settings-dev.coder");
+    await expect(coder).toBeVisible();
+    await expect(coder).toContainText("This conversation only");
+    await expect(page.getByTestId("agent-settings-captain")).toHaveCount(0);
+    await coder.getByTestId("agent-dev.coder-model-mode").selectOption("pin");
+    await coder.getByTestId("agent-dev.coder-model-value").fill("claude-tuned-coder");
+    await coder.getByTestId("agent-save-dev.coder").click();
+    await expect(coder).toHaveCount(0);
 
-    // The Captain is an agent here too, tuned from its own pane's chip.
-    await expect(panel.getByTestId("tuning-origin-dev.coder")).toContainText("This session: model.");
-    await page.keyboard.press("Escape");
-    await page.getByTestId("tuning-chip-captain").click();
-    const captainPanel = page.getByTestId("session-tuning");
-    await captainPanel.getByTestId("tuning-captain-model-mode").selectOption("pin");
-    await captainPanel.getByTestId("tuning-captain-model-value").fill("claude-tuned-captain");
-    await captainPanel.getByTestId("tuning-apply-captain").click();
-    await expect(captainPanel.getByTestId("tuning-origin-captain")).toContainText("This session: model.");
-    await page.keyboard.press("Escape");
+    // The Captain's own chip opens the Captain's.
+    await page.getByTestId("agent-chip-captain").click();
+    const captain = page.getByTestId("agent-settings-captain");
+    await captain.getByTestId("agent-captain-model-mode").selectOption("pin");
+    await captain.getByTestId("agent-captain-model-value").fill("claude-tuned-captain");
+    await captain.getByTestId("agent-save-captain").click();
+    await expect(captain).toHaveCount(0);
 
-    // A chip is a setting: both read the chosen value before any
-    // message is sent, and the header carries the standing count
-    // (run-view-139).
-    await expect(page.getByTestId("tuning-chip-dev.coder")).toContainText("claude-tuned-coder");
-    await expect(page.getByTestId("tuning-chip-captain")).toContainText("claude-tuned-captain");
-    await expect(header).toContainText("2");
-    await expect(header).toHaveAttribute("aria-label", "Session tuning, 2 agents tuned");
+    // A chip is a setting: both read the choice before any message.
+    await expect(page.getByTestId("agent-chip-dev.coder")).toContainText("claude-tuned-coder");
+    await expect(page.getByTestId("agent-chip-captain")).toContainText("claude-tuned-captain");
+    await expect(page.getByTestId("agent-chip-dev.coder")).toHaveAttribute("data-changed", "true");
+    await expect(page.getByTestId("agent-chip-dev.reviewer")).not.toHaveAttribute("data-changed", "true");
 
     // The next turn runs on them, and the shared config never moved.
     const listed = await app.core.command("session.list", {});
     const session = listed.find((entry) => (entry.title ?? "").startsWith("Fix the token refresh"))!;
     const sessionId = session.id;
-    expect(session.tuning, JSON.stringify(listed.map((e) => [e.id, e.title, e.tuning])))
+    expect(session.agentSettings, JSON.stringify(listed.map((e) => [e.id, e.title, e.agentSettings])))
       .toMatchObject({ captain: { model: "claude-tuned-captain" }, "dev.coder": { model: "claude-tuned-coder" } });
     await send(page, "And once more");
-    // The turn has to start before it can settle: a poll taken between
-    // the click and the runtime opening would read the first turn.
     await expect
       .poll(async () => (await app.core.command("session.list", {})).find((e) => e.id === sessionId)?.turns ?? 0, { timeout: 30_000 })
       .toBe(2);
@@ -358,20 +352,19 @@ test.describe("run-view-141: a session's own tuning", () => {
     expect(applied.catalog.code?.roles.coder?.model.value).toBe("claude-tuned-coder");
     expect(app.readConfig()).toBe(configBefore);
 
-    // Settings still shows the configured values, and the way back is
-    // one gesture from the standing signal.
+    // Settings still shows the configured values.
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    // The defaults never moved: Settings still reads the config's own.
     await expect(page.getByText("Session players")).toBeVisible();
     await expect(page.getByText("claude-tuned-captain")).toHaveCount(0);
     await expect(page.getByText("claude-tuned-coder")).toHaveCount(0);
-    // Back to the conversation through its own sidebar row: the tab
-    // strip belongs to Projects, and Settings is the surface now.
+
+    // And each agent goes back from its own chip.
     await page.getByRole("tree", { name: "Projects and sessions" })
       .getByText(/fix the token r/i).click();
-    await page.getByTestId("session-tuning-control").click();
-    await page.getByTestId("session-tuning-clear").click();
-    await expect(page.getByTestId("tuning-chip-dev.coder")).not.toContainText("claude-tuned-coder");
-    await expect(page.getByTestId("session-tuning-control")).not.toContainText("2");
+    await page.getByTestId("agent-chip-dev.coder").click();
+    await page.getByTestId("agent-default-dev.coder").click();
+    await page.getByTestId("agent-save-dev.coder").click();
+    await expect(page.getByTestId("agent-chip-dev.coder")).not.toContainText("claude-tuned-coder");
+    await expect(page.getByTestId("agent-chip-dev.coder")).not.toHaveAttribute("data-changed", "true");
   });
 });

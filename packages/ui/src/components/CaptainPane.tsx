@@ -17,8 +17,8 @@ import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { latestCall } from "./PlayerPane.js";
 import { Markdown } from "./Markdown.js";
 import { MachineCard } from "./MachineCard.js";
-import { TuningChip } from "./SessionTuning.js";
-import type { TuningAgent } from "../lib/session-tuning.js";
+import { AgentChipButton } from "./AgentSettings.js";
+import type { SessionAgent } from "../lib/session-agents.js";
 import { SourceChip } from "./DeliveryCard.js";
 import type { IntentSource, MachineGraph } from "@sublang/spex-core/protocol";
 
@@ -284,23 +284,23 @@ export function CaptainPane({
   bossSources,
   extras,
   readiness,
-  tuning,
-  onTune,
-  tuneAnchorRef,
-  tuneOpen = false,
-  tunePopover,
+  settings,
+  onEditSettings,
+  settingsAnchorRef,
+  settingsOpen = false,
+  settingsPopover,
   focusKey,
   onFocusHandled,
 }: {
   view: SessionView;
   /** What the Captain is set to run, and the door to changing it for
-   * this session alone (run-view-139). */
-  tuning?: TuningAgent;
-  onTune?: () => void;
-  tuneAnchorRef?: RefObject<HTMLButtonElement | null>;
-  tuneOpen?: boolean;
-  /** The one panel, rendered beside the Captain's chip while open. */
-  tunePopover?: ReactNode;
+   * this conversation alone (run-view-139). */
+  settings?: SessionAgent;
+  onEditSettings?: () => void;
+  settingsAnchorRef?: RefObject<HTMLButtonElement | null>;
+  settingsOpen?: boolean;
+  /** This agent's editor, beside its chip while it is open. */
+  settingsPopover?: ReactNode;
   /** Served machine definitions by playbook id (run-view-64: absent
    * definitions degrade to the observed drawing). */
   machineGraphs?: Record<string, MachineGraph | null>;
@@ -415,18 +415,18 @@ export function CaptainPane({
           C
         </span>
         <span className="text-sm font-semibold">Captain</span>
-        {tuning && onTune ? (
+        {settings && onEditSettings ? (
           // The Captain is an agent like any other here: its chip reads
-          // what it is set to run and opens this session's tuning
-          // (run-view-139), at the chip the reader used.
+          // what it is set to run and opens its own settings for this
+          // conversation (run-view-139). It has no lane, so this is its door.
           <span className="relative flex min-w-0 shrink">
-            <TuningChip
-              agent={tuning}
-              onOpen={onTune}
-              {...(tuneAnchorRef ? { anchorRef: tuneAnchorRef } : {})}
-              open={tuneOpen}
+            <AgentChipButton
+              agent={settings}
+              onOpen={onEditSettings}
+              {...(settingsAnchorRef ? { anchorRef: settingsAnchorRef } : {})}
+              open={settingsOpen}
             />
-            {tuneOpen ? tunePopover : null}
+            {settingsOpen ? settingsPopover : null}
           </span>
         ) : null}
         {status.state || view.turnActive ? (

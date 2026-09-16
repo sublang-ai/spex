@@ -17,7 +17,7 @@ import {
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
 import type { ComposedConfig, LoadModule } from "./config.js";
-import { CAPTAIN_AGENT_ID, type ProjectInfo, type SessionAgentTuning, type SessionInfo, type SessionTuning, type TmuxPlayRecord } from "./protocol.js";
+import { CAPTAIN_AGENT_ID, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
 
 export class CoreError extends Error {
@@ -105,7 +105,7 @@ export class SettingsDriftError extends Error {
  * DR-067): a string pins, `false` takes the provider's current
  * default, and an absent field leaves the configured selection. The
  * shell is told the outcome, exactly as composition tells it one. */
-function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean}>(block: T, tuning: SessionAgentTuning | undefined): T {
+function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean}>(block: T, tuning: SessionAgentSettings | undefined): T {
   if (!tuning) return block;
   const selection = (value: string | false): unknown => value === false ? {kind: "provider-default"} : {kind: "value", value};
   return {
@@ -116,7 +116,7 @@ function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean}>(
   };
 }
 
-export function executionConfig(composed: ComposedConfig, cwd: string, members?: StoredMembers, tuning?: SessionTuning): SessionExecutionProjection {
+export function executionConfig(composed: ComposedConfig, cwd: string, members?: StoredMembers, tuning?: SessionAgentSettingsMap): SessionExecutionProjection {
   const playbooks = members
     ? members.playbookIds.map((id) => composed.playbooks.find((playbook) => playbook.id === id))
     : composed.playbooks;
@@ -307,7 +307,7 @@ export class SessionManager {
       // never after the provider hints are consumed (core-service-92).
       const stored = composed && mode === "continue" ? await this.storedStructure(sessionId) : undefined;
       const members = stored ? storedMembers(stored) : undefined;
-      const config = composed ? executionConfig(composed, project.path, members, this.store.sessionTuning(sessionId)) : undefined;
+      const config = composed ? executionConfig(composed, project.path, members, this.store.sessionAgentSettings(sessionId)) : undefined;
       if (stored && config) {
         try { assertCaptainSessionExecutionCompatible(stored, config); }
         catch { throw new SettingsDriftError(describeStructuralDrift(stored, projectCaptainSessionStructure(config))); }

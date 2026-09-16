@@ -51,11 +51,11 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
     found.push(...(await scan(page, "Session")));
 
-    // This session's own tuning, open on an expanded row: three
-    // selects and their rows inside a dialog (run-view-138).
-    await page.getByTestId("tuning-chip-dev.coder").click();
-    await expect(page.getByTestId("session-tuning")).toBeVisible();
-    found.push(...(await scan(page, "Session (tuning panel)")));
+    // One agent's settings for this conversation: three selects and
+    // their labels inside a dialog (run-view-138).
+    await page.getByTestId("agent-chip-dev.coder").click();
+    await expect(page.getByTestId("agent-settings-dev.coder")).toBeVisible();
+    found.push(...(await scan(page, "Session (agent settings)")));
     await page.keyboard.press("Escape");
 
     // A run parked in its recoverable failure state, where the notice
