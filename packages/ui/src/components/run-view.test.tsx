@@ -2848,3 +2848,154 @@ describe("run-view-133: at rest the chip reads the leaf, not the last reporter",
     expect(chip.getAttribute("title")).toBe("state: runFirstPhase");
   });
 });
+
+describe("run-view-138/139/140: a session's own tuning", () => {
+  const SUMMARY = {
+    path: "/tmp/playbook.config.yaml",
+    captain: { adapter: "claude" as const, model: "claude-captain", effort: "high" },
+    players: [
+      { id: "dev.coder", agent: { adapter: "claude" as const, model: "claude-test" }, display: "claude-test", boundBy: ["code.coder"] },
+      { id: "dev.reviewer", agent: { adapter: "codex" as const }, display: "codex", boundBy: ["review.reviewer"] },
+    ],
+    playbooks: [
+      { id: "code", from: "@sublang/playbook/code/registry", command: "/code", intent: "write code",
+        roles: { coder: { playerId: "dev.coder", effort: "low" as const, display: "claude-test @ low" } } },
+    ],
+  };
+
+  function mount(tuning?: SessionInfo["tuning"]) {
+    const previous = useAppStore.getState();
+    const command = vi.fn(async (name: string) =>
+      name === "agent.options"
+        ? { adapter: "claude", effortValues: ["low", "high", "max"], fastModeSupported: true,
+            discovery: { status: "available", models: [{ id: "claude-opus", name: "Opus" }] } }
+        : { ...SESSION, ...(tuning ? { tuning } : {}) });
+    setClientForTests({ command } as never);
+    useAppStore.setState({
+      sessions: [{ ...SESSION, ...(tuning ? { tuning } : {}) }],
+      activeSessionId: SESSION.id,
+      views: { s1: initialSessionView(PLAYERS) },
+      composers: { s1: { queued: [] } },
+      collapsedLanes: {},
+      configState: { status: "valid", summary: SUMMARY, seeded: false },
+      specTrees: {},
+      ledger: undefined,
+      stagedIntents: {},
+    } as never);
+    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+    const session = { ...SESSION, ...(tuning ? { tuning } : {}) };
+    const result = render(
+      <RunView
+        session={session}
+        view={view}
+        composer={{ queued: [] }}
+        connected
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    return { command, restore: () => { useAppStore.setState(previous, true); setClientForTests(undefined); }, ...result };
+  }
+
+  test("a chip reads what its agent is set to run, and is the door to changing it", async () => {
+    const { command, restore } = mount();
+    // Untuned: the chip reads the configured value, for the Captain
+    // (which has no lane) and for each player alike (run-view-139).
+    expect(screen.getByTestId("tuning-chip-captain").textContent).toMatch("claude-captain @ high");
+    expect(screen.getByTestId("tuning-chip-dev.coder").textContent).toMatch("claude-test");
+    expect(screen.getByTestId("tuning-chip-captain").getAttribute("data-tuned")).toBeNull();
+    // The header stands with no count while nothing is tuned.
+    expect(screen.getByTestId("session-tuning-control").textContent).not.toMatch(/·/);
+
+    // The chip opens the panel at its own agent's row, expanded.
+    fireEvent.click(screen.getByTestId("tuning-chip-dev.coder"));
+    const panel = await screen.findByTestId("session-tuning");
+    expect(within(panel).getByTestId("tuning-row-captain")).toBeTruthy();
+    expect(within(panel).getByTestId(`tuning-${"dev.coder"}-model-mode`)).toBeTruthy();
+    // A binding that tunes this lane of its own accord is named before
+    // the choice is taken (run-view-138).
+    expect(within(panel).getByTestId("tuning-origin-dev.coder").textContent).toMatch(/code\.coder/);
+    expect(within(panel).getByTestId("tuning-origin-dev.coder").textContent).toMatch(/From Settings\./);
+    // Adapter and permissions are named as living elsewhere.
+    expect(panel.textContent).toMatch(/Adapter, instruction and permissions live in Settings/);
+    expect(command).not.toHaveBeenCalledWith("config.edit", expect.anything());
+    restore();
+  });
+
+  test("applying sends one tuning command and no config edit", async () => {
+    const { command, restore } = mount();
+    fireEvent.click(screen.getByTestId("tuning-chip-captain"));
+    await screen.findByTestId("session-tuning");
+    fireEvent.click(screen.getByTestId("tuning-apply-captain"));
+    await waitFor(() => expect(command).toHaveBeenCalled());
+    const calls = command.mock.calls as unknown as [string, Record<string, unknown>][];
+    expect(calls.map(([name]) => name)).toContain("session.tune");
+    expect(calls.every(([name]) => name !== "config.edit")).toBe(true);
+    const [, payload] = calls.find(([name]) => name === "session.tune")!;
+    expect(payload).toMatchObject({ sessionId: "s1", agentId: "captain" });
+    restore();
+  });
+
+  test("a tuned session reads its choice at once, on the chip and on the header", () => {
+    const { restore } = mount({ "dev.coder": { model: "claude-opus", effort: "max" }, captain: { fastMode: true } });
+    // The chip is a setting, not a receipt: the chosen value shows
+    // without waiting for a call to run under it (run-view-139).
+    expect(screen.getByTestId("tuning-chip-dev.coder").textContent).toMatch("claude-opus @ max");
+    expect(screen.getByTestId("tuning-chip-dev.coder").getAttribute("data-tuned")).toBe("true");
+    expect(screen.getByTestId("tuning-fast-mode-captain")).toBeTruthy();
+    // The standing count answers "is this running my defaults?".
+    const control = screen.getByTestId("session-tuning-control");
+    expect(control.textContent).toMatch(/·\s*2/);
+    expect(control.getAttribute("aria-label")).toBe("Session tuning, 2 agents tuned");
+    restore();
+  });
+
+  test("a tuned row says what this session changed, and offers the way back", async () => {
+    const { command, restore } = mount({ "dev.coder": { model: "claude-opus" } });
+    fireEvent.click(screen.getByTestId("session-tuning-control"));
+    const panel = await screen.findByTestId("session-tuning");
+    expect(within(panel).getByTestId("tuning-origin-dev.coder").textContent).toMatch(/This session: model\./);
+    expect(within(panel).getByTestId("tuning-origin-captain").textContent).toMatch(/From Settings\./);
+    fireEvent.click(within(panel).getByTestId("tuning-reset-dev.coder"));
+    await waitFor(() => expect(command).toHaveBeenCalled());
+    const [, payload] = (command.mock.calls as unknown as [string, Record<string, unknown>][])
+      .find(([name]) => name === "session.tune")!;
+    expect(payload).toMatchObject({ agentId: "dev.coder", model: null, effort: null, fastMode: null });
+    restore();
+  });
+
+  test("a session in use elsewhere reads its tuning without writing it", async () => {
+    const previous = useAppStore.getState();
+    setClientForTests({ command: vi.fn(async (name: string) =>
+      name === "agent.options"
+        ? { adapter: "claude", effortValues: ["low"], fastModeSupported: false, discovery: { status: "unavailable", reason: "no runtime" } }
+        : ({} as never)) } as never);
+    useAppStore.setState({
+      sessions: [SESSION], activeSessionId: SESSION.id,
+      views: { s1: initialSessionView(PLAYERS) }, composers: { s1: { queued: [] } },
+      collapsedLanes: {}, configState: { status: "valid", summary: SUMMARY, seeded: false },
+      specTrees: {}, ledger: undefined, stagedIntents: {},
+    } as never);
+    render(
+      <RunView
+        session={{ ...SESSION, live: false, externalWriter: "active" }}
+        view={applyRecords(initialSessionView(PLAYERS), TURN_ONE)}
+        composer={{ queued: [] }}
+        connected
+        readOnly
+        onSubmit={async () => {}}
+        onAbort={() => {}}
+        onRemoveQueued={() => {}}
+        onDismissError={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("session-tuning-control"));
+    const panel = await screen.findByTestId("session-tuning");
+    expect(panel.textContent).toMatch(/reads only/);
+    expect(within(panel).queryByTestId("tuning-open-dev.coder")).toBeNull();
+    useAppStore.setState(previous, true);
+    setClientForTests(undefined);
+  });
+});

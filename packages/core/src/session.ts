@@ -17,7 +17,7 @@ import {
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
 import type { ComposedConfig, LoadModule } from "./config.js";
-import type { ProjectInfo, SessionInfo, TmuxPlayRecord } from "./protocol.js";
+import { CAPTAIN_AGENT_ID, type ProjectInfo, type SessionAgentTuning, type SessionInfo, type SessionTuning, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
 
 export class CoreError extends Error {
@@ -79,9 +79,9 @@ interface LiveSession {
 
 /** The members a stored structure names: its playbooks, and its
  * referenced players in stored order (core-service-92). */
-interface StoredMembers { playbookIds: string[]; playerIds: string[] }
+export interface StoredMembers { playbookIds: string[]; playerIds: string[] }
 
-function storedMembers(structure: SessionStructuralProjection): StoredMembers {
+export function storedMembers(structure: SessionStructuralProjection): StoredMembers {
   return {
     playbookIds: Object.keys(structure.catalog),
     playerIds: structure.players.map((player) => String((player as {id: unknown}).id)),
@@ -101,7 +101,22 @@ export class SettingsDriftError extends Error {
  * config — the whole enabled catalog for a new session, or the current
  * config projected onto a stored session's members so an unrelated
  * playbook or player never invalidates it (core-service-92, DR-051). */
-function executionConfig(composed: ComposedConfig, cwd: string, members?: StoredMembers): SessionExecutionProjection {
+/** One agent's tuning read onto a composed block (core-service-100,
+ * DR-067): a string pins, `false` takes the provider's current
+ * default, and an absent field leaves the configured selection. The
+ * shell is told the outcome, exactly as composition tells it one. */
+function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean}>(block: T, tuning: SessionAgentTuning | undefined): T {
+  if (!tuning) return block;
+  const selection = (value: string | false): unknown => value === false ? {kind: "provider-default"} : {kind: "value", value};
+  return {
+    ...block,
+    ...(tuning.model !== undefined ? {model: selection(tuning.model)} : {}),
+    ...(tuning.effort !== undefined ? {effort: selection(tuning.effort)} : {}),
+    ...(tuning.fastMode !== undefined ? {fastMode: tuning.fastMode} : {}),
+  };
+}
+
+export function executionConfig(composed: ComposedConfig, cwd: string, members?: StoredMembers, tuning?: SessionTuning): SessionExecutionProjection {
   const playbooks = members
     ? members.playbookIds.map((id) => composed.playbooks.find((playbook) => playbook.id === id))
     : composed.playbooks;
@@ -116,8 +131,8 @@ function executionConfig(composed: ComposedConfig, cwd: string, members?: Stored
   }
   return validateCaptainSessionExecutionProjection({
     schemaVersion: 2,
-    captain: composed.captainOptions.sessionAgents.captain,
-    players: playerIds.map((id) => ({ id, ...composed.captainOptions.sessionAgents.players[id] })),
+    captain: tuned(composed.captainOptions.sessionAgents.captain, tuning?.[CAPTAIN_AGENT_ID]),
+    players: playerIds.map((id) => ({ id, ...tuned(composed.captainOptions.sessionAgents.players[id], tuning?.[id]) })),
     catalog: Object.fromEntries((playbooks as ComposedConfig["playbooks"]).map((playbook) => {
       const block = composed.captainOptions.playbooks[playbook.id];
       return [playbook.id, {
@@ -127,7 +142,11 @@ function executionConfig(composed: ComposedConfig, cwd: string, members?: Stored
         artifactSchema: playbook.artifactSchema,
         requiredRoleIds: playbook.requiredRoleIds,
         concurrentRoleSets: playbook.concurrentRoleSets,
-        roles: block.roles,
+        // A role's provider call is built from its binding, so a tuned
+        // player must reach every binding naming it — patching the
+        // player's own block alone changes nothing at call time.
+        roles: Object.fromEntries(Object.entries(block.roles).map(([role, binding]) =>
+          [role, tuned(binding, tuning?.[binding.playerId])])),
         options: { ...block.options, ...(playbook.acceptsCwdOption ? {cwd} : {}) },
       }];
     })),
@@ -288,7 +307,7 @@ export class SessionManager {
       // never after the provider hints are consumed (core-service-92).
       const stored = composed && mode === "continue" ? await this.storedStructure(sessionId) : undefined;
       const members = stored ? storedMembers(stored) : undefined;
-      const config = composed ? executionConfig(composed, project.path, members) : undefined;
+      const config = composed ? executionConfig(composed, project.path, members, this.store.sessionTuning(sessionId)) : undefined;
       if (stored && config) {
         try { assertCaptainSessionExecutionCompatible(stored, config); }
         catch { throw new SettingsDriftError(describeStructuralDrift(stored, projectCaptainSessionStructure(config))); }
@@ -351,7 +370,7 @@ export class SessionManager {
   }
 
   /** The stored structural projection of a schema-7 checkpoint, when it has one. */
-  private async storedStructure(sessionId: string): Promise<SessionStructuralProjection | undefined> {
+  async storedStructure(sessionId: string): Promise<SessionStructuralProjection | undefined> {
     try {
       const manifest = await this.store.sessionStore().readManifest(sessionId) as {schemaVersion?: unknown; structuralProjection?: SessionStructuralProjection};
       return manifest.schemaVersion === 7 ? manifest.structuralProjection : undefined;

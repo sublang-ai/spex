@@ -246,7 +246,7 @@ When the reader opens an agent's tuning control — the chip in the Captain pane
 - each field offers the configured value named, the provider's current default, and a value pinned from the runtime's own choices [[settings-34](settings.md#settings-34)], and fast mode is offered where the adapter accepts the request or a choice already stands, so a stale one is always clearable;
 - the panel says what it cannot change and why: adapter, instruction, and permissions belong to Settings, and changing them needs a new session [[core-service-92](core-service.md#core-service-92)];
 - where a player answers roles whose bindings tune them differently, its row says so before the choice is taken, because one session tuning runs those roles alike;
-- Reset returns one agent to the configured values, and the session header's control carries a clear for the whole session while more than one agent is tuned, so the standing signal and the way back are one object;
+- Reset returns one agent to the configured values, and while more than one agent is tuned the panel carries a clear for the whole session, so the way back is one gesture from the standing signal rather than one visit per agent;
 - the panel says when a choice bites — from the next message, and, while a turn is in flight, that this turn keeps the settings it started with [[core-service-92](core-service.md#core-service-92)] — so a choice taken mid-turn promises nothing about the work already running;
 - a refusal lands in the panel's frame with the draft kept, and unavailable model discovery shows its reason with a retry while every field stays usable ([DR-052](../decisions/052-runtime-model-options.md));
 - a session reporting external ownership [[run-view-125](#run-view-125)] or history the core cannot continue [[run-view-33](#run-view-33)] reads its tuning without writing it.
@@ -257,7 +257,7 @@ While a session's tab is shown, the run view shall read each agent's tuning on t
 
 - the Captain pane's header and each player pane's header carry their agent's chip — adapter, model, and effort, with the lightning mark while it runs in fast mode, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — and that chip is the control that tunes it [[run-view-138](#run-view-138)];
 - a chip reads what its agent is set to run — the session's own tuning of a field [[core-service-32](core-service.md#core-service-32)], else the configured value — so a choice shows the moment it is taken, as a setting does and a record of a past call does not;
-- the session header carries the count of tuned agents for the session's whole life, the count in its accessible name, yielding its words before its count as the header narrows ([DR-041](../decisions/041-chrome-that-fits.md));
+- the session header carries the count of tuned agents for the session's whole life, shortening its own label before its count as the header narrows and naming the count in full in its accessible name ([DR-041](../decisions/041-chrome-that-fits.md));
 - a folded lane's rail carries its chip's reading in its tooltip [[run-view-116](#run-view-116)], and the session header's control opens the tuning of every agent [[run-view-138](#run-view-138)], so folding a lane reaches nothing away ([DR-030](../decisions/030-workspace-chrome.md)).
 
 #### run-view-33

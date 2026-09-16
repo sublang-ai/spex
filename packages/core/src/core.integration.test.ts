@@ -2678,3 +2678,91 @@ test("storage-15: repeated default-home startup does not grow leases for a refus
   service=await CoreService.start(options);client=new Client(service.port());await client.open();
   assert.deepEqual(guards(),migratedGuards,"successful migration is not retried on the next startup");
 });
+
+test("core-service-101: a session's own tuning reaches its runtime, its config file, and nothing else", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-tuning-"));
+  const configPath = join(dir, "playbook.config.yaml");
+  // A binding that pins its own effort, so the session's tuning can be
+  // seen beating it at the site the provider call is built from.
+  const config = VALID_CONFIG.replace(
+    "    roles:\n      coder: dev.coder\n",
+    "    roles:\n      coder:\n        player: dev.coder\n        effort: low\n",
+  );
+  writeFileSync(configPath, config);
+  const projectDir = join(dir, "project");
+  mkdirSync(projectDir);
+  execFileSync("git", ["init", "-q", projectDir]);
+  const { imports } = fakeAdapterImports({ fallback: { result: "not json on purpose" } });
+  const service = await CoreService.start({
+    token: "test", configPath, dataDir: join(dir, "state"),
+    adapterImports: imports, env: {}, home: join(dir, "home"), watchConfig: false,
+  });
+  t.after(async () => { await service.stop(); rmSync(dir, {recursive:true,force:true}); });
+  const client = new Client(service.port());
+  t.after(() => client.close());
+  await client.open();
+  const project = await client.expectOk("project.register", { path: projectDir });
+  const tuned = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: tuned.id } });
+  await client.expectOk("turn.submit", { sessionId: tuned.id, text: "hello" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === tuned.id && m.session.live === false);
+
+  const configBefore = readFileSync(configPath);
+
+  // The Captain and the player are tuned for this session alone.
+  const afterCaptain = await client.expectOk("session.tune", { sessionId: tuned.id, agentId: "captain", model: "claude-captain-tuned" });
+  assert.deepEqual(afterCaptain.tuning?.captain, { model: "claude-captain-tuned" }, "the reply carries the session's own tuning");
+  await client.expectOk("session.tune", { sessionId: tuned.id, agentId: "dev.coder", model: "claude-coder-tuned", effort: "high" });
+
+  // The projection the next message opens on carries it at all three
+  // sites: the Captain, the player's block, and the role binding the
+  // provider call is actually built from (core-service-92).
+  await client.expectOk("turn.submit", { sessionId: tuned.id, text: "hello again" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === tuned.id && m.session.turns === 2 && m.session.live === false);
+  const manifest = join(dir, "state", "sessions", `${tuned.id}.json`);
+  const applied = (JSON.parse(readFileSync(manifest, "utf8")) as {
+    lastAppliedExecutionProjection: {
+      captain: { model: { value?: string } };
+      players: { id: string; model: { value?: string }; effort: { value?: string } }[];
+      catalog: Record<string, { roles: Record<string, { model: { value?: string }; effort: { value?: string } }> }>;
+    };
+  }).lastAppliedExecutionProjection;
+  assert.equal(applied.captain.model.value, "claude-captain-tuned", "the Captain ran the session's own model");
+  assert.equal(applied.players[0]?.model.value, "claude-coder-tuned", "the player's block carries it");
+  assert.equal(applied.catalog.code?.roles.coder?.model.value, "claude-coder-tuned", "and so does the binding the call is built from");
+  assert.equal(applied.catalog.code?.roles.coder?.effort.value, "high", "the session's effort beats the binding's own pin");
+
+  // Another session of the same project and the same player opens on
+  // the config's values, and the config file itself never moved.
+  const plain = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: plain.id, text: "hello" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === plain.id && m.session.live === false);
+  const other = (JSON.parse(readFileSync(join(dir, "state", "sessions", `${plain.id}.json`), "utf8")) as {
+    lastAppliedExecutionProjection: {
+      captain: { model: { value?: string } };
+      catalog: Record<string, { roles: Record<string, { model: { value?: string }; effort: { value?: string } }> }>;
+    };
+  }).lastAppliedExecutionProjection;
+  assert.equal(other.captain.model.value, "claude-test", "an untuned session keeps the config's Captain");
+  assert.equal(other.catalog.code?.roles.coder?.model.value, "claude-test", "and the config's player");
+  assert.equal(other.catalog.code?.roles.coder?.effort.value, "low", "binding pins still stand where nothing tuned them");
+  assert.deepEqual(readFileSync(configPath), configBefore, "the shared config file is byte-identical");
+
+  // A value the adapter cannot enforce is refused with nothing written.
+  const refused = await client.command("session.tune", { sessionId: tuned.id, agentId: "dev.coder", effort: "not-an-effort" });
+  assert.ok(!refused.ok && refused.error.code === "invalid_config", `refused: ${JSON.stringify(refused)}`);
+  const unchanged = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === tuned.id);
+  assert.equal(unchanged?.tuning?.["dev.coder"]?.effort, "high", "the refusal left the session's tuning as it was");
+
+  // An agent the session does not hold is refused as a request.
+  const unknown = await client.command("session.tune", { sessionId: tuned.id, agentId: "dev.nobody", model: "x" });
+  assert.ok(!unknown.ok && unknown.error.code === "invalid_request", `unknown agent refused: ${JSON.stringify(unknown)}`);
+
+  // Clearing returns the session to the config's values, and deleting
+  // it leaves no tuning behind (core-service-70).
+  const cleared = await client.expectOk("session.tune", { sessionId: tuned.id, agentId: "dev.coder", model: null, effort: null, fastMode: null });
+  assert.equal(cleared.tuning?.["dev.coder"], undefined, "the agent's tuning is gone");
+  await client.expectOk("session.tune", { sessionId: tuned.id, agentId: "captain", model: null });
+  const bare = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === tuned.id);
+  assert.equal(bare?.tuning, undefined, "a session tuning nothing carries none");
+});

@@ -33,12 +33,12 @@ export function findModel(models: readonly AgentModelOption[], model: string) {
 }
 
 export function modelTuning(options: AgentOptions | undefined, model: string) {
-  const selected = options?.discovery.status === "available"
-    ? findModel(options.discovery.models, model)
-    : undefined;
+  // A reply without a discovery report narrows nothing rather than
+  // throwing: discovery informs an editor, it never gates one (DR-052).
+  const available = options?.discovery?.status === "available" ? options.discovery : undefined;
+  const selected = available ? findModel(available.models ?? [], model) : undefined;
   const efforts = selected?.effortValues ?? options?.effortValues ?? [];
-  const additionalEfforts = (options?.discovery.status === "available"
-    ? options.discovery.unreportedEffortValues ?? [] : []).filter((effort) => !efforts.includes(effort));
+  const additionalEfforts = (available?.unreportedEffortValues ?? []).filter((effort) => !efforts.includes(effort));
   return {
     efforts: [...new Set([...efforts, ...additionalEfforts])],
     additionalEfforts,

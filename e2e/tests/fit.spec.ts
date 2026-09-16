@@ -302,6 +302,64 @@ test.describe("chrome the sweep does not open", () => {
   } });
   test.afterEach(() => releaseDiscovery?.());
 
+  // The tuning panel hangs from a chip inside the player grid, which
+  // scrolls sideways and is therefore the box that must show it — the
+  // hardest anchor in the product (run-view-105, run-view-138).
+  test("run-view-105: the session tuning panel stays inside the box that must show it", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(120_000);
+    const defects: string[] = [];
+    await page.setViewportSize({ width: 1280, height: TALL });
+    await open(page, app);
+    await setRail(page, false);
+    await send(page, TASK);
+    await expect(page.getByTestId("player-pane-dev.reviewer")).toBeVisible();
+    const panel = page.getByTestId("session-tuning");
+
+    for (const height of HEIGHTS) {
+      for (const width of [320, 900]) {
+        await page.setViewportSize({ width, height });
+        // The last lane of the grid, reached by scrolling it to its end:
+        // its chip is the anchor furthest from the window's edge.
+        const grid = page.getByTestId("player-grid");
+        await grid.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+        await page.getByTestId("tuning-chip-dev.reviewer").click();
+        await expect(panel).toBeVisible();
+        if (releaseDiscovery) { releaseDiscovery(); releaseDiscovery = undefined; }
+        const where = `session tuning panel · ${width}×${height}`;
+        await expect(async () => {
+          const fitDefects: string[] = [];
+          const box = (await panel.boundingBox())!;
+          if (box.x < -1) fitDefects.push(`${where}: left at ${Math.round(box.x)}`);
+          if (box.x + box.width > width + 1) fitDefects.push(`${where}: right at ${Math.round(box.x + box.width)} of ${width}`);
+          if (box.y < -1) fitDefects.push(`${where}: top at ${Math.round(box.y)}`);
+          if (box.y + box.height > height + 1) fitDefects.push(`${where}: bottom at ${Math.round(box.y + box.height)} of ${height}`);
+          // Its first control must be reachable, not merely inside.
+          const first = (await panel.getByTestId("tuning-open-captain").boundingBox())!;
+          if (first.y < -1 || first.y + first.height > height + 1) {
+            fitDefects.push(`${where}: the first row's control is outside the window`);
+          }
+          const grew = await page.evaluate(() => [
+            document.documentElement.scrollWidth,
+            document.documentElement.clientWidth,
+            document.documentElement.scrollHeight,
+            document.documentElement.clientHeight,
+          ]);
+          if (grew[0] > grew[1] + 1) fitDefects.push(`${where}: the page grew sideways to ${grew[0]} of ${grew[1]}`);
+          if (grew[2] > grew[3] + 1) fitDefects.push(`${where}: the page grew to ${grew[2]} of ${grew[3]}`);
+          expect(fitDefects, fitDefects.join("\n")).toEqual([]);
+        }).toPass({ timeout: 2_000 }).catch((cause: unknown) => {
+          defects.push(`${where}: ${cause instanceof Error ? cause.message : String(cause)}`);
+        });
+        await page.keyboard.press("Escape");
+        await expect(panel).toHaveCount(0);
+      }
+    }
+    expect(defects, defects.join("\n\n")).toEqual([]);
+  });
+
   test("run-view-105: the home's agent popover and the queue stay in the window", async ({
     page,
     app,

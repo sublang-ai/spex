@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 16;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -81,6 +81,24 @@ export interface RoleBindingSummary {
   /** What this role effectively runs, after inheritance. */
   display: string;
 }
+
+/** One agent's tuning for one session, above everything the config
+ * resolves (DR-067). Encoded as a role binding's tuning is: a string
+ * pins, `false` takes the provider's current default, and an absent
+ * key leaves the configured value in place. */
+export interface SessionAgentTuning {
+  model?: string | false;
+  effort?: string | false;
+  fastMode?: boolean;
+}
+
+/** A session's own tuning, keyed by agent id — the reserved `captain`,
+ * or one of the session's bound players (DR-067). */
+export type SessionTuning = Record<string, SessionAgentTuning>;
+
+/** The reserved agent id naming the Captain wherever an id addresses
+ * either kind of agent; composition refuses it as a player id. */
+export const CAPTAIN_AGENT_ID = "captain";
 
 export interface PlaybookSummary {
   id: string;
@@ -192,6 +210,8 @@ export interface SessionInfo {
   failed: boolean;
   /** Recorded cost, when any usage carried one. */
   costUsd?: number;
+  /** This session's own tuning, absent when it holds none (DR-067). */
+  tuning?: SessionTuning;
   /** Set when a record could not be durably appended: the persisted
    * stream is complete only up to this sequence, so served history is
    * never presented as complete when it is not (DR-036). */
@@ -548,6 +568,19 @@ export const commandSchema = z.discriminatedUnion("type", [
     sessionId: z.string().min(1),
     kind: z.enum(["recovery", "ending"]),
   }).strict(),
+  /** core-service-100: one agent's tuning for one session, above the
+   * config and touching no file the launcher reads (DR-067). */
+  z.object({
+    type: z.literal("session.tune"),
+    id,
+    sessionId: z.string().min(1),
+    agentId: z.string().min(1),
+    // A concrete value pins, false selects the provider default, null
+    // clears this session's own, absent preserves it (DR-032/DR-067).
+    model: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+    effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+    fastMode: z.boolean().nullable().optional(),
+  }).strict(),
   z.object({ type: z.literal("turn.abort"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("subscribe"), id, channel: channelSchema }),
   z.object({ type: z.literal("unsubscribe"), id, channel: channelSchema }),
@@ -778,6 +811,7 @@ export interface CommandResults {
   "session.delete": null;
   "turn.submit": { accepted: true };
   "session.control": { accepted: true };
+  "session.tune": SessionInfo;
   "turn.abort": { aborted: boolean };
   subscribe: null;
   unsubscribe: null;
