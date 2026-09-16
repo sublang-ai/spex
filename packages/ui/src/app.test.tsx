@@ -20,6 +20,21 @@ afterEach(cleanup);
 
 const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
 
+/** The reply a command with no test-specific answer gets.
+ *
+ * `{}` is not a legal reply for every command, and a stub that hands
+ * one back tests nothing — it makes the view crash on a shape the core
+ * never sends. `specs.get` promises a parsed tree carrying its lists,
+ * empty when the project has no `specs/` directory rather than absent
+ * (spec-view-10), so that is what an unanswered `specs.get` replies
+ * here. Add a command to this table rather than teaching a caller to
+ * survive a reply the protocol forbids. */
+function defaultReply(type: string): object {
+  return type === "specs.get"
+    ? { present: false, legacy: false, files: [], decisions: [], intents: [], notices: [], readAt: 0 }
+    : {};
+}
+
 vi.mock("./state/store.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./state/store.js")>();
   return { ...actual, getClient: () => ({ command: commandMock }) };
@@ -180,7 +195,7 @@ beforeEach(() => {
   // The App re-pulls the ledger once connected (DR-035): the default
   // reply must keep serving the seeded fold.
   commandMock.mockImplementation(async (type: string) =>
-    type === "ledger.get" ? (LEDGER as object) : {},
+    type === "ledger.get" ? (LEDGER as object) : defaultReply(type),
   );
   // Store actions resolve the module-local client, which the module
   // mock above cannot reach.
@@ -570,7 +585,7 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
       if (type === "config.get") {
         return { status: "valid", summary: { playbooks: [], captain: undefined } };
       }
-      return {};
+      return defaultReply(type);
     });
 
     await useAppStore.getState().refresh();
@@ -608,7 +623,7 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
         };
       }
       if (type === "ledger.history") return { intents: [], more: false };
-      return {};
+      return defaultReply(type);
     });
     render(<App />);
     expect(screen.queryByTestId("workspace-tab-repo")).toBeNull();
@@ -722,7 +737,7 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
         ? (LEDGER as object)
         : type === "history.get"
           ? { records: [] }
-          : {},
+          : defaultReply(type),
     );
     await act(async () => {
       fireEvent.click(screen.getByTestId("sidebar-session-a-failed"));
@@ -793,7 +808,7 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
       if (type === "session.delete") {
         throw new Error("the session is live — end it first");
       }
-      return type === "ledger.get" ? (LEDGER as object) : {};
+      return type === "ledger.get" ? (LEDGER as object) : defaultReply(type);
     });
     render(<App />);
     fireEvent.click(screen.getByTestId("sidebar-delete-a-failed"));
@@ -874,6 +889,28 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
   });
 });
 
+describe("spec-view-63: the Specs tab on a project with no specs/", () => {
+  // The tree the core replies with when a project has no `specs/`
+  // directory: absence stated with empty lists, never a failure and
+  // never a reply missing them (spec-view-10). The view reads those
+  // lists as it renders, so a reply without them took the whole app
+  // down through its error boundary rather than showing this state.
+  test("the absent tree renders its empty state rather than crashing", async () => {
+    render(<App />);
+    await screen.findByTestId("sidebar-session-a-live");
+    fireEvent.click(screen.getByTestId("workspace-tab-specs"));
+
+    const empty = await screen.findByTestId("specs-empty");
+    expect(empty.textContent).toMatch(/npx @sublang\/spex/);
+    expect(commandMock).toHaveBeenCalledWith("specs.get", { projectId: "p1" });
+    // The tab really is the shown one, so the empty state is what the
+    // reader is looking at and not something rendered off-surface.
+    expect(
+      screen.getByTestId("workspace-tab-specs").getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+});
+
 describe("spec-view-7, dashboard-24: a History record opens in the reader", () => {
   // A finished record in alpha's tree: History lists it on the
   // Dashboard and the Overview alike.
@@ -912,7 +949,7 @@ describe("spec-view-7, dashboard-24: a History record opens in the reader", () =
       if (type === "forge.items") {
         return { adapter: "github", authenticated: null, issues: [], prs: [] };
       }
-      return {};
+      return defaultReply(type);
     });
   }
 
@@ -1001,7 +1038,7 @@ describe("run-view-134/137: the marker is the reader's own showing", () => {
   function seedUnread(): void {
     const fold = { intents: [], attention: [UNREAD], badge: 1 } as never;
     commandMock.mockImplementation(async (type: string) =>
-      type === "ledger.get" ? (fold as object) : {},
+      type === "ledger.get" ? (fold as object) : defaultReply(type),
     );
     useAppStore.setState({
       sessions: [
@@ -1124,7 +1161,7 @@ describe("run-view-135/136: a summons the session answers names its turn", () =>
       badge: 1,
     } as never;
     commandMock.mockImplementation(async (type: string) =>
-      type === "ledger.get" ? (fold as object) : {},
+      type === "ledger.get" ? (fold as object) : defaultReply(type),
     );
     useAppStore.setState({
       sessions: [

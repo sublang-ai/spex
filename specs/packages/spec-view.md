@@ -431,6 +431,12 @@ Where a fixture tree contains an unreadable file and unknown entries directly un
 - every other file's parse stays intact [[spec-view-10](#spec-view-10)];
 - a fixture project with no `specs/` directory yields a reply stating absence with empty lists [[spec-view-10](#spec-view-10)].
 
+#### spec-view-63
+
+Where the workspace serves a project whose tree states absence with empty lists [[spec-view-10](#spec-view-10)], when the Specs tab is shown, the test suite shall assert that the empty state renders with its scaffold command and that the tab stands as the shown one [[spec-view-9](#spec-view-9)]:
+
+- the view reads the tree's lists as it renders, so a reply carrying none at all takes the surface down instead of degrading — the state this item exists to hold.
+
 ### Citation Coverage
 
 #### spec-view-37
