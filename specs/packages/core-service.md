@@ -103,7 +103,7 @@ When a session's runtime is opened for a message [[core-service-73](#core-servic
 
 #### core-service-100
 
-When a client sends `session.tune` naming a session, one of its agents — the reserved `captain`, or a player of its bound roster — and a change to that agent's model, effort, or fast mode, the core service shall accept the change only if the projection the session's next message would open on validates with it applied, then persist the session's tuning [[storage-5](storage.md#storage-5)] and republish the session's summary [[core-service-32](#core-service-32)] ([DR-067](../decisions/067-tuning-for-one-conversation.md)):
+When a client sends `session.agent.set` naming a session, one of its agents — the reserved `captain`, or a player of its bound roster — and a change to that agent's model, effort, or fast mode, the core service shall accept the change only if the projection the session's next message would open on validates with it applied, then persist the session's own agent settings [[storage-5](storage.md#storage-5)] and republish the session's summary [[core-service-32](#core-service-32)] ([DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md): the same act as the configuration's own agent edits, at a different scope):
 
 | The field's value is | The agent runs |
 | --- | --- |
@@ -157,7 +157,7 @@ When a client requests the session list, the core service shall reply with every
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count and whether it ended holding a failure record;
-- each entry carries the session's own tuning [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md)).
+- each entry carries the session's own agent settings [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md)).
 
 #### core-service-34
 

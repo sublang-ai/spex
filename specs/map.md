@@ -93,6 +93,7 @@ meta.md       The spec of specs
 | [DR-065](decisions/065-repairs-the-reader-answers.md) | 065-repairs-the-reader-answers.md | Repairs the reader answers: a repair counts until he acts, set aside stands quietly, folders checked and proposed for one gesture, the palette handing its project back |
 | [DR-066](decisions/066-every-summons-has-a-door.md) | 066-every-summons-has-a-door.md | Every summons has a door: an act on the row that reads no runtime state, the marker the reader's own showing advances, permission unraised |
 | [DR-067](decisions/067-tuning-for-one-conversation.md) | 067-tuning-for-one-conversation.md | Tuning for one conversation: a session's own model, effort and fast mode above the config's, the Captain and each player tuned from the agent's own chip, chosen and applied kept apart |
+| [DR-068](decisions/068-an-agents-settings-where-the-agent-is.md) | 068-an-agents-settings-where-the-agent-is.md | An agent's settings, where the agent is: one chip opens one agent's own editor, no session-wide panel and no count, the act carrying no name of its own |
 
 ## Packages
 

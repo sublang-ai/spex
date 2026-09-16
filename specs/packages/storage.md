@@ -74,7 +74,7 @@ The preference store shall encode `prefs.json` as exactly `{v:1,prefs:{...}}`, w
 - `space:lastSync` stores the last completed in-app sync as `{at, sent, received}` — Unix milliseconds and unit counts;
 - `space:repair:<repair>` records that this device's reader declined to add a repair's project, keyed by the project and recorded directories it names, so the repair stands in the list and counts as no issue here alone;
 - `draft:<id>:player` stores the roster player id answering that draft's authoring conversation; absent means the Captain's block; removed with the draft.
-- `session:<id>:tuning` stores that session's own tuning as agent id — the reserved `captain`, or a roster player — to a model, an effort and a fast mode, each a string, `false` for the provider's current default, or absent for the configured value [[core-service-100](core-service.md#core-service-100)]; absent means the session runs what the config resolves; removed with the session.
+- `session:<id>:agents` stores that session's own agent settings as agent id — the reserved `captain`, or a roster player — to a model, an effort and a fast mode, each a string, `false` for the provider's current default, or absent for the configured value [[core-service-100](core-service.md#core-service-100)]; absent means the session runs what the config resolves; removed with the session.
 
 ### storage-6
 

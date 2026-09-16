@@ -302,10 +302,10 @@ test.describe("chrome the sweep does not open", () => {
   } });
   test.afterEach(() => releaseDiscovery?.());
 
-  // The tuning panel hangs from a chip inside the player grid, which
-  // scrolls sideways and is therefore the box that must show it — the
-  // hardest anchor in the product (run-view-105, run-view-138).
-  test("run-view-105: the session tuning panel stays inside the box that must show it", async ({
+  // An agent's settings editor hangs from a chip inside the player
+  // grid, which scrolls sideways and is therefore the box that must show
+  // it — the hardest anchor in the product (run-view-105, run-view-138).
+  test("run-view-105: an agent's settings editor stays inside the box that must show it", async ({
     page,
     app,
   }) => {
@@ -316,7 +316,7 @@ test.describe("chrome the sweep does not open", () => {
     await setRail(page, false);
     await send(page, TASK);
     await expect(page.getByTestId("player-pane-dev.reviewer")).toBeVisible();
-    const panel = page.getByTestId("session-tuning");
+    const panel = page.getByTestId("agent-settings-dev.reviewer");
 
     for (const height of HEIGHTS) {
       for (const width of [320, 900]) {
@@ -325,10 +325,10 @@ test.describe("chrome the sweep does not open", () => {
         // its chip is the anchor furthest from the window's edge.
         const grid = page.getByTestId("player-grid");
         await grid.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
-        await page.getByTestId("tuning-chip-dev.reviewer").click();
+        await page.getByTestId("agent-chip-dev.reviewer").click();
         await expect(panel).toBeVisible();
         if (releaseDiscovery) { releaseDiscovery(); releaseDiscovery = undefined; }
-        const where = `session tuning panel · ${width}×${height}`;
+        const where = `agent settings editor · ${width}×${height}`;
         await expect(async () => {
           const fitDefects: string[] = [];
           const box = (await panel.boundingBox())!;
@@ -337,9 +337,9 @@ test.describe("chrome the sweep does not open", () => {
           if (box.y < -1) fitDefects.push(`${where}: top at ${Math.round(box.y)}`);
           if (box.y + box.height > height + 1) fitDefects.push(`${where}: bottom at ${Math.round(box.y + box.height)} of ${height}`);
           // Its first control must be reachable, not merely inside.
-          const first = (await panel.getByTestId("tuning-open-captain").boundingBox())!;
+          const first = (await panel.getByTestId("agent-dev.reviewer-model-mode").boundingBox())!;
           if (first.y < -1 || first.y + first.height > height + 1) {
-            fitDefects.push(`${where}: the first row's control is outside the window`);
+            fitDefects.push(`${where}: the first field is outside the window`);
           }
           const grew = await page.evaluate(() => [
             document.documentElement.scrollWidth,

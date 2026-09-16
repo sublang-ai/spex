@@ -82,19 +82,19 @@ export interface RoleBindingSummary {
   display: string;
 }
 
-/** One agent's tuning for one session, above everything the config
+/** One agent's settings for one session, above everything the config
  * resolves (DR-067). Encoded as a role binding's tuning is: a string
  * pins, `false` takes the provider's current default, and an absent
  * key leaves the configured value in place. */
-export interface SessionAgentTuning {
+export interface SessionAgentSettings {
   model?: string | false;
   effort?: string | false;
   fastMode?: boolean;
 }
 
-/** A session's own tuning, keyed by agent id — the reserved `captain`,
- * or one of the session's bound players (DR-067). */
-export type SessionTuning = Record<string, SessionAgentTuning>;
+/** A session's own agent settings, keyed by agent id — the reserved
+ * `captain`, or one of the session's bound players (DR-067). */
+export type SessionAgentSettingsMap = Record<string, SessionAgentSettings>;
 
 /** The reserved agent id naming the Captain wherever an id addresses
  * either kind of agent; composition refuses it as a player id. */
@@ -210,8 +210,8 @@ export interface SessionInfo {
   failed: boolean;
   /** Recorded cost, when any usage carried one. */
   costUsd?: number;
-  /** This session's own tuning, absent when it holds none (DR-067). */
-  tuning?: SessionTuning;
+  /** This session's own agent settings, absent when it holds none. */
+  agentSettings?: SessionAgentSettingsMap;
   /** Set when a record could not be durably appended: the persisted
    * stream is complete only up to this sequence, so served history is
    * never presented as complete when it is not (DR-036). */
@@ -568,10 +568,11 @@ export const commandSchema = z.discriminatedUnion("type", [
     sessionId: z.string().min(1),
     kind: z.enum(["recovery", "ending"]),
   }).strict(),
-  /** core-service-100: one agent's tuning for one session, above the
-   * config and touching no file the launcher reads (DR-067). */
+  /** core-service-100: one agent's settings for one session, above the
+   * config and touching no file the launcher reads (DR-067) — the same
+   * act as `captain.set` and `player.set`, at a different scope. */
   z.object({
-    type: z.literal("session.tune"),
+    type: z.literal("session.agent.set"),
     id,
     sessionId: z.string().min(1),
     agentId: z.string().min(1),
@@ -811,7 +812,7 @@ export interface CommandResults {
   "session.delete": null;
   "turn.submit": { accepted: true };
   "session.control": { accepted: true };
-  "session.tune": SessionInfo;
+  "session.agent.set": SessionInfo;
   "turn.abort": { aborted: boolean };
   subscribe: null;
   unsubscribe: null;

@@ -32,8 +32,8 @@ import { Composer } from "./Composer.js";
 import { DeliveryCard } from "./DeliveryCard.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { PlayerPane } from "./PlayerPane.js";
-import { SessionTuningPopover } from "./SessionTuning.js";
-import { sessionAgents, tunedCount } from "../lib/session-tuning.js";
+import { AgentSettingsPopover } from "./AgentSettings.js";
+import { sessionAgents } from "../lib/session-agents.js";
 import { WorkingLine } from "./WorkingLine.js";
 import { parkedFailure } from "../lib/machine-frames.js";
 
@@ -230,16 +230,17 @@ export function RunView({
     }])),
   }, [view]);
   const machineGraphs = useAppStore((state) => state.machineGraphs);
-  // The configured values this session's tuning is read over
-  // (run-view-139): one source, so a chip and the panel never disagree.
+  // The configured values this conversation's own settings are read
+  // over (run-view-139): one source, so a chip and the editor it opens
+  // never disagree about the same agent.
   const configSummary = useAppStore((state) =>
     state.configState?.status === "valid" ? state.configState.summary : undefined,
   );
-  const tuneAgent = useAppStore((state) => state.tuneAgent);
-  // One panel, opened from a pane's chip or from the session header,
-  // anchored at whichever control the reader used (run-view-138).
-  const [tuning, setTuning] = useState<{ from: "header" | "agent"; agentId?: string } | undefined>();
-  const tuneAnchorRef = useRef<HTMLButtonElement>(null);
+  const setAgentSettings = useAppStore((state) => state.setAgentSettings);
+  // One agent's editor, opened from that agent's own chip: the object
+  // the reader touched is the object they get (run-view-138, DR-068).
+  const [editingAgent, setEditingAgent] = useState<string | undefined>();
+  const settingsAnchorRef = useRef<HTMLButtonElement>(null);
   const captainSplit = useAppStore((state) => state.captainSplit);
   const setCaptainSplit = useAppStore((state) => state.setCaptainSplit);
   const ledger = useAppStore((state) => state.ledger);
@@ -456,27 +457,35 @@ export function RunView({
   const metaById = new Map(session.players.map((player) => [player.id, player]));
   // This session's agents — the Captain and its players — with what
   // each is set to run (run-view-138/139). The config summary is read
-  // here rather than fetched: the panel needs no second source.
-  const agents = sessionAgents(session, configSummary);
-  const agentById = new Map(agents.map((agent) => [agent.id, agent]));
-  const tuned = tunedCount(session);
-  const tuningReadOnly = readOnly || !!externalWriter;
-  // One panel, rendered beside whichever control opened it, so it
-  // arrives where the hand is rather than at a fixed corner
-  // (run-view-138).
-  const tunePanel = (side: "left" | "right") =>
-    tuning ? (
-      <SessionTuningPopover
-        agents={agents}
-        {...(tuning.agentId ? { openAgentId: tuning.agentId } : {})}
-        side={side}
-        turnActive={!!session.turnActive}
-        readOnly={tuningReadOnly}
-        anchorRef={tuneAnchorRef}
-        onTune={(agentId, change) => tuneAgent(session.id, agentId, change)}
-        onClose={() => setTuning(undefined)}
-      />
-    ) : null;
+  // here rather than fetched: the chip needs no second source.
+  const agentById = new Map(sessionAgents(session, configSummary).map((agent) => [agent.id, agent]));
+  const settingsReadOnly = readOnly || !!externalWriter;
+  /** The props a pane needs to show its agent's chip and, while that
+   * chip is the open one, the editor hanging from it. */
+  const agentProps = (agentId: string) => {
+    const agent = agentById.get(agentId);
+    if (!agent) return {};
+    const open = editingAgent === agentId;
+    return {
+      settings: agent,
+      onEditSettings: () => setEditingAgent((current) => (current === agentId ? undefined : agentId)),
+      settingsOpen: open,
+      ...(open
+        ? {
+            settingsAnchorRef,
+            settingsPopover: (
+              <AgentSettingsPopover
+                agent={agent}
+                readOnly={settingsReadOnly}
+                anchorRef={settingsAnchorRef}
+                onSave={(change) => setAgentSettings(session.id, agentId, change)}
+                onClose={() => setEditingAgent(undefined)}
+              />
+            ),
+          }
+        : {}),
+    };
+  };
   const title = session.title ?? "new session";
   const uncertain = !externalWriter && !!session.recovery && !session.turnActive;
   // The runtime is held only for a turn (DR-051): whether it is held
@@ -524,35 +533,6 @@ export function RunView({
             {session.endedAt ? new Date(session.endedAt).toLocaleString() : ""}
           </span>
         ) : null}
-        {agents.length > 0 ? (
-          <span className="relative ml-auto shrink-0">
-            {/* The standing answer to "is this conversation running my
-                defaults?" (run-view-139): the count stands for the
-                session's whole life, and its words yield before it as
-                the header narrows (DR-041). */}
-            <button
-              type="button"
-              ref={tuning?.from === "header" ? tuneAnchorRef : undefined}
-              data-testid="session-tuning-control"
-              aria-expanded={!!tuning}
-              aria-label={tuned > 0 ? `Session tuning, ${tuned} ${tuned === 1 ? "agent" : "agents"} tuned` : "Session tuning"}
-              title={tuned > 0 ? `${tuned} ${tuned === 1 ? "agent runs" : "agents run"} something other than your defaults in this session` : "Tune this session's agents"}
-              onClick={() => setTuning((current) => (current ? undefined : { from: "header" }))}
-              className={`min-h-6 rounded border px-2 py-0.5 text-xs ${
-                tuned > 0
-                  ? "border-neutral-400 text-neutral-700 dark:border-neutral-500 dark:text-neutral-200"
-                  : "border-neutral-300 text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
-              }`}
-            >
-              <span className="hidden @md:inline">Tuning</span>
-              <span className="@md:hidden" aria-hidden>
-                Tune
-              </span>
-              {tuned > 0 ? <span aria-hidden> · {tuned}</span> : null}
-            </button>
-            {tuning?.from === "header" ? tunePanel("right") : null}
-          </span>
-        ) : null}
       </div>
       {/* The split is layout by its own width (run-view-107): panes
           side by side with the divider from 42rem, stacked below it
@@ -583,15 +563,7 @@ export function RunView({
             bossSources={bossSources}
             extras={extras}
             readiness={readOnly ? undefined : readinessHint}
-            {...(agentById.get(CAPTAIN_AGENT_ID)
-              ? {
-                  tuning: agentById.get(CAPTAIN_AGENT_ID),
-                  onTune: () => setTuning((current) =>
-                    current?.agentId === CAPTAIN_AGENT_ID ? undefined : { from: "agent", agentId: CAPTAIN_AGENT_ID }),
-                  tuneOpen: tuning?.agentId === CAPTAIN_AGENT_ID,
-                  ...(tuning?.agentId === CAPTAIN_AGENT_ID ? { tuneAnchorRef, tunePopover: tunePanel("left") } : {}),
-                }
-              : {})}
+            {...agentProps(CAPTAIN_AGENT_ID)}
             focusKey={focusKey}
             onFocusHandled={onFocusHandled}
           />
@@ -736,15 +708,7 @@ export function RunView({
                     }
                   }
                   meta={metaById.get(playerId)}
-                  {...(agentById.get(playerId)
-                    ? {
-                        tuning: agentById.get(playerId),
-                        onTune: () => setTuning((current) =>
-                          current?.agentId === playerId ? undefined : { from: "agent", agentId: playerId }),
-                        tuneOpen: tuning?.agentId === playerId,
-                        ...(tuning?.agentId === playerId ? { tuneAnchorRef, tunePopover: tunePanel("left") } : {}),
-                      }
-                    : {})}
+                  {...agentProps(playerId)}
                   collapsed={collapsed.has(playerId)}
                   onCollapsedChange={(next) =>
                     setLaneCollapsed(session.id, playerId, next)

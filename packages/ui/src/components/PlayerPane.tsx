@@ -13,8 +13,8 @@ import { absoluteTitle, clockTime, duration } from "../lib/time.js";
 import { inputBlocks, outputBlock } from "../lib/tool-body.js";
 import { useClock } from "../lib/useClock.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
-import { TuningChip, tuningReading } from "./SessionTuning.js";
-import type { TuningAgent } from "../lib/session-tuning.js";
+import { AgentChipButton, agentReading } from "./AgentSettings.js";
+import type { SessionAgent } from "../lib/session-agents.js";
 import { Markdown } from "./Markdown.js";
 import { RunningMark } from "./RunningMark.js";
 
@@ -302,26 +302,26 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
 export function PlayerPane({
   view,
   meta,
-  tuning,
-  onTune,
-  tuneAnchorRef,
-  tuneOpen = false,
-  tunePopover,
+  settings,
+  onEditSettings,
+  settingsAnchorRef,
+  settingsOpen = false,
+  settingsPopover,
   collapsed = false,
   onCollapsedChange,
 }: {
   view: PlayerView;
   meta?: SessionInfo["players"][number];
   /** What this lane's agent is set to run, and the door to changing it
-   * for this session alone (run-view-139). */
-  tuning?: TuningAgent;
-  onTune?: () => void;
+   * for this conversation alone (run-view-139). */
+  settings?: SessionAgent;
+  onEditSettings?: () => void;
   /** Set only while this lane's panel is the open one, so one anchor
    * serves every pane (the Library's role-row idiom). */
-  tuneAnchorRef?: RefObject<HTMLButtonElement | null>;
-  tuneOpen?: boolean;
-  /** The one panel, rendered beside this lane's chip while it is open. */
-  tunePopover?: ReactNode;
+  settingsAnchorRef?: RefObject<HTMLButtonElement | null>;
+  settingsOpen?: boolean;
+  /** This agent's editor, beside its chip while it is open. */
+  settingsPopover?: ReactNode;
   /** The lane stands as a rail (run-view-116). */
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
@@ -388,7 +388,7 @@ export function PlayerPane({
         ) : null}
         <span
           data-testid={`player-name-${view.id}`}
-          title={tuning ? `${view.id} · ${tuningReading(tuning)}` : view.id}
+          title={settings ? `${view.id} · ${agentReading(settings)}` : view.id}
           className="min-h-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm font-semibold [writing-mode:vertical-rl]"
         >
           {view.id}
@@ -420,19 +420,19 @@ export function PlayerPane({
           ) : null}
           <span className="font-mono">{view.id}</span>
         </span>
-        {tuning && onTune ? (
+        {settings && onEditSettings ? (
           // The chip reads what this lane is set to run and is the
           // control that changes it for this session (run-view-139).
           // Its popover hangs from this box, so the panel arrives where
           // the hand is rather than at a fixed corner (run-view-138).
           <span className="relative flex min-w-0 shrink">
-            <TuningChip
-              agent={tuning}
-              onOpen={onTune}
-              {...(tuneAnchorRef ? { anchorRef: tuneAnchorRef } : {})}
-              open={tuneOpen}
+            <AgentChipButton
+              agent={settings}
+              onOpen={onEditSettings}
+              {...(settingsAnchorRef ? { anchorRef: settingsAnchorRef } : {})}
+              open={settingsOpen}
             />
-            {tuneOpen ? tunePopover : null}
+            {settingsOpen ? settingsPopover : null}
           </span>
         ) : meta ? (
           <span

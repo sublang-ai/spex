@@ -334,9 +334,9 @@ export interface AppState {
   consumeRevealPlaybook(): string | undefined;
 
   loadAgentOptions(adapter: AdapterName): Promise<AgentOptions>;
-  /** One agent's tuning for one session (DR-067). It writes no
-   * configuration: the defaults in Settings are untouched. */
-  tuneAgent(sessionId: string, agentId: string, change: {model?: string | false | null; effort?: string | false | null; fastMode?: boolean | null}): Promise<void>;
+  /** One agent's settings for one conversation (DR-067, DR-068). It
+   * writes no configuration: the defaults in Settings are untouched. */
+  setAgentSettings(sessionId: string, agentId: string, change: {model?: string | false | null; effort?: string | false | null; fastMode?: boolean | null}): Promise<void>;
   connect(url?: string): void;
   refresh(): Promise<void>;
   setCurrentProject(projectId: string | undefined): void;
@@ -1480,10 +1480,10 @@ export const useAppStore = create<AppState>((set, get) => {
 
     loadAgentOptions: (adapter) => getClient().command("agent.options", { adapter }),
 
-    async tuneAgent(sessionId, agentId, change): Promise<void> {
-      const session = await getClient().command("session.tune", { sessionId, agentId, ...change });
+    async setAgentSettings(sessionId, agentId, change): Promise<void> {
+      const session = await getClient().command("session.agent.set", { sessionId, agentId, ...change });
       // The core broadcasts the same session; taking the reply too
-      // means the panel never redraws from a value it just replaced.
+      // means the chip never redraws from a value it just replaced.
       const sessions = get().sessions.filter((entry) => entry.id !== session.id);
       sessions.push(session);
       sessions.sort((a, b) => a.createdAt - b.createdAt);
