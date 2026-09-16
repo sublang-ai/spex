@@ -62,7 +62,7 @@ Where the Settings surface is open, the Settings surface shall offer adding a se
 
 #### settings-34
 
-When an agent or role-binding editor opens or the adapter it uses changes, the editor shall request Cligent's model and tuning options through the core protocol [[settings-35](#settings-35)] ([DR-052](../decisions/052-runtime-model-options.md)):
+When an agent, role-binding, or session-tuning editor opens or the adapter it uses changes, the editor shall request Cligent's model and tuning options through the core protocol [[settings-35](#settings-35)] ([DR-052](../decisions/052-runtime-model-options.md)):
 
 - Offer runtime model IDs, provider default, and explicit custom entry; recognize a saved ID reported as an alias's resolution without rewriting it, and retain unlisted values.
 - Use known model effort and fast-mode support; supplement efforts only with adapter choices Cligent identifies as unreported by its discovery interface, labeling only added choices adapter-wide. Missing model metadata leaves adapter-wide options unverified for that model.

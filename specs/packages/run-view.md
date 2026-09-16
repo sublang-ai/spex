@@ -41,7 +41,7 @@ While a project session is live, when the session record stream delivers a failu
 
 While a project session is live, when the session record stream delivers text or text deltas for a visible player, that player's pane shall render the accumulating message as formatted Markdown, appending each delta as it arrives rather than waiting for turn completion:
 
-- A player pane is read-only — no text input, reply, or edit affordance — since Boss input happens only in the Boss composer [[run-view-8](#run-view-8)];
+- A player pane's transcript is read-only — no text input, reply, or edit affordance — since Boss input happens only in the Boss composer [[run-view-8](#run-view-8)], while its header governs the lane's agent [[run-view-138](#run-view-138)];
 - rendered text wraps inside its pane — an unbroken token such as a long URL breaks anywhere rather than scrolling the pane sideways, in a player pane, a call's prompt, and the Captain thread's bubbles alike ([DR-041](../decisions/041-chrome-that-fits.md)) — and a code block wraps its long lines the same way, so nothing in a transcript scrolls sideways or traps the keyboard.
 
 #### run-view-4
@@ -98,7 +98,7 @@ The run view shall show exactly one player pane per player in the session's boun
 - the pane's header carries a collapse control, and a collapsed pane stands in its place as a rail [[run-view-116](#run-view-116)] that opens itself when its call opens [[run-view-117](#run-view-117)] — a folded lane is still a lane;
 - the runtime's report of which players a call engages adds no pane and removes none — a lane the reader is following never leaves under them — and when a lane's call opens while its pane lies beyond the grid's visible edge, the grid scrolls just far enough to show that pane, side by side or stacked alike, so the working lane never hides behind idle ones;
 - a roster with no players renders no player pane, and the Captain column then stands alone at the Captain home's reading width with no divider — a division with nothing on its far side reads as a pane that failed to load;
-- the pane's header names the lane and, from its first call on, the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the player's model chip beside it, and a lane no call has reached yet reads "Idle until the playbook calls ⟨lane⟩";
+- the pane's header names the lane and, from its first call on, the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the lane's agent chip beside it, which is also the control that tunes that agent for this session [[run-view-139](#run-view-139)] [[run-view-138](#run-view-138)], and a lane no call has reached yet reads "Idle until the playbook calls ⟨lane⟩";
 - while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second, hidden first in a narrow pane ([DR-041](../decisions/041-chrome-that-fits.md)) — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5).
 
 #### run-view-116
@@ -198,7 +198,7 @@ The app shell shall fill the window at every size, giving the surface it shows a
 
 #### run-view-25
 
-Where no session tab is active, when the Projects surface is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip and player label wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
+Where no session tab is active, when the Projects surface is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
 
 - the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place, and says in one clause what a playbook is — a scripted workflow the AI players run — so the first sentence needs no glossary;
 - with no project current, the greeting names the remedy the workspace actually has — picking one where projects exist, adding one where none do — never sending the reader to a sidebar holding nothing;
@@ -236,6 +236,29 @@ When the user opens the captain identity's editor control (or another agent's ed
 
 - the popover opens on the side of its anchor with the more room and takes at most what the window can show there, scrolling inside that bound, so it never lies past an edge the reader cannot scroll to and never grows the page ([DR-041](../decisions/041-chrome-that-fits.md)) — the Captain home's control sits at the foot of the surface, where the room above and below changes with the window's height;
 - the open popover refits whenever the window or its own box resizes; a window resize also re-decides its side and its room.
+
+#### run-view-138
+
+When the reader opens an agent's tuning control — the chip in the Captain pane's header, the chip in a player pane's header, or the session header's own control [[run-view-139](#run-view-139)] — the run view shall show an anchored popover listing that session's agents, the Captain first and then its players in pane order, and shall write a chosen model, effort, or fast mode as that session's own tuning [[core-service-100](core-service.md#core-service-100)], without leaving the surface and without editing the shared configuration ([DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-009](../decisions/009-at-hand-interaction.md)):
+
+- it opens at the agent whose control was used, anchored at that control and taking the side and the bound of the agent editor's popover [[run-view-32](#run-view-32)], so the panel arrives where the hand is rather than at a fixed corner, and it follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6): focus enters on open and returns to the control on close, and Escape, an outside click, and Cancel close it;
+- a row names its agent, what that agent will run, and where that came from — the configured value, or this session's own [[run-view-139](#run-view-139)] — and expands in place, one at a time, to model, effort, and fast mode;
+- each field offers the configured value named, the provider's current default, and a value pinned from the runtime's own choices [[settings-34](settings.md#settings-34)], and fast mode is offered where the adapter accepts the request or a choice already stands, so a stale one is always clearable;
+- the panel says what it cannot change and why: adapter, instruction, and permissions belong to Settings, and changing them needs a new session [[core-service-92](core-service.md#core-service-92)];
+- where a player answers roles whose bindings tune them differently, its row says so before the choice is taken, because one session tuning runs those roles alike;
+- Reset returns one agent to the configured values, and the session header's control carries a clear for the whole session while more than one agent is tuned, so the standing signal and the way back are one object;
+- the panel says when a choice bites — from the next message, and, while a turn is in flight, that this turn keeps the settings it started with [[core-service-92](core-service.md#core-service-92)] — so a choice taken mid-turn promises nothing about the work already running;
+- a refusal lands in the panel's frame with the draft kept, and unavailable model discovery shows its reason with a retry while every field stays usable ([DR-052](../decisions/052-runtime-model-options.md));
+- a session reporting external ownership [[run-view-125](#run-view-125)] or history the core cannot continue [[run-view-33](#run-view-33)] reads its tuning without writing it.
+
+#### run-view-139
+
+While a session's tab is shown, the run view shall read each agent's tuning on the agent itself and the count of tuned agents on the session's header, so a session set to run something other than its configured values never reads as one that is not ([DR-067](../decisions/067-tuning-for-one-conversation.md)):
+
+- the Captain pane's header and each player pane's header carry their agent's chip — adapter, model, and effort, with the lightning mark while it runs in fast mode, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — and that chip is the control that tunes it [[run-view-138](#run-view-138)];
+- a chip reads what its agent is set to run — the session's own tuning of a field [[core-service-32](core-service.md#core-service-32)], else the configured value — so a choice shows the moment it is taken, as a setting does and a record of a past call does not;
+- the session header carries the count of tuned agents for the session's whole life, the count in its accessible name, yielding its words before its count as the header narrows ([DR-041](../decisions/041-chrome-that-fits.md));
+- a folded lane's rail carries its chip's reading in its tooltip [[run-view-116](#run-view-116)], and the session header's control opens the tuning of every agent [[run-view-138](#run-view-138)], so folding a lane reaches nothing away ([DR-030](../decisions/030-workspace-chrome.md)).
 
 #### run-view-33
 
@@ -893,6 +916,16 @@ Where a replayed fixture stream parks a playbook run in its recoverable failure 
 - the derived attention holds a failure for that session, and a later turn that settles with no failure of its own leaves it standing [[run-view-34](#run-view-34)];
 - a stream that then reports the run leaving its failure state returns the chip to the reported state's own label and clears that attention [[run-view-59](#run-view-59)] [[run-view-34](#run-view-34)].
 
+#### run-view-140
+
+Where a replayed fixture stream stands settled with a Captain and two player lanes, the test suite shall assert the session tuning flow through the protocol:
+
+- opening a player pane's chip shows the panel with that player's row expanded, and the session header's control shows the same panel [[run-view-138](#run-view-138)];
+- choosing a model and an effort sends exactly one tuning command naming the session, the agent, and the chosen values, and sends no config edit [[run-view-138](#run-view-138)];
+- the pane's chip reads the chosen value as soon as the change is accepted, and the session header reads one tuned agent [[run-view-139](#run-view-139)];
+- a refused change keeps the panel open with its draft, and Reset returns the row to the configured values and clears the header's count [[run-view-138](#run-view-138)];
+- the Captain is tuned by the same panel from the Captain pane's chip [[run-view-138](#run-view-138)] [[run-view-139](#run-view-139)].
+
 ### Intent Ledger Coverage
 
 #### run-view-92
@@ -999,7 +1032,7 @@ Where the harness boots with the demo project registered, the test suite shall a
 
 #### run-view-102
 
-Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
+Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session with its tuning panel open on an expanded row [[run-view-138](#run-view-138)], a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
 
 #### run-view-103
 
@@ -1021,6 +1054,15 @@ Where the harness boots with the demo project registered and the scripted Captai
 
 Where the hermetic lane's demo shell has run a task to its end ([DR-039](../decisions/039-browser-acceptance-journeys.md)), the test suite shall assert through the page that the settled session's composer stands ready with no notice, that a message sent there — after a model change in Settings — continues the session on the same tab with the Captain narrating again and the coder's pane wearing the new model [[run-view-69](#run-view-69)] [[run-view-8](#run-view-8)], and that after the shell restarts underneath the page the same tab continues once more [[run-view-68](#run-view-68)]; and, with a session the terminal wrote listed for the project, that its sidebar row's delete control and inline confirm — worded for the terminal's history — remove it from the listing and its record and stream from the shared session store [[run-view-73](#run-view-73)].
 
+#### run-view-141
+
+Where the harness boots with the demo project registered and the scripted Captain, when the journey tunes the Captain and the coder from a session's own panes and then sends a message, the test suite shall assert through the page that ad-hoc tuning runs and stays where it was made:
+
+- both panes wear the tuned values before the message is sent, and the session header reads two tuned agents [[run-view-139](#run-view-139)];
+- the turn runs on those values, the coder's own records naming the tuned model [[run-view-4](#run-view-4)];
+- the Settings surface still shows the configured values, and a second session of the same project opens with its panes wearing them [[run-view-138](#run-view-138)];
+- clearing from the session header's control returns both panes to the configured values on the next turn [[run-view-138](#run-view-138)].
+
 #### run-view-105
 
 Where the harness boots with the demo project registered and carrying closed work, the scripted Captain, the authoring fake with a passing stub `slc`, and ten further projects each holding a session parked on a player question, when the journey shows each surface — the Captain home, a session with a turn in flight, the Dashboard, the project's Overview, the Specs tab with the graph shown, Playbooks, a playbook draft's workspace at rest after its compile, and Settings — at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md): the open sidebar is 224 pixels wide), the test suite shall assert fit through the page, naming every offending element:
@@ -1031,7 +1073,8 @@ Where the harness boots with the demo project registered and carrying closed wor
 - every control's accessible name is the same at every width [[run-view-8](#run-view-8)] [[run-view-85](#run-view-85)] [[run-view-48](#run-view-48)];
 - the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)];
 - the Captain home's agent popover, opened at each height, lies inside the window both on opening and after model discovery grows its content, with its adapter picker reachable and the page unmoved [[run-view-32](#run-view-32)];
-- a composer standing behind six queued submissions keeps its frame a few entries tall and its primary control inside the window at every width and height [[run-view-106](#run-view-106)].
+- a composer standing behind six queued submissions keeps its frame a few entries tall and its primary control inside the window at every width and height [[run-view-106](#run-view-106)];
+- the session tuning panel, opened from the narrowest player pane and again from the last pane of a sideways-scrolled grid, lies inside the box that must show it with its fields reachable and the page unmoved [[run-view-138](#run-view-138)].
 
 #### run-view-121
 

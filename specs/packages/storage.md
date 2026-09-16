@@ -74,6 +74,7 @@ The preference store shall encode `prefs.json` as exactly `{v:1,prefs:{...}}`, w
 - `space:lastSync` stores the last completed in-app sync as `{at, sent, received}` — Unix milliseconds and unit counts;
 - `space:repair:<repair>` records that this device's reader declined to add a repair's project, keyed by the project and recorded directories it names, so the repair stands in the list and counts as no issue here alone;
 - `draft:<id>:player` stores the roster player id answering that draft's authoring conversation; absent means the Captain's block; removed with the draft.
+- `session:<id>:tuning` stores that session's own tuning as agent id — the reserved `captain`, or a roster player — to a model, an effort and a fast mode, each a string, `false` for the provider's current default, or absent for the configured value [[core-service-100](core-service.md#core-service-100)]; absent means the session runs what the config resolves; removed with the session.
 
 ### storage-6
 
@@ -213,7 +214,7 @@ When an integration suite migrates a legacy store with writers stopped and opens
 - unchanged project IDs [[storage-2](#storage-2)];
 - local alias resolution [[storage-3](#storage-3)];
 - exact intent act folds [[storage-4](#storage-4)];
-- core preferences and viewed markers [[storage-5](#storage-5)];
+- core preferences, viewed markers, and session tuning [[storage-5](#storage-5)];
 - session association after registration and restoration of existing project IDs [[storage-6](#storage-6)];
 - shared module path resolution [[storage-7](#storage-7)];
 - library rebuilding from retained sources [[storage-8](#storage-8)];

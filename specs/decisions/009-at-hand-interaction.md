@@ -7,6 +7,9 @@
 
 Accepted; the profile-popover wording is amended by [DR-019](019-inline-agent-configuration.md) — the at-hand rule stands with the agent editor as its target.
 
+Amended by [DR-067](067-tuning-for-one-conversation.md): an in-place editor may write a scope that is not the default, naming the scope it writes, so the consequence below that one `config.edit` operation keeps the popovers consistent no longer covers every in-place editor.
+The at-hand rule itself stands, with one more primary flow inside Sessions.
+
 ## Context
 
 - The owner's review (2026-07-11): configuring the captain jumped to Settings mid-conversation — an interruption.
