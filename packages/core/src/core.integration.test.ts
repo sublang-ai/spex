@@ -1641,6 +1641,7 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
     { type: "turn_started", turnId: 1, turn: { id: 1, prompt: "first terminal turn" }, timestamp: 2000 },
     { type: "captain_prompt", turnId: 1, prompt: "routing", visibility: "hidden", timestamp: 3000 },
     { type: "captain_reply", turnId: 1, text: "first reply", timestamp: 4000 },
+    { type: "captain_finished", turnId: 1, visibility: "hidden", timestamp: 4500, result: { status: "ok", turnId: 1 } },
     usage(1, 5000, 10, 4),
     { type: "turn_finished", turnId: 1, timestamp: 6000 },
   ];
@@ -1648,33 +1649,34 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   const line = (seq: number, record: Record<string, unknown>) => JSON.stringify({ v: 1, seq, record });
   // Only the stream changes. The parseable last record is deliberately
   // not newline-terminated, just as a reader can catch an append.
-  appendFileSync(stream, firstTurn.map((record, index) => line(index + 2, record)).join("\n") + "\n" + line(7, secondStart));
+  appendFileSync(stream, firstTurn.map((record, index) => line(index + 2, record)).join("\n") + "\n" + line(8, secondStart));
   // Continuing directory activity must not postpone this stream's
   // subscriber updates until the writer goes quiet.
   const activity = setInterval(() => writeFileSync(malformed, malformedBefore), 25);
   try {
     await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.turns === 1);
-    await client.waitFor((message) => message.type === "record" && message.sessionId === sessionId && message.seq === 6);
+    await client.waitFor((message) => message.type === "record" && message.sessionId === sessionId && message.seq === 7);
   } finally {
     clearInterval(activity);
   }
   const first = (await client.expectOk("session.list", {})).find((session) => session.id === sessionId);
   assert.equal(first?.title, "first terminal turn");
   assert.equal(first?.turns, 1, "the unterminated second turn is not read");
+  assert.deepEqual(first?.agentActiveMs, { captain: 1500 });
   const firstHistory = await client.expectOk("history.get", { sessionId });
-  assert.deepEqual(firstHistory.records.map((entry) => entry.seq), [1, 2, 4, 5, 6]);
-  assert.deepEqual(client.records("session").map((entry) => entry.seq), [2, 4, 5, 6]);
-  assert.deepEqual(client.records("debug").map((entry) => entry.seq), [3]);
+  assert.deepEqual(firstHistory.records.map((entry) => entry.seq), [1, 2, 4, 6, 7]);
+  assert.deepEqual(client.records("session").map((entry) => entry.seq), [2, 4, 6, 7]);
+  assert.deepEqual(client.records("debug").map((entry) => entry.seq), [3, 5]);
   assert.equal((await client.expectOk("usage.get", { sessionId })).inputTokens, 10);
 
   appendFileSync(stream, "\n");
   await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.turns === 2);
-  await client.waitFor((message) => message.type === "record" && message.sessionId === sessionId && message.seq === 7);
-  assert.equal((await client.expectOk("history.get", { sessionId })).records.at(-1)?.seq, 7);
+  await client.waitFor((message) => message.type === "record" && message.sessionId === sessionId && message.seq === 8);
+  assert.equal((await client.expectOk("history.get", { sessionId })).records.at(-1)?.seq, 8);
   const secondEnd = [usage(2, 8000, 6, 2), { type: "turn_finished", turnId: 2, timestamp: 9000 }];
-  appendFileSync(stream, secondEnd.map((record, index) => line(index + 8, record)).join("\n") + "\n");
+  appendFileSync(stream, secondEnd.map((record, index) => line(index + 9, record)).join("\n") + "\n");
   await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.endedAt === 9000);
-  await client.waitFor((message) => message.type === "record" && message.sessionId === sessionId && message.seq === 9);
+  await client.waitFor((message) => message.type === "record" && message.sessionId === sessionId && message.seq === 10);
   const completeHistory = await client.expectOk("history.get", { sessionId });
   const expectedUsage = await client.expectOk("usage.get", { sessionId });
   assert.equal(expectedUsage.inputTokens, 16);
@@ -1689,8 +1691,11 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
     await client.expectOk("project.register", { path: projectDir });
     assert.deepEqual(await client.expectOk("usage.get", { sessionId }), expectedUsage);
     assert.deepEqual(await client.expectOk("history.get", { sessionId }), completeHistory);
+    const rescanned = (await client.expectOk("session.list", {}))
+      .find((session) => session.id === sessionId);
+    assert.deepEqual(rescanned?.agentActiveMs, { captain: 1500 });
   }
-  assert.deepEqual(client.records("session").map((entry) => entry.seq), [2, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(client.records("session").map((entry) => entry.seq), [2, 4, 6, 7, 8, 9, 10]);
   assert.equal(client.messages.filter((message) => message.type === "session.state").length, announced);
 
   // A replacement is a new readable history, not a second addition to
@@ -1698,7 +1703,9 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   const replacement = [
     opening,
     { ...firstTurn[0], turn: { id: 1, prompt: "replaced terminal history" } },
-    ...firstTurn.slice(1),
+    ...firstTurn.slice(1, 3),
+    { ...firstTurn[3], timestamp: 5500 },
+    ...firstTurn.slice(4),
   ];
   writeFileSync(stream, replacement.map((record, index) => line(index + 1, record)).join("\n") + "\n");
   await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.title === "replaced terminal history");
@@ -1707,10 +1714,11 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   assert.ok(resetIndex >= 0 && resetIndex < stateIndex, "history replacement is announced before its summary");
   const replaced = (await client.expectOk("session.list", {})).find((session) => session.id === sessionId);
   assert.equal(replaced?.turns, 1);
+  assert.deepEqual(replaced?.agentActiveMs, { captain: 2500 });
   assert.equal((await client.expectOk("usage.get", { sessionId })).inputTokens, 10);
   const replacedHistory = await client.expectOk("history.get", { sessionId });
-  assert.deepEqual(replacedHistory.records.map((entry) => entry.seq), [1, 2, 4, 5, 6]);
-  assert.deepEqual(client.records("session").map((entry) => entry.seq), [2, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(replacedHistory.records.map((entry) => entry.seq), [1, 2, 4, 6, 7]);
+  assert.deepEqual(client.records("session").map((entry) => entry.seq), [2, 4, 6, 7, 8, 9, 10]);
 
   const streamAfterExternalWrites = readFileSync(stream, "utf8");
   client.close();
@@ -1998,6 +2006,9 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   await client.waitFor((message) => message.type === "record" && message.sessionId === native.id && message.record.type === "turn_finished");
   await client.waitFor((m) => m.type === "session.state" && m.session.id === native.id && m.session.turns === 1 && !m.session.turnActive && !m.session.live);
   const nativeUsage = await client.expectOk("usage.get", { sessionId: native.id });
+  const nativeActive = (await client.expectOk("session.list", {}))
+    .find((session) => session.id === native.id)?.agentActiveMs;
+  assert.ok(nativeActive, "the known native turn establishes an active-time fold");
   client.close();
   await service.stop();
 
@@ -2055,6 +2066,8 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   assert.equal(nativeInfo?.failed, false);
   assert.equal(nativeInfo?.streamIncompleteAfterSeq, undefined);
   assert.equal(nativeInfo?.continuable, true);
+  assert.deepEqual(nativeInfo?.agentActiveMs, nativeActive);
+  assert.ok(!Object.hasOwn(nativeInfo?.agentActiveMs ?? {}, "not-a-player"));
   assert.equal(JSON.parse(readFileSync(join(sessionsDir, `${native.id}.json`), "utf8")).replay.incomplete, false);
   assert.deepEqual(await client.expectOk("usage.get", { sessionId: native.id }), nativeUsage);
   const withoutEnvelopeVersion = ({ v: _v, ...entry }: { v: number }) => entry;
@@ -2068,6 +2081,7 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   assert.equal(foreignInfo?.turns, 1);
   assert.equal(foreignInfo?.failed, false);
   assert.deepEqual(foreignInfo?.players, []);
+  assert.equal(foreignInfo?.agentActiveMs, undefined);
   assert.equal(foreignInfo?.createdAt, 1000);
   assert.equal(foreignInfo?.endedAt, 2000);
   const opaqueInfo = sessions.find((session) => session.id === opaqueId);

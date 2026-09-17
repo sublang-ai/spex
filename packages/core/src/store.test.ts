@@ -562,17 +562,18 @@ test("a lease-free shared read serves only the complete prefix and mutates nothi
 test("shared stream failure preserves the incomplete marker across Store restart", async () => {
   const dir = tempRoot(); const store = new Store({ dir });
   const lease = await sharedSession(store);
-  await lease.append({ type: "captain_status", turnId: 1, timestamp: 10, message: "durable" });
+  await lease.append({ type: "player_prompt", turnId: 1, timestamp: 10, playerId: "dev.coder", prompt: "measure" });
   const file = join(dir, "sessions", `${SESSION}.records.jsonl`);
   const prefix = readFileSync(file);
   chmodSync(file, 0o644);
-  await assert.rejects(() => lease.append({ type: "captain_status", turnId: 1, timestamp: 11, message: "memory-only" }));
+  await assert.rejects(() => lease.append({ type: "player_finished", turnId: 1, timestamp: 11, playerId: "dev.coder", result: { status: "ok", playerId: "dev.coder", turnId: 1 } }));
   chmodSync(file, 0o600);
   assert.equal(lease.streamStatus().incomplete, true);
   await lease.release(); store.close();
   assert.deepEqual(readFileSync(file), prefix);
   const reopened = new Store({ dir }); await reopened.initializeSessions();
   assert.equal(reopened.describeSession(SESSION)?.streamIncompleteAfterSeq, 1, "failure retains the last fsynced checkpoint, not merely readable bytes");
+  assert.equal(reopened.describeSession(SESSION)?.agentActiveMs, undefined);
   assert.equal(reopened.describeSession(SESSION)?.continuable, undefined);
   assert.deepEqual(reopened.getRecords(SESSION).map((record) => record.seq), [1, 2]);
   reopened.close();
