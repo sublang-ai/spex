@@ -25,6 +25,7 @@ import { useAppStore } from "../state/store.js";
 import { causePhrase } from "../lib/failure-catalogue.js";
 import { absoluteTitle, duration, relativeAge } from "../lib/time.js";
 import { RunningMark } from "./RunningMark.js";
+import { QueueStandingPhrase } from "./QueuedIntentPresentation.js";
 import {
   ProjectGroup,
   TONE_CHIP,
@@ -103,16 +104,14 @@ export function statsLine(stats: IntentStats): string {
   return parts.join(" · ");
 }
 
-/** The globally next unblocked queue head, first by sidebar order
+/** The globally published next queue row, first by sidebar order
  * (dashboard-8): the all-clear state's pull. */
-function nextUnblockedHead(
+function publishedNextHead(
   intents: DerivedIntent[],
   projects: ProjectInfo[],
 ): DerivedIntent | undefined {
   for (const project of projects) {
-    const head = queueOf(intents, project.id).find(
-      (derived) => !derived.blockedBy,
-    );
+    const head = queueOf(intents, project.id).find((derived) => derived.next);
     if (head) return head;
   }
   return undefined;
@@ -466,7 +465,9 @@ export function DashboardSurface({
         !summoned.has(session.id),
     ),
   );
-  const nextHead = nextUnblockedHead(intents, filtered);
+  // The filter hides entries and groups; it never changes the global
+  // queue reading (dashboard-32).
+  const nextHead = publishedNextHead(intents, projects);
   const projectName = (projectId: string) =>
     projects.find((project) => project.id === projectId)?.name ?? projectId;
 
@@ -612,15 +613,27 @@ export function DashboardSurface({
                     <span className="text-neutral-500">
                       ({projectName(nextHead.intent.projectId)})
                     </span>
+                    {nextHead.next ? (
+                      <>
+                        {" "}
+                        <QueueStandingPhrase
+                          schedule={nextHead.next}
+                          testId="all-clear-standing"
+                          className="text-neutral-500"
+                        />
+                      </>
+                    ) : null}
                   </span>
-                  <button
-                    type="button"
-                    data-testid="all-clear-start"
-                    onClick={() => void onStartIntent(nextHead.intent)}
-                    className="min-h-6 shrink-0 rounded bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
-                  >
-                    Start
-                  </button>
+                  {nextHead.next?.manualStart ? (
+                    <button
+                      type="button"
+                      data-testid="all-clear-start"
+                      onClick={() => void onStartIntent(nextHead.intent)}
+                      className="min-h-6 shrink-0 rounded bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
+                    >
+                      Start
+                    </button>
+                  ) : null}
                 </>
               ) : (
                 <span className="flex-1 text-center">

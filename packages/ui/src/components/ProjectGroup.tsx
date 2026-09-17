@@ -49,6 +49,10 @@ import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { RecordRow } from "./RecordRow.js";
 import { ResizableFrame } from "./ResizableFrame.js";
+import {
+  QueuedMark,
+  QueueStandingPhrase,
+} from "./QueuedIntentPresentation.js";
 
 // ---------------------------------------------------------------------------
 // Copy and formatting
@@ -921,7 +925,6 @@ function QueueRow({
   derived,
   index,
   queue,
-  isNext,
   highlighted,
   menuOpen,
   projects,
@@ -940,7 +943,6 @@ function QueueRow({
   derived: DerivedIntent;
   index: number;
   queue: DerivedIntent[];
-  isNext: boolean;
   highlighted: boolean;
   /** Whether this row's menu is the band's one open menu. */
   menuOpen: boolean;
@@ -973,6 +975,10 @@ function QueueRow({
   const intent = derived.intent;
   const title = firstLine(intent.text);
   const blocked = derived.blockedBy;
+  // Presence is the core-published Next marker (core-service-107).
+  // A blocked row cannot be next; fail closed if a malformed reply
+  // ever combines the two.
+  const schedule = blocked ? undefined : derived.next;
   const blockedForeign =
     blocked && blocked.projectId !== intent.projectId
       ? (projects.find((p) => p.id === blocked.projectId)?.name ??
@@ -1039,7 +1045,7 @@ function QueueRow({
       ref={rowRef}
       data-testid={`upnext-row-${intent.id}`}
       data-intent-id={intent.id}
-      data-next={isNext ? "true" : undefined}
+      data-next={schedule ? "true" : undefined}
       data-blocked={blocked ? "true" : undefined}
       data-highlight={highlighted ? "true" : undefined}
       draggable
@@ -1052,47 +1058,48 @@ function QueueRow({
       tabIndex={0}
       onKeyDown={onKeyDown}
       title="Drag, Alt+↑/↓, or the row menu reorders"
-      className={`group relative flex min-h-6 items-center gap-2 rounded px-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+      className={`@container group relative flex min-h-6 items-center gap-2 rounded px-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
         highlighted ? "ring-2 ring-brand-400" : ""
       }`}
     >
       <Grip />
-      <span
-        className={`min-w-0 flex-1 truncate ${isNext ? "font-medium" : ""} ${
-          blocked ? "text-neutral-500" : ""
-        }`}
-        title={intent.text}
+      <div
+        data-testid={`upnext-text-${intent.id}`}
+        className="flex min-w-0 flex-1 flex-col @md:flex-row @md:items-baseline @md:gap-2"
       >
-        {title}
-      </span>
-      {blocked ? (
         <span
-          className="min-w-0 max-w-[40%] truncate text-xs text-neutral-500"
-          data-testid={`upnext-blocked-${intent.id}`}
-          title={`after ${blocked.title}${blockedForeign ? ` (${blockedForeign})` : ""}`}
+          data-testid={`upnext-title-${intent.id}`}
+          className={`min-w-0 truncate @md:flex-1 ${schedule ? "font-medium" : ""} ${
+            blocked ? "text-neutral-500" : ""
+          }`}
+          title={intent.text}
         >
-          after {blocked.title}
-          {blockedForeign ? ` (${blockedForeign})` : ""}
+          {title}
         </span>
-      ) : null}
-      {isNext ? (
+        {blocked ? (
+          <span
+            className="min-w-0 truncate text-xs text-neutral-500 @md:max-w-[45%]"
+            data-testid={`upnext-blocked-${intent.id}`}
+            title={`after ${blocked.title}${blockedForeign ? ` (${blockedForeign})` : ""}`}
+          >
+            after {blocked.title}
+            {blockedForeign ? ` (${blockedForeign})` : ""}
+          </span>
+        ) : schedule ? (
+          <QueueStandingPhrase
+            schedule={schedule}
+            testId={`upnext-standing-${intent.id}`}
+            className="min-w-0 truncate text-xs text-neutral-500 @md:max-w-[45%]"
+          />
+        ) : null}
+      </div>
+      <QueuedMark testId={`upnext-queued-${intent.id}`} />
+      {schedule?.manualStart ? (
         <button
           type="button"
           data-testid={`upnext-start-${intent.id}`}
           onClick={onStart}
           className="min-h-6 shrink-0 rounded bg-brand-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
-        >
-          Start
-        </button>
-      ) : blocked ? (
-        // Disablement earned, not category color (DR-026 §2): the
-        // reason rides the control.
-        <button
-          type="button"
-          disabled
-          data-testid={`upnext-start-${intent.id}`}
-          title={`Blocked — waiting on “${blocked.title}”`}
-          className="min-h-6 shrink-0 rounded bg-neutral-200 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500"
         >
           Start
         </button>
@@ -1228,8 +1235,6 @@ function UpNextBand({
   // removal (dashboard-29).
   const { removed, undoRef, show, dismiss } = useUndoLine<Removal>();
 
-  const nextId = queue.find((derived) => !derived.blockedBy)?.intent.id;
-
   const add = () => {
     const text = draft.trim();
     if (!text) return;
@@ -1330,7 +1335,6 @@ function UpNextBand({
               derived={derived}
               index={index}
               queue={queue}
-              isNext={derived.intent.id === nextId}
               highlighted={derived.intent.id === highlightId}
               menuOpen={menuFor === derived.intent.id}
               projects={projects}
@@ -1408,23 +1412,37 @@ function UpNextBand({
           )}
         </div>
       ) : null}
-      <textarea
-        ref={addRef}
-        rows={1}
-        value={draft}
-        data-testid={`add-intent-${project.id}`}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            add();
-          }
-        }}
-        placeholder="Add intent…"
-        aria-label={`Add an intent to ${project.name}`}
-        className="min-h-6 w-full resize-none rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none [field-sizing:content] max-h-[max(40vh,1.75rem)] dark:border-neutral-700"
-      />
+      <div
+        data-testid={`add-intent-row-${project.id}`}
+        className="flex min-w-0 items-start gap-2"
+      >
+        <textarea
+          ref={addRef}
+          rows={1}
+          value={draft}
+          data-testid={`add-intent-${project.id}`}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              add();
+            }
+          }}
+          placeholder="Add intent…"
+          aria-label={`Add an intent to ${project.name}`}
+          className="min-h-6 min-w-0 flex-1 resize-none rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none [field-sizing:content] max-h-[max(40vh,1.75rem)] dark:border-neutral-700"
+        />
+        <button
+          type="button"
+          data-testid={`queue-intent-${project.id}`}
+          disabled={!draft.trim()}
+          onClick={add}
+          className="min-h-6 shrink-0 rounded bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700 disabled:bg-neutral-200 disabled:text-neutral-500 dark:bg-brand-500 dark:hover:bg-brand-400 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500"
+        >
+          Queue
+        </button>
+      </div>
     </div>
   );
 }

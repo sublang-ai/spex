@@ -30,6 +30,7 @@ import type {
   IntentInfo,
   IntentSource,
   LedgerState,
+  QueueSchedule,
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
@@ -41,6 +42,7 @@ import { initialSessionView } from "../state/reducer.js";
 afterEach(() => {
   cleanup();
   setClientForTests(undefined);
+  vi.restoreAllMocks();
 });
 
 const commandMock = vi.fn();
@@ -64,6 +66,10 @@ const EMPTY_TREE: SpecTreeState = {
 };
 
 const EMPTY_LEDGER: LedgerState = { intents: [], attention: [], badge: 0 };
+const MANUAL_READY: QueueSchedule = {
+  standing: "manual-ready",
+  manualStart: true,
+};
 
 function info(
   over: Partial<IntentInfo> & { id: string; projectId: string; text: string },
@@ -536,7 +542,7 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
 
   test("a verdict hands focus on: the next entry, then the all-clear Start (dashboard-4, DR-010 §6)", async () => {
     const current = ledgerMock({
-      intents: [q("n1", "p1", "Polish README")],
+      intents: [q("n1", "p1", "Polish README", { next: MANUAL_READY })],
       attention: [ATTENTION[3], ATTENTION[4]],
       badge: 2,
     });
@@ -605,16 +611,17 @@ describe("dashboard-8: no false all-clear before the ledger is read", () => {
   });
 });
 
-describe("dashboard-8: the all-clear names the globally next head", () => {
-  test("the first unblocked head by sidebar order carries Start", () => {
-    // p1 holds only a blocked intent, so p2's head is globally next.
+describe("dashboard-8: the all-clear names the globally published next", () => {
+  test("the first published next by sidebar order carries Start", () => {
+    // Ledger order is deliberately reversed: project/sidebar order owns
+    // the global reading when more than one project publishes a next.
     seed({
       ledger: {
         intents: [
-          q("b1", "p1", "Wait on upstream", {
-            blockedBy: { intentId: "n1", title: "Polish README", projectId: "p2" },
+          q("beta-next", "p2", "Polish README\nwith details", {
+            next: MANUAL_READY,
           }),
-          q("n1", "p2", "Polish README\nwith details"),
+          q("alpha-next", "p1", "Ship alpha", { next: MANUAL_READY }),
         ],
         attention: [],
         badge: 0,
@@ -623,11 +630,12 @@ describe("dashboard-8: the all-clear names the globally next head", () => {
     const { onStartIntent } = renderSurface();
 
     const allClear = screen.getByTestId("attention-all-clear");
-    expect(allClear.textContent).toContain("Polish README");
-    expect(allClear.textContent).toContain("beta");
+    expect(allClear.textContent).toContain("Ship alpha");
+    expect(allClear.textContent).toContain("alpha");
+    expect(allClear.textContent).not.toContain("Polish README");
     fireEvent.click(screen.getByTestId("all-clear-start"));
     expect(onStartIntent).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "n1", text: "Polish README\nwith details" }),
+      expect.objectContaining({ id: "alpha-next", text: "Ship alpha" }),
     );
   });
 
@@ -649,6 +657,32 @@ describe("dashboard-8: the all-clear names the globally next head", () => {
     ).toContain("All clear — nothing waiting");
     expect(screen.queryByTestId("all-clear-start")).toBeNull();
   });
+
+  test("the project filter never changes the global next reading", () => {
+    seed({
+      ledger: {
+        intents: [
+          q("alpha-next", "p1", "Alpha goes first", {
+            next: MANUAL_READY,
+          }),
+          q("beta-next", "p2", "Beta follows", { next: MANUAL_READY }),
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    renderSurface();
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by project" }), {
+      target: { value: "p2" },
+    });
+
+    expect(screen.queryByTestId("project-group-p1")).toBeNull();
+    expect(screen.getByTestId("project-group-p2")).toBeTruthy();
+    const allClear = screen.getByTestId("attention-all-clear");
+    expect(allClear.textContent).toContain("Alpha goes first");
+    expect(allClear.textContent).toContain("alpha");
+    expect(allClear.textContent).not.toContain("Beta follows");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -658,7 +692,7 @@ describe("dashboard-8: the all-clear names the globally next head", () => {
 describe("dashboard-26/29: groups and the queue band", () => {
   const QUEUE_LEDGER: LedgerState = {
     intents: [
-      q("q1", "p1", "First thing"),
+      q("q1", "p1", "First thing", { next: MANUAL_READY }),
       q("q2", "p1", "Blocked thing", {
         blockedBy: { intentId: "x1", title: "Upstream fix", projectId: "p2" },
       }),
@@ -778,30 +812,208 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(column.className).not.toContain("overflow-y-auto");
   });
 
-  test("head emphasized with Start; blocked visible, disabled, reasoned", () => {
+  test("published next is emphasized; every row is Queued; blocked and later rows are inert", () => {
     seed({ ledger: QUEUE_LEDGER });
     const { onStartIntent } = renderSurface();
 
     const head = screen.getByTestId("upnext-row-q1");
     expect(head.getAttribute("data-next")).toBe("true");
+    expect(screen.getByTestId("upnext-title-q1").className).toContain(
+      "font-medium",
+    );
+    expect(screen.getByTestId("upnext-title-q3").className).not.toContain(
+      "font-medium",
+    );
     fireEvent.click(screen.getByTestId("upnext-start-q1"));
     expect(onStartIntent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "q1" }),
     );
+    for (const id of ["q1", "q2", "q3"]) {
+      expect(screen.getByTestId(`upnext-queued-${id}`).textContent).toBe(
+        "Queued",
+      );
+    }
 
     // The blocked row stays visible at its place with "after ⟨title⟩",
     // the predecessor's project named when foreign (dashboard-29).
     expect(screen.getByTestId("upnext-blocked-q2").textContent).toBe(
       "after Upstream fix (beta)",
     );
-    const blockedStart = screen.getByTestId(
-      "upnext-start-q2",
-    ) as HTMLButtonElement;
-    expect(blockedStart.disabled).toBe(true);
-    expect(blockedStart.title).toContain("Upstream fix");
+    expect(screen.queryByTestId("upnext-start-q2")).toBeNull();
+    expect(screen.getByTestId("upnext-row-q2").getAttribute("data-next")).toBeNull();
 
     // A queued row that is neither head nor blocked carries no Start.
     expect(screen.queryByTestId("upnext-start-q3")).toBeNull();
+    expect(screen.queryByTestId("upnext-standing-q3")).toBeNull();
+  });
+
+  const standingCases: Array<{
+    name: string;
+    schedule: QueueSchedule;
+    phrase?: string;
+  }> = [
+    {
+      name: "active work",
+      schedule: { standing: "after-current-work", manualStart: false },
+      phrase: "after current work",
+    },
+    {
+      name: "question park",
+      schedule: { standing: "question-park", manualStart: false },
+      phrase: "waiting — your reply",
+    },
+    {
+      name: "failure park",
+      schedule: {
+        standing: "failure-park",
+        manualStart: false,
+        cause: { code: "commit-missing" },
+      },
+      phrase: "waiting — current work failed — Committed nothing",
+    },
+    {
+      name: "previous failure",
+      schedule: {
+        standing: "failed",
+        manualStart: true,
+        cause: { code: "commit-missing" },
+      },
+      phrase: "waiting — previous work failed — Committed nothing",
+    },
+    {
+      name: "stopped work",
+      schedule: { standing: "stopped", manualStart: true },
+      phrase: "waiting — previous work stopped",
+    },
+    {
+      name: "manual ready",
+      schedule: MANUAL_READY,
+    },
+  ];
+
+  test.each(standingCases)(
+    "dashboard-59/60: $name has one shared row and all-clear presentation",
+    ({ schedule, phrase }) => {
+      seed({
+        projects: [PROJECTS[0]],
+        ledger: {
+          intents: [
+            q("next", "p1", "The published next", { next: schedule }),
+            q("later", "p1", "Later queued work"),
+          ],
+          attention: [],
+          badge: 0,
+        },
+      });
+      renderSurface();
+
+      const next = screen.getByTestId("upnext-row-next");
+      expect(next.getAttribute("data-next")).toBe("true");
+      expect(screen.getByTestId("upnext-queued-next").textContent).toBe(
+        "Queued",
+      );
+      expect(screen.getByTestId("upnext-queued-later").textContent).toBe(
+        "Queued",
+      );
+      expect(screen.getByTestId("upnext-row-later").getAttribute("data-next")).toBeNull();
+      expect(screen.queryByTestId("upnext-start-later")).toBeNull();
+      expect(screen.queryByTestId("upnext-standing-later")).toBeNull();
+
+      const rowStanding = screen.queryByTestId("upnext-standing-next");
+      const allClearStanding = screen.queryByTestId("all-clear-standing");
+      if (phrase) {
+        expect(rowStanding?.textContent).toBe(phrase);
+        expect(rowStanding?.getAttribute("title")).toBe(phrase);
+        expect(allClearStanding?.textContent).toBe(phrase);
+      } else {
+        expect(rowStanding).toBeNull();
+        expect(allClearStanding).toBeNull();
+      }
+      expect(screen.queryByTestId("upnext-start-next") !== null).toBe(
+        schedule.manualStart,
+      );
+      expect(screen.queryByTestId("all-clear-start") !== null).toBe(
+        schedule.manualStart,
+      );
+      expect(screen.getByTestId("attention-all-clear").textContent).toContain(
+        "The published next",
+      );
+    },
+  );
+
+  test("the published marker, not a local first-eligible guess, chooses Next", () => {
+    seed({
+      projects: [PROJECTS[0]],
+      ledger: {
+        intents: [
+          q("earlier", "p1", "Earlier but not published"),
+          q("published", "p1", "Core-published next", {
+            next: MANUAL_READY,
+          }),
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    renderSurface();
+
+    expect(screen.getByTestId("upnext-row-earlier").getAttribute("data-next")).toBeNull();
+    expect(screen.queryByTestId("upnext-start-earlier")).toBeNull();
+    expect(screen.getByTestId("upnext-row-published").getAttribute("data-next")).toBe("true");
+    expect(screen.getByTestId("attention-all-clear").textContent).toContain(
+      "Core-published next",
+    );
+  });
+
+  test("the title and standing are the row's one responsive slack owner", () => {
+    const phrase = "waiting — previous work stopped";
+    seed({
+      projects: [PROJECTS[0]],
+      ledger: {
+        intents: [
+          q("fit", "p1", "A long queued title\nwith retained detail", {
+            next: { standing: "stopped", manualStart: true },
+          }),
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    renderSurface();
+
+    const row = screen.getByTestId("upnext-row-fit");
+    const text = screen.getByTestId("upnext-text-fit");
+    const title = screen.getByTestId("upnext-title-fit");
+    const standing = screen.getByTestId("upnext-standing-fit");
+    expect(row.className).toContain("@container");
+    expect(text.className).toContain("min-w-0");
+    expect(text.className).toContain("flex-1");
+    expect(text.className).toContain("flex-col");
+    expect(text.className).toContain("@md:flex-row");
+    expect(
+      Array.from(row.children).filter((child) =>
+        child.getAttribute("class")?.split(" ").includes("flex-1"),
+      ),
+    ).toEqual([text]);
+    expect(title.className).toContain("truncate");
+    expect(title.getAttribute("title")).toBe(
+      "A long queued title\nwith retained detail",
+    );
+    expect(standing.className).toContain("truncate");
+    expect(standing.className).toContain("@md:max-w-[45%]");
+    expect(standing.getAttribute("title")).toBe(phrase);
+    expect(screen.getByTestId("upnext-queued-fit").className).toContain(
+      "shrink-0",
+    );
+    expect(screen.getByTestId("upnext-start-fit").className).toContain(
+      "shrink-0",
+    );
+    expect(screen.getByTestId("upnext-menu-fit").className).toContain(
+      "shrink-0",
+    );
+    expect(row.querySelector("svg")?.getAttribute("class")).toContain(
+      "shrink-0",
+    );
   });
 
   test("Alt+Arrow reorders the focused row through intent.move", async () => {
@@ -1156,7 +1368,7 @@ describe("dashboard-26/29: groups and the queue band", () => {
     ).toBe(true);
   });
 
-  test("the inline add row grows for multiple lines, captures on Enter, and reveals the row", async () => {
+  test("the inline Queue action captures a later row and reveals it without a standing", async () => {
     let current: LedgerState = { ...QUEUE_LEDGER };
     commandMock.mockImplementation(async (type: string, fields) => {
       if (type === "intent.queue") {
@@ -1176,10 +1388,17 @@ describe("dashboard-26/29: groups and the queue band", () => {
     seed({ ledger: QUEUE_LEDGER });
     renderSurface();
 
+    const addRow = screen.getByTestId("add-intent-row-p1");
     const add = screen.getByTestId("add-intent-p1") as HTMLTextAreaElement;
+    const queue = within(addRow).getByRole("button", { name: "Queue" });
     expect(add.tagName).toBe("TEXTAREA");
     expect(add.rows).toBe(1);
     expect(add.className).toContain("resize-none");
+    expect(add.className).toContain("min-w-0");
+    expect(add.className).toContain("flex-1");
+    expect(queue.className).toContain("shrink-0");
+    expect((queue as HTMLButtonElement).disabled).toBe(true);
+    expect(within(addRow).queryByRole("button", { name: "Start" })).toBeNull();
     Object.defineProperty(add, "scrollHeight", {
       configurable: true,
       value: 64,
@@ -1192,8 +1411,10 @@ describe("dashboard-26/29: groups and the queue band", () => {
     });
     expect(callsOf("intent.queue")).toEqual([]);
     fireEvent.change(add, { target: { value: "  New idea\nwith details  " } });
+    expect((queue as HTMLButtonElement).disabled).toBe(false);
+    const timerSpy = vi.spyOn(globalThis, "setTimeout");
     await act(async () => {
-      fireEvent.keyDown(add, { key: "Enter" });
+      fireEvent.click(queue);
     });
     // Captured with no source (dashboard-29's inline add).
     expect(callsOf("intent.queue")).toEqual([
@@ -1201,7 +1422,70 @@ describe("dashboard-26/29: groups and the queue band", () => {
     ]);
     const row = await screen.findByTestId("upnext-row-i-new");
     expect(row.getAttribute("data-highlight")).toBe("true");
+    expect(screen.getByTestId("upnext-queued-i-new").textContent).toBe(
+      "Queued",
+    );
+    expect(row.getAttribute("data-next")).toBeNull();
+    expect(screen.queryByTestId("upnext-standing-i-new")).toBeNull();
+    expect(screen.queryByTestId("upnext-start-i-new")).toBeNull();
+    expect(callsOf("turn.submit")).toEqual([]);
     expect(add.value).toBe("");
+    const clearHighlight = timerSpy.mock.calls.find(
+      ([, delay]) => delay === 2_500,
+    )?.[0];
+    expect(clearHighlight).toBeTypeOf("function");
+    act(() => {
+      (clearHighlight as () => void)();
+    });
+    expect(row.getAttribute("data-highlight")).toBeNull();
+    timerSpy.mockRestore();
+  });
+
+  test("Enter is the same Queue gesture and an idle capture renders manual-ready", async () => {
+    let current = EMPTY_LEDGER;
+    commandMock.mockImplementation(async (type: string, fields) => {
+      if (type === "intent.queue") {
+        const input = fields as { projectId: string; text: string };
+        const intent = info({
+          id: "i-first",
+          projectId: input.projectId,
+          text: input.text,
+        });
+        current = {
+          intents: [{ intent, state: "queued", next: MANUAL_READY }],
+          attention: [],
+          badge: 0,
+        };
+        return intent;
+      }
+      if (type === "ledger.get") return current;
+      return {};
+    });
+    seed({ projects: [PROJECTS[0]], ledger: current });
+    renderSurface();
+
+    const add = screen.getByTestId("add-intent-p1") as HTMLTextAreaElement;
+    fireEvent.change(add, { target: { value: "  First queued work  " } });
+    await act(async () => {
+      fireEvent.keyDown(add, { key: "Enter" });
+    });
+
+    expect(callsOf("intent.queue")).toEqual([
+      { projectId: "p1", text: "First queued work" },
+    ]);
+    const row = await screen.findByTestId("upnext-row-i-first");
+    expect(row.getAttribute("data-highlight")).toBe("true");
+    expect(row.getAttribute("data-next")).toBe("true");
+    expect(screen.getByTestId("upnext-queued-i-first").textContent).toBe(
+      "Queued",
+    );
+    expect(screen.getByTestId("upnext-start-i-first")).toBeTruthy();
+    expect(screen.queryByTestId("upnext-standing-i-first")).toBeNull();
+    expect(screen.getByTestId("attention-all-clear").textContent).toContain(
+      "First queued work",
+    );
+    expect(screen.getByTestId("all-clear-start")).toBeTruthy();
+    expect(callsOf("turn.submit")).toEqual([]);
   });
 });
 
@@ -1791,6 +2075,75 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
       "intents/003-half.md",
       "sources-toggle-p1",
     );
+  });
+
+  test("a Source has one Queue gesture and reveals a queued-only tail row", async () => {
+    const existing = q("existing", "p1", "Already next", {
+      next: MANUAL_READY,
+    });
+    let current: LedgerState = {
+      intents: [existing],
+      attention: [],
+      badge: 0,
+    };
+    commandMock.mockImplementation(async (type: string, fields) => {
+      if (type === "intent.queue") {
+        const input = fields as {
+          projectId: string;
+          text: string;
+          source: IntentSource;
+        };
+        const intent = info({
+          id: "captured-issue",
+          projectId: input.projectId,
+          text: input.text,
+          source: input.source,
+        });
+        current = {
+          ...current,
+          intents: [...current.intents, { intent, state: "queued" }],
+        };
+        return intent;
+      }
+      if (type === "ledger.get") return current;
+      return {};
+    });
+    seedSources({ ledger: current });
+    renderSurface();
+
+    const issue = screen.getByTestId("source-issue-p1-7");
+    const queue = within(issue).getByRole("button", {
+      name: /Queue issue #7/,
+    });
+    expect(within(issue).queryByRole("button", { name: /Start/ })).toBeNull();
+    await act(async () => fireEvent.click(queue));
+
+    const captured = await screen.findByTestId("upnext-row-captured-issue");
+    expect(captured.getAttribute("data-highlight")).toBe("true");
+    expect(captured.getAttribute("data-next")).toBeNull();
+    expect(screen.getByTestId("upnext-queued-captured-issue").textContent).toBe(
+      "Queued",
+    );
+    expect(screen.queryByTestId("upnext-standing-captured-issue")).toBeNull();
+    expect(screen.queryByTestId("upnext-start-captured-issue")).toBeNull();
+    expect(screen.getByTestId("upnext-row-existing").getAttribute("data-next")).toBe(
+      "true",
+    );
+    const capturedSource = screen.getByTestId("source-issue-p1-7");
+    expect(
+      within(capturedSource).getByTestId("source-issue-p1-7-state").textContent,
+    ).toBe("queued");
+    expect(within(capturedSource).queryByRole("button", { name: /Queue/ })).toBeNull();
+    expect(callsOf("turn.submit")).toEqual([]);
+
+    // Once the captured intent closes, its artifact regains Queue.
+    current = { ...current, intents: [existing] };
+    act(() => useAppStore.setState({ ledger: current }));
+    expect(
+      within(screen.getByTestId("source-issue-p1-7")).getByRole("button", {
+        name: /Queue issue #7/,
+      }),
+    ).toBeTruthy();
   });
 
   test("a captured artifact swaps its Queue control for the intent's state and regains it on close", () => {
@@ -2579,6 +2932,32 @@ function renderOverview(onOpenIntent = vi.fn()) {
 }
 
 describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
+  test("the shared project group carries the published standing in Overview", () => {
+    seed({
+      projects: [PROJECTS[0]],
+      ledger: {
+        intents: [
+          q("overview-next", "p1", "Answer before continuing", {
+            next: { standing: "question-park", manualStart: false },
+          }),
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    const { overview } = renderOverview();
+
+    expect(
+      within(overview).getByTestId("upnext-queued-overview-next").textContent,
+    ).toBe("Queued");
+    expect(
+      within(overview).getByTestId("upnext-standing-overview-next").textContent,
+    ).toBe("waiting — your reply");
+    expect(
+      within(overview).queryByTestId("upnext-start-overview-next"),
+    ).toBeNull();
+  });
+
   test("the repository header over the project's own group, sharing the rows", async () => {
     seedSources({
       projectMeta: {

@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (task 1 completed 2026-09-17).
+In progress (tasks 1–2 completed 2026-09-17).
 
 ## Intent
 
@@ -16,7 +16,7 @@ The spec plane is already current; any implementation evidence that changes beha
 
 - [x] The core publishes exactly one next scheduling standing per project, including manual-start availability and a structured failure cause, without storing another intent state.
 - [x] Clean attributed settlement advances once without typed trace proof, while failure, abort, an ending control, a surviving park, an after-link, or refused admission holds without retry.
-- [ ] Dashboard and Overview show every row as `Queued`, distinguish `Next`, render the shared standing with conditional Start, keep blocked and later rows inert without disabled Start, and offer one visible Queue capture action.
+- [x] Dashboard and Overview show every row as `Queued`, distinguish `Next`, render the shared standing with conditional Start, keep blocked and later rows inert without disabled Start, and offer one visible Queue capture action.
 - [ ] The resolved delivery card and Captain home use that same standing, including conditional Start and the correct Remove target when Undo restores a waiting row.
 - [ ] Core, component, and browser coverage prove the six standings, settlement races, capture positions, focus behavior, and responsive row and card fit.
 
@@ -33,3 +33,4 @@ Each task below is exactly one commit and runs its focused gate before the next 
 
 Planned: task 1 runs `npm run build -w packages/core`, `npm test -w packages/core`, and `npm run build -w packages/ui`; tasks 2 and 3 each run `npm run build -w packages/ui` and `npm test -w packages/ui`; task 4 runs `npm run build`, `npm test`, `npm run e2e`, and `spex lint`.
 Task 1 (2026-09-17): core build passed; focused ledger, session, and queue-advancement integration tests passed 67/67; the full core suite passed 316/316; the UI build passed against the extended protocol; and `spex lint` passed.
+Task 2 (2026-09-17): UI build passed; the focused Dashboard component suite passed 76/76; the full UI suite passed 675/675; and `spex lint` passed.
