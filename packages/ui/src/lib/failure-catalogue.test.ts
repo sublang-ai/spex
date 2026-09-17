@@ -118,6 +118,78 @@ describe("run-view-147: the phrases and their evidence", () => {
     expect(causeStep(cause)).toBe("Sign in to dev.coder again");
   });
 
+  test("an adapter message no pattern knows prints as itself, with no step", () => {
+    // The runtime attaches the adapter's error as `{ name, message }`
+    // (Playbook DR-063 §1). A message the mapping has not met is the
+    // only account of the failure there is, so the line carries it
+    // rather than saying nothing but who failed (run-view-147).
+    const cause = {
+      code: "player-failed",
+      evidence: {
+        roleId: "coder",
+        playerId: "dev.coder",
+        error: {
+          name: "Error",
+          message:
+            "Selected model is at capacity. Please try a different model.",
+        },
+      },
+    };
+    expect(causePhrase(cause)).toBe(
+      "dev.coder failed: Selected model is at capacity. Please try a different model.",
+    );
+    // Nothing outside Spex answers a message nothing recognized.
+    expect(causeStep(cause)).toBeUndefined();
+  });
+
+  test("a message longer than the line takes is bounded with an ellipsis", () => {
+    const phrase = causePhrase({
+      code: "player-failed",
+      evidence: {
+        roleId: "coder",
+        error: { name: "Error", message: "A".repeat(400) },
+      },
+    });
+    const said = phrase!.slice("coder failed: ".length);
+    expect(said).toHaveLength(120);
+    expect(said).toBe(`${"A".repeat(119)}…`);
+  });
+
+  test("the judge's failure carries what the adapter said beside its reason", () => {
+    // The reason names the step that failed; the adapter's message is
+    // why it did, under the same bound (run-view-147).
+    expect(
+      causePhrase({
+        code: "judge-failed",
+        evidence: {
+          reason: "judge transport failed",
+          error: {
+            name: "Error",
+            message: "Selected model is at capacity.",
+          },
+        },
+      }),
+    ).toBe(
+      "Couldn't judge the result: judge transport failed — Selected model is at capacity.",
+    );
+    // A known message still reads in its plain phrase, and an evidence
+    // carrying no error leaves the reason standing alone.
+    expect(
+      causePhrase({
+        code: "judge-failed",
+        evidence: { reason: "judge transport failed", error: "HTTP 429" },
+      }),
+    ).toBe(
+      "Couldn't judge the result: judge transport failed — The provider rate-limited the call — it can be retried",
+    );
+    expect(
+      causePhrase({
+        code: "judge-failed",
+        evidence: { reason: "judge transport failed" },
+      }),
+    ).toBe("Couldn't judge the result: judge transport failed");
+  });
+
   test("a child's failure is phrased by the child's own cause", () => {
     expect(
       causePhrase({

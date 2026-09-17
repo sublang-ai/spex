@@ -293,6 +293,46 @@ test.describe("a run parked on real repository evidence", () => {
       "Stop /code",
     );
 
+    // The labels here are the runtime's own, and a runtime's label runs
+    // as long as its state description (DR-041, run-view-128): at the
+    // reflow floor each control still sits under the words and inside
+    // the notice's box, its label ellipsing at the control's width
+    // rather than the control growing past the notice and taking Drop
+    // out of it with it. run-view-132 measures this over Drop alone;
+    // only here are the advertised controls real. A simulated document
+    // cannot measure layout, so the evidence is here.
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await settleLayout(page);
+    expect(
+      await notice.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const words = el
+          .querySelector('[data-testid="failed-workflow-what"]')!
+          .getBoundingClientRect();
+        const controls = [...el.querySelectorAll("button")].map((button) =>
+          button.getBoundingClientRect(),
+        );
+        return {
+          // Both advertised controls and Drop, every one of them
+          // measured: a control left unweighed is one free to stray.
+          count: controls.length,
+          under: controls.every((c) => c.top >= words.bottom - 1),
+          inside: controls.every(
+            (c) => c.left >= box.left - 1 && c.right <= box.right + 1,
+          ),
+          clipped: el.scrollWidth > el.clientWidth + 1,
+        };
+      }),
+    ).toEqual({ count: 3, under: true, inside: true, clipped: false });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await setRail(page, true);
+    await settleLayout(page);
+
     // Activating one runs it as the next turn, which lands in the
     // thread under the action's own Boss-facing label, and the run
     // leaves its park with the notice.

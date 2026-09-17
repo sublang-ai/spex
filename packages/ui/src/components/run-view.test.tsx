@@ -2912,6 +2912,39 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     ).toBe("Stop /code");
   });
 
+  test("a runtime's long label is bounded by the notice and whole in its tooltip", () => {
+    // The runtime labels an action with its own state description
+    // (run-view-128, DR-041): the control that carried this one grew
+    // to 844px inside a 349px notice and pushed Drop out of the box.
+    // It now yields with the group, ellipses the label at its width,
+    // and keeps the whole of it in the tooltip — the label is still
+    // what the turn will carry, so the reader can read all of it.
+    const LABEL =
+      "Retry: Coder is running the first coding phase: a direct implementation, a new intent record, or an existing intent-record task";
+    renderFailed({
+      session: {
+        ...SESSION,
+        parked: {
+          ...PARKED_FAILURE,
+          actions: [{ id: "retry:START_CODE", label: LABEL, standing: "ready" }],
+        },
+      },
+    });
+    const control = action("retry:START_CODE");
+    // Nothing holds the control open: it shrinks to the line it wraps
+    // onto and never exceeds it.
+    expect(control.className).toContain("max-w-full");
+    expect(control.className).not.toContain("shrink-0");
+    const label = control.querySelector("span")!;
+    expect(label.className).toContain("truncate");
+    expect(label.textContent).toBe(LABEL);
+    expect(control.getAttribute("title")).toBe(LABEL);
+    // Drop keeps its own width and stays visible beside it.
+    expect(screen.getByTestId("failed-workflow-drop").className).toContain(
+      "shrink-0",
+    );
+  });
+
   test("where the summary published no controls, Drop stands alone and the composer is the other door", () => {
     // A session parked before this rule, or one whose controls were
     // never captured (run-view-128): the notice offers no recovery it

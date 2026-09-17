@@ -59,6 +59,7 @@ Where a failure the record stream delivers carries the runtime's own account of 
 
 - the catalogue holds one row per failure code the runtime exports [[run-view-148](#run-view-148)], each row a phrase and an optional Boss step — what to do outside Spex — derived from that code's bounded evidence: its repository paths printed as a comma-separated list ending in "… and N more" for the count the evidence says was omitted, never their content, and a nested failure phrased by the child's own cause;
 - a standing the runtime reports for a control reads as that control's label and the phrased reason it carries, so a control that would do nothing says so before it is pressed;
+- an adapter message a cause's evidence carries reads in the plain phrase the runtime mapping gives it [[run-view-2](#run-view-2)], and otherwise as itself, bounded to 120 characters ending in an ellipsis and carrying no Boss step;
 - a code the catalogue has no row for, and a standing reason it has no phrase for, read as their own identifiers in words rather than as nothing;
 - the runtime's own message and the raw state id ride the card's tooltip and never its copy ([DR-010](../decisions/010-interface-craft.md) §2).
 
@@ -336,7 +337,7 @@ While a session a Boss message continues [[core-service-32](core-service.md#core
 - on the failure park the notice draws one control per action the session summary publishes for that run [[core-service-32](core-service.md#core-service-32)], each labelled with that action's own label, and never chooses among them: a control the runtime called a no-op or blocked stands visible and disabled with its phrased reason in its tooltip;
 - Drop stands on either park and ends the run through the ending that summary publishes, and where no action is published — a run whose controls were never captured — Drop stands alone with the composer named as the way on [[run-view-8](#run-view-8)]; a run awaiting a reply carries Drop alone, its other door being the composer;
 - a control the opened run advertises nothing for refuses with its cause rather than being withheld, since a settled session holds no shell to read [[core-service-98](core-service.md#core-service-98)];
-- the notice wraps its controls under its words as one group when its pane is too narrow for both ([DR-041](../decisions/041-chrome-that-fits.md));
+- the notice wraps its controls under its words as one group when its pane is too narrow for both, and no control widens past the notice: a label too long for its control's width ends there in an ellipsis, whole in that control's tooltip ([DR-041](../decisions/041-chrome-that-fits.md));
 - an uncertain session shows the interrupted-turn controls instead [[run-view-110](#run-view-110)], a session reporting external ownership shows no notice [[run-view-125](#run-view-125)], and history the core cannot continue shows its own notice [[run-view-33](#run-view-33)].
 
 #### run-view-129
@@ -974,6 +975,7 @@ Where a replayed fixture stream ends with a playbook run standing parked on the 
 - the thread draws that failure as a card in the bare status line's place, its what line naming the run's command and the step it left in human words, its why line the catalogue's phrase for the fixture's own cause with its paths, its what-now line the Boss step and the published no-op's standing, and the runtime's message with the raw state in its tooltip [[run-view-147](#run-view-147)] [[run-view-2](#run-view-2)];
 - the notice stands between the Captain pane and the composer, naming the parked workflow by its command in key phrases with the raw state in its title, saying why the run failed and what to do about it, while a run no configured playbook claims names no command and carries its playbook id in that title instead [[run-view-128](#run-view-128)];
 - the notice draws one control per action the fixture summary publishes, in the summary's order and each in the action's own label, with the no-op among them visible, disabled, and carrying its phrased reason in its tooltip and in the what-now line, and Drop's tooltip carrying the published ending's own label [[run-view-128](#run-view-128)];
+- a published action whose label runs long draws a control holding no width of its own open and a label set to ellipse at that control's width, the whole of the label in the control's tooltip, while Drop holds its own width beside it [[run-view-128](#run-view-128)];
 - the same fixture whose summary publishes no controls draws Drop alone, no recovery, and names the composer as the way on [[run-view-128](#run-view-128)];
 - a fixture whose run waits for a Boss reply carries Drop with no recovery control beside it, the composer standing as that park's other door [[run-view-128](#run-view-128)];
 - activating a recovery control dispatches exactly one control over the protocol naming the recovery kind and that action's own id — not the first the run advertises — which then renders as a Boss bubble carrying that action's own label, while a staged intent detaches and no intent id rides it [[run-view-129](#run-view-129)];
@@ -1068,7 +1070,8 @@ Where the runtime's closed failure-code list is read at its boundary, the test s
 - the list under test is the runtime's own export reaching the interface through that boundary, never a copy the interface keeps, so the catalogue is never held against itself ([DR-076](../decisions/076-playbook-14-1-adoption.md));
 - each code has a row whose phrase is non-empty for a sample evidence carrying every member any code reads, and for no evidence at all;
 - the catalogue holds no code the list does not, so a code that leaves the runtime leaves the catalogue with it;
-- a code outside the list, and a standing reason the catalogue has no phrase for, still read as their own identifiers in words.
+- a code outside the list, and a standing reason the catalogue has no phrase for, still read as their own identifiers in words;
+- an adapter message the runtime mapping knows reads in its plain phrase with the Boss step that mapping gives it, and one it does not reads as the message itself, bounded with an ellipsis and carrying no step.
 
 #### run-view-19
 
@@ -1192,4 +1195,5 @@ Where the harness boots the served shell with the demo project registered and a 
 
 - the notice names the failed workflow by its command and says why in the catalogue's phrase for the cause the runtime attached, carrying the residual's own path [[run-view-128](#run-view-128)] [[run-view-147](#run-view-147)];
 - it draws one control per advertised action in the action's own label, the reconciliation the runtime reports as a no-op visible and disabled with its phrased reason in its tooltip and in the what-now line, the abandonment beside it activatable, and Drop's tooltip carrying the ending the shell advertised [[run-view-128](#run-view-128)];
+- at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] every control it drew, each in the runtime's own label, sits under its words and inside the notice's box [[run-view-128](#run-view-128)], with the page still not scrolling sideways [[run-view-119](#run-view-119)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout);
 - activating the abandonment runs it as the next turn, which lands in the thread under that action's own label and leaves the notice with the park, no refusal reported [[run-view-129](#run-view-129)] [[run-view-130](#run-view-130)].

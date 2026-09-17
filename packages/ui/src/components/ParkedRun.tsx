@@ -49,14 +49,23 @@ import { causePhrase, causeStep, standingLine } from "../lib/failure-catalogue.j
 const CONTROL_WIDTH = "min-w-[6.75rem]";
 
 /** An advertised action's label is the runtime's, and a runtime's
- * label runs long ("Retry unresolved effect reconciliation"). It is
- * shown whole — the label is what the turn will carry, so trimming it
- * would make the control promise something other than it performs —
- * and the group wraps under the words as one (DR-041 §9). While the
- * control is busy the label stays in the box, invisible, holding the
- * width its busy form is laid over: a label longer than "Working…"
- * cannot narrow on activation, and one shorter than it is held by the
- * same reserve every control in the notice keeps (run-view-130). */
+ * label runs as long as the runtime's own state description ("Retry:
+ * Coder is running the first coding phase: a direct implementation, a
+ * new intent record, or an existing intent-record task" — 844px of
+ * control in a 349px notice, with Drop pushed out of the box and the
+ * visible part of the label no longer over the control). The control
+ * is therefore bounded by the notice: it yields its width (no
+ * `shrink-0`), never exceeds the line it wraps onto (`max-w-full`),
+ * and the label ellipses at that width (`truncate`), with the whole
+ * of it in the control's tooltip (run-view-128, DR-041). The reserve
+ * CONTROL_WIDTH sets is also what lets the control yield at all: an
+ * explicit `min-width` replaces a flex item's automatic minimum size,
+ * so the control shrinks to the line and stops at the busy form's
+ * reserve rather than at its own text. While the control is busy the
+ * label stays in the box, invisible, holding the width its busy form
+ * is laid over: a label longer than "Working…" cannot narrow on
+ * activation, and one shorter than it is held by that same reserve
+ * (run-view-130). */
 const ACTION_WIDTH = "relative max-w-full";
 
 /** What the notice activates: a recovery the parked run advertises,
@@ -142,7 +151,11 @@ export function ParkedRun({
   const tone = failed
     ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
     : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200";
-  const controlClass = `shrink-0 rounded-md border px-2.5 py-1 text-center font-medium disabled:opacity-40 ${
+  // Drop and its confirm carry fixed short words, so they hold their
+  // width and stay whole; only an advertised action, whose label is
+  // the runtime's, yields (DR-041).
+  const fixed = "shrink-0";
+  const controlClass = `rounded-md border px-2.5 py-1 text-center font-medium disabled:opacity-40 ${
     failed
       ? "border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
       : "border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
@@ -216,7 +229,11 @@ export function ParkedRun({
         </div>
         <div
           ref={group}
-          className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"
+          // The group wraps under the words as one (DR-041 §9) and
+          // yields with them: a group that could not shrink handed a
+          // long-labelled control the whole of its own width and let it
+          // out of the notice's box (run-view-128).
+          className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"
         >
           {confirming
             ? null
@@ -241,7 +258,11 @@ export function ParkedRun({
                     }
                     className={`${CONTROL_WIDTH} ${ACTION_WIDTH} ${controlClass}`}
                   >
-                    <span className={pending === action.id ? "invisible" : undefined}>
+                    <span
+                      className={`block truncate${
+                        pending === action.id ? " invisible" : ""
+                      }`}
+                    >
                       {action.label}
                     </span>
                     {pending === action.id ? (
@@ -267,7 +288,7 @@ export function ParkedRun({
                     ...(parked?.ending ? { actionId: parked.ending.id } : {}),
                   })
                 }
-                className={`${CONTROL_WIDTH} ${controlClass}`}
+                className={`${CONTROL_WIDTH} ${fixed} ${controlClass}`}
               >
                 {pending === "ending" ? "Dropping…" : "Drop"}
               </button>
@@ -276,7 +297,7 @@ export function ParkedRun({
                 data-testid="failed-workflow-drop-keep"
                 disabled={disabled}
                 onClick={() => setConfirming(false)}
-                className={`${CONTROL_WIDTH} ${controlClass}`}
+                className={`${CONTROL_WIDTH} ${fixed} ${controlClass}`}
               >
                 Keep
               </button>
@@ -288,7 +309,7 @@ export function ParkedRun({
               disabled={disabled}
               title={blocked ?? parked?.ending?.label ?? "End this run. It will not be resumed."}
               onClick={() => setConfirming(true)}
-              className={`${CONTROL_WIDTH} ${controlClass}`}
+              className={`${CONTROL_WIDTH} ${fixed} ${controlClass}`}
             >
               Drop
             </button>

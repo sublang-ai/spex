@@ -103,6 +103,33 @@ const withDetail = (phrase: string, detail: string | undefined): string =>
 const agentOf = (evidence: Evidence): string | undefined =>
   text(evidence?.playerId) ?? text(evidence?.roleId);
 
+/** The adapter's own message, however the runtime attached it:
+ * Playbook carries `{ name, message }` (Playbook DR-063 §1), and a
+ * record from a runtime that carried a bare string still reads. */
+const errorMessage = (value: unknown): string | undefined =>
+  text(value) ?? text(object(value)?.message);
+
+/** How much of an adapter's message the why line will carry: enough
+ * for the provider's own sentence ("Selected model is at capacity.
+ * Please try a different model."), and not so much that one runtime
+ * message becomes the notice (run-view-147). */
+const SAID_LIMIT = 120;
+
+/** What the adapter said, in as many words as the line will hold: the
+ * plain phrase where the message is one the runtime mapping knows
+ * (run-view-2), and otherwise the message itself — a message no
+ * pattern matches is the only account of the failure there is, so it
+ * is printed rather than dropped, bounded to `SAID_LIMIT` with an
+ * ellipsis. */
+function adapterSaid(value: unknown): string | undefined {
+  const message = errorMessage(value);
+  if (!message) return undefined;
+  const said = plainFailure(message).text;
+  return said.length <= SAID_LIMIT
+    ? said
+    : `${said.slice(0, SAID_LIMIT - 1).trimEnd()}…`;
+}
+
 // ---------------------------------------------------------------------------
 // The catalogue
 // ---------------------------------------------------------------------------
@@ -171,21 +198,34 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
     phrase: () => "The step left no record of what it changed",
   },
   "judge-failed": {
-    phrase: (evidence) =>
-      withDetail("Couldn't judge the result", text(evidence?.reason)),
+    // The runtime's reason names the step that failed ("judge
+    // transport failed"); what the adapter said is why it did, so the
+    // phrase carries both where both were attached.
+    phrase: (evidence) => {
+      const head = withDetail(
+        "Couldn't judge the result",
+        text(evidence?.reason),
+      );
+      const said = adapterSaid(evidence?.error);
+      return said ? `${head} — ${said}` : head;
+    },
   },
   "player-failed": {
     // The adapter's own plain phrase (run-view-2): one mapping of
     // known runtime messages serves the thread's failure lines and
-    // this catalogue alike.
+    // this catalogue alike; a message it does not know is printed as
+    // itself rather than swallowed (run-view-147).
     phrase: (evidence) => {
       const who = agentOf(evidence);
-      const error = text(evidence?.error);
-      const said = error ? plainFailure(error).text : undefined;
-      return withDetail(who ? `${who} failed` : "An agent failed", said);
+      return withDetail(
+        who ? `${who} failed` : "An agent failed",
+        adapterSaid(evidence?.error),
+      );
     },
     bossStep: (evidence) => {
-      const error = text(evidence?.error);
+      // A message no pattern matches answers to nothing outside Spex,
+      // so it carries no step.
+      const error = errorMessage(evidence?.error);
       const remedy = error ? failureRemedy(error) : undefined;
       if (!remedy) return undefined;
       const who = agentOf(evidence);
