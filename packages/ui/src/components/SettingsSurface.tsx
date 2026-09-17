@@ -303,10 +303,6 @@ function PlayerRoster({
         <h2 className="text-sm font-semibold text-neutral-500">
           Session players
         </h2>
-        <span className="text-xs text-neutral-500">
-          Each player is one conversation for the whole session; roles bind
-          to them in the Library.
-        </span>
       </div>
       {players.map((player) => (
         <div
@@ -602,9 +598,7 @@ export function SettingsSurface() {
       <div>
         <h1 className="text-lg font-semibold">Settings</h1>
         <p className="mt-0.5 text-xs text-neutral-500">
-          Shared with the playbook CLI:{" "}
-          <span className="font-mono break-all">{summary.path}</span> — external
-          edits appear here live.
+          <span className="font-mono break-all" title="Shared with the playbook CLI — edits made outside appear here">{summary.path}</span>
         </p>
         {configState.seeded ? (
           <p
@@ -644,9 +638,6 @@ export function SettingsSurface() {
               readiness={readinessByAdapter.get(summary.captain.adapter)}
               label="Captain"
             />
-            <span className="text-xs text-neutral-500">
-              Reads your messages and picks the playbook to run.
-            </span>
             <span className="ml-auto flex items-center gap-1">
               {saved === "captain" ? <SavedTick testId="captain-saved" /> : null}
               <EditToggle
@@ -738,10 +729,6 @@ export function SettingsSurface() {
         <h2 className="text-sm font-semibold text-neutral-500">
           Notifications
         </h2>
-        <p className="text-xs text-neutral-500">
-          Where each moment reaches you: nowhere, a terminal bell, or a
-          desktop notification.
-        </p>
         <div className="flex flex-col gap-1.5">
           {NOTIFICATION_EVENTS.map((event) => {
             const key = `notifications:${event}`;
@@ -790,10 +777,6 @@ export function SettingsSurface() {
         <h2 className="text-sm font-semibold text-neutral-500">
           Keyboard shortcuts
         </h2>
-        <p className="text-xs text-neutral-500">
-          The same in the desktop app and a browser; {modKey()} is this
-          machine's modifier.
-        </p>
         <div className="relative overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">Keyboard shortcuts</caption>

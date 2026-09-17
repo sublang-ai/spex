@@ -323,7 +323,7 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(within(setup).getByRole("button", { name: "Set up space" })).toBeTruthy();
     expect(within(setup).queryByRole("button", { name: "Initialize" })).toBeNull();
     expect(within(setup).getByText("Remote")).toBeTruthy();
-    expect(setup.textContent).toContain("stay on this device");
+    expect(setup.textContent).toContain("Nothing is contacted until you set up");
     // No changes list stands (space-3).
     expect(screen.queryByText(/^Local changes/)).toBeNull();
     expect(screen.queryByTestId("space-local-list")).toBeNull();

@@ -304,10 +304,6 @@ export function CaptainHome(props: CaptainHomeProps) {
               </button>
             </div>
           ) : null}
-          <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-            Tip: type <span className="font-mono">/</span> to browse
-            playbooks, or just describe the task in your own words.
-          </p>
         </CaptainBubble>
 
         {configBroken ? (

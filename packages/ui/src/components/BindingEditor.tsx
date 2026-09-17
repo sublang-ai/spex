@@ -106,7 +106,7 @@ export function BindingEditorPopover({
             data-testid="binding-shared-note"
             className="text-xs text-brand-700 dark:text-brand-300"
           >
-            Also answers {others.join(", ")} — one conversation across them.
+            Also answers {others.join(", ")}
           </span>
         ) : null}
       </label>
@@ -144,11 +144,6 @@ export function BindingEditorPopover({
       {invalidFastMode && <p role="alert" className="text-xs text-red-600">{adapterFastMode === false ? "Clear the fast-mode override; this adapter does not accept it." : "Turn off fast mode for this model."}</p>}
       {invalidEffort && <p role="alert" className="text-xs text-red-600">Choose a listed effort, inherit, or use the provider default.</p>}
       {invalidModel && <p role="alert" className="text-xs text-red-600">Enter a model ID, inherit, or use the provider default.</p>}
-      <p className="text-xs text-neutral-500 dark:text-neutral-400">
-        Adapter and permissions belong to the player — edit them in
-        Settings.
-      </p>
-
       {error ? (
         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
       ) : null}

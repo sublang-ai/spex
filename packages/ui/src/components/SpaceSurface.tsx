@@ -335,10 +335,7 @@ function SetupCard({
       data-testid="space-setup"
       className="flex w-full flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900"
     >
-      <p>Keep this space in Git to back it up and use it on another machine.</p>
-      <p className="text-xs text-neutral-500">
-        Nothing is contacted until you set the space up.
-      </p>
+      <p className="font-medium">Keep this space in Git</p>
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
         <span className="shrink-0 text-neutral-500">Remote</span>
         <input
@@ -388,8 +385,8 @@ function SetupCard({
           {setupLabel}
         </button>
         <span className="min-w-0 text-xs text-neutral-500">
-          An empty remote is filled from this device; one that already
-          holds a space is joined with it, anything differing asked.
+          Empty remote: filled from this device · Existing space: joined,
+          differences asked
         </span>
       </div>
       {error ? (
@@ -398,13 +395,11 @@ function SetupCard({
         </p>
       ) : null}
       <p className="text-xs text-neutral-500">
-        Sessions, queues, projects, Settings and playbook sources sync.
-        Provider hints, leases, local paths and preferences stay on this
-        device —{" "}
+        Syncs sessions, queues, projects, Settings and playbook sources —{" "}
         <button type="button" className={LINK} onClick={onExplore}>
           see what stays
         </button>
-        .
+        . Nothing is contacted until you set up.
       </p>
     </div>
   );
