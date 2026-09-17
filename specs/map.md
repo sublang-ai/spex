@@ -98,6 +98,7 @@ meta.md       The spec of specs
 | [DR-070](decisions/070-agent-active-time.md) | 070-agent-active-time.md | Per-agent cumulative active time, read quietly in each pane header and never combined in the run view; measurement amended by DR-071 |
 | [DR-071](decisions/071-active-time-follows-held-calls.md) | 071-active-time-follows-held-calls.md | Active time follows each agent's completed prompt-to-finish spans, aligning shared shells while the durable fold stays order-neutral; backward spans amended by DR-072 |
 | [DR-072](decisions/072-backward-call-time-is-zero.md) | 072-backward-call-time-is-zero.md | A matched call whose finite clock moves backward closes normally and contributes measured zero |
+| [DR-073](decisions/073-letting-go-ends-the-parked-run.md) | 073-letting-go-ends-the-parked-run.md | Letting go ends the parked run: Drop on interrupted work ends the parked run before recording its verdict, and the run view's notice covers a question park |
 
 ## Packages
 

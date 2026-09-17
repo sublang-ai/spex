@@ -9,6 +9,7 @@ Accepted.
 Amends [DR-060](060-failed-workflow-control.md)'s single-control notice: Drop stands beside Retry, and Retry becomes the deterministic selection that record deferred; the notice's placement, its plain wording, and its busy and disabled forms stand.
 Amends [DR-061](061-run-state-from-frames.md)'s failure attention: the divergence that record scoped as a consequence closes, the ledger now holding a parked failure on the same terms the frames do; reading a leaf's state from its own frames stands.
 Amends [DR-035](035-intent-ledger.md)'s failure acknowledgment: a later Boss turn no longer clears a failure that parked a run; the verdict acts, the two-band queue, and every other fold contract stand.
+Amended by [DR-073](073-letting-go-ends-the-parked-run.md) in scope: dropping interrupted work is the whole ruling rather than a verdict alone, and the run's own control covers any run parked on the Boss, a question park included; the deterministic Retry, the model-free give-up, the one-ruling gesture and the History tag stand.
 
 ## Context
 

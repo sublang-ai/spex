@@ -310,6 +310,7 @@ When a client sends `intent.close` for an open intent with a verdict of `done` o
 
 - `done` is accepted only while a turn the intent attributes [[core-service-47](#core-service-47)] ended finished with none later active, and is otherwise rejected — confirming work that never ran would falsify the ledger ([DR-035](../decisions/035-intent-ledger.md));
 - `dropped` is legal on any open intent; dropped before any turn the intent attributes [[core-service-47](#core-service-47)] ended finished, the intent is removed — the history read excludes it [[core-service-50](#core-service-50)] and no verdict shows anywhere ([DR-038](../decisions/038-history-is-done-work.md));
+- `dropped` while a run of the intent's session stands parked on the Boss within the turns it attributes [[core-service-47](#core-service-47)] — on a question, or in its recoverable failure state — first ends that run as the session's next turn, as an ending control does [[core-service-98](#core-service-98)], and records the verdict only once that turn has settled with no run of the session still parked, the two announced together; an ending refused, or one settling with the run still parked, refuses the close with that cause and leaves the intent open ([DR-073](../decisions/073-letting-go-ends-the-parked-run.md));
 - a close of an already-closed intent is rejected.
 
 #### core-service-79
@@ -767,6 +768,16 @@ Where the integration suite starts intent-attributed work through real core comm
 - an explicit after-link to the unconfirmed predecessor remains blocked, and a competing manual submission or admission refusal creates no duplicate turn or dispatch stamp;
 - adding or editing queued work during the active turn affects the next selection, while capture or edits after settlement, ledger reads, confirmation, adoption and restart start no work;
 - subsequent dispatch bounds the first intent's attribution, and confirming that first intent changes neither the second intent nor its active turn.
+
+#### core-service-104
+
+Where a session's scripted Captain leaves a run parked on a Boss question inside an open intent's turn range while the Captain shell holds the root its decision engaged [[core-service-18](#core-service-18)], the test suite shall close that intent `dropped` over the protocol and assert the whole ruling [[core-service-46](#core-service-46)] ([DR-073](../decisions/073-letting-go-ends-the-parked-run.md)):
+
+- the close runs one further turn carrying the ending control's own label rather than any Boss text, adding no dispatch stamp [[core-service-47](#core-service-47)] [[core-service-98](#core-service-98)];
+- that turn disposes the ended run, after which the intent reads closed dropped, `ledger.get` carries no entry for its session, and `ledger.history` lists it dropped [[core-service-49](#core-service-49)] [[core-service-50](#core-service-50)];
+- closing an intent no run stands parked for records the verdict alone and runs no further turn;
+- where the opened session advertises no ending, the close is refused with that cause, the intent stays open and its entry stands [[core-service-98](#core-service-98)];
+- the same rule's failure park is not driven here: the turn-scoped `runtime_error` a failure stands on [[core-service-49](#core-service-49)] arrives in this harness only on a turn that aborts and disposes its runtime, leaving no live run to stand parked.
 
 #### core-service-58
 
