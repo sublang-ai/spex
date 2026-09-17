@@ -468,6 +468,8 @@ export function DashboardSurface({
   // The filter hides entries and groups; it never changes the global
   // queue reading (dashboard-32).
   const nextHead = publishedNextHead(intents, projects);
+  const selectedProject = projectFilter === "all" ? undefined : filtered[0];
+  const globalAttentionEmpty = (ledger?.attention ?? []).length === 0;
   const projectName = (projectId: string) =>
     projects.find((project) => project.id === projectId)?.name ?? projectId;
 
@@ -486,6 +488,7 @@ export function DashboardSurface({
       row?.querySelector<HTMLElement>("button") ??
       box.querySelector<HTMLElement>('[data-testid="all-clear-start"]') ??
       box.querySelector<HTMLElement>('[data-testid="attention-all-clear"]') ??
+      box.querySelector<HTMLElement>('[data-testid="attention-filter-empty"]') ??
       box.querySelector<HTMLElement>("button");
     target?.focus();
     setHandOff(undefined);
@@ -597,7 +600,10 @@ export function DashboardSurface({
               Loading…
             </div>
           ) : null}
-          {ledger && !ledgerError && attention.length === 0 ? (
+          {ledger &&
+          !ledgerError &&
+          attention.length === 0 &&
+          globalAttentionEmpty ? (
             <div
               data-testid="attention-all-clear"
               tabIndex={-1}
@@ -606,7 +612,9 @@ export function DashboardSurface({
               {nextHead ? (
                 <>
                   <span className="min-w-0 flex-1 truncate">
-                    All clear. Next up:{" "}
+                    {selectedProject
+                      ? "All clear across projects. Next up: "
+                      : "All clear. Next up: "}
                     <span className="font-medium text-neutral-700 dark:text-neutral-200">
                       {firstLine(nextHead.intent.text)}
                     </span>{" "}
@@ -628,6 +636,7 @@ export function DashboardSurface({
                     <button
                       type="button"
                       data-testid="all-clear-start"
+                      aria-label={`Start ${firstLine(nextHead.intent.text)} in ${projectName(nextHead.intent.projectId)}`}
                       onClick={() => void onStartIntent(nextHead.intent)}
                       className="min-h-6 shrink-0 rounded bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
                     >
@@ -637,9 +646,24 @@ export function DashboardSurface({
                 </>
               ) : (
                 <span className="flex-1 text-center">
-                  All clear — nothing waiting, nothing queued to start.
+                  {selectedProject
+                    ? "All clear across projects — nothing waiting, nothing queued to start."
+                    : "All clear — nothing waiting, nothing queued to start."}
                 </span>
               )}
+            </div>
+          ) : null}
+          {ledger &&
+          !ledgerError &&
+          attention.length === 0 &&
+          !globalAttentionEmpty &&
+          selectedProject ? (
+            <div
+              data-testid="attention-filter-empty"
+              tabIndex={-1}
+              className="rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-center text-sm text-neutral-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:border-neutral-700"
+            >
+              Nothing in {selectedProject.name} needs attention.
             </div>
           ) : null}
         </div>

@@ -540,7 +540,7 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     await act(async () => settleClose());
   });
 
-  test("a verdict hands focus on: the next entry, then the all-clear Start (dashboard-4, DR-010 §6)", async () => {
+  test("a verdict hands focus to the next entry, global all-clear, or filtered empty note", async () => {
     const current = ledgerMock({
       intents: [q("n1", "p1", "Polish README", { next: MANUAL_READY })],
       attention: [ATTENTION[3], ATTENTION[4]],
@@ -565,6 +565,28 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     // The last verdict lands on the all-clear's Start, never on body.
     expect(screen.queryByTestId("attention-id2-finish")).toBeNull();
     expect(document.activeElement).toBe(screen.getByTestId("all-clear-start"));
+
+    // Under a project filter, another project's hidden summons means
+    // the global all-clear is false. The scoped note is still a real
+    // focus destination when the last visible verdict leaves.
+    cleanup();
+    const filtered = ledgerMock({
+      intents: [q("n1", "p1", "Polish README", { next: MANUAL_READY })],
+      attention: [ATTENTION[3], ATTENTION[4]],
+      badge: 2,
+    });
+    seed({ ledger: filtered() });
+    renderSurface();
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by project" }), {
+      target: { value: "p2" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("attention-drop-id2"));
+    });
+    expect(screen.queryByTestId("attention-all-clear")).toBeNull();
+    const filteredEmpty = screen.getByTestId("attention-filter-empty");
+    expect(filteredEmpty.textContent).toBe("Nothing in beta needs attention.");
+    expect(document.activeElement).toBe(filteredEmpty);
   });
 });
 
@@ -633,7 +655,31 @@ describe("dashboard-8: the all-clear names the globally published next", () => {
     expect(allClear.textContent).toContain("Ship alpha");
     expect(allClear.textContent).toContain("alpha");
     expect(allClear.textContent).not.toContain("Polish README");
-    fireEvent.click(screen.getByTestId("all-clear-start"));
+    const allClearStart = within(allClear).getByRole("button", {
+      name: "Start Ship alpha in alpha",
+    });
+    expect(allClearStart.textContent).toBe("Start");
+    expect(
+      within(screen.getByTestId("upnext-row-alpha-next")).getByRole("button", {
+        name: "Start Ship alpha in alpha",
+      }).textContent,
+    ).toBe("Start");
+    expect(
+      within(screen.getByTestId("upnext-row-beta-next")).getByRole("button", {
+        name: "Start Polish README in beta",
+      }).textContent,
+    ).toBe("Start");
+    expect(
+      within(screen.getByTestId("add-intent-row-p1")).getByRole("button", {
+        name: "Queue an intent in alpha",
+      }).textContent,
+    ).toBe("Queue");
+    expect(
+      within(screen.getByTestId("add-intent-row-p2")).getByRole("button", {
+        name: "Queue an intent in beta",
+      }).textContent,
+    ).toBe("Queue");
+    fireEvent.click(allClearStart);
     expect(onStartIntent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "alpha-next", text: "Ship alpha" }),
     );
@@ -658,7 +704,7 @@ describe("dashboard-8: the all-clear names the globally published next", () => {
     expect(screen.queryByTestId("all-clear-start")).toBeNull();
   });
 
-  test("the project filter never changes the global next reading", () => {
+  test("the project filter keeps the global next but distinguishes hidden attention", () => {
     seed({
       ledger: {
         intents: [
@@ -679,9 +725,26 @@ describe("dashboard-8: the all-clear names the globally published next", () => {
     expect(screen.queryByTestId("project-group-p1")).toBeNull();
     expect(screen.getByTestId("project-group-p2")).toBeTruthy();
     const allClear = screen.getByTestId("attention-all-clear");
+    expect(allClear.textContent).toContain("All clear across projects");
     expect(allClear.textContent).toContain("Alpha goes first");
     expect(allClear.textContent).toContain("alpha");
     expect(allClear.textContent).not.toContain("Beta follows");
+
+    act(() => {
+      useAppStore.setState({
+        ledger: {
+          ...useAppStore.getState().ledger!,
+          attention: [ATTENTION[0]],
+          badge: 1,
+        },
+      });
+    });
+    expect(screen.queryByTestId("attention-iq-question")).toBeNull();
+    expect(screen.queryByTestId("attention-all-clear")).toBeNull();
+    const filteredEmpty = screen.getByTestId("attention-filter-empty");
+    expect(filteredEmpty.textContent).toBe("Nothing in beta needs attention.");
+    expect(within(filteredEmpty).queryByRole("button")).toBeNull();
+    expect(useAppStore.getState().ledger?.badge).toBe(1);
   });
 });
 
@@ -1390,7 +1453,9 @@ describe("dashboard-26/29: groups and the queue band", () => {
 
     const addRow = screen.getByTestId("add-intent-row-p1");
     const add = screen.getByTestId("add-intent-p1") as HTMLTextAreaElement;
-    const queue = within(addRow).getByRole("button", { name: "Queue" });
+    const queue = within(addRow).getByRole("button", {
+      name: "Queue an intent in alpha",
+    });
     expect(add.tagName).toBe("TEXTAREA");
     expect(add.rows).toBe(1);
     expect(add.className).toContain("resize-none");
@@ -1398,7 +1463,9 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(add.className).toContain("flex-1");
     expect(queue.className).toContain("shrink-0");
     expect((queue as HTMLButtonElement).disabled).toBe(true);
-    expect(within(addRow).queryByRole("button", { name: "Start" })).toBeNull();
+    expect(
+      within(addRow).queryByRole("button", { name: /^Start\b/ }),
+    ).toBeNull();
     Object.defineProperty(add, "scrollHeight", {
       configurable: true,
       value: 64,

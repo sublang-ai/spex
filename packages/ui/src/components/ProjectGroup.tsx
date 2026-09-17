@@ -974,6 +974,9 @@ function QueueRow({
   });
   const intent = derived.intent;
   const title = firstLine(intent.text);
+  const ownerName =
+    projects.find((project) => project.id === intent.projectId)?.name ??
+    intent.projectId;
   const blocked = derived.blockedBy;
   // Presence is the core-published Next marker (core-service-107).
   // A blocked row cannot be next; fail closed if a malformed reply
@@ -1098,6 +1101,7 @@ function QueueRow({
         <button
           type="button"
           data-testid={`upnext-start-${intent.id}`}
+          aria-label={`Start ${title} in ${ownerName}`}
           onClick={onStart}
           className="min-h-6 shrink-0 rounded bg-brand-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
         >
@@ -1436,6 +1440,7 @@ function UpNextBand({
         <button
           type="button"
           data-testid={`queue-intent-${project.id}`}
+          aria-label={`Queue an intent in ${project.name}`}
           disabled={!draft.trim()}
           onClick={add}
           className="min-h-6 shrink-0 rounded bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700 disabled:bg-neutral-200 disabled:text-neutral-500 dark:bg-brand-500 dark:hover:bg-brand-400 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500"

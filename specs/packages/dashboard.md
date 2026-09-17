@@ -55,7 +55,7 @@ While an attention entry is displayed, when its clearing condition arrives, the 
 | Session unread turn | the session's persisted last-viewed marker advancing past the turn — the reader having that session in front of them [[run-view-134](run-view.md#run-view-134)], or Reviewed on its row [[dashboard-55](#dashboard-55)] |
 
 - Resolving one entry removes no other entry, and viewing alone never clears an intent entry, whose verdict is owed regardless of reading.
-- An act taken on a row hands focus on as its entry leaves: to the entry now at its place, else the last entry, else the all-clear's Start where one is available [[dashboard-59](#dashboard-59)] or the all-clear region otherwise — never to the page body ([DR-010](../decisions/010-interface-craft.md) §6).
+- An act taken on a row hands focus on as its entry leaves: to the entry now at its place, else the last entry, else the all-clear's Start where one is available [[dashboard-59](#dashboard-59)] or the all-clear region otherwise, or to the project-filter empty note where hidden attention keeps the global all-clear from standing [[dashboard-32](#dashboard-32)] — never to the page body ([DR-010](../decisions/010-interface-craft.md) §6).
 
 #### dashboard-53
 
@@ -180,6 +180,7 @@ While the Now band shows the open intent the session serves [[dashboard-28](#das
 The group's Up next band shall list the project's queued intents in rank order, every row carrying a neutral `Queued` tag, with the core-published first unblocked intent [[core-service-107](core-service.md#core-service-107)] emphasized as the project's next and rendering its scheduling standing [[dashboard-59](#dashboard-59)], followed by an inline add row whose one Queue action captures a new queued intent ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - the next row carries Start only where its standing makes manual dispatch available, and otherwise carries the standing phrase with no Start; every later eligible row carries only its `Queued` tag, since rank says it is later;
+- the visible Start and Queue labels stay short while Start's accessible name identifies its intent and project and Queue's identifies its destination project ([DR-041](../decisions/041-chrome-that-fits.md));
 - the title and standing share the row's sole shrinkable text region and one line at and above the `@md` container step, each truncating with its full text in its title; below `@md` the standing takes its own line within that region, while the grip, `Queued` mark, available Start, and row menu remain visible ([DR-041](../decisions/041-chrome-that-fits.md));
 - the add field is one row while empty, soft-wraps and grows with its text to the smaller of eight lines and two fifths of the viewport, then scrolls with no native resize grip; Queue and Enter take the same capture of a nonblank draft after trimming its outer whitespace while preserving its internal line breaks, Shift+Enter inserts a line, and no Start stands beside Queue ([DR-041](../decisions/041-chrome-that-fits.md));
 - a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with `after ⟨title⟩`, the predecessor's project named when it lives in another project, carries no Start, and is never presented as next;
@@ -265,6 +266,7 @@ Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.m
 When the user selects a project filter, the Dashboard shall show only that project's attention entries and ledger group until the filter is cleared, as pure visibility in the linked-views ghost grammar ([DR-027](../decisions/027-linked-views-contract.md)):
 
 - no derived state, rank, or persisted data changes, and the published attention count [[dashboard-9](#dashboard-9)] stays the unfiltered queue's size.
+- filtering never changes the globally named next: where no attention entry exists anywhere, the global all-clear remains and names its cross-project scope; where another project still holds an entry but the selected project holds none, a project-named quiet note stands instead, with no queued head or Start [[dashboard-8](#dashboard-8)].
 
 ### Empty States
 
@@ -274,7 +276,7 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 
 | Section | Empty condition | Guidance |
 | --- | --- | --- |
-| Attention queue | no entry, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — and mirroring its scheduling standing [[dashboard-59](#dashboard-59)], with Start only where manual dispatch is available; or plain all-clear copy when no unblocked head exists |
+| Attention queue | no entry in the unfiltered queue, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — and mirroring its scheduling standing [[dashboard-59](#dashboard-59)], with Start only where manual dispatch is available and its accessible name identifying the intent and project; or plain all-clear copy when no unblocked head exists |
 | Running | no live session holds a turn in flight unattended by the queue [[dashboard-50](#dashboard-50)] | a quiet note that nothing is running |
 | Project groups | no registered project | how to register a project, with a navigation control to Projects |
 | History | no done work, once the first history page has answered | a note that nothing is done here yet — "Loading…" until then |
@@ -389,7 +391,7 @@ Where fixture intent rows and a fixture record stream span two projects — one 
 
 #### dashboard-16
 
-While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, the unread turn's Reviewed control, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry even when dispatching another intent before any machine transition [[dashboard-4](#dashboard-4)], that Reviewed cleared the unread-turn stand-in and no intent entry with the session never opened [[dashboard-55](#dashboard-55)] [[dashboard-4](#dashboard-4)], that a refused Reviewed left the entry standing and said so on its row [[dashboard-55](#dashboard-55)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's live Start or the all-clear region according to the next standing [[dashboard-4](#dashboard-4)] [[dashboard-59](#dashboard-59)], that an interrupted intent's Drop asked before acting and then took the whole ruling in that one close, with no control command of the row's own, while a refused close left the entry standing with its cause on the row [[dashboard-56](#dashboard-56)] [[dashboard-53](#dashboard-53)], that a Boss turn taken while a run of the failure intent's session stands parked in its failure state left that failure entry standing where the same turn would have cleared an unparked one, and that the parked run's disposal within a later turn cleared it [[dashboard-10](#dashboard-10)] [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
+While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, the unread turn's Reviewed control, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry even when dispatching another intent before any machine transition [[dashboard-4](#dashboard-4)], that Reviewed cleared the unread-turn stand-in and no intent entry with the session never opened [[dashboard-55](#dashboard-55)] [[dashboard-4](#dashboard-4)], that a refused Reviewed left the entry standing and said so on its row [[dashboard-55](#dashboard-55)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's live Start or the all-clear region according to the next standing, or to the project-filter empty note while another project's hidden entry remains [[dashboard-4](#dashboard-4)] [[dashboard-32](#dashboard-32)] [[dashboard-59](#dashboard-59)], that an interrupted intent's Drop asked before acting and then took the whole ruling in that one close, with no control command of the row's own, while a refused close left the entry standing with its cause on the row [[dashboard-56](#dashboard-56)] [[dashboard-53](#dashboard-53)], that a Boss turn taken while a run of the failure intent's session stands parked in its failure state left that failure entry standing where the same turn would have cleared an unparked one, and that the parked run's disposal within a later turn cleared it [[dashboard-10](#dashboard-10)] [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
 
 #### dashboard-17
 
@@ -414,7 +416,8 @@ Where fixture ledger replies publish next intents spanning every scheduling stan
 - `question-park` reads `waiting — your reply`, and `failure-park` reads `waiting — current work failed` with the fixture catalogue cause, each with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
 - `failed` reads `waiting — previous work failed` with its known catalogue cause and carries Start, while `stopped` reads `waiting — previous work stopped` and carries Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
 - an after-linked row reads `after ⟨title⟩`, names a foreign project where applicable, carries no Start, and is skipped when choosing next [[dashboard-29](#dashboard-29)];
-- the all-clear names the same global next with the same phrase and Start availability [[dashboard-8](#dashboard-8)] [[dashboard-59](#dashboard-59)].
+- the all-clear names the same global next with the same phrase and Start availability, its Start accessible name identifying the intent and project; under a project filter its copy names the cross-project scope, while hidden attention replaces it with the selected project's quiet empty note [[dashboard-8](#dashboard-8)] [[dashboard-32](#dashboard-32)] [[dashboard-59](#dashboard-59)];
+- visible row Start and Queue labels keep their short forms while their accessible names identify the intent and project or destination project, respectively [[dashboard-29](#dashboard-29)].
 
 ### Capture Coverage
 
