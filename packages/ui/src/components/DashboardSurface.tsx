@@ -436,14 +436,25 @@ export function DashboardSurface({
   const fetchedAt = useForgeAge(projects);
   const { highlightId, capture } = useCaptureReveal();
 
-  const filtered =
+  const selectedProject =
     projectFilter === "all"
+      ? undefined
+      : projects.find((project) => project.id === projectFilter);
+  const effectiveProjectFilter = selectedProject?.id ?? "all";
+  useEffect(() => {
+    if (projectFilter !== effectiveProjectFilter) {
+      setProjectFilter(effectiveProjectFilter);
+    }
+  }, [effectiveProjectFilter, projectFilter]);
+  const filtered =
+    effectiveProjectFilter === "all"
       ? projects
-      : projects.filter((project) => project.id === projectFilter);
+      : projects.filter((project) => project.id === effectiveProjectFilter);
   const intents = ledger?.intents ?? [];
   const attention = (ledger?.attention ?? []).filter(
     (entry) =>
-      projectFilter === "all" || entry.projectId === projectFilter,
+      effectiveProjectFilter === "all" ||
+      entry.projectId === effectiveProjectFilter,
   );
   // Only an interruption of the current work replaces its running
   // row (dashboard-50). Earlier deliveries can still owe a verdict
@@ -468,7 +479,6 @@ export function DashboardSurface({
   // The filter hides entries and groups; it never changes the global
   // queue reading (dashboard-32).
   const nextHead = publishedNextHead(intents, projects);
-  const selectedProject = projectFilter === "all" ? undefined : filtered[0];
   const globalAttentionEmpty = (ledger?.attention ?? []).length === 0;
   const projectName = (projectId: string) =>
     projects.find((project) => project.id === projectId)?.name ?? projectId;
@@ -553,7 +563,7 @@ export function DashboardSurface({
             Needs attention
           </h2>
           <select
-            value={projectFilter}
+            value={effectiveProjectFilter}
             onChange={(event) => setProjectFilter(event.target.value)}
             className="ml-auto rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
             title="Filter by project (visibility only)"

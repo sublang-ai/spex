@@ -266,7 +266,11 @@ Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.m
 When the user selects a project filter, the Dashboard shall show only that project's attention entries and ledger group until the filter is cleared, as pure visibility in the linked-views ghost grammar ([DR-027](../decisions/027-linked-views-contract.md)):
 
 - no derived state, rank, or persisted data changes, and the published attention count [[dashboard-9](#dashboard-9)] stays the unfiltered queue's size.
-- filtering never changes the globally named next: where no attention entry exists anywhere, the global all-clear remains and names its cross-project scope; where another project still holds an entry but the selected project holds none, a project-named quiet note stands instead, with no queued head or Start [[dashboard-8](#dashboard-8)].
+- filtering never changes the globally named next: where no attention entry exists anywhere, the global all-clear remains and names its cross-project scope; where another project still holds an entry but the selected project holds none, the project-named quiet note of [[dashboard-8](#dashboard-8)] stands with no queued head or Start.
+
+#### dashboard-61
+
+While the active project filter names no registered project, the Dashboard shall expose and apply All projects before deriving its visible attention entries, Running rows [[dashboard-50](#dashboard-50)], or ledger groups, and retain that normalized choice so a project later returning does not silently restore the stale filter [[dashboard-32](#dashboard-32)].
 
 ### Empty States
 
@@ -277,6 +281,7 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 | Section | Empty condition | Guidance |
 | --- | --- | --- |
 | Attention queue | no entry in the unfiltered queue, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — and mirroring its scheduling standing [[dashboard-59](#dashboard-59)], with Start only where manual dispatch is available and its accessible name identifying the intent and project; or plain all-clear copy when no unblocked head exists |
+| Attention queue | the selected project's visible slice has no entry while the unfiltered queue does [[dashboard-32](#dashboard-32)] | a focusable quiet note, `Nothing in ⟨project⟩ needs attention.`, with no queued head or Start |
 | Running | no live session holds a turn in flight unattended by the queue [[dashboard-50](#dashboard-50)] | a quiet note that nothing is running |
 | Project groups | no registered project | how to register a project, with a navigation control to Projects |
 | History | no done work, once the first history page has answered | a note that nothing is done here yet — "Loading…" until then |
@@ -396,6 +401,10 @@ While the attention queue holds interrupted and finished entries, when the fixtu
 #### dashboard-17
 
 Where fixture intent rows, records, and review state are persisted to the app store, when the fold is re-run from persisted state alone, as after a core restart, the test suite shall assert that the derived intent states and attention set equal those derived live from the same inputs [[dashboard-11](#dashboard-11)], with the fold reading only the store and the record bus [[dashboard-12](#dashboard-12)].
+
+#### dashboard-62
+
+Where the displayed Dashboard is filtered to one project while another project retains an attention entry, live Running row, and ledger group, when the filtered project leaves the registered project list, the test suite shall assert that the filter reads All projects in that same render, the remaining project's entry, Running row, and group are visible, and neither attention empty state stands [[dashboard-61](#dashboard-61)] [[dashboard-8](#dashboard-8)].
 
 ### Ledger Coverage
 

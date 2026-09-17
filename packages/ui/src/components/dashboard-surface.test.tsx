@@ -706,6 +706,22 @@ describe("dashboard-8: the all-clear names the globally published next", () => {
 
   test("the project filter keeps the global next but distinguishes hidden attention", () => {
     seed({
+      sessions: [
+        {
+          id: "s-alpha",
+          projectId: "p1",
+          projectPath: "/tmp/alpha",
+          title: "Alpha running",
+          createdAt: NOW - MIN,
+          live: true,
+          endedAt: null,
+          players: [],
+          initialVisible: [],
+          turns: 1,
+          failed: false,
+          turnActive: true,
+        },
+      ],
       ledger: {
         intents: [
           q("alpha-next", "p1", "Alpha goes first", {
@@ -724,6 +740,7 @@ describe("dashboard-8: the all-clear names the globally published next", () => {
 
     expect(screen.queryByTestId("project-group-p1")).toBeNull();
     expect(screen.getByTestId("project-group-p2")).toBeTruthy();
+    expect(screen.queryByTestId("running-session-s-alpha")).toBeNull();
     const allClear = screen.getByTestId("attention-all-clear");
     expect(allClear.textContent).toContain("All clear across projects");
     expect(allClear.textContent).toContain("Alpha goes first");
@@ -745,6 +762,37 @@ describe("dashboard-8: the all-clear names the globally published next", () => {
     expect(filteredEmpty.textContent).toBe("Nothing in beta needs attention.");
     expect(within(filteredEmpty).queryByRole("button")).toBeNull();
     expect(useAppStore.getState().ledger?.badge).toBe(1);
+
+    // A registered project can disappear while this surface stays
+    // mounted. Its stale filter falls back to the unfiltered view in
+    // the same render, then reconciles the select state.
+    act(() => {
+      useAppStore.setState({ projects: [PROJECTS[0]] });
+    });
+    expect(
+      (screen.getByRole("combobox", {
+        name: "Filter by project",
+      }) as HTMLSelectElement).value,
+    ).toBe("all");
+    expect(screen.getByTestId("attention-iq-question")).toBeTruthy();
+    expect(screen.getByTestId("running-session-s-alpha")).toBeTruthy();
+    expect(screen.getByTestId("project-group-p1")).toBeTruthy();
+    expect(screen.queryByTestId("project-group-p2")).toBeNull();
+    expect(screen.queryByTestId("attention-filter-empty")).toBeNull();
+    expect(screen.queryByTestId("attention-all-clear")).toBeNull();
+
+    // The reconciliation is durable: beta returning to the registry
+    // does not silently revive the filter that named it.
+    act(() => {
+      useAppStore.setState({ projects: PROJECTS });
+    });
+    expect(
+      (screen.getByRole("combobox", {
+        name: "Filter by project",
+      }) as HTMLSelectElement).value,
+    ).toBe("all");
+    expect(screen.getByTestId("project-group-p1")).toBeTruthy();
+    expect(screen.getByTestId("project-group-p2")).toBeTruthy();
   });
 });
 
