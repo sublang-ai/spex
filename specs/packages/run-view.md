@@ -44,7 +44,23 @@ While a project session is live, when the session record stream delivers a failu
 
 - a failure identical to the line just before it, within the same turn, folds into that line as a visible count (×2, ×3, …) whose meaning is also in text — never suppressed, never merged with a different failure or across turns;
 - the line speaks plain ([DR-010](../decisions/010-interface-craft.md) §2): a leading "Error:" and doubled periods are stripped, a known runtime message — a sign-in that expired, a rate limit, a timeout, an agent process that exited, a command not installed, an unknown adapter or player, a repository reconciliation that failed — reads as its plain phrase, and whenever the words changed the runtime's own text stays in the line's tooltip;
+- a delivered failure the runtime reported an account of — its own error beside the line, with the structured cause it attached where it attached one — is drawn in that line's place as the failure card [[run-view-147](#run-view-147)] instead, carrying the same count and the same readiness link ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
 - while the Captain agent's adapter readiness reports not ready [[core-service-9](core-service.md#core-service-9)], each failure line carries a "Check agent readiness" link that opens Settings in place, its tooltip naming the unmet requirement.
+
+#### run-view-147
+
+Where a failure the record stream delivers carries the runtime's own account of it [[run-view-2](#run-view-2)], the run view shall draw a failure card at that failure's place saying what failed, why, and what now, every word read from data and none composed by a model ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md), [DR-069](../decisions/069-key-phrases-not-sentences.md)):
+
+| Line | What it says |
+| --- | --- |
+| what failed | the command a configured playbook gives the failing run, and the step it failed in — the state it left for its failure state — in the state vocabulary's human form [[run-view-59](#run-view-59)], neither named where the stream names neither |
+| why | the catalogue's phrase for the structured cause the runtime attached, falling back to the runtime's own message spoken plain [[run-view-2](#run-view-2)] where it attached none |
+| what now | the Boss step the catalogue gives that cause, where it gives one, and the standing of each control the session summary publishes for a run of this session standing parked [[core-service-32](core-service.md#core-service-32)]; absent where there is neither |
+
+- the catalogue holds one row per failure code the runtime exports [[run-view-148](#run-view-148)], each row a phrase and an optional Boss step — what to do outside Spex — derived from that code's bounded evidence: its repository paths printed as a comma-separated list ending in "… and N more" for the count the evidence says was omitted, never their content, and a nested failure phrased by the child's own cause;
+- a standing the runtime reports for a control reads as that control's label and the phrased reason it carries, so a control that would do nothing says so before it is pressed;
+- a code the catalogue has no row for, and a standing reason it has no phrase for, read as their own identifiers in words rather than as nothing;
+- the runtime's own message and the raw state id ride the card's tooltip and never its copy ([DR-010](../decisions/010-interface-craft.md) §2).
 
 ### Player Panes
 
@@ -316,16 +332,18 @@ While a session reports external ownership [[core-service-32](core-service.md#co
 While a session a Boss message continues [[core-service-32](core-service.md#core-service-32)] holds a playbook run its record stream still reports underway [[run-view-14](#run-view-14)] [[run-view-74](#run-view-74)] standing parked on the Boss — in the recoverable failure state its machine card draws in the failure emphasis [[run-view-61](#run-view-61)], or awaiting the Boss's reply [[run-view-9](#run-view-9)] — the run view shall stand a parked-run notice between the Captain pane and the composer, saying in key phrases what that run waits for and what each of its controls does ([DR-010](../decisions/010-interface-craft.md) §2, [DR-069](../decisions/069-key-phrases-not-sentences.md), [DR-060](../decisions/060-failed-workflow-control.md), [DR-073](../decisions/073-letting-go-ends-the-parked-run.md)):
 
 - the notice names the parked workflow by the command a configured playbook gives that run, and by no name at all where none does — an identifier is never dressed as a command — with that run's playbook id and the raw state carried in its title;
-- Drop stands on either park and ends the run, while Retry stands only on the failure park, which a recovery answers: a run awaiting a reply carries Drop alone, its other door being the composer [[run-view-8](#run-view-8)];
-- the notice states what each control does — Retry runs the recovery the run itself advertises, Drop ends the run — so each promises only what it performs, and a control the opened run advertises nothing for refuses with its cause rather than being withheld, since a settled session holds no shell to read [[core-service-98](core-service.md#core-service-98)];
+- on the failure park the notice says why, in the catalogue's phrase for the cause the runtime attached [[run-view-147](#run-view-147)], and what now — the Boss step that cause carries and the standing of each control it draws ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
+- on the failure park the notice draws one control per action the session summary publishes for that run [[core-service-32](core-service.md#core-service-32)], each labelled with that action's own label, and never chooses among them: a control the runtime called a no-op or blocked stands visible and disabled with its phrased reason in its tooltip;
+- Drop stands on either park and ends the run through the ending that summary publishes, and where no action is published — a run whose controls were never captured — Drop stands alone with the composer named as the way on [[run-view-8](#run-view-8)]; a run awaiting a reply carries Drop alone, its other door being the composer;
+- a control the opened run advertises nothing for refuses with its cause rather than being withheld, since a settled session holds no shell to read [[core-service-98](core-service.md#core-service-98)];
 - the notice wraps its controls under its words as one group when its pane is too narrow for both ([DR-041](../decisions/041-chrome-that-fits.md));
 - an uncertain session shows the interrupted-turn controls instead [[run-view-110](#run-view-110)], a session reporting external ownership shows no notice [[run-view-125](#run-view-125)], and history the core cannot continue shows its own notice [[run-view-33](#run-view-33)].
 
 #### run-view-129
 
-When the parked-run notice's Retry control is activated [[run-view-128](#run-view-128)], the run view shall run that run's own advertised recovery as the session's next turn [[core-service-98](core-service.md#core-service-98)] ([DR-062](../decisions/062-ending-a-failed-workflow.md)):
+When one of the parked-run notice's recovery controls is activated [[run-view-128](#run-view-128)], the run view shall run that control's own action as the session's next turn [[core-service-98](core-service.md#core-service-98)] ([DR-062](../decisions/062-ending-a-failed-workflow.md), [DR-075](../decisions/075-a-failure-says-what-and-what-now.md)):
 
-- the control names the kind to run, the core resolving it against what the opened run advertises [[core-service-98](core-service.md#core-service-98)];
+- the control names the recovery kind and the id of the action it draws, as the summary published it [[core-service-32](core-service.md#core-service-32)], the core resolving that name against what the opened run advertises [[core-service-98](core-service.md#core-service-98)];
 - the turn renders in the thread as the Boss's own message carrying that action's own label, so the conversation records what was asked;
 - the submission carries no intent dispatch and stamps none [[core-service-47](core-service.md#core-service-47)] — a staged intent detaches rather than riding it [[run-view-86](#run-view-86)].
 
@@ -336,16 +354,16 @@ When the parked-run notice's Drop control is activated and its inline confirm ta
 | The session serves | The one command |
 | --- | --- |
 | an open intent | that intent's Drop verdict, which ends the parked run before recording it [[core-service-46](core-service.md#core-service-46)] — one ruling taken once |
-| no intent | the ending control [[core-service-98](core-service.md#core-service-98)], ending the run being the whole of the act, with nothing further recorded |
+| no intent | the ending control, named by the id the summary published for it [[core-service-32](core-service.md#core-service-32)] [[core-service-98](core-service.md#core-service-98)], ending the run being the whole of the act, with nothing further recorded |
 
 - the turn the core runs renders in the thread as the Boss's own message carrying the ending's own label, so the conversation records that the Boss stopped it;
 - the submission carries no intent dispatch and stamps none [[core-service-47](core-service.md#core-service-47)] — a staged intent detaches rather than riding it [[run-view-86](#run-view-86)].
 
 #### run-view-130
 
-While a command the parked-run notice sent is in flight [[run-view-129](#run-view-129)] [[run-view-112](#run-view-112)], the run view shall show the activated control's busy form in place without widening it, accept no further activation of either, and present the outcome only as the conversation reports it ([DR-010](../decisions/010-interface-craft.md) §3, §5, [DR-041](../decisions/041-chrome-that-fits.md)):
+While a command the parked-run notice sent is in flight [[run-view-129](#run-view-129)] [[run-view-112](#run-view-112)], the run view shall show the activated control's busy form in place without widening it, accept no further activation of any of its controls, and present the outcome only as the conversation reports it ([DR-010](../decisions/010-interface-craft.md) §3, §5, [DR-041](../decisions/041-chrome-that-fits.md)):
 
-- both controls are disabled while the core connection is down and while a turn is active;
+- every control the notice draws is disabled while the core connection is down and while a turn is active;
 - a refused command shows its cause beside the notice with the transcript and draft preserved, as a refused composer submission does [[run-view-8](#run-view-8)];
 - the notice stands until the record stream reports that run left its park or ended [[run-view-14](#run-view-14)], so a turn that answers without leaving it keeps the way back in place while a control's success, or a reply the park itself awaited, takes it away.
 
@@ -353,6 +371,7 @@ While a command the parked-run notice sent is in flight [[run-view-129](#run-vie
 
 While the shown session carries a failure entry [[dashboard-1](dashboard.md#dashboard-1)] with no run of its standing parked on the Boss [[run-view-128](#run-view-128)], no turn in flight, and an ordinary Boss message continuing it [[core-service-32](core-service.md#core-service-32)], the run view shall stand a notice where the parked-run notice stands saying that the last turn failed and that a message picks it up, with the composer beneath it ([DR-066](../decisions/066-every-summons-has-a-door.md)):
 
+- the notice says why, in the catalogue's phrase for the cause the runtime attached to that failure, and the Boss step that cause carries, each omitted where the catalogue gives none [[run-view-147](#run-view-147)] ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
 - nothing is stuck, so the notice carries no control of its own: the act is the composer's, and the notice is void wherever the composer is [[run-view-8](#run-view-8)];
 - the notice leaves when the entry does — the next Boss turn starting [[dashboard-4](dashboard.md#dashboard-4)].
 
@@ -599,7 +618,7 @@ The tab strip shall show the current project's open sessions, working and idle a
 
 - the strip holds the sessions the reader has opened — the working set, not the archive, which the sidebar keeps [[run-view-67](#run-view-67)];
 - session tabs are titled by the session's first Boss turn (truncated; "new session" before the first turn) with the full prompt and start time in the tooltip — never by the project name, which the sidebar carries ([DR-011](../decisions/011-project-workspace.md));
-- tabs carry the shared attention signal [[dashboard-9](dashboard.md#dashboard-9)]: a red dot for a failure and an amber one for every other entry, standing on the active tab as well as a background one — showing a session clears what showing settles [[run-view-134](#run-view-134)], so a dot that stands is one the reader still owes — with the detail in the tab tooltip and the tab's accessible name ending in that entry's own words — "failed", "needs your reply", "needs your verdict", "unread turn" — so the dot is never the only channel, and a tab of history the core cannot continue says "history" ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
+- tabs carry the shared attention signal [[dashboard-9](dashboard.md#dashboard-9)]: a red dot for a failure and an amber one for every other entry, standing on the active tab as well as a background one — showing a session clears what showing settles [[run-view-134](#run-view-134)], so a dot that stands is one the reader still owes — with the detail in the tab tooltip — a failure entry's tooltip carrying the catalogue's phrase for the cause that entry names [[run-view-147](#run-view-147)] [[dashboard-1](dashboard.md#dashboard-1)] ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md)) — and the tab's accessible name ending in that entry's own words — "failed", "needs your reply", "needs your verdict", "unread turn" — so the dot is never the only channel, and a tab of history the core cannot continue says "history" ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - each tab's close control files the session out of the working set, stopping nothing and confirming nothing ([DR-029](../decisions/029-session-history-home.md)), and after a tab closes focus moves to a neighboring tab, never to the document body;
 - the strip scrolls horizontally when tabs overflow, keeps the new-session control — a plus glyph, its name in its accessible name and tooltip ([DR-041](../decisions/041-chrome-that-fits.md)) — reachable, exposes tab-list semantics, and keeps the active tab scrolled into view;
 - the strip has one Tab stop — the active tab — and Arrow Left, Arrow Right, Home, and End move focus between session tabs, the new-session control, and the pinned tabs without activating any;
@@ -950,12 +969,14 @@ The test suite shall assert first-hour failures surface at hand:
 
 Where a replayed fixture stream ends with a playbook run standing parked on the Boss [[run-view-14](#run-view-14)], the test suite shall assert the parked-run notice:
 
-- the notice stands between the Captain pane and the composer, naming the parked workflow by its command in key phrases with the raw state in its title and stating what each control does, while a run no configured playbook claims names no command and carries its playbook id in that title instead [[run-view-128](#run-view-128)];
-- a fixture whose run waits for a Boss reply carries Drop with no Retry beside it, the composer standing as that park's other door [[run-view-128](#run-view-128)];
-- a fixture whose run advertises no recovery refuses Retry with its cause, leaving the notice and the transcript standing [[run-view-128](#run-view-128)];
-- activating Retry dispatches exactly one control over the protocol naming the recovery kind, which then renders as a Boss bubble carrying that action's own label, while a staged intent detaches and no intent id rides it [[run-view-129](#run-view-129)];
-- activating Drop asks its confirm first — backing out sends nothing — and then sends exactly one command: for a fixture serving an open intent that intent's close as dropped and no control, the ending riding it, and for one serving none exactly one ending control and no close [[run-view-112](#run-view-112)];
-- while either command is in flight the activated control shows its busy form under the width rule it held at rest and neither control can be activated; a refused command shows its cause beside the notice, which stands, with the transcript and draft intact [[run-view-130](#run-view-130)];
+- the thread draws that failure as a card in the bare status line's place, its what line naming the run's command and the step it left in human words, its why line the catalogue's phrase for the fixture's own cause with its paths, its what-now line the Boss step and the published no-op's standing, and the runtime's message with the raw state in its tooltip [[run-view-147](#run-view-147)] [[run-view-2](#run-view-2)];
+- the notice stands between the Captain pane and the composer, naming the parked workflow by its command in key phrases with the raw state in its title, saying why the run failed and what to do about it, while a run no configured playbook claims names no command and carries its playbook id in that title instead [[run-view-128](#run-view-128)];
+- the notice draws one control per action the fixture summary publishes, in the summary's order and each in the action's own label, with the no-op among them visible, disabled, and carrying its phrased reason in its tooltip and in the what-now line, and Drop's tooltip carrying the published ending's own label [[run-view-128](#run-view-128)];
+- the same fixture whose summary publishes no controls draws Drop alone, no recovery, and names the composer as the way on [[run-view-128](#run-view-128)];
+- a fixture whose run waits for a Boss reply carries Drop with no recovery control beside it, the composer standing as that park's other door [[run-view-128](#run-view-128)];
+- activating a recovery control dispatches exactly one control over the protocol naming the recovery kind and that action's own id — not the first the run advertises — which then renders as a Boss bubble carrying that action's own label, while a staged intent detaches and no intent id rides it [[run-view-129](#run-view-129)];
+- activating Drop asks its confirm first — backing out sends nothing — and then sends exactly one command: for a fixture serving an open intent that intent's close as dropped and no control, the ending riding it, and for one serving none exactly one ending control naming the published ending's id and no close [[run-view-112](#run-view-112)];
+- while a command is in flight the activated control shows its busy form under the width rule it held at rest and no control of the notice can be activated; a refused command shows its cause beside the notice, which stands, with the transcript and draft intact [[run-view-130](#run-view-130)];
 - a fixture whose stream then reports the run leaving its failure state removes the notice, one whose stream reports the run ended removes it too, and one whose next turn only answers leaves it standing [[run-view-130](#run-view-130)];
 - the same fixture marked uncertain shows the interrupted-turn controls and no parked-run notice [[run-view-128](#run-view-128)] [[run-view-110](#run-view-110)], and marked externally owned shows neither [[run-view-125](#run-view-125)].
 
@@ -1018,7 +1039,7 @@ Where a fixture holds a session whose last turn finished before the client learn
 - showing that session sends the marker naming the fold's own summoning turn, so an entry raised before the client connected clears with no live record arriving;
 - a session listed in the sidebar, subscribed, or held in a background tab is never marked, and neither is a pinned tab that is no conversation;
 - a fold naming no unread turn for the shown session sends nothing, so a turn in flight is never marked, and the marker is sent once per fold rather than on every render;
-- a session carrying a failure entry with no run parked stands the pick-it-up notice above its composer, which a parked run's own notice replaces [[run-view-135](#run-view-135)];
+- a session carrying a failure entry with no run parked stands the pick-it-up notice above its composer, carrying the catalogue's phrase for the cause its stream reported and that cause's Boss step [[run-view-135](#run-view-135)] [[run-view-147](#run-view-147)], which a parked run's own notice replaces [[run-view-135](#run-view-135)];
 - a player's permission request renders as its own line in that player's pane and raises no mark on the tab, the sidebar row, or the badge [[run-view-136](#run-view-136)].
 
 ### Protocol Boundary Coverage
@@ -1030,6 +1051,14 @@ When an integration suite reconnects the app store and delivers a history-replac
 #### run-view-126
 
 When an integration suite presents active and unprovable external ownership, it shall verify history loading and failed-load retry, the ownership reason, unavailable mutation controls and preserved drafts and queued input [[run-view-125](#run-view-125)].
+
+#### run-view-148
+
+Where the runtime's closed failure-code list is read at its boundary, the test suite shall assert that the failure catalogue phrases every code that list holds [[run-view-147](#run-view-147)] ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md)):
+
+- each code has a row whose phrase is non-empty for a sample evidence carrying every member any code reads, and for no evidence at all;
+- the catalogue holds no code the list does not, so a code that leaves the runtime leaves the catalogue with it;
+- a code outside the list, and a standing reason the catalogue has no phrase for, still read as their own identifiers in words.
 
 #### run-view-19
 
@@ -1144,4 +1173,4 @@ Where the harness boots with the demo project registered, when the journey leave
 
 #### run-view-132
 
-Where the harness boots with the demo project registered and a scripted workflow that parks in its recoverable failure state, the test suite shall assert the recovery round trip through the page [[run-view-128](#run-view-128)]: the notice appears naming the failed workflow by its command with the raw state in its title, and stands through the turn's settlement [[run-view-128](#run-view-128)], the settled turn leaving the state chip reading the failure in red with the parked run's state in its tooltip rather than the Captain shell's rest state [[run-view-59](#run-view-59)], a control the opened run cannot satisfy refuses with its cause, leaving the notice, the transcript and the composer intact, and Drop's confirm backs out having sent nothing [[run-view-130](#run-view-130)] [[run-view-112](#run-view-112)] — the served harness opens a continued session with no engagement restored, so the successful round trips are the fixture stream's to prove [[run-view-131](#run-view-131)]; and that at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] both of the notice's controls sit under its words, neither overlapping them nor each other nor leaving the notice's box [[run-view-128](#run-view-128)], with the page still not scrolling sideways [[run-view-119](#run-view-119)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout).
+Where the harness boots with the demo project registered and a scripted workflow that parks in its recoverable failure state, the test suite shall assert the recovery round trip through the page [[run-view-128](#run-view-128)]: the notice appears naming the failed workflow by its command with the raw state in its title, and stands through the turn's settlement [[run-view-128](#run-view-128)], the settled turn leaving the state chip reading the failure in red with the parked run's state in its tooltip rather than the Captain shell's rest state [[run-view-59](#run-view-59)], the harness publishing no control for that run so the notice draws no recovery and names the composer as the way on [[run-view-128](#run-view-128)], a control the opened run cannot satisfy refuses with its cause, leaving the notice, the transcript and the composer intact, and Drop's confirm backs out having sent nothing [[run-view-130](#run-view-130)] [[run-view-112](#run-view-112)] — the served harness opens a continued session with no engagement restored, so the published-control path and the successful round trips are the fixture stream's to prove [[run-view-131](#run-view-131)]; and that at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] every control the notice draws sits under its words, none overlapping them nor each other nor leaving the notice's box [[run-view-128](#run-view-128)], with the page still not scrolling sideways [[run-view-119](#run-view-119)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout).

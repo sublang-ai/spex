@@ -363,6 +363,9 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 | Project groups | per project: the current conversation's state [[core-service-93](#core-service-93)], the queue in rank order with each blocked intent marked [[core-service-45](#core-service-45)], and the open intents' source-artifact references [[core-service-42](#core-service-42)] |
 | Badge | the count of all attention entries |
 
+- a failure entry whose run stands parked carries the structured cause the runtime attached to that failure — the `{ code, evidence }` the stream reports beside the failure it decided — read defensively, so a shape that is not a code with an optional evidence object is dropped rather than half-read and the entry states no reason the runtime did not state ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
+- the core neither interprets nor completes that cause: the words are the client's to give it [[run-view-147](run-view.md#run-view-147)].
+
 #### core-service-50
 
 When a client sends `ledger.history` for a project, the core service shall reply with one page of that project's worked closed intents — closed done, or closed dropped after a turn of theirs ended finished ([DR-038](../decisions/038-history-is-done-work.md)) — newest-closed first, the same stored data yielding identical pages after a restart [[core-service-10](#core-service-10)]:
@@ -742,6 +745,13 @@ Where the core service runs with a valid config and the scripted fake adapter [[
 #### core-service-54
 
 Where a store holds queued, dispatched, finished, and closed intents from a completed run, the test suite shall stop the core service, start it again on the same state root [[core-service-15](#core-service-15)], and assert that `ledger.get` replies identically to its pre-restart reply [[core-service-49](#core-service-49)] and that the intent act log carries no state or status field [[core-service-52](#core-service-52)].
+
+#### core-service-106
+
+Where a stored session's stream parks a run in its failure state, the test suite shall fold that stream and assert the cause contract of [[core-service-49](#core-service-49)]:
+
+- a stream whose failed-state status record carries the runtime's error with a well-formed cause yields a parked failure entry carrying exactly that cause, code and evidence alike;
+- a stream carrying a shape that is not a cause yields the same parked entry with none, the fold stating no reason the runtime did not state.
 
 #### core-service-55
 
