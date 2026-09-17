@@ -13,11 +13,11 @@ Coverage replays recorded record-stream fixtures through that protocol, exercisi
 
 ## External Behavior
 
-### Duration Vocabulary
+### Elapsed-Span Vocabulary
 
 #### run-view-145
 
-When the run view presents a duration, it shall use one compact vocabulary and never raw milliseconds:
+When the run view presents an elapsed work span — how long work took or has run, rather than how old a moment is — it shall use one compact vocabulary and never raw milliseconds:
 
 | Span | Form |
 | --- | --- |
@@ -514,8 +514,9 @@ While the app is connected, the sidebar shall present navigation as surface entr
 
 #### run-view-73
 
-Each session row in the sidebar shall read as its conversation — its title (the first Boss turn, or a never-spoken marker), its age in the app's compact form with the exact moment in its tooltip, and a status mark — with its turn count and its age in words in the row's accessible description [[core-service-32](core-service.md#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)):
+Each session row in the sidebar shall read as its conversation — its title (the first Boss turn, or a never-spoken marker), its compact age with the exact moment in its tooltip, and a status mark — with its turn count and its qualified age in the row's accessible description [[core-service-32](core-service.md#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)):
 
+- the age clamps a future moment to zero, rounds the difference to whole seconds, and at each boundary rounds that current unit into the next — seconds to minutes at 60, minutes to hours at 60, hours to days at 24, and days to weeks at 7; its visible form is `now` while the rounded seconds remain below 60, then one unit such as `3m`, `2h`, `5d` or `3w` with no `ago`, while its accessible form is `just now` or appends ` ago` to that unit;
 - the mark speaks attention first and life second, in the app's one status palette: red while the session holds an unacknowledged failure and amber for its every other entry — the one published fold naming which [[dashboard-9](dashboard.md#dashboard-9)] — then running while a turn is in flight, then idle ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - the description says what the entry asks for in its own words — "failed", "waiting for your reply", "waiting for your verdict", "unread turn" — and a session the core cannot continue keeps that limitation in its description beside them, so a claim that a reply is owed never displaces it;
 - an idle session whose last turn held a failure that no longer summons wears a quieter historical mark that counts toward no attention signal;
@@ -846,7 +847,7 @@ Where a fixture machine holds a neighbour edge, a same-rank pair, a rank-skippin
 
 #### run-view-70
 
-Where a fixture store holds two projects — the current one with a titled session awaiting a Boss reply, more idle sessions than the recent window holds (one of them having held a failure), and a session with no turns; the other with a session awaiting a reply and an idle session — the test suite shall assert the sidebar contract: Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)], the current project's rows carry their titles, relative times, and attention-first marks with the turn counts in their accessible descriptions and the settled failure marked as history rather than attention [[run-view-73](#run-view-73)], and the other project's row carries its own attention signal [[run-view-67](#run-view-67)]; disclosing that project leaves the current project unchanged [[run-view-67](#run-view-67)]; activating its session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; a turn settling keeps its transcript on screen with the composer ready and no ended word on its tab or row [[run-view-69](#run-view-69)]; closing that tab leaves the session listed and running nothing [[run-view-68](#run-view-68)]; the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)]; and, with Projects showing the waiting session's tab, the current project's row and that session's row are selected, showing Playbooks leaves no row selected with its own entry current, and Projects selects the remembered project again [[run-view-67](#run-view-67)].
+Where a fixture store holds two projects — the current one with a titled session awaiting a Boss reply, more idle sessions than the recent window holds (one of them having held a failure), and a session with no turns; the other with a session awaiting a reply and an idle session — the test suite shall assert the sidebar contract: Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)], the current project's rows carry their titles, compact ages spanning `now`, minutes, hours, days and weeks with exact-moment tooltips, and attention-first marks, while their accessible descriptions carry `just now` or the same rounded unit followed by `ago`, their turn counts, and the settled failure as history rather than attention [[run-view-73](#run-view-73)], and the other project's row carries its own attention signal [[run-view-67](#run-view-67)]; disclosing that project leaves the current project unchanged [[run-view-67](#run-view-67)]; activating its session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; a turn settling keeps its transcript on screen with the composer ready and no ended word on its tab or row [[run-view-69](#run-view-69)]; closing that tab leaves the session listed and running nothing [[run-view-68](#run-view-68)]; the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)]; and, with Projects showing the waiting session's tab, the current project's row and that session's row are selected, showing Playbooks leaves no row selected with its own entry current, and Projects selects the remembered project again [[run-view-67](#run-view-67)].
 
 
 #### run-view-84
@@ -1114,7 +1115,7 @@ Where the harness boots with the demo project registered and carrying closed wor
 - the page never scrolls vertically, no scrolling box ends past the bottom of the viewport, and no positioned element lies past it with no scrolling box containing it — at either height, and again after the window is made short and tall within one page life [[run-view-119](#run-view-119)];
 - within every tab list, toolbar, header, list row, and composer box, no two visible siblings overlap and every child lies inside its parent [[run-view-106](#run-view-106)] [[run-view-71](#run-view-71)];
 - every control's accessible name is the same at every width [[run-view-8](#run-view-8)] [[run-view-85](#run-view-85)] [[run-view-48](#run-view-48)];
-- as the measured player pane narrows, its resting active-time phrase yields at a wider measured pane width than its live elapsed reading, each is visible in the roomy pane and has yielded at the pane floor, and agent identity and header controls remain without overlap throughout; every yielded active-time reading remains in the pane's accessible description [[run-view-143](#run-view-143)];
+- as the measured player pane narrows, its resting active-time phrase yields at a wider measured pane width than its live elapsed reading, each is visible in the roomy pane and has yielded at the pane floor, and agent identity and header controls remain without overlap throughout [[run-view-7](#run-view-7)] [[run-view-143](#run-view-143)]; every yielded active-time reading remains in the pane's accessible description [[run-view-143](#run-view-143)];
 - the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)];
 - the Captain home's agent popover, opened at each height, lies inside the window both on opening and after model discovery grows its content, with its adapter picker reachable and the page unmoved [[run-view-32](#run-view-32)];
 - a composer standing behind six queued submissions keeps its frame a few entries tall and its primary control inside the window at every width and height [[run-view-106](#run-view-106)];

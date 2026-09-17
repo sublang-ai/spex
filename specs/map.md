@@ -96,7 +96,8 @@ meta.md       The spec of specs
 | [DR-068](decisions/068-an-agents-settings-where-the-agent-is.md) | 068-an-agents-settings-where-the-agent-is.md | An agent's settings, where the agent is: one chip opens one agent's own editor, no session-wide panel and no count, the act carrying no name of its own |
 | [DR-069](decisions/069-key-phrases-not-sentences.md) | 069-key-phrases-not-sentences.md | Key phrases, not sentences: a surface explains nothing its controls show, a scope or boundary is a phrase where it applies, what is not offered is not explained; amends DR-010 and DR-068 |
 | [DR-070](decisions/070-agent-active-time.md) | 070-agent-active-time.md | Per-agent cumulative active time, read quietly in each pane header and never combined in the run view; measurement amended by DR-071 |
-| [DR-071](decisions/071-active-time-follows-held-calls.md) | 071-active-time-follows-held-calls.md | Active time follows each agent's completed prompt-to-finish spans, aligning shared shells while the durable fold stays order-neutral |
+| [DR-071](decisions/071-active-time-follows-held-calls.md) | 071-active-time-follows-held-calls.md | Active time follows each agent's completed prompt-to-finish spans, aligning shared shells while the durable fold stays order-neutral; backward spans amended by DR-072 |
+| [DR-072](decisions/072-backward-call-time-is-zero.md) | 072-backward-call-time-is-zero.md | A matched call whose finite clock moves backward closes normally and contributes measured zero |
 
 ## Packages
 
