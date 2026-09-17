@@ -15,6 +15,9 @@ export interface AttentionItem {
   sessionId: string;
   projectPath: string;
   text: string;
+  /** Why a failure failed, in the catalogue's phrase (run-view-147,
+   * DR-075): the mark's tooltip says it wherever the mark is read. */
+  why?: string;
 }
 
 /** Worst-first order for a session carrying more than one entry. */

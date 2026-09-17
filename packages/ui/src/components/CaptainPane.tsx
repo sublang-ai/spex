@@ -10,6 +10,8 @@ import { useEffect, useState, type ReactNode, type RefObject } from "react";
 
 import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
+import { readRecordFailure } from "../lib/failure-catalogue.js";
+import { FailureCard, type FailureContext } from "./FailureCard.js";
 import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, clockTime, duration } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
@@ -53,6 +55,7 @@ export function ThreadLine({
   graphs,
   source,
   readiness,
+  failure,
 }: {
   line: CaptainLine;
   graphs?: Record<string, MachineGraph | null>;
@@ -62,8 +65,46 @@ export function ThreadLine({
   /** Present while the Captain's adapter is not ready: every failure
    * line then carries the link to Settings (run-view-2). */
   readiness?: ReadinessHint;
+  /** What the failure card says beyond the record's own data: the
+   * run's command and step, and the controls the summary publishes
+   * (run-view-147). */
+  failure?: FailureContext;
 }) {
   const time = new Date(line.at).toLocaleString();
+  // A failure the runtime reported draws as the card, wherever the
+  // thread shows it (run-view-2, DR-075): the failed-state status line
+  // the shell narrates, which carries the runtime's own account of the
+  // failure, and a failure record the runtime explained with a cause.
+  // A failure line the runtime said nothing structured about keeps its
+  // plain one-line form.
+  const reported = readRecordFailure(line.data);
+  const drawsCard =
+    reported !== undefined &&
+    (line.kind === "status" || (line.kind === "error" && reported.cause !== undefined));
+  const readinessLink = readiness ? (
+    <button
+      type="button"
+      data-testid="failure-readiness-link"
+      onClick={readiness.onOpenSettings}
+      title={readiness.requirement}
+      className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-300"
+    >
+      Check agent readiness
+    </button>
+  ) : null;
+  if (drawsCard) {
+    return (
+      <div title={time}>
+        <FailureCard
+          cause={reported.cause}
+          message={reported.message ?? line.raw ?? line.text}
+          context={failure}
+          count={line.count}
+          extra={readinessLink}
+        />
+      </div>
+    );
+  }
   switch (line.kind) {
     case "machine":
       // A finished run's drawn record settles into the thread
@@ -161,17 +202,7 @@ export function ThreadLine({
               <span className="sr-only">, {line.count} times</span>
             </span>
           ) : null}
-          {readiness ? (
-            <button
-              type="button"
-              data-testid="failure-readiness-link"
-              onClick={readiness.onOpenSettings}
-              title={readiness.requirement}
-              className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-300"
-            >
-              Check agent readiness
-            </button>
-          ) : null}
+          {readinessLink}
         </div>
       );
     default:
@@ -296,6 +327,7 @@ export function CaptainPane({
   settingsPopover,
   focusKey,
   onFocusHandled,
+  failure,
 }: {
   view: SessionView;
   /** The core-folded completed active time for the Captain. */
@@ -323,6 +355,10 @@ export function CaptainPane({
    * place (run-view-91). */
   focusKey?: string;
   onFocusHandled?: () => void;
+  /** What a failure card says beyond the record's own data: the run's
+   * command and step, and the controls the session summary publishes
+   * (run-view-147). */
+  failure?: FailureContext;
 }) {
   const { scrollRef, onScroll, newBelow, jump } = useStickToBottom(
     view.captain.length +
@@ -492,6 +528,7 @@ export function CaptainPane({
                         : undefined
                     }
                     readiness={readiness}
+                    failure={failure}
                   />
                 </div>
                 {extras

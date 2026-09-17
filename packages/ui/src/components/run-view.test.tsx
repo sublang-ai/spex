@@ -46,6 +46,7 @@ import {
   MACHINE_RECOVERED,
   MACHINE_RUN,
   MACHINE_STOPPED,
+  PARKED_FAILURE,
   type FixtureEntry,
 } from "../fixtures/sample-run.js";
 import codeGraph from "../fixtures/machines/code.json";
@@ -2827,10 +2828,23 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
   }
 
-  // core-service-98: the runtime is held only for a turn, so the notice
-  // cannot read what a settled run advertises. It offers both controls
-  // and the core resolves each at activation.
-  const PARKED: SessionInfo = SESSION;
+  // core-service-32, DR-074/DR-075: the runtime is held only for a
+  // turn, so what the parked run advertises was read at settlement and
+  // travels with the summary. The notice draws one control per action
+  // and names the one it activates; the core re-validates that name
+  // against the opened shell.
+  const PARKED: SessionInfo = { ...SESSION, parked: PARKED_FAILURE };
+  const RECONCILE = PARKED_FAILURE.actions[0];
+  const ABANDON = PARKED_FAILURE.actions[1];
+
+  /** One advertised control, by the id the summary published. */
+  function action(id: string): HTMLButtonElement {
+    const found = screen
+      .getAllByTestId("failed-workflow-action")
+      .find((button) => button.getAttribute("data-action-id") === id);
+    if (!found) throw new Error(`no control for "${id}"`);
+    return found as HTMLButtonElement;
+  }
 
   function renderFailed(over: Partial<Parameters<typeof RunView>[0]> = {}) {
     return render(
@@ -2866,19 +2880,75 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       "The /code workflow failed and is waiting for you.",
     );
     expect(notice.getAttribute("title")).toBe("state: failed");
-    expect(notice.textContent).toContain(
-      "Retry runs the workflow's own recovery. Drop ends the run.",
+    // Why, from the catalogue's phrase for the cause the runtime
+    // attached, and what to do about it outside Spex (run-view-128,
+    // DR-075) — no model composed either.
+    expect(screen.getByTestId("failed-workflow-why").textContent).toBe(
+      "Committed 3b7de901 but left changes uncommitted: src/session/refresh.ts, src/session/index.ts",
     );
-    const retry = screen.getByTestId("failed-workflow-retry");
-    expect(retry.textContent).toBe("Retry");
-    // Each control promises only what it performs (run-view-128): the
-    // recovery names the run's own action, and Drop says it ends it.
-    expect(retry.getAttribute("title")).toBe(
-      "Run the recovery this workflow offers.",
+    // One control per advertised action, in the run's own labels, and
+    // the no-op's reason where the what-now line names it.
+    const controls = screen.getAllByTestId("failed-workflow-action");
+    expect(controls.map((button) => button.getAttribute("data-action-id"))).toEqual([
+      RECONCILE.id,
+      ABANDON.id,
+    ]);
+    expect(controls.map((button) => button.textContent)).toEqual([
+      RECONCILE.label,
+      ABANDON.label,
+    ]);
+    expect(screen.getByTestId("failed-workflow-next").textContent).toBe(
+      "Commit or discard what is left · Retry unresolved effect reconciliation: nothing has changed since it failed",
     );
+    // A no-op stays visible and disabled, its reason in its tooltip:
+    // nothing is chosen for the Boss and nothing is hidden from him.
+    expect(action(RECONCILE.id).disabled).toBe(true);
+    expect(action(RECONCILE.id).getAttribute("title")).toBe(
+      "Retry unresolved effect reconciliation: nothing has changed since it failed",
+    );
+    expect(action(ABANDON.id).disabled).toBe(false);
     expect(
       screen.getByTestId("failed-workflow-drop").getAttribute("title"),
-    ).toBe("End this run. It will not be resumed.");
+    ).toBe("Give up on /code");
+  });
+
+  test("where the summary published no controls, Drop stands alone and the composer is the other door", () => {
+    // A session parked before this rule, or one whose controls were
+    // never captured (run-view-128): the notice offers no recovery it
+    // cannot name, and says what does work.
+    renderFailed({ session: SESSION });
+    expect(screen.queryAllByTestId("failed-workflow-action")).toEqual([]);
+    expect(screen.getByTestId("failed-workflow-drop")).toBeTruthy();
+    expect(screen.getByTestId("failed-workflow-next").textContent).toContain(
+      "Send a message to pick it up, or drop the run",
+    );
+    expect(screen.getByTestId("boss-composer")).toBeTruthy();
+  });
+
+  test("the thread draws the failure as a card: what failed, why, and what now", () => {
+    renderFailed();
+    const card = screen.getByTestId("failure-card");
+    // What failed: the run's command and the step it left, humanized
+    // (run-view-59); the raw id and the runtime's own message ride the
+    // tooltip.
+    expect(screen.getByTestId("failure-card-what").textContent).toBe(
+      "/code failed at run first phase",
+    );
+    expect(screen.getByTestId("failure-card-why").textContent).toBe(
+      "Committed 3b7de901 but left changes uncommitted: src/session/refresh.ts, src/session/index.ts",
+    );
+    expect(screen.getByTestId("failure-card-next").textContent).toBe(
+      "Commit or discard what is left · Retry unresolved effect reconciliation: nothing has changed since it failed",
+    );
+    expect(card.getAttribute("title")).toBe(
+      "CODE governed outcome remains unresolved: repository-disposition-mismatch · step: runFirstPhase",
+    );
+    // The bare status line it replaces is gone from the thread.
+    expect(
+      screen
+        .queryAllByTestId("system-line")
+        .some((line) => line.textContent?.includes("workflow failed")),
+    ).toBe(false);
   });
 
 
@@ -2910,14 +2980,14 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     });
     try {
       const { rerender } = renderFailed();
-      await act(async () =>
-        fireEvent.click(screen.getByTestId("failed-workflow-retry")),
-      );
-      // run-view-129: the run's own advertised recovery, named by id —
-      // no prose for the Captain to interpret.
+      await act(async () => fireEvent.click(action(ABANDON.id)));
+      // run-view-129: the action the Boss chose, named by the id the
+      // summary published — never the first the run advertised, and no
+      // prose for the Captain to interpret.
       expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
         sessionId: "s1",
         kind: "recovery",
+        actionId: ABANDON.id,
       });
       // Nothing else rides the control turn (run-view-129).
       expect(useAppStore.getState().stagedIntents.s1).toBeUndefined();
@@ -2985,10 +3055,12 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       await act(async () =>
         fireEvent.click(screen.getByTestId("failed-workflow-drop-confirm")),
       );
-      // run-view-112: the shell's own ending, selected by id.
+      // run-view-112: the shell's own ending, selected by the id the
+      // summary published.
       expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
         sessionId: "s1",
         kind: "ending",
+        actionId: "give-up",
       });
     } finally {
       setClientForTests(undefined);
@@ -3016,23 +3088,27 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
         composer: { draft: "Keep my draft", queued: [] },
         onDraftChange: () => {},
       });
-      const retry = screen.getByTestId("failed-workflow-retry") as HTMLButtonElement;
-      const shape = retry.className;
-      fireEvent.click(retry);
-      fireEvent.click(retry);
+      const abandon = action(ABANDON.id);
+      const shape = abandon.className;
+      fireEvent.click(abandon);
+      fireEvent.click(abandon);
       expect(command).toHaveBeenCalledOnce();
-      expect(retry.textContent).toBe("Retrying…");
-      expect(retry.getAttribute("aria-busy")).toBe("true");
-      expect(retry.disabled).toBe(true);
-      // run-view-130: neither control may be activated while the turn
-      // this one started is in flight.
+      // The label stays in the box, invisible, holding the width the
+      // busy form is laid over (run-view-130).
+      expect(abandon.textContent).toBe(`${ABANDON.label}Working…`);
+      expect(abandon.getAttribute("aria-busy")).toBe("true");
+      expect(abandon.disabled).toBe(true);
+      // run-view-130: no control may be activated while the turn this
+      // one started is in flight.
       expect((screen.getByTestId("failed-workflow-drop") as HTMLButtonElement).disabled).toBe(true);
       // The busy form never widens the control (DR-041): the width rule
       // it wears is the one it held at rest. A simulated document cannot
       // measure the box itself, so the browser journey weighs the busy
       // word against that reserved width (run-view-132).
-      expect(retry.className).toBe(shape);
-      expect(screen.getByRole("status").textContent).toContain("Retrying");
+      expect(abandon.className).toBe(shape);
+      expect(screen.getByRole("status").textContent).toContain(
+        "Running the workflow's control",
+      );
       await act(async () => {
         refuse(new Error("A turn is already running."));
         await Promise.resolve();
@@ -3052,7 +3128,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
 
   test("the control is disabled while disconnected and while a turn is active", () => {
     const { rerender } = renderFailed({ connected: false });
-    const disconnected = screen.getByTestId("failed-workflow-retry") as HTMLButtonElement;
+    const disconnected = action(ABANDON.id);
     expect(disconnected.disabled).toBe(true);
     expect(disconnected.getAttribute("title")).toBe("Reconnecting…");
     const working = failedView([
@@ -3079,7 +3155,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
         onDismissError={() => {}}
       />,
     );
-    const busy = screen.getByTestId("failed-workflow-retry") as HTMLButtonElement;
+    const busy = action(ABANDON.id);
     expect(busy.disabled).toBe(true);
     expect(busy.getAttribute("title")).toBe("Wait for the running turn");
   });
@@ -3172,9 +3248,10 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       expect(screen.getByTestId("failed-workflow-what").textContent).toBe(
         "The /code workflow is waiting for your answer.",
       );
-      expect(notice.textContent).toContain("Answer below. Drop ends the run.");
+      expect(notice.textContent).toContain("Answer below, or drop the run");
       expect(notice.getAttribute("title")).toBe("state: awaitBossReply");
-      expect(screen.queryByTestId("failed-workflow-retry")).toBeNull();
+      // No recovery answers a question, so none is drawn (run-view-128).
+      expect(screen.queryAllByTestId("failed-workflow-action")).toEqual([]);
       // The composer is the question's other door (run-view-8).
       expect(screen.getByTestId("boss-composer")).toBeTruthy();
 
@@ -3274,10 +3351,11 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
         fireEvent.click(screen.getByTestId("failed-workflow-drop-confirm")),
       );
       // Ending the run is the whole of the act, so it is the whole of
-      // what is sent (run-view-112).
+      // what is sent (run-view-112), by the ending's published id.
       expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
         sessionId: "s1",
         kind: "ending",
+        actionId: "give-up",
       });
     } finally {
       setClientForTests(undefined);

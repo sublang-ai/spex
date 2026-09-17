@@ -88,8 +88,15 @@ export function stateLabel(
 
 /** The runtime failures a person meets often enough to deserve a
  * plain phrase (DR-010 §2, run-view-2); the raw text rides the line's
- * tooltip. Order matters: the first match wins. */
-const KNOWN_FAILURES: { test: RegExp; text: (match: RegExpExecArray) => string }[] = [
+ * tooltip. `step` is what the Boss does about it outside Spex, where
+ * anything can be done there (run-view-147, DR-075) — the failure
+ * catalogue reads it from here rather than testing these patterns
+ * again. Order matters: the first match wins. */
+const KNOWN_FAILURES: {
+  test: RegExp;
+  text: (match: RegExpExecArray) => string;
+  step?: (match: RegExpExecArray) => string;
+}[] = [
   {
     test: /repository-effect reconciliation failed: (.+)/i,
     text: (m) => `Couldn't reconcile the repository: ${m[1]}`,
@@ -97,6 +104,7 @@ const KNOWN_FAILURES: { test: RegExp; text: (match: RegExpExecArray) => string }
   {
     test: /oauth session expired|not logged in|unauthori[sz]ed|\b401\b|authentication/i,
     text: () => "The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI",
+    step: () => "Sign in again with that agent's CLI",
   },
   {
     test: /rate limit|\b429\b/i,
@@ -116,16 +124,29 @@ const KNOWN_FAILURES: { test: RegExp; text: (match: RegExpExecArray) => string }
       m[1]
         ? `${m[1]} is not installed`
         : "A command the run needs is not installed",
+    step: (m) => (m[1] ? `Install ${m[1]}` : "Install the missing command"),
   },
   {
     test: /Unknown adapter "([^"]+)"/,
     text: (m) => `No adapter named "${m[1]}" — check the config`,
+    step: () => "Fix the adapter in Settings",
   },
   {
     test: /Unknown player:? "?([^"\s]+)"?/,
     text: (m) => `No player named "${m[1]}" — check the config`,
+    step: () => "Fix the player in Settings",
   },
 ];
+
+/** What the Boss does outside Spex about a known runtime message, or
+ * nothing where nothing outside Spex answers it (run-view-147,
+ * DR-075). Read from the one table above, so a phrase and its step
+ * can never drift apart. */
+export function failureRemedy(raw: string): string | undefined {
+  const message = String(raw);
+  const known = KNOWN_FAILURES.find((entry) => entry.test.test(message));
+  return known?.step?.(known.test.exec(message) as RegExpExecArray);
+}
 
 /** A failure message as a person reads it: a leading "Error:" gone,
  * doubled periods healed, a known runtime message mapped to its plain

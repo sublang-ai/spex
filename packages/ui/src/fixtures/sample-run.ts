@@ -5,7 +5,7 @@
 // one boss turn (visible records only, as the core delivers them),
 // followed by an awaitBossReply park and a reply turn.
 
-import type { TmuxPlayRecord } from "@sublang/spex-core/protocol";
+import type { ParkedRun, TmuxPlayRecord } from "@sublang/spex-core/protocol";
 
 export interface FixtureEntry {
   seq: number;
@@ -580,6 +580,32 @@ export const MACHINE_FAILED: FixtureEntry[] = [
     turnId: 14,
     timestamp: 14_011,
     message: "◆ workflow failed; awaiting Boss recovery.",
+    // The runtime's own account of the failure (Playbook DR-063,
+    // DR-075): the error it marked as the FSM failure, with the
+    // closed cause attached. Hand-authored against that contract
+    // while Playbook 14.1 is not yet installed — adopting it
+    // re-captures this stream from a real core.
+    data: {
+      lastError: {
+        name: "Error",
+        message:
+          "CODE governed outcome remains unresolved: repository-disposition-mismatch",
+        cause: {
+          code: "commit-residual",
+          evidence: {
+            required: "one-commit",
+            observed: "commit-and-worktree-change",
+            baselineHead: "9f21c0d4e6b78a15",
+            afterHead: "3b7de901aa45c2f8",
+            commitOid: "3b7de901aa45c2f8",
+            paths: {
+              uncommitted: ["src/session/refresh.ts"],
+              altered: ["src/session/index.ts"],
+            },
+          },
+        },
+      },
+    },
   }),
   rec(707, {
     type: "captain_telemetry",
@@ -608,6 +634,32 @@ export const MACHINE_FAILED: FixtureEntry[] = [
   }),
   rec(710, { type: "turn_finished", turnId: 14, timestamp: 14_015 }),
 ];
+
+/** What the session summary publishes for the run MACHINE_FAILED parks
+ * (core-service-32, DR-074): every action the run advertised, with the
+ * standing the runtime reported for it, and the shell's own ending.
+ * The reconciliation is the `no-op` a complete receipt makes pointless
+ * — the case DR-075 was written on, where a host that took the first
+ * advertised action offered a Retry that could never work. Hand-
+ * authored against Playbook's contract while 14.1 is not yet
+ * installed; adopting it re-captures this from a real core. */
+export const PARKED_FAILURE: ParkedRun = {
+  reason: "failure",
+  actions: [
+    {
+      id: "reconcile-effects",
+      label: "Retry unresolved effect reconciliation",
+      standing: "no-op",
+      reason: "receipt-complete",
+    },
+    {
+      id: "abandon-attempt",
+      label: "Abandon unresolved workflow attempt",
+      standing: "ready",
+    },
+  ],
+  ending: { id: "give-up", label: "Give up on /code" },
+};
 
 /** A run parked on a Boss question (run-view-128, DR-073):
  * `awaitBossReply` is a parked state and not a final one, so the frame

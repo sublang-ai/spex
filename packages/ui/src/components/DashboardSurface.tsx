@@ -22,6 +22,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
+import { causePhrase } from "../lib/failure-catalogue.js";
 import { absoluteTitle, duration, relativeAge } from "../lib/time.js";
 import { RunningMark } from "./RunningMark.js";
 import {
@@ -170,6 +171,7 @@ function AttentionRow({
   const interruptedIntent =
     entry.band === "interrupted" && entry.intentId !== undefined;
   const act = actLine(entry);
+  const why = causePhrase(entry.cause);
   return (
     <div
       data-testid={`attention-${entry.intentId ?? entry.sessionId}-${entry.kind}`}
@@ -197,6 +199,17 @@ function AttentionRow({
               data-testid={`attention-stats-${entry.intentId ?? entry.sessionId}`}
             >
               {statsLine(entry.stats)}
+            </span>
+          ) : null}
+          {/* Why it failed, in the catalogue's phrase (DR-075): the
+              row says what happened, not only that something did. */}
+          {why ? (
+            <span
+              className="block truncate text-xs opacity-70"
+              data-testid={`attention-why-${entry.intentId ?? entry.sessionId}`}
+              title={why}
+            >
+              {why}
             </span>
           ) : null}
           {act ? (

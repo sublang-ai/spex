@@ -403,7 +403,16 @@ export interface AppState {
   submitBossText(sessionId: string, text: string): Promise<void>;
   /** run-view-129 / run-view-112: run one control the session already
    * advertises as its next turn. */
-  submitSessionControl(sessionId: string, kind: "recovery" | "ending"): Promise<void>;
+  /** One advertised control run as the session's next turn
+   * (core-service-98): `actionId` names which one the summary
+   * published, the core re-validating it against what the opened
+   * shell advertises; without a name the core takes the first
+   * (DR-074, DR-075). */
+  submitSessionControl(
+    sessionId: string,
+    kind: "recovery" | "ending",
+    actionId?: string,
+  ): Promise<void>;
   /** Re-pull the one ledger fold (DR-035). */
   loadLedger(): Promise<void>;
   /** Load (or extend, with `more`) a project's History page. */
@@ -1657,6 +1666,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async submitSessionControl(
       sessionId: string,
       kind: "recovery" | "ending",
+      actionId?: string,
     ): Promise<void> {
       const state = get();
       const session = state.sessions.find((s) => s.id === sessionId);
@@ -1666,7 +1676,11 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       try {
         if (session && !session.live) await ensureSubscribed(sessionId);
-        await getClient().command("session.control", { sessionId, kind });
+        await getClient().command("session.control", {
+          sessionId,
+          kind,
+          ...(actionId !== undefined ? { actionId } : {}),
+        });
       } catch (cause) {
         const error = cause as { code?: string; message: string };
         // A control turn is never queued: the control it names may not

@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The failed-workflow round trip (run-view-132, DR-062): a workflow
-// parked in its recoverable failure state used to offer nothing but
-// prose in the composer. The notice now stands with two controls —
-// Retry runs the recovery the run advertises, Drop ends the run — and
-// neither asks a model to read prose. The served harness continues a
-// session with no engagement restored, so the successful round trips
-// belong to the fixture stream; what this lane can prove is that the
-// notice appears and stands through settlement, that a control the
-// opened run cannot satisfy refuses with its cause and leaves the page
-// intact, that Drop's confirm backs out having sent nothing, and that
-// no control's busy form widens it at a 320-pixel viewport.
+// The failed-workflow round trip (run-view-132, DR-062, DR-075): a
+// workflow parked in its recoverable failure state used to offer
+// nothing but prose in the composer. The notice now draws one control
+// per action the session summary publishes for that run, plus Drop,
+// and none asks a model to read prose. The served harness's shell
+// advertises nothing and restores no engagement on a continued
+// session, so this lane's parked run publishes no controls: what it
+// proves is the Drop-alone fallback — the notice appearing and
+// standing through settlement, naming the composer as the way on,
+// refusing an ending the opened run cannot satisfy with its cause and
+// leaving the page intact, backing out of Drop's confirm having sent
+// nothing, and no control's busy form widening it at 320 pixels. The
+// published-controls path is the fixture stream's to prove
+// (run-view-131).
 
 import type { Page } from "@playwright/test";
 
@@ -48,8 +51,11 @@ test("run-view-132: the failed workflow's notice stands, refuses with its cause,
   await expect(notice).toContainText(
     "The /code workflow failed and is waiting for you.",
   );
+  // No action is published for this run, so none is drawn and the
+  // notice names the door that does work (run-view-128, DR-075).
+  await expect(page.getByTestId("failed-workflow-action")).toHaveCount(0);
   await expect(notice).toContainText(
-    "Retry runs the workflow's own recovery. Drop ends the run.",
+    "Send a message to pick it up, or drop the run",
   );
   await expect(notice).toHaveAttribute("title", "state: failed");
 
@@ -72,13 +78,14 @@ test("run-view-132: the failed workflow's notice stands, refuses with its cause,
   // width is a layout fact, so it is measured here against the real
   // fonts and rules rather than inferred from a class name: the busy
   // word is put in the control's own box and the box is measured.
-  // Both controls are weighed, not just the one this journey presses:
-  // a reserve that holds one busy word and not the other is the reflow
-  // DR-041 forbids, and it differs by platform font.
+  // Every control the notice draws is weighed, not just the one this
+  // journey presses: a reserve that holds one busy word and not
+  // another is the reflow DR-041 forbids, and it differs by platform
+  // font.
   const widths = await notice.evaluate((el) => {
     const words: Record<string, string> = {
-      Retry: "Retrying…",
       Drop: "Dropping…",
+      Keep: "Keep",
     };
     return [...el.querySelectorAll("button")].map((button) => {
       const rest = button.getBoundingClientRect().width;
@@ -186,10 +193,10 @@ test("run-view-146: a run parked on a question carries Drop, and the composer an
   await expect(notice).toContainText(
     "The /code workflow is waiting for your answer.",
   );
-  await expect(notice).toContainText("Answer below. Drop ends the run.");
+  await expect(notice).toContainText("Answer below, or drop the run");
   await expect(notice).toHaveAttribute("title", "state: awaitBossReply");
   // A question advertises no recovery, so nothing offers one.
-  await expect(page.getByTestId("failed-workflow-retry")).toHaveCount(0);
+  await expect(page.getByTestId("failed-workflow-action")).toHaveCount(0);
 
   // The composer is the other door, and it still names the waiting
   // player (run-view-9).

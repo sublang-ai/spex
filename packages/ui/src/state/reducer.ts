@@ -654,12 +654,16 @@ export function applyRecord(
     case "runtime_error": {
       // The line speaks plain (DR-010 §2): a leading "Error:" and
       // doubled periods go, a known runtime message maps to its
-      // phrase, and the raw text survives for the tooltip.
+      // phrase, and the raw text survives for the tooltip. The
+      // record's own data travels with it: where the runtime attached
+      // a structured cause, the line draws as the failure card
+      // instead (run-view-147, DR-075).
       pushCaptain(view, {
         kind: "error",
         ...plainFailure(String(r.message)),
         turnId: r.turnId,
         at: r.timestamp,
+        data: r.data,
       });
       break;
     }

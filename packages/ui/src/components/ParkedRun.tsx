@@ -2,15 +2,24 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The parked-run notice (run-view-128..130, run-view-112, DR-060,
-// DR-062, DR-073): a run standing parked on the Boss used to offer
-// nothing to activate — the only way back was prose the Boss invented.
-// The notice stands between the Captain pane and the composer and says
-// in phrases what the run waits for and what each control does. Drop
-// stands on either park and ends the run through the shell's own
+// DR-062, DR-073, DR-075): a run standing parked on the Boss used to
+// offer nothing to activate — the only way back was prose the Boss
+// invented. The notice stands between the Captain pane and the
+// composer and says in phrases why the run stopped, what the Boss can
+// do about it outside Spex, and what each of its controls would do.
+//
+// One control per advertised action (DR-075): the run's own actions,
+// each with its own label, and no interface notion of "a retry"
+// choosing among them. An action the runtime calls a no-op or blocked
+// stays visible and disabled with its reason phrased, so the Boss can
+// see that it would do nothing rather than press it and find out.
+// Where the summary publishes no actions — a session parked before
+// this rule, or one whose controls were never captured — Drop stands
+// alone and the composer is the other door.
+//
+// Drop stands on either park and ends the run through the shell's own
 // give-up, which spends no model call, so the exit works when the
-// provider is what failed. Retry stands only where a recovery answers
-// the park — the failure state — and a run waiting for a reply carries
-// Drop alone, the composer being its other door.
+// provider is what failed.
 //
 // Drop sends one command and no more (run-view-112): a session serving
 // an open intent is ruled on by that intent's close, which ends the run
@@ -21,21 +30,46 @@
 
 import { useRef, useState } from "react";
 
+import type {
+  FailureCause,
+  ParkedRun as ParkedRunSummary,
+} from "@sublang/spex-core/protocol";
+
+import { causePhrase, causeStep, standingLine } from "../lib/failure-catalogue.js";
+
 /** The busy form is the longer word, so each control reserves its width
  * once and nothing reflows on activation (DR-041: a busy form never
  * widens its control). The reserve is measured against the busy form in
  * a real browser (run-view-132) — which is how 5.5rem was caught coming
- * up short of "Retrying…" by a pixel and a half, and how 6rem was caught
+ * up short of a busy word by a pixel and a half, and how 6rem was caught
  * holding "Dropping…" on one platform's fonts but not on the Linux
- * fonts CI renders with. It must clear the longest busy word on the
- * widest font the journey runs under, not on the author's. */
+ * fonts CI renders with. It must clear the longest busy word — today
+ * "Dropping…" and "Working…" — on the widest font the journey runs
+ * under, not on the author's. */
 const CONTROL_WIDTH = "min-w-[6.75rem]";
+
+/** An advertised action's label is the runtime's, and a runtime's
+ * label runs long ("Retry unresolved effect reconciliation"). It is
+ * shown whole — the label is what the turn will carry, so trimming it
+ * would make the control promise something other than it performs —
+ * and the group wraps under the words as one (DR-041 §9). While the
+ * control is busy the label stays in the box, invisible, holding the
+ * width its busy form is laid over: a label longer than "Working…"
+ * cannot narrow on activation, and one shorter than it is held by the
+ * same reserve every control in the notice keeps (run-view-130). */
+const ACTION_WIDTH = "relative max-w-full";
+
+/** What the notice activates: a recovery the parked run advertises,
+ * named by its own id, or the shell's own ending. */
+export type ParkedControl = { kind: "recovery" | "ending"; actionId?: string };
 
 export function ParkedRun({
   reason,
   command,
   playbookId,
   state,
+  parked,
+  cause,
   connected,
   turnActive,
   onControl,
@@ -53,11 +87,17 @@ export function ParkedRun({
   /** The raw state id, which rides the notice's tooltip and never the
    * copy (DR-010 §2). */
   state?: string;
+  /** The controls the session summary publishes for this run
+   * (core-service-32); absent where that settlement captured none. */
+  parked?: ParkedRunSummary;
+  /** The cause the runtime attached to the failure, phrased by the
+   * catalogue (run-view-147). */
+  cause?: FailureCause;
   connected: boolean;
   turnActive: boolean;
-  onControl(kind: "recovery" | "ending"): Promise<void>;
+  onControl(control: ParkedControl): Promise<void>;
 }) {
-  const [pending, setPending] = useState<"recovery" | "ending">();
+  const [pending, setPending] = useState<string>();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string>();
   const busy = useRef(false);
@@ -72,15 +112,18 @@ export function ParkedRun({
   // activated, so the whole group disables together.
   const disabled = pending !== undefined || blocked !== undefined;
   const failed = reason === "failure";
+  // Only a failure park has a recovery to advertise; a run waiting for
+  // a reply carries Drop alone, its other door being the composer.
+  const actions = failed ? (parked?.actions ?? []) : [];
 
-  async function run(kind: "recovery" | "ending"): Promise<void> {
+  async function run(key: string, control: ParkedControl): Promise<void> {
     if (busy.current || disabled) return;
     busy.current = true;
-    setPending(kind);
+    setPending(key);
     setError(undefined);
     setConfirming(false);
     try {
-      await onControl(kind);
+      await onControl(control);
       // The turn is away and the controls are about to disable
       // themselves: focus belongs where the next thing happens
       // (DR-010 §6).
@@ -88,8 +131,8 @@ export function ParkedRun({
         ?.closest('[data-testid="captain-column"]')
         ?.querySelector("textarea")
         ?.focus();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+    } catch (refusal) {
+      setError(refusal instanceof Error ? refusal.message : String(refusal));
     } finally {
       busy.current = false;
       setPending(undefined);
@@ -99,11 +142,30 @@ export function ParkedRun({
   const tone = failed
     ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
     : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200";
-  const controlClass = `${CONTROL_WIDTH} shrink-0 rounded-md border px-2.5 py-1 text-center font-medium disabled:opacity-40 ${
+  const controlClass = `shrink-0 rounded-md border px-2.5 py-1 text-center font-medium disabled:opacity-40 ${
     failed
       ? "border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
       : "border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
   }`;
+
+  // Why it stopped and what to do: the catalogue's phrase for the
+  // cause the runtime attached, the Boss step where one exists, and
+  // the standing of every control the summary published (DR-075).
+  const why = failed ? causePhrase(cause) : undefined;
+  const nextParts: string[] = [];
+  const bossStep = failed ? causeStep(cause) : undefined;
+  if (bossStep) nextParts.push(bossStep);
+  for (const action of actions) {
+    const standing = standingLine(action);
+    if (standing) nextParts.push(standing);
+  }
+  if (!failed) nextParts.push("Answer below, or drop the run");
+  else if (actions.length === 0) {
+    // No recovery is published, so the composer is the way on
+    // (run-view-128): the notice names it rather than leaving the
+    // reader with Drop and no account of the other door.
+    nextParts.push("Send a message to pick it up, or drop the run");
+  }
 
   return (
     <section
@@ -135,29 +197,61 @@ export function ParkedRun({
                 ? `The /${command} workflow is waiting for your answer.`
                 : "The workflow is waiting for your answer."}
           </p>
-          <p className="text-neutral-600 dark:text-neutral-400">
-            {failed
-              ? "Retry runs the workflow's own recovery. Drop ends the run."
-              : "Answer below. Drop ends the run."}
-          </p>
+          {why ? (
+            <p
+              data-testid="failed-workflow-why"
+              className="text-neutral-600 dark:text-neutral-400"
+            >
+              {why}
+            </p>
+          ) : null}
+          {nextParts.length > 0 ? (
+            <p
+              data-testid="failed-workflow-next"
+              className="text-neutral-600 dark:text-neutral-400"
+            >
+              {nextParts.join(" · ")}
+            </p>
+          ) : null}
         </div>
         <div
           ref={group}
           className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"
         >
-          {failed ? (
-            <button
-              type="button"
-              data-testid="failed-workflow-retry"
-              disabled={disabled || confirming}
-              aria-busy={pending === "recovery" || undefined}
-              title={blocked ?? "Run the recovery this workflow offers."}
-              onClick={() => void run("recovery")}
-              className={controlClass}
-            >
-              {pending === "recovery" ? "Retrying…" : "Retry"}
-            </button>
-          ) : null}
+          {confirming
+            ? null
+            : actions.map((action) => {
+                // A no-op or blocked action stays visible and disabled,
+                // its reason in its tooltip: no control is chosen for
+                // the Boss, and none is hidden from him (DR-075).
+                const standing = standingLine(action);
+                const inert =
+                  action.standing === "no-op" || action.standing === "blocked";
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    data-testid="failed-workflow-action"
+                    data-action-id={action.id}
+                    disabled={disabled || inert}
+                    aria-busy={pending === action.id || undefined}
+                    title={standing ?? blocked ?? action.label}
+                    onClick={() =>
+                      void run(action.id, { kind: "recovery", actionId: action.id })
+                    }
+                    className={`${CONTROL_WIDTH} ${ACTION_WIDTH} ${controlClass}`}
+                  >
+                    <span className={pending === action.id ? "invisible" : undefined}>
+                      {action.label}
+                    </span>
+                    {pending === action.id ? (
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        Working…
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
           {confirming ? (
             // DR-010 §4: ending a run is the Boss's ruling, so it
             // asks in place. Keep backs out having sent nothing.
@@ -167,8 +261,13 @@ export function ParkedRun({
                 type="button"
                 data-testid="failed-workflow-drop-confirm"
                 disabled={disabled}
-                onClick={() => void run("ending")}
-                className={controlClass}
+                onClick={() =>
+                  void run("ending", {
+                    kind: "ending",
+                    ...(parked?.ending ? { actionId: parked.ending.id } : {}),
+                  })
+                }
+                className={`${CONTROL_WIDTH} ${controlClass}`}
               >
                 {pending === "ending" ? "Dropping…" : "Drop"}
               </button>
@@ -177,7 +276,7 @@ export function ParkedRun({
                 data-testid="failed-workflow-drop-keep"
                 disabled={disabled}
                 onClick={() => setConfirming(false)}
-                className={controlClass}
+                className={`${CONTROL_WIDTH} ${controlClass}`}
               >
                 Keep
               </button>
@@ -187,9 +286,9 @@ export function ParkedRun({
               type="button"
               data-testid="failed-workflow-drop"
               disabled={disabled}
-              title={blocked ?? "End this run. It will not be resumed."}
+              title={blocked ?? parked?.ending?.label ?? "End this run. It will not be resumed."}
               onClick={() => setConfirming(true)}
-              className={controlClass}
+              className={`${CONTROL_WIDTH} ${controlClass}`}
             >
               Drop
             </button>
@@ -198,9 +297,9 @@ export function ParkedRun({
       </div>
       {pending !== undefined ? (
         <p className="sr-only" role="status">
-          {pending === "recovery"
-            ? "Retrying the workflow"
-            : "Dropping the workflow"}
+          {pending === "ending"
+            ? "Dropping the workflow"
+            : "Running the workflow's control"}
         </p>
       ) : null}
       {error ? (

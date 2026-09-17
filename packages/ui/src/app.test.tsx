@@ -905,6 +905,51 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
     expect(plus.title).toBe(`Start another session (${keyLabel("N")})`);
   });
 
+  test("a failure tab's tooltip says why it failed", async () => {
+    // The mark is never the only channel, and what it says is the
+    // catalogue's phrase for the cause the fold carried (run-view-48,
+    // DR-075) — no surface phrases a failure of its own.
+    const fold = {
+      intents: [],
+      attention: [
+        {
+          band: "interrupted",
+          kind: "failure",
+          parked: true,
+          title: "chase the flaky test",
+          projectId: "p1",
+          sessionId: "a-idle",
+          since: NOW - 60_000,
+          cause: {
+            code: "pre-existing-lost",
+            evidence: { paths: { lost: ["src/a.ts"], truncated: 2 } },
+          },
+        },
+      ],
+      badge: 1,
+    } as never;
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? (fold as object) : defaultReply(type),
+    );
+    useAppStore.setState({
+      sessions: [
+        ...SESSIONS,
+        session({ id: "a-idle", title: "chase the flaky test", failed: true }),
+      ],
+      openTabs: { p1: ["a-idle"] },
+      workspaceTabs: { p1: "a-idle" },
+      views: { ...useAppStore.getState().views, "a-idle": view() },
+      ledger: fold,
+    });
+    render(<App />);
+    const tab = await screen.findByRole("tab", {
+      name: "chase the flaky test — failed",
+    });
+    expect(tab.title).toContain(
+      "Uncommitted changes you had were lost: src/a.ts, … and 2 more",
+    );
+  });
+
   test("closing tabs leaves focus on a tab", async () => {
     render(<App />);
     const failed = screen.getByRole("tab", {
@@ -1198,12 +1243,35 @@ describe("run-view-135/136: a summons the session answers names its turn", () =>
     commandMock.mockImplementation(async (type: string) =>
       type === "ledger.get" ? (fold as object) : defaultReply(type),
     );
+    // The runtime's own account of the failure travels with the
+    // record (DR-075): the notice phrases it rather than saying only
+    // that a turn failed.
+    const failed = view();
+    failed.captain.push({
+      kind: "error",
+      text: "the coder could not sign in",
+      turnId: 1,
+      at: NOW - 60_000,
+      data: {
+        lastError: {
+          message: "OAuth session expired",
+          cause: {
+            code: "player-failed",
+            evidence: {
+              roleId: "coder",
+              playerId: "dev.coder",
+              error: "OAuth session expired",
+            },
+          },
+        },
+      },
+    });
     useAppStore.setState({
       sessions: [
         ...SESSIONS,
         session({ id: "a-idle", title: "chase the flaky test", failed: true }),
       ],
-      views: { ...useAppStore.getState().views, "a-idle": view() },
+      views: { ...useAppStore.getState().views, "a-idle": failed },
       ledger: fold,
     });
     render(<App />);
@@ -1211,8 +1279,15 @@ describe("run-view-135/136: a summons the session answers names its turn", () =>
 
     // Nothing is stuck, and until now this state named no act at all.
     const notice = await screen.findByTestId("unparked-failure-notice");
-    expect(notice.textContent).toBe(
+    expect(notice.textContent).toContain(
       "The last turn failed. Send a message to pick it up.",
+    );
+    // Why, and what to do about it outside Spex (run-view-135, DR-075).
+    expect(screen.getByTestId("unparked-failure-why").textContent).toBe(
+      "dev.coder failed: The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI",
+    );
+    expect(screen.getByTestId("unparked-failure-next").textContent).toBe(
+      "Sign in to dev.coder again",
     );
     expect(screen.getByTestId("boss-composer")).toBeTruthy();
   });

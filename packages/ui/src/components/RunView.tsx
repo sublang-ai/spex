@@ -8,12 +8,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CAPTAIN_AGENT_ID,
   type DerivedIntent,
+  type FailureCause,
   type IntentSource,
   type PlaybookSummary,
   type SessionInfo,
 } from "@sublang/spex-core/protocol";
 
-import type { SessionView } from "../state/reducer.js";
+import type { CaptainLine, SessionView } from "../state/reducer.js";
 import type { ComposerState } from "../state/store.js";
 import {
   CaptainPane,
@@ -35,7 +36,56 @@ import { PlayerPane } from "./PlayerPane.js";
 import { AgentSettingsPopover } from "./AgentSettings.js";
 import { sessionAgents } from "../lib/session-agents.js";
 import { WorkingLine } from "./WorkingLine.js";
-import { parkedRun } from "../lib/machine-frames.js";
+import {
+  FAILURE_STATE_ID,
+  parkedRun,
+  type MachineFrame,
+} from "../lib/machine-frames.js";
+import type { FailureContext } from "./FailureCard.js";
+import {
+  causePhrase,
+  causeStep,
+  readRecordFailure,
+} from "../lib/failure-catalogue.js";
+
+/** The run a failure belongs to, as the thread can see it: the run
+ * standing parked, else the deepest run still open, else the last run
+ * that settled into the thread (run-view-147). */
+function failureFrame(
+  view: SessionView,
+  parked: MachineFrame | undefined,
+): MachineFrame | undefined {
+  if (parked) return parked;
+  if (view.frames.length > 0) return view.frames[view.frames.length - 1];
+  for (let index = view.captain.length - 1; index >= 0; index -= 1) {
+    const frame = view.captain[index].frame;
+    if (frame) return frame;
+  }
+  return undefined;
+}
+
+/** The step a run failed in: the state it left for its failure state,
+ * or — where it is not parked there — the state it stands in. Raw; the
+ * copy humanizes it and the tooltip keeps it (run-view-59). */
+function failureStep(frame: MachineFrame): string | undefined {
+  if (frame.active === FAILURE_STATE_ID) return frame.lastFired?.from;
+  return frame.active ?? undefined;
+}
+
+/** The cause the last failure the thread reported carried
+ * (run-view-147): the notices say why from the same reading the card
+ * draws, so no two surfaces explain one failure differently. */
+function latestFailureCause(
+  lines: readonly CaptainLine[],
+): FailureCause | undefined {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    if (line.kind !== "status" && line.kind !== "error") continue;
+    const cause = readRecordFailure(line.data)?.cause;
+    if (cause) return cause;
+  }
+  return undefined;
+}
 
 
 /** The house divider (DR-030): the Captain/players split here, and
@@ -538,6 +588,22 @@ export function RunView({
   const parkedCommand = parked
     ? playbooks?.find((entry) => entry.id === parked.frame.playbookId)?.command
     : undefined;
+  // The failure's own account (run-view-147, DR-075): the run the
+  // failure belongs to, the step it left, the cause the runtime
+  // attached, and the controls the summary publishes. The card, the
+  // parked notice and the unparked notice all phrase this one reading
+  // rather than each composing an account of its own.
+  const failureRun = failureFrame(activityView, parked?.frame);
+  const failureCommand = failureRun
+    ? playbooks?.find((entry) => entry.id === failureRun.playbookId)?.command
+    : undefined;
+  const failedStep = failureRun ? failureStep(failureRun) : undefined;
+  const failureContext: FailureContext = {
+    ...(failureCommand ? { command: failureCommand } : {}),
+    ...(failedStep ? { step: failedStep } : {}),
+    ...(session.parked?.actions ? { actions: session.parked.actions } : {}),
+  };
+  const failureCause = latestFailureCause(activityView.captain);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -596,6 +662,7 @@ export function RunView({
             bossSources={bossSources}
             extras={extras}
             readiness={readOnly ? undefined : readinessHint}
+            failure={failureContext}
             {...agentProps(CAPTAIN_AGENT_ID)}
             focusKey={focusKey}
             onFocusHandled={onFocusHandled}
@@ -643,7 +710,25 @@ export function RunView({
               data-testid="unparked-failure-notice"
               className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
             >
-              The last turn failed. Send a message to pick it up.
+              <p>The last turn failed. Send a message to pick it up.</p>
+              {/* Why, and what to do about it outside Spex (DR-075):
+                  the same catalogue phrase every other mention uses. */}
+              {causePhrase(failureCause) ? (
+                <p
+                  data-testid="unparked-failure-why"
+                  className="text-neutral-600 dark:text-neutral-400"
+                >
+                  {causePhrase(failureCause)}
+                </p>
+              ) : null}
+              {causeStep(failureCause) ? (
+                <p
+                  data-testid="unparked-failure-next"
+                  className="text-neutral-600 dark:text-neutral-400"
+                >
+                  {causeStep(failureCause)}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {parked ? (
@@ -652,9 +737,11 @@ export function RunView({
               command={parkedCommand}
               playbookId={parkedCommand ? undefined : parked.frame.playbookId}
               state={parked.frame.active ?? undefined}
+              parked={session.parked}
+              cause={failureCause}
               connected={connected}
               turnActive={view.turnActive}
-              onControl={async (kind) => {
+              onControl={async ({ kind, actionId }) => {
                 // Nothing else rides this turn (run-view-129,
                 // run-view-112): a staged intent detaches rather than
                 // being stamped by a control it did not ask for
@@ -667,7 +754,7 @@ export function RunView({
                 // here would race that path.
                 const ruled = kind === "ending" ? workingIntent?.intent : undefined;
                 if (ruled) await closeIntent(ruled.id, "dropped");
-                else await submitSessionControl(session.id, kind);
+                else await submitSessionControl(session.id, kind, actionId);
               }}
             />
           ) : null}

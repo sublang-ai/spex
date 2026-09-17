@@ -240,6 +240,12 @@ const ATTENTION: AttentionEntry[] = [
     projectId: "p2",
     sessionId: "s2",
     since: NOW - 5 * MIN,
+    // The runtime's own account of the failure, which the row phrases
+    // rather than restating that something failed (DR-075).
+    cause: {
+      code: "pre-existing-lost",
+      evidence: { paths: { lost: ["db/schema.sql"], truncated: 2 } },
+    },
   },
   {
     band: "finished",
@@ -337,6 +343,13 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     expect(screen.getByTestId("attention-act-if").textContent).toBe(
       "Open to retry or drop the run.",
     );
+    // A failure the fold carried a cause for says why, above its act
+    // line, in the catalogue's phrase (dashboard-1, DR-075); one it
+    // carried none for says nothing it cannot support.
+    expect(screen.getByTestId("attention-why-if").textContent).toBe(
+      "Uncommitted changes you had were lost: db/schema.sql, … and 2 more",
+    );
+    expect(screen.queryByTestId("attention-why-s6")).toBeNull();
     expect(screen.getByTestId("attention-act-s6").textContent).toBe(
       "Open and send a message to pick it up.",
     );

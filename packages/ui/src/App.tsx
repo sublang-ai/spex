@@ -17,6 +17,7 @@ import {
   type AttentionItem,
 } from "./state/dashboard.js";
 import { setCaptain } from "./lib/config-ops.js";
+import { causePhrase } from "./lib/failure-catalogue.js";
 import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionView } from "./state/reducer.js";
 import { RunView } from "./components/RunView.js";
@@ -105,6 +106,9 @@ function useLedgerAttention(): Map<string, AttentionItem> {
         sessionId: entry.sessionId,
         projectPath: session?.projectPath ?? "",
         text: entry.title,
+        // Why it failed, in the catalogue's phrase (DR-075): the mark
+        // says what happened wherever it is read.
+        ...(causePhrase(entry.cause) ? { why: causePhrase(entry.cause)! } : {}),
       });
     }
     return map;
@@ -595,7 +599,13 @@ function WorkspaceSurface({
                 }}
                 title={
                   attentionItem
-                    ? `${sessionTooltip(session, views[session.id])}\n${attentionItem.text}`
+                    ? [
+                        sessionTooltip(session, views[session.id]),
+                        attentionItem.text,
+                        attentionItem.why,
+                      ]
+                        .filter(Boolean)
+                        .join("\n")
                     : sessionTooltip(session, views[session.id])
                 }
                 aria-keyshortcuts="Delete"
