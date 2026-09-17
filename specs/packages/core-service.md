@@ -157,13 +157,26 @@ When a client requests the session list, the core service shall reply with every
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count and whether it ended holding a failure record;
+- each entry carries cumulative active time from complete stored history for every agent whose finished history is completely measured [[core-service-102](#core-service-102)];
 - each entry carries the session's own agent settings [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md)).
+
+#### core-service-102
+
+When the core service folds a session's conversation summary, it shall carry cumulative completed-call active time as an optional `agentActiveMs` map keyed by the reserved `captain` id and by session player id, derived solely from the stored record stream and its persisted completeness state so the same complete history yields the same map after a restart [[core-service-10](#core-service-10)] ([DR-070](../decisions/070-agent-active-time.md)):
+
+- each terminal `done` event with a finite, non-negative `payload.durationMs` contributes that duration once — a `captain_event` to `captain`, including where the persisted record is hidden [[core-service-10](#core-service-10)], and a `player_event` to its string `playerId` across every role the lane served [[core-service-36](#core-service-36)];
+- every terminal status contributes, while tool-result durations, turn spans, and time between calls contribute nothing;
+- an agent has a map entry, including a measured zero, only after at least one attributed terminal `done`, every attributed terminal `done` reports a valid duration, and no `player_finished` or `captain_finished` attributed to it lacks a preceding unmatched `done`; otherwise that agent has no entry, so a missing measurement never produces a partial total;
+- an open prompt does not change the completed-call figure;
+- a session whose stored stream is marked incomplete carries no `agentActiveMs`, because its retained prefix cannot establish any agent's cumulative session figure [[core-service-10](#core-service-10)];
+- each agent's durations sum independently without removing overlap between calls, and `agentActiveMs` is absent when no agent has a measured figure.
 
 #### core-service-34
 
-When the core service reports a session's state to subscribed clients — at each turn's start and end, when its runtime is released [[core-service-91](#core-service-91)] or opened by a message [[core-service-73](#core-service-73)], and after recovery [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)] — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with:
+When the core service reports a session's state to subscribed clients — at each turn's start and end, after any stored record or stream-completeness change alters its active-time fold [[core-service-102](#core-service-102)], when its runtime is released [[core-service-91](#core-service-91)] or opened by a message [[core-service-73](#core-service-73)], and after recovery [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)] — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with:
 
 - A session is named from the turn that starts, not the turn that finishes, so a running session is never listed as having said nothing.
+- A state report caused by a terminal agent `done` follows that event's record and precedes the corresponding `player_finished` or `captain_finished` record, so the completed fold is present when the view ends its live reading.
 
 #### core-service-87
 
@@ -427,7 +440,7 @@ When a client requests adapter readiness, the core service shall report one dedu
 
 The core service shall persist and replay sessions through Playbook's common manifest/stream contract [[1]], using the shared root and explicit overrides [[storage-1](storage.md#storage-1)] ([DR-045](../decisions/045-unified-session-storage.md)):
 
-- restart serves the same records and visibility filtering [[core-service-8](#core-service-8)], deriving turns, summaries and usage; liveness comes from runtime/leases rather than stored flags;
+- restart serves the same records and visibility filtering [[core-service-8](#core-service-8)], deriving turns, summaries, usage, and per-agent active time [[core-service-102](#core-service-102)]; liveness comes from runtime/leases rather than stored flags;
 - valid opaque v1 records, including unknown/headerless objects, remain in sequence/digest accounting; unsupported presentation is skipped without damage;
 - record-write failure preserves live presentation and durable recovery, marks the manifest's replay incomplete and refuses later continuation [[core-service-73](#core-service-73)]; a restart cannot clear the marker merely because the retained bytes parse;
 - a reader serves the valid complete prefix with the damaged boundary reported, without altering files during a read;
@@ -606,6 +619,17 @@ Where a stored session held two turns and a failure record, and a second stored 
 
 Where a client subscribes to a session that then runs a fake-adapter turn, the test suite shall assert the broadcast contract of [[core-service-34](#core-service-34)]: the state reported at the turn's start already carries the session's title, and the states reported at the turn's end and at the runtime's release [[core-service-91](#core-service-91)] each carry the title and turn count, not the zeros the session was created with.
 
+#### core-service-103
+
+Where fixture sessions' record streams hold overlapping completed calls by two players, two roles served by one of those players, terminal `done` events with `success`, `error`, `interrupted`, `max_turns`, and `max_budget` statuses, a hidden Captain call, a zero-duration completion, tool results with durations, a live open prompt, a previously measured player whose next terminal `done` lacks a valid duration, another previously measured player whose finished call has no terminal `done`, an otherwise measured stream marked incomplete, and a stream with no terminal `done`, the core integration suite shall assert the active-time fold through the WebSocket protocol:
+
+- each fully measured player's terminal durations sum under that player and the hidden Captain duration sums under `captain`, with every non-success duration retained and no tool duration added again [[core-service-102](#core-service-102)];
+- the concurrently reported durations remain whole when their sum exceeds the turn's elapsed time [[core-service-102](#core-service-102)];
+- the measured zero remains a zero-valued entry, the live open prompt changes no completed-call figure, and both the duration-less `done` and the finish without a `done` remove their players' earlier entries rather than leaving partial totals [[core-service-102](#core-service-102)];
+- the session whose stream is marked incomplete carries no `agentActiveMs` [[core-service-102](#core-service-102)];
+- the session with no terminal `done` carries no `agentActiveMs` [[core-service-102](#core-service-102)];
+- a state report caused by a terminal `done` follows that event and precedes its finished record, a finish without a preceding `done` is followed by a report carrying that player's removal, and a report after the stream becomes incomplete carries no map [[core-service-34](#core-service-34)] [[core-service-102](#core-service-102)].
+
 #### core-service-40
 
 Where a live session's runtime fails its disposal, the test suite shall request that session's disposal over the protocol during its turn and assert the failing-disposal case of [[core-service-4](#core-service-4)]: the request reports the failure and a fresh session request for the same project remains blocked.
@@ -646,13 +670,13 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 
 #### core-service-22
 
-Where a session has completed a Boss turn, the test suite shall stop the core service, start it again on the same state root and sessions directory [[core-service-15](#core-service-15)], and assert that the session, its turns, its records (content and order), and its usage totals are served identically after restart [[core-service-10](#core-service-10)], and that a session live at shutdown is reported as no longer live:
+Where a session has completed a Boss turn, the test suite shall stop the core service, start it again on the same state root and sessions directory [[core-service-15](#core-service-15)], and assert that the session, its turns, its records (content and order), its usage totals, and its per-agent active time are served identically after restart [[core-service-10](#core-service-10)] [[core-service-102](#core-service-102)], and that a session live at shutdown is reported as no longer live:
 
 - Where the root carries an earlier release's file versions, the suite shall assert startup migrates forward, keeps every row, and serves the migrated data identically [[core-service-15](#core-service-15)].
 - Where records carry provider resume tokens — in a result and in a `playbook.trace` payload — the suite shall assert the persisted and replayed stream carries none of them [[core-service-10](#core-service-10)].
-- Where the stream file becomes unappendable mid-session, the suite shall assert the fail-soft contract of [[core-service-10](#core-service-10)]: the record is still served from memory, the listing marks the stream incomplete after the last durable sequence, and the mark survives a restart.
+- Where the stream file becomes unappendable mid-session, the suite shall assert the fail-soft contract of [[core-service-10](#core-service-10)]: the record is still served from memory, the listing marks the stream incomplete after the last durable sequence and carries no `agentActiveMs`, and both facts survive a restart [[core-service-102](#core-service-102)].
 - Where a native stream is damaged before restart, the suite shall assert its valid history remains readable, its persisted incomplete marker keeps any earlier boundary [[core-service-10](#core-service-10)], and a Boss submission refuses continuation without appending to the damaged stream [[core-service-73](#core-service-73)].
-- With opaque v1 objects interspersed, restart preserves records, sequences, later turn/usage folds and stream bytes without marking incompleteness [[core-service-10](#core-service-10)].
+- With opaque v1 objects interspersed, restart preserves records, sequences, later turn, usage, and active-time folds and stream bytes without marking incompleteness [[core-service-10](#core-service-10)] [[core-service-102](#core-service-102)].
 - Where the shell names a legacy SQLite store holding sessions and intents, beside a legacy library directory the shared config's `from` paths point into, the suite shall assert the one-time import of [[core-service-64](#core-service-64)]: the rows serve identically from the file state, the library relocates with its `from` paths rewritten and comments kept, the legacy store file is untouched, and a second startup imports nothing twice.
 
 #### core-service-62
@@ -663,7 +687,7 @@ Where a fixture session — manifest naming a registered project's directory as 
 - their records are served with hidden records filtered from the session subscription [[core-service-10](#core-service-10)];
 - a session-state report announcing the second session reaches a subscribed client [[core-service-60](#core-service-60)];
 - after the terminal appends to an already listed session's stream without replacing its manifest, the listing and history reflect the new title and turns, and the session subscriber receives each appended visible record once even during continuous directory activity, with the complete but unterminated final record withheld until its newline arrives [[core-service-60](#core-service-60)];
-- rescanning the same streams leaves their turn and usage folds unchanged, replacing a stream refreshes its title and history, and a malformed neighboring manifest hides no healthy session [[core-service-60](#core-service-60)];
+- rescanning the same streams leaves their turn, usage, and active-time folds unchanged, replacing a stream refreshes its title, history, and active-time fold, and a malformed neighboring manifest hides no healthy session [[core-service-60](#core-service-60)] [[core-service-102](#core-service-102)];
 - leading, interspersed and trailing opaque v1 objects preserve history without inventing players, turns or failures; summary times stay finite even for wholly opaque streams [[core-service-60](#core-service-60)];
 - a fixture session whose working directory matches no registered project is absent from the listing [[core-service-60](#core-service-60)];
 - a fixture record with a Boss journal and no stream lists with the first Boss entry as its title, its Boss turns counted, and a history of turn starts, Captain replies, and turn finishes [[core-service-60](#core-service-60)];
