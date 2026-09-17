@@ -118,11 +118,11 @@ export function NextCard({
       {next ? (
         <div
           data-testid="next-row"
-          className="@container flex items-center gap-2"
+          className="@container flex flex-wrap items-center gap-2"
         >
           <div
             data-testid="next-text"
-            className="flex min-w-0 flex-1 flex-col"
+            className="flex min-w-0 flex-1 basis-full flex-col @md:basis-0"
           >
             <div className="flex min-w-0 flex-col @md:flex-row @md:items-baseline @md:gap-2">
               <span

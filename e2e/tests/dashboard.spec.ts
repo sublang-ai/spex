@@ -169,7 +169,13 @@ test("dashboard-39: capture, start, confirm, and History through the page", asyn
   // The inline field starts at one row, soft-wraps as a real textarea,
   // caps and scrolls, then keeps Shift+Enter's line for capture
   // (dashboard-29/39).
+  const addRow = page.getByTestId(`add-intent-row-${app.projectId}`);
   const add = page.getByRole("textbox", { name: /add an intent to demo-project/i });
+  const queue = addRow.getByRole("button", {
+    name: "Queue an intent in demo-project",
+  });
+  await expect(queue).toBeVisible();
+  await expect(addRow.getByRole("button", { name: /^Start\b/ })).toHaveCount(0);
   const oneRow = await add.evaluate(
     (field) => field.getBoundingClientRect().height,
   );
@@ -208,10 +214,24 @@ test("dashboard-39: capture, start, confirm, and History through the page", asyn
     .getByTestId(/^upnext-row-/)
     .filter({ hasText: "Add a README badge" });
   await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute("data-highlight", "true");
+  await expect(row).toHaveAttribute("data-next", "true");
+  await expect(row.getByText("Queued", { exact: true })).toBeVisible();
+  await expect(
+    row.getByRole("button", {
+      name: "Start Add a README badge in demo-project",
+    }),
+  ).toBeVisible();
+  await expect(row.getByTestId(/^upnext-standing-/)).toHaveCount(0);
   await expect(add).toHaveValue("");
-  await expect(page.getByTestId("attention-all-clear")).toContainText(
-    /add a readme badge/i,
-  );
+  const allClear = page.getByTestId("attention-all-clear");
+  await expect(allClear).toContainText(/add a readme badge/i);
+  await expect(
+    allClear.getByRole("button", {
+      name: "Start Add a README badge in demo-project",
+    }),
+  ).toBeVisible();
+  await expect(allClear.getByTestId("all-clear-standing")).toHaveCount(0);
   await expect
     .poll(async () => {
       const state = await app.core.command("ledger.get", {});
@@ -219,20 +239,35 @@ test("dashboard-39: capture, start, confirm, and History through the page", asyn
     })
     .toBe(multiline);
 
-  // A second intent, removed before it ever ran, leaves no History.
+  // The same capture is available as the row's visible Queue action.
   await add.fill("Second thought");
-  await add.press("Enter");
-  const second = page.getByTestId(/^upnext-row-/).filter({ hasText: "Second thought" });
+  await queue.click();
+  const second = page
+    .getByTestId(/^upnext-row-/)
+    .filter({ hasText: "Second thought" });
   await expect(second).toBeVisible();
   await second.getByRole("button", { name: /actions for second thought/i }).click();
   await page.getByTestId(/^upnext-remove-action-/).click();
   await expect(second).toHaveCount(0);
   await expect(group).toContainText(/nothing done here yet/i);
 
-  // Queue from a record: the row wears its provenance.
-  await record.getByRole("button", { name: /queue/i }).click();
-  await expect(page.getByTestId(/^upnext-row-/)).toHaveCount(2);
-  await expect(page.getByTestId(/^upnext-row-/).nth(1)).toContainText(/IR-\d+/);
+  // Queue from a record: its one intent control has no sibling Start,
+  // and the new tail row is committed work without claiming Next.
+  const recordQueue = record.getByRole("button", { name: /queue/i });
+  await expect(recordQueue).toBeVisible();
+  await expect(record.getByRole("button", { name: /^Start\b/ })).toHaveCount(0);
+  await recordQueue.click();
+  const rows = page.getByTestId(/^upnext-row-/);
+  await expect(rows).toHaveCount(2);
+  const capturedRecord = rows.nth(1);
+  await expect(capturedRecord).toContainText(/IR-\d+/);
+  await expect(capturedRecord).toHaveAttribute("data-highlight", "true");
+  await expect(capturedRecord).not.toHaveAttribute("data-next", "true");
+  await expect(capturedRecord.getByText("Queued", { exact: true })).toBeVisible();
+  await expect(capturedRecord.getByTestId(/^upnext-standing-/)).toHaveCount(0);
+  await expect(
+    capturedRecord.getByRole("button", { name: /^Start\b/ }),
+  ).toHaveCount(0);
 
   // Start stages the head intent into the composer; Send dispatches.
   await page.getByTestId("all-clear-start").click();

@@ -14,10 +14,13 @@
 // itself lives in ../src/fit.
 
 import { join } from "node:path";
-import { seedDemoProject } from "@sublang/spex-core/testing";
-import type { Locator } from "@playwright/test";
+import {
+  appendHistorySession,
+  seedDemoProject,
+} from "@sublang/spex-core/testing";
+import type { Locator, Page } from "@playwright/test";
 
-import { test, expect, open, nav, send } from "../src/harness";
+import { test, expect, open, nav, runTurn, send } from "../src/harness";
 import {
   HEIGHTS,
   OPEN_RAIL_MIN_WIDTH,
@@ -53,6 +56,245 @@ test.use({
  * pane sideways. */
 const LONG_URL = `https://example.com/${"a".repeat(380)}`;
 const TASK = `Fix the token refresh in auth.ts — see ${LONG_URL}`;
+
+const QUEUE_FIT_TITLE =
+  "Reconcile the authentication migration after the complete compatibility audit finishes";
+const QUEUE_FIT_PATH =
+  `packages/server/src/${"deeply-nested-authentication-migration/".repeat(4)}unfinished-refresh-handler.ts`;
+const QUEUE_FIT_CAUSE = {
+  code: "commit-residual",
+  evidence: {
+    commitOid: "1234567890abcdef",
+    paths: { uncommitted: [QUEUE_FIT_PATH] },
+  },
+};
+const QUEUE_FIT_CAUSE_PHRASE =
+  `Committed 12345678 but left changes uncommitted: ${QUEUE_FIT_PATH}`;
+const QUEUE_FIT_PARKED_PHRASE =
+  `waiting — current work failed — ${QUEUE_FIT_CAUSE_PHRASE}`;
+const QUEUE_FIT_FAILED_PHRASE =
+  `waiting — previous work failed — ${QUEUE_FIT_CAUSE_PHRASE}`;
+
+/** Stored turns that move one lane from a stable failure park to an
+ * unparked failure, carrying the same structured long-path cause. The
+ * browser still reads the result from the real core; these are only
+ * the off-screen writer's arrangement records (dashboard-43,
+ * run-view-105). */
+function queueFitFailureRecords(
+  turnId: number,
+  at: number,
+  kind: "park" | "unpark-and-fail",
+): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = [
+    {
+      type: "turn_started",
+      turnId,
+      turn: { id: turnId, prompt: `Arrange ${kind} queue fit` },
+      timestamp: at,
+    },
+  ];
+  if (kind === "unpark-and-fail") {
+    records.push({
+      type: "captain_telemetry",
+      turnId,
+      timestamp: at + 1,
+      topic: "playbook.fsm.state",
+      payload: { from: "failed", to: "working", event: "RETRY_CODE" },
+    });
+  }
+  records.push({
+    type: "runtime_error",
+    turnId,
+    timestamp: at + 2,
+    message: "The queue-fit fixture failed after changing the repository",
+    cause: QUEUE_FIT_CAUSE,
+  });
+  if (kind === "park") {
+    records.push({
+      type: "captain_telemetry",
+      turnId,
+      timestamp: at + 3,
+      topic: "playbook.fsm.state",
+      payload: { from: "working", to: "failed", event: "CODE_FAILED" },
+    });
+  }
+  records.push({
+    type: "turn_finished",
+    turnId,
+    timestamp: at + 4,
+  });
+  return records;
+}
+
+interface QueueFitTarget {
+  row: Locator;
+  rowSelector: string;
+  textTestId: string;
+  title: Locator;
+  standing: Locator;
+  queued: Locator;
+  fixed: Locator[];
+  count?: Locator;
+}
+
+/** Assert the responsive relationship that a DOM-shape test cannot:
+ * one flexible text region, line sharing at @md, stacking below it,
+ * actual ellipsis at the floor, and fixed chrome staying contained. */
+async function assertQueueFit(
+  target: QueueFitTarget,
+  expectedTitle: string,
+  expectedStanding: string,
+  where: string,
+  mustTruncate: boolean,
+): Promise<void> {
+  await target.row.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await expect(target.row, `${where}: row`).toBeVisible();
+  await expect(target.title, `${where}: full title`).toHaveAttribute(
+    "title",
+    expectedTitle,
+  );
+  await expect(target.standing, `${where}: standing words`).toHaveText(
+    expectedStanding,
+  );
+  await expect(target.standing, `${where}: full standing`).toHaveAttribute(
+    "title",
+    expectedStanding,
+  );
+  await expect(target.queued, `${where}: Queued`).toBeVisible();
+  for (const control of target.fixed) {
+    await expect(control, `${where}: fixed control`).toBeVisible();
+  }
+  if (target.count) {
+    await expect(target.count, `${where}: remaining count`).toBeVisible();
+    expect(
+      await target.count.evaluate(
+        (count, textTestId) =>
+          count.closest(`[data-testid="${textTestId}"]`) !== null,
+        target.textTestId,
+      ),
+      `${where}: remaining count belongs to the text region`,
+    ).toBe(true);
+  }
+
+  const layout = await target.row.evaluate(
+    (row, ids) => {
+      const find = (id: string): HTMLElement => {
+        const found = row.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+        if (!found) throw new Error(`queue-fit row has no ${id}`);
+        return found;
+      };
+      const text = find(ids.text);
+      const title = find(ids.title);
+      const standing = find(ids.standing);
+      const rowBox = row.getBoundingClientRect();
+      const titleBox = title.getBoundingClientRect();
+      const standingBox = standing.getBoundingClientRect();
+      const fixed = [find(ids.queued), ...ids.fixed.map(find)].map((node) => {
+        const box = node.getBoundingClientRect();
+        return {
+          shrink: Number.parseFloat(getComputedStyle(node).flexShrink),
+          inside:
+            box.left >= rowBox.left - 1 &&
+            box.right <= rowBox.right + 1 &&
+            box.top >= rowBox.top - 1 &&
+            box.bottom <= rowBox.bottom + 1,
+        };
+      });
+      return {
+        rowWidth: rowBox.width,
+        flexible: Array.from(row.children)
+          .filter(
+            (child) =>
+              Number.parseFloat(getComputedStyle(child).flexGrow) > 0,
+          )
+          .map((child) => child.getAttribute("data-testid")),
+        textMinWidth: getComputedStyle(text).minWidth,
+        sharesLine:
+          Math.min(titleBox.bottom, standingBox.bottom) -
+            Math.max(titleBox.top, standingBox.top) >
+          1,
+        standingBelow: standingBox.top >= titleBox.bottom - 1,
+        standingClient: standing.clientWidth,
+        standingScroll: standing.scrollWidth,
+        fixed,
+      };
+    },
+    {
+      text: target.textTestId,
+      title: await target.title.getAttribute("data-testid"),
+      standing: await target.standing.getAttribute("data-testid"),
+      queued: await target.queued.getAttribute("data-testid"),
+      fixed: await Promise.all(
+        target.fixed.map((control) => control.getAttribute("data-testid")),
+      ),
+    } as {
+      text: string;
+      title: string;
+      standing: string;
+      queued: string;
+      fixed: string[];
+    },
+  );
+  expect(layout.flexible, `${where}: sole flexible child`).toEqual([
+    target.textTestId,
+  ]);
+  expect(layout.textMinWidth, `${where}: text yields`).toBe("0px");
+  if (layout.rowWidth >= 28 * 16) {
+    expect(layout.sharesLine, `${where}: title and standing share a line`).toBe(
+      true,
+    );
+  } else {
+    expect(layout.standingBelow, `${where}: standing owns the next line`).toBe(
+      true,
+    );
+  }
+  if (mustTruncate) {
+    expect(
+      layout.standingScroll,
+      `${where}: long standing actually truncates`,
+    ).toBeGreaterThan(layout.standingClient + 1);
+  }
+  expect(
+    layout.fixed.every(({ shrink, inside }) => shrink === 0 && inside),
+    `${where}: Queued and controls stay fixed inside the row`,
+  ).toBe(true);
+}
+
+async function sweepQueueFit(
+  page: Page,
+  name: string,
+  target: QueueFitTarget,
+  expectedTitle: string,
+  expectedStanding: string,
+  defects: string[],
+): Promise<void> {
+  for (const railOpen of [false, true]) {
+    await setRail(page, railOpen);
+    let names: string[] | undefined;
+    for (const width of WIDTHS) {
+      if (railOpen && width < OPEN_RAIL_MIN_WIDTH) continue;
+      for (const height of HEIGHTS) {
+        await page.setViewportSize({ width, height });
+        const where = `${name} · sidebar ${railOpen ? "open" : "collapsed"} · ${width}×${height}`;
+        await assertQueueFit(
+          target,
+          expectedTitle,
+          expectedStanding,
+          where,
+          !railOpen && width === 320,
+        );
+        const found = await measure(page, [target.rowSelector]);
+        record(where, found, defects);
+        names = compareNames(where, found, names, defects);
+      }
+    }
+  }
+}
 
 interface Surface {
   name: string;
@@ -535,6 +777,251 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
   ).toBeVisible();
 
   expect(defects, defects.join("\n")).toEqual([]);
+});
+
+test.describe("committed queue rows and cards", () => {
+  test.use({
+    appOptions: {
+      project: true,
+      history: 25,
+      agentDelayMs: 50,
+      authoring: { slc: "ok" },
+    },
+  });
+
+  test("dashboard-43, run-view-105: queued work keeps one responsive text region", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(180_000);
+    const projectId = app.projectId!;
+
+    // Keep the focused row/card assertions inside the same stressed
+    // fixture as the full fit sweep: a long History band and ten
+    // further projects summoning from parked questions.
+    for (let index = 0; index < 10; index += 1) {
+      const dir = join(app.projectDir, "..", `parked-${index}`);
+      seedDemoProject(dir);
+      const project = await app.core.command("project.register", { path: dir });
+      const session = await app.core.command("session.create", {
+        projectId: project.id,
+      });
+      await app.core.command("turn.submit", {
+        sessionId: session.id,
+        text: "ask before migrating",
+      });
+    }
+    await expect
+      .poll(async () => (await app.core.command("ledger.get", {})).badge, {
+        timeout: 15_000,
+      })
+      .toBeGreaterThanOrEqual(10);
+
+    // First create a delivered intent without a successor: settlement
+    // must not consume the long queued rows this journey needs to see.
+    const delivered = await app.core.command("intent.queue", {
+      projectId,
+      text: "Prepare the authentication migration",
+    });
+    const deliveredSession = await app.core.command("session.create", {
+      projectId,
+    });
+    await app.core.command("turn.submit", {
+      sessionId: deliveredSession.id,
+      text: delivered.text,
+      intentId: delivered.id,
+    });
+    await expect
+      .poll(async () => {
+        const ledger = await app.core.command("ledger.get", {});
+        return ledger.intents.find((row) => row.intent.id === delivered.id)
+          ?.state;
+      })
+      .toBe("finished");
+
+    // The project's current conversation carries the standing. Its
+    // stored second turn parks a failed run with a real structured
+    // cause before any successor exists, so no settlement race can
+    // dispatch the fit fixture while it is being arranged.
+    const lane = await app.core.command("session.create", { projectId });
+    await runTurn(app, lane.id, "Establish the queue-fit lane");
+    await app.stop();
+    await appendHistorySession(
+      app.sharedSessionsDir,
+      lane.id,
+      queueFitFailureRecords(2, Date.now(), "park"),
+    );
+    await app.start();
+
+    const next = await app.core.command("intent.queue", {
+      projectId,
+      text: QUEUE_FIT_TITLE,
+    });
+    await app.core.command("intent.queue", {
+      projectId,
+      text: "Review the migration notes after the compatibility audit",
+    });
+
+    const nextSchedule = async () => {
+      const ledger = await app.core.command("ledger.get", {});
+      return ledger.intents.find((row) => row.intent.id === next.id)?.next;
+    };
+    await expect.poll(nextSchedule).toEqual({
+      standing: "failure-park",
+      manualStart: false,
+      cause: QUEUE_FIT_CAUSE,
+    });
+
+    const defects: string[] = [];
+    // Leaving the failed state clears the park; the same turn's
+    // runtime_error remains the latest lane outcome, so Start becomes
+    // available while the phrase keeps the failure visible.
+    await app.stop();
+    await appendHistorySession(
+      app.sharedSessionsDir,
+      lane.id,
+      queueFitFailureRecords(3, Date.now(), "unpark-and-fail"),
+    );
+    await app.start();
+    await expect.poll(nextSchedule).toEqual({
+      standing: "failed",
+      manualStart: true,
+      cause: QUEUE_FIT_CAUSE,
+    });
+
+    await open(page, app);
+    await page.getByTestId(`sidebar-session-${deliveredSession.id}`).click();
+    const deliveryCard = page.getByTestId(`delivery-card-${delivered.id}`);
+    await expect(deliveryCard.getByTestId("delivery-confirm")).toBeEnabled();
+    await deliveryCard.getByTestId("delivery-confirm").click();
+    await expect(deliveryCard).toHaveAttribute("data-settled", "1");
+
+    const resolvedTarget = (): QueueFitTarget => ({
+      row: deliveryCard.getByTestId("resolved-next-row"),
+      rowSelector: `[data-testid="delivery-card-${delivered.id}"] [data-testid="resolved-next-row"]`,
+      textTestId: "resolved-next-text",
+      title: deliveryCard.getByTestId("resolved-next-title"),
+      standing: deliveryCard.getByTestId("resolved-next-standing"),
+      queued: deliveryCard.getByTestId("resolved-next-queued"),
+      fixed: [deliveryCard.getByTestId("upnext-start")],
+    });
+    await expect(
+      deliveryCard.getByRole("button", { name: `Start ${QUEUE_FIT_TITLE}` }),
+    ).toBeVisible();
+    await sweepQueueFit(
+      page,
+      "Resolved delivery next row",
+      resolvedTarget(),
+      QUEUE_FIT_TITLE,
+      QUEUE_FIT_FAILED_PHRASE,
+      defects,
+    );
+
+    // At a roomy window the Captain pane's own floor is a second
+    // independent width constraint, beyond the viewport matrix.
+    await setRail(page, false);
+    await page.setViewportSize({ width: 1280, height: TALL });
+    const divider = page.getByTestId("captain-divider");
+    const floor = await divider.getAttribute("aria-valuemin");
+    if (!floor) throw new Error("Captain divider has no minimum");
+    for (let step = 0; step < 30; step += 1) {
+      if ((await divider.getAttribute("aria-valuenow")) === floor) break;
+      await divider.press("ArrowLeft");
+    }
+    await expect(divider).toHaveAttribute("aria-valuenow", floor);
+    await assertQueueFit(
+      resolvedTarget(),
+      QUEUE_FIT_TITLE,
+      QUEUE_FIT_FAILED_PHRASE,
+      "Resolved delivery next row · Captain pane floor",
+      true,
+    );
+    record(
+      "Resolved delivery next row · Captain pane floor",
+      await measure(page, [resolvedTarget().rowSelector]),
+      defects,
+    );
+
+    await page.getByRole("tab", { name: "Start another session" }).click();
+    const homeCard = page.getByTestId("next-card");
+    const homeTarget = (): QueueFitTarget => ({
+      row: homeCard.getByTestId("next-row"),
+      rowSelector: `[data-testid="next-card"] [data-testid="next-row"]`,
+      textTestId: "next-text",
+      title: homeCard.getByTestId("next-title"),
+      standing: homeCard.getByTestId("next-standing"),
+      queued: homeCard.getByTestId("next-queued"),
+      fixed: [
+        homeCard.getByTestId("next-start"),
+        homeCard.getByTestId("next-remove"),
+      ],
+      count: homeCard.getByText("+1 more queued", { exact: true }),
+    });
+    await expect(
+      homeCard.getByRole("button", { name: `Start ${QUEUE_FIT_TITLE}` }),
+    ).toBeVisible();
+    await sweepQueueFit(
+      page,
+      "Captain home next row",
+      homeTarget(),
+      QUEUE_FIT_TITLE,
+      QUEUE_FIT_FAILED_PHRASE,
+      defects,
+    );
+
+    // Close out the Run View fixture before restoring the park that
+    // dashboard-43 requires. The Dashboard therefore measures its
+    // own failure summons, not the delivery verdict used above.
+    await app.stop();
+    await appendHistorySession(
+      app.sharedSessionsDir,
+      lane.id,
+      queueFitFailureRecords(4, Date.now(), "park"),
+    );
+    await app.start();
+    await expect.poll(nextSchedule).toEqual({
+      standing: "failure-park",
+      manualStart: false,
+      cause: QUEUE_FIT_CAUSE,
+    });
+
+    await open(page, app);
+    await page.getByRole("button", { name: /^Dashboard\b/ }).click();
+    const dashboardTarget = (): QueueFitTarget => ({
+      row: page.getByTestId(`upnext-row-${next.id}`),
+      rowSelector: `[data-testid="upnext-row-${next.id}"]`,
+      textTestId: `upnext-text-${next.id}`,
+      title: page.getByTestId(`upnext-title-${next.id}`),
+      standing: page.getByTestId(`upnext-standing-${next.id}`),
+      queued: page.getByTestId(`upnext-queued-${next.id}`),
+      fixed: [page.getByTestId(`upnext-menu-${next.id}`)],
+    });
+    await expect(
+      dashboardTarget().row.getByRole("button", { name: /^Start\b/ }),
+    ).toHaveCount(0);
+    await sweepQueueFit(
+      page,
+      "Dashboard parked-failure row",
+      dashboardTarget(),
+      QUEUE_FIT_TITLE,
+      QUEUE_FIT_PARKED_PHRASE,
+      defects,
+    );
+
+    await nav(page, "Projects").click();
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await expect(page.getByTestId("overview-tab")).toBeVisible();
+    await sweepQueueFit(
+      page,
+      "Overview parked-failure row",
+      dashboardTarget(),
+      QUEUE_FIT_TITLE,
+      QUEUE_FIT_PARKED_PHRASE,
+      defects,
+    );
+
+    expect(defects, defects.join("\n")).toEqual([]);
+  });
 });
 
 // The at-hand popovers and the composer's queue are chrome the sweep

@@ -118,12 +118,27 @@ export async function measure(page: Page, containers: string[] = []): Promise<Me
       inCanvas.set(el, found);
       return found;
     };
+    const inEllipsis = new Map<Element, boolean>();
+    const insideEllipsis = (el: Element): boolean => {
+      const known = inEllipsis.get(el);
+      if (known !== undefined) return known;
+      const parent = el.parentElement;
+      const found = parent
+        ? styleOf(parent).textOverflow === "ellipsis" || insideEllipsis(parent)
+        : false;
+      inEllipsis.set(el, found);
+      return found;
+    };
     const viewportWidth = document.documentElement.clientWidth;
     for (const el of Array.from(document.body.querySelectorAll("*"))) {
       if (!(el instanceof HTMLElement)) continue;
       const style = styleOf(el);
       if (style.display === "none" || style.display === "inline") continue;
-      if (scrolls(el) || style.textOverflow === "ellipsis") continue;
+      if (
+        scrolls(el) ||
+        style.textOverflow === "ellipsis" ||
+        insideEllipsis(el)
+      ) continue;
       if (folded(el)) continue;
       if (el.clientWidth <= 1) continue;
       // A text field scrolls its own value; its box is what counts.
@@ -223,11 +238,13 @@ export async function measure(page: Page, containers: string[] = []): Promise<Me
       const parentBox = parent.getBoundingClientRect();
       const children = Array.from(parent.children).filter(shown);
       const parentScrolls = scrolls(parent);
+      const parentStyle = styleOf(parent);
+      const parentClips = parentStyle.textOverflow === "ellipsis";
       const parentHasBox = parentBox.width > 0 && parentBox.height > 0;
       for (let i = 0; i < children.length; i += 1) {
         const child = children[i];
         const childRects = rects(child);
-        if (parentHasBox && !parentScrolls) {
+        if (parentHasBox && !parentScrolls && !parentClips) {
           for (const r of childRects) {
             if (!inside(r, parentBox)) {
               overlap.push(

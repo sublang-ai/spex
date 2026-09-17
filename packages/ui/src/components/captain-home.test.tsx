@@ -553,12 +553,15 @@ describe("run-view-88: the Captain home names the queue's head", () => {
 
     const row = screen.getByTestId("next-row");
     expect(row.className).toContain("@container");
+    expect(row.className).toContain("flex-wrap");
     const slackOwners = Array.from(row.children).filter((child) =>
       child.className.split(/\s+/).includes("flex-1"),
     );
     expect(slackOwners).toEqual([screen.getByTestId("next-text")]);
     const text = screen.getByTestId("next-text");
     expect(text.className).toContain("min-w-0");
+    expect(text.className).toContain("basis-full");
+    expect(text.className).toContain("@md:basis-0");
     expect(text.firstElementChild?.className).toContain("flex-col");
     expect(text.firstElementChild?.className).toContain("@md:flex-row");
     expect(screen.getByTestId("next-title").getAttribute("title")).toBe(
