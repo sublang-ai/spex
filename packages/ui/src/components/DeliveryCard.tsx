@@ -4,9 +4,9 @@
 // The intent delivery card (run-view-87, DR-035): a first-class
 // settled card at the intent's final finished turn — title, provenance
 // chip, run stats, Confirm foremost with Drop beside — resolving in
-// place into the project's next queued intent once the verdict lands.
-// The source chip (run-view-89) lives here too, shared with the Boss
-// bubble that dispatched the intent.
+// place into the project's queue reading once the verdict lands. The
+// source chip (run-view-89) lives here too, shared with the Boss bubble
+// that dispatched the intent.
 
 import { useState } from "react";
 import type {
@@ -110,6 +110,8 @@ export function DeliveryCard({
   live,
   ownsConversation,
   next,
+  blocked,
+  blockedProjectName,
   onClose,
   onStartNext,
   onQueueNext,
@@ -117,7 +119,7 @@ export function DeliveryCard({
   /** The finished intent as the ledger last derived it. */
   derived: DerivedIntent;
   /** True once the verdict landed and the intent left the open fold:
-   * the card resolves in place into the project's next intent. */
+   * the card resolves in place into the project's queue reading. */
   closed: boolean;
   /** False in an ended session's replay: the card renders inert. */
   live: boolean;
@@ -125,6 +127,10 @@ export function DeliveryCard({
   ownsConversation: boolean;
   /** The project's core-published next queued intent, for the pull. */
   next?: DerivedIntent;
+  /** The first ranked after-linked row when the project has no next. */
+  blocked?: DerivedIntent;
+  /** A foreign predecessor project's display name, with id fallback. */
+  blockedProjectName?: string;
   onClose(as: "done" | "dropped"): Promise<void>;
   onStartNext(intent: IntentInfo): void | Promise<void>;
   onQueueNext(text: string): Promise<void>;
@@ -138,6 +144,16 @@ export function DeliveryCard({
   const inertTitle = live
     ? undefined
     : "This session has ended — the replay is read-only";
+  const publishedNext = next?.next ? next : undefined;
+  const blockedQueued = !publishedNext && blocked?.blockedBy ? blocked : undefined;
+  const queued = publishedNext ?? blockedQueued;
+  const blockedPhrase = blockedQueued?.blockedBy
+    ? `after ${blockedQueued.blockedBy.title}${
+        blockedQueued.blockedBy.projectId !== blockedQueued.intent.projectId
+          ? ` (${blockedProjectName ?? blockedQueued.blockedBy.projectId})`
+          : ""
+      }`
+    : undefined;
 
   // A verdict rules on the intent, not on the session: it is legal on
   // any open intent and reads no runtime state, so it stays takeable
@@ -165,7 +181,7 @@ export function DeliveryCard({
           </span>
           <SourceChip source={derived.intent.source} />
         </div>
-        {next?.next ? (
+        {queued ? (
           <div
             data-testid="resolved-next-row"
             className="@container flex items-center gap-2"
@@ -177,28 +193,38 @@ export function DeliveryCard({
               <span
                 data-testid="resolved-next-title"
                 className="min-w-0 truncate text-sm @md:flex-1"
-                title={next.intent.text}
+                title={queued.intent.text}
               >
-                Up next:{" "}
-                <span className="font-medium">{intentTitle(next.intent)}</span>
+                {publishedNext ? "Up next: " : null}
+                <span className="font-medium">{intentTitle(queued.intent)}</span>
               </span>
-              <QueueStandingPhrase
-                schedule={next.next}
-                testId="resolved-next-standing"
-                className="min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-400 @md:max-w-[45%]"
-              />
+              {publishedNext?.next ? (
+                <QueueStandingPhrase
+                  schedule={publishedNext.next}
+                  testId="resolved-next-standing"
+                  className="min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-400 @md:max-w-[45%]"
+                />
+              ) : blockedPhrase ? (
+                <span
+                  data-testid="resolved-next-blocked"
+                  title={blockedPhrase}
+                  className="min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-400 @md:max-w-[45%]"
+                >
+                  {blockedPhrase}
+                </span>
+              ) : null}
             </div>
             <QueuedMark testId="resolved-next-queued" />
-            {next.next.manualStart ? (
+            {publishedNext?.next?.manualStart ? (
               <button
                 type="button"
                 data-testid="upnext-start"
-                aria-label={`Start ${intentTitle(next.intent)}`}
+                aria-label={`Start ${intentTitle(publishedNext.intent)}`}
                 disabled={starting || !live}
                 title={inertTitle}
                 onClick={() => {
                   setStarting(true);
-                  void Promise.resolve(onStartNext(next.intent))
+                  void Promise.resolve(onStartNext(publishedNext.intent))
                     .catch(() => {})
                     .finally(() => setStarting(false));
                 }}
@@ -209,7 +235,8 @@ export function DeliveryCard({
             ) : null}
           </div>
         ) : (
-          // An empty queue is an invitation, never a blank (DR-010 §5).
+          // Only a truly empty queue becomes capture guidance. A queue
+          // with no eligible next shows its first after-linked row above.
           <form
             className="flex items-center gap-2"
             onSubmit={(event) => {

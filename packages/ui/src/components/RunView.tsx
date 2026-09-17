@@ -309,6 +309,7 @@ export function RunView({
   const captainSplit = useAppStore((state) => state.captainSplit);
   const setCaptainSplit = useAppStore((state) => state.setCaptainSplit);
   const ledger = useAppStore((state) => state.ledger);
+  const projects = useAppStore((state) => state.projects);
   const staged = useAppStore((state) => state.stagedIntents[session.id]);
   const clearStagedIntent = useAppStore((state) => state.clearStagedIntent);
   const submitSessionControl = useAppStore((state) => state.submitSessionControl);
@@ -398,18 +399,28 @@ export function RunView({
     return map;
   }, [bound, delivered]);
 
-  // The project's core-published next intent, the pull the delivery
-  // card resolves into with its scheduling standing (run-view-87).
-  const nextUp = useMemo(
+  // The project's ranked queue. The published next wins even when a
+  // blocked row ranks before it; only a queue with no eligible next
+  // falls back to its first blocked row (run-view-87, DR-077).
+  const projectQueue = useMemo(
     () =>
-      (ledger?.intents ?? []).find(
+      (ledger?.intents ?? []).filter(
         (entry) =>
           entry.intent.projectId === session.projectId &&
-          entry.state === "queued" &&
-          entry.next,
+          entry.state === "queued",
       ),
     [ledger, session.projectId],
   );
+  const nextUp = projectQueue.find((entry) => entry.next);
+  const blockedHead =
+    !nextUp && projectQueue[0]?.blockedBy ? projectQueue[0] : undefined;
+  const blockedProjectName =
+    blockedHead?.blockedBy &&
+    blockedHead.blockedBy.projectId !== blockedHead.intent.projectId
+      ? (projects.find(
+          (project) => project.id === blockedHead.blockedBy?.projectId,
+        )?.name ?? blockedHead.blockedBy.projectId)
+      : undefined;
 
   // Delivery cards anchored at each intent's final turn's end.
   const extras = useMemo<ThreadExtra[]>(() => {
@@ -437,6 +448,8 @@ export function RunView({
             live={!readOnly}
             ownsConversation={to === Number.POSITIVE_INFINITY}
             next={nextUp}
+            blocked={blockedHead}
+            blockedProjectName={blockedProjectName}
             onClose={(as) => closeIntent(entry.intent.id, as)}
             onStartNext={(intent) => void stageDispatch(intent)}
             onQueueNext={async (text) => {
@@ -449,7 +462,16 @@ export function RunView({
     return list;
     // rangeOf reads only state derived in this render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [delivered, dispatchTurns, view.captain, ledger, nextUp, session]);
+  }, [
+    blockedHead,
+    blockedProjectName,
+    delivered,
+    dispatchTurns,
+    view.captain,
+    ledger,
+    nextUp,
+    session,
+  ]);
 
   // Where an attention activation should land (run-view-91): the
   // delivery card, the question bubble, or the failure line of the
