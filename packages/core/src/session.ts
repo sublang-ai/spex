@@ -17,6 +17,7 @@ import {
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
 import type { ComposedConfig, LoadModule } from "./config.js";
+import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
 import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
@@ -198,12 +199,13 @@ export function describeStructuralDrift(stored: SessionStructuralProjection, cur
 }
 
 /** A project's current conversation (core-service-93, DR-051): its live
- * session, else the most recently active one that continues and no
- * other host owns. */
+ * session, else the most recently active owned one that continues or
+ * still carries a recovery boundary. */
 export function currentSession(sessions: SessionInfo[], projectId: string): SessionInfo | undefined {
   const own = sessions.filter((session) => session.projectId === projectId);
   return own.find((session) => session.live) ?? own
-    .filter((session) => session.continuable && !session.externalWriter)
+    .filter((session) => !session.externalWriter &&
+      (session.continuable || session.recovery))
     .sort((a, b) => (b.endedAt ?? b.createdAt) - (a.endedAt ?? a.createdAt))[0];
 }
 
@@ -216,12 +218,19 @@ export class SessionManager {
   private readonly settling = new Map<string, {projectId: string; done: Promise<void>}>();
   private readonly opening = new Set<string>();
   private readonly recovering = new Set<string>();
+  /** Sessions whose active turn is being stopped intentionally. */
+  private readonly intentionalStops = new Set<string>();
   private readonly now: () => number;
   onRecord: (envelope: RecordEnvelope) => void = () => {};
   onSessionState: (session: SessionInfo) => void = () => {};
   onLedgerChange: (projectId: string) => void = () => {};
   /** Local turn completion, after release and the durable read model agree. */
-  onTurnSettled: (sessionId: string, turnId: number, intentId?: string) => void = () => {};
+  onTurnSettled: (
+    sessionId: string,
+    turnId: number,
+    intentId?: string,
+    control?: TurnControlKind,
+  ) => void = () => {};
 
   constructor(private readonly options: SessionManagerOptions) {
     this.store = options.store;
@@ -232,16 +241,22 @@ export class SessionManager {
   listSessions(): SessionInfo[] {
     return this.store.listSessions().map((session) => {
       const live = this.live.get(session.id);
-      return {...session, ...(live ? {externalWriter:undefined} : {}), live: !!live || session.live, turnActive: live?.turnActive ?? (session.live ? session.turnActive ?? false : false)};
+      const settling = this.settling.has(session.id);
+      return {...session, ...(live ? {externalWriter:undefined} : {}), live: !!live || session.live, turnActive: (live?.turnActive ?? (session.live ? session.turnActive ?? false : false)) || settling};
     });
   }
-  /** One lane per project: its current conversation (core-service-93). */
-  listLanes(): { sessionId: string; projectId: string; turnActive: boolean }[] {
+  /** One lane per project: its current or recovery-bound conversation
+   * (core-service-93, core-service-107). */
+  listLanes(): { sessionId: string; projectId: string; turnActive: boolean; settling: boolean }[] {
     const sessions = this.listSessions();
-    const lanes: { sessionId: string; projectId: string; turnActive: boolean }[] = [];
+    const lanes: { sessionId: string; projectId: string; turnActive: boolean; settling: boolean }[] = [];
     for (const projectId of new Set(sessions.map((session) => session.projectId))) {
+      // An aborted/failed conversation remains the queue's lane while
+      // its recovery boundary stands, even though it cannot continue a
+      // normal message yet. That is what lets the queue name the stop or
+      // failure instead of presenting an unqualified Start.
       const current = currentSession(sessions, projectId);
-      if (current) lanes.push({sessionId: current.id, projectId, turnActive: current.turnActive ?? false});
+      if (current) lanes.push({sessionId: current.id, projectId, turnActive: current.turnActive ?? false, settling: this.settling.has(current.id)});
     }
     return lanes;
   }
@@ -427,6 +442,20 @@ export class SessionManager {
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
 
+  /** Persist which kind of control produced a turn. The Captain's
+   * ordinary turn record carries only the control label, which is not
+   * enough to distinguish recovery from ending after a restart. */
+  private async appendControl(
+    entry: LiveSession,
+    turnId: number,
+    kind: TurnControlKind,
+  ): Promise<void> {
+    const afterSeq = this.store.maxSeq(entry.info.id);
+    await entry.controller.lease.append(controlRecord(turnId, kind, this.now()));
+    const added = await entry.controller.lease.readStream({ afterSeq });
+    for (const item of added.entries) this.record(entry.info.id, item, entry);
+  }
+
   /** What the opened shell advertises now (core-service-98): the
    * parked leaf's own actions for a recovery, the shell's own controls
    * for an ending. An unreadable control view advertises nothing
@@ -529,11 +558,20 @@ export class SessionManager {
           await (control.kind === "recovery"
             ? controller.submitRuntimeAction(control.controlId)
             : controller.submitShellAction(control.controlId));
+          const turnId = this.store.listTurns(entry.info.id).at(-1)?.turnId;
+          if (turnId !== undefined) await this.appendControl(entry, turnId, control.kind);
         } else await entry.controller.handleBossTurn(text!);
       } catch (error) {
         failed = true;
-        try { await this.appendError(entry, error instanceof Error ? error.message : String(error)); }
-        catch { /* The lifecycle retains incomplete evidence and ownership. */ }
+        // The runtime reports an intentional stop through the same
+        // rejected promise as a fault, after durably ending its turn as
+        // aborted. Its stopped outcome is sufficient evidence; recording
+        // a runtime_error as well would misclassify it as failure.
+        const stopped = this.intentionalStops.has(entry.info.id);
+        if (!stopped) {
+          try { await this.appendError(entry, error instanceof Error ? error.message : String(error)); }
+          catch { /* The lifecycle retains incomplete evidence and ownership. */ }
+        }
       } finally {
         entry.turnActive = false;
         entry.pendingIntentId = undefined;
@@ -554,8 +592,13 @@ export class SessionManager {
         });
         this.settling.set(entry.info.id, {projectId: entry.info.projectId, done});
         try { await done; }
-        finally { this.settling.delete(entry.info.id); }
-        if (!failed && turnId !== undefined) this.onTurnSettled(entry.info.id, turnId, intentId);
+        finally {
+          this.settling.delete(entry.info.id);
+          this.intentionalStops.delete(entry.info.id);
+        }
+        if (!failed && turnId !== undefined) {
+          this.onTurnSettled(entry.info.id, turnId, intentId, control?.kind);
+        }
       }
     })().catch((error) => console.error(`spex: session state refresh failed: ${String(error)}`));
   }
@@ -563,16 +606,29 @@ export class SessionManager {
   abortTurn(sessionId: string): boolean {
     const entry = this.requireLive(sessionId);
     if (!entry.turnActive) return false;
-    entry.runtime.abortActiveTurn();
+    this.stopActiveTurn(entry, BOSS_ABORT_REASON);
     return true;
   }
+
+  private stopActiveTurn(entry: LiveSession, reason: string): void {
+    this.intentionalStops.add(entry.info.id);
+    try {
+      (entry.runtime.abortActiveTurn as (reason?: string) => void)(reason);
+    } catch (error) {
+      this.intentionalStops.delete(entry.info.id);
+      throw error;
+    }
+  }
+
   async disposeSession(sessionId: string): Promise<void> {
     if (!this.live.has(sessionId) && this.settling.has(sessionId)) {
       await this.settled(sessionId);
       return;
     }
     const entry = this.requireLive(sessionId);
-    if (entry.turnActive) entry.runtime.abortActiveTurn();
+    if (entry.turnActive) {
+      this.stopActiveTurn(entry, CORE_STOP_REASON);
+    }
     await entry.operation;
     // The turn's own settlement may have released the runtime already.
     if (!this.live.has(sessionId)) return;

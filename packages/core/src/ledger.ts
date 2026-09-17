@@ -7,6 +7,8 @@
 // restart-identical. This is the one derivation the Dashboard, the
 // sidebar, and the dock badge consume; nothing else computes attention.
 
+import { isDeepStrictEqual } from "node:util";
+
 import type {
   AttentionEntry,
   DerivedIntent,
@@ -14,8 +16,10 @@ import type {
   IntentInfo,
   IntentStats,
   LedgerState,
+  QueueSchedule,
   StoredRecord,
 } from "./protocol.js";
+import { controlKind, isStoppedTurnReason } from "./control-record.js";
 import type { Store } from "./store.js";
 
 /** What the session manager knows live: the lanes and their activity. */
@@ -23,6 +27,8 @@ export interface LiveLane {
   sessionId: string;
   projectId: string;
   turnActive: boolean;
+  /** Full settlement or an authorized handoff still owns the lane. */
+  settling?: boolean;
 }
 
 /** The intent's display title: the first line of its text. */
@@ -53,6 +59,8 @@ export interface SessionConditions {
    * attached one (DR-075).
    */
   failure?: { since: number; turnId: number | null; cause?: FailureCause };
+  /** Latest structured failure cause, including an unparked failure. */
+  failureCause?: FailureCause;
 }
 
 /** The cause a record carries, or nothing (core-service-49, DR-075).
@@ -78,35 +86,140 @@ export function readFailureCause(value: unknown): FailureCause | undefined {
   return { code: candidate.code, ...(evidence ? { evidence } : {}) };
 }
 
+/** The runtime reports an intentional stop as both a runtime_error and
+ * a turn_aborted terminal. Ignore only that synthetic error: a genuine
+ * earlier failure in the same turn must keep standing. */
+function stoppedTurnErrorSeqs(records: StoredRecord[]): Set<number> {
+  const ignored = new Set<number>();
+  for (let index = 0; index < records.length; index += 1) {
+    const terminal = records[index]?.record as {
+      type?: unknown;
+      turnId?: unknown;
+      reason?: unknown;
+    } | undefined;
+    if (terminal?.type !== "turn_aborted" ||
+        typeof terminal.turnId !== "number" ||
+        !isStoppedTurnReason(terminal.reason)) continue;
+    for (let before = index - 1; before >= 0; before -= 1) {
+      const candidate = records[before];
+      if (!candidate) continue;
+      const record = candidate.record as {
+        type?: unknown;
+        turnId?: unknown;
+        message?: unknown;
+      };
+      if (record.type === "turn_started") break;
+      if (record.type === "runtime_error" &&
+          record.turnId === terminal.turnId &&
+          record.message === terminal.reason) {
+        ignored.add(candidate.seq);
+        break;
+      }
+    }
+  }
+  return ignored;
+}
+
 export function foldConditions(records: StoredRecord[]): SessionConditions {
-  let question: SessionConditions["question"];
-  let failure: SessionConditions["failure"];
-  // Runs parked on a question, by trace session id: a run disposed
-  // while parked — dismissed by the Captain — takes its question with
-  // it (dashboard-10).
-  const parkedRuns = new Set<string>();
-  /** Runs parked in their failure state, by trace session id. */
-  const parkedFailures = new Set<string>();
-  /** The last cause the stream carried, which the runtime attaches to
-   * the failure it decides on the transition, on the settled input and
-   * on the failed-state status line alike (DR-075). Its record may
-   * arrive either side of the state report the condition opens on, so
-   * it is held here and attached whichever lands first. */
-  let cause: FailureCause | undefined;
-  const bearsCause = (value: unknown): void => {
+  const abortErrors = stoppedTurnErrorSeqs(records);
+  let fallbackQuestion: SessionConditions["question"];
+  let fallbackFailure: SessionConditions["failure"];
+  // The run-specific trace is authoritative where present. The shell's
+  // aggregate state topic remains a fallback for older streams that did
+  // not identify the machine which moved.
+  const parkedQuestions = new Map<string, NonNullable<SessionConditions["question"]>>();
+  const parkedFailures = new Map<string, NonNullable<SessionConditions["failure"]>>();
+  // A cause belongs to the failure beside which the runtime emitted it;
+  // it is never a session-global label. Hold an as-yet-unmatched cause
+  // only until the next failure event consumes it, and retain a cause
+  // separately for the latest unparked runtime error.
+  let pendingCause: FailureCause | undefined;
+  let pendingFromError = false;
+  const pendingByRun = new Map<string, FailureCause>();
+  let unparkedFailureCause: FailureCause | undefined;
+  let latestFailure: "parked" | "fallback" | "unparked" | undefined;
+  const bearsCause = (value: unknown, runId?: string): void => {
     const read = readFailureCause(value);
     if (!read) return;
-    cause = read;
-    if (failure && !failure.cause) failure.cause = read;
+    if (runId) {
+      const parked = parkedFailures.get(runId);
+      if (parked && !parked.cause) parked.cause = read;
+      else pendingByRun.set(runId, read);
+      return;
+    }
+    if (latestFailure === "fallback" && fallbackFailure) {
+      if (!fallbackFailure.cause) fallbackFailure.cause = read;
+      else if (!isDeepStrictEqual(fallbackFailure.cause, read)) {
+        pendingCause = read;
+        pendingFromError = false;
+      }
+      return;
+    }
+    if (latestFailure === "parked") {
+      const parked = [...parkedFailures.values()].at(-1);
+      if (parked && !parked.cause) parked.cause = read;
+      else if (parked && !isDeepStrictEqual(parked.cause, read)) {
+        pendingCause = read;
+        pendingFromError = false;
+      }
+      return;
+    }
+    if (latestFailure === "unparked") {
+      if (!unparkedFailureCause) unparkedFailureCause = read;
+      else if (!isDeepStrictEqual(unparkedFailureCause, read)) {
+        pendingCause = read;
+        pendingFromError = false;
+      }
+      return;
+    }
+    pendingCause = read;
+    pendingFromError = false;
   };
-  for (const { record } of records) {
+  for (const { seq, record } of records) {
     switch (record.type) {
       case "turn_started":
         // The next Boss turn acknowledges the standing question,
         // even when it dispatches another intent (dashboard-10).
-        question = undefined;
-        parkedRuns.clear();
+        fallbackQuestion = undefined;
+        parkedQuestions.clear();
+        // An unparked failure is acknowledged by the next Boss turn;
+        // genuinely parked failures keep their own causes through recovery.
+        unparkedFailureCause = undefined;
+        pendingCause = undefined;
+        pendingFromError = false;
+        pendingByRun.clear();
+        latestFailure = parkedFailures.size > 0
+          ? "parked"
+          : fallbackFailure
+            ? "fallback"
+            : undefined;
         break;
+      case "runtime_error": {
+        if (abortErrors.has(seq)) break;
+        const read: FailureCause | undefined = readFailureCause(record) ??
+          (pendingFromError ? undefined : pendingCause);
+        unparkedFailureCause = read;
+        const parked = [...parkedFailures.values()].at(-1);
+        if (parked) {
+          if (read && !parked.cause) parked.cause = read;
+          pendingCause = undefined;
+          pendingFromError = false;
+          latestFailure = "parked";
+        } else if (fallbackFailure) {
+          if (read && !fallbackFailure.cause) fallbackFailure.cause = read;
+          pendingCause = undefined;
+          pendingFromError = false;
+          latestFailure = "fallback";
+        } else {
+          // A run-specific failed-state trace may follow the aggregate
+          // runtime error. Keep only this error's own cause for it; the
+          // next runtime_error replaces it even when it states none.
+          pendingCause = read;
+          pendingFromError = read !== undefined;
+          latestFailure = "unparked";
+        }
+        break;
+      }
       case "captain_status":
         bearsCause((record as { data?: unknown }).data);
         break;
@@ -125,29 +238,66 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
           };
           if (typeof trace?.sessionId !== "string") break;
           if (trace.type === "fsm.transition" || trace.type === "boss.input.settled") {
-            bearsCause(trace.payload);
+            bearsCause(trace.payload, trace.sessionId);
           }
           if (trace.type === "fsm.transition") {
-            if (trace.payload?.to === "awaitBossReply") parkedRuns.add(trace.sessionId);
-            else if (trace.payload?.from === "awaitBossReply") parkedRuns.delete(trace.sessionId);
-            if (trace.payload?.to === "failed") parkedFailures.add(trace.sessionId);
+            if (trace.payload?.to === "awaitBossReply") {
+              // The identified trace subsumes an aggregate state report
+              // that may have arrived first for this same transition.
+              fallbackQuestion = undefined;
+              parkedQuestions.set(trace.sessionId, {
+                since: telemetry.timestamp,
+                turnId: telemetry.turnId,
+              });
+            }
+            else if (trace.payload?.from === "awaitBossReply") {
+              parkedQuestions.delete(trace.sessionId);
+            }
+            if (trace.payload?.to === "failed") {
+              const fallbackCause = fallbackFailure?.cause;
+              fallbackFailure = undefined;
+              const traceCause = readFailureCause(trace.payload) ??
+                pendingByRun.get(trace.sessionId) ?? pendingCause ??
+                fallbackCause;
+              parkedFailures.set(trace.sessionId, {
+                since: telemetry.timestamp,
+                turnId: telemetry.turnId,
+                ...(traceCause ? { cause: traceCause } : {}),
+              });
+              pendingByRun.delete(trace.sessionId);
+              pendingCause = undefined;
+              pendingFromError = false;
+              latestFailure = "parked";
+            }
             else if (trace.payload?.from === "failed") {
-              if (parkedFailures.delete(trace.sessionId)) {
-                failure = undefined;
-                cause = undefined;
-              }
+              parkedFailures.delete(trace.sessionId);
+              pendingByRun.delete(trace.sessionId);
+              latestFailure = parkedFailures.size > 0
+                ? "parked"
+                : fallbackFailure
+                  ? "fallback"
+                  : unparkedFailureCause
+                    ? "unparked"
+                    : undefined;
             }
           } else if (trace.type === "session.disposed") {
             // Outside a turn — no turn id — the host is releasing the
             // runtime at settlement, a pause the parked run survives
             // (core-service-93); inside one, the Captain dismissed it.
-            if (telemetry.turnId !== null && parkedRuns.delete(trace.sessionId)) question = undefined;
+            if (telemetry.turnId !== null) parkedQuestions.delete(trace.sessionId);
             // A run disposed inside a turn was ended deliberately — the
             // Captain dismissed it, or the Boss dropped it — which is
             // one of the two ways a failure stops summoning (DR-062).
-            if (telemetry.turnId !== null && parkedFailures.delete(trace.sessionId)) {
-              failure = undefined;
-              cause = undefined;
+            if (telemetry.turnId !== null) {
+              parkedFailures.delete(trace.sessionId);
+              pendingByRun.delete(trace.sessionId);
+              latestFailure = parkedFailures.size > 0
+                ? "parked"
+                : fallbackFailure
+                  ? "fallback"
+                  : unparkedFailureCause
+                    ? "unparked"
+                    : undefined;
             }
           }
           break;
@@ -164,28 +314,34 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
         };
         const state =
           stateText(telemetry.payload?.to) ?? stateText(telemetry.payload?.state);
-        if (state === "awaitBossReply") {
-          question = question ?? {
+        if (state === "awaitBossReply" && parkedQuestions.size === 0) {
+          fallbackQuestion = fallbackQuestion ?? {
             since: telemetry.timestamp,
             turnId: telemetry.turnId,
           };
         } else if (stateText(telemetry.payload?.from) === "awaitBossReply") {
-          // The parked machine leaving its park answers the question;
-          // unrelated Captain state reports must not clear it.
-          question = undefined;
+          // A shell-state report can clear only the aggregate fallback;
+          // identified parked runs leave through their own trace.
+          fallbackQuestion = undefined;
         }
-        if (state === "failed") {
-          failure = failure ?? {
+        if (state === "failed" && parkedFailures.size === 0) {
+          fallbackFailure = fallbackFailure ?? {
             since: telemetry.timestamp,
             turnId: telemetry.turnId,
-            ...(cause ? { cause } : {}),
+            ...(pendingCause ? { cause: pendingCause } : {}),
           };
+          pendingCause = undefined;
+          pendingFromError = false;
+          latestFailure = "fallback";
         } else if (stateText(telemetry.payload?.from) === "failed") {
-          // Only the failing machine leaving its failure state resolves
-          // it; another machine's report, the Captain shell's rest
-          // state included, leaves it standing (DR-061, DR-062).
-          failure = undefined;
-          cause = undefined;
+          // As above, never let an aggregate report erase a different
+          // run's identified failure park.
+          fallbackFailure = undefined;
+          latestFailure = parkedFailures.size > 0
+            ? "parked"
+            : unparkedFailureCause
+              ? "unparked"
+              : undefined;
         }
         break;
       }
@@ -193,9 +349,15 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
         break;
     }
   }
+  const firstByOnset = <T extends { since: number }>(
+    values: Iterable<T>,
+  ): T | undefined => [...values].sort((a, b) => a.since - b.since)[0];
+  const question = firstByOnset(parkedQuestions.values()) ?? fallbackQuestion;
+  const failure = firstByOnset(parkedFailures.values()) ?? fallbackFailure;
   return {
     ...(question ? { question } : {}),
     ...(failure ? { failure } : {}),
+    ...(unparkedFailureCause ? { failureCause: unparkedFailureCause } : {}),
   };
 }
 
@@ -236,6 +398,59 @@ export interface LedgerSources {
   now: () => number;
 }
 
+/** One lane's scheduling answer (core-service-107), derived only from
+ * its stored stream plus live activity. */
+export function queueSchedule(
+  store: Store,
+  lane?: LiveLane,
+): QueueSchedule {
+  if (!lane) return { standing: "manual-ready", manualStart: true };
+  if (lane.turnActive || lane.settling) {
+    return { standing: "after-current-work", manualStart: false };
+  }
+
+  const records = store.getRecords(lane.sessionId);
+  const controlRecords = store.getRecords(lane.sessionId, { includeHidden: true });
+  const abortErrors = stoppedTurnErrorSeqs(records);
+  const conditions = foldConditions(records);
+  if (conditions.failure) {
+    return {
+      standing: "failure-park",
+      manualStart: false,
+      ...(conditions.failure.cause ? { cause: conditions.failure.cause } : {}),
+    };
+  }
+  if (conditions.question) {
+    return { standing: "question-park", manualStart: false };
+  }
+
+  const latest = store.listTurns(lane.sessionId).at(-1);
+  if (latest) {
+    const failed = records.some(({ seq, record }) => {
+      if (record.type !== "runtime_error") return false;
+      if (abortErrors.has(seq)) return false;
+      const turnId = (record as { turnId?: unknown }).turnId;
+      return turnId === latest.turnId ||
+        (turnId === null && record.timestamp >= latest.startedAt);
+    });
+    if (failed) {
+      return {
+        standing: "failed",
+        manualStart: true,
+        ...(conditions.failureCause ? { cause: conditions.failureCause } : {}),
+      };
+    }
+    const ending = controlRecords.some(({ record }) =>
+      (record as { turnId?: unknown }).turnId === latest.turnId &&
+      controlKind(record) === "ending"
+    );
+    if (latest.status === "aborted" || ending) {
+      return { standing: "stopped", manualStart: true };
+    }
+  }
+  return { standing: "manual-ready", manualStart: true };
+}
+
 /** Derive the whole ledger (DR-035): open intents with states, the
  * two-band attention queue, and the badge. */
 export function foldLedger(sources: LedgerSources): LedgerState {
@@ -264,6 +479,21 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       conditionsBySession.set(sessionId, conditions);
     }
     return conditions;
+  };
+  const effectiveRuntimeErrors = (
+    sessionId: string,
+    fromTurnId: number,
+    toTurnId: number | null,
+  ) => {
+    const records = store.getRecords(sessionId);
+    const ignored = stoppedTurnErrorSeqs(records);
+    return records.flatMap(({ seq, record }) => {
+      if (record.type !== "runtime_error" || ignored.has(seq)) return [];
+      const turnId = (record as { turnId?: unknown }).turnId;
+      if (typeof turnId !== "number" || turnId < fromTurnId ||
+          (toTurnId !== null && turnId >= toTurnId)) return [];
+      return [{ turnId, timestamp: record.timestamp }];
+    });
   };
 
   const derived: DerivedIntent[] = [];
@@ -345,7 +575,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     // ever stands while its own turn is still open), so ranking
     // working above them would keep them out of the attention queue
     // for exactly as long as they summon the Boss.
-    const errors = store.runtimeErrors(bound.sessionId, bound.turnId, endTurnId);
+    const errors = effectiveRuntimeErrors(bound.sessionId, bound.turnId, endTurnId);
     const lastError = errors[errors.length - 1];
     // DR-062: where the failure parked a run, only that run leaving its
     // failure state — recovered or ended — stops the summons. Where it
@@ -355,6 +585,11 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       ? sessionConditions(bound.sessionId).failure
       : undefined;
     const parked = parkedFailure !== undefined;
+    const failureCause = laneLive
+      ? parked
+        ? parkedFailure.cause
+        : sessionConditions(bound.sessionId).failureCause
+      : undefined;
     const failureStands =
       lastError !== undefined &&
       (parked || !turns.some((turn) => turn.startedAt > lastError.timestamp));
@@ -372,7 +607,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         ...(parked ? { parked: true as const } : {}),
         // The row phrases what the runtime said, never a diagnosis of
         // its own (DR-075).
-        ...(parkedFailure?.cause ? { cause: parkedFailure.cause } : {}),
+        ...(failureCause ? { cause: failureCause } : {}),
         intentId: intent.id,
         title: intentTitle(intent),
         projectId: intent.projectId,
@@ -463,12 +698,15 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     const conditions = sessionConditions(lane.sessionId);
     const standsIn = (turnId: number | null): boolean =>
       turnId === null ? owned.size === 0 : !owned.has(turnId);
-    const errors = store.runtimeErrors(lane.sessionId, 0, null);
+    const errors = effectiveRuntimeErrors(lane.sessionId, 0, null);
     const lastError = errors[errors.length - 1];
     // Where the failure parked a run, only that run leaving its failure
     // state stops the summons — the rule dashboard-4 already stated for
     // a session failure, which this branch used to ignore (DR-062).
     const parked = conditions.failure !== undefined;
+    const standInCause = parked
+      ? conditions.failure?.cause
+      : conditions.failureCause;
     if (
       lastError &&
       standsIn(lastError.turnId) &&
@@ -479,7 +717,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         band: "interrupted",
         kind: "failure",
         ...(parked ? { parked: true as const } : {}),
-        ...(conditions.failure?.cause ? { cause: conditions.failure.cause } : {}),
+        ...(standInCause ? { cause: standInCause } : {}),
         title,
         projectId: lane.projectId,
         sessionId: lane.sessionId,
@@ -543,6 +781,20 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     if (a.band !== b.band) return a.band === "interrupted" ? -1 : 1;
     return a.since - b.since;
   });
+
+  // Presence of `next` is the project-local next marker: the first
+  // queued unblocked row in rank order (DR-077).
+  const lanesByProject = new Map(lanes.map((lane) => [lane.projectId, lane]));
+  for (const projectId of new Set(derived.map((entry) => entry.intent.projectId))) {
+    const lane = lanesByProject.get(projectId);
+    const eligible = derived.filter((entry) =>
+      entry.intent.projectId === projectId &&
+      entry.state === "queued" &&
+      !entry.blockedBy
+    );
+    const next = eligible[0];
+    if (next) next.next = queueSchedule(store, lane);
+  }
 
   return {
     intents: derived,

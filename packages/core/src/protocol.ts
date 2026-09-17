@@ -399,6 +399,24 @@ export interface IntentStats {
   elapsedMs?: number;
 }
 
+/** Why a project's next queued intent is or is not manually startable
+ * (DR-077). Presence on a derived row also identifies that row as the
+ * project's first queued, unblocked intent. */
+export type QueueStanding =
+  | "after-current-work"
+  | "failure-park"
+  | "question-park"
+  | "failed"
+  | "stopped"
+  | "manual-ready";
+
+export interface QueueSchedule {
+  standing: QueueStanding;
+  manualStart: boolean;
+  /** The runtime's structured cause for a failure standing, if known. */
+  cause?: FailureCause;
+}
+
 /** An open intent with its derived state (DR-035). */
 export interface DerivedIntent {
   intent: IntentInfo;
@@ -409,6 +427,8 @@ export interface DerivedIntent {
   blockedBy?: { intentId: string; title: string; projectId: string };
   /** Why an interrupted intent stands stopped on the Boss. */
   reason?: "question" | "failure";
+  /** Present on exactly the project's first queued, unblocked row. */
+  next?: QueueSchedule;
 }
 
 /** One attention entry: an interrupted or finished intent, or a

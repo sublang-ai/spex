@@ -11,7 +11,8 @@ import { join } from "node:path";
 import { composeConfig, templatePath } from "./config.js";
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
-import { SessionManager, CoreError, type RecordEnvelope } from "./session.js";
+import { SessionManager, CoreError, currentSession, type RecordEnvelope } from "./session.js";
+import type { SessionInfo } from "./protocol.js";
 import { Store } from "./store.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import {
@@ -68,6 +69,36 @@ async function setup(
   const project = store.registerProject(projectDir, "proj-a", 1);
   return { manager, store, project, composed, stats };
 }
+
+test("core-service-93: the newest continuable or recovery-bound conversation owns the lane", () => {
+  const session = (
+    id: string,
+    endedAt: number,
+    state: "continuable" | "recovery",
+  ): SessionInfo => ({
+    id,
+    projectId: "project",
+    projectPath: "/tmp/project",
+    createdAt: 1,
+    live: false,
+    endedAt,
+    players: [],
+    initialVisible: [],
+    turns: 1,
+    failed: state === "recovery",
+    ...(state === "continuable"
+      ? { continuable: true }
+      : { recovery: { state: "uncertain" as const, input: "work" } }),
+  });
+  const olderRecovery = session("recovery", 100, "recovery");
+  const newerClean = session("clean", 200, "continuable");
+  assert.equal(currentSession([olderRecovery, newerClean], "project")?.id, "clean");
+  const newestRecovery = session("latest-recovery", 300, "recovery");
+  assert.equal(
+    currentSession([olderRecovery, newerClean, newestRecovery], "project")?.id,
+    "latest-recovery",
+  );
+});
 
 test("end-to-end turn produces ordered persisted records with visibility flags", async () => {
   const records: RecordEnvelope[] = [];

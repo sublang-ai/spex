@@ -17,6 +17,7 @@ import { WebSocket } from "ws";
 
 import { Store } from "./store.js";
 import { foldLedger, type LiveLane } from "./ledger.js";
+import { BOSS_ABORT_REASON, controlRecord } from "./control-record.js";
 import { CoreService } from "./service.js";
 import { parseSpecTree } from "./specs.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
@@ -120,9 +121,15 @@ function abortStoredTurn(
   sessionId: string,
   turnId: number,
   at: number,
+  reason?: string,
 ): void {
   store.endTurn(sessionId, turnId, "aborted", at);
-  append(store, sessionId, { type: "turn_aborted", turnId, timestamp: at });
+  append(store, sessionId, {
+    type: "turn_aborted",
+    turnId,
+    timestamp: at,
+    ...(reason ? { reason } : {}),
+  });
 }
 
 function lane(sessionId: string, projectId: string, turnActive: boolean): LiveLane {
@@ -138,6 +145,448 @@ function stateOf(ledger: LedgerState, intentId: string): DerivedIntent {
   assert.ok(found, `intent ${intentId} missing from the fold`);
   return found;
 }
+
+function nextOf(ledger: LedgerState, projectId: string): DerivedIntent {
+  const rows = ledger.intents.filter(
+    (entry) => entry.intent.projectId === projectId && entry.next,
+  );
+  assert.equal(rows.length, 1, `expected exactly one next row in ${projectId}`);
+  return rows[0] as DerivedIntent;
+}
+
+function markControl(
+  store: Store,
+  sessionId: string,
+  turnId: number,
+  kind: "recovery" | "ending",
+  at: number,
+): void {
+  store.appendRecord(
+    sessionId,
+    store.maxSeq(sessionId) + 1,
+    controlRecord(turnId, kind, at),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Queue scheduling standing (core-service-49/95/107)
+// ---------------------------------------------------------------------------
+
+test("core-service-107: only the first queued unblocked row is next", () => {
+  const { store, projectId } = newProjectStore();
+  const predecessorProject = store.registerProject(
+    "/tmp/ledger-predecessor",
+    "ledger-predecessor",
+    2,
+  );
+  const predecessor = queueIntent(store, predecessorProject.id, "P", "a");
+  queueIntent(store, projectId, "A", "a", { afterId: predecessor.id });
+  queueIntent(store, projectId, "B", "b");
+  queueIntent(store, projectId, "C", "c");
+
+  const ledger = fold(store, []);
+  const rows = ledger.intents.filter(
+    (entry) => entry.intent.projectId === projectId,
+  );
+  assert.equal(stateOf(ledger, "A").blockedBy?.intentId, predecessor.id);
+  assert.deepEqual(
+    rows.filter((entry) => entry.next).map((entry) => entry.intent.id),
+    ["B"],
+  );
+  assert.deepEqual(nextOf(ledger, projectId).next, {
+    standing: "manual-ready",
+    manualStart: true,
+  });
+  assert.equal(stateOf(ledger, "C").next, undefined);
+  store.close();
+});
+
+test("core-service-107: the six scheduling standings derive from the ordered lane conditions", () => {
+  const read = (
+    prepare: (store: Store, projectId: string, sessionId: string) => void,
+    activity: Partial<LiveLane> | undefined = {},
+    withLane = true,
+  ) => {
+    const { store, projectId } = newProjectStore();
+    const sessionId = "s1";
+    addSession(store, projectId, sessionId);
+    queueIntent(store, projectId, "N", "a");
+    prepare(store, projectId, sessionId);
+    const lanes = withLane
+      ? [{ ...lane(sessionId, projectId, false), ...activity }]
+      : [];
+    const schedule = nextOf(fold(store, lanes), projectId).next;
+    store.close();
+    return schedule;
+  };
+
+  assert.deepEqual(read(() => {}, {}, false), {
+    standing: "manual-ready",
+    manualStart: true,
+  });
+  assert.deepEqual(read(() => {}, { turnActive: true }), {
+    standing: "after-current-work",
+    manualStart: false,
+  });
+  assert.deepEqual(read(() => {}, { settling: true }), {
+    standing: "after-current-work",
+    manualStart: false,
+  });
+
+  const cause = {
+    code: "commit-residual",
+    evidence: { required: "one-commit" },
+  };
+  assert.deepEqual(read((store, _projectId, sessionId) => {
+    beginTurn(store, sessionId, 1, "park on failure", 1000);
+    append(store, sessionId, {
+      type: "captain_status",
+      turnId: 1,
+      timestamp: 1200,
+      data: { lastError: { cause } },
+    });
+    append(store, sessionId, {
+      type: "captain_telemetry",
+      topic: "playbook.trace",
+      payload: {
+        sessionId: "run-failure",
+        type: "fsm.transition",
+        payload: { from: "work", to: "failed", lastError: { cause } },
+      },
+      turnId: 1,
+      timestamp: 1300,
+    });
+    append(store, sessionId, {
+      type: "captain_telemetry",
+      topic: "playbook.fsm.state",
+      payload: { from: "work", to: "failed" },
+      turnId: 1,
+      timestamp: 1400,
+    });
+    finishTurn(store, sessionId, 1, 1500);
+  }), { standing: "failure-park", manualStart: false, cause });
+
+  assert.deepEqual(read((store, _projectId, sessionId) => {
+    beginTurn(store, sessionId, 1, "ask", 1000);
+    append(store, sessionId, {
+      type: "captain_telemetry",
+      topic: "playbook.fsm.state",
+      payload: { from: "work", to: "awaitBossReply" },
+      turnId: 1,
+      timestamp: 1200,
+    });
+    finishTurn(store, sessionId, 1, 1500);
+  }), { standing: "question-park", manualStart: false });
+
+  assert.deepEqual(read((store, _projectId, sessionId) => {
+    beginTurn(store, sessionId, 1, "fail without a park", 1000);
+    append(store, sessionId, {
+      type: "runtime_error",
+      turnId: 1,
+      timestamp: 1200,
+      message: "failed",
+      cause,
+    });
+    finishTurn(store, sessionId, 1, 1500);
+  }), { standing: "failed", manualStart: true, cause });
+
+  assert.deepEqual(read((store, _projectId, sessionId) => {
+    beginTurn(store, sessionId, 1, "stop", 1000);
+    append(store, sessionId, {
+      type: "runtime_error",
+      turnId: 1,
+      timestamp: 1200,
+      message: BOSS_ABORT_REASON,
+    });
+    abortStoredTurn(store, sessionId, 1, 1500, BOSS_ABORT_REASON);
+  }), { standing: "stopped", manualStart: true });
+
+  assert.deepEqual(read((store, _projectId, sessionId) => {
+    beginTurn(store, sessionId, 1, "fail and abort", 1000);
+    append(store, sessionId, {
+      type: "runtime_error",
+      turnId: 1,
+      timestamp: 1100,
+      message: "provider failed",
+      cause,
+    });
+    append(store, sessionId, {
+      type: "runtime_error",
+      turnId: 1,
+      timestamp: 1200,
+      message: BOSS_ABORT_REASON,
+    });
+    abortStoredTurn(store, sessionId, 1, 1500, BOSS_ABORT_REASON);
+  }), { standing: "failed", manualStart: true, cause });
+
+  assert.deepEqual(read((store, _projectId, sessionId) => {
+    beginTurn(store, sessionId, 1, "finish", 1000);
+    append(store, sessionId, {
+      type: "runtime_error",
+      turnId: 1,
+      timestamp: 1200,
+      message: "hidden diagnostic",
+      visibility: "hidden",
+    });
+    finishTurn(store, sessionId, 1, 1500);
+  }), { standing: "manual-ready", manualStart: true });
+});
+
+test("core-service-107: failure park wins over question and stopped with its cause", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "N", "a");
+  beginTurn(store, "s1", 1, "several outcomes", 1000);
+  const cause = { code: "commit-residual", evidence: { observed: "mixed" } };
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "work", to: "awaitBossReply" },
+    turnId: 1,
+    timestamp: 1100,
+  });
+  append(store, "s1", {
+    type: "captain_status",
+    turnId: 1,
+    timestamp: 1200,
+    data: { lastError: { cause } },
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-failure",
+      type: "fsm.transition",
+      payload: { from: "work", to: "failed", lastError: { cause } },
+    },
+    turnId: 1,
+    timestamp: 1300,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "work", to: "failed" },
+    turnId: 1,
+    timestamp: 1400,
+  });
+  abortStoredTurn(store, "s1", 1, 1500);
+
+  assert.deepEqual(
+    nextOf(fold(store, [{ ...lane("s1", projectId, false), settling: true }]), projectId).next,
+    { standing: "after-current-work", manualStart: false },
+  );
+  assert.deepEqual(nextOf(fold(store, [lane("s1", projectId, false)]), projectId).next, {
+    standing: "failure-park",
+    manualStart: false,
+    cause,
+  });
+  store.close();
+});
+
+test("core-service-107: when one failed run leaves, another park and its cause survive", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "N", "a");
+  beginTurn(store, "s1", 1, "two runs fail", 1000);
+  const first = { code: "commit-residual", evidence: { run: "first" } };
+  const survivor = { code: "receipt-missing", evidence: { run: "second" } };
+  const park = (runId: string, cause: typeof first, at: number) => {
+    append(store, "s1", {
+      type: "captain_status",
+      turnId: 1,
+      timestamp: at,
+      data: { lastError: { cause } },
+    });
+    append(store, "s1", {
+      type: "captain_telemetry",
+      topic: "playbook.trace",
+      payload: {
+        sessionId: runId,
+        type: "fsm.transition",
+        payload: { from: "work", to: "failed" },
+      },
+      turnId: 1,
+      timestamp: at + 1,
+    });
+    append(store, "s1", {
+      type: "captain_telemetry",
+      topic: "playbook.fsm.state",
+      payload: { from: "work", to: "failed" },
+      turnId: 1,
+      timestamp: at + 2,
+    });
+  };
+  park("run-first", first, 1100);
+  park("run-second", survivor, 1200);
+  finishTurn(store, "s1", 1, 1500);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: { sessionId: "run-first", type: "session.disposed" },
+    turnId: 1,
+    timestamp: 1600,
+  });
+
+  assert.deepEqual(nextOf(fold(store, [lane("s1", projectId, false)]), projectId).next, {
+    standing: "failure-park",
+    manualStart: false,
+    cause: survivor,
+  });
+  store.close();
+});
+
+test("core-service-49/107: a failure never inherits an earlier failure's cause", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "N", "a");
+  beginTurn(store, "s1", 1, "fail twice", 1000);
+  const oldCause = { code: "commit-residual", evidence: { run: "old" } };
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1100,
+    message: "first failure",
+    cause: oldCause,
+  });
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1200,
+    message: "second failure stated no cause",
+  });
+  finishTurn(store, "s1", 1, 1300);
+  assert.deepEqual(nextOf(fold(store, [lane("s1", projectId, false)]), projectId).next, {
+    standing: "failed",
+    manualStart: true,
+  });
+  store.close();
+});
+
+test("core-service-49/107: duplicate and aggregate evidence cannot create a phantom failure park", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "N", "a");
+  beginTurn(store, "s1", 1, "two parked failures", 1000);
+  const oldCause = { code: "commit-residual", evidence: { run: "old" } };
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-old",
+      type: "fsm.transition",
+      payload: { from: "work", to: "failed", cause: oldCause },
+    },
+    turnId: 1,
+    timestamp: 1100,
+  });
+  // A duplicate aggregate status still belongs to run-old; it must not
+  // wait around to label the next run.
+  append(store, "s1", {
+    type: "captain_status",
+    turnId: 1,
+    timestamp: 1110,
+    data: { lastError: { cause: oldCause } },
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-new",
+      type: "fsm.transition",
+      payload: { from: "work", to: "failed" },
+    },
+    turnId: 1,
+    timestamp: 1200,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: { sessionId: "run-old", type: "session.disposed" },
+    turnId: 1,
+    timestamp: 1300,
+  });
+  finishTurn(store, "s1", 1, 1400);
+  assert.deepEqual(nextOf(fold(store, [lane("s1", projectId, false)]), projectId).next, {
+    standing: "failure-park",
+    manualStart: false,
+  });
+
+  // An aggregate report may precede the identified trace. Once that
+  // trace leaves, the fallback must not resurrect as a phantom park.
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-new",
+      type: "fsm.transition",
+      payload: { from: "failed", to: "work" },
+    },
+    turnId: 1,
+    timestamp: 1450,
+  });
+  const aggregateCause = { code: "receipt-missing", evidence: { run: "aggregate-first" } };
+  append(store, "s1", {
+    type: "captain_status",
+    turnId: 1,
+    timestamp: 1490,
+    data: { lastError: { cause: aggregateCause } },
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "work", to: "failed" },
+    turnId: 1,
+    timestamp: 1500,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-phantom",
+      type: "fsm.transition",
+      payload: { from: "work", to: "failed" },
+    },
+    turnId: 1,
+    timestamp: 1510,
+  });
+  assert.deepEqual(nextOf(fold(store, [lane("s1", projectId, false)]), projectId).next, {
+    standing: "failure-park",
+    manualStart: false,
+    cause: aggregateCause,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-phantom",
+      type: "fsm.transition",
+      payload: { from: "failed", to: "work" },
+    },
+    turnId: 1,
+    timestamp: 1600,
+  });
+  assert.deepEqual(nextOf(fold(store, [lane("s1", projectId, false)]), projectId).next, {
+    standing: "manual-ready",
+    manualStart: true,
+  });
+  store.close();
+});
+
+test("core-service-107: a durable ending marker makes a finished turn stopped", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "N", "a");
+  beginTurn(store, "s1", 1, "Stop /code", 1000);
+  finishTurn(store, "s1", 1, 1500);
+  markControl(store, "s1", 1, "ending", 1600);
+
+  const expected = {
+    standing: "stopped",
+    manualStart: true,
+  } as const;
+  assert.deepEqual(nextOf(fold(store, [lane("s1", projectId, false)]), projectId).next, expected);
+  store.close();
+});
 
 // ---------------------------------------------------------------------------
 // Derived states over a synthetic session (core-service-47/49)
@@ -1073,10 +1522,11 @@ class Client {
 }
 
 interface Harness {
-  service: CoreService;
+  readonly service: CoreService;
   dir: string;
   dataDir: string;
   projectDir: string;
+  restart(): Promise<void>;
 }
 
 async function startHarness(
@@ -1121,7 +1571,7 @@ async function startHarness(
       }),
   );
 
-  const service = await CoreService.start({
+  const serviceOptions = {
     token: "test",
     configPath,
     dataDir,
@@ -1131,8 +1581,18 @@ async function startHarness(
     env: {},
     home: join(dir, "home"),
     watchConfig: false,
-  });
-  return { service, dir, dataDir, projectDir };
+  };
+  let service = await CoreService.start(serviceOptions);
+  return {
+    get service() { return service; },
+    dir,
+    dataDir,
+    projectDir,
+    async restart() {
+      await service.stop();
+      service = await CoreService.start(serviceOptions);
+    },
+  };
 }
 
 /** The one project's queue, in rank order, as intent ids. */
@@ -1408,7 +1868,7 @@ test(
       captainScript: parkingCaptain(),
       decision: START_CODE,
     });
-    const client = new Client(harness.service.port());
+    let client = new Client(harness.service.port());
     t.after(async () => { client.close(); await harness.service.stop(); });
     await client.open();
     const project = await client.expectOk("project.register", {
@@ -1493,6 +1953,13 @@ test(
       after.attention.filter((entry) => entry.sessionId === session.id),
       [],
     );
+    const successor = stateOf(after, untouched.id);
+    assert.equal(successor.state, "queued");
+    assert.equal(successor.intent.dispatched, undefined);
+    assert.deepEqual(successor.next, {
+      standing: "stopped",
+      manualStart: true,
+    });
     const history = await client.expectOk("ledger.history", {
       projectId: project.id,
     });
@@ -1500,6 +1967,22 @@ test(
       history.intents.map((row) => [row.intent.id, row.intent.closedAs]),
       [[parked.id, "dropped"]],
     );
+
+    // The control kind is durable execution evidence. Restarting the
+    // service must retain the stopped standing instead of reducing the
+    // finished ending turn to a clean handoff.
+    client.close();
+    await harness.restart();
+    client = new Client(harness.service.port());
+    await client.open();
+    const restarted = stateOf(
+      await client.expectOk("ledger.get", {}),
+      untouched.id,
+    );
+    assert.deepEqual(restarted.next, {
+      standing: "stopped",
+      manualStart: true,
+    });
 
     // With no run parked, the verdict is the whole act: no control turn.
     await client.expectOk("intent.close", {
@@ -1734,6 +2217,10 @@ test("core-service-57: submission validates the intent, the turn start stamps it
     intentId: i3.id,
   });
   assert.ok(!busySubmit.ok && busySubmit.error.code === "busy");
+  // Keep this stamping-focused test from offering automatic work at the
+  // first settlement. Closing i1 later lifts both links by derivation,
+  // and that verdict itself starts nothing (DR-077).
+  await client.expectOk("intent.link", { intentId: i3.id, afterIntentId: i1.id });
 
   // The started turn stamped the dispatch: working, and no longer
   // editable (core-service-43).
@@ -1776,8 +2263,10 @@ test("core-service-57: submission validates the intent, the turn start stamps it
   assert.equal(bystander?.state, "queued");
   assert.equal(bystander?.intent.dispatched, undefined);
 
-  // The shared checkpoint must settle before another turn starts.
-  await client.waitFor((message) => message.type === "session.state" && message.session.id === session.id && message.session.turns === 1 && message.session.turnActive === false);
+  // The shared checkpoint and its one automatic handoff decision must
+  // settle before this later verdict; the verdict itself starts nothing.
+  await settledTurns(client, harness, session.id, 1);
+  await Promise.all([...harness.service["advancing"]]);
 
   // The verdict lands, releasing the follower for dispatch.
   await client.expectOk("intent.close", { intentId: i1.id, as: "done" });
@@ -1820,6 +2309,9 @@ test("core-service-57: submission validates the intent, the turn start stamps it
   // An abort leaves shared uncertainty. Resolve it before sending different work.
   await client.waitFor((message) => message.type === "session.state" && message.session.id === session.id && !message.session.live && !!message.session.recovery);
   await client.expectOk("session.discard", { sessionId: session.id });
+  // Keep the released follower behind the bystander so this fixture's
+  // later finished turn does not start unrelated work automatically.
+  await client.expectOk("intent.link", { intentId: i2.id, afterIntentId: i3.id });
 
   // History is done work (core-service-50, DR-038): the done intent
   // lists; the bystander, worked then dropped, lists under its

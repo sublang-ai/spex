@@ -120,7 +120,7 @@ When a client sends `session.agent.set` naming a session, one of its agents — 
 
 #### core-service-93
 
-When a client requests the session list or the ledger, the core service shall derive each project's current conversation from stored state — its live session, else its most recently active session that continues [[core-service-32](#core-service-32)] and no other host owns — and shall fold that conversation as the project's lane: its standing conditions and stand-ins [[core-service-49](#core-service-49)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md)):
+When a client requests the session list or the ledger, the core service shall derive each project's current conversation from stored state — its live session, else its most recently active session that continues [[core-service-32](#core-service-32)] or still carries a recovery boundary, and that no other host owns — and shall fold that conversation as the project's lane: its standing conditions and stand-ins [[core-service-49](#core-service-49)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - a disposal trace the runtime emits outside a turn — carrying no turn id — is a pause, never the Captain dismissing a parked run, so a question parked at that moment stands until the next Boss turn starts.
 
@@ -340,8 +340,8 @@ When a locally owned intent-attributed turn completes full settlement [[core-ser
 - a Boss answer qualifies after its own turn settles finished and the question park has left; a question or failure park still standing, a failed turn, or an aborted turn starts no successor;
 - an aborted follow-up starts no successor even where an older finished turn leaves the intent's derived state Finished; a later clean attributed follow-up or recovery may qualify, while an ending control never does;
 - a permission record and absent, unsupported, child, failed, or non-terminal playbook trace evidence add no gate of their own;
-- a Done or Drop verdict accepted before or during the eligible settlement, and a later removal, neither authorizes nor cancels that settlement's successor; no verdict or removal initiates advancement;
-- selection and submission use the intent's current text, identity and rank, retaining explicit after-link blocking [[core-service-45](#core-service-45)], normal admission [[core-service-5](#core-service-5)], and actual-start dispatch stamping and attribution [[core-service-47](#core-service-47)]; a competing manual submission wins normal admission and a refused admission causes no automatic retry;
+- a Done or Drop verdict accepted before or during the eligible settlement, and a later removal of that settled owner, neither authorizes nor cancels that settlement's successor; no verdict or removal initiates advancement;
+- selection snapshots the successor's then-current identity before release can expose a manual Start and submits its latest text only while it remains the first eligible row; later capture, reorder, closing of that successor, or blocking that changes the next row cancels the handoff rather than substituting another intent, except that a settled-owner verdict may reveal a formerly blocked next without cancelling the already-authorized successor; explicit after-link blocking [[core-service-45](#core-service-45)], normal admission [[core-service-5](#core-service-5)], and actual-start dispatch stamping and attribution [[core-service-47](#core-service-47)] stand, a competing manual submission wins normal admission, and a refused admission causes no automatic retry;
 - the settled intent remains finished and awaiting its human verdict unless that verdict already landed [[core-service-46](#core-service-46)] [[core-service-49](#core-service-49)];
 - no next eligible intent starts nothing, and queue capture or edits, ledger reads, verdicts after settlement, adoption and restart initiate no advancement or retained runner state.
 
@@ -381,7 +381,7 @@ When the core service derives a project's queue reading, it shall choose the fir
 | none of the preceding conditions holds | `manual-ready` | available |
 
 - a queued row whose after-link names an open predecessor is excluded before next is chosen [[core-service-45](#core-service-45)];
-- an eligible automatic handoff [[core-service-94](#core-service-94)] is selected before publication can expose `manual-ready`, so clean settlement never flickers a Start;
+- an eligible automatic handoff [[core-service-94](#core-service-94)] is selected before publication can expose `manual-ready`, so clean settlement never flickers a Start; rank still chooses next while admission is pending, and a non-verdict queue change that changes that next cancels the handoff;
 - the standing and availability are derived from the lane and intent records, never stored on an intent.
 
 #### core-service-50
@@ -796,11 +796,11 @@ Where the integration suite starts project turns through real core commands with
 - an ordinary Captain reply carrying no typed terminal evidence starts the next unblocked intent exactly once after release and publication, using its latest queued text and rank, while the first remains finished and unconfirmed;
 - a prose question that parks no run and permission telemetry add no hold, while an answered parked question starts the successor only after the answer turn settles and the park leaves;
 - an unattributed turn in the project lane publishes `after-current-work` with manual start unavailable, starts no successor when it settles, and then publishes `manual-ready` with manual start available [[core-service-107](#core-service-107)];
-- a failed turn, a finished turn retaining an unparked failure condition, an aborted dispatch, an aborted follow-up after an older finish, and a reply or control settling with a question or failure park still standing start no successor, while a later clean attributed follow-up or recovery may start one and an ending control may not;
+- a failed turn, a finished turn retaining an unparked failure condition, an aborted dispatch, an aborted follow-up after an older finish, and a reply or control settling with a question or failure park still standing start no successor; either abort keeps its recovery-bound conversation as the current lane [[core-service-93](#core-service-93)], while a later clean attributed follow-up or recovery may start one and an ending control may not;
 - `ledger.get` publishes the ordered standings of [[core-service-107](#core-service-107)]: active or settling work wins over every settled condition, a surviving failure park wins over a simultaneous question park and carries its structured cause, either park wins over the turn that left it, a failed turn or finished turn retaining an unparked failure reports `failed` with its cause, an abort or successful ending reports `stopped`, and the fallback alone reports `manual-ready`;
-- a Done or Drop verdict accepted before or during an otherwise eligible settlement preserves the one authorized successor, while either verdict after settlement and a later removal initiate nothing; an ending turn required by Drop remains ineligible;
+- a Done or Drop verdict accepted before or during an otherwise eligible settlement neither selects a row that only the verdict releases nor cancels the verdict-independent successor, while either verdict after settlement and a later removal initiate nothing; an ending turn required by Drop remains ineligible;
 - an explicit after-link to the unconfirmed predecessor remains blocked, and a competing manual submission or admission refusal creates no duplicate turn, dispatch stamp, or automatic retry;
-- adding or editing queued work during the active turn affects the next selection, while capture or edits after settlement, ledger reads, adoption and restart start no work;
+- adding or editing queued work during the active turn affects the next selection, while a capture, reorder, close, or after-link that changes next after authorization cancels rather than substitutes work; later queue edits, ledger reads, adoption and restart initiate no handoff;
 - subsequent dispatch bounds the first intent's attribution, and confirming that first intent changes neither the second intent nor its active turn.
 
 #### core-service-104
@@ -809,7 +809,7 @@ Where a session's scripted Captain leaves a run parked on a Boss question inside
 
 - the close runs one further turn carrying the ending control's own label rather than any Boss text, adding no dispatch stamp [[core-service-47](#core-service-47)] [[core-service-98](#core-service-98)];
 - that turn disposes the ended run, after which the intent reads closed dropped, `ledger.get` carries no entry for its session, and `ledger.history` lists it dropped [[core-service-49](#core-service-49)] [[core-service-50](#core-service-50)];
-- the ending turn dispatches no successor, and `ledger.get` leaves the queued successor next with standing `stopped` and manual start available [[core-service-94](#core-service-94)] [[core-service-107](#core-service-107)];
+- the ending turn dispatches no successor, and `ledger.get` leaves the queued successor next with standing `stopped` and manual start available after the ending and after a service restart [[core-service-49](#core-service-49)] [[core-service-94](#core-service-94)] [[core-service-107](#core-service-107)];
 - closing an intent no run stands parked for records the verdict alone and runs no further turn;
 - where the opened session advertises no ending, the close is refused with that cause, the intent stays open and its entry stands [[core-service-98](#core-service-98)];
 - the same rule's failure park is not driven here: the turn-scoped `runtime_error` a failure stands on [[core-service-49](#core-service-49)] arrives in this harness only on a turn that aborts and disposes its runtime, leaving no live run to stand parked.

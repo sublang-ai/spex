@@ -8,6 +8,7 @@
 Accepted (2026-09-17) on the Boss's ruling that an ordinary settled Captain reply, including a turn that answered a question, advances queued work once the conversation is free, while failure, abort, or a run still waiting on him holds it with the reason shown.
 Amends [DR-035](035-intent-ledger.md) in scope: every Up next row is visibly queued work, only the first unblocked row is next, Start is its manual-kickoff doorway rather than a queued state, and capture offers one queueing gesture; the stored acts, lifecycle states, verdicts, rank, and after-links stand.
 Amends [DR-055](055-queue-advancement.md) in scope: a clean settled turn and a free conversation replace typed governed-root success as the advancement gate; verdict independence, settlement-only triggering, actual-start attribution, normal admission, explicit after-links, and the absence of a retained runner or automatic retry stand.
+Amends [DR-051](051-runtime-held-for-a-turn.md) in scope: the latest owned conversation remains the queue's lane while its recovery boundary stands, even when ordinary continuation is unavailable; the runtime-held-for-a-turn and one-working-turn rules stand.
 Applies [DR-069](069-key-phrases-not-sentences.md) to the next row's standing and [DR-075](075-a-failure-says-what-and-what-now.md) to any failure cause it carries.
 
 ## Context

@@ -11,6 +11,7 @@ Amends [DR-042](042-sessions-continue.md) (ending retires: a session is continue
 Amended by [DR-067](067-tuning-for-one-conversation.md): a message opens the runtime on the current settings and the session's own tuning.
 The hold lasting a turn, the tuning-versus-structure line, and the refusal by name stand.
 Amended by [DR-074](074-a-parked-run-survives.md): the runtime is released at settlement whether or not unresolved repository effects stand.
+Amended by [DR-077](077-up-next-is-a-committed-queue.md) in scope: the latest owned conversation remains the queue's lane while its recovery boundary stands, even when ordinary continuation is unavailable; the runtime-held-for-a-turn and one-working-turn rules stand.
 
 ## Context
 

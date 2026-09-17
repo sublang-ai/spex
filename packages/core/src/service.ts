@@ -56,10 +56,10 @@ import {
   type SessionAgentSettings,
   type SessionInfo,
   type SessionAgentSettingsMap,
-  type StoredRecord,
 } from "./protocol.js";
 import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
-import { closedStats, foldLedger, intentTitle, wasWorked } from "./ledger.js";
+import { closedStats, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
+import type { TurnControlKind } from "./control-record.js";
 import { rankBetween } from "./rank.js";
 import { Store } from "./store.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
@@ -177,41 +177,19 @@ const SPACE_GATED_COMMANDS = new Set<Command["type"]>([
 // The Sources cache ages out at ten minutes (dashboard-14).
 const FORGE_CACHE_MS = 600_000;
 
-/** A finished Boss turn can be a clarification. Only the governed
- * root's typed successful terminal result authorizes queue advancement. */
-function completedRoot(records: StoredRecord[], turnId: number): boolean {
-  let completed = false;
-  for (const {record} of records) {
-    if (record.type !== "captain_telemetry" || record.turnId !== turnId) continue;
-    const telemetry = record as {topic?: string; payload?: unknown};
-    if (telemetry.topic !== "playbook.trace") continue;
-    const trace = telemetry.payload as {
-      schemaVersion?: unknown;
-      playbookId?: unknown; sessionId?: unknown; rootSessionId?: unknown;
-      parentSessionId?: unknown; depth?: unknown; type?: unknown;
-      payload?: {outcome?: unknown; terminal?: {kind?: unknown}};
-    } | undefined;
-    if (!trace || typeof trace.playbookId !== "string" || trace.playbookId === "captain" ||
-        typeof trace.sessionId !== "string" || trace.sessionId !== trace.rootSessionId ||
-        trace.depth !== 0 || trace.parentSessionId !== undefined) continue;
-    // Only the supported runtime contract grants completion authority.
-    // Later unsupported root evidence also invalidates an earlier success.
-    if (trace.schemaVersion !== 4) {
-      completed = false;
-      continue;
-    }
-    if (trace.type === "boss.input.settled") {
-      completed = trace.payload?.outcome === "terminal" && trace.payload.terminal?.kind === "success";
-    } else if (trace.type === "boss.input.received" || trace.type === "session.started") {
-      completed = false;
-    }
-  }
-  return completed;
-}
-
 interface ClientState {
   socket: WebSocket;
   channels: Set<string>;
+}
+
+interface QueueHandoff {
+  sessionId: string;
+  turnId: number;
+  ownerIntentId: string;
+  nextIntentId: string;
+  projectId: string;
+  /** Earlier rows which only the settled owner's verdict can unblock. */
+  verdictUnblocks: { intentId: string; rank: string }[];
 }
 
 function channelKey(channel: Channel): string {
@@ -341,6 +319,8 @@ export class CoreService {
   private stopping = false;
   /** Tracked so shutdown cannot race an automatic continuation opening. */
   private readonly advancing = new Set<Promise<void>>();
+  /** A settled lane whose one automatic handoff is being decided. */
+  private readonly handoffs = new Map<string, string>();
   /** Manual and automatic sends share one admission per conversation. */
   private readonly submitting = new Map<string, Promise<void>>();
   /** The Space surface's engine (DR-057); absent without a state root. */
@@ -385,15 +365,23 @@ export class CoreService {
     this.sessions.onLedgerChange = (projectId) => {
       this.queueLedgerChange([projectId]);
     };
-    this.sessions.onTurnSettled = (sessionId, turnId, intentId) => {
+    this.sessions.onTurnSettled = (sessionId, turnId, intentId, control) => {
       if (this.stopping || intentId === undefined) return;
-      const work = this.advanceQueue(sessionId, turnId, intentId).catch((error) => {
+      const handoff = this.authorizeQueueHandoff(sessionId, turnId, intentId, control);
+      if (!handoff) return;
+      this.handoffs.set(sessionId, handoff.nextIntentId);
+      this.queueLedgerChange([handoff.projectId]);
+      const work = this.advanceQueue(handoff).catch((error) => {
         // Admission can require human repair (settings, ownership or
         // recovery). Keep the next intent queued; never retry silently.
         console.error(`spex: queue advancement paused: ${String(error)}`);
       });
       this.advancing.add(work);
-      void work.finally(() => this.advancing.delete(work));
+      void work.finally(() => {
+        this.advancing.delete(work);
+        this.handoffs.delete(sessionId);
+        this.queueLedgerChange([handoff.projectId]);
+      });
     };
     if (options.dataDir) {
       this.space = new SpaceManager({
@@ -508,8 +496,18 @@ export class CoreService {
   ledger(): import("./protocol.js").LedgerState {
     return foldLedger({
       store: this.store,
-      lanes: this.sessions.listLanes(),
+      lanes: this.ledgerLanes(),
       now: Date.now,
+    });
+  }
+
+  /** The ledger keeps the lane busy through release and the one-shot
+   * handoff decision, so no consumer sees a manual Start flicker. */
+  private ledgerLanes() {
+    return this.sessions.listLanes().map((lane) => {
+      return this.handoffs.has(lane.sessionId)
+        ? { ...lane, settling: true }
+        : lane;
     });
   }
 
@@ -1619,11 +1617,7 @@ export class CoreService {
         return null;
       }
       case "ledger.get":
-        return foldLedger({
-          store: this.store,
-          lanes: this.sessions.listLanes(),
-          now: Date.now,
-        });
+        return this.ledger();
       case "ledger.history": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
@@ -1818,49 +1812,138 @@ export class CoreService {
   }
 
   /** Starting an intent authorizes its same-project successors, not a
-   * verdict on its delivery. Reads, captures and confirmations never
-   * call this path; only locally handled turn settlement does (DR-055). */
-  private async advanceQueue(sessionId: string, turnId: number, intentId: string): Promise<void> {
+   * verdict on its delivery. Decide the one handoff synchronously at
+   * settlement. Queue writes
+   * after this point can update its text, but cannot create or
+   * substitute automatic work (core-service-94). */
+  private authorizeQueueHandoff(
+    sessionId: string,
+    turnId: number,
+    intentId: string,
+    control?: TurnControlKind,
+  ): QueueHandoff | undefined {
+    if (this.stopping || control === "ending") return;
+    const session = this.store.describeSession(sessionId);
+    if (!session) return;
+    const current = currentSession(this.sessions.listSessions(), session.projectId);
+    if (current?.id !== sessionId || current.turnActive || current.recovery ||
+        current.externalWriter || this.sessions.getLive(sessionId) || !current.continuable) return;
+    const lastTurn = this.store.listTurns(sessionId).at(-1);
+    if (lastTurn?.turnId !== turnId || lastTurn.status !== "finished") return;
+    const dispatch = this.store.listSessionDispatches(sessionId).at(-1);
+    if (!dispatch || dispatch.intentId !== intentId || dispatch.turnId > turnId) return;
+    const lane = this.sessions.listLanes().find((entry) => entry.sessionId === sessionId);
+    if (!lane || queueSchedule(this.store, lane).standing !== "manual-ready") return;
+    const ledger = this.ledger();
+    const owner = this.store.getIntent(intentId);
+    if (owner && owner.closedAt === undefined &&
+        ledger.intents.find((entry) => entry.intent.id === intentId)?.state !== "finished") return;
+    const projectQueue = ledger.intents.filter((entry) =>
+      entry.intent.projectId === session.projectId && entry.state === "queued"
+    );
+    // A verdict racing settlement can release rows linked after the
+    // settled owner, but it cannot be the act which authorizes one.
+    // Select as though that owner remained open for this handoff.
+    const next = projectQueue.find((entry) =>
+      !entry.blockedBy && entry.intent.afterId !== intentId
+    )?.intent;
+    if (!next) return;
+    const nextIndex = projectQueue.findIndex((entry) => entry.intent.id === next.id);
+    const verdictUnblocks = projectQueue.slice(0, nextIndex).flatMap((entry) =>
+      entry.intent.afterId === intentId
+        ? [{ intentId: entry.intent.id, rank: entry.intent.rank }]
+        : []
+    );
+    return {
+      sessionId,
+      turnId,
+      ownerIntentId: intentId,
+      nextIntentId: next.id,
+      projectId: session.projectId,
+      verdictUnblocks,
+    };
+  }
+
+  private async advanceQueue(handoff: QueueHandoff): Promise<void> {
+    const {
+      sessionId,
+      turnId,
+      ownerIntentId,
+      nextIntentId,
+      projectId,
+      verdictUnblocks,
+    } = handoff;
     // Let an already-admitted manual send finish. If it starts a new
     // turn, the original completion is stale; if it is refused, the
-    // completed queue intent can still advance normally.
+    // already-authorized queue intent can still advance normally.
     while (this.submitting.has(sessionId)) await this.submitting.get(sessionId);
     const release = this.admitSubmission(sessionId);
     let opened = false;
     let submitted = false;
     try {
-      const session = this.store.describeSession(sessionId);
-      if (!session) return;
-      const next = (opened = false) => {
+      const boundary = (opened = false) => {
         if (this.stopping) return;
         const sessions = this.sessions.listSessions();
-        const current = currentSession(sessions, session.projectId);
+        const current = currentSession(sessions, projectId);
         if (current?.id !== sessionId || current.turnActive || current.recovery || current.externalWriter) return;
         if (this.sessions.getLive(sessionId) ? !opened : !current.continuable) return;
         const lastTurn = this.store.listTurns(sessionId).at(-1);
         if (lastTurn?.turnId !== turnId || lastTurn.status !== "finished") return;
         const dispatch = this.store.listSessionDispatches(sessionId).at(-1);
-        if (!dispatch || dispatch.intentId !== intentId || dispatch.turnId > turnId) return;
-        const ledger = this.ledger();
-        const owner = this.store.getIntent(dispatch.intentId);
-        // A prompt after a verdict is plain chat. A verdict during this
-        // turn's settlement, however, must not cancel its successor.
-        const confirmed = owner?.closedAs === "done";
-        if ((!confirmed && !ledger.intents.some((entry) => entry.intent.id === dispatch.intentId && entry.state === "finished")) ||
-            ledger.attention.some((entry) => entry.sessionId === sessionId && entry.band === "interrupted") ||
-            !completedRoot(this.store.getRecords(sessionId), turnId)) return;
-        return ledger.intents.find((entry) => entry.intent.projectId === session.projectId &&
-          entry.state === "queued" && !entry.blockedBy)?.intent;
+        if (!dispatch || dispatch.intentId !== ownerIntentId || dispatch.turnId > turnId) return;
+        return current;
       };
-      if (!next()) return;
+      const authorized = () => {
+        const intent = this.store.getIntent(nextIntentId);
+        if (!intent || intent.closedAt !== undefined || intent.projectId !== projectId) return;
+        const ledger = this.ledger();
+        const entry = ledger.intents.find((candidate) =>
+          candidate.intent.id === nextIntentId
+        );
+        if (entry?.state !== "queued") return;
+        const predecessor = intent.afterId ? this.store.getIntent(intent.afterId) : undefined;
+        if (predecessor && predecessor.closedAt === undefined) return;
+        const projectQueue = ledger.intents.filter((candidate) =>
+          candidate.intent.projectId === projectId && candidate.state === "queued"
+        );
+        const currentNext = projectQueue.find((candidate) =>
+          candidate.intent.projectId === projectId && candidate.next
+        );
+        // Next is always rank-derived. If capture or reorder puts
+        // another row first, this settlement cannot silently start the
+        // newcomer or a now-lower-ranked snapshot. The sole exception
+        // is a row which this settled owner's verdict released: verdict
+        // and already-authorized dispatch remain independent (DR-077).
+        if (currentNext?.intent.id !== nextIntentId) {
+          const owner = this.store.getIntent(ownerIntentId);
+          const candidateIndex = projectQueue.findIndex((candidate) =>
+            candidate.intent.id === nextIntentId
+          );
+          const allowed = new Map(verdictUnblocks.map((candidate) =>
+            [candidate.intentId, candidate.rank]
+          ));
+          const releasedBeforeCandidate = candidateIndex < 0
+            ? []
+            : projectQueue.slice(0, candidateIndex).filter((candidate) =>
+              !candidate.blockedBy
+            );
+          if ((owner && owner.closedAt === undefined) || releasedBeforeCandidate.length === 0 ||
+              releasedBeforeCandidate.some((candidate) =>
+                candidate.intent.afterId !== ownerIntentId ||
+                allowed.get(candidate.intent.id) !== candidate.intent.rank
+              )) return;
+        }
+        return intent;
+      };
+      if (!boundary() || !authorized()) return;
       await this.settledConfig();
-      if (!next()) return;
+      if (!boundary() || !authorized()) return;
       await this.continueSession(sessionId);
       opened = true;
       // Opening is asynchronous. Re-read the queue and dispatch boundary
       // before sending, so edits and competing manual sends win honestly.
       if (this.stopping) return;
-      const intent = next(true);
+      const intent = boundary(true) ? authorized() : undefined;
       if (intent) {
         this.validateIntentDispatch(sessionId, intent.id);
         this.sessions.submitTurn(sessionId, intent.text, intent.id);
@@ -1936,11 +2019,7 @@ export class CoreService {
 
   /** One intent's derived state, read from the one fold (DR-035). */
   private deriveIntentState(intentId: string) {
-    const ledger = foldLedger({
-      store: this.store,
-      lanes: this.sessions.listLanes(),
-      now: Date.now,
-    });
+    const ledger = this.ledger();
     return ledger.intents.find((entry) => entry.intent.id === intentId)?.state;
   }
 
@@ -1949,11 +2028,7 @@ export class CoreService {
    * fold rather than derived again here: a question entry is a parked
    * run by definition, and a failure entry says whether one parked. */
   private parkedRun(intentId: string): boolean {
-    const ledger = foldLedger({
-      store: this.store,
-      lanes: this.sessions.listLanes(),
-      now: Date.now,
-    });
+    const ledger = this.ledger();
     const entry = ledger.attention.find(
       (row) => row.intentId === intentId && row.band === "interrupted",
     );
