@@ -956,6 +956,46 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
     act(() => observers.fire(scroller));
     expect(scroller.style.maskImage).toBe("");
   });
+
+  // run-view-142: the grid is the run's own sideways-scrolling canvas,
+  // and it scrolls itself to the lane whose call opens, so either edge
+  // can hide a pane and each says so on its own.
+  test("the player grid fades whichever edge hides a pane", () => {
+    const observers = observeResizes();
+    renderRun(MACHINE_RUN.slice(0, 13));
+    const grid = screen.getByTestId("player-grid");
+    const geometry = { clientWidth: 544, scrollWidth: 572, scrollLeft: 0 };
+    for (const key of Object.keys(geometry) as (keyof typeof geometry)[]) {
+      Object.defineProperty(grid, key, {
+        configurable: true,
+        get: () => geometry[key],
+      });
+    }
+    const fade = () => [
+      grid.style.getPropertyValue("--fade-start"),
+      grid.style.getPropertyValue("--fade-end"),
+    ];
+    // The mask rides the box as the drawing's does, each edge's fade
+    // its own length (run-view-7).
+    expect(grid.className).toContain("var(--fade-start");
+    expect(grid.className).toContain("var(--fade-end");
+    // At the start only the far edge hides a pane.
+    fireEvent.scroll(grid);
+    expect(fade()).toEqual(["0px", "24px"]);
+    // Standing between them, both edges hide one.
+    geometry.scrollLeft = 14;
+    fireEvent.scroll(grid);
+    expect(fade()).toEqual(["24px", "24px"]);
+    // Scrolled to that end, its fade retires: nothing lies beyond it.
+    geometry.scrollLeft = 28;
+    fireEvent.scroll(grid);
+    expect(fade()).toEqual(["24px", "0px"]);
+    // The box narrows with no scroll of the reader's own, so a pane
+    // lies beyond again and that edge's fade returns.
+    geometry.clientWidth = 400;
+    act(() => observers.fire(grid));
+    expect(fade()).toEqual(["24px", "24px"]);
+  });
 });
 
 describe("run-view-81: the divider lands under the pointer", () => {

@@ -97,6 +97,7 @@ The run view shall show exactly one player pane per player in the session's boun
 - a pane is a player's lane, so it stands whether or not that player is engaged in the call now running, and a finished call's transcript stays where the reader last read it;
 - the pane's header carries a collapse control, and a collapsed pane stands in its place as a rail [[run-view-116](#run-view-116)] that opens itself when its call opens [[run-view-117](#run-view-117)] — a folded lane is still a lane;
 - the runtime's report of which players a call engages adds no pane and removes none — a lane the reader is following never leaves under them — and when a lane's call opens while its pane lies beyond the grid's visible edge, the grid scrolls just far enough to show that pane, side by side or stacked alike, so the working lane never hides behind idle ones;
+- a pane still lying beyond the grid's edge is said, not cut: the grid fades whichever edge hides one, and retires that edge's fade once nothing lies beyond it ([DR-041](../decisions/041-chrome-that-fits.md));
 - a roster with no players renders no player pane, and the Captain column then stands alone at the Captain home's reading width with no divider — a division with nothing on its far side reads as a pane that failed to load;
 - the pane's header names the lane and, from its first call on, the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the lane's agent chip beside it, which is also the control that tunes that agent for this session [[run-view-139](#run-view-139)] [[run-view-138](#run-view-138)], and a lane no call has reached yet reads "Idle until the playbook calls ⟨lane⟩";
 - while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second, hidden first in a narrow pane ([DR-041](../decisions/041-chrome-that-fits.md)) — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5).
@@ -877,6 +878,14 @@ Where a fixture stream calls one player under two roles, the test suite shall as
 #### run-view-82
 
 Where the run view renders with its default split, the test suite shall assert the divider contract of [[run-view-81](#run-view-81)]: an arrow key moves the split and a double-click restores the default of 45%, the split survives a remount, a nudge past either bound stops at that bound, a drag against a padded container leaves the rule within a pixel of the pointer rather than the padding's width away from it, and a machine drawing carries the scale-or-scroll rule — its natural width, the floor at four fifths of it, and the container query choosing between them — inside a scrolling box that masks its edge, which a box read to its end and then narrowed masks again, and which is itself the keyboard stop that names the drawing it holds [[run-view-50](#run-view-50)].
+
+#### run-view-142
+
+Where the run view renders a player grid whose panes are wider than its box, the test suite shall assert the grid's edge fade of [[run-view-7](#run-view-7)]:
+
+- an edge with a pane beyond it is faded, and both edges are faded at once while the grid stands between them;
+- scrolled to an end, that end's fade retires because nothing lies beyond it;
+- the box narrowing with no scroll of its own brings the fade back.
 
 #### run-view-53
 

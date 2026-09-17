@@ -163,6 +163,21 @@ export function SplitDivider({
   );
 }
 
+/** The player grid is the run's one sideways-scrolling canvas, so an
+ * edge that hides a pane says so: a hard cut reads as broken, a fade
+ * reads as "more this way" (run-view-7, DR-041). Either edge can hide
+ * one — the grid scrolls itself to the lane whose call opens — so each
+ * is faded only while a pane lies beyond it. */
+function markGridEdges(box: HTMLElement): void {
+  const before = box.scrollLeft > 1;
+  const beyond = box.scrollLeft + box.clientWidth < box.scrollWidth - 1;
+  box.style.setProperty("--fade-start", before ? FADE : "0px");
+  box.style.setProperty("--fade-end", beyond ? FADE : "0px");
+}
+
+/** How far an edge fades while it hides a pane; zero retires it. */
+const FADE = "24px";
+
 export function RunView({
   session,
   view,
@@ -450,6 +465,22 @@ export function RunView({
       if (hidden) pane.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
   }, [runningLanes]);
+  // The fade must return with the content it hides (run-view-7): the
+  // grid's box changes with the divider and the rail, and a lane
+  // folding to a rail narrows the content under an unchanged box, so
+  // the panes are watched as well as the box.
+  const laneKey = lanes.join("\u0000");
+  const collapsedKey = (collapsedLanes ?? []).join("\u0000");
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    markGridEdges(grid);
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => markGridEdges(grid));
+    observer.observe(grid);
+    for (const pane of Array.from(grid.children)) observer.observe(pane);
+    return () => observer.disconnect();
+  }, [laneKey, collapsedKey, runningLanes]);
   // No lane, no split (run-view-7): a session whose roster binds no
   // player — a record the CLI wrote — reads as the Captain home does,
   // one column at the home's measure, with no divider to nowhere.
@@ -695,7 +726,8 @@ export function RunView({
             <div
               ref={gridRef}
               data-testid="player-grid"
-              className="relative flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto"
+              className="relative flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto [mask-image:linear-gradient(to_right,transparent_0,#000_var(--fade-start,0px),#000_calc(100%_-_var(--fade-end,0px)),transparent_100%)] [mask-repeat:no-repeat] [mask-size:100%_100%]"
+              onScroll={(event) => markGridEdges(event.currentTarget)}
             >
               {lanes.map((playerId) => (
                 <PlayerPane
