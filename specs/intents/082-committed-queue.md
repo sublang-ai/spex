@@ -1,0 +1,34 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
+
+# IR-082: Committed Queue Realization
+
+## Status
+
+Open
+
+## Intent
+
+Realize [DR-077](../decisions/077-up-next-is-a-committed-queue.md) and the package contracts at evaluated revision `ab312fb`: one committed queue, a core-published next standing, clean-settlement handoff, and one presentation across the Dashboard, project Overview, resolved delivery card, and Captain home.
+The spec plane is already current; any implementation evidence that changes behavior shall update the affected package item, and `map.md` where its index changes, in the same task commit.
+
+## Deliverables
+
+- [ ] The core publishes exactly one next scheduling standing per project, including manual-start availability and a structured failure cause, without storing another intent state.
+- [ ] Clean attributed settlement advances once without typed trace proof, while failure, abort, an ending control, a surviving park, an after-link, or refused admission holds without retry.
+- [ ] Dashboard and Overview show every row as `Queued`, distinguish `Next`, render the shared standing with conditional Start, keep blocked and later rows inert without disabled Start, and offer one visible Queue capture action.
+- [ ] The resolved delivery card and Captain home use that same standing, including conditional Start and the correct Remove target when Undo restores a waiting row.
+- [ ] Core, component, and browser coverage prove the six standings, settlement races, capture positions, focus behavior, and responsive row fit.
+
+## Tasks
+
+Each task below is exactly one commit and runs its focused gate before the next begins.
+
+1. Core standing and handoff: extend the protocol and ledger projection, represent active settlement and ending-control outcomes, replace the typed-trace gate, and cover the settlement, park, failure, abort, verdict, dependency, and admission races in core tests.
+2. Dashboard and Overview: add the shared standing presentation, consume the core-published next row in Up next and the all-clear, add the inline Queue control, preserve capture reveal semantics, and cover all six standings, row roles, capture positions, and responsive structure in Dashboard component tests.
+3. Run View and Captain home: consume the shared presentation in resolved delivery and next cards, stage only a manual-ready Start, repair Remove/Undo focus when Start is absent, and cover every standing and ended-session behavior in Run View component tests.
+4. Acceptance and closure: extend the Dashboard and fit browser journeys through the public UI, run the full build and test gates, then record the exact results and close this intent once every deliverable holds.
+
+## Verification
+
+Planned: `npm test -w packages/core` after task 1; `npm test -w packages/ui` after tasks 2 and 3; then `npm run build`, `npm test`, `npm run e2e`, and `spex lint` in task 4.
