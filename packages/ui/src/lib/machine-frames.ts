@@ -83,8 +83,33 @@ export const FAILURE_STATE_ID = "failed";
 export function parkedFailure(
   frames: readonly MachineFrame[],
 ): MachineFrame | undefined {
+  return deepestIn(frames, FAILURE_STATE_ID);
+}
+
+/** The state a playbook parks in while it waits for the Boss's reply:
+ * the id every built-in machine gives it, the other park a run can
+ * stand in (run-view-128, DR-073). */
+export const QUESTION_STATE_ID = "awaitBossReply";
+
+/** The run standing parked on the Boss, where one is underway
+ * (run-view-128): the deepest frame in either park, the leaf being the
+ * run that stopped, with its failure named so the notice and the card
+ * can speak the same park. */
+export function parkedRun(
+  frames: readonly MachineFrame[],
+): { frame: MachineFrame; reason: "failure" | "question" } | undefined {
+  const failed = deepestIn(frames, FAILURE_STATE_ID);
+  if (failed) return { frame: failed, reason: "failure" };
+  const asking = deepestIn(frames, QUESTION_STATE_ID);
+  return asking ? { frame: asking, reason: "question" } : undefined;
+}
+
+function deepestIn(
+  frames: readonly MachineFrame[],
+  stateId: string,
+): MachineFrame | undefined {
   for (let index = frames.length - 1; index >= 0; index -= 1) {
-    if (frames[index].active === FAILURE_STATE_ID) return frames[index];
+    if (frames[index].active === stateId) return frames[index];
   }
   return undefined;
 }

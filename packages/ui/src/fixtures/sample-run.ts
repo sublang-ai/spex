@@ -609,6 +609,54 @@ export const MACHINE_FAILED: FixtureEntry[] = [
   rec(710, { type: "turn_finished", turnId: 14, timestamp: 14_015 }),
 ];
 
+/** A run parked on a Boss question (run-view-128, DR-073):
+ * `awaitBossReply` is a parked state and not a final one, so the frame
+ * stays open and the turn settles with the machine waiting for the
+ * Boss — the other park a run can stand in, and the one no recovery
+ * answers. */
+export const MACHINE_ASKED: FixtureEntry[] = [
+  rec(731, {
+    type: "turn_started",
+    turnId: 20,
+    timestamp: 20_000,
+    turn: { id: 20, prompt: "/code fix the refresh path" },
+  }),
+  rec(732, {
+    type: "captain_status",
+    turnId: 20,
+    timestamp: 20_001,
+    message: "◇ /code started",
+  }),
+  trace(733, 20_002, "t-ask", "code", "session.started", {}),
+  trace(734, 20_003, "t-ask", "code", "fsm.transition",
+    moved("ready", "runFirstPhase", "START_CODE", "active", ["playbook.busy"])),
+  trace(735, 20_010, "t-ask", "code", "fsm.transition",
+    moved("runFirstPhase", "awaitBossReply", "NEEDS_BOSS", "active", ["playbook.parked"])),
+  rec(736, {
+    type: "captain_status",
+    turnId: 20,
+    timestamp: 20_011,
+    message: "◆ code-coder asks: Should I also migrate the legacy sessions?",
+  }),
+  rec(737, {
+    type: "captain_telemetry",
+    turnId: 20,
+    timestamp: 20_012,
+    topic: "playbook.fsm.state",
+    payload: {
+      from: "runFirstPhase",
+      to: "awaitBossReply",
+      event: "NEEDS_BOSS",
+      pendingBossQuestion: {
+        player: "dev.coder",
+        question: "Should I also migrate the legacy sessions?",
+        resumeStateId: "runFirstPhase",
+      },
+    },
+  }),
+  rec(738, { type: "turn_finished", turnId: 20, timestamp: 20_013 }),
+];
+
 /** The turn that leaves the failure behind (run-view-130): the machine
  * walks out of `failed` and the way back is no longer owed. */
 export const MACHINE_RECOVERED: FixtureEntry[] = [

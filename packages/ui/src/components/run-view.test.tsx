@@ -40,6 +40,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 import {
   MACHINE_ANSWERED,
+  MACHINE_ASKED,
   MACHINE_FAILED,
   MACHINE_ORPHAN,
   MACHINE_RECOVERED,
@@ -3131,6 +3132,157 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     );
     expect(screen.queryByTestId("failed-workflow")).toBeNull();
     expect(screen.queryByRole("region", { name: "Interrupted turn" })).toBeNull();
+  });
+
+  test("a run parked on a question carries Drop alone, and its Drop takes the verdict", async () => {
+    const previous = useAppStore.getState();
+    const command = vi.fn(async (type: string) =>
+      type === "ledger.get" ? { intents: [], attention: [], badge: 0 } : {},
+    );
+    setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
+    const asked = applyRecords(initialSessionView(PLAYERS), MACHINE_ASKED);
+    useAppStore.setState({
+      sessions: [PARKED],
+      views: { s1: asked },
+      composers: { s1: { queued: [] } },
+      stagedIntents: {},
+      specTrees: {},
+      activeSessionId: undefined,
+      ledger: {
+        intents: [
+          {
+            intent: makeIntent({
+              id: "i1",
+              dispatched: { sessionId: "s1", turnId: 20, at: 1 },
+            }),
+            state: "interrupted",
+            reason: "question",
+          },
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    try {
+      renderFailed({ view: asked });
+      const notice = screen.getByTestId("failed-workflow");
+      // The park the run stands in is what the words name (DR-069):
+      // no recovery answers a question, so Retry is absent rather than
+      // offered and refused (run-view-128).
+      expect(screen.getByTestId("failed-workflow-what").textContent).toBe(
+        "The /code workflow is waiting for your answer.",
+      );
+      expect(notice.textContent).toContain("Answer below. Drop ends the run.");
+      expect(notice.getAttribute("title")).toBe("state: awaitBossReply");
+      expect(screen.queryByTestId("failed-workflow-retry")).toBeNull();
+      // The composer is the question's other door (run-view-8).
+      expect(screen.getByTestId("boss-composer")).toBeTruthy();
+
+      // DR-010 §4: ending a run asks in place before it acts.
+      fireEvent.click(screen.getByTestId("failed-workflow-drop"));
+      expect(screen.getByTestId("failed-workflow-confirm-ask")).toBeTruthy();
+      expect(command).not.toHaveBeenCalled();
+      await act(async () =>
+        fireEvent.click(screen.getByTestId("failed-workflow-drop-confirm")),
+      );
+      // One ruling, one command (run-view-112): the close is the whole
+      // act, the core ending the run on its way to the verdict — the
+      // notice sends no control of its own.
+      expect(
+        command.mock.calls.filter(([type]) => type === "intent.close"),
+      ).toEqual([["intent.close", { intentId: "i1", as: "dropped" }]]);
+      expect(
+        command.mock.calls.filter(([type]) => type === "session.control"),
+      ).toEqual([]);
+    } finally {
+      setClientForTests(undefined);
+      useAppStore.setState(previous, true);
+    }
+  });
+
+  test("a refused close leaves its cause beside the notice, which stands", async () => {
+    const previous = useAppStore.getState();
+    const command = vi.fn(async (type: string) => {
+      if (type === "intent.close") {
+        throw new Error("the run is still parked, so the intent stays open");
+      }
+      return { intents: [], attention: [], badge: 0 };
+    });
+    setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
+    const asked = applyRecords(initialSessionView(PLAYERS), MACHINE_ASKED);
+    useAppStore.setState({
+      sessions: [PARKED],
+      views: { s1: asked },
+      composers: { s1: { queued: [] } },
+      stagedIntents: {},
+      specTrees: {},
+      activeSessionId: undefined,
+      ledger: {
+        intents: [
+          {
+            intent: makeIntent({
+              id: "i1",
+              dispatched: { sessionId: "s1", turnId: 20, at: 1 },
+            }),
+            state: "interrupted",
+            reason: "question",
+          },
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    try {
+      renderFailed({ view: asked });
+      fireEvent.click(screen.getByTestId("failed-workflow-drop"));
+      await act(async () =>
+        fireEvent.click(screen.getByTestId("failed-workflow-drop-confirm")),
+      );
+      // The busy form stood until the one command resolved, and its
+      // refusal reads where the act was taken (run-view-130).
+      expect(screen.getByTestId("failed-workflow-error").textContent).toContain(
+        "the run is still parked",
+      );
+      expect(screen.getByTestId("failed-workflow")).toBeTruthy();
+      expect(
+        (screen.getByTestId("failed-workflow-drop") as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+    } finally {
+      setClientForTests(undefined);
+      useAppStore.setState(previous, true);
+    }
+  });
+
+  test("a parked run the session serves no intent for closes nothing", async () => {
+    const previous = useAppStore.getState();
+    const command = vi.fn(async () => ({}));
+    setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
+    useAppStore.setState({
+      sessions: [PARKED],
+      views: { s1: failedView() },
+      composers: { s1: { queued: [] } },
+      stagedIntents: {},
+      specTrees: {},
+      activeSessionId: undefined,
+      ledger: { intents: [], attention: [], badge: 0 },
+    });
+    try {
+      renderFailed();
+      fireEvent.click(screen.getByTestId("failed-workflow-drop"));
+      await act(async () =>
+        fireEvent.click(screen.getByTestId("failed-workflow-drop-confirm")),
+      );
+      // Ending the run is the whole of the act, so it is the whole of
+      // what is sent (run-view-112).
+      expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
+        sessionId: "s1",
+        kind: "ending",
+      });
+    } finally {
+      setClientForTests(undefined);
+      useAppStore.setState(previous, true);
+    }
   });
 });
 

@@ -59,7 +59,12 @@ function actLine(entry: AttentionEntry): string | undefined {
     case "review":
       return "Nothing owed — open it, or mark it reviewed.";
     case "question":
-      return "Open to reply — the run is waiting.";
+      // Both doors (dashboard-4, DR-073): a session's question ends on
+      // a reply or on the run's own ending, and an intent's row carries
+      // the Drop that takes both, so its line names the reply alone.
+      return entry.intentId
+        ? "Open to reply — the run is waiting."
+        : "Open to reply, or drop the run.";
     case "failure":
       return entry.parked
         ? "Open to retry or drop the run."
@@ -159,8 +164,9 @@ function AttentionRow({
   };
   const finishedIntent = entry.kind === "finish" && entry.intentId;
   // An interrupted intent's work is still in play, so its Drop asks
-  // first — and dropping it rules on the intent alone: a run still
-  // parked keeps summoning in the session's own words (dashboard-56).
+  // first — and it takes the whole ruling: the core ends a run of that
+  // session standing parked before it records the verdict, so a refused
+  // ending leaves the intent open and says so here (dashboard-56).
   const interruptedIntent =
     entry.band === "interrupted" && entry.intentId !== undefined;
   const act = actLine(entry);

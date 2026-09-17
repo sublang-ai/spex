@@ -166,3 +166,65 @@ test("run-view-132: the failed workflow's notice stands, refuses with its cause,
   await expect(page.getByTestId("failed-workflow-confirm-ask")).toHaveCount(0);
   await expect(notice).toBeVisible();
 });
+
+// Every parked run has the same door (run-view-128, DR-073): a run
+// waiting for the Boss's answer carries Drop, and no Retry — no
+// recovery answers a question. The harness continues a session with no
+// engagement restored, so what this lane proves is that the notice
+// stands with the right controls beside the composer and that its
+// refusal is reported where it was taken.
+test("run-view-146: a run parked on a question carries Drop, and the composer answers it", async ({
+  page,
+  app,
+}) => {
+  await open(page, app);
+  await send(page, "ask before migrating");
+
+  const notice = page.getByTestId("failed-workflow");
+  await expect(notice).toBeVisible();
+  await expect(notice).toHaveAttribute("data-reason", "question");
+  await expect(notice).toContainText(
+    "The /code workflow is waiting for your answer.",
+  );
+  await expect(notice).toContainText("Answer below. Drop ends the run.");
+  await expect(notice).toHaveAttribute("title", "state: awaitBossReply");
+  // A question advertises no recovery, so nothing offers one.
+  await expect(page.getByTestId("failed-workflow-retry")).toHaveCount(0);
+
+  // The composer is the other door, and it still names the waiting
+  // player (run-view-9).
+  const box = page.getByTestId("boss-composer");
+  await expect(box).toBeEnabled();
+  await expect(box).toHaveAttribute("placeholder", /reply to coder/i);
+  await expect(
+    notice.evaluate(
+      (el, id) =>
+        Boolean(
+          el.compareDocumentPosition(
+            document.querySelector(`[data-testid="${id}"]`)!,
+          ) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+      "boss-composer",
+    ),
+  ).resolves.toBe(true);
+
+  // Drop asks first, and a refused ending is reported with the
+  // transcript and the question intact (run-view-130).
+  await page.getByTestId("failed-workflow-drop").click();
+  await expect(page.getByTestId("failed-workflow-confirm-ask")).toBeVisible();
+  await page.getByTestId("failed-workflow-drop-keep").click();
+  await expect(page.getByTestId("failed-workflow-confirm-ask")).toHaveCount(0);
+  await page.getByTestId("failed-workflow-drop").click();
+  await page.getByTestId("failed-workflow-drop-confirm").click();
+  await expect(page.getByTestId("failed-workflow-error")).toContainText(
+    "no way to end its run",
+  );
+  await expect(notice).toBeVisible();
+  await expect(page.getByTestId("question-bubble")).toBeVisible();
+
+  // Answering leaves the park, and the way out goes with it.
+  await box.fill("Yes, migrate them too");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+  await expect(notice).toHaveCount(0);
+});

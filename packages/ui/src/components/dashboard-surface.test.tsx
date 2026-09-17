@@ -436,6 +436,55 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     );
   });
 
+  test("the interrupted Drop is one command, and its refusal stands on the row", async () => {
+    // The whole ruling is the close's (dashboard-56, DR-073): the core
+    // ends the parked run before it records the verdict, so the row
+    // orchestrates nothing — and a refused ending leaves the entry.
+    seed({ ledger: { intents: [], attention: ATTENTION, badge: 6 } });
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "intent.close") {
+        throw new Error("the run is still parked, so the intent stays open");
+      }
+      if (type === "ledger.get") return useAppStore.getState().ledger;
+      return {};
+    });
+    renderSurface();
+
+    fireEvent.click(screen.getByTestId("attention-drop-if"));
+    fireEvent.click(screen.getByTestId("attention-drop-confirm-if"));
+    await screen.findByText(
+      "Couldn't record the verdict: the run is still parked, so the intent stays open",
+    );
+    expect(callsOf("session.control")).toEqual([]);
+    expect(screen.getByTestId("attention-if-failure")).toBeTruthy();
+    expect(
+      (screen.getByTestId("attention-drop-confirm-if") as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  });
+
+  test("a session's question names both of its doors", () => {
+    // Its acts are a reply and the ending its run's own notice takes
+    // (dashboard-4, dashboard-53, DR-073), so the row names both and
+    // carries no control of its own — no verdict is owed.
+    const asking: AttentionEntry = {
+      band: "interrupted",
+      kind: "question",
+      title: "chat about the migration",
+      projectId: "p1",
+      sessionId: "s7",
+      turnId: 3,
+      since: NOW - 4 * MIN,
+    };
+    seed({ ledger: { intents: [], attention: [asking], badge: 1 } });
+    renderSurface();
+
+    expect(screen.getByTestId("attention-act-s7").textContent).toBe(
+      "Open to reply, or drop the run.",
+    );
+    expect(screen.queryByTestId("attention-drop-s7")).toBeNull();
+  });
+
   test("Confirm closes done with an in-frame busy state; Drop acts on the click", async () => {
     seed({ ledger: { intents: [], attention: ATTENTION, badge: 6 } });
     let settleClose!: () => void;

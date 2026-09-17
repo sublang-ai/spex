@@ -18,7 +18,7 @@ import type { Captain } from "@sublang/cligent/tmux-play";
 import { academyCorpusDir } from "../forge.js";
 import { Store } from "../store.js";
 import { fakeAdapterImports, type FakeScript } from "./fake-adapter.js";
-import { createScriptedCaptain } from "./scripted-captain.js";
+import { createScriptedCaptain, type CaptainTurnScript } from "./scripted-captain.js";
 
 /** A starter config naming two players and the code/review built-ins;
  * the captain and coder ride the claude adapter, the reviewer codex. */
@@ -291,9 +291,43 @@ export function demoCaptain(
     if (runId) failedSessions.set(sessionId, runId);
     else failedSessions.delete(sessionId);
   };
+  // The run that asked, so its own frame carries the park: the
+  // interface reads a leaf's state from that run's frames (DR-061), and
+  // the way out of a question park hangs on the same reading (DR-073).
+  const askingRun = `demo-ask-${sessionId ?? "local"}`;
+  const askTrace = async (
+    session: Parameters<CaptainTurnScript>[2],
+    from: string,
+    to: string,
+    event: string,
+    tags: string[],
+  ): Promise<void> => {
+    await session.emitTelemetry({
+      topic: "playbook.trace",
+      payload: {
+        schemaVersion: 3,
+        sessionId: askingRun,
+        playbookId: "code",
+        rootSessionId: askingRun,
+        depth: 1,
+        sequence: 1,
+        timestamp: Date.now(),
+        type: "fsm.transition",
+        payload: {
+          from,
+          to,
+          event: { type: event },
+          state: { value: to, activeStateIds: [to], tags, status: "active", quiescent: true },
+        },
+      },
+    });
+  };
   return createScriptedCaptain(async (turn, context, session) => {
     if (isParked() && !turn.prompt.toLowerCase().startsWith("ask")) {
       setParked(false);
+      await askTrace(session, "awaitBossReply", "coding", "BOSS_REPLY", [
+        "playbook.busy",
+      ]);
       await session.emitTelemetry({
         topic: "playbook.fsm.state",
         payload: { from: "awaitBossReply", to: "coding", event: "BOSS_REPLY" },
@@ -304,6 +338,9 @@ export function demoCaptain(
       await session.emitStatus(
         "◆ code-coder asks: Should I also migrate the legacy sessions?",
       );
+      await askTrace(session, "coding", "awaitBossReply", "NEEDS_BOSS", [
+        "playbook.parked",
+      ]);
       await session.emitTelemetry({
         topic: "playbook.fsm.state",
         payload: {

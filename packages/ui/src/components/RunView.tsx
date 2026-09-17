@@ -27,7 +27,7 @@ import {
   useAppStore,
 } from "../state/store.js";
 import { SessionRecovery } from "./SessionRecovery.js";
-import { FailedWorkflow } from "./FailedWorkflow.js";
+import { ParkedRun } from "./ParkedRun.js";
 import { Composer } from "./Composer.js";
 import { DeliveryCard } from "./DeliveryCard.js";
 import { InlineConfirm } from "./InlineConfirm.js";
@@ -35,7 +35,7 @@ import { PlayerPane } from "./PlayerPane.js";
 import { AgentSettingsPopover } from "./AgentSettings.js";
 import { sessionAgents } from "../lib/session-agents.js";
 import { WorkingLine } from "./WorkingLine.js";
-import { parkedFailure } from "../lib/machine-frames.js";
+import { parkedRun } from "../lib/machine-frames.js";
 
 
 /** The house divider (DR-030): the Captain/players split here, and
@@ -524,18 +524,19 @@ export function RunView({
   // history the core cannot continue is named, with when it last spoke.
   const history = !externalWriter && readOnly && !uncertain;
   const loadError = view.loadError ?? (readOnly && !uncertain ? error : undefined);
-  // The failed-workflow notice (run-view-128, DR-060): the run the
-  // stream still reports underway, standing in its recoverable
-  // failure state. The way back stands until that run leaves it,
-  // mid-turn included. The notice speaks the run's command and never
-  // an identifier (DR-010 §2): where no configured playbook claims
-  // the run, the trace's id rides the tooltip and the words name no
-  // command at all, rather than dressing an id as one.
-  const failedRun = readOnly || uncertain
+  // The parked-run notice (run-view-128, DR-060, DR-073): the run the
+  // stream still reports underway, standing parked on the Boss — in
+  // its recoverable failure state, or waiting for a reply. The way
+  // back stands until that run leaves the park, mid-turn included.
+  // The notice speaks the run's command and never an identifier
+  // (DR-010 §2): where no configured playbook claims the run, the
+  // trace's id rides the tooltip and the words name no command at
+  // all, rather than dressing an id as one.
+  const parked = readOnly || uncertain
     ? undefined
-    : parkedFailure(activityView.frames);
-  const failedCommand = failedRun
-    ? playbooks?.find((entry) => entry.id === failedRun.playbookId)?.command
+    : parkedRun(activityView.frames);
+  const parkedCommand = parked
+    ? playbooks?.find((entry) => entry.id === parked.frame.playbookId)?.command
     : undefined;
 
   return (
@@ -636,7 +637,7 @@ export function RunView({
           {/* A failure that parked no run (run-view-135): nothing is
               stuck, so the way on is an ordinary message — and until
               now the summons named no act at all. */}
-          {attention === "failure" && !failedRun && !readOnly && !uncertain && !view.turnActive ? (
+          {attention === "failure" && !parked && !readOnly && !uncertain && !view.turnActive ? (
             <div
               role="status"
               data-testid="unparked-failure-notice"
@@ -645,11 +646,12 @@ export function RunView({
               The last turn failed. Send a message to pick it up.
             </div>
           ) : null}
-          {failedRun ? (
-            <FailedWorkflow
-              command={failedCommand}
-              playbookId={failedCommand ? undefined : failedRun.playbookId}
-              state={failedRun.active ?? undefined}
+          {parked ? (
+            <ParkedRun
+              reason={parked.reason}
+              command={parkedCommand}
+              playbookId={parkedCommand ? undefined : parked.frame.playbookId}
+              state={parked.frame.active ?? undefined}
               connected={connected}
               turnActive={view.turnActive}
               onControl={async (kind) => {
@@ -658,7 +660,14 @@ export function RunView({
                 // being stamped by a control it did not ask for
                 // (run-view-86).
                 if (staged) clearStagedIntent(session.id);
-                await submitSessionControl(session.id, kind);
+                // One ruling, one command (run-view-112): where the
+                // session serves an open intent, the close is the whole
+                // act — the core ends the parked run and records the
+                // verdict together (core-service-46). Sending both from
+                // here would race that path.
+                const ruled = kind === "ending" ? workingIntent?.intent : undefined;
+                if (ruled) await closeIntent(ruled.id, "dropped");
+                else await submitSessionControl(session.id, kind);
               }}
             />
           ) : null}

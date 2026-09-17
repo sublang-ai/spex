@@ -1,14 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The failed-workflow notice (run-view-128..130, run-view-112, DR-060,
-// DR-062): a workflow parked in its recoverable failure state used to
-// offer nothing to activate — the only way back was prose the Boss
-// invented. The notice stands between the Captain pane and the composer
-// with two controls, and says in words what each does. Both are now
-// deterministic: Retry runs the recovery the run itself advertises, and
-// Drop ends the run through the shell's own give-up, which spends no
-// model call — so the exit works when the provider is what failed.
+// The parked-run notice (run-view-128..130, run-view-112, DR-060,
+// DR-062, DR-073): a run standing parked on the Boss used to offer
+// nothing to activate — the only way back was prose the Boss invented.
+// The notice stands between the Captain pane and the composer and says
+// in phrases what the run waits for and what each control does. Drop
+// stands on either park and ends the run through the shell's own
+// give-up, which spends no model call, so the exit works when the
+// provider is what failed. Retry stands only where a recovery answers
+// the park — the failure state — and a run waiting for a reply carries
+// Drop alone, the composer being its other door.
+//
+// Drop sends one command and no more (run-view-112): a session serving
+// an open intent is ruled on by that intent's close, which ends the run
+// on the way; one serving none takes the ending control itself.
+//
+// The test ids read `failed-workflow`: they are held from the notice's
+// first name so the browser journeys keep their grip on it.
 
 import { useRef, useState } from "react";
 
@@ -22,7 +31,8 @@ import { useRef, useState } from "react";
  * widest font the journey runs under, not on the author's. */
 const CONTROL_WIDTH = "min-w-[6.75rem]";
 
-export function FailedWorkflow({
+export function ParkedRun({
+  reason,
   command,
   playbookId,
   state,
@@ -30,7 +40,10 @@ export function FailedWorkflow({
   turnActive,
   onControl,
 }: {
-  /** The command that started the failed run, where a configured
+  /** Which park the run stands in: the failure a recovery answers, or
+   * the reply it waits for (run-view-128). */
+  reason: "failure" | "question";
+  /** The command that started the parked run, where a configured
    * playbook names one; absent when none does (run-view-128). */
   command?: string;
   /** The run's own playbook id, carried only where no command names
@@ -58,6 +71,7 @@ export function FailedWorkflow({
   // run-view-130: while either turn is in flight neither control may be
   // activated, so the whole group disables together.
   const disabled = pending !== undefined || blocked !== undefined;
+  const failed = reason === "failure";
 
   async function run(kind: "recovery" | "ending"): Promise<void> {
     if (busy.current || disabled) return;
@@ -82,12 +96,20 @@ export function FailedWorkflow({
     }
   }
 
-  const controlClass = `${CONTROL_WIDTH} shrink-0 rounded-md border border-red-300 px-2.5 py-1 text-center font-medium hover:bg-red-100 disabled:opacity-40 dark:border-red-800 dark:hover:bg-red-900`;
+  const tone = failed
+    ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+    : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200";
+  const controlClass = `${CONTROL_WIDTH} shrink-0 rounded-md border px-2.5 py-1 text-center font-medium disabled:opacity-40 ${
+    failed
+      ? "border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
+      : "border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
+  }`;
 
   return (
     <section
-      aria-label="Failed workflow"
+      aria-label={failed ? "Failed workflow" : "Workflow waiting for you"}
       data-testid="failed-workflow"
+      data-reason={reason}
       title={
         [
           playbookId ? `playbook: ${playbookId}` : undefined,
@@ -96,7 +118,7 @@ export function FailedWorkflow({
           .filter(Boolean)
           .join(" · ") || undefined
       }
-      className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+      className={`rounded-md border px-3 py-2 text-sm ${tone}`}
     >
       {/* The row yields as the pane narrows (DR-041): the words own the
           slack, and the controls wrap under them as one group rather
@@ -105,29 +127,37 @@ export function FailedWorkflow({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <div className="min-w-0 flex-1 basis-40">
           <p data-testid="failed-workflow-what">
-            {command
-              ? `The /${command} workflow failed and is waiting for you.`
-              : "The workflow failed and is waiting for you."}
+            {failed
+              ? command
+                ? `The /${command} workflow failed and is waiting for you.`
+                : "The workflow failed and is waiting for you."
+              : command
+                ? `The /${command} workflow is waiting for your answer.`
+                : "The workflow is waiting for your answer."}
           </p>
           <p className="text-neutral-600 dark:text-neutral-400">
-            Retry runs the workflow&apos;s own recovery. Drop ends the run.
+            {failed
+              ? "Retry runs the workflow's own recovery. Drop ends the run."
+              : "Answer below. Drop ends the run."}
           </p>
         </div>
         <div
           ref={group}
           className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"
         >
-          <button
-            type="button"
-            data-testid="failed-workflow-retry"
-            disabled={disabled || confirming}
-            aria-busy={pending === "recovery" || undefined}
-            title={blocked ?? "Run the recovery this workflow offers."}
-            onClick={() => void run("recovery")}
-            className={controlClass}
-          >
-            {pending === "recovery" ? "Retrying…" : "Retry"}
-          </button>
+          {failed ? (
+            <button
+              type="button"
+              data-testid="failed-workflow-retry"
+              disabled={disabled || confirming}
+              aria-busy={pending === "recovery" || undefined}
+              title={blocked ?? "Run the recovery this workflow offers."}
+              onClick={() => void run("recovery")}
+              className={controlClass}
+            >
+              {pending === "recovery" ? "Retrying…" : "Retry"}
+            </button>
+          ) : null}
           {confirming ? (
             // DR-010 §4: ending a run is the Boss's ruling, so it
             // asks in place. Keep backs out having sent nothing.
