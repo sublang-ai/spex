@@ -118,6 +118,15 @@ While a project's live session holds a turn in flight and no attention entry for
 
 While projects are registered, the Dashboard shall display one ledger group per project below the attention queue and its Running band [[dashboard-50](#dashboard-50)], in the projects' fixed sidebar order, each group carrying four bands in order: History [[dashboard-27](#dashboard-27)], Now [[dashboard-28](#dashboard-28)], Up next [[dashboard-29](#dashboard-29)], and Sources [[dashboard-20](#dashboard-20)].
 
+#### dashboard-45
+
+When the reader activates a Dashboard project group's disclosure control, the Dashboard shall fold that group's four bands to its header or unfold them, remembering the state for that project across launches as app preference ([DR-030](../decisions/030-workspace-chrome.md)):
+
+- the control reads "Collapse ⟨project⟩" while expanded and "Expand ⟨project⟩" while collapsed, exposes its state accessibly, and remains in the header with the project name;
+- the collapsed header carries no band content or summary, but keeps an attention mark whenever that project contributes an entry to the attention queue [[dashboard-1](#dashboard-1)], so the fold never hides a duty;
+- a project with no remembered state starts expanded; each project's state is independent, and only that project's disclosure control changes it — arriving or changing work never moves the fold;
+- the disclosure belongs to the cross-project Dashboard alone: the same ledger group in the project's Overview always draws all four bands [[dashboard-26](#dashboard-26)].
+
 #### dashboard-27
 
 Where a project has done work — intents closed after a turn of theirs ended finished, and finished intent records in its specs tree [[dashboard-24](#dashboard-24)] — the group's History band shall list it as one timeline newest first, every loaded row inside a frame eight rows tall by default that scrolls when the rows exceed it, with an "Older…" control at the end of the scrolled list that fetches the next intent page ([DR-038](../decisions/038-history-is-done-work.md)):
@@ -160,6 +169,7 @@ While the Now band shows the open intent the session serves [[dashboard-28](#das
 
 The group's Up next band shall list the project's queued intents in rank order, ending in an inline add row that captures a new queued intent, with the head unblocked intent emphasized as the project's next and carrying Start:
 
+- the add field is one row while empty, soft-wraps and grows with its text to the smaller of eight lines and two fifths of the viewport, then scrolls with no native resize grip; Enter captures a nonblank draft after trimming its outer whitespace while preserving its internal line breaks, and Shift+Enter inserts a line ([DR-041](../decisions/041-chrome-that-fits.md));
 - a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with "after ⟨title⟩", the predecessor's project named when it lives in another project, its Start disabled with the reason ([DR-026](../decisions/026-data-graphics-craft.md) §2), and is never presented as next;
 - reorder works by drag — the grip at the row's left is the affordance — by keyboard (Alt+↑/↓ on the focused row), and by the row menu's Move up and Move down, which take the same step, are disabled at the queue's ends, and name the shortcut; a reorder changes only the queue's rank order;
 - each row's actions live in a ⋯ menu that follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) — focus moves into it on open and returns to the trigger on close, Escape and an outside click close it, at most one row menu is open — offering Move up, Move down, Edit text, Remove, and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, the record row [[dashboard-40](#dashboard-40)] opening the record, "Session" opening the capturing session;
@@ -414,7 +424,7 @@ Where a fixture stream holds a live session serving an open intent and carrying 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and the scripted Captain, when the journey works the ledger through the page, the test suite shall assert:
 
 - every empty band carries its guidance, and the Sources line reads collapsed with the seeded example's open records behind it, each with a Queue control [[dashboard-8](#dashboard-8)] [[dashboard-20](#dashboard-20)] [[dashboard-24](#dashboard-24)] [[dashboard-30](#dashboard-30)];
-- the inline add row captures a queued intent, revealing its row and clearing the field, and the all-clear names it next [[dashboard-29](#dashboard-29)] [[dashboard-31](#dashboard-31)];
+- the inline add field begins one row high; a long line soft-wraps and grows it without adding a newline, Shift+Enter adds a line, text beyond its maximum leaves it capped and scrolling without a native resize grip, and Enter captures the trimmed multiline draft with its internal lines intact and clears the field, revealing its row while the all-clear names it next [[dashboard-29](#dashboard-29)] [[dashboard-31](#dashboard-31)];
 - a queued intent removed before any turn leaves History untouched [[dashboard-27](#dashboard-27)];
 - queuing from a record row lands a row wearing the record's identifier [[dashboard-30](#dashboard-30)] [[dashboard-31](#dashboard-31)];
 - while the dispatched intent's session runs, the Now band shows it [[dashboard-28](#dashboard-28)];
@@ -434,7 +444,16 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### dashboard-43
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and holding more closed work than one History page, a queued intent with a second queued behind it, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained [[dashboard-47](#dashboard-47)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], and every control keeps its accessible name at every size [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and holding more closed work than one History page, a queued intent with a second queued behind it, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained and, wherever the centered column leaves empty space, a wheel over either its left or right margin advances that same surface scroll box [[dashboard-47](#dashboard-47)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], and every control keeps its accessible name at every size [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
+
+#### dashboard-58
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with two registered projects and one project contributing an attention entry, when the journey exercises that project's disclosure through the page, the test suite shall assert the project-local fold [[dashboard-45](#dashboard-45)]:
+
+- collapsing leaves the disclosure control, project name, and attention mark in the header while hiding all four bands, and the other project's group remains expanded [[dashboard-45](#dashboard-45)];
+- work arriving or changing under the collapsed project leaves it collapsed [[dashboard-45](#dashboard-45)];
+- reloading the app restores the same project's collapsed state while leaving the other expanded [[dashboard-45](#dashboard-45)];
+- the collapsed project's Overview still draws all four bands with no project-group disclosure, and returning to the Dashboard permits the header control to expand the group again [[dashboard-45](#dashboard-45)] [[dashboard-26](#dashboard-26)].
 
 #### dashboard-44
 

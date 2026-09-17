@@ -5,8 +5,8 @@
 // Now, Up next, and Sources, drawn by this one component wherever the
 // group appears — the Dashboard lists every project's, the Overview
 // tab pins one (projects-4, DR-038, DR-027). Every state here is
-// derived; the group writes nothing but Boss acts (queue, move,
-// close, remove).
+// derived; the group writes only Boss acts (queue, move, close,
+// remove) and the Dashboard's reader-owned disclosure preference.
 
 import {
   useEffect,
@@ -32,6 +32,7 @@ import type { SessionView } from "../state/reducer.js";
 import { stateLabel, type StatusTone } from "../lib/labels.js";
 import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
+import { useAutoGrow } from "../lib/useAutoGrow.js";
 import { usePopover } from "../lib/usePopover.js";
 import { activatedByKeyboard, useUndoLine } from "../lib/useUndoLine.js";
 import { currentSessionOf } from "../lib/sessions.js";
@@ -1210,6 +1211,8 @@ function UpNextBand({
   const closeIntent = useAppStore((state) => state.closeIntent);
   const loadLedger = useAppStore((state) => state.loadLedger);
   const [draft, setDraft] = useState("");
+  const addRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(addRef, draft);
   // One row menu open at a time (dashboard-29): the band holds whose.
   const [menuFor, setMenuFor] = useState<string>();
   const [focusRowId, setFocusRowId] = useState<string>();
@@ -1399,16 +1402,22 @@ function UpNextBand({
           )}
         </div>
       ) : null}
-      <input
+      <textarea
+        ref={addRef}
+        rows={1}
         value={draft}
         data-testid={`add-intent-${project.id}`}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter") add();
+          if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            add();
+          }
         }}
         placeholder="Add intent…"
         aria-label={`Add an intent to ${project.name}`}
-        className="min-h-6 w-full rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none dark:border-neutral-700"
+        className="min-h-6 w-full resize-none rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none [field-sizing:content] max-h-[max(40vh,1.75rem)] dark:border-neutral-700"
       />
     </div>
   );
@@ -1461,6 +1470,12 @@ export function ProjectGroup({
   const meta = useAppStore((state) => state.projectMeta[project.id]);
   const tree = useAppStore((state) => state.specTrees[project.id]);
   const loadProjectMeta = useAppStore((state) => state.loadProjectMeta);
+  const collapsed = useAppStore(
+    (state) => state.dashboardGroupsCollapsed[project.id] ?? false,
+  );
+  const setCollapsed = useAppStore(
+    (state) => state.setDashboardGroupCollapsed,
+  );
   const intents = ledger?.intents ?? [];
   const ledgerState: LedgerState = ledger
     ? "ready"
@@ -1470,52 +1485,110 @@ export function ProjectGroup({
   // The Now band shows the project's current conversation
   // (dashboard-28, DR-051): working, waiting, or idle.
   const session = currentSessionOf(sessions, project.id);
+  const projectAttention = ledger?.attention.filter(
+    (entry) => entry.projectId === project.id,
+  );
+  const attentionWord = projectAttention?.some(
+    (entry) => entry.kind === "failure",
+  )
+    ? "has failed work"
+    : projectAttention?.length
+      ? "needs your attention"
+      : undefined;
+  const bodyId = `project-bands-${project.id}`;
+  const attentionId = `project-attention-description-${project.id}`;
   return (
     <div
       data-testid={`project-group-${project.id}`}
+      data-collapsed={heading && collapsed ? "true" : undefined}
       className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
     >
-      {heading ? <h3 className="text-sm font-semibold">{project.name}</h3> : null}
-      <HistoryBand
-        project={project}
-        tree={tree}
-        now={now}
-        onOpenIntent={onOpenIntent}
-      />
-      <NowBand
-        project={project}
-        session={session}
-        intents={intents}
-        now={now}
-        onOpenSession={onOpenSession}
-      />
-      <UpNextBand
-        project={project}
-        queue={queueOf(intents, project.id)}
-        ledgerState={ledgerState}
-        projects={projects}
-        sessions={sessions}
-        tree={tree}
-        highlightId={highlightId}
-        onStartIntent={onStartIntent}
-        onOpenIntent={onOpenIntent}
-        onOpenSession={onOpenSession}
-        onCapture={onCapture}
-      />
-      <SourcesBand
-        project={project}
-        meta={meta}
-        tree={tree}
-        openSources={openSourceIntents(ledger, project.id)}
-        fetchedAt={fetchedAt}
-        now={now}
-        onRefresh={() => void loadProjectMeta(project.id, true)}
-        onQueue={(text, source) =>
-          onCapture({ projectId: project.id, text, source })
-        }
-        onOpenIntent={onOpenIntent}
-        onOpenOverview={onOpenOverview}
-      />
+      {heading ? (
+        <h3 className="text-sm font-semibold">
+          <button
+            type="button"
+            data-testid={`project-toggle-${project.id}`}
+            aria-expanded={!collapsed}
+            aria-controls={bodyId}
+            aria-label={`${collapsed ? "Expand" : "Collapse"} ${project.name}`}
+            aria-describedby={attentionWord ? attentionId : undefined}
+            title={
+              attentionWord ? `${project.name} — ${attentionWord}` : undefined
+            }
+            onClick={() => setCollapsed(project.id, !collapsed)}
+            className="flex min-h-6 w-full min-w-0 items-center gap-1 rounded text-left hover:text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:hover:text-neutral-200"
+          >
+            <Icon
+              name={collapsed ? "caretRight" : "caretDown"}
+              className="h-3.5 w-3.5 shrink-0 text-neutral-500"
+            />
+            <span className="min-w-0 flex-1 truncate">{project.name}</span>
+            {attentionWord ? (
+              <>
+                <span
+                  aria-hidden="true"
+                  data-testid={`project-attention-${project.id}`}
+                  className={`h-2 w-2 shrink-0 rounded-full ${
+                    attentionWord === "has failed work"
+                      ? "bg-red-500"
+                      : "bg-amber-500"
+                  }`}
+                />
+                <span id={attentionId} className="sr-only">
+                  {project.name} {attentionWord}
+                </span>
+              </>
+            ) : null}
+          </button>
+        </h3>
+      ) : null}
+      <div
+        id={bodyId}
+        data-testid={bodyId}
+        hidden={heading && collapsed}
+        className={`${heading && collapsed ? "hidden" : "flex"} flex-col gap-3`}
+      >
+        <HistoryBand
+          project={project}
+          tree={tree}
+          now={now}
+          onOpenIntent={onOpenIntent}
+        />
+        <NowBand
+          project={project}
+          session={session}
+          intents={intents}
+          now={now}
+          onOpenSession={onOpenSession}
+        />
+        <UpNextBand
+          project={project}
+          queue={queueOf(intents, project.id)}
+          ledgerState={ledgerState}
+          projects={projects}
+          sessions={sessions}
+          tree={tree}
+          highlightId={highlightId}
+          onStartIntent={onStartIntent}
+          onOpenIntent={onOpenIntent}
+          onOpenSession={onOpenSession}
+          onCapture={onCapture}
+        />
+        <SourcesBand
+          project={project}
+          meta={meta}
+          tree={tree}
+          openSources={openSourceIntents(ledger, project.id)}
+          fetchedAt={fetchedAt}
+          now={now}
+          onRefresh={() => void loadProjectMeta(project.id, true)}
+          onQueue={(text, source) =>
+            onCapture({ projectId: project.id, text, source })
+          }
+          onOpenIntent={onOpenIntent}
+          onOpenOverview={onOpenOverview}
+        />
+      </div>
     </div>
   );
 }

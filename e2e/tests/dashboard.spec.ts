@@ -18,7 +18,9 @@ test("run-view-115, dashboard-39: an intent dropped from the working line leaves
 }) => {
   await open(page, app);
   await nav(page, "Dashboard").click();
-  const add = page.getByRole("textbox", { name: /add an intent to demo-project/i });
+  const add = page.getByRole("textbox", {
+    name: /add an intent to demo-project/i,
+  });
   await add.fill("Drop me midway");
   await add.press("Enter");
   await expect(
@@ -164,14 +166,58 @@ test("dashboard-39: capture, start, confirm, and History through the page", asyn
   const record = page.getByTestId(new RegExp(`^source-record-${app.projectId}-`)).first();
   await expect(record).toBeVisible();
 
-  // Inline capture reveals the row; the all-clear names it next.
+  // The inline field starts at one row, soft-wraps as a real textarea,
+  // caps and scrolls, then keeps Shift+Enter's line for capture
+  // (dashboard-29/39).
   const add = page.getByRole("textbox", { name: /add an intent to demo-project/i });
+  const oneRow = await add.evaluate(
+    (field) => field.getBoundingClientRect().height,
+  );
+  const longLine = `Add a README badge ${"with accessible contrast ".repeat(60)}`;
+  await add.fill(longLine);
+  await expect(add).not.toHaveValue(/\n/);
+  await expect
+    .poll(() => add.evaluate((field) => field.getBoundingClientRect().height))
+    .toBeGreaterThan(oneRow);
+  await add.fill(
+    Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n"),
+  );
+  await expect
+    .poll(() =>
+      add.evaluate((field) => ({
+        client: field.clientHeight,
+        scroll: field.scrollHeight,
+        overflow: getComputedStyle(field).overflowY,
+        resize: getComputedStyle(field).resize,
+      })),
+    )
+    .toEqual(expect.objectContaining({ overflow: "auto", resize: "none" }));
+  const capped = await add.evaluate((field) => ({
+    client: field.clientHeight,
+    scroll: field.scrollHeight,
+  }));
+  expect(capped.scroll).toBeGreaterThan(capped.client);
+
+  const multiline = "Add a README badge\nwith accessible contrast";
   await add.fill("Add a README badge");
+  await add.press("Shift+Enter");
+  await add.pressSequentially("with accessible contrast");
+  await expect(add).toHaveValue(multiline);
   await add.press("Enter");
-  const row = page.getByTestId(/^upnext-row-/).filter({ hasText: "Add a README badge" });
+  const row = page
+    .getByTestId(/^upnext-row-/)
+    .filter({ hasText: "Add a README badge" });
   await expect(row).toBeVisible();
   await expect(add).toHaveValue("");
-  await expect(page.getByTestId("attention-all-clear")).toContainText(/add a readme badge/i);
+  await expect(page.getByTestId("attention-all-clear")).toContainText(
+    /add a readme badge/i,
+  );
+  await expect
+    .poll(async () => {
+      const state = await app.core.command("ledger.get", {});
+      return state.intents.find((entry) => entry.intent.text === multiline)?.intent.text;
+    })
+    .toBe(multiline);
 
   // A second intent, removed before it ever ran, leaves no History.
   await add.fill("Second thought");
@@ -191,7 +237,7 @@ test("dashboard-39: capture, start, confirm, and History through the page", asyn
   // Start stages the head intent into the composer; Send dispatches.
   await page.getByTestId("all-clear-start").click();
   await expect(page.getByTestId("staged-intent-chip")).toContainText(/add a readme badge/i);
-  await expect(page.getByTestId("start-composer")).toHaveValue("Add a README badge");
+  await expect(page.getByTestId("start-composer")).toHaveValue(multiline);
   await page.getByTestId("start-send").click();
   await expect(page.getByTestId("captain-pane")).toContainText("/code started");
 

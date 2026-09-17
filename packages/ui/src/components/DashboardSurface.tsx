@@ -7,8 +7,9 @@
 // ledger fold as served; under it the Running band answers the other
 // question — what is working right now, with nothing to answer
 // (dashboard-50) — and below both, one ledger group per project, the
-// same component the Overview tab draws (DR-038). Every state here is
-// derived — the surface writes nothing but Boss acts (queue, close).
+// same component the Overview tab draws (DR-038). Work state here is
+// derived — the surface writes only Boss acts (queue, close) and its
+// reader-owned project disclosure preference.
 
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -496,7 +497,14 @@ export function DashboardSurface({
     // The surface root is the box the Dashboard scrolls in (DR-041
     // §9): height-constrained, and the containing block for its own
     // positioned content, so the page itself never scrolls.
-    <div className="relative mx-auto flex w-full min-h-0 max-w-4xl flex-1 flex-col gap-5 overflow-y-auto p-6">
+    <div
+      data-testid="dashboard-scroll"
+      className="relative flex w-full min-h-0 flex-1 overflow-y-auto"
+    >
+      <div
+        data-testid="dashboard-column"
+        className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-6"
+      >
       {ledgerError ? (
         <div
           role="alert"
@@ -657,6 +665,7 @@ export function DashboardSurface({
           ))
         )}
       </section>
+      </div>
     </div>
   );
 }

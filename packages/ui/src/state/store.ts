@@ -199,6 +199,9 @@ export interface AppState {
    * expanded, and a fold lasts this launch — the Dashboard's group and
    * the project's Overview read the same one. */
   foldedSources: Record<string, boolean>;
+  /** Per-project Dashboard group disclosure (dashboard-45): chrome
+   * preference persisted across launches. The Overview never reads it. */
+  dashboardGroupsCollapsed: Record<string, boolean>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
   /** The Spex home as the core last described it (space-30, DR-057):
@@ -352,6 +355,7 @@ export interface AppState {
   toggleProjectExpanded(projectId: string, expanded: boolean): void;
   setLaneCollapsed(sessionId: string, playerId: string, collapsed: boolean): void;
   setSourcesFolded(projectId: string, folded: boolean): void;
+  setDashboardGroupCollapsed(projectId: string, collapsed: boolean): void;
   /** Register a folder, silently git-initializing non-repos
    * (RUN-27); the palette and any surface share this one action. */
   addProjectByPath(path: string): Promise<ProjectInfo>;
@@ -455,6 +459,7 @@ let client: SpexClient | undefined;
 const CURRENT_PROJECT_KEY = "spex.currentProject";
 const RAIL_COLLAPSED_KEY = "spex.railCollapsed";
 const EXPANDED_PROJECTS_KEY = "spex.expandedProjects";
+const DASHBOARD_GROUPS_COLLAPSED_KEY = "spex.dashboardGroupsCollapsed";
 const CAPTAIN_SPLIT_KEY = "spex.captainSplit";
 /** The default share leaves a 1280px window's Captain column wide
  * enough for the built-in machines' drawings to scale into it rather
@@ -582,6 +587,15 @@ export function safeStorageSet(key: string, value: string): void {
 function readExpandedProjects(): Record<string, boolean> {
   try {
     const raw = safeStorageGet(EXPANDED_PROJECTS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function readDashboardGroupsCollapsed(): Record<string, boolean> {
+  try {
+    const raw = safeStorageGet(DASHBOARD_GROUPS_COLLAPSED_KEY);
     return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
   } catch {
     return {};
@@ -1071,6 +1085,7 @@ export const useAppStore = create<AppState>((set, get) => {
     stagedIntents: {},
     collapsedLanes: {},
     foldedSources: {},
+    dashboardGroupsCollapsed: readDashboardGroupsCollapsed(),
     drafts: {},
     draftsLoaded: false,
     draftViews: {},
@@ -1351,6 +1366,18 @@ export const useAppStore = create<AppState>((set, get) => {
     setSourcesFolded(projectId: string, folded: boolean): void {
       if ((get().foldedSources[projectId] ?? false) === folded) return;
       set({ foldedSources: { ...get().foldedSources, [projectId]: folded } });
+    },
+
+    setDashboardGroupCollapsed(projectId: string, collapsed: boolean): void {
+      if ((get().dashboardGroupsCollapsed[projectId] ?? false) === collapsed) {
+        return;
+      }
+      const next = {
+        ...get().dashboardGroupsCollapsed,
+        [projectId]: collapsed,
+      };
+      set({ dashboardGroupsCollapsed: next });
+      safeStorageSet(DASHBOARD_GROUPS_COLLAPSED_KEY, JSON.stringify(next));
     },
 
     async addProjectByPath(path: string): Promise<ProjectInfo> {

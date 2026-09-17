@@ -63,7 +63,7 @@ interface Surface {
   ready: () => Promise<void>;
 }
 
-test("run-view-105: chrome fits at every width, in both sidebar states", async ({
+test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar states", async ({
   page,
   app,
 }) => {
@@ -82,10 +82,12 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
     text: "Tighten the expiry tests once the badge lands on the README",
     afterIntentId: first.id,
   });
+  const parkedProjectIds: string[] = [];
   for (let index = 0; index < 10; index += 1) {
     const dir = join(app.projectDir, "..", `parked-${index}`);
     seedDemoProject(dir);
     const project = await app.core.command("project.register", { path: dir });
+    parkedProjectIds.push(project.id);
     const session = await app.core.command("session.create", {
       projectId: project.id,
     });
@@ -253,6 +255,122 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
     await page.setViewportSize({ width: 1280, height: TALL });
     await surface.show();
     log(`${surface.name}: shown`);
+    if (surface.name === "Dashboard") {
+      // The full surface, not its centered content column, owns
+      // scrolling (dashboard-43/47). Prove both empty margins are
+      // wheel targets in a real browser; a DOM-shape assertion cannot
+      // establish which box receives a pointer's wheel.
+      await page.setViewportSize({ width: 1280, height: SHORT });
+      await setRail(page, false);
+      await surface.ready();
+      const scroll = page.getByTestId("dashboard-scroll");
+      const geometry = await scroll.evaluate((box) => {
+        const content = box.querySelector<HTMLElement>(
+          '[data-testid="dashboard-column"]',
+        );
+        if (!content) {
+          throw new Error("Dashboard scroll box has no content column");
+        }
+        const outer = box.getBoundingClientRect();
+        const inner = content.getBoundingClientRect();
+        return {
+          outer: {
+            left: outer.left,
+            right: outer.right,
+            top: outer.top,
+            height: outer.height,
+          },
+          inner: { left: inner.left, right: inner.right },
+          overflows: box.scrollHeight > box.clientHeight,
+        };
+      });
+      expect(
+        geometry.overflows,
+        "the Dashboard has enough content to scroll",
+      ).toBe(true);
+      const left = geometry.outer.left + 8;
+      const right = geometry.outer.right - 8;
+      const y = geometry.outer.top + Math.min(100, geometry.outer.height / 2);
+      expect(
+        left,
+        "left wheel point lies outside the centered column",
+      ).toBeLessThan(geometry.inner.left);
+      expect(
+        right,
+        "right wheel point lies outside the centered column",
+      ).toBeGreaterThan(geometry.inner.right);
+      for (const x of [left, right]) {
+        await scroll.evaluate((box) => {
+          box.scrollTop = 0;
+        });
+        await page.mouse.move(x, y);
+        await page.mouse.wheel(0, 360);
+        await expect
+          .poll(() => scroll.evaluate((box) => box.scrollTop))
+          .toBeGreaterThan(0);
+      }
+      await scroll.evaluate((box) => {
+        box.scrollTop = 0;
+      });
+
+      // A whole project group is reader-owned chrome (dashboard-58):
+      // its attention survives the fold, new work cannot open it, and
+      // the preference survives a reload without affecting a sibling
+      // group or the project's full Overview.
+      const collapsedId = parkedProjectIds[0];
+      const siblingId = parkedProjectIds[1];
+      if (!collapsedId || !siblingId) {
+        throw new Error("Dashboard disclosure journey needs two parked projects");
+      }
+      const toggle = page.getByTestId(`project-toggle-${collapsedId}`);
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(
+        page.getByTestId(`project-bands-${collapsedId}`),
+      ).not.toBeVisible();
+      await expect(
+        page.getByTestId(`project-attention-${collapsedId}`),
+      ).toBeVisible();
+      await expect(
+        page.getByTestId(`project-toggle-${siblingId}`),
+      ).toHaveAttribute("aria-expanded", "true");
+      await app.core.command("intent.queue", {
+        projectId: collapsedId,
+        text: "Work that arrived behind the fold",
+      });
+      await expect(
+        page
+          .getByTestId(`project-bands-${collapsedId}`)
+          .getByTestId(/^upnext-row-/)
+          .filter({ hasText: "Work that arrived behind the fold" }),
+      ).toHaveCount(1);
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+      await page.reload();
+      await expect(
+        page.getByTestId(`project-toggle-${collapsedId}`),
+      ).toHaveAttribute("aria-expanded", "false");
+      await expect(
+        page.getByTestId(`project-toggle-${siblingId}`),
+      ).toHaveAttribute("aria-expanded", "true");
+      await setRail(page, true);
+      await page.getByTestId(`sidebar-project-${collapsedId}`).click();
+      await page.getByRole("tab", { name: "Overview" }).click();
+      const overview = page.getByTestId("overview-tab");
+      for (const band of ["history", "now", "upnext", "sources"]) {
+        await expect(overview.getByTestId(`${band}-${collapsedId}`)).toBeVisible();
+      }
+      await expect(
+        overview.getByTestId(`project-toggle-${collapsedId}`),
+      ).toHaveCount(0);
+      await page.getByRole("button", { name: /^Dashboard\b/ }).click();
+      await page.getByTestId(`project-toggle-${collapsedId}`).click();
+      await expect(
+        page.getByTestId(`project-bands-${collapsedId}`),
+      ).toBeVisible();
+      await page.getByTestId(`sidebar-project-${projectId}`).click();
+      await page.getByRole("button", { name: /^Dashboard\b/ }).click();
+    }
     for (const railOpen of [false, true]) {
       await setRail(page, railOpen);
       let reference: string[] | undefined;

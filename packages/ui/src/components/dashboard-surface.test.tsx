@@ -3,9 +3,9 @@
 
 // The Dashboard as the intent ledger's surface (DR-035): the two-band
 // attention queue with its verdict acts (dashboard-1..4), the
-// all-clear pull (dashboard-8), the per-project groups' four bands
-// (dashboard-26..30), capture with the shelf reveal (dashboard-30/31,
-// 37), the paged Sources tabs with the captured-artifact swap
+// all-clear pull (dashboard-8), the per-project groups' disclosure
+// and four bands (dashboard-26..30, 45), capture with the shelf reveal
+// (dashboard-30/31, 37), the paged Sources tabs with the captured-artifact swap
 // (dashboard-19/20/24/25), History as done work (dashboard-27/38,
 // DR-038), empty states without takeover (dashboard-8/21/22), the
 // row menu as the house popover with Move up/down and Undo
@@ -97,6 +97,7 @@ function seed(over: Record<string, unknown> = {}) {
     ledgerError: undefined,
     stagedIntents: {},
     foldedSources: {},
+    dashboardGroupsCollapsed: {},
     ...over,
   } as never);
 }
@@ -620,6 +621,89 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(within(p1).getByTestId("sources-p1")).toBeTruthy();
   });
 
+  test("dashboard-45: groups fold independently, keep their draft and attention, and leave Overview open", () => {
+    seed({
+      ledger: { intents: [], attention: ATTENTION, badge: ATTENTION.length },
+    });
+    renderSurface();
+
+    const p1 = screen.getByTestId("project-group-p1");
+    const p2 = screen.getByTestId("project-group-p2");
+    const toggle = within(p1).getByTestId("project-toggle-p1");
+    const body = within(p1).getByTestId("project-bands-p1");
+    const draft = within(p1).getByTestId("add-intent-p1") as HTMLTextAreaElement;
+    fireEvent.change(draft, { target: { value: "Keep this draft" } });
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.getAttribute("aria-label")).toBe("Collapse alpha");
+    expect(toggle.getAttribute("aria-describedby")).toBe(
+      "project-attention-description-p1",
+    );
+    expect(
+      within(p1).getByText("alpha has failed work").className,
+    ).toContain("sr-only");
+    expect(within(p1).getByTestId("project-attention-p1")).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(body.hidden).toBe(true);
+    expect(p1.dataset.collapsed).toBe("true");
+    expect(p2.dataset.collapsed).toBeUndefined();
+    expect(useAppStore.getState().dashboardGroupsCollapsed).toEqual({ p1: true });
+
+    // New work updates the group without taking disclosure back from
+    // the reader, and the other project keeps its independent state.
+    act(() => {
+      useAppStore.setState({
+        ledger: {
+          intents: [q("arrived", "p1", "Arrived behind the fold")],
+          attention: ATTENTION,
+          badge: ATTENTION.length,
+        },
+      });
+    });
+    expect(body.hidden).toBe(true);
+    expect(
+      within(p2).getByTestId("project-toggle-p2").getAttribute("aria-expanded"),
+    ).toBe("true");
+
+    // Disclosure hides rather than remounts the group: an unfinished
+    // capture is still there when the reader opens it again.
+    fireEvent.click(toggle);
+    expect(body.hidden).toBe(false);
+    expect(draft.value).toBe("Keep this draft");
+    fireEvent.click(toggle);
+
+    // A redraw reads the same preference; the Overview deliberately
+    // ignores it because this one project is the tab's whole content.
+    cleanup();
+    renderSurface();
+    expect(screen.getByTestId("project-bands-p1").hidden).toBe(true);
+    cleanup();
+    const { overview } = renderOverview();
+    expect(within(overview).queryByTestId("project-toggle-p1")).toBeNull();
+    expect(
+      (within(overview).getByTestId("project-bands-p1") as HTMLDivElement)
+        .hidden,
+    ).toBe(false);
+    expect(within(overview).getByTestId("history-p1")).toBeTruthy();
+  });
+
+  test("dashboard-47: the scroll box owns the full surface around its centered column", () => {
+    seed();
+    renderSurface();
+    const scroll = screen.getByTestId("dashboard-scroll");
+    const column = screen.getByTestId("dashboard-column");
+    expect(scroll.contains(column)).toBe(true);
+    expect(scroll.className).toContain("relative");
+    expect(scroll.className).toContain("min-h-0");
+    expect(scroll.className).toContain("w-full");
+    expect(scroll.className).toContain("overflow-y-auto");
+    expect(scroll.className).not.toContain("max-w-4xl");
+    expect(column.className).toContain("mx-auto");
+    expect(column.className).toContain("max-w-4xl");
+    expect(column.className).not.toContain("overflow-y-auto");
+  });
+
   test("head emphasized with Start; blocked visible, disabled, reasoned", () => {
     seed({ ledger: QUEUE_LEDGER });
     const { onStartIntent } = renderSurface();
@@ -998,7 +1082,7 @@ describe("dashboard-26/29: groups and the queue band", () => {
     ).toBe(true);
   });
 
-  test("the inline add row captures and the shelf reveals the row", async () => {
+  test("the inline add row grows for multiple lines, captures on Enter, and reveals the row", async () => {
     let current: LedgerState = { ...QUEUE_LEDGER };
     commandMock.mockImplementation(async (type: string, fields) => {
       if (type === "intent.queue") {
@@ -1018,18 +1102,32 @@ describe("dashboard-26/29: groups and the queue band", () => {
     seed({ ledger: QUEUE_LEDGER });
     renderSurface();
 
-    const add = screen.getByTestId("add-intent-p1");
+    const add = screen.getByTestId("add-intent-p1") as HTMLTextAreaElement;
+    expect(add.tagName).toBe("TEXTAREA");
+    expect(add.rows).toBe(1);
+    expect(add.className).toContain("resize-none");
+    Object.defineProperty(add, "scrollHeight", {
+      configurable: true,
+      value: 64,
+    });
     fireEvent.change(add, { target: { value: "New idea" } });
+    expect(add.style.height).toBe("64px");
+    expect(add.style.overflowY).toBe("hidden");
+    await act(async () => {
+      fireEvent.keyDown(add, { key: "Enter", shiftKey: true });
+    });
+    expect(callsOf("intent.queue")).toEqual([]);
+    fireEvent.change(add, { target: { value: "  New idea\nwith details  " } });
     await act(async () => {
       fireEvent.keyDown(add, { key: "Enter" });
     });
     // Captured with no source (dashboard-29's inline add).
     expect(callsOf("intent.queue")).toEqual([
-      { projectId: "p1", text: "New idea" },
+      { projectId: "p1", text: "New idea\nwith details" },
     ]);
     const row = await screen.findByTestId("upnext-row-i-new");
     expect(row.getAttribute("data-highlight")).toBe("true");
-    expect((add as HTMLInputElement).value).toBe("");
+    expect(add.value).toBe("");
   });
 });
 
