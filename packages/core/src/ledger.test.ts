@@ -468,6 +468,98 @@ test("DR-062: a parked failure stands through a later turn, and the run's end cl
   store.close();
 });
 
+test("core-service-106: the parked failure's cause travels to its attention entry", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  beginTurn(store, "s1", 1, "/code fix it", 1000);
+  const cause = {
+    code: "commit-residual",
+    evidence: {
+      required: "one-commit",
+      observed: "commit-and-worktree-change",
+      commitOid: "3b7de901",
+      paths: { uncommitted: ["src/a.ts"], altered: ["src/b.ts"] },
+    },
+  };
+  // The runtime attaches the cause where it decides the failure, so it
+  // reaches the transition and the failed-state status line alike
+  // (DR-075). Either arrival order yields the same entry, which is what
+  // the deterministic fold owes (dashboard-10).
+  append(store, "s1", {
+    type: "captain_status",
+    turnId: 1,
+    timestamp: 1380,
+    message: "◆ workflow failed; awaiting Boss recovery.",
+    data: { lastError: { name: "Error", message: "unresolved", cause } },
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-1",
+      type: "fsm.transition",
+      payload: { from: "coding", to: "failed" },
+    },
+    turnId: 1,
+    timestamp: 1390,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { to: "failed" },
+    turnId: 1,
+    timestamp: 1400,
+  });
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1500,
+    message: "CODE governed outcome remains unresolved",
+  });
+  finishTurn(store, "s1", 1, 2000);
+
+  const parked = fold(store, [lane("s1", projectId, true)]);
+  const entry = parked.attention.find((row) => row.kind === "failure");
+  assert.equal(entry?.parked, true);
+  assert.deepEqual(entry?.cause, cause);
+  store.close();
+});
+
+test("core-service-106: a cause the runtime never stated is left unstated", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  beginTurn(store, "s1", 1, "/code fix it", 1000);
+  // A shape that is not `{ code }` is dropped rather than half-read: the
+  // row says a failure stands and invents no reason for it (DR-075).
+  append(store, "s1", {
+    type: "captain_status",
+    turnId: 1,
+    timestamp: 1380,
+    message: "◆ workflow failed; awaiting Boss recovery.",
+    data: { lastError: { message: "unresolved", cause: { reason: "?" } } },
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { to: "failed" },
+    turnId: 1,
+    timestamp: 1400,
+  });
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1500,
+    message: "CODE governed outcome remains unresolved",
+  });
+  finishTurn(store, "s1", 1, 2000);
+
+  const parked = fold(store, [lane("s1", projectId, true)]);
+  const entry = parked.attention.find((row) => row.kind === "failure");
+  assert.equal(entry?.parked, true);
+  assert.equal(entry?.cause, undefined);
+  store.close();
+});
+
 test("DR-035: failure outranks the question and the permission", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");

@@ -10,6 +10,7 @@
 import type {
   AttentionEntry,
   DerivedIntent,
+  FailureCause,
   IntentInfo,
   IntentStats,
   LedgerState,
@@ -47,9 +48,34 @@ export interface SessionConditions {
    * A run stands parked in its failure state. Unlike a question, a
    * later Boss turn does not clear this: a failure is resolved by the
    * run leaving that state — recovered or ended — and not by talking
-   * about something else (DR-062, dashboard-10).
+   * about something else (DR-062, dashboard-10). `cause` is the
+   * structured cause the runtime attached to that failure, where it
+   * attached one (DR-075).
    */
-  failure?: { since: number; turnId: number | null };
+  failure?: { since: number; turnId: number | null; cause?: FailureCause };
+}
+
+/** The cause a record carries, or nothing (core-service-49, DR-075).
+ * The shape is the runtime's, so it is read defensively: anything
+ * that is not `{ code: string }` with an optional JSON object beside
+ * it is dropped rather than half-read, and no phrase is invented for
+ * a record that carried none. */
+export function readFailureCause(value: unknown): FailureCause | undefined {
+  const holder = value as { lastError?: unknown; cause?: unknown } | null;
+  if (!holder || typeof holder !== "object") return undefined;
+  const inner = (holder.lastError as { cause?: unknown } | undefined)?.cause;
+  const candidate = (inner ?? holder.cause) as
+    | { code?: unknown; evidence?: unknown }
+    | undefined;
+  if (!candidate || typeof candidate !== "object") return undefined;
+  if (typeof candidate.code !== "string" || candidate.code === "") return undefined;
+  const evidence =
+    candidate.evidence &&
+    typeof candidate.evidence === "object" &&
+    !Array.isArray(candidate.evidence)
+      ? (candidate.evidence as Record<string, unknown>)
+      : undefined;
+  return { code: candidate.code, ...(evidence ? { evidence } : {}) };
 }
 
 export function foldConditions(records: StoredRecord[]): SessionConditions {
@@ -61,6 +87,18 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
   const parkedRuns = new Set<string>();
   /** Runs parked in their failure state, by trace session id. */
   const parkedFailures = new Set<string>();
+  /** The last cause the stream carried, which the runtime attaches to
+   * the failure it decides on the transition, on the settled input and
+   * on the failed-state status line alike (DR-075). Its record may
+   * arrive either side of the state report the condition opens on, so
+   * it is held here and attached whichever lands first. */
+  let cause: FailureCause | undefined;
+  const bearsCause = (value: unknown): void => {
+    const read = readFailureCause(value);
+    if (!read) return;
+    cause = read;
+    if (failure && !failure.cause) failure.cause = read;
+  };
   for (const { record } of records) {
     switch (record.type) {
       case "turn_started":
@@ -68,6 +106,9 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
         // even when it dispatches another intent (dashboard-10).
         question = undefined;
         parkedRuns.clear();
+        break;
+      case "captain_status":
+        bearsCause((record as { data?: unknown }).data);
         break;
       case "captain_telemetry": {
         const telemetry = record as {
@@ -83,12 +124,18 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
             payload?: { to?: unknown; from?: unknown };
           };
           if (typeof trace?.sessionId !== "string") break;
+          if (trace.type === "fsm.transition" || trace.type === "boss.input.settled") {
+            bearsCause(trace.payload);
+          }
           if (trace.type === "fsm.transition") {
             if (trace.payload?.to === "awaitBossReply") parkedRuns.add(trace.sessionId);
             else if (trace.payload?.from === "awaitBossReply") parkedRuns.delete(trace.sessionId);
             if (trace.payload?.to === "failed") parkedFailures.add(trace.sessionId);
             else if (trace.payload?.from === "failed") {
-              if (parkedFailures.delete(trace.sessionId)) failure = undefined;
+              if (parkedFailures.delete(trace.sessionId)) {
+                failure = undefined;
+                cause = undefined;
+              }
             }
           } else if (trace.type === "session.disposed") {
             // Outside a turn — no turn id — the host is releasing the
@@ -100,6 +147,7 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
             // one of the two ways a failure stops summoning (DR-062).
             if (telemetry.turnId !== null && parkedFailures.delete(trace.sessionId)) {
               failure = undefined;
+              cause = undefined;
             }
           }
           break;
@@ -130,12 +178,14 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
           failure = failure ?? {
             since: telemetry.timestamp,
             turnId: telemetry.turnId,
+            ...(cause ? { cause } : {}),
           };
         } else if (stateText(telemetry.payload?.from) === "failed") {
           // Only the failing machine leaving its failure state resolves
           // it; another machine's report, the Captain shell's rest
           // state included, leaves it standing (DR-061, DR-062).
           failure = undefined;
+          cause = undefined;
         }
         break;
       }
@@ -301,9 +351,10 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     // failure state — recovered or ended — stops the summons. Where it
     // parked none, nothing is stuck and the next Boss turn acknowledges
     // it, which is the rule this fold has always had.
-    const parked = laneLive
-      ? sessionConditions(bound.sessionId).failure !== undefined
-      : false;
+    const parkedFailure = laneLive
+      ? sessionConditions(bound.sessionId).failure
+      : undefined;
+    const parked = parkedFailure !== undefined;
     const failureStands =
       lastError !== undefined &&
       (parked || !turns.some((turn) => turn.startedAt > lastError.timestamp));
@@ -319,6 +370,9 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         band: "interrupted",
         kind: "failure",
         ...(parked ? { parked: true as const } : {}),
+        // The row phrases what the runtime said, never a diagnosis of
+        // its own (DR-075).
+        ...(parkedFailure?.cause ? { cause: parkedFailure.cause } : {}),
         intentId: intent.id,
         title: intentTitle(intent),
         projectId: intent.projectId,
@@ -425,6 +479,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         band: "interrupted",
         kind: "failure",
         ...(parked ? { parked: true as const } : {}),
+        ...(conditions.failure?.cause ? { cause: conditions.failure.cause } : {}),
         title,
         projectId: lane.projectId,
         sessionId: lane.sessionId,

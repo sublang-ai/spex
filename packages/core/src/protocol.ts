@@ -178,6 +178,17 @@ export interface ProjectInfo {
   registeredAt: number;
 }
 
+/** The structured cause the runtime attaches to a failure it decides
+ * (core-service-49, DR-075): `code` from Playbook's closed list and
+ * `evidence` the bounded JSON object that code carries. The core
+ * neither interprets nor completes it — it validates the shape and
+ * passes it on, so a client's phrase catalogue is the only place a
+ * code becomes words. */
+export interface FailureCause {
+  code: string;
+  evidence?: Record<string, unknown>;
+}
+
 /** One control a parked run advertises (core-service-32, DR-074): its
  * id names it to `session.control`, its label is the Boss-facing text
  * the turn would carry, and its standing is what the runtime says
@@ -403,6 +414,10 @@ export interface AttentionEntry {
    * the conversation carries Retry and Drop, so the row can name the
    * reader's next step honestly (dashboard-53, DR-062). */
   parked?: true;
+  /** The parked failure's own cause, where the runtime attached one
+   * (core-service-49, DR-075): the row phrases it rather than saying
+   * only that something failed. */
+  cause?: FailureCause;
   /** Absent for session stand-in entries. */
   intentId?: string;
   /** The intent's title, or the session's latest turn text. */
