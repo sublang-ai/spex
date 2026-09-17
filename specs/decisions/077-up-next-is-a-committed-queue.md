@@ -34,13 +34,13 @@ Its standing is derived from the current conversation and record stream, never s
 | Condition | Phrase on the next row | Start |
 | --- | --- | --- |
 | Any turn in the project's current conversation is active or settling | `after current work` | absent; an eligible attributed settlement hands off automatically, while any other settlement reveals the next standing |
-| A run is waiting on a question | `waiting — your reply` | absent |
 | A run remains parked on a failure | `waiting — current work failed`, followed by the catalogue cause when known | absent |
-| The latest lane turn failed and no run remains parked | `waiting — previous work failed`, followed by the catalogue cause when known | shown as the Boss's explicit decision to proceed |
+| A run is waiting on a question | `waiting — your reply` | absent |
+| No run remains parked, and either the latest lane turn ended failed or an unparked failure condition still stands | `waiting — previous work failed`, followed by the catalogue cause when known | shown as the Boss's explicit decision to proceed |
 | The latest lane turn aborted or ran an ending control | `waiting — previous work stopped` | shown as the Boss's explicit restart or move-on |
 | None of the preceding conditions holds, including first capture into an idle project or capture after settlement | none | shown |
 
-The table is ordered: the first matching condition is the standing, so active or settling work wins first, a surviving park wins over the turn that left it, and a failed outcome wins over a stopped outcome.
+The table is ordered: the first matching condition is the standing, so active or settling work wins first, a surviving failure park wins over a question park, either park wins over the turn that left it, and an unparked failure wins over a stopped outcome.
 `Waiting` means automatic handoff is held; where Start is present it is the explicit way to proceed, and where Start is absent the named current prerequisite must resolve elsewhere.
 An intent whose after-link names an open predecessor is not next, carries `after ⟨title⟩` with the other project named when needed, and carries no Start.
 A standing phrase replaces an inert Start rather than explaining a disabled control.

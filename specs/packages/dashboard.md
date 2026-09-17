@@ -6,6 +6,7 @@
 ## Intent
 
 This spec defines the observable behavior, implementation constraints, and integration coverage of the Dashboard, the one cross-project surface carrying the intent ledger ([DR-035](../decisions/035-intent-ledger.md)): a two-band attention queue over a band of the sessions running unattended and per-project ledger groups.
+It also owns the shared queued-intent standing presentation used by Up next, the attention all-clear, resolved delivery cards, and Captain home.
 Every visible state derives deterministically from stored intent rows, the session record stream, and review state persisted in the app store, and forge data flows only through the forge adapter.
 Integration coverage drives fixture intent rows, record streams, persisted store state, and stubbed forge adapters through the core and asserts the derived Dashboard state, so that attention bands, intent-state derivation, capture, sources, history paging, and empty states are verified end to end rather than per unit.
 
@@ -179,7 +180,7 @@ While the Now band shows the open intent the session serves [[dashboard-28](#das
 The group's Up next band shall list the project's queued intents in rank order, every row carrying a neutral `Queued` tag, with the core-published first unblocked intent [[core-service-107](core-service.md#core-service-107)] emphasized as the project's next and rendering its scheduling standing [[dashboard-59](#dashboard-59)], followed by an inline add row whose one Queue action captures a new queued intent ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - the next row carries Start only where its standing makes manual dispatch available, and otherwise carries the standing phrase with no Start; every later eligible row carries only its `Queued` tag, since rank says it is later;
-- the title and standing form the row's sole shrinkable text stack, each truncating with its full text in its title; at the narrow step the standing takes its own line inside that stack, while the grip, `Queued` mark, available Start, and row menu remain visible ([DR-041](../decisions/041-chrome-that-fits.md));
+- the title and standing share the row's sole shrinkable text region and one line at and above the `@md` container step, each truncating with its full text in its title; below `@md` the standing takes its own line within that region, while the grip, `Queued` mark, available Start, and row menu remain visible ([DR-041](../decisions/041-chrome-that-fits.md));
 - the add field is one row while empty, soft-wraps and grows with its text to the smaller of eight lines and two fifths of the viewport, then scrolls with no native resize grip; Queue and Enter take the same capture of a nonblank draft after trimming its outer whitespace while preserving its internal line breaks, Shift+Enter inserts a line, and no Start stands beside Queue ([DR-041](../decisions/041-chrome-that-fits.md));
 - a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with `after ⟨title⟩`, the predecessor's project named when it lives in another project, carries no Start, and is never presented as next;
 - reorder works by drag — the grip at the row's left is the affordance — by keyboard (Alt+↑/↓ on the focused row), and by the row menu's Move up and Move down, which take the same step, are disabled at the queue's ends, and name the shortcut; a reorder changes only the queue's rank order;
@@ -188,7 +189,7 @@ The group's Up next band shall list the project's queued intents in rank order, 
 
 #### dashboard-59
 
-While the Dashboard renders the core-published next intent and scheduling standing [[core-service-107](core-service.md#core-service-107)], it shall render the standing's exact phrase and Start availability by this table ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+When the Up next band, attention all-clear, resolved delivery card, or Captain home renders the core-published next intent and scheduling standing [[core-service-107](core-service.md#core-service-107)], the shared queued-intent presentation shall render the standing's exact phrase and Start availability by this table ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 | Published standing | Phrase | Start |
 | --- | --- | --- |
@@ -229,7 +230,7 @@ Where a Sources row names an issue, pull request, or open intent record with no 
 
 #### dashboard-31
 
-When an intent is captured from any Dashboard Queue gesture, the Up next band shall reveal the new row in its core-published scheduling standing [[core-service-107](core-service.md#core-service-107)] as rendered by [[dashboard-59](#dashboard-59)] and briefly highlight it where it landed, without dispatching it.
+When an intent is captured from any Dashboard Queue gesture, the Up next band shall reveal the new row with its neutral `Queued` mark [[dashboard-29](#dashboard-29)] and briefly highlight it where it landed, rendering the core-published scheduling standing [[core-service-107](core-service.md#core-service-107)] through the shared presentation [[dashboard-59](#dashboard-59)] only when capture makes that row next, without dispatching it.
 
 ### Sources
 
@@ -419,7 +420,7 @@ Where fixture ledger replies publish next intents spanning every scheduling stan
 
 #### dashboard-37
 
-Where a fixture Sources row lists issue #7, when the user activates its sole intent action Queue, the test suite shall assert that no sibling Start is offered, that a queued intent is captured with the exact editable issue seed and provenance and no turn dispatched [[dashboard-30](#dashboard-30)], that the Up next band reveals and briefly highlights the new row in its derived standing [[dashboard-31](#dashboard-31)], that the issue row shows the open intent's derived state in place of its Queue control [[dashboard-30](#dashboard-30)], and that the row regains the control when the intent closes [[dashboard-30](#dashboard-30)].
+Where a fixture Sources row lists issue #7 and the project already holds a next intent, when the user activates the source row's sole intent action Queue, the test suite shall assert that no sibling Start is offered, that a queued intent is captured with the exact editable issue seed and provenance and no turn dispatched [[dashboard-30](#dashboard-30)], that the Up next band reveals and briefly highlights the captured later row with `Queued` but no scheduling standing or Start [[dashboard-31](#dashboard-31)], that the issue row shows the open intent's derived state in place of its Queue control [[dashboard-30](#dashboard-30)], and that the row regains the control when the intent closes [[dashboard-30](#dashboard-30)].
 
 ### Sources Coverage
 
@@ -461,7 +462,7 @@ Where a fixture stream holds a live session serving an open intent and carrying 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and the scripted Captain, when the journey works the ledger through the page, the test suite shall assert:
 
 - every empty band carries its guidance, and the Sources line reads collapsed with the seeded example's open records behind it, each with a Queue control [[dashboard-8](#dashboard-8)] [[dashboard-20](#dashboard-20)] [[dashboard-24](#dashboard-24)] [[dashboard-30](#dashboard-30)];
-- the inline add field begins one row high with Queue and no Start beside it; a long line soft-wraps and grows it without adding a newline, Shift+Enter adds a line, text beyond its maximum leaves it capped and scrolling without a native resize grip, and Queue or Enter captures the trimmed multiline draft with its internal lines intact and clears the field without dispatching a turn, revealing its row with `Queued` while the all-clear names it next [[dashboard-29](#dashboard-29)] [[dashboard-31](#dashboard-31)];
+- the inline add field begins one row high with Queue and no Start beside it; a long line soft-wraps and grows it without adding a newline, Shift+Enter adds a line, text beyond its maximum leaves it capped and scrolling without a native resize grip, and Queue or Enter captures the trimmed multiline draft with its internal lines intact and clears the field without dispatching a turn, revealing its row with `Queued` as the `manual-ready` next — Start and no phrase — while the all-clear names the same next [[dashboard-29](#dashboard-29)] [[dashboard-31](#dashboard-31)] [[dashboard-59](#dashboard-59)];
 - a queued intent removed before any turn leaves History untouched [[dashboard-27](#dashboard-27)];
 - queuing from a record row lands a row wearing the record's identifier [[dashboard-30](#dashboard-30)] [[dashboard-31](#dashboard-31)];
 - while the dispatched intent's session runs, the Now band shows it [[dashboard-28](#dashboard-28)];
@@ -481,7 +482,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### dashboard-43
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and holding more closed work than one History page, a queued intent with a second queued behind it and a current conversation parked on a failure whose catalogue phrase carries a long path, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained and, wherever the centered column leaves empty space, a wheel over either its left or right margin advances that same surface scroll box [[dashboard-47](#dashboard-47)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], the Up next title-and-standing stack alone owns its row's slack with both lines' full text in their titles while the long phrase truncates and `Queued` remains visible at 320 pixels [[dashboard-29](#dashboard-29)], and every control keeps its accessible name at every size [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and holding more closed work than one History page, a queued intent with a second queued behind it and a current conversation parked on a failure whose catalogue phrase carries a long path, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained and, wherever the centered column leaves empty space, a wheel over either its left or right margin advances that same surface scroll box [[dashboard-47](#dashboard-47)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], the Up next title-and-standing region alone owns its row's slack with both texts' full values in their titles, sharing one line where the measured row is at or above `@md` and placing the standing on its own line below `@md`, while the long phrase truncates and `Queued` remains visible at 320 pixels [[dashboard-29](#dashboard-29)], and every control keeps its accessible name at every size [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
 
 #### dashboard-58
 

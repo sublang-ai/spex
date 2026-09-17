@@ -374,9 +374,9 @@ When the core service derives a project's queue reading, it shall choose the fir
 | First matching lane condition | Standing | Manual start |
 | --- | --- | --- |
 | any turn in the current conversation is active, or its full settlement and release publication are still in progress | `after-current-work` | unavailable |
-| a run remains parked on a Boss question | `question-park` | unavailable |
 | a run remains parked on a failure | `failure-park` | unavailable |
-| the latest lane turn ended failed, or an unparked failure condition still stands | `failed` | available |
+| a run remains parked on a Boss question | `question-park` | unavailable |
+| no run remains parked on the Boss, and either the latest lane turn ended failed or an unparked failure condition still stands | `failed` | available |
 | the latest lane turn ended aborted or ran an ending control [[core-service-98](#core-service-98)] | `stopped` | available |
 | none of the preceding conditions holds | `manual-ready` | available |
 
@@ -796,8 +796,8 @@ Where the integration suite starts project turns through real core commands with
 - an ordinary Captain reply carrying no typed terminal evidence starts the next unblocked intent exactly once after release and publication, using its latest queued text and rank, while the first remains finished and unconfirmed;
 - a prose question that parks no run and permission telemetry add no hold, while an answered parked question starts the successor only after the answer turn settles and the park leaves;
 - an unattributed turn in the project lane publishes `after-current-work` with manual start unavailable, starts no successor when it settles, and then publishes `manual-ready` with manual start available [[core-service-107](#core-service-107)];
-- a failed turn, an aborted dispatch, an aborted follow-up after an older finish, and a reply or control settling with a question or failure park still standing start no successor, while a later clean attributed follow-up or recovery may start one and an ending control may not;
-- `ledger.get` publishes the ordered standings of [[core-service-107](#core-service-107)]: active or settling work wins over every settled condition, a surviving question or failure park wins over the turn that left it, a failed ending reports `failed`, an abort or successful ending reports `stopped`, and the fallback alone reports `manual-ready`;
+- a failed turn, a finished turn retaining an unparked failure condition, an aborted dispatch, an aborted follow-up after an older finish, and a reply or control settling with a question or failure park still standing start no successor, while a later clean attributed follow-up or recovery may start one and an ending control may not;
+- `ledger.get` publishes the ordered standings of [[core-service-107](#core-service-107)]: active or settling work wins over every settled condition, a surviving failure park wins over a simultaneous question park and carries its structured cause, either park wins over the turn that left it, a failed turn or finished turn retaining an unparked failure reports `failed` with its cause, an abort or successful ending reports `stopped`, and the fallback alone reports `manual-ready`;
 - a Done or Drop verdict accepted before or during an otherwise eligible settlement preserves the one authorized successor, while either verdict after settlement and a later removal initiate nothing; an ending turn required by Drop remains ineligible;
 - an explicit after-link to the unconfirmed predecessor remains blocked, and a competing manual submission or admission refusal creates no duplicate turn, dispatch stamp, or automatic retry;
 - adding or editing queued work during the active turn affects the next selection, while capture or edits after settlement, ledger reads, adoption and restart start no work;
