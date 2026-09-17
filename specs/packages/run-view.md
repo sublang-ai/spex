@@ -13,6 +13,17 @@ Coverage replays recorded record-stream fixtures through that protocol, exercisi
 
 ## External Behavior
 
+### Duration Vocabulary
+
+#### run-view-145
+
+When the run view presents a duration, it shall use one compact vocabulary and never raw milliseconds:
+
+| Span | Form |
+| --- | --- |
+| less than one second | `<1s` |
+| at least one second | round to the nearest whole second, then render seconds below a minute, minutes and seconds below an hour, or hours and minutes from an hour onward — at most the largest two units, with zero remainders omitted and no zero padding, as in `12s`, `3m 12s`, and `2h 5m` |
+
 ### Captain Pane
 
 #### run-view-1
@@ -57,7 +68,7 @@ When the session record stream delivers a tool-use event for a visible player, t
 - a subject is presented as one line — outer whitespace trimmed, inner whitespace runs collapsed to single spaces, elided where the card's width ends — so the collapsed card carries what the call acts on and never its payload;
 - a command a runner wrapped as `<shell> -lc <command>` — a login-shell wrapper with its quoting — presents the inner command as it was typed, and a runner's wire name for its shell tool reads "shell" with the wire name in the label's tooltip, so the coder's rows read as commands whichever agent runs them;
 - the expanded body prints each string-valued field — a command, a patch, an old and new string, a file's content, the result's text — verbatim under the field's name, and only a value that is not a string as JSON, every line wrapping inside the card so it never widens the pane;
-- a delivered result's span uses the app's one duration vocabulary: under a second "<1s", otherwise rounded to the nearest whole second and rendered in at most the largest two units, with zero remainders omitted and no zero padding — "12s", "3m 12s", "2h 5m" — never as raw milliseconds ([DR-010](../decisions/010-interface-craft.md) §2).
+- a delivered result's span uses the run view's duration vocabulary [[run-view-145](#run-view-145)] ([DR-010](../decisions/010-interface-craft.md) §2).
 
 #### run-view-83
 
@@ -100,7 +111,7 @@ The run view shall show exactly one player pane per player in the session's boun
 - a pane still lying beyond the grid's edge is said, not cut: the grid fades whichever edge hides one, and retires that edge's fade once nothing lies beyond it ([DR-041](../decisions/041-chrome-that-fits.md));
 - a roster with no players renders no player pane, and the Captain column then stands alone at the Captain home's reading width with no divider — a division with nothing on its far side reads as a pane that failed to load;
 - the pane's header names the lane and, from its first call on, the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the lane's agent chip beside it, which is also the control that tunes that agent for this session [[run-view-139](#run-view-139)] [[run-view-138](#run-view-138)], and a lane no call has reached yet reads "Idle until the playbook calls ⟨lane⟩";
-- while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second, hidden first in a narrow pane ([DR-041](../decisions/041-chrome-that-fits.md)) — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5).
+- while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second in the duration vocabulary [[run-view-145](#run-view-145)] — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5); as the pane narrows, the live reading remains after the resting active-time phrase has yielded [[run-view-143](#run-view-143)], then yields before the lane identity and header controls at the pane floor ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 #### run-view-116
 
@@ -128,11 +139,11 @@ While a player pane holds a call the core resolved to a role [[core-service-36](
 
 #### run-view-143
 
-While a session tab is shown, the run view shall present each agent's core-folded completed-call active time [[core-service-102](core-service.md#core-service-102)] in that agent's pane header as a muted `active · ⟨duration⟩` phrase, using the one duration vocabulary [[run-view-4](#run-view-4)] and adding no session-level rollup ([DR-070](../decisions/070-agent-active-time.md)):
+While a session tab is shown, the run view shall present each agent's core-folded completed-call active time [[core-service-102](core-service.md#core-service-102)] in that agent's pane header as a muted `active · ⟨duration⟩` phrase, using the duration vocabulary [[run-view-145](#run-view-145)] and adding no session-level rollup ([DR-070](../decisions/070-agent-active-time.md), [DR-071](../decisions/071-active-time-follows-held-calls.md)):
 
 - the Captain and every roster player read only their own entry from the summary, and the run view never derives active time from records;
 - an absent entry produces no phrase and no zero, while a measured zero reads `active · <1s`;
-- while a player's call is open, its existing `⟨role⟩ working · ⟨elapsed⟩` reading [[run-view-7](#run-view-7)] occupies the same at-a-glance slot; any fold-changing summary is cached behind it, and after `player_finished` closes the live reading the slot follows the latest summary's phrase or silence;
+- while a player's call is open, its existing `⟨role⟩ working · ⟨elapsed⟩` reading [[run-view-7](#run-view-7)] occupies the same at-a-glance slot; summaries update the cached resting value whether they arrive before or after `player_finished`, closing the live reading reveals the latest received phrase or silence, and a later summary updates it in place;
 - the Captain's phrase remains a completed-call total rather than ticking while `Captain is thinking…` supplies the turn's non-player progress signal; the indicator itself does not advance the figure, which changes only with a new folded summary [[run-view-37](#run-view-37)];
 - the phrase's title and accessible description read `Completed active time this session: ⟨duration⟩ · parallel calls overlap`;
 - the phrase stands apart from the agent-settings chip [[run-view-139](#run-view-139)], carries no combined total, share, ranking or cost, appears nowhere in the transcript, and leaves each player's per-call token usage on its result line [[run-view-6](#run-view-6)];
@@ -361,7 +372,7 @@ The run view shall keep cross-project attention and playbook creation at hand:
 
 #### run-view-37
 
-While a turn is active and the Captain is not streaming speech, the Captain thread shall show a working indicator naming what runs — "⟨role⟩ working · ⟨elapsed⟩" while any player runs, the roles of the running lanes' latest calls [[run-view-7](#run-view-7)] and the span since the earliest open call's prompt ticking each second, "Captain is thinking…" otherwise — so the thread is never inert mid-turn and a long call reports its progress ([DR-010](../decisions/010-interface-craft.md) §5).
+While a turn is active and the Captain is not streaming speech, the Captain thread shall show a working indicator naming what runs — "⟨role⟩ working · ⟨elapsed⟩" while any player runs, the roles of the running lanes' latest calls [[run-view-7](#run-view-7)] and the span since the earliest open call's prompt ticking each second in the duration vocabulary [[run-view-145](#run-view-145)], "Captain is thinking…" otherwise — so the thread is never inert mid-turn and a long call reports its progress ([DR-010](../decisions/010-interface-craft.md) §5).
 
 #### run-view-38
 
@@ -673,7 +684,7 @@ When Start is activated on a queued intent, the run view shall stage the intent'
 
 When a dispatched intent's final turn ends finished, the run view shall render the intent's delivery card at that turn's end in the Captain thread — a first-class settled card carrying the intent's title, its provenance chip where the intent carries a source, a run-stats line, and a primary Confirm control with Drop beside it ([DR-035](../decisions/035-intent-ledger.md)):
 
-- the run-stats line folds from the intent's own turns — its review rounds foremost, omitted when zero, then its turn count and its elapsed time from dispatch to the last turn's end, in the app's one duration vocabulary — so the verdict is informed before the click;
+- the run-stats line folds from the intent's own turns — its review rounds foremost, omitted when zero, then its turn count and its elapsed time from dispatch to the last turn's end, in the duration vocabulary [[run-view-145](#run-view-145)] — so the verdict is informed before the click;
 - the provenance chip with a canonical URL is a link that opens outside the page — a new browsing context, with no referrer — so the session never navigates away, and the same chip is the one the bound turn's bubble wears [[run-view-89](#run-view-89)];
 - the card says visibly that a follow-up message continues the intent only while it is the newest open dispatched intent owning the conversation [[run-view-90](#run-view-90)]; an automatic successor leaves this card and its verdict controls in place ([DR-055](../decisions/055-queue-advancement.md));
 - when a verdict is given, the card resolves in place into the project's next queued intent with Start, or into an inline add affordance when the queue holds none;
@@ -794,17 +805,17 @@ When a browser journey opens an interrupted CLI-created session, it shall verify
 
 #### run-view-20
 
-Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per roster player and a record narrowing the engaged players removes none [[run-view-7](#run-view-7)], player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards labeled by tool name and input subject, with a subject-less input labeled by name alone, their bodies printing string fields verbatim and other values as JSON with the result's span in the duration vocabulary [[run-view-4](#run-view-4)], each pane's header naming its latest call's role and an unprompted lane saying whom it waits for [[run-view-7](#run-view-7)], a transcript's Markdown link to a target the shell cannot open renders as plain text while an `https` one stays a link [[run-view-83](#run-view-83)], every completed call with a token report shows its token totals and no pane shows a monetary figure though the fixture records a cost [[run-view-6](#run-view-6)], opaque records only advance the cursor, and later supported records still render [[run-view-14](#run-view-14)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
+Where a recorded fixture stream of a completed playbook session is replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert that the rendered result matches the fixture's expectations: the Captain pane holds the expected glyph lines in arrival order [[run-view-1](#run-view-1)], one pane exists per roster player and a record narrowing the engaged players removes none [[run-view-7](#run-view-7)], player transcripts render the expected Markdown text [[run-view-3](#run-view-3)], tool-use entries appear as collapsed cards labeled by tool name and input subject, with a subject-less input labeled by name alone, their bodies printing string fields verbatim and other values as JSON with fixture result spans rendering `<1s`, `12s`, `3m 12s`, and `2h 5m` rather than raw milliseconds [[run-view-4](#run-view-4)] [[run-view-145](#run-view-145)], each pane's header naming its latest call's role and an unprompted lane saying whom it waits for [[run-view-7](#run-view-7)], a transcript's Markdown link to a target the shell cannot open renders as plain text while an `https` one stays a link [[run-view-83](#run-view-83)], every completed call with a token report shows its token totals and no pane shows a monetary figure though the fixture records a cost [[run-view-6](#run-view-6)], opaque records only advance the cursor, and later supported records still render [[run-view-14](#run-view-14)], and the machine card assertions of [[run-view-66](#run-view-66)] hold over the same replay.
 
 #### run-view-144
 
-Where a fixture session summary reports the Captain's active time at 3,840,000 milliseconds, one player's at zero, another player's figure absent after an earlier duration-less terminal `done`, and settings for each agent, when that summary and subsequent record and state messages are replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert the active-time reading through rest, work, settlement, and a folded lane [[run-view-143](#run-view-143)]:
+Where a fixture session summary reports the Captain's active time at 3,840,000 milliseconds, one player's at zero, another player's figure absent because it has no matched closed call, and settings for each agent, when that summary and subsequent record and state messages are replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert the active-time reading through rest, work, settlement, and a folded lane [[run-view-143](#run-view-143)]:
 
-- at rest the Captain reads `active · 1h 4m`, the measured-zero player reads `active · <1s`, and the unmeasured player has no active-time phrase or invented zero [[run-view-4](#run-view-4)] [[run-view-143](#run-view-143)];
+- at rest the Captain reads `active · 1h 4m`, the measured-zero player reads `active · <1s`, and the unmeasured player has no active-time phrase or invented zero [[run-view-145](#run-view-145)] [[run-view-143](#run-view-143)];
 - each present reading's title and accessible description include its duration, name completed active time, and disclose that parallel calls overlap [[run-view-143](#run-view-143)];
 - while the thread reads `Captain is thinking…` and no new summary arrives, the Captain's phrase stays at `active · 1h 4m` rather than ticking [[run-view-37](#run-view-37)] [[run-view-143](#run-view-143)];
-- a `player_prompt` replaces the player's cumulative phrase with its `working` reading; a terminal `done` carrying a duration and token totals followed by the updated session summary leaves that live reading in place, and `player_finished` then reveals the updated phrase [[run-view-7](#run-view-7)] [[run-view-143](#run-view-143)];
-- a valid terminal event for the unmeasured player and the ensuing `player_finished` leave that header silent without a new summary entry, rather than deriving a figure from the record's duration [[run-view-143](#run-view-143)];
+- a `player_prompt` replaces the player's cumulative phrase with its `working` reading and a terminal `done` carrying a duration and token totals changes no active-time phrase; on one call an updated summary stays cached until `player_finished` reveals it, while on the next `player_finished` restores the prior resting phrase until a later summary updates it in place [[run-view-7](#run-view-7)] [[run-view-143](#run-view-143)];
+- a terminal `done` carrying a duration for the unmeasured player creates no active-time phrase and does not replace its live reading without a summary, rather than deriving a figure from the event [[run-view-143](#run-view-143)];
 - the completed call's token totals appear once on its result line and not in the header, each active-time phrase stays outside the transcript and the settings control, and each settings chip's accessible reading remains settings-only [[run-view-6](#run-view-6)] [[run-view-139](#run-view-139)] [[run-view-143](#run-view-143)];
 - collapsing the measured player's pane removes its visible phrase while the folded rail's tooltip and accessible description retain the full qualified reading, and expanding the lane restores the header phrase [[run-view-116](#run-view-116)] [[run-view-143](#run-view-143)];
 - no header or transcript gains a combined total, share, ranking, graphic or cost [[run-view-143](#run-view-143)].

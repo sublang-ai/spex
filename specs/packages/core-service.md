@@ -157,26 +157,25 @@ When a client requests the session list, the core service shall reply with every
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count and whether it ended holding a failure record;
-- each entry carries cumulative active time from complete stored history for every agent whose finished history is completely measured [[core-service-102](#core-service-102)];
+- each entry carries cumulative active time from complete stored history for every agent with a measured finished call [[core-service-102](#core-service-102)];
 - each entry carries the session's own agent settings [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md)).
 
 #### core-service-102
 
-When the core service folds a session's conversation summary, it shall carry cumulative completed-call active time as an optional `agentActiveMs` map keyed by the reserved `captain` id and by session player id, derived solely from the stored record stream and its persisted completeness state so the same complete history yields the same map after a restart [[core-service-10](#core-service-10)] ([DR-070](../decisions/070-agent-active-time.md)):
+When the core service folds a session's conversation summary, it shall carry cumulative completed-call active time as an optional `agentActiveMs` map keyed by the reserved `captain` id and by session player id, derived solely from the stored record stream and its persisted completeness state so the same complete history yields the same map after a restart [[core-service-10](#core-service-10)] ([DR-070](../decisions/070-agent-active-time.md), [DR-071](../decisions/071-active-time-follows-held-calls.md)):
 
-- each terminal `done` event with a finite, non-negative `payload.durationMs` contributes that duration once — a `captain_event` to `captain`, including where the persisted record is hidden [[core-service-10](#core-service-10)], and a `player_event` to its string `playerId` across every role the lane served [[core-service-36](#core-service-36)];
-- every terminal status contributes, while tool-result durations, turn spans, and time between calls contribute nothing;
-- an agent has a map entry, including a measured zero, only after at least one attributed terminal `done`, every attributed terminal `done` reports a valid duration, and no `player_finished` or `captain_finished` attributed to it lacks a preceding unmatched `done`; otherwise that agent has no entry, so a missing measurement never produces a partial total;
-- an open prompt does not change the completed-call figure;
+- reading records in order, each `player_finished` closes the oldest unmatched `player_prompt` with the same `turnId` and string `playerId`, and each `captain_finished` closes the oldest unmatched `captain_prompt` with the same `turnId`; the non-negative difference between their timestamps contributes once to that player across every role the lane served [[core-service-36](#core-service-36)] or to `captain`, including where the Captain records are hidden [[core-service-10](#core-service-10)];
+- every matched finished call contributes regardless of outcome, while terminal event durations, tool-result durations, turn spans, and time between calls contribute nothing;
+- only records with finite numeric timestamps can open or close a pair; an invalid-timestamp record, open prompt, or unmatched finish contributes nothing, creates no entry by itself, consumes no valid counterpart, and never removes an earlier measured span;
+- an agent has a map entry, including a measured zero, after at least one matched prompt/finish pair;
 - a session whose stored stream is marked incomplete carries no `agentActiveMs`, because its retained prefix cannot establish any agent's cumulative session figure [[core-service-10](#core-service-10)];
-- each agent's durations sum independently without removing overlap between calls, and `agentActiveMs` is absent when no agent has a measured figure.
+- each agent's spans sum independently without removing overlap between calls, and `agentActiveMs` is absent when no agent has a measured figure.
 
 #### core-service-34
 
 When the core service reports a session's state to subscribed clients — at each turn's start and end, after any stored record or stream-completeness change alters its active-time fold [[core-service-102](#core-service-102)], when its runtime is released [[core-service-91](#core-service-91)] or opened by a message [[core-service-73](#core-service-73)], and after recovery [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)] — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with:
 
 - A session is named from the turn that starts, not the turn that finishes, so a running session is never listed as having said nothing.
-- A state report caused by a terminal agent `done` follows that event's record and precedes the corresponding `player_finished` or `captain_finished` record, so the completed fold is present when the view ends its live reading.
 
 #### core-service-87
 
@@ -621,14 +620,14 @@ Where a client subscribes to a session that then runs a fake-adapter turn, the t
 
 #### core-service-103
 
-Where fixture sessions' record streams hold overlapping completed calls by two players, two roles served by one of those players, terminal `done` events with `success`, `error`, `interrupted`, `max_turns`, and `max_budget` statuses, a hidden Captain call, a zero-duration completion, tool results with durations, a live open prompt, a previously measured player whose next terminal `done` lacks a valid duration, another previously measured player whose finished call has no terminal `done`, an otherwise measured stream marked incomplete, and a stream with no terminal `done`, the core integration suite shall assert the active-time fold through the WebSocket protocol:
+Where fixture sessions' stored record streams hold overlapping prompt-to-finish calls by two players, two roles served by one of those players, successful, failed and aborted finishes, a hidden Captain call, a zero-length call, terminal and tool durations deliberately different from their enclosing spans, a live open prompt, an unmatched finish after an earlier measured call, invalid-timestamp records around a valid pair, a dangling prompt followed by a matched same-agent call in a later turn, an otherwise measured stream marked incomplete, and a stream with no matched pair, the core integration suite shall assert the active-time fold through the WebSocket protocol:
 
-- each fully measured player's terminal durations sum under that player and the hidden Captain duration sums under `captain`, with every non-success duration retained and no tool duration added again [[core-service-102](#core-service-102)];
-- the concurrently reported durations remain whole when their sum exceeds the turn's elapsed time [[core-service-102](#core-service-102)];
-- the measured zero remains a zero-valued entry, the live open prompt changes no completed-call figure, and both the duration-less `done` and the finish without a `done` remove their players' earlier entries rather than leaving partial totals [[core-service-102](#core-service-102)];
+- each player's matched spans sum under that player across both roles and the hidden Captain span sums under `captain`, with successful, failed and aborted calls retained and no terminal or tool duration added [[core-service-102](#core-service-102)];
+- the concurrent spans remain whole when their sum exceeds the turn's elapsed time [[core-service-102](#core-service-102)];
+- the zero-length call remains a zero-valued entry, while the live open prompt, unmatched finish and invalid-timestamp records change no completed-call figure, consume no valid counterpart and do not remove an earlier entry; the later same-agent call contributes only its within-turn span rather than closing the earlier turn's dangling prompt [[core-service-102](#core-service-102)];
 - the session whose stream is marked incomplete carries no `agentActiveMs` [[core-service-102](#core-service-102)];
-- the session with no terminal `done` carries no `agentActiveMs` [[core-service-102](#core-service-102)];
-- a state report caused by a terminal `done` follows that event and precedes its finished record, a finish without a preceding `done` is followed by a report carrying that player's removal, and a report after the stream becomes incomplete carries no map [[core-service-34](#core-service-34)] [[core-service-102](#core-service-102)].
+- the session with no matched pair carries no `agentActiveMs` [[core-service-102](#core-service-102)];
+- a newly matched finish and an incompleteness change each cause a state report carrying the revised or absent fold, without asserting that report's position among record messages [[core-service-34](#core-service-34)] [[core-service-102](#core-service-102)].
 
 #### core-service-40
 

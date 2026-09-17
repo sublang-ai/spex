@@ -7,6 +7,8 @@
 
 Accepted (2026-09-17) on the owner's choice of cumulative session time, with its measurement and resting place decided together.
 
+Amended by [DR-071](071-active-time-follows-held-calls.md) in its measurement and publication timing: completed prompt-to-finish spans replace terminal reported durations, while this record's placement and presentation decisions stand.
+
 ## Context
 
 - The Boss chose a session-cumulative figure rather than a duration repeated beside every turn.
