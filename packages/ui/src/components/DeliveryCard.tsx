@@ -17,6 +17,10 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { duration } from "../lib/time.js";
+import {
+  QueuedMark,
+  QueueStandingPhrase,
+} from "./QueuedIntentPresentation.js";
 
 /** The first line of the intent's text is its display title (DR-035). */
 export function intentTitle(intent: IntentInfo): string {
@@ -119,7 +123,7 @@ export function DeliveryCard({
   live: boolean;
   /** Only the latest dispatch owns subsequent Boss messages. */
   ownsConversation: boolean;
-  /** The project's next queued unblocked intent, for the pull. */
+  /** The project's core-published next queued intent, for the pull. */
   next?: DerivedIntent;
   onClose(as: "done" | "dropped"): Promise<void>;
   onStartNext(intent: IntentInfo): void | Promise<void>;
@@ -161,29 +165,48 @@ export function DeliveryCard({
           </span>
           <SourceChip source={derived.intent.source} />
         </div>
-        {next ? (
-          <div className="flex items-center gap-2">
-            <span
-              className="min-w-0 flex-1 truncate text-sm"
-              title={next.intent.text}
+        {next?.next ? (
+          <div
+            data-testid="resolved-next-row"
+            className="@container flex items-center gap-2"
+          >
+            <div
+              data-testid="resolved-next-text"
+              className="flex min-w-0 flex-1 flex-col @md:flex-row @md:items-baseline @md:gap-2"
             >
-              Up next: <span className="font-medium">{intentTitle(next.intent)}</span>
-            </span>
-            <button
-              type="button"
-              data-testid="upnext-start"
-              disabled={starting || !live}
-              title={inertTitle}
-              onClick={() => {
-                setStarting(true);
-                void Promise.resolve(onStartNext(next.intent))
-                  .catch(() => {})
-                  .finally(() => setStarting(false));
-              }}
-              className="shrink-0 rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
-            >
-              {starting ? "Starting…" : "Start"}
-            </button>
+              <span
+                data-testid="resolved-next-title"
+                className="min-w-0 truncate text-sm @md:flex-1"
+                title={next.intent.text}
+              >
+                Up next:{" "}
+                <span className="font-medium">{intentTitle(next.intent)}</span>
+              </span>
+              <QueueStandingPhrase
+                schedule={next.next}
+                testId="resolved-next-standing"
+                className="min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-400 @md:max-w-[45%]"
+              />
+            </div>
+            <QueuedMark testId="resolved-next-queued" />
+            {next.next.manualStart ? (
+              <button
+                type="button"
+                data-testid="upnext-start"
+                aria-label={`Start ${intentTitle(next.intent)}`}
+                disabled={starting || !live}
+                title={inertTitle}
+                onClick={() => {
+                  setStarting(true);
+                  void Promise.resolve(onStartNext(next.intent))
+                    .catch(() => {})
+                    .finally(() => setStarting(false));
+                }}
+                className="shrink-0 rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
+              >
+                {starting ? "Starting…" : "Start"}
+              </button>
+            ) : null}
           </div>
         ) : (
           // An empty queue is an invitation, never a blank (DR-010 §5).

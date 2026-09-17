@@ -439,13 +439,14 @@ function WorkspaceSurface({
     }
   }
 
-  // The current project's queue (run-view-88): the head unblocked
-  // intent is the next card; the rest is the "+N more" count.
+  // The current project's queue (run-view-88): the core marks the one
+  // next intent and publishes its standing; every other queued row is
+  // included in the "+N more" count.
   const projectQueue = (ledger?.intents ?? []).filter(
     (entry) =>
       entry.intent.projectId === currentProjectId && entry.state === "queued",
   );
-  const nextIntent = projectQueue.find((entry) => !entry.blockedBy);
+  const nextIntent = projectQueue.find((entry) => entry.next);
 
   const startView = (
     <CaptainHome
@@ -470,7 +471,11 @@ function WorkspaceSurface({
       onSaveCaptain={setCaptain}
       next={
         nextIntent
-          ? { intent: nextIntent.intent, more: projectQueue.length - 1 }
+          ? {
+              intent: nextIntent.intent,
+              schedule: nextIntent.next!,
+              more: projectQueue.length - 1,
+            }
           : undefined
       }
       onStartIntent={async (intent) => {

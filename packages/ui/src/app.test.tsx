@@ -969,6 +969,135 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
   });
 });
 
+describe("run-view-88: Captain Home consumes the published next standing", () => {
+  const manualIntent = {
+    id: "i-manual",
+    projectId: "p1",
+    text: "Start the published task\nwith its full context",
+    rank: "a",
+    createdAt: 1,
+  };
+  const manualFold = {
+    intents: [
+      {
+        intent: manualIntent,
+        state: "queued",
+        next: { standing: "manual-ready", manualStart: true },
+      },
+    ],
+    attention: [],
+    badge: 0,
+  } as never;
+
+  test("an earlier unmarked row cannot replace the core-published next", async () => {
+    const fold = {
+      intents: [
+        {
+          intent: {
+            id: "i-earlier",
+            projectId: "p1",
+            text: "Earlier queued row",
+            rank: "a",
+            createdAt: 1,
+          },
+          state: "queued",
+        },
+        {
+          intent: {
+            id: "i-published",
+            projectId: "p1",
+            text: "Core-published next row",
+            rank: "b",
+            createdAt: 2,
+          },
+          state: "queued",
+          next: { standing: "question-park", manualStart: false },
+        },
+      ],
+      attention: [],
+      badge: 0,
+    } as never;
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? (fold as object) : defaultReply(type),
+    );
+    useAppStore.setState({
+      ledger: fold,
+      workspaceTabs: { p1: "start" },
+    });
+
+    render(<App />);
+    const card = await screen.findByTestId("next-card");
+    expect(card.textContent).toContain("Core-published next row");
+    expect(card.textContent).not.toContain("Earlier queued row");
+    expect(card.textContent).toContain("waiting — your reply");
+    expect(card.textContent).toContain("+1 more queued");
+    expect(within(card).getByTestId("next-queued").textContent).toBe("Queued");
+    expect(within(card).queryByTestId("next-start")).toBeNull();
+  });
+
+  test("Start stages into the project's current conversation", async () => {
+    const idle = session({
+      id: "a-idle",
+      title: "the current conversation",
+      live: false,
+      endedAt: NOW - 1_000,
+      continuable: true,
+    });
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? (manualFold as object) : defaultReply(type),
+    );
+    useAppStore.setState({
+      ledger: manualFold,
+      sessions: [idle],
+      views: { "a-idle": view() },
+      openTabs: { p1: ["a-idle"] },
+      workspaceTabs: { p1: "start" },
+      activeSessionId: "a-idle",
+      composers: {},
+      stagedIntents: {},
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByTestId("next-start"));
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().stagedIntents["a-idle"]?.intentId).toBe(
+        "i-manual",
+      ),
+    );
+    expect(useAppStore.getState().composers["a-idle"]?.draft).toBe(
+      manualIntent.text,
+    );
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("a-idle");
+    expect(useAppStore.getState().stagedIntents.home).toBeUndefined();
+  });
+
+  test("Start stages into Captain Home when no conversation exists", async () => {
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? (manualFold as object) : defaultReply(type),
+    );
+    useAppStore.setState({
+      ledger: manualFold,
+      sessions: [],
+      views: {},
+      openTabs: { p1: [] },
+      workspaceTabs: { p1: "start" },
+      activeSessionId: undefined,
+      homeDraft: "",
+      stagedIntents: {},
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByTestId("next-start"));
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().stagedIntents.home?.intentId).toBe(
+        "i-manual",
+      ),
+    );
+    expect(useAppStore.getState().homeDraft).toBe(manualIntent.text);
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("start");
+  });
+});
+
 describe("spec-view-63: the Specs tab on a project with no specs/", () => {
   // The tree the core replies with when a project has no `specs/`
   // directory: absence stated with empty lists, never a failure and

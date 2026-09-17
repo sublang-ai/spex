@@ -25,6 +25,7 @@ import type {
   AgentSummary,
   IntentInfo,
   PlaybookSummary,
+  QueueSchedule,
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 import type { AgentPatch } from "../lib/config-ops.js";
@@ -94,7 +95,9 @@ function renderHome({
   configStatus = undefined as "valid" | "invalid" | "missing" | undefined,
   configErrors = undefined as string[] | undefined,
   storage = memoryStorage(),
-  next = undefined as { intent: IntentInfo; more: number } | undefined,
+  next = undefined as
+    | { intent: IntentInfo; schedule: QueueSchedule; more: number }
+    | undefined,
   onStartIntent = undefined as
     | ((intent: IntentInfo) => Promise<void>)
     | undefined,
@@ -426,22 +429,100 @@ const NEXT_INTENT: IntentInfo = {
   text: "Address #12: harden the auth flow\nwith the full context below",
   rank: "m",
   createdAt: 0,
+  source: { kind: "issue", ref: "12" },
 };
 
-describe("run-view-88: the Captain home names the queue's head", () => {
-  test("the next card shows the head intent, the count, and Start", async () => {
-    const onStartIntent = vi.fn(async () => {});
-    renderHome({ next: { intent: NEXT_INTENT, more: 2 }, onStartIntent });
+const MANUAL_READY: QueueSchedule = {
+  standing: "manual-ready",
+  manualStart: true,
+};
 
-    const card = screen.getByTestId("next-card");
-    expect(card.textContent).toContain("Up next");
-    expect(card.textContent).toContain("Address #12: harden the auth flow");
-    expect(card.textContent).toContain("+2 more queued");
+function nextCard(
+  schedule: QueueSchedule = MANUAL_READY,
+  over: Partial<IntentInfo> = {},
+  more = 0,
+) {
+  return { intent: { ...NEXT_INTENT, ...over }, schedule, more };
+}
+
+describe("run-view-88: the Captain home names the queue's head", () => {
+  const standings: Array<{
+    name: string;
+    schedule: QueueSchedule;
+    phrase?: string;
+  }> = [
+    {
+      name: "current work",
+      schedule: { standing: "after-current-work", manualStart: false },
+      phrase: "after current work",
+    },
+    {
+      name: "a parked failure",
+      schedule: {
+        standing: "failure-park",
+        manualStart: false,
+        cause: { code: "commit-missing" },
+      },
+      phrase: "waiting — current work failed — Committed nothing",
+    },
+    {
+      name: "a parked question",
+      schedule: { standing: "question-park", manualStart: false },
+      phrase: "waiting — your reply",
+    },
+    {
+      name: "an unparked failure",
+      schedule: {
+        standing: "failed",
+        manualStart: true,
+        cause: { code: "commit-missing" },
+      },
+      phrase: "waiting — previous work failed — Committed nothing",
+    },
+    {
+      name: "stopped work",
+      schedule: { standing: "stopped", manualStart: true },
+      phrase: "waiting — previous work stopped",
+    },
+    { name: "manual readiness", schedule: MANUAL_READY },
+  ];
+
+  test.each(standings)(
+    "the next card renders the published standing for $name",
+    ({ schedule, phrase }) => {
+      renderHome({ next: nextCard(schedule, {}, 2) });
+
+      const card = screen.getByTestId("next-card");
+      expect(card.textContent).toContain("Up next");
+      expect(card.textContent).toContain("Address #12: harden the auth flow");
+      expect(card.textContent).toContain("+2 more queued");
+      expect(screen.getByTestId("next-queued").textContent).toBe("Queued");
+      expect(screen.getByTestId("next-remove")).toBeTruthy();
+      const standing = screen.queryByTestId("next-standing");
+      if (phrase) {
+        expect(standing?.textContent).toBe(phrase);
+        expect(standing?.getAttribute("title")).toBe(phrase);
+      } else {
+        expect(standing).toBeNull();
+      }
+      expect(Boolean(screen.queryByTestId("next-start"))).toBe(
+        schedule.manualStart,
+      );
+      // Coexists with the quick start card (run-view-88).
+      expect(screen.getByTestId("quick-start")).toBeTruthy();
+    },
+  );
+
+  test("a manual-ready Start stages the published intent", async () => {
+    const onStartIntent = vi.fn(async () => {});
+    renderHome({ next: nextCard(MANUAL_READY, {}, 2), onStartIntent });
+
     expect(screen.getByTestId("next-start").title).toBe(
       "Put this task in the message — Send starts it",
     );
-    // Coexists with the quick start card (run-view-88).
-    expect(screen.getByTestId("quick-start")).toBeTruthy();
+    expect(screen.getByTestId("next-start").getAttribute("aria-label")).toBe(
+      "Start Address #12: harden the auth flow",
+    );
 
     fireEvent.click(screen.getByTestId("next-start"));
     await vi.waitFor(() =>
@@ -453,6 +534,46 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     renderHome();
     expect(screen.queryByTestId("next-card")).toBeNull();
     expect(screen.getByTestId("quick-start")).toBeTruthy();
+  });
+
+  test("the next row has one responsive text region and fixed actions", () => {
+    const longText =
+      "A deliberately long queued intent title that must yield before its actions\nfull context";
+    renderHome({
+      next: nextCard(
+        {
+          standing: "failed",
+          manualStart: true,
+          cause: { code: "commit-missing" },
+        },
+        { text: longText },
+        3,
+      ),
+    });
+
+    const row = screen.getByTestId("next-row");
+    expect(row.className).toContain("@container");
+    const slackOwners = Array.from(row.children).filter((child) =>
+      child.className.split(/\s+/).includes("flex-1"),
+    );
+    expect(slackOwners).toEqual([screen.getByTestId("next-text")]);
+    const text = screen.getByTestId("next-text");
+    expect(text.className).toContain("min-w-0");
+    expect(text.firstElementChild?.className).toContain("flex-col");
+    expect(text.firstElementChild?.className).toContain("@md:flex-row");
+    expect(screen.getByTestId("next-title").getAttribute("title")).toBe(
+      longText,
+    );
+    const standing = screen.getByTestId("next-standing");
+    expect(standing.getAttribute("title")).toBe(
+      "waiting — previous work failed — Committed nothing",
+    );
+    expect(standing.className).toContain("truncate");
+    expect(standing.className).toContain("@md:max-w-[45%]");
+    expect(text.textContent).toContain("+3 more queued");
+    for (const testId of ["next-queued", "next-start", "next-remove"]) {
+      expect(screen.getByTestId(testId).className).toContain("shrink-0");
+    }
   });
 
   test("Remove closes the head dropped on the click; Undo re-queues it at the head (run-view-114)", async () => {
@@ -477,7 +598,7 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       storage: memoryStorage(),
     };
     const view = render(
-      <CaptainHome {...props} next={{ intent: NEXT_INTENT, more: 0 }} />,
+      <CaptainHome {...props} next={nextCard()} />,
     );
 
     const remove = screen.getByTestId("next-remove");
@@ -522,12 +643,79 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     view.rerender(
       <CaptainHome
         {...props}
-        next={{ intent: { ...NEXT_INTENT, id: "i-back" }, more: 0 }}
+        next={nextCard(MANUAL_READY, { id: "i-back" })}
       />,
     );
     await vi.waitFor(() =>
       expect(document.activeElement).toBe(screen.getByTestId("next-start")),
     );
+    setClientForTests(undefined);
+  });
+
+  test("Undo focuses Remove when the restored row has no Start", async () => {
+    const waiting: QueueSchedule = {
+      standing: "after-current-work",
+      manualStart: false,
+    };
+    const command = vi.fn(async (type: string) => {
+      if (type === "ledger.get") return { intents: [], attention: [], badge: 0 };
+      if (type === "intent.queue") return { ...NEXT_INTENT, id: "i-waiting" };
+      return {};
+    });
+    setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
+    const props = {
+      hasProject: true,
+      hasProjects: true,
+      projectName: PROJECT.name,
+      playbooks: PLAYBOOKS,
+      captain: CAPTAIN,
+      readiness: READY,
+      connected: true,
+      onOpenPalette: vi.fn(),
+      onNavigate: vi.fn(),
+      onSaveCaptain: vi.fn(async () => {}),
+      onStart: vi.fn(async () => {}),
+      storage: memoryStorage(),
+    };
+    const view = render(<CaptainHome {...props} next={nextCard(waiting)} />);
+    expect(screen.queryByTestId("next-start")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("next-remove"));
+    const undo = await within(
+      await screen.findByTestId("next-removed"),
+    ).findByRole("button", { name: "Undo" });
+    await vi.waitFor(() => expect(document.activeElement).toBe(undo));
+    view.rerender(<CaptainHome {...props} next={undefined} />);
+    fireEvent.click(undo);
+    await vi.waitFor(() =>
+      expect(command).toHaveBeenCalledWith(
+        "intent.queue",
+        expect.objectContaining({
+          text: NEXT_INTENT.text,
+          source: NEXT_INTENT.source,
+          at: "head",
+        }),
+      ),
+    );
+
+    // A different visible head cannot consume the restored row's focus.
+    view.rerender(
+      <CaptainHome
+        {...props}
+        next={nextCard(MANUAL_READY, { id: "intervening" })}
+      />,
+    );
+    expect(document.activeElement).not.toBe(screen.getByTestId("next-start"));
+    view.rerender(
+      <CaptainHome
+        {...props}
+        next={nextCard(waiting, { id: "i-waiting" })}
+      />,
+    );
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId("next-remove")),
+    );
+    expect(screen.queryByTestId("next-start")).toBeNull();
     setClientForTests(undefined);
   });
 
@@ -539,7 +727,7 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     });
     setClientForTests({ command, subscribe: vi.fn(async () => {}) } as never);
     try {
-      renderHome({ next: { intent: NEXT_INTENT, more: 0 } });
+      renderHome({ next: nextCard() });
       // A mouse click carries its click count; a keyboard activation
       // carries none (detail 0), which is what fireEvent.click sends
       // by default and the keyboard test above relies on.

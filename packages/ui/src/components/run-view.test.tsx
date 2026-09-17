@@ -1378,6 +1378,7 @@ const FINISHED: DerivedIntent = {
 const QUEUED_NEXT: DerivedIntent = {
   intent: makeIntent({ id: "i2", text: "Review PR 45: tighten the docs" }),
   state: "queued",
+  next: { standing: "manual-ready", manualStart: true },
 };
 
 function seedLedger(ledger: LedgerState): void {
@@ -1758,6 +1759,7 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
         dispatched: { sessionId: "s1", turnId: 2, at: 2000 },
       },
       state: "working",
+      next: undefined,
     };
     seedLedger({ intents: [FINISHED, working], attention: [], badge: 1 });
     renderRunWith([...TURN_ONE, ...TURN_TWO_QUESTION.slice(0, 2)]);
@@ -1798,13 +1800,20 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
         as: "done",
       }),
     );
-    // The card resolves in place into the project's next queued
-    // unblocked intent with Start (run-view-87).
+    // The card resolves in place into the core-published next intent
+    // with the shared lifecycle mark and manual Start (run-view-87).
     await vi.waitFor(() => {
       const card = screen.getByTestId("delivery-card-i1");
       expect(card.getAttribute("data-settled")).toBe("1");
       expect(card.textContent).toContain("Review PR 45: tighten the docs");
+      expect(within(card).getByTestId("resolved-next-queued").textContent).toBe(
+        "Queued",
+      );
+      expect(within(card).queryByTestId("resolved-next-standing")).toBeNull();
     });
+    expect(screen.getByTestId("upnext-start").getAttribute("aria-label")).toBe(
+      "Start Review PR 45: tighten the docs",
+    );
 
     // Start stages the dispatch — no live session here, so it stages
     // the Captain home (run-view-86).
@@ -1815,6 +1824,84 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
         "Review PR 45: tighten the docs",
       );
     });
+  });
+
+  test("the resolved card trusts the published waiting row, not an earlier queued row", async () => {
+    const earlier: DerivedIntent = {
+      intent: makeIntent({ id: "i-earlier", text: "Blocked-looking earlier row" }),
+      state: "queued",
+    };
+    const waiting: DerivedIntent = {
+      ...QUEUED_NEXT,
+      intent: makeIntent({ id: "i-waiting", text: "Published waiting row" }),
+      next: {
+        standing: "failure-park",
+        manualStart: false,
+        cause: { code: "commit-missing" },
+      },
+    };
+    seedLedger({
+      intents: [FINISHED, earlier, waiting],
+      attention: [],
+      badge: 1,
+    });
+    servedLedger = { intents: [earlier, waiting], attention: [], badge: 0 };
+    renderRunWith(TURN_ONE);
+
+    fireEvent.click(screen.getByTestId("delivery-confirm"));
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("delivery-card-i1").getAttribute("data-settled")).toBe(
+        "1",
+      ),
+    );
+    const card = screen.getByTestId("delivery-card-i1");
+    expect(card.textContent).toContain("Published waiting row");
+    expect(card.textContent).not.toContain("Blocked-looking earlier row");
+    expect(within(card).getByTestId("resolved-next-standing").textContent).toBe(
+      "waiting — current work failed — Committed nothing",
+    );
+    expect(within(card).queryByTestId("upnext-start")).toBeNull();
+  });
+
+  test("the resolved row has one responsive text region and fixed controls", async () => {
+    const longText =
+      "A deliberately long published intent title that must yield before controls\nfull context";
+    const failed: DerivedIntent = {
+      ...QUEUED_NEXT,
+      intent: makeIntent({ id: "i-failed", text: longText }),
+      next: {
+        standing: "failed",
+        manualStart: true,
+        cause: { code: "commit-missing" },
+      },
+    };
+    seedLedger({ intents: [FINISHED, failed], attention: [], badge: 1 });
+    servedLedger = { intents: [failed], attention: [], badge: 0 };
+    renderRunWith(TURN_ONE);
+
+    fireEvent.click(screen.getByTestId("delivery-confirm"));
+    const row = await screen.findByTestId("resolved-next-row");
+    expect(row.className).toContain("@container");
+    const slackOwners = Array.from(row.children).filter((child) =>
+      child.className.split(/\s+/).includes("flex-1"),
+    );
+    expect(slackOwners).toEqual([screen.getByTestId("resolved-next-text")]);
+    const text = screen.getByTestId("resolved-next-text");
+    expect(text.className).toContain("min-w-0");
+    expect(text.className).toContain("flex-col");
+    expect(text.className).toContain("@md:flex-row");
+    expect(screen.getByTestId("resolved-next-title").getAttribute("title")).toBe(
+      longText,
+    );
+    const standing = screen.getByTestId("resolved-next-standing");
+    expect(standing.getAttribute("title")).toBe(
+      "waiting — previous work failed — Committed nothing",
+    );
+    expect(standing.className).toContain("truncate");
+    expect(standing.className).toContain("@md:max-w-[45%]");
+    for (const testId of ["resolved-next-queued", "upnext-start"]) {
+      expect(screen.getByTestId(testId).className).toContain("shrink-0");
+    }
   });
 
   test("an empty queue resolves into the inline add affordance", async () => {
@@ -1844,7 +1931,7 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
     );
   });
 
-  test("a history session's replay keeps the verdict takeable", () => {
+  test("a history replay keeps its verdict live and its resolved actions inert", async () => {
     renderRunWith(TURN_ONE, {
       session: { ...SESSION, live: false, endedAt: 5 },
       readOnly: true,
@@ -1865,6 +1952,29 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
     ).toBe(false);
     // And a read-only lane shows no working line.
     expect(screen.queryByTestId("working-line")).toBeNull();
+
+    servedLedger = { intents: [QUEUED_NEXT], attention: [], badge: 0 };
+    fireEvent.click(within(card).getByTestId("delivery-confirm"));
+    await vi.waitFor(() =>
+      expect(card.getAttribute("data-settled")).toBe("1"),
+    );
+    expect(within(card).getByTestId("resolved-next-queued").textContent).toBe(
+      "Queued",
+    );
+    const start = within(card).getByTestId("upnext-start") as HTMLButtonElement;
+    expect(start.disabled).toBe(true);
+    fireEvent.click(start);
+    expect(useAppStore.getState().stagedIntents.home).toBeUndefined();
+
+    act(() => useAppStore.setState({ ledger: EMPTY_LEDGER }));
+    const input = await within(card).findByTestId("upnext-add-input");
+    const add = within(card).getByTestId("upnext-add") as HTMLButtonElement;
+    expect((input as HTMLInputElement).disabled).toBe(true);
+    expect(add.disabled).toBe(true);
+    fireEvent.click(add);
+    expect(command.mock.calls.some(([type]) => type === "intent.queue")).toBe(
+      false,
+    );
   });
 });
 

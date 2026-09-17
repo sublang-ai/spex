@@ -21,7 +21,7 @@ import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
-import { NextCard } from "./NextCard.js";
+import { NextCard, type NextCardIntent } from "./NextCard.js";
 import { ComposerBox, ComposerCaption, ComposerField } from "./Composer.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
@@ -79,9 +79,9 @@ export interface CaptainHomeProps {
   /** Apply a merge patch to the Captain's block (captain.set). */
   onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
   onStart: (text: string) => Promise<void>;
-  /** The project's head unblocked queued intent with the count of the
-   * rest — the home's next card (run-view-88, DR-035). */
-  next?: { intent: IntentInfo; more: number };
+  /** The project's core-published next intent with the count of the
+   * rest — the home's next card (run-view-88, DR-077). */
+  next?: NextCardIntent;
   /** Stage the next intent into this composer (run-view-86/88). */
   onStartIntent?: (intent: IntentInfo) => Promise<void> | void;
   /** The staged dispatch this composer wears (key "home"). */
@@ -371,9 +371,9 @@ export function CaptainHome(props: CaptainHomeProps) {
           </CaptainBubble>
         ) : null}
 
-        {/* The project's plan, one Enter away (run-view-88): the head
-         * unblocked intent with Start and Remove (run-view-114),
-         * beside the quick start card. */}
+        {/* The project's plan (run-view-88): the core-published next
+         * intent with its standing and available actions, beside the
+         * quick start card. */}
         <NextCard
           next={props.next}
           connected={connected}

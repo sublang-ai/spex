@@ -398,15 +398,15 @@ export function RunView({
     return map;
   }, [bound, delivered]);
 
-  // The project's next queued unblocked intent, the pull the delivery
-  // card resolves into (run-view-87).
+  // The project's core-published next intent, the pull the delivery
+  // card resolves into with its scheduling standing (run-view-87).
   const nextUp = useMemo(
     () =>
       (ledger?.intents ?? []).find(
         (entry) =>
           entry.intent.projectId === session.projectId &&
           entry.state === "queued" &&
-          !entry.blockedBy,
+          entry.next,
       ),
     [ledger, session.projectId],
   );
