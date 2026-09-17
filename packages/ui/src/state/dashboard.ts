@@ -24,3 +24,19 @@ export const ATTENTION_RANK: Record<AttentionKind, number> = {
   finish: 2,
   review: 3,
 };
+
+/** The one status-palette mark for each kind (DR-010 §8). */
+export const ATTENTION_MARK_CLASS: Record<AttentionKind, string> = {
+  failure: "bg-red-500",
+  question: "bg-amber-500",
+  finish: "bg-amber-500",
+  review: "bg-amber-500",
+};
+
+/** What a project's mark says, in its worst entry's own words. */
+export const PROJECT_ATTENTION_WORDS: Record<AttentionKind, string> = {
+  failure: "failed",
+  question: "is waiting for your reply",
+  finish: "is waiting for your verdict",
+  review: "has an unread turn",
+};

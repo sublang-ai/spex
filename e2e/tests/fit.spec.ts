@@ -82,12 +82,12 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
     text: "Tighten the expiry tests once the badge lands on the README",
     afterIntentId: first.id,
   });
-  const parkedProjectIds: string[] = [];
+  const parkedProjects: { id: string; name: string }[] = [];
   for (let index = 0; index < 10; index += 1) {
     const dir = join(app.projectDir, "..", `parked-${index}`);
     seedDemoProject(dir);
     const project = await app.core.command("project.register", { path: dir });
-    parkedProjectIds.push(project.id);
+    parkedProjects.push({ id: project.id, name: project.name });
     const session = await app.core.command("session.create", {
       projectId: project.id,
     });
@@ -317,20 +317,31 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
       // its attention survives the fold, new work cannot open it, and
       // the preference survives a reload without affecting a sibling
       // group or the project's full Overview.
-      const collapsedId = parkedProjectIds[0];
-      const siblingId = parkedProjectIds[1];
-      if (!collapsedId || !siblingId) {
+      const collapsed = parkedProjects[0];
+      const sibling = parkedProjects[1];
+      if (!collapsed || !sibling) {
         throw new Error("Dashboard disclosure journey needs two parked projects");
       }
+      const collapsedId = collapsed.id;
+      const siblingId = sibling.id;
+      const group = page.getByTestId(`project-group-${collapsedId}`);
       const toggle = page.getByTestId(`project-toggle-${collapsedId}`);
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(toggle).toHaveAccessibleDescription(
+        "A session is waiting for your reply",
+      );
+      await expect(group.getByRole("heading", { level: 3 })).toHaveAccessibleName(
+        collapsed.name,
+      );
       await expect(
         page.getByTestId(`project-bands-${collapsedId}`),
       ).not.toBeVisible();
-      await expect(
-        page.getByTestId(`project-attention-${collapsedId}`),
-      ).toBeVisible();
+      const attentionMark = page.getByTestId(
+        `project-attention-${collapsedId}`,
+      );
+      await expect(attentionMark).toBeVisible();
+      await expect(attentionMark).toHaveClass(/bg-amber-500/);
       await expect(
         page.getByTestId(`project-toggle-${siblingId}`),
       ).toHaveAttribute("aria-expanded", "true");

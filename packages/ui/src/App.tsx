@@ -11,7 +11,11 @@ import type { IntentInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { ProjectInfo } from "@sublang/spex-core/protocol";
 import { safeStorageGet, safeStorageSet, SURFACE_KEY, useAppStore } from "./state/store.js";
-import { ATTENTION_RANK, type AttentionItem } from "./state/dashboard.js";
+import {
+  ATTENTION_MARK_CLASS,
+  ATTENTION_RANK,
+  type AttentionItem,
+} from "./state/dashboard.js";
 import { setCaptain } from "./lib/config-ops.js";
 import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionView } from "./state/reducer.js";
@@ -610,11 +614,7 @@ function WorkspaceSurface({
                   <span
                     data-testid={`tab-attention-${session.id}`}
                     aria-hidden
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      attentionItem.kind === "failure"
-                        ? "bg-red-500"
-                        : "bg-amber-500"
-                    }`}
+                    className={`h-2 w-2 shrink-0 rounded-full ${ATTENTION_MARK_CLASS[attentionItem.kind]}`}
                   />
                 ) : null}
                 <span className="truncate">{title}</span>

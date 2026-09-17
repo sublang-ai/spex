@@ -122,8 +122,15 @@ While projects are registered, the Dashboard shall display one ledger group per 
 
 When the reader activates a Dashboard project group's disclosure control, the Dashboard shall fold that group's four bands to its header or unfold them, remembering the state for that project across launches as app preference ([DR-030](../decisions/030-workspace-chrome.md)):
 
-- the control reads "Collapse ⟨project⟩" while expanded and "Expand ⟨project⟩" while collapsed, exposes its state accessibly, and remains in the header with the project name;
-- the collapsed header carries no band content or summary, but keeps an attention mark whenever that project contributes an entry to the attention queue [[dashboard-1](#dashboard-1)], so the fold never hides a duty;
+| Most severe attention entry | Mark tone | Accessible description |
+| --- | --- | --- |
+| failure | red failure | "A session failed" |
+| question | amber needs-you | "A session is waiting for your reply" |
+| finish | amber needs-you | "A session is waiting for your verdict" |
+| review | amber needs-you | "A session has an unread turn" |
+
+- the control reads "Collapse ⟨project⟩" while expanded and "Expand ⟨project⟩" while collapsed, exposes its state accessibly, and remains in the header whose heading is named only for the project;
+- the collapsed header carries no band content or summary, but whenever that project contributes an entry to the attention queue [[dashboard-1](#dashboard-1)] it keeps the most severe mark in the table's order and words, so the fold never hides or misnames a duty;
 - a project with no remembered state starts expanded; each project's state is independent, and only that project's disclosure control changes it — arriving or changing work never moves the fold;
 - the disclosure belongs to the cross-project Dashboard alone: the same ledger group in the project's Overview always draws all four bands [[dashboard-26](#dashboard-26)].
 
@@ -450,7 +457,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with two registered projects and one project contributing an attention entry, when the journey exercises that project's disclosure through the page, the test suite shall assert the project-local fold [[dashboard-45](#dashboard-45)]:
 
-- collapsing leaves the disclosure control, project name, and attention mark in the header while hiding all four bands, and the other project's group remains expanded [[dashboard-45](#dashboard-45)];
+- collapsing leaves the disclosure control and project-only heading with the question entry's amber mark and "A session is waiting for your reply" description while hiding all four bands, and the other project's group remains expanded [[dashboard-45](#dashboard-45)];
 - work arriving or changing under the collapsed project leaves it collapsed [[dashboard-45](#dashboard-45)];
 - reloading the app restores the same project's collapsed state while leaving the other expanded [[dashboard-45](#dashboard-45)];
 - the collapsed project's Overview still draws all four bands with no project-group disclosure, and returning to the Dashboard permits the header control to expand the group again [[dashboard-45](#dashboard-45)] [[dashboard-26](#dashboard-26)].

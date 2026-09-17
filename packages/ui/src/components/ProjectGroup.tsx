@@ -29,6 +29,12 @@ import type {
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import type { SessionView } from "../state/reducer.js";
+import {
+  ATTENTION_MARK_CLASS,
+  ATTENTION_RANK,
+  PROJECT_ATTENTION_WORDS,
+  type AttentionKind,
+} from "../state/dashboard.js";
 import { stateLabel, type StatusTone } from "../lib/labels.js";
 import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
@@ -1485,16 +1491,18 @@ export function ProjectGroup({
   // The Now band shows the project's current conversation
   // (dashboard-28, DR-051): working, waiting, or idle.
   const session = currentSessionOf(sessions, project.id);
-  const projectAttention = ledger?.attention.filter(
-    (entry) => entry.projectId === project.id,
+  const attentionKind = ledger?.attention.reduce<AttentionKind | undefined>(
+    (worst, entry) => {
+      if (entry.projectId !== project.id) return worst;
+      return !worst || ATTENTION_RANK[entry.kind] < ATTENTION_RANK[worst]
+        ? entry.kind
+        : worst;
+    },
+    undefined,
   );
-  const attentionWord = projectAttention?.some(
-    (entry) => entry.kind === "failure",
-  )
-    ? "has failed work"
-    : projectAttention?.length
-      ? "needs your attention"
-      : undefined;
+  const attentionDescription = attentionKind
+    ? `A session ${PROJECT_ATTENTION_WORDS[attentionKind]}`
+    : undefined;
   const bodyId = `project-bands-${project.id}`;
   const attentionId = `project-attention-description-${project.id}`;
   return (
@@ -1504,43 +1512,39 @@ export function ProjectGroup({
       className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
     >
       {heading ? (
-        <h3 className="text-sm font-semibold">
-          <button
-            type="button"
-            data-testid={`project-toggle-${project.id}`}
-            aria-expanded={!collapsed}
-            aria-controls={bodyId}
-            aria-label={`${collapsed ? "Expand" : "Collapse"} ${project.name}`}
-            aria-describedby={attentionWord ? attentionId : undefined}
-            title={
-              attentionWord ? `${project.name} — ${attentionWord}` : undefined
-            }
-            onClick={() => setCollapsed(project.id, !collapsed)}
-            className="flex min-h-6 w-full min-w-0 items-center gap-1 rounded text-left hover:text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:hover:text-neutral-200"
-          >
-            <Icon
-              name={collapsed ? "caretRight" : "caretDown"}
-              className="h-3.5 w-3.5 shrink-0 text-neutral-500"
-            />
-            <span className="min-w-0 flex-1 truncate">{project.name}</span>
-            {attentionWord ? (
-              <>
+        <>
+          <h3 aria-label={project.name} className="text-sm font-semibold">
+            <button
+              type="button"
+              data-testid={`project-toggle-${project.id}`}
+              aria-expanded={!collapsed}
+              aria-controls={bodyId}
+              aria-label={`${collapsed ? "Expand" : "Collapse"} ${project.name}`}
+              aria-describedby={attentionDescription ? attentionId : undefined}
+              title={attentionDescription}
+              onClick={() => setCollapsed(project.id, !collapsed)}
+              className="flex min-h-6 w-full min-w-0 items-center gap-1 rounded text-left hover:text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:hover:text-neutral-200"
+            >
+              <Icon
+                name={collapsed ? "caretRight" : "caretDown"}
+                className="h-3.5 w-3.5 shrink-0 text-neutral-500"
+              />
+              <span className="min-w-0 flex-1 truncate">{project.name}</span>
+              {attentionKind ? (
                 <span
                   aria-hidden="true"
                   data-testid={`project-attention-${project.id}`}
-                  className={`h-2 w-2 shrink-0 rounded-full ${
-                    attentionWord === "has failed work"
-                      ? "bg-red-500"
-                      : "bg-amber-500"
-                  }`}
+                  className={`h-2 w-2 shrink-0 rounded-full ${ATTENTION_MARK_CLASS[attentionKind]}`}
                 />
-                <span id={attentionId} className="sr-only">
-                  {project.name} {attentionWord}
-                </span>
-              </>
-            ) : null}
-          </button>
-        </h3>
+              ) : null}
+            </button>
+          </h3>
+          {attentionDescription ? (
+            <span id={attentionId} className="sr-only">
+              {attentionDescription}
+            </span>
+          ) : null}
+        </>
       ) : null}
       <div
         id={bodyId}

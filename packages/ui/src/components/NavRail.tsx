@@ -12,7 +12,12 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
-import { ATTENTION_RANK, type AttentionItem } from "../state/dashboard.js";
+import {
+  ATTENTION_MARK_CLASS,
+  ATTENTION_RANK,
+  PROJECT_ATTENTION_WORDS,
+  type AttentionItem,
+} from "../state/dashboard.js";
 import { useAppStore } from "../state/store.js";
 import { isHistory } from "../lib/sessions.js";
 import { keyLabel } from "../lib/shortcuts.js";
@@ -129,24 +134,16 @@ const LIFE_WORDS: Record<Life, string> = {
 // held that no longer summons is history (hollow), and counts toward
 // no badge.
 const LIFE_MARKS: Record<Life, string> = {
-  question: "bg-amber-500",
-  failure: "bg-red-500",
-  finish: "bg-amber-500",
-  review: "bg-amber-500",
+  question: ATTENTION_MARK_CLASS.question,
+  failure: ATTENTION_MARK_CLASS.failure,
+  finish: ATTENTION_MARK_CLASS.finish,
+  review: ATTENTION_MARK_CLASS.review,
   running: "bg-emerald-500",
   "idle-failed": "border-2 border-red-500",
   idle: "border-2 border-neutral-500",
   history: "border-2 border-neutral-300 dark:border-neutral-600",
   "external-active": "bg-emerald-500",
   "external-unknown": "border-2 border-neutral-500",
-};
-
-/** What a project's dot says, in the worst entry's own words. */
-const PROJECT_WORDS: Record<AttentionItem["kind"], string> = {
-  failure: "failed",
-  question: "is waiting for your reply",
-  finish: "is waiting for your verdict",
-  review: "has an unread turn",
 };
 
 function sessionLabel(
@@ -503,7 +500,7 @@ export function NavRail(props: NavRailProps) {
               onFocus={() => setFocusKey(`p:${project.id}`)}
               onClick={() => props.onPickProject(project.id)}
               title={`${project.path}${worst ? ` — needs you` : ""}`}
-              aria-label={`${project.name}${worst ? `, a session ${PROJECT_WORDS[worst]}` : ""}`}
+              aria-label={`${project.name}${worst ? `, a session ${PROJECT_ATTENTION_WORDS[worst]}` : ""}`}
               className={`${rowClass(
                 project.id === selectedProjectId && !shownSessionId,
               )} pl-0.5`}
@@ -534,10 +531,8 @@ export function NavRail(props: NavRailProps) {
                 <span
                   data-testid={`sidebar-project-attention-${project.id}`}
                   aria-hidden
-                  className={`h-2 w-2 shrink-0 rounded-full ${
-                    worst === "failure" ? "bg-red-500" : "bg-amber-500"
-                  }`}
-                  title={`A session ${PROJECT_WORDS[worst]}`}
+                  className={`h-2 w-2 shrink-0 rounded-full ${ATTENTION_MARK_CLASS[worst]}`}
+                  title={`A session ${PROJECT_ATTENTION_WORDS[worst]}`}
                 />
               ) : null}
             </div>

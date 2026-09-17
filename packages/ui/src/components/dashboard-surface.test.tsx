@@ -639,10 +639,18 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(toggle.getAttribute("aria-describedby")).toBe(
       "project-attention-description-p1",
     );
+    const heading = within(p1).getByRole("heading", {
+      level: 3,
+      name: "alpha",
+    });
+    const description = document.getElementById(
+      "project-attention-description-p1",
+    )!;
+    expect(description.textContent).toBe("A session failed");
+    expect(heading.contains(description)).toBe(false);
     expect(
-      within(p1).getByText("alpha has failed work").className,
-    ).toContain("sr-only");
-    expect(within(p1).getByTestId("project-attention-p1")).toBeTruthy();
+      within(p1).getByTestId("project-attention-p1").className,
+    ).toContain("bg-red-500");
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(body.hidden).toBe(true);
@@ -656,12 +664,16 @@ describe("dashboard-26/29: groups and the queue band", () => {
       useAppStore.setState({
         ledger: {
           intents: [q("arrived", "p1", "Arrived behind the fold")],
-          attention: ATTENTION,
-          badge: ATTENTION.length,
+          attention: [ATTENTION[0]],
+          badge: 1,
         },
       });
     });
     expect(body.hidden).toBe(true);
+    expect(description.textContent).toBe("A session is waiting for your reply");
+    expect(
+      within(p1).getByTestId("project-attention-p1").className,
+    ).toContain("bg-amber-500");
     expect(
       within(p2).getByTestId("project-toggle-p2").getAttribute("aria-expanded"),
     ).toBe("true");

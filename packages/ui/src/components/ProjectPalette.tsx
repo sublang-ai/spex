@@ -14,7 +14,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
-import { ATTENTION_RANK, type AttentionItem } from "../state/dashboard.js";
+import {
+  ATTENTION_MARK_CLASS,
+  ATTENTION_RANK,
+  type AttentionItem,
+} from "../state/dashboard.js";
 import { useAppStore } from "../state/store.js";
 import { Icon } from "./Icon.js";
 
@@ -327,11 +331,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                     >
                       <span
                         aria-hidden
-                        className={`h-2 w-2 rounded-full ${
-                          row.worst === "failure"
-                            ? "bg-red-500"
-                            : "bg-amber-500"
-                        }`}
+                        className={`h-2 w-2 rounded-full ${ATTENTION_MARK_CLASS[row.worst!]}`}
                       />
                       {row.attention} need{row.attention === 1 ? "s" : ""} you
                     </span>
