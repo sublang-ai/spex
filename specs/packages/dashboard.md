@@ -189,7 +189,7 @@ The group's Up next band shall list the project's queued intents in rank order, 
 
 #### dashboard-59
 
-When the Up next band, attention all-clear, resolved delivery card, or Captain home renders the core-published next intent and scheduling standing [[core-service-107](core-service.md#core-service-107)], the shared queued-intent presentation shall render the standing's exact phrase and Start availability by this table ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+The shared queued-intent presentation shall map each core-published scheduling standing [[core-service-107](core-service.md#core-service-107)] to the exact phrase and Start availability in this table ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 | Published standing | Phrase | Start |
 | --- | --- | --- |
