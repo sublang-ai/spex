@@ -1269,16 +1269,8 @@ export class CoreService {
       // so a parked run reached after a restart still answers, and stamps
       // no intent dispatch — the Boss is acting on the run, not sending work.
       case "session.control": {
-        const release = this.admitSubmission(command.sessionId);
-        try {
-          await this.sessions.settled(command.sessionId);
-          if (!this.sessions.getLive(command.sessionId)) {
-            await this.settledConfig();
-            await this.continueSession(command.sessionId);
-          }
-          this.sessions.submitControl(command.sessionId, command.kind);
-          return { accepted: true };
-        } finally { release(); }
+        await this.runControl(command.sessionId, command.kind);
+        return { accepted: true };
       }
       case "turn.abort":
         return { aborted: this.sessions.abortTurn(command.sessionId) };
@@ -1570,7 +1562,7 @@ export class CoreService {
         return this.store.getIntent(intent.id);
       }
       case "intent.close": {
-        const intent = this.requireOpenIntent(command.intentId);
+        let intent = this.requireOpenIntent(command.intentId);
         if (
           command.as === "done" &&
           this.deriveIntentState(intent.id) !== "finished"
@@ -1579,6 +1571,26 @@ export class CoreService {
             "conflict",
             "only a finished intent confirms done",
           );
+        }
+        // Letting go ends the parked run (DR-073): a Drop taken on work
+        // whose run stands parked on the Boss is one ruling, not two.
+        // The run is ended first, through the shell's own ending, and
+        // the verdict is recorded only once that turn has settled with
+        // nothing of the session's still parked. Nothing half-rules: a
+        // refused ending refuses the close and leaves the intent open.
+        const parkedSession =
+          command.as === "dropped" && this.parkedRun(intent.id)
+            ? intent.dispatched?.sessionId
+            : undefined;
+        if (parkedSession !== undefined) {
+          await this.runControl(parkedSession, "ending", true);
+          intent = this.requireOpenIntent(command.intentId);
+          if (this.parkedRun(intent.id)) {
+            throw new CoreError(
+              "conflict",
+              "the run is still parked, so the intent stays open",
+            );
+          }
         }
         this.store.closeIntent(intent.id, command.as, Date.now());
         // Closing may release blocked intents in any project.
@@ -1930,6 +1942,45 @@ export class CoreService {
       now: Date.now,
     });
     return ledger.intents.find((entry) => entry.intent.id === intentId)?.state;
+  }
+
+  /** Whether a run of this intent's session stands parked on the Boss
+   * within the turns the intent attributes (DR-073), read from the one
+   * fold rather than derived again here: a question entry is a parked
+   * run by definition, and a failure entry says whether one parked. */
+  private parkedRun(intentId: string): boolean {
+    const ledger = foldLedger({
+      store: this.store,
+      lanes: this.sessions.listLanes(),
+      now: Date.now,
+    });
+    const entry = ledger.attention.find(
+      (row) => row.intentId === intentId && row.band === "interrupted",
+    );
+    if (!entry) return false;
+    return entry.kind === "question" || entry.parked === true;
+  }
+
+  /** core-service-98: open the session and run one control it advertises
+   * as its next turn, under turn.submit's admission, so a parked run
+   * reached after a restart still answers. `awaitTurn` holds the caller
+   * until that turn has settled — the ruling of core-service-46 needs
+   * its outcome before it writes. */
+  private async runControl(
+    sessionId: string,
+    kind: "recovery" | "ending",
+    awaitTurn = false,
+  ): Promise<void> {
+    const release = this.admitSubmission(sessionId);
+    try {
+      await this.sessions.settled(sessionId);
+      if (!this.sessions.getLive(sessionId)) {
+        await this.settledConfig();
+        await this.continueSession(sessionId);
+      }
+      if (awaitTurn) await this.sessions.runControl(sessionId, kind);
+      else this.sessions.submitControl(sessionId, kind);
+    } finally { release(); }
   }
 
   /** The project's open-intent ranks in order, optionally without the

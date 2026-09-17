@@ -460,6 +460,15 @@ export class SessionManager {
     this.startTurn(entry, undefined, false, { kind, controlId: control.id });
   }
 
+  /** The same control, awaited to its settlement (DR-073): a caller that
+   * rules on what the control did — the Drop that ends a parked run
+   * before it records its verdict — reads a settled session. */
+  async runControl(sessionId: string, kind: "recovery" | "ending"): Promise<void> {
+    this.submitControl(sessionId, kind);
+    await this.live.get(sessionId)?.operation;
+    await this.settled(sessionId);
+  }
+
   submitTurn(sessionId: string, text: string, intentId?: string): void {
     const entry = this.requireLive(sessionId);
     if (entry.turnActive) throw new CoreError("busy", "a turn is already running in this session");

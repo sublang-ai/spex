@@ -987,7 +987,18 @@ interface Harness {
   projectDir: string;
 }
 
-async function startHarness(options: { dataDir?: string } = {}): Promise<Harness> {
+async function startHarness(
+  options: {
+    dataDir?: string;
+    /** Replaces the default scripted Captain, so a test can leave a run
+     * parked where the fold reads it (core-service-104). */
+    captainScript?: Parameters<typeof createScriptedCaptain>[0];
+    /** Prepended to the adapter's rules: a decision reply that starts a
+     * catalog playbook engages a real root, which is what makes the
+     * Captain shell advertise its own ending (core-service-98). */
+    decision?: string;
+  } = {},
+): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "spex-ledger-it-"));
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, VALID_CONFIG);
@@ -998,6 +1009,9 @@ async function startHarness(options: { dataDir?: string } = {}): Promise<Harness
 
   const { imports } = fakeAdapterImports({
     rules: [
+      ...(options.decision !== undefined
+        ? [{ match: /"action"/, response: { result: options.decision } }]
+        : []),
       { match: "route:", response: { result: '{"decision":"dispatch"}' } },
       {
         match: "slow:",
@@ -1006,11 +1020,14 @@ async function startHarness(options: { dataDir?: string } = {}): Promise<Harness
     ],
     fallback: { deltas: ["hello ", "world"], result: "hello world" },
   });
-  const captain = createScriptedCaptain(async (turn, context, session) => {
-    await session.emitStatus(`◇ turn ${turn.id}`);
-    await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
-    await context.callPlayer("dev_coder", `${turn.prompt}`);
-  });
+  const captain = createScriptedCaptain(
+    options.captainScript ??
+      (async (turn, context, session) => {
+        await session.emitStatus(`◇ turn ${turn.id}`);
+        await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
+        await context.callPlayer("dev_coder", `${turn.prompt}`);
+      }),
+  );
 
   const service = await CoreService.start({
     token: "test",
@@ -1198,6 +1215,264 @@ test("core-service-42..46: intent commands hold position, dedup, link, and close
   client.close();
   await harness.service.stop();
 });
+
+// ---------------------------------------------------------------------------
+// core-service-104: letting go ends the parked run (DR-073)
+// ---------------------------------------------------------------------------
+
+/** A Captain that parks a run on a Boss question on its first turn and
+ * then stays out of the way, so the fold reads a standing question while
+ * the real Captain shell keeps the root its decision engaged. */
+function parkingCaptain(): Parameters<typeof createScriptedCaptain>[0] {
+  let turns = 0;
+  return async (turn, context, session) => {
+    turns += 1;
+    if (turns > 1) return;
+    const trace = async (
+      type: string,
+      payload: Record<string, unknown>,
+      sequence: number,
+    ): Promise<void> => {
+      await session.emitTelemetry({
+        topic: "playbook.trace",
+        payload: {
+          schemaVersion: 4,
+          sequence,
+          timestamp: Date.now(),
+          type,
+          playbookId: "code",
+          depth: 0,
+          sessionId: "root-code",
+          rootSessionId: "root-code",
+          payload,
+        },
+      });
+    };
+    await trace("session.started", {}, 1);
+    await trace(
+      "fsm.transition",
+      {
+        from: "coding",
+        to: "awaitBossReply",
+        event: { type: "NEEDS_BOSS" },
+        state: {
+          value: "awaitBossReply",
+          activeStateIds: ["awaitBossReply"],
+          tags: [],
+          status: "active",
+          quiescent: true,
+        },
+      },
+      2,
+    );
+    await session.emitTelemetry({
+      topic: "playbook.fsm.state",
+      payload: { from: "coding", to: "awaitBossReply", event: "NEEDS_BOSS" },
+    });
+    await context.emitReply("Should I also migrate the legacy sessions?");
+  };
+}
+
+const START_CODE = JSON.stringify({
+  action: "start",
+  playbookId: "code",
+  input: "Carry out the parked work",
+});
+
+/** Wait out a turn and the runtime release that follows it: the fold
+ * reads the stored turn as ended a moment before the shell lets go, and
+ * a control submitted in that window is refused busy. */
+async function settledTurns(
+  client: Client,
+  harness: Harness,
+  sessionId: string,
+  turns: number,
+): Promise<void> {
+  await client.waitFor(
+    (message) =>
+      message.type === "session.state" &&
+      message.session.id === sessionId &&
+      message.session.turns === turns &&
+      !message.session.turnActive &&
+      !message.session.live,
+  );
+  await harness.service["sessions"].settled(sessionId);
+}
+
+/** Every Boss turn the session has started, oldest first, by prompt. */
+async function turnPrompts(client: Client, sessionId: string): Promise<string[]> {
+  const { records } = await client.expectOk("history.get", { sessionId });
+  return records.flatMap(({ record }) => {
+    const entry = record as unknown as { type: string; turn?: { prompt: string } };
+    return entry.type === "turn_started" && entry.turn ? [entry.turn.prompt] : [];
+  });
+}
+
+test(
+  "core-service-104: a Drop on interrupted work ends its parked run, then rules",
+  { timeout: 30_000 },
+  async (t) => {
+    const harness = await startHarness({
+      captainScript: parkingCaptain(),
+      decision: START_CODE,
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => { client.close(); await harness.service.stop(); });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    const parked = await client.expectOk("intent.queue", {
+      projectId: project.id,
+      text: "Migrate the legacy sessions",
+    });
+    // Never dispatched, so nothing of its own is ever parked: its Drop
+    // stays the pure verdict it has always been.
+    const untouched = await client.expectOk("intent.queue", {
+      projectId: project.id,
+      text: "Something else entirely",
+    });
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: parked.text,
+      intentId: parked.id,
+    });
+    await settledTurns(client, harness, session.id, 1);
+    const standing = await client.ledgerUntil(
+      (ledger) =>
+        ledger.attention.some(
+          (entry) => entry.intentId === parked.id && entry.kind === "question",
+        ),
+      "the run to park on its question",
+    );
+    assert.equal(
+      standing.intents.find((entry) => entry.intent.id === parked.id)?.state,
+      "interrupted",
+    );
+
+    // The whole ruling, taken by the close alone (core-service-46).
+    const dropped = await client.expectOk("intent.close", {
+      intentId: parked.id,
+      as: "dropped",
+    });
+    assert.equal(dropped.closedAs, "dropped");
+    // The ending ran as the session's own next turn, carrying the
+    // control's label rather than any Boss text, and stamped no
+    // dispatch (core-service-47, core-service-98).
+    const prompts = await turnPrompts(client, session.id);
+    assert.equal(prompts.length, 2);
+    assert.notEqual(prompts[1], parked.text);
+    assert.ok(
+      prompts[1].includes("/code"),
+      `the ending turn names the run it stopped; got ${prompts[1]}`,
+    );
+    assert.equal(dropped.dispatched?.turnId, 1);
+    // The run it ended is disposed, inside that turn, so the fold's
+    // park stops standing for every consumer at once.
+    const { records } = await client.expectOk("history.get", {
+      sessionId: session.id,
+    });
+    const disposed = records.filter(({ record }) => {
+      const entry = record as unknown as {
+        type: string;
+        topic?: string;
+        turnId: number | null;
+        payload?: { type?: string; playbookId?: string };
+      };
+      return (
+        entry.type === "captain_telemetry" &&
+        entry.topic === "playbook.trace" &&
+        entry.payload?.type === "session.disposed" &&
+        entry.payload.playbookId === "code" &&
+        entry.turnId === 2
+      );
+    });
+    assert.ok(disposed.length > 0, "the ended run reports its disposal");
+    // Nothing of that session still summons, and the work reads as
+    // dropped in History (core-service-49, core-service-50).
+    const after = await client.expectOk("ledger.get", {});
+    assert.deepEqual(
+      after.attention.filter((entry) => entry.sessionId === session.id),
+      [],
+    );
+    const history = await client.expectOk("ledger.history", {
+      projectId: project.id,
+    });
+    assert.deepEqual(
+      history.intents.map((row) => [row.intent.id, row.intent.closedAs]),
+      [[parked.id, "dropped"]],
+    );
+
+    // With no run parked, the verdict is the whole act: no control turn.
+    await client.expectOk("intent.close", {
+      intentId: untouched.id,
+      as: "dropped",
+    });
+    assert.deepEqual(await turnPrompts(client, session.id), prompts);
+  },
+);
+
+test(
+  "core-service-104: an ending the session cannot run refuses the Drop",
+  { timeout: 30_000 },
+  async (t) => {
+    // No decision starts a root, so the opened shell advertises no
+    // ending: nothing half-rules, and the intent stays open.
+    const harness = await startHarness({ captainScript: parkingCaptain() });
+    const client = new Client(harness.service.port());
+    t.after(async () => { client.close(); await harness.service.stop(); });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    const parked = await client.expectOk("intent.queue", {
+      projectId: project.id,
+      text: "Migrate the legacy sessions",
+    });
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: parked.text,
+      intentId: parked.id,
+    });
+    await settledTurns(client, harness, session.id, 1);
+    await client.ledgerUntil(
+      (ledger) =>
+        ledger.attention.some(
+          (entry) => entry.intentId === parked.id && entry.kind === "question",
+        ),
+      "the run to park on its question",
+    );
+
+    const refused = await client.command("intent.close", {
+      intentId: parked.id,
+      as: "dropped",
+    });
+    assert.ok(!refused.ok, "the close is refused with the ending's cause");
+    assert.match(refused.error.message, /end its run/);
+    const after = await client.expectOk("ledger.get", {});
+    assert.equal(
+      after.intents.find((entry) => entry.intent.id === parked.id)?.intent
+        .closedAt,
+      undefined,
+    );
+    assert.ok(
+      after.attention.some((entry) => entry.intentId === parked.id),
+      "the summons stands until the ruling lands",
+    );
+  },
+);
 
 // ---------------------------------------------------------------------------
 // core-service-47/53/57: dispatch stamping over real turns
