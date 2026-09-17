@@ -122,7 +122,11 @@ function systemLine(text: string | RegExp): HTMLElement | null {
   );
 }
 
-function renderRun(entries: typeof FULL_RUN, storedGraphs = false) {
+function renderRun(
+  entries: typeof FULL_RUN,
+  storedGraphs = false,
+  session: SessionInfo = SESSION,
+) {
   if (storedGraphs) entries = [{seq:1, record:{type:"session_context", timestamp:0, contextVersion:1, graphs:[{playbookId:"code",graph:codeGraph},{playbookId:"review",graph:reviewGraph}]} as unknown as TmuxPlayRecord},
     ...entries.map((entry) => ({...entry, seq:entry.seq + 1, record:{...entry.record, contextSeq:1}}))];
   const view = applyRecords(
@@ -131,7 +135,7 @@ function renderRun(entries: typeof FULL_RUN, storedGraphs = false) {
   );
   return render(
     <RunView
-      session={SESSION}
+      session={session}
       view={view}
       composer={{ queued: [] }}
       connected
@@ -323,7 +327,12 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     expect(body.textContent).toContain("old_string");
     expect(body.textContent).not.toContain('"src/auth.ts"');
     expect(blocks[0].className).toContain("overflow-wrap:anywhere");
-    expect(screen.getByTestId("tool-duration-7").textContent).toContain("<1s");
+    expect([
+      screen.getByTestId("tool-duration-7").textContent?.trim(),
+      screen.getByTestId("tool-duration-9").textContent?.trim(),
+      screen.getByTestId("tool-duration-11").textContent?.trim(),
+      screen.getByTestId("tool-duration-13").textContent?.trim(),
+    ]).toEqual(["· <1s", "· 12s", "· 3m 12s", "· 2h 5m"]);
     const todoBody = screen.getByTestId("tool-body-9");
     expect(todoBody.querySelector("pre")!.getAttribute("data-kind")).toBe("json");
     expect(todoBody.textContent).toContain('"content": "ship it"');
@@ -467,6 +476,295 @@ describe("RUN-37: the thread stays alive while a turn runs", () => {
       );
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("run-view-143/144: cumulative active time stays with its agent", () => {
+  const configState = {
+    status: "valid" as const,
+    summary: {
+      path: "/tmp/playbook.config.yaml",
+      captain: { adapter: "claude" as const, model: "captain-default" },
+      players: PLAYERS.map((player) => ({
+        id: player.id,
+        agent: { adapter: player.adapter },
+        display: player.adapter,
+        boundBy: [],
+      })),
+      playbooks: [],
+    },
+    seeded: false,
+  };
+  let previousConfigState: ReturnType<typeof useAppStore.getState>["configState"];
+  let previousCollapsedLanes: ReturnType<typeof useAppStore.getState>["collapsedLanes"];
+
+  beforeEach(() => {
+    previousConfigState = useAppStore.getState().configState;
+    previousCollapsedLanes = useAppStore.getState().collapsedLanes;
+    useAppStore.setState({ configState, collapsedLanes: {} });
+  });
+
+  afterEach(() => {
+    useAppStore.setState({
+      configState: previousConfigState,
+      collapsedLanes: previousCollapsedLanes,
+    });
+  });
+
+  const timedSession = (agentActiveMs: Record<string, number>): SessionInfo => ({
+    ...SESSION,
+    live: false,
+    endedAt: 1_700_000_000_012,
+    agentActiveMs,
+    agentSettings: {
+      captain: { model: "captain-session" },
+      "dev.coder": { effort: "high" },
+      "dev.reviewer": { fastMode: true },
+    },
+  });
+  const activeDescription = (value: string) =>
+    `Completed active time this session: ${value} · parallel calls overlap`;
+
+  test("renders measured values at rest, silence when absent, and keeps a folded lane qualified", () => {
+    renderRun(
+      TURN_ONE,
+      false,
+      timedSession({ captain: 3_840_000, "dev.coder": 0 }),
+    );
+
+    const captain = screen.getByTestId("agent-active-captain");
+    expect(captain.textContent).toBe("active · 1h 4m");
+    expect(captain.title).toBe(activeDescription("1h 4m"));
+    expect(screen.getByTestId("agent-active-description-captain").textContent)
+      .toBe(activeDescription("1h 4m"));
+
+    const coder = screen.getByTestId("agent-active-dev.coder");
+    expect(coder.textContent).toBe("active · <1s");
+    expect(coder.title).toBe(activeDescription("<1s"));
+    expect(screen.queryByTestId("agent-active-dev.reviewer")).toBeNull();
+    expect(screen.queryByTestId("agent-active-description-dev.reviewer")).toBeNull();
+
+    // The execution receipt is beside, never inside, the setting.
+    const settings = screen.getByTestId("agent-chip-dev.coder");
+    expect(settings.textContent).not.toContain("active");
+    expect(settings.getAttribute("aria-label")).not.toContain("active");
+
+    // Per-call tokens remain on the result line exactly once; the
+    // cumulative header adds no second usage metric or money.
+    expect(screen.getAllByText("120→30 tok")).toHaveLength(1);
+    const coderHeader = screen.getByTestId("player-pane-dev.coder").querySelector("header")!;
+    expect(coderHeader.textContent).not.toContain("tok");
+    expect(document.body.textContent).not.toMatch(/[$≈]/);
+
+    fireEvent.click(within(screen.getByTestId("player-pane-dev.coder"))
+      .getByRole("button", { name: "Collapse dev.coder" }));
+    const rail = screen.getByTestId("player-pane-dev.coder");
+    expect(rail.dataset.collapsed).toBe("true");
+    expect(within(rail).getByTestId("player-name-dev.coder").title)
+      .toContain(activeDescription("<1s"));
+    expect(rail.getAttribute("aria-describedby"))
+      .toBe("agent-active-description-dev.coder");
+    expect(screen.queryByTestId("agent-active-dev.coder")).toBeNull();
+    expect(screen.getByTestId("agent-active-description-dev.coder").textContent)
+      .toBe(activeDescription("<1s"));
+
+    fireEvent.click(within(rail).getByRole("button", { name: "Expand dev.coder" }));
+    expect(screen.getByTestId("agent-active-dev.coder").textContent)
+      .toBe("active · <1s");
+  });
+
+  test("keeps Captain time fixed while the Captain thinks", () => {
+    vi.useFakeTimers();
+    try {
+      renderRun(
+        TURN_ONLY_STARTED,
+        false,
+        timedSession({ captain: 3_840_000 }),
+      );
+      expect(screen.getByTestId("working-indicator").textContent)
+        .toContain("Captain is thinking…");
+      expect(screen.getByTestId("agent-active-captain").textContent)
+        .toBe("active · 1h 4m");
+      act(() => vi.advanceTimersByTime(60_000));
+      expect(screen.getByTestId("agent-active-captain").textContent)
+        .toBe("active · 1h 4m");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("uses summaries only and converges for either summary/finish order", () => {
+    const previous = useAppStore.getState();
+    const liveSession = (agentActiveMs: Record<string, number>): SessionInfo => ({
+      ...timedSession(agentActiveMs),
+      live: true,
+      turnActive: true,
+      endedAt: null,
+    });
+    useAppStore.setState({
+      sessions: [liveSession({ "dev.coder": 1_000 })],
+      activeSessionId: SESSION.id,
+      views: { [SESSION.id]: initialSessionView(PLAYERS) },
+      composers: { [SESSION.id]: { queued: [] } },
+      collapsedLanes: {},
+      machineGraphs: {},
+      specTrees: {},
+      ledger: undefined,
+      stagedIntents: {},
+    });
+
+    function ConnectedRun() {
+      const session = useAppStore((state) =>
+        state.sessions.find(({ id }) => id === SESSION.id),
+      )!;
+      const view = useAppStore((state) => state.views[SESSION.id]);
+      return (
+        <RunView
+          session={session}
+          view={view}
+          composer={{ queued: [] }}
+          connected
+          onSubmit={async () => {}}
+          onAbort={() => {}}
+          onRemoveQueued={() => {}}
+          onDismissError={() => {}}
+        />
+      );
+    }
+
+    let seq = 0;
+    const record = (body: Record<string, unknown>) => {
+      act(() => {
+        deliverServerMessageForTests({
+          type: "record",
+          channel: "session",
+          sessionId: SESSION.id,
+          seq: ++seq,
+          record: body as unknown as TmuxPlayRecord,
+        });
+      });
+    };
+    const summary = (agentActiveMs: Record<string, number>) => {
+      act(() => {
+        deliverServerMessageForTests({
+          type: "session.state",
+          session: liveSession(agentActiveMs),
+        });
+      });
+    };
+    const prompt = (timestamp: number, playerId = "dev.coder") => record({
+      type: "player_prompt",
+      turnId: 2,
+      timestamp,
+      playerId,
+      prompt: "continue coding",
+    });
+    const done = (
+      timestamp: number,
+      input: number,
+      output: number,
+      playerId = "dev.coder",
+    ) => record({
+      type: "player_event",
+      turnId: 2,
+      timestamp,
+      playerId,
+      event: {
+        type: "done",
+        agent: "fake",
+        timestamp,
+        sessionId: "a",
+        payload: {
+          status: "success",
+          result: "done",
+          durationMs: 999_000,
+          usage: {
+            toolUses: 0,
+            tokens: {
+              coverage: "full",
+              totals: {
+                input: { total: input },
+                output: { total: output },
+              },
+            },
+            cost: {
+              amount: 99,
+              currency: "USD",
+              source: "provider-reported",
+            },
+          },
+        },
+      },
+    });
+    const finish = (timestamp: number, playerId = "dev.coder") => record({
+      type: "player_finished",
+      turnId: 2,
+      timestamp,
+      playerId,
+      result: { status: "ok", playerId, turnId: 2, finalText: "done" },
+    });
+
+    const rendered = render(<ConnectedRun />);
+    try {
+      expect(screen.getByTestId("agent-active-dev.coder").textContent)
+        .toBe("active · 1s");
+      record({
+        type: "turn_started",
+        turnId: 2,
+        timestamp: 1_700_000_000_020,
+        turn: {
+          id: 2,
+          prompt: "continue",
+          timestamp: 1_700_000_000_020,
+        },
+      });
+      prompt(1_700_000_000_021);
+      expect(screen.queryByTestId("agent-active-dev.coder")).toBeNull();
+      expect(screen.getByTestId("agent-active-description-dev.coder").textContent)
+        .toBe(activeDescription("1s"));
+
+      done(1_700_000_000_022, 120, 30);
+      expect(screen.queryByTestId("agent-active-dev.coder")).toBeNull();
+      expect(screen.getByTestId("agent-active-description-dev.coder").textContent)
+        .toBe(activeDescription("1s"));
+
+      // Summary first: cache the new resting value behind the live
+      // slot, then reveal it when the finished record arrives.
+      summary({ "dev.coder": 2_000 });
+      expect(screen.getByTestId("agent-active-description-dev.coder").textContent)
+        .toBe(activeDescription("2s"));
+      finish(1_700_000_000_023);
+      expect(screen.getByTestId("agent-active-dev.coder").textContent)
+        .toBe("active · 2s");
+      expect(screen.getAllByText("120→30 tok")).toHaveLength(1);
+
+      // Finish first: restore the prior resting value until a later
+      // summary replaces it; no terminal duration is accumulated.
+      prompt(1_700_000_000_024);
+      expect(screen.queryByTestId("agent-active-dev.coder")).toBeNull();
+      done(1_700_000_000_025, 40, 10);
+      finish(1_700_000_000_026);
+      expect(screen.getByTestId("agent-active-dev.coder").textContent)
+        .toBe("active · 2s");
+      expect(screen.getAllByText("40→10 tok")).toHaveLength(1);
+      summary({ "dev.coder": 3_000 });
+      expect(screen.getByTestId("agent-active-dev.coder").textContent)
+        .toBe("active · 3s");
+
+      // A terminal event for an agent with no summary entry neither
+      // invents a cumulative figure nor displaces its live reading.
+      prompt(1_700_000_000_027, "dev.reviewer");
+      done(1_700_000_000_028, 5, 1, "dev.reviewer");
+      expect(within(screen.getByTestId("player-pane-dev.reviewer"))
+        .getByTestId("player-working").textContent).toContain("working");
+      expect(screen.queryByTestId("agent-active-dev.reviewer")).toBeNull();
+      expect(screen.queryByTestId("agent-active-description-dev.reviewer")).toBeNull();
+      finish(1_700_000_000_029, "dev.reviewer");
+      expect(screen.queryByTestId("agent-active-dev.reviewer")).toBeNull();
+    } finally {
+      rendered.unmount();
+      useAppStore.setState(previous, true);
     }
   });
 });

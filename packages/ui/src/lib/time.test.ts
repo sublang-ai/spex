@@ -33,4 +33,24 @@ describe("ages", () => {
     expect(compactAge(now - 3 * 60_000, now)).toBe("3m");
     expect(compactAge(now, now)).toBe("now");
   });
+
+  test("future moments clamp to now and each rounded unit carries into the next", () => {
+    const now = 1_700_000_000_000;
+    expect(relativeAge(now + 60_000, now)).toBe("just now");
+    expect(compactAge(now + 60_000, now)).toBe("now");
+
+    expect(relativeAge(now - 59_499, now)).toBe("just now");
+    expect(relativeAge(now - 59_500, now)).toBe("1m ago");
+    expect(relativeAge(now - (59 * 60 + 30) * 1_000, now)).toBe("1h ago");
+    expect(relativeAge(now - (23 * 60 + 30) * 60_000, now)).toBe("1d ago");
+    expect(relativeAge(now - (6 * 24 + 12) * 3_600_000, now)).toBe("1w ago");
+  });
+
+  test("compact ages cover minutes, hours, days, and weeks", () => {
+    const now = 1_700_000_000_000;
+    expect(compactAge(now - 3 * 60_000, now)).toBe("3m");
+    expect(compactAge(now - 2 * 3_600_000, now)).toBe("2h");
+    expect(compactAge(now - 5 * 24 * 3_600_000, now)).toBe("5d");
+    expect(compactAge(now - 3 * 7 * 24 * 3_600_000, now)).toBe("3w");
+  });
 });

@@ -210,6 +210,9 @@ export interface SessionInfo {
   failed: boolean;
   /** Recorded cost, when any usage carried one. */
   costUsd?: number;
+  /** Completed prompt-to-finish time per measured agent. Absent when
+   * the stored stream is incomplete or holds no completed call. */
+  agentActiveMs?: Record<string, number>;
   /** This session's own agent settings, absent when it holds none. */
   agentSettings?: SessionAgentSettingsMap;
   /** Set when a record could not be durably appended: the persisted

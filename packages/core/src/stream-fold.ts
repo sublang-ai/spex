@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The record stream is the one persisted truth for a session
-// (DR-036, core-service-10): turns and usage fold from it. These
+// (DR-036, core-service-10): turns, usage, and active time fold from it. These
 // helpers are the single extraction the live path (session.ts) and
 // the store's load-time fold share, so a restart derives exactly what
 // live tracking derived.
 
-import type { TmuxPlayRecord } from "./protocol.js";
+import type { StoredRecord, TmuxPlayRecord } from "./protocol.js";
 import { hasPresentationHeader } from "./protocol.js";
 
 export interface UsageEntry {
@@ -38,6 +38,75 @@ export interface UsageTotals {
    * rather than a number that hides them (DR-032). Empty when no
    * entry reported a cost at all. */
   costSources: string[];
+}
+
+interface OpenAgentCall {
+  actorId: string;
+  turnId: number;
+  at: number;
+}
+
+/**
+ * Completed prompt-to-finish time by agent (DR-071). The fold is pure over
+ * stored records so live summaries, restart replay, and foreign-session scans
+ * cannot acquire different clocks or pairing state.
+ */
+export function foldAgentActiveMs(
+  entries: readonly Pick<StoredRecord, "record">[],
+): Record<string, number> | undefined {
+  const openPlayers: OpenAgentCall[] = [];
+  const openCaptains: OpenAgentCall[] = [];
+  const totals = new Map<string, number>();
+
+  const close = (
+    open: OpenAgentCall[],
+    actorId: string,
+    turnId: number,
+    at: number,
+  ): void => {
+    const index = open.findIndex(
+      (call) => call.actorId === actorId && call.turnId === turnId,
+    );
+    if (index < 0) return;
+    const [started] = open.splice(index, 1);
+    totals.set(
+      actorId,
+      (totals.get(actorId) ?? 0) + Math.max(0, at - started.at),
+    );
+  };
+
+  for (const { record } of entries) {
+    if (!hasPresentationHeader(record)) continue;
+    const turnId = (record as { turnId?: unknown }).turnId;
+    if (typeof turnId !== "number" || !Number.isFinite(turnId)) continue;
+
+    switch (record.type) {
+      case "player_prompt": {
+        const playerId = (record as { playerId?: unknown }).playerId;
+        if (typeof playerId === "string") {
+          openPlayers.push({ actorId: playerId, turnId, at: record.timestamp });
+        }
+        break;
+      }
+      case "player_finished": {
+        const playerId = (record as { playerId?: unknown }).playerId;
+        if (typeof playerId === "string") {
+          close(openPlayers, playerId, turnId, record.timestamp);
+        }
+        break;
+      }
+      case "captain_prompt":
+        openCaptains.push({ actorId: "captain", turnId, at: record.timestamp });
+        break;
+      case "captain_finished":
+        close(openCaptains, "captain", turnId, record.timestamp);
+        break;
+      default:
+        break;
+    }
+  }
+
+  return totals.size > 0 ? Object.fromEntries(totals) : undefined;
 }
 
 /**

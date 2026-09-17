@@ -42,6 +42,7 @@ import type {
 } from "./protocol.js";
 import { hasPresentationHeader } from "./protocol.js";
 import {
+  foldAgentActiveMs,
   foldTurnEvent,
   foldUsage,
   sanitizeRecord,
@@ -129,6 +130,7 @@ function sessionInfo(
   failed: boolean,
   costUsd: number | undefined,
   agentSettings: SessionAgentSettingsMap | undefined,
+  agentActiveMs: Record<string, number> | undefined,
 ): SessionInfo {
   return {
     id: meta.id,
@@ -144,6 +146,7 @@ function sessionInfo(
     turns,
     failed,
     ...(costUsd !== undefined ? { costUsd } : {}),
+    ...(agentActiveMs !== undefined ? { agentActiveMs } : {}),
     ...(meta.streamIncompleteAfterSeq !== undefined
       ? { streamIncompleteAfterSeq: meta.streamIncompleteAfterSeq }
       : {}),
@@ -529,7 +532,7 @@ export class Store {
         // continuation gate refuses it instead of appending onto damage.
       }
       this.records.set(meta.id, stored);
-      // Turns, titles, and usage are never separately stored: the
+      // Turns, titles, usage, and active time are never separately stored: the
       // stream is the truth and the restart folds it (core-service-10).
       for (const entry of stored) {
         this.foldRecord(meta.id, entry.record);
@@ -1125,7 +1128,19 @@ export class Store {
       costed.length > 0
         ? costed.reduce((sum, entry) => sum + (entry.totalCostUsd ?? 0), 0)
         : undefined;
-    return sessionInfo(meta, path, turns[0]?.prompt, turns.length, failed, cost, this.sessionAgentSettings(meta.id));
+    const agentActiveMs = meta.streamIncompleteAfterSeq === undefined
+      ? foldAgentActiveMs(this.records.get(meta.id) ?? [])
+      : undefined;
+    return sessionInfo(
+      meta,
+      path,
+      turns[0]?.prompt,
+      turns.length,
+      failed,
+      cost,
+      this.sessionAgentSettings(meta.id),
+      agentActiveMs,
+    );
   }
 
   listSessions(): SessionInfo[] {

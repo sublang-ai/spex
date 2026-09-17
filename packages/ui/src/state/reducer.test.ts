@@ -33,6 +33,8 @@ describe("RUN-19: fixture stream renders expected pane structure", () => {
       "text",
       "tool",
       "tool",
+      "tool",
+      "tool",
       "thinking",
       "result",
     ]);
@@ -43,7 +45,7 @@ describe("RUN-19: fixture stream renders expected pane structure", () => {
     );
     const tool = coder.segments[2];
     expect(tool.kind === "tool" && tool.status).toBe("success");
-    const result = coder.segments[5];
+    const result = coder.segments[7];
     // The cligent 0.22 shape is read as sent: inclusive totals, and
     // the cost it carries left out of the view (DR-032, DR-044).
     expect(result.kind === "result" && result.usage).toEqual({

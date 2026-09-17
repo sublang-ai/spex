@@ -18,6 +18,10 @@ import { latestCall } from "./PlayerPane.js";
 import { Markdown } from "./Markdown.js";
 import { MachineCard } from "./MachineCard.js";
 import { AgentChipButton } from "./AgentSettings.js";
+import {
+  AgentActiveTime,
+  activeTimeDescriptionId,
+} from "./AgentActiveTime.js";
 import type { SessionAgent } from "../lib/session-agents.js";
 import { SourceChip } from "./DeliveryCard.js";
 import type { IntentSource, MachineGraph } from "@sublang/spex-core/protocol";
@@ -284,6 +288,7 @@ export function CaptainPane({
   bossSources,
   extras,
   readiness,
+  activeMs,
   settings,
   onEditSettings,
   settingsAnchorRef,
@@ -293,6 +298,8 @@ export function CaptainPane({
   onFocusHandled,
 }: {
   view: SessionView;
+  /** The core-folded completed active time for the Captain. */
+  activeMs?: number;
   /** What the Captain is set to run, and the door to changing it for
    * this conversation alone (run-view-139). */
   settings?: SessionAgent;
@@ -410,7 +417,10 @@ export function CaptainPane({
       data-testid="captain-pane"
       className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
-      <header className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
+      <header
+        aria-describedby={activeMs === undefined ? undefined : activeTimeDescriptionId("captain")}
+        className="@container flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800"
+      >
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
           C
         </span>
@@ -429,13 +439,20 @@ export function CaptainPane({
             {settingsOpen ? settingsPopover : null}
           </span>
         ) : null}
-        {status.state || view.turnActive ? (
-          <span
-            data-testid="state-chip"
-            title={status.state ? `state: ${status.state}` : undefined}
-            className={`ml-auto rounded px-1.5 py-0.5 text-xs ${STATE_TONE_CLASSES[status.tone]}`}
-          >
-            {status.text}
+        {activeMs !== undefined || status.state || view.turnActive ? (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {activeMs !== undefined ? (
+              <AgentActiveTime agentId="captain" ms={activeMs} />
+            ) : null}
+            {status.state || view.turnActive ? (
+              <span
+                data-testid="state-chip"
+                title={status.state ? `state: ${status.state}` : undefined}
+                className={`rounded px-1.5 py-0.5 text-xs ${STATE_TONE_CLASSES[status.tone]}`}
+              >
+                {status.text}
+              </span>
+            ) : null}
           </span>
         ) : null}
       </header>

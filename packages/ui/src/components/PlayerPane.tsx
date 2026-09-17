@@ -14,6 +14,11 @@ import { inputBlocks, outputBlock } from "../lib/tool-body.js";
 import { useClock } from "../lib/useClock.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
 import { AgentChipButton, agentReading } from "./AgentSettings.js";
+import {
+  AgentActiveTime,
+  activeTimeDescription,
+  activeTimeDescriptionId,
+} from "./AgentActiveTime.js";
 import type { SessionAgent } from "../lib/session-agents.js";
 import { Markdown } from "./Markdown.js";
 import { RunningMark } from "./RunningMark.js";
@@ -302,6 +307,7 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
 export function PlayerPane({
   view,
   meta,
+  activeMs,
   settings,
   onEditSettings,
   settingsAnchorRef,
@@ -312,6 +318,8 @@ export function PlayerPane({
 }: {
   view: PlayerView;
   meta?: SessionInfo["players"][number];
+  /** The core-folded completed active time for this lane. */
+  activeMs?: number;
   /** What this lane's agent is set to run, and the door to changing it
    * for this conversation alone (run-view-139). */
   settings?: SessionAgent;
@@ -336,6 +344,16 @@ export function PlayerPane({
   const call = latestCall(view);
   const who = call?.role ?? view.id;
   const now = useClock(view.running);
+  const activeDescription = activeMs === undefined
+    ? undefined
+    : activeTimeDescription(activeMs);
+  const activeDescriptionId = activeMs === undefined
+    ? undefined
+    : activeTimeDescriptionId(view.id);
+  const railLabel = settings ? `${view.id} · ${agentReading(settings)}` : view.id;
+  const railTitle = activeDescription
+    ? `${railLabel} · ${activeDescription}`
+    : railLabel;
   // The toggle hands focus to its counterpart once the pane has taken
   // its other form (run-view-116): on the reader's own gesture, or
   // when the control they were on left with the form — a lane that
@@ -373,6 +391,7 @@ export function PlayerPane({
       <section
         data-testid={`player-pane-${view.id}`}
         data-collapsed="true"
+        aria-describedby={activeDescriptionId}
         className="flex min-h-0 w-9 flex-none flex-col items-center gap-2 rounded-lg border border-neutral-200 bg-white py-1.5 dark:border-neutral-800 dark:bg-neutral-900"
       >
         <button
@@ -388,11 +407,14 @@ export function PlayerPane({
         ) : null}
         <span
           data-testid={`player-name-${view.id}`}
-          title={settings ? `${view.id} · ${agentReading(settings)}` : view.id}
+          title={railTitle}
           className="min-h-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm font-semibold [writing-mode:vertical-rl]"
         >
           {view.id}
         </span>
+        {activeMs !== undefined ? (
+          <AgentActiveTime agentId={view.id} ms={activeMs} visible={false} />
+        ) : null}
       </section>
     );
   }
@@ -404,10 +426,12 @@ export function PlayerPane({
       data-testid={`player-pane-${view.id}`}
       className="@container flex min-h-0 min-w-[280px] flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
-      {/* One line at any pane width: the lane's name is never abridged,
-          a long model name elides, and the at-a-glance usage — which
-          the transcript's own result line repeats — gives way first. */}
-      <header className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
+      {/* One line at any pane width: identity and controls remain;
+          cumulative time yields before a live elapsed reading. */}
+      <header
+        aria-describedby={activeDescriptionId}
+        className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800"
+      >
         <span
           data-testid={`player-name-${view.id}`}
           className="shrink-0 text-sm font-semibold"
@@ -475,10 +499,13 @@ export function PlayerPane({
                 </span>
               ) : null}
             </>
-          ) : view.turnUsage ? (
-            <span className="hidden whitespace-nowrap @md:inline">
-              <Usage usage={view.turnUsage} />
-            </span>
+          ) : null}
+          {activeMs !== undefined ? (
+            <AgentActiveTime
+              agentId={view.id}
+              ms={activeMs}
+              visible={!view.running}
+            />
           ) : null}
         </span>
         <button

@@ -207,6 +207,41 @@ beforeEach(() => {
 });
 
 describe("run-view-70: the sidebar navigates, the tabs hold what is open", () => {
+  test("session ages span the compact vocabulary with exact and accessible readings", () => {
+    const moments = [
+      { id: "age-now", at: NOW + 60_000, compact: "now", spoken: "just now", live: true },
+      { id: "age-minute", at: NOW - 3 * 60_000, compact: "3m", spoken: "3m ago", live: false },
+      { id: "age-hour", at: NOW - 2 * 3_600_000, compact: "2h", spoken: "2h ago", live: false },
+      { id: "age-day", at: NOW - 5 * 24 * 3_600_000, compact: "5d", spoken: "5d ago", live: false },
+      { id: "age-week", at: NOW - 3 * 7 * 24 * 3_600_000, compact: "3w", spoken: "3w ago", live: false },
+    ] as const;
+    const sessions = moments.map((moment) => session({
+      id: moment.id,
+      title: moment.id,
+      live: moment.live,
+      createdAt: moment.live ? moment.at : NOW - 30 * 24 * 3_600_000,
+      endedAt: moment.live ? null : moment.at,
+    }));
+    useAppStore.setState({
+      sessions,
+      views: { "age-now": view() },
+      activeSessionId: "age-now",
+      workspaceTabs: { p1: "age-now" },
+      openTabs: { p1: ["age-now"] },
+      ledger: { intents: [], attention: [], badge: 0 } as never,
+    });
+
+    render(<App />);
+
+    for (const moment of moments) {
+      const age = screen.getByTestId(`sidebar-age-${moment.id}`);
+      const row = screen.getByTestId(`sidebar-session-${moment.id}`);
+      expect(age.textContent).toBe(moment.compact);
+      expect(age.title).toBe(new Date(moment.at).toLocaleString());
+      expect(row.getAttribute("aria-label")).toContain(moment.spoken);
+    }
+  });
+
   test.each(["loaded transcript", "session summary"])("an earlier delivery stays counted without marking later work as waiting for a reply (%s)", async (source) => {
     render(<App />);
     await act(async () => {});

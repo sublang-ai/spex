@@ -590,6 +590,7 @@ export function RunView({
         >
           <CaptainPane
             view={activityView}
+            activeMs={session.agentActiveMs?.[CAPTAIN_AGENT_ID]}
             machineGraphs={machineGraphs}
             bossSources={bossSources}
             extras={extras}
@@ -740,6 +741,7 @@ export function RunView({
                     }
                   }
                   meta={metaById.get(playerId)}
+                  activeMs={session.agentActiveMs?.[playerId]}
                   {...agentProps(playerId)}
                   collapsed={collapsed.has(playerId)}
                   onCollapsedChange={(next) =>

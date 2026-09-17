@@ -145,10 +145,88 @@ export const TURN_ONE: FixtureEntry[] = [
       agent: "fake",
       timestamp: t + 7,
       sessionId: "a",
-      payload: { toolUseId: "tu2", toolName: "TodoWrite", status: "success", output: "ok" },
+      payload: {
+        toolUseId: "tu2",
+        toolName: "TodoWrite",
+        status: "success",
+        output: "ok",
+        durationMs: 12_000,
+      },
     },
   }),
   rec(11, {
+    type: "player_event",
+    turnId: 1,
+    timestamp: t + 8,
+    playerId: "dev.coder",
+    event: {
+      type: "tool_use",
+      agent: "fake",
+      timestamp: t + 8,
+      sessionId: "a",
+      payload: {
+        toolName: "Read",
+        toolUseId: "tu3",
+        input: { path: "specs/meta.md" },
+      },
+    },
+  }),
+  rec(12, {
+    type: "player_event",
+    turnId: 1,
+    timestamp: t + 8,
+    playerId: "dev.coder",
+    event: {
+      type: "tool_result",
+      agent: "fake",
+      timestamp: t + 8,
+      sessionId: "a",
+      payload: {
+        toolUseId: "tu3",
+        toolName: "Read",
+        status: "success",
+        output: "rules",
+        durationMs: 192_000,
+      },
+    },
+  }),
+  rec(13, {
+    type: "player_event",
+    turnId: 1,
+    timestamp: t + 8,
+    playerId: "dev.coder",
+    event: {
+      type: "tool_use",
+      agent: "fake",
+      timestamp: t + 8,
+      sessionId: "a",
+      payload: {
+        toolName: "Bash",
+        toolUseId: "tu4",
+        input: { command: "npm test" },
+      },
+    },
+  }),
+  rec(14, {
+    type: "player_event",
+    turnId: 1,
+    timestamp: t + 8,
+    playerId: "dev.coder",
+    event: {
+      type: "tool_result",
+      agent: "fake",
+      timestamp: t + 8,
+      sessionId: "a",
+      payload: {
+        toolUseId: "tu4",
+        toolName: "Bash",
+        status: "success",
+        output: "passed",
+        durationMs: 7_500_000,
+      },
+    },
+  }),
+  rec(15, {
     type: "player_event",
     turnId: 1,
     timestamp: t + 8,
@@ -161,7 +239,7 @@ export const TURN_ONE: FixtureEntry[] = [
       payload: { summary: "considering edge cases" },
     },
   }),
-  rec(12, {
+  rec(16, {
     type: "player_event",
     turnId: 1,
     timestamp: t + 9,
@@ -188,39 +266,39 @@ export const TURN_ONE: FixtureEntry[] = [
       },
     },
   }),
-  rec(13, {
+  rec(17, {
     type: "player_finished",
     turnId: 1,
     timestamp: t + 10,
     playerId: "dev.coder",
     result: { status: "ok", playerId: "dev.coder", turnId: 1, finalText: "Fixed." },
   }),
-  rec(14, {
+  rec(18, {
     type: "captain_telemetry",
     turnId: 1,
     timestamp: t + 11,
     topic: "playbook.fsm.state",
     payload: { from: "coding", to: "ready", event: "xstate.done" },
   }),
-  rec(15, { type: "turn_finished", turnId: 1, timestamp: t + 12 }),
+  rec(19, { type: "turn_finished", turnId: 1, timestamp: t + 12 }),
 ];
 
 /** Turn 2: the reviewer asks a question; the FSM parks awaiting a reply. */
 export const TURN_TWO_QUESTION: FixtureEntry[] = [
-  rec(16, {
+  rec(20, {
     type: "turn_started",
     turnId: 2,
     timestamp: t + 20,
     turn: { id: 2, prompt: "review it", timestamp: t + 20 },
   }),
-  rec(17, {
+  rec(21, {
     type: "player_prompt",
     turnId: 2,
     timestamp: t + 21,
     playerId: "dev.reviewer",
     prompt: "Review the change",
   }),
-  rec(18, {
+  rec(22, {
     type: "player_finished",
     turnId: 2,
     timestamp: t + 22,
@@ -232,13 +310,13 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
       finalText: "Which auth flow should I prioritize?",
     },
   }),
-  rec(19, {
+  rec(23, {
     type: "captain_status",
     turnId: 2,
     timestamp: t + 23,
     message: "◆ dev.reviewer asks: Which auth flow should I prioritize?",
   }),
-  rec(20, {
+  rec(24, {
     type: "captain_telemetry",
     turnId: 2,
     timestamp: t + 24,
@@ -254,31 +332,31 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
       },
     },
   }),
-  rec(21, { type: "turn_finished", turnId: 2, timestamp: t + 25 }),
+  rec(25, { type: "turn_finished", turnId: 2, timestamp: t + 25 }),
 ];
 
 /** Turn 3: the Boss reply resumes the flow. */
 export const TURN_THREE_REPLY: FixtureEntry[] = [
-  rec(22, {
+  rec(26, {
     type: "turn_started",
     turnId: 3,
     timestamp: t + 30,
     turn: { id: 3, prompt: "prioritize OAuth", timestamp: t + 30 },
   }),
-  rec(23, {
+  rec(27, {
     type: "captain_telemetry",
     turnId: 3,
     timestamp: t + 31,
     topic: "playbook.fsm.state",
     payload: { from: "awaitBossReply", to: "review", event: "BOSS_REPLY" },
   }),
-  rec(24, { type: "turn_finished", turnId: 3, timestamp: t + 32 }),
+  rec(28, { type: "turn_finished", turnId: 3, timestamp: t + 32 }),
 ];
 
 /** A hidden captain exchange — must NEVER appear on a session channel;
  * used to verify the reducer ignores it even if misdelivered. */
 export const HIDDEN_LEAK: FixtureEntry[] = [
-  rec(25, {
+  rec(29, {
     type: "captain_prompt",
     turnId: 4,
     timestamp: t + 40,

@@ -268,7 +268,7 @@ export function MachineCard({
   );
 
   const header = (
-    <div className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+    <div className="flex items-center gap-1 px-1.5 py-1.5 text-xs @sm:gap-2 @sm:px-2.5">
       <button
         type="button"
         data-testid={`machine-disclose-${frame.traceSessionId}`}
@@ -310,7 +310,7 @@ export function MachineCard({
       </span>
       <span
         data-testid={`machine-outcome-${frame.traceSessionId}`}
-        className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+        className={`shrink-0 rounded-full px-1 py-0.5 text-xs @sm:px-2 ${
           running
             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
             : frame.outcome === "failed"

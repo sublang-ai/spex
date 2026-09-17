@@ -15,6 +15,7 @@
 
 import { join } from "node:path";
 import { seedDemoProject } from "@sublang/spex-core/testing";
+import type { Locator } from "@playwright/test";
 
 import { test, expect, open, nav, send } from "../src/harness";
 import {
@@ -128,6 +129,12 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
       show: async () => {
         await send(page, TASK);
         await expect(page.getByTestId("captain-pane")).toContainText("/code started");
+        // Settle one complete run first, then keep the next in flight:
+        // every viewport therefore carries both the folded resting
+        // measure and the live replacement whose fit it exercises.
+        await expect(abort).toHaveCount(0, { timeout: 20_000 });
+        await send(page, "Continue measuring the token refresh work");
+        await expect(abort).toBeVisible();
       },
       ready: async () => {
         await expect(page.getByTestId("captain-pane")).toBeVisible();
@@ -274,6 +281,122 @@ test("run-view-105: chrome fits at every width, in both sidebar states", async (
       log(`${where}: measured`);
     }
   }
+
+  // The agent-local time slot has two deliberate yield points
+  // (run-view-105/143): completed active time leaves first, while a
+  // live call's elapsed reading survives to the next rung. Exercise
+  // those thresholds against a real folded summary and the real
+  // divider rather than inferring them from class names.
+  await nav(page, "Projects").click();
+  await page.getByRole("tab", { name: /Fix the token refresh/i }).click();
+  await expect(page.getByTestId("captain-pane")).toBeVisible();
+  await expect(abort).toHaveCount(0, { timeout: 20_000 });
+  await setRail(page, false);
+  await page.setViewportSize({ width: 1280, height: TALL });
+
+  const reviewerCollapse = page.getByRole("button", {
+    name: "Collapse dev.reviewer",
+  });
+  if (await reviewerCollapse.isVisible()) await reviewerCollapse.click();
+  await expect(page.getByTestId("player-pane-dev.reviewer"))
+    .toHaveAttribute("data-collapsed", "true");
+
+  const divider = page.getByTestId("captain-divider");
+  const coderPane = page.getByTestId("player-pane-dev.coder");
+  const coderName = page.getByTestId("player-name-dev.coder");
+  const coderCollapse = page.getByRole("button", { name: "Collapse dev.coder" });
+  const coderRunning = coderPane.getByTestId("player-running");
+  const active = page.getByTestId("agent-active-dev.coder");
+  const activeDescription = page.getByTestId(
+    "agent-active-description-dev.coder",
+  );
+  await divider.press("Home");
+  await expect(active).toBeVisible();
+  await expect(activeDescription).toContainText(
+    /Completed active time this session: .+ · parallel calls overlap/,
+  );
+
+  const dragToFloor = async (
+    target: Locator,
+    phase: "resting active time" | "live elapsed",
+    requireRunning: boolean,
+  ): Promise<number> => {
+    const geometry = await divider.evaluate((node) => {
+      const container = node.parentElement?.parentElement;
+      if (!(container instanceof HTMLElement)) {
+        throw new Error("Captain divider has no split container");
+      }
+      const box = container.getBoundingClientRect();
+      const style = getComputedStyle(container);
+      const padLeft = Number.parseFloat(style.paddingLeft) || 0;
+      const padRight = Number.parseFloat(style.paddingRight) || 0;
+      const gap = Number.parseFloat(style.columnGap) || 0;
+      return {
+        left: box.left,
+        y: node.getBoundingClientRect().y + node.getBoundingClientRect().height / 2,
+        content: box.width - padLeft - padRight,
+        padLeft,
+        gap,
+      };
+    });
+    let yieldedAt: number | undefined;
+    await divider.hover();
+    await page.mouse.down();
+    try {
+      for (const percent of [45, 47, 49, 51, 53, 55, 57, 59, 61, 63, 65, 67, 69, 70]) {
+        const x = geometry.left + geometry.padLeft + geometry.gap +
+          geometry.content * percent / 100;
+        await page.mouse.move(x, geometry.y);
+        await expect(divider).toHaveAttribute("aria-valuenow", String(percent));
+        const paneWidth = (await coderPane.boundingBox())!.width;
+        record(
+          `${phase} · coder pane ${Math.round(paneWidth)}px`,
+          await measure(page),
+          defects,
+        );
+        if (yieldedAt === undefined && !(await target.isVisible())) {
+          if (requireRunning && (
+            await target.count() !== 1 ||
+            !(await coderRunning.isVisible()) ||
+            !(await abort.isVisible())
+          )) {
+            throw new Error(
+              `${phase} call settled before its yield point was measured`,
+            );
+          }
+          yieldedAt = paneWidth;
+        }
+      }
+    } finally {
+      await page.mouse.up();
+    }
+    if (yieldedAt === undefined) {
+      throw new Error(`${phase} remained visible at the player-pane floor`);
+    }
+    return yieldedAt;
+  };
+
+  const activeYieldWidth = await dragToFloor(active, "resting active time", false);
+  await expect(active).not.toBeVisible();
+  await expect(activeDescription).toContainText("parallel calls overlap");
+  await expect(coderName).toBeVisible();
+  await expect(coderCollapse).toBeVisible();
+
+  await divider.press("Home");
+  await expect(active).toBeVisible();
+  await send(page, "Measure the live elapsed yield point");
+  const liveElapsed = coderPane.getByTestId("player-working");
+  await expect(liveElapsed).toBeVisible({ timeout: 10_000 });
+  const liveYieldWidth = await dragToFloor(liveElapsed, "live elapsed", true);
+  expect(activeYieldWidth).toBeGreaterThan(liveYieldWidth);
+  await expect(abort).toBeVisible();
+  await expect(coderRunning).toBeVisible();
+  await expect(liveElapsed).toHaveCount(1);
+  await expect(liveElapsed).not.toBeVisible();
+  await expect(activeDescription).toContainText("parallel calls overlap");
+  await expect(coderName).toBeVisible();
+  await expect(coderCollapse).toBeVisible();
+
   // The collapsed rail's badge caps at "9+", the count in the name
   // (run-view-108).
   await setRail(page, false);

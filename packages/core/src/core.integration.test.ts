@@ -464,7 +464,7 @@ test("CORE-21: each launcher defect class yields a named config error and blocks
 // CORE-22: restart persistence
 // ---------------------------------------------------------------------------
 
-test("CORE-22: records, order, and usage survive a service restart", async () => {
+test("CORE-22: records, order, usage, and active time survive a service restart", async () => {
   const harness = await startHarness();
   const client = new Client(harness.service.port());
   await client.open();
@@ -501,6 +501,10 @@ test("CORE-22: records, order, and usage survive a service restart", async () =>
   const usageBefore = await client.expectOk("usage.get", {
     sessionId: session.id,
   });
+  const activeBefore = (await client.expectOk("session.list", {}))
+    .find((entry) => entry.id === session.id)?.agentActiveMs;
+  assert.ok(Object.hasOwn(activeBefore ?? {}, "captain"));
+  assert.ok(Object.hasOwn(activeBefore ?? {}, "dev.coder"));
   client.close();
   await harness.service.stop();
 
@@ -519,6 +523,7 @@ test("CORE-22: records, order, and usage survive a service restart", async () =>
   const recovered = sessions.find((s: SessionInfo) => s.id === session.id);
   assert.ok(recovered, "session survives restart");
   assert.equal(recovered.live, false, "a released session stays not live across restart");
+  assert.deepEqual(recovered.agentActiveMs, activeBefore);
 
   const after = await client2.expectOk("history.get", {
     sessionId: session.id,
@@ -1251,6 +1256,20 @@ function writeForeignSession(
   cwd: string,
   records: Record<string, unknown>[],
 ): void {
+  writeForeignRecordEntries(
+    sessionsDir,
+    id,
+    cwd,
+    records.map((record) => ({ record })),
+  );
+}
+
+function writeForeignRecordEntries(
+  sessionsDir: string,
+  id: string,
+  cwd: string,
+  entries: { record: Record<string, unknown>; role?: string }[],
+): void {
   mkdirSync(sessionsDir, { recursive: true });
   writeFileSync(
     join(sessionsDir, `${id}.json`),
@@ -1258,13 +1277,141 @@ function writeForeignSession(
   );
   writeFileSync(
     join(sessionsDir, `${id}.records.jsonl`),
-    records
-      .map((record, index) =>
-        JSON.stringify({ v: 1, seq: index + 1, record }),
+    entries
+      .map((entry, index) =>
+        JSON.stringify({ v: 1, seq: index + 1, ...entry }),
       )
       .join("\n") + "\n", {mode:0o600},
   );
 }
+
+test("core-service-103: stored call spans fold to per-agent active time", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-agent-active-"));
+  const sessionsDir = join(dir, "shared-sessions");
+  const projectDir = join(dir, "project");
+  mkdirSync(projectDir);
+  execFileSync("git", ["init", "-q", projectDir]);
+  const configPath = join(dir, "playbook.config.yaml");
+  writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+
+  const measuredId = "10300000-0000-4000-8000-000000000001";
+  const noPairId = "10300000-0000-4000-8000-000000000002";
+  const incompleteId = "10300000-0000-4000-8000-000000000003";
+  const measured: { record: Record<string, unknown>; role?: string }[] = [
+    { record: { type: "turn_started", turnId: 1, turn: { id: 1, prompt: "measure calls" }, timestamp: 0 } },
+    { record: { type: "captain_prompt", turnId: 1, prompt: "route", visibility: "hidden", timestamp: 50 } },
+    { record: { type: "player_prompt", turnId: 1, playerId: "dev.shared", prompt: "code", timestamp: 100 }, role: "code.coder" },
+    { record: { type: "player_prompt", turnId: 1, playerId: "dev.other", prompt: "review", timestamp: 200 }, role: "review.reviewer" },
+    { record: { type: "player_event", turnId: 1, playerId: "dev.shared", timestamp: 300, event: { type: "done", payload: { durationMs: 9_999 } } }, role: "code.coder" },
+    { record: { type: "captain_finished", turnId: 1, visibility: "hidden", timestamp: 450, result: { status: "success" } } },
+    { record: { type: "player_finished", turnId: 1, playerId: "dev.shared", timestamp: 600, result: { status: "success" } }, role: "code.coder" },
+    { record: { type: "player_prompt", turnId: 1, playerId: "dev.shared", prompt: "review", timestamp: 650 }, role: "review.reviewer" },
+    { record: { type: "player_event", turnId: 1, playerId: "dev.shared", timestamp: 700, event: { type: "tool_result", payload: { durationMs: 8_888 } } }, role: "review.reviewer" },
+    { record: { type: "player_finished", turnId: 1, playerId: "dev.other", timestamp: 800, result: { status: "aborted" } }, role: "review.reviewer" },
+    { record: { type: "player_finished", turnId: 1, playerId: "dev.shared", timestamp: 900, result: { status: "error" } }, role: "review.reviewer" },
+    { record: { type: "turn_finished", turnId: 1, timestamp: 1_000 } },
+    { record: { type: "turn_started", turnId: 2, turn: { id: 2, prompt: "edge cases" }, timestamp: 1_100 } },
+    { record: { type: "player_prompt", turnId: 2, playerId: "dev.zero", prompt: "zero", timestamp: 1_200 } },
+    { record: { type: "player_finished", turnId: 2, playerId: "dev.zero", timestamp: 1_200, result: { status: "success" } } },
+    { record: { type: "player_prompt", turnId: 2, playerId: "dev.backward", prompt: "backward", timestamp: 1_400 } },
+    { record: { type: "player_finished", turnId: 2, playerId: "dev.backward", timestamp: 1_300, result: { status: "success" } } },
+    { record: { type: "player_finished", turnId: 2, playerId: "dev.backward", timestamp: 1_500, result: { status: "success" } } },
+    { record: { type: "player_prompt", turnId: 2, playerId: "dev.prior", prompt: "measured", timestamp: 1_600 } },
+    { record: { type: "player_finished", turnId: 2, playerId: "dev.prior", timestamp: 1_700, result: { status: "success" } } },
+    { record: { type: "player_finished", turnId: 2, playerId: "dev.prior", timestamp: 1_800, result: { status: "success" } } },
+    { record: { type: "player_prompt", turnId: 2, playerId: "dev.invalid", prompt: "ignored", timestamp: "bad" } },
+    { record: { type: "player_prompt", turnId: 2, playerId: "dev.invalid", prompt: "valid", timestamp: 1_900 } },
+    { record: { type: "player_finished", turnId: 2, playerId: "dev.invalid", timestamp: "bad", result: { status: "success" } } },
+    { record: { type: "player_finished", turnId: 2, playerId: "dev.invalid", timestamp: 2_200, result: { status: "success" } } },
+    { record: { type: "turn_finished", turnId: 2, timestamp: 2_250 } },
+    { record: { type: "turn_started", turnId: 3, turn: { id: 3, prompt: "unfinished calls" }, timestamp: 2_260 } },
+    { record: { type: "player_prompt", turnId: 2, playerId: "dev.later", prompt: "dangling", timestamp: 2_300 } },
+    { record: { type: "player_prompt", turnId: 3, playerId: "dev.later", prompt: "matched", timestamp: 2_400 } },
+    { record: { type: "player_finished", turnId: 3, playerId: "dev.later", timestamp: 2_600, result: { status: "success" } } },
+    { record: { type: "player_prompt", turnId: 3, playerId: "dev.open", prompt: "still open", timestamp: 2_700 } },
+    { record: { type: "player_finished", turnId: 3, playerId: "dev.none", timestamp: 2_800, result: { status: "success" } } },
+  ];
+  writeForeignRecordEntries(sessionsDir, measuredId, projectDir, measured);
+  writeForeignSession(sessionsDir, noPairId, projectDir, [
+    { type: "player_prompt", turnId: 1, playerId: "dev.never", prompt: "open", timestamp: 10 },
+    { type: "player_finished", turnId: 2, playerId: "dev.never", timestamp: 20, result: { status: "success" } },
+  ]);
+  writeForeignSession(sessionsDir, incompleteId, projectDir, [
+    { type: "captain_prompt", turnId: 1, prompt: "measured prefix", timestamp: 10, visibility: "hidden" },
+    { type: "captain_finished", turnId: 1, timestamp: 20, visibility: "hidden", result: { status: "success" } },
+  ]);
+  appendFileSync(join(sessionsDir, `${incompleteId}.records.jsonl`), '{"v":1,"seq":3\n');
+
+  const service = await CoreService.start({
+    token: "test",
+    configPath,
+    dataDir: join(dir, "state"),
+    env: {},
+    home: join(dir, "home"),
+    watchConfig: true,
+  });
+  const client = new Client(service.port());
+  t.after(async () => {
+    client.close();
+    await service.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  await client.open();
+  await client.expectOk("project.register", { path: projectDir });
+
+  const sessions = await client.expectOk("session.list", {});
+  const folded = sessions.find((session) => session.id === measuredId);
+  assert.deepEqual(folded?.agentActiveMs, {
+    captain: 400,
+    "dev.shared": 750,
+    "dev.other": 600,
+    "dev.zero": 0,
+    "dev.backward": 0,
+    "dev.prior": 100,
+    "dev.invalid": 300,
+    "dev.later": 200,
+  });
+  assert.ok(
+    (folded?.agentActiveMs?.["dev.shared"] ?? 0) +
+      (folded?.agentActiveMs?.["dev.other"] ?? 0) > 1_000,
+    "overlapping player spans remain whole rather than partitioning the turn",
+  );
+  assert.ok(!Object.hasOwn(folded?.agentActiveMs ?? {}, "dev.open"));
+  assert.ok(!Object.hasOwn(folded?.agentActiveMs ?? {}, "dev.none"));
+  assert.equal(sessions.find((session) => session.id === noPairId)?.agentActiveMs, undefined);
+  const incomplete = sessions.find((session) => session.id === incompleteId);
+  assert.notEqual(incomplete?.streamIncompleteAfterSeq, undefined);
+  assert.equal(incomplete?.agentActiveMs, undefined);
+
+  const visible = await client.expectOk("history.get", { sessionId: measuredId });
+  assert.ok(
+    !visible.records.some((entry) => entry.record.type === "captain_prompt" || entry.record.type === "captain_finished"),
+    "the Captain's hidden calls contribute without leaking into visible replay",
+  );
+
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: measuredId } });
+  const stream = join(sessionsDir, `${measuredId}.records.jsonl`);
+  const finishSeq = measured.length + 1;
+  appendFileSync(stream, JSON.stringify({
+    v: 1,
+    seq: finishSeq,
+    record: { type: "player_finished", turnId: 3, playerId: "dev.open", timestamp: 3_100, result: { status: "success" } },
+  }) + "\n");
+  await client.waitFor((message) =>
+    message.type === "session.state" && message.session.id === measuredId &&
+    message.session.agentActiveMs?.["dev.open"] === 400,
+  );
+  await client.waitFor((message) =>
+    message.type === "record" && message.sessionId === measuredId && message.seq === finishSeq,
+  );
+
+  appendFileSync(stream, `{"v":1,"seq":${finishSeq + 1}\n`);
+  await client.waitFor((message) =>
+    message.type === "session.state" && message.session.id === measuredId &&
+    message.session.streamIncompleteAfterSeq !== undefined &&
+    message.session.agentActiveMs === undefined,
+  );
+});
 
 /** The lease directory the CLI guards a writer with: `.<id>.lock`
  * holding `owner.json` naming the pid and host. */
