@@ -33,6 +33,8 @@ import type {
   IntentInfo,
   IntentSource,
   IntentSourceKind,
+  ParkedRun,
+  ParkedRunAction,
   ProjectInfo,
   SessionAgentSettings,
   SessionInfo,
@@ -131,6 +133,7 @@ function sessionInfo(
   costUsd: number | undefined,
   agentSettings: SessionAgentSettingsMap | undefined,
   agentActiveMs: Record<string, number> | undefined,
+  parked: ParkedRun | undefined,
 ): SessionInfo {
   return {
     id: meta.id,
@@ -156,10 +159,35 @@ function sessionInfo(
       : meta.continuationReason ? { continuationReason: meta.continuationReason } : {}),
     ...(meta.recovery && !meta.externalWriter ? { recovery: meta.recovery } : {}),
     ...(agentSettings && Object.keys(agentSettings).length > 0 ? { agentSettings } : {}),
+    ...(parked ? { parked } : {}),
   };
 }
 
 const agentSettingsKey = (sessionId: string): string => `session:${sessionId}:agents`;
+const parkedRunKey = (sessionId: string): string => `session:${sessionId}:parked`;
+
+/** A parked run's captured controls, read defensively: a hand-edited
+ * or older preference never invalidates the rest of the session. */
+function readParkedRun(value: unknown): ParkedRun | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  if (source.reason !== "failure" && source.reason !== "question") return undefined;
+  const control = (entry: unknown): ParkedRunAction | undefined => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return undefined;
+    const held = entry as Record<string, unknown>;
+    if (typeof held.id !== "string" || !held.id || typeof held.label !== "string") return undefined;
+    return {
+      id: held.id, label: held.label,
+      ...(held.standing === "ready" || held.standing === "no-op" || held.standing === "blocked" ? {standing: held.standing} : {}),
+      ...(typeof held.reason === "string" && held.reason ? {reason: held.reason} : {}),
+    };
+  };
+  const actions = (Array.isArray(source.actions) ? source.actions : [])
+    .map(control).filter((entry): entry is ParkedRunAction => entry !== undefined);
+  const ending = control(source.ending);
+  if (actions.length === 0 && !ending) return undefined;
+  return {reason: source.reason, actions, ...(ending ? {ending: {id: ending.id, label: ending.label}} : {})};
+}
 
 /** One agent's stored tuning, read defensively: a hand-edited or
  * older preference file never invalidates the rest of the session. */
@@ -610,8 +638,11 @@ export class Store {
       manifest = checked.manifest as SessionManifest;
       if (manifest.schemaVersion === 7 && !checked.integrityValid) problem = {file:join(shared.sessionsDir, `${id}.json`), reason:checked.reasons.join("; ") || "session checkpoint and replay disagree", blocking:true};
       stored = checked.history.entries.map(({ v: _v, ...entry }) => entry as unknown as StoredRecord);
-      continuable = manifest.schemaVersion === 7 && checked.resumable && manifest.state === "settled" && manifest.unresolvedEffects.length === 0;
-      reason = checked.reasons.join("; ") || (manifest.state === "uncertain" ? "Recover the interrupted turn with Retry or Discard" : manifest.schemaVersion === 7 && manifest.state === "settled" && manifest.unresolvedEffects.length ? "Reconcile unresolved effects before continuation" : undefined);
+      // Continuation follows Playbook's own validation (core-service-73,
+      // DR-074): unresolved effects are evidence a restored session
+      // fences, never a refusal of the core's own invention.
+      continuable = manifest.schemaVersion === 7 && checked.resumable && manifest.state === "settled";
+      reason = checked.reasons.join("; ") || (manifest.state === "uncertain" ? "Recover the interrupted turn with Retry or Discard" : undefined);
       if (checked.history.incomplete || checked.history.pendingTail || (manifest.schemaVersion === 7 && manifest.replay.incomplete)) {
         incompleteAfterSeq = Math.min(checked.history.lastReadableSeq, manifest.schemaVersion === 7 ? manifest.replay.seq : checked.history.lastReadableSeq);
       }
@@ -1092,7 +1123,7 @@ export class Store {
     this.records.delete(id);
     this.turns.delete(id);
     this.usage.delete(id);
-    if ([this.prefs.delete(`viewed:${id}`), this.prefs.delete(agentSettingsKey(id))].some(Boolean)) this.savePrefs();
+    if ([this.prefs.delete(`viewed:${id}`), this.prefs.delete(agentSettingsKey(id)), this.prefs.delete(parkedRunKey(id))].some(Boolean)) this.savePrefs();
   }
 
   /** Local runtime liveness is never restored from stored history. */
@@ -1140,6 +1171,7 @@ export class Store {
       cost,
       this.sessionAgentSettings(meta.id),
       agentActiveMs,
+      this.parkedRun(meta.id),
     );
   }
 
@@ -1544,6 +1576,20 @@ export class Store {
       if (entry) tuning[agentId] = entry;
     }
     return Object.keys(tuning).length > 0 ? tuning : undefined;
+  }
+
+  /** What a session's parked run advertised when its shell was last
+   * held (core-service-32, DR-074): a local, rebuildable reading the
+   * summary carries across restarts (storage-5). */
+  parkedRun(sessionId: string): ParkedRun | undefined {
+    return readParkedRun(this.getPref<unknown>(parkedRunKey(sessionId)));
+  }
+
+  /** No parked run is no key: the reading leaves rather than standing
+   * for a run that has moved on. */
+  setParkedRun(sessionId: string, parked: ParkedRun | undefined): void {
+    if (!parked) this.deletePref(parkedRunKey(sessionId));
+    else this.setPref(parkedRunKey(sessionId), parked);
   }
 
   /** An empty tuning is no tuning: the key leaves rather than standing

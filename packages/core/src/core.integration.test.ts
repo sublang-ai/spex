@@ -22,7 +22,7 @@ import { CoreService } from "./service.js";
 import { templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
 import { pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
-import { fakeAdapterImports, type FakeAdapterStats } from "./testing/fake-adapter.js";
+import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import type { LineSpawner } from "./compile.js";
 import { defaultSpawner } from "./compile.js";
@@ -148,9 +148,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** A repository a scripted player can really commit in: an identity,
+ * no signing — the host's global git config must not decide it — and a
+ * baseline commit for a later one to descend from. */
+function seedRepository(projectDir: string): void {
+  for (const [key, value] of [
+    ["user.name", "Spex Test"],
+    ["user.email", "spex@example.test"],
+    ["commit.gpgsign", "false"],
+  ]) execFileSync("git", ["-C", projectDir, "config", key, value]);
+  writeFileSync(join(projectDir, "work.txt"), "baseline\n");
+  execFileSync("git", ["-C", projectDir, "add", "-A"]);
+  execFileSync("git", ["-C", projectDir, "commit", "-q", "-m", "baseline"]);
+}
+
 interface Harness {
   service: CoreService;
   stats: FakeAdapterStats;
+  /** The same substitute agents a restarted core is given. */
+  imports: import("@sublang/cligent/tmux-play").PlayerAdapterImports;
   dir: string;
   dataDir: string;
   projectDir: string;
@@ -161,6 +177,12 @@ async function startHarness(
   options: {
     dataDir?: string;
     realShell?: boolean;
+    /** Replaces the default adapter script, so a test can drive the
+     * real shell's decisions and its players' repository work. */
+    script?: FakeScript;
+    /** Seed the project with an identity, no signing and a baseline
+     * commit, so a scripted player can really commit in it. */
+    seedCommit?: boolean;
     env?: NodeJS.ProcessEnv;
     runCommand?: import("./forge.js").RunCommand;
     compileSpawner?: import("./compile.js").LineSpawner;
@@ -174,9 +196,10 @@ async function startHarness(
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
+  if (options.seedCommit) seedRepository(projectDir);
   const dataDir = options.dataDir ?? join(dir, "state");
 
-  const { imports, stats } = fakeAdapterImports({
+  const { imports, stats } = fakeAdapterImports(options.script ?? {
     rules: [
       { match: "route:", response: { result: '{"decision":"dispatch"}' } },
       {
@@ -216,7 +239,7 @@ async function startHarness(
       ? { compileSpawner: options.compileSpawner }
       : {}),
   });
-  return { service, stats, dir, dataDir, projectDir };
+  return { service, stats, imports, dir, dataDir, projectDir };
 }
 
 // ---------------------------------------------------------------------------
@@ -1135,6 +1158,299 @@ test("real captain shell: a Boss turn round-trips the captain reply", async () =
   client.close();
   await service.stop();
 });
+
+// ---------------------------------------------------------------------------
+// core-service-99/105: a parked run survives its settlement (DR-074)
+// ---------------------------------------------------------------------------
+
+/** A run that parks itself on real repository evidence: the Captain's
+ * decision starts the real /code root, and its coder commits the phase
+ * and leaves a stray file behind — the receipt Playbook classifies
+ * observation-ambiguous, so the turn settles with one unresolved
+ * effect and a fenced leaf advertising its two controls. */
+function parkingScript(): FakeScript {
+  let phase = 0;
+  return {
+    rules: [
+      {
+        // The coder's own call, inside the repository-effect boundary.
+        match: "Original request:",
+        response: {
+          result: "Committed the phase.",
+          effect: (cwd) => {
+            phase += 1;
+            writeFileSync(join(cwd, "work.txt"), `baseline\nphase ${phase}\n`);
+            execFileSync("git", ["-C", cwd, "add", "-A"]);
+            execFileSync("git", ["-C", cwd, "commit", "-q", "-m", `phase ${phase}`]);
+            writeFileSync(join(cwd, `stray-${phase}.txt`), "left behind\n");
+          },
+        },
+      },
+      {
+        match: /"action"/,
+        response: {
+          result: JSON.stringify({
+            action: "start",
+            playbookId: "code",
+            input: "Add a line to work.txt",
+          }),
+        },
+      },
+    ],
+    fallback: { result: "Done." },
+  };
+}
+
+/** Wait out a turn and the settlement that releases its runtime, and
+ * return the summary published with that release. */
+async function settledSession(
+  client: Client,
+  sessionId: string,
+  turns: number,
+): Promise<SessionInfo> {
+  const message = await client.waitFor(
+    (m) =>
+      m.type === "session.state" &&
+      m.session.id === sessionId &&
+      m.session.turns === turns &&
+      !m.session.turnActive &&
+      !m.session.live,
+    60_000,
+  );
+  if (message.type !== "session.state") throw new Error("unreachable");
+  return message.session;
+}
+
+/** The preferences as the file holds them. */
+function storedPrefs(dataDir: string): Record<string, unknown> {
+  return (
+    JSON.parse(readFileSync(join(dataDir, "prefs.json"), "utf8")) as {
+      prefs: Record<string, unknown>;
+    }
+  ).prefs;
+}
+
+test(
+  "core-service-99: a settled run parked on unresolved effects releases its runtime, publishes its controls, and answers a named one after a restart",
+  { timeout: 180_000 },
+  async (t) => {
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: parkingScript(),
+      seedCommit: true,
+    });
+    let service = harness.service;
+    let client = new Client(service.port());
+    t.after(async () => {
+      client.close();
+      await service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: "Add a line to work.txt",
+    });
+    const released = await settledSession(client, session.id, 1);
+
+    // The evidence really stands in the checkpoint.
+    const manifest = JSON.parse(
+      readFileSync(join(harness.dataDir, "sessions", `${session.id}.json`), "utf8"),
+    ) as { state: string; unresolvedEffects: unknown[] };
+    assert.equal(manifest.state, "settled");
+    assert.equal(manifest.unresolvedEffects.length, 1);
+    // Released at settlement all the same, and continuable exactly as
+    // Playbook's validation says (core-service-91, core-service-73).
+    assert.equal(released.live, false);
+    assert.equal(released.continuable, true, released.continuationReason ?? "no reason given");
+    assert.equal(released.continuationReason, undefined);
+    // The controls the fenced run advertises, read while the shell was
+    // still held and published with the summary (core-service-32).
+    assert.equal(released.parked?.reason, "failure");
+    assert.deepEqual(
+      released.parked?.actions.map((action) => action.id),
+      ["reconcile:unresolved-effect", "abandon:unresolved-effect"],
+    );
+    assert.ok(
+      released.parked?.actions.every((action) => action.label.length > 0),
+      "each advertised action carries its Boss-facing label",
+    );
+    assert.equal(released.parked?.ending?.id, "give-up");
+    assert.match(released.parked?.ending?.label ?? "", /\/code/);
+    assert.ok(
+      Object.hasOwn(storedPrefs(harness.dataDir), `session:${session.id}:parked`),
+      "the reading is kept where a restart can find it",
+    );
+
+    // Busy means busy: an idle parked session blocks nothing.
+    const second = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("session.dispose", { sessionId: second.id });
+
+    // A fresh core over the same home reads both from the files.
+    client.close();
+    await service.stop();
+    service = await CoreService.start({
+      token: "test",
+      configPath: join(harness.dir, "playbook.config.yaml"),
+      dataDir: harness.dataDir,
+      adapterImports: harness.imports,
+      adapterRuntime: () => ({ usable: true }),
+      env: {},
+      home: join(harness.dir, "home"),
+      watchConfig: false,
+    });
+    client = new Client(service.port());
+    await client.open();
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    const restarted = (await client.expectOk("session.list", {})).find(
+      (entry) => entry.id === session.id,
+    );
+    assert.equal(restarted?.live, false);
+    assert.equal(restarted?.continuable, true, restarted?.continuationReason ?? "no reason given");
+    assert.deepEqual(restarted?.parked, released.parked);
+
+    // A control names the action it selects; one the opened run does
+    // not advertise is refused with its cause (core-service-98).
+    const refused = await client.command("session.control", {
+      sessionId: session.id,
+      kind: "recovery",
+      actionId: "no-such-action",
+    });
+    assert.ok(!refused.ok, "an unadvertised action is refused");
+    assert.match(refused.error.message, /no-such-action/);
+    const unmoved = (await client.expectOk("session.list", {})).find(
+      (entry) => entry.id === session.id,
+    );
+    assert.equal(unmoved?.turns, 1, "a refused control starts no turn");
+    assert.equal(
+      unmoved?.live,
+      false,
+      "the runtime the refused control opened is let go again",
+    );
+
+    // The second advertised action — unreachable while the first was
+    // taken — runs through the settled session the control opens.
+    await client.expectOk("session.control", {
+      sessionId: session.id,
+      kind: "recovery",
+      actionId: "abandon:unresolved-effect",
+    });
+    // A second request adds no turn of its own, whether it lands on the
+    // running turn or on the run that is no longer parked.
+    assert.ok(
+      !(
+        await client.command("session.control", {
+          sessionId: session.id,
+          kind: "recovery",
+          actionId: "abandon:unresolved-effect",
+        })
+      ).ok,
+      "a repeated control is refused rather than run twice",
+    );
+    const ended = await settledSession(client, session.id, 2);
+    assert.equal(ended.parked, undefined, "the run left its park");
+    assert.equal(ended.continuable, true, ended.continuationReason ?? "no reason given");
+    assert.ok(
+      !Object.hasOwn(storedPrefs(harness.dataDir), `session:${session.id}:parked`),
+      "the reading leaves with the park",
+    );
+    const { records } = await client.expectOk("history.get", {
+      sessionId: session.id,
+    });
+    const prompts = records.flatMap(({ record }) => {
+      const entry = record as unknown as { type: string; turn?: { prompt: string } };
+      return entry.type === "turn_started" && entry.turn ? [entry.turn.prompt] : [];
+    });
+    assert.equal(prompts.length, 2);
+    assert.equal(prompts[1], "Abandon unresolved workflow attempt");
+    // The run it abandoned summons nobody, though the effect stays in
+    // the checkpoint as evidence: what stands is the finished turn's
+    // own entry, not an interrupted one.
+    const ledger = await client.expectOk("ledger.get", {});
+    assert.deepEqual(
+      ledger.attention
+        .filter((entry) => entry.sessionId === session.id)
+        .map((entry) => entry.band),
+      ["finished"],
+    );
+  },
+);
+
+test(
+  "core-service-105: the ending runs by fallback on a restored parked run, and deletion forgets its controls",
+  { timeout: 180_000 },
+  async (t) => {
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: parkingScript(),
+      seedCommit: true,
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: "Add a line to work.txt",
+    });
+    const parked = await settledSession(client, session.id, 1);
+    assert.equal(parked.parked?.ending?.id, "give-up");
+
+    // No name: the first advertised control of that kind, as the
+    // interface that has not yet moved to named actions sends it.
+    await client.expectOk("session.control", {
+      sessionId: session.id,
+      kind: "ending",
+    });
+    const stopped = await settledSession(client, session.id, 2);
+    assert.equal(stopped.parked, undefined);
+    assert.equal(stopped.continuable, true, stopped.continuationReason ?? "no reason given");
+
+    // A Boss message continues the session the ending left behind, and
+    // its own run parks the same way.
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: "Add another line to work.txt",
+    });
+    const reparked = await settledSession(client, session.id, 3);
+    assert.equal(reparked.parked?.reason, "failure");
+    assert.ok(
+      Object.hasOwn(storedPrefs(harness.dataDir), `session:${session.id}:parked`),
+      "the new park is published in its turn",
+    );
+
+    // Deleting the session — idle, though its run stands parked —
+    // forgets the reading with it (storage-5).
+    await client.expectOk("session.delete", { sessionId: session.id });
+    assert.ok(
+      !Object.hasOwn(storedPrefs(harness.dataDir), `session:${session.id}:parked`),
+      "no reading outlives the session it describes",
+    );
+  },
+);
 
 // ---------------------------------------------------------------------------
 // CORE-13: malformed messages leave the connection open with no state change

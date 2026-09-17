@@ -40,7 +40,7 @@ interface Turn {
 
 /** A session's standing needs-you conditions, folded from its visible
  * records exactly as the run view folds them (dashboard-10). */
-interface SessionConditions {
+export interface SessionConditions {
   /** The captain parked at awaitBossReply and nothing moved since. */
   question?: { since: number; turnId: number | null };
   /**
@@ -52,7 +52,7 @@ interface SessionConditions {
   failure?: { since: number; turnId: number | null };
 }
 
-function foldConditions(records: StoredRecord[]): SessionConditions {
+export function foldConditions(records: StoredRecord[]): SessionConditions {
   let question: SessionConditions["question"];
   let failure: SessionConditions["failure"];
   // Runs parked on a question, by trace session id: a run disposed

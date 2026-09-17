@@ -33,6 +33,10 @@ export interface FakeResponse {
    * — a source-writing authoring agent (DR-058). A `<id>` in a path
    * names the cwd's basename, the draft id. */
   writes?: Record<string, string>;
+  /** Run in the run's `cwd` before the tool events — a player that
+   * really touches its repository, so Playbook classifies the receipt
+   * it actually finds rather than a scripted one (core-service-91). */
+  effect?: (cwd: string) => void;
   /** Emitted after the deltas, in order. */
   tools?: FakeToolCall[];
   thinking?: string;
@@ -183,6 +187,7 @@ export function fakeAdapterImports(
           writeFileSync(target, named(content));
         }
       }
+      if (response.effect && options?.cwd) response.effect(options.cwd);
       for (const [index, tool] of (response.tools ?? []).entries()) {
         const toolUseId = `fake-tool-${index}`;
         yield {

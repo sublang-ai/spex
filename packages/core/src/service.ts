@@ -1269,7 +1269,7 @@ export class CoreService {
       // so a parked run reached after a restart still answers, and stamps
       // no intent dispatch — the Boss is acting on the run, not sending work.
       case "session.control": {
-        await this.runControl(command.sessionId, command.kind);
+        await this.runControl(command.sessionId, command.kind, false, command.actionId);
         return { accepted: true };
       }
       case "turn.abort":
@@ -1965,22 +1965,37 @@ export class CoreService {
    * as its next turn, under turn.submit's admission, so a parked run
    * reached after a restart still answers. `awaitTurn` holds the caller
    * until that turn has settled — the ruling of core-service-46 needs
-   * its outcome before it writes. */
+   * its outcome before it writes. `actionId` names which advertised
+   * control to run; without a name the first advertised one runs. */
   private async runControl(
     sessionId: string,
     kind: "recovery" | "ending",
     awaitTurn = false,
+    actionId?: string,
   ): Promise<void> {
     const release = this.admitSubmission(sessionId);
+    let opened = false;
+    let submitted = false;
     try {
       await this.sessions.settled(sessionId);
       if (!this.sessions.getLive(sessionId)) {
         await this.settledConfig();
         await this.continueSession(sessionId);
+        opened = true;
       }
-      if (awaitTurn) await this.sessions.runControl(sessionId, kind);
-      else this.sessions.submitControl(sessionId, kind);
-    } finally { release(); }
+      if (awaitTurn) await this.sessions.runControl(sessionId, kind, actionId);
+      else this.sessions.submitControl(sessionId, kind, actionId);
+      submitted = true;
+    } finally {
+      // A refused control starts no turn, so the runtime this command
+      // opened to read what the session advertises is let go again: an
+      // idle session never stands in its project's way (DR-074).
+      try {
+        if (opened && !submitted && this.sessions.getLive(sessionId)) {
+          await this.sessions.disposeSession(sessionId);
+        }
+      } finally { release(); }
+    }
   }
 
   /** The project's open-intent ranks in order, optionally without the

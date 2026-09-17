@@ -17,7 +17,8 @@ import {
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
 import type { ComposedConfig, LoadModule } from "./config.js";
-import { CAPTAIN_AGENT_ID, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
+import { foldConditions } from "./ledger.js";
+import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
 
 export class CoreError extends Error {
@@ -378,13 +379,16 @@ export class SessionManager {
   }
 
   /** The runtime is held only for a turn (core-service-91): once the
-   * settled checkpoint can be continued from disk, release it — the
-   * Playbook lease with it — keeping the provider hints settlement wrote. */
+   * checkpoint has settled, release it — the Playbook lease with it —
+   * keeping the provider hints settlement wrote. Unresolved repository
+   * effects hold nothing: Playbook's restore installs their fence, and
+   * the controls that fence advertises are captured first (DR-074). */
   private async releaseAtSettle(entry: LiveSession): Promise<void> {
     const id = entry.info.id;
-    let recovery: {state?: string; unresolvedEffects?: readonly unknown[]} | undefined;
+    let recovery: {state?: string} | undefined;
     try { recovery = await entry.controller.read(); } catch { recovery = undefined; }
-    if (recovery?.state !== "settled" || (recovery.unresolvedEffects?.length ?? 0) > 0) return;
+    if (recovery?.state !== "settled") return;
+    this.captureParkedRun(entry);
     try {
       await entry.controller.dispose();
       this.live.delete(id);
@@ -423,38 +427,69 @@ export class SessionManager {
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
 
+  /** What the opened shell advertises now (core-service-98): the
+   * parked leaf's own actions for a recovery, the shell's own controls
+   * for an ending. An unreadable control view advertises nothing
+   * rather than failing in a way a notice cannot explain. Fields the
+   * installed runtime does not report are simply absent. */
+  private advertised(entry: LiveSession, kind: "recovery" | "ending"): ParkedRunAction[] {
+    const controller = entry.controller as {
+      listRuntimeActions?(): readonly Partial<ParkedRunAction>[];
+      listShellActions?(): readonly Partial<ParkedRunAction>[];
+    };
+    let offered: readonly Partial<ParkedRunAction>[] = [];
+    try {
+      offered = (kind === "recovery" ? controller.listRuntimeActions?.() : controller.listShellActions?.()) ?? [];
+    } catch { offered = []; }
+    return offered.flatMap((action) => typeof action?.id === "string" && typeof action.label === "string" ? [{
+      id: action.id, label: action.label,
+      ...(action.standing ? {standing: action.standing} : {}),
+      ...(action.reason ? {reason: action.reason} : {}),
+    }] : []);
+  }
+
+  /** The parked run's advertised controls, read at settlement while the
+   * shell is still held — the only moment they can be read without
+   * opening the session — and kept with the local preferences, so the
+   * summary carries them after a restart (core-service-32, DR-074). A
+   * settlement that finds no run parked leaves no reading behind. */
+  private captureParkedRun(entry: LiveSession): void {
+    const id = entry.info.id;
+    const conditions = foldConditions(this.store.getRecords(id));
+    const reason = conditions.failure ? "failure" as const : conditions.question ? "question" as const : undefined;
+    const actions = reason ? this.advertised(entry, "recovery") : [];
+    const ending = reason ? this.advertised(entry, "ending")[0] : undefined;
+    try {
+      this.store.setParkedRun(id, reason && (actions.length > 0 || ending)
+        ? {reason, actions, ...(ending ? {ending: {id: ending.id, label: ending.label}} : {})}
+        : undefined);
+    } catch (error) {
+      console.error(`spex: parked-run controls not recorded: ${String(error)}`);
+    }
+  }
+
   /** core-service-98: run one advertised control as the next turn. */
-  submitControl(sessionId: string, kind: "recovery" | "ending"): void {
+  submitControl(sessionId: string, kind: "recovery" | "ending", actionId?: string): void {
     const entry = this.requireLive(sessionId);
     if (entry.turnActive) throw new CoreError("busy", "a turn is already running in this session");
     if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", "Recover the interrupted turn with Retry or Discard first");
     // The runtime is held only for a turn (core-service-91), so what a
     // run advertises can be read only while the session is open — which
-    // it is by the time this runs. The control is resolved here, at
-    // activation, rather than carried from a reading a client took when
-    // no shell was held.
-    const controller = entry.controller as {
-      listRuntimeActions?(): readonly { id: string; label: string }[];
-      listShellActions?(): readonly { id: string; label: string }[];
-    };
-    let offered: readonly { id: string; label: string }[] = [];
-    try {
-      offered =
-        kind === "recovery"
-          ? (controller.listRuntimeActions?.() ?? [])
-          : (controller.listShellActions?.() ?? []);
-    } catch {
-      // An unreadable control view offers nothing rather than failing
-      // in a way the notice cannot explain.
-      offered = [];
-    }
-    const control = offered[0];
+    // it is by the time this runs. The named control is validated here,
+    // at activation, against what the opened shell advertises now,
+    // never against the reading the client held.
+    const offered = this.advertised(entry, kind);
+    const control = actionId === undefined ? offered[0] : offered.find((action) => action.id === actionId);
     if (!control) {
       throw new CoreError(
         "invalid_request",
-        kind === "recovery"
-          ? "This run offers no recovery to rerun."
-          : "This session offers no way to end its run.",
+        actionId !== undefined
+          ? kind === "recovery"
+            ? `This run no longer offers “${actionId}”.`
+            : `This session no longer offers “${actionId}” to end its run.`
+          : kind === "recovery"
+            ? "This run offers no recovery to rerun."
+            : "This session offers no way to end its run.",
       );
     }
     this.startTurn(entry, undefined, false, { kind, controlId: control.id });
@@ -463,8 +498,8 @@ export class SessionManager {
   /** The same control, awaited to its settlement (DR-073): a caller that
    * rules on what the control did — the Drop that ends a parked run
    * before it records its verdict — reads a settled session. */
-  async runControl(sessionId: string, kind: "recovery" | "ending"): Promise<void> {
-    this.submitControl(sessionId, kind);
+  async runControl(sessionId: string, kind: "recovery" | "ending", actionId?: string): Promise<void> {
+    this.submitControl(sessionId, kind, actionId);
     await this.live.get(sessionId)?.operation;
     await this.settled(sessionId);
   }

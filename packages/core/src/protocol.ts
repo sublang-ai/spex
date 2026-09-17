@@ -178,6 +178,25 @@ export interface ProjectInfo {
   registeredAt: number;
 }
 
+/** One control a parked run advertises (core-service-32, DR-074): its
+ * id names it to `session.control`, its label is the Boss-facing text
+ * the turn would carry, and its standing is what the runtime says
+ * activating it would do — absent while the runtime reports none. */
+export interface ParkedRunAction {
+  id: string;
+  label: string;
+  standing?: "ready" | "no-op" | "blocked";
+  reason?: string;
+}
+
+/** A run standing parked on the Boss, with the controls read while the
+ * shell was still held at settlement (core-service-32, DR-074). */
+export interface ParkedRun {
+  reason: "failure" | "question";
+  actions: ParkedRunAction[];
+  ending?: { id: string; label: string };
+}
+
 export interface SessionInfo {
   id: string;
   projectId: string;
@@ -215,6 +234,9 @@ export interface SessionInfo {
   agentActiveMs?: Record<string, number>;
   /** This session's own agent settings, absent when it holds none. */
   agentSettings?: SessionAgentSettingsMap;
+  /** The controls of a run standing parked on the Boss, absent when
+   * none stands (core-service-32). */
+  parked?: ParkedRun;
   /** Set when a record could not be durably appended: the persisted
    * stream is complete only up to this sequence, so served history is
    * never presented as complete when it is not (DR-036). */
@@ -564,12 +586,15 @@ export const commandSchema = z.discriminatedUnion("type", [
     intentId: z.string().min(1).optional(),
   }),
   /** core-service-98: one advertised control run as the session's next
-   * turn — a recovery the parked run offers, or the shell's own ending. */
+   * turn — a recovery the parked run offers, or the shell's own ending.
+   * `actionId` names which one, as the summary published it; without a
+   * name the core runs the first the opened shell advertises. */
   z.object({
     type: z.literal("session.control"),
     id,
     sessionId: z.string().min(1),
     kind: z.enum(["recovery", "ending"]),
+    actionId: z.string().min(1).optional(),
   }).strict(),
   /** core-service-100: one agent's settings for one session, above the
    * config and touching no file the launcher reads (DR-067) — the same
