@@ -188,6 +188,68 @@ export function demoAdapterImports(options: { delayMs?: number } = {}) {
   return fakeAdapterImports(demoScript(options));
 }
 
+/**
+ * The script that parks a real run on real repository evidence
+ * (DR-076): the Captain's decision starts the real /code root, the
+ * coder commits its phase and leaves a stray file behind, and the
+ * phase's own adjudication passes — so the run reaches its governed
+ * receipt, fails closed on the residual, and settles with one
+ * unresolved effect and a fenced leaf advertising its controls.
+ * Shared by the core's integration suite and the browser harness, so
+ * the published-control path is proven against one failure and not
+ * two.
+ */
+export function parkingScript(options: { delayMs?: number } = {}): FakeScript {
+  const delay = options.delayMs ?? 1;
+  let phase = 0;
+  return {
+    rules: [
+      {
+        // The coder's own call, inside the repository-effect boundary.
+        // Identity rides each command, so the host's global Git config
+        // never decides whether the scratch repository can commit.
+        match: "Original request:",
+        response: {
+          result: "Committed the phase.",
+          delayMs: delay,
+          effect: (cwd) => {
+            phase += 1;
+            writeFileSync(join(cwd, "work.txt"), `baseline\nphase ${phase}\n`);
+            execFileSync("git", ["-C", cwd, "add", "-A"]);
+            execFileSync("git", [
+              "-C", cwd,
+              "-c", "user.name=Spex Test",
+              "-c", "user.email=spex@example.test",
+              "-c", "commit.gpgsign=false",
+              "commit", "-q", "-m", `phase ${phase}`,
+            ]);
+            writeFileSync(join(cwd, `stray-${phase}.txt`), "left behind\n");
+          },
+        },
+      },
+      {
+        // The hidden adjudication of the coder's output: the phase's
+        // own declared outcome, so the run is judged on its receipt
+        // rather than failing at the judge.
+        match: "Pick exactly one declared",
+        response: { result: JSON.stringify({ guard: "directCommit" }) },
+      },
+      {
+        // The Captain's decision: start the real /code root.
+        match: /"action"/,
+        response: {
+          result: JSON.stringify({
+            action: "start",
+            playbookId: "code",
+            input: "Add a line to work.txt",
+          }),
+        },
+      },
+    ],
+    fallback: { result: "Done." },
+  };
+}
+
 /** The fake adapter's script behind the demo: the coder's and the
  * reviewer's replies, each in flight for `delayMs`. Exported so a
  * harness can lay other rules before it (the authoring agent's) and

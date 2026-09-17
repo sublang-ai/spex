@@ -42,6 +42,7 @@ import {
   appendHistorySession,
   interruptDemoSession,
   fakeAdapterImports,
+  parkingScript,
   prepareStorageGitFiles,
   STUB_SLC_RELEASE_FILE,
   stubSlcScriptedSource,
@@ -89,6 +90,14 @@ export interface AppOptions {
   agentDelayMs?: number;
   /** Keep the real Captain journal/recovery; substitute only provider replies. */
   realCaptain?: boolean;
+  /**
+   * The real Captain shell with the parking script (DR-076): the first
+   * Boss turn starts the real /code root, whose coder commits its
+   * phase and leaves a stray file behind, so the run parks over one
+   * unresolved effect and really advertises its controls. Implies
+   * `realCaptain`, and needs `project` for a repository to commit in.
+   */
+  park?: boolean;
   /** The scripted root reports typed success, enabling intent advancement. */
   governedCompletion?: boolean;
   /** Substitute task-free model discovery; never start installed providers. */
@@ -551,12 +560,14 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
           env: { ...process.env, SPEX_HOME: dataDir },
         }
       : {
-          adapterImports: options.realCaptain
+          adapterImports: options.park
+            ? fakeAdapterImports(parkingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
+            : options.realCaptain
             ? fakeAdapterImports({ fallback: { result: JSON.stringify({ action: "respond", text: "Acknowledged by the real Captain." }) } }).imports
             : fakeAdapterImports(adapterScript(options)).imports,
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
-          ...(options.realCaptain ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
+          ...(options.realCaptain || options.park ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
           ...(options.forge

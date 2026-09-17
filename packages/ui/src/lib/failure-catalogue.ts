@@ -17,27 +17,12 @@ import type { FailureCause } from "@sublang/spex-core/protocol";
 
 import { failureRemedy, humanizeId, plainFailure } from "./labels.js";
 
-/** Playbook's closed failure-code list (Playbook DR-063 §1). Adopting
- * Playbook 14.1 replaces this constant with that package's own export;
- * until it is installed the list is held here, so the coverage test
- * still checks the catalogue against the contract rather than against
- * itself. */
-export const PLAYBOOK_FAILURE_CODES = [
-  "commit-missing",
-  "commit-residual",
-  "pre-existing-lost",
-  "commits-more-than-one",
-  "history-rewritten",
-  "foreign-change",
-  "observation-unstable",
-  "attribution-ambiguous",
-  "receipt-missing",
-  "judge-failed",
-  "player-failed",
-  "aborted",
-  "child-failed",
-  "runtime-defect",
-] as const;
+// The codes this catalogue must cover are Playbook's own closed list,
+// reaching the interface as `PLAYBOOK_FAILURE_CODES` through the
+// protocol boundary that reads it (core-service-49, DR-076). Nothing
+// here restates it: the coverage test holds the catalogue against that
+// export, so a code Playbook adds is a failing test until it has
+// words.
 
 export type Evidence = Record<string, unknown> | undefined;
 

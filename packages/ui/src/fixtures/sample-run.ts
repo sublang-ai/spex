@@ -553,10 +553,12 @@ export const MACHINE_ORPHAN: FixtureEntry[] = [
  * `failed` is a parked state and not a final one, so the trace leaves
  * the frame open and the turn settles with the machine still standing
  * there, waiting for the Boss. The Captain shell's own controller
- * then walks hub → deciding → hub on the very topic the leaf just
- * used, exactly as a real core reports it, so the session's last
+ * then walks deciding → reporting → hub on the very topic the leaf
+ * just used, exactly as a real core reports it, so the session's last
  * reported state is the shell's rest state and only the frames still
- * name the leaf (run-view-59, DR-061). */
+ * name the leaf (run-view-59, DR-061). The failure, its cause and the
+ * frames around it are captured from a real core with substitute
+ * agents (DR-076). */
 export const MACHINE_FAILED: FixtureEntry[] = [
   rec(701, {
     type: "turn_started",
@@ -574,17 +576,22 @@ export const MACHINE_FAILED: FixtureEntry[] = [
   trace(704, 14_003, "t-fail", "code", "fsm.transition",
     moved("ready", "runFirstPhase", "START_CODE", "active", ["playbook.busy"])),
   trace(705, 14_010, "t-fail", "code", "fsm.transition",
-    moved("runFirstPhase", "failed", "CODE_FAILED", "active", ["playbook.parked"])),
+    moved("runFirstPhase", "failed", "xstate.error.actor.0.runFirstPhase",
+      "active", ["playbook.parked"])),
   rec(706, {
     type: "captain_status",
     turnId: 14,
     timestamp: 14_011,
     message: "◆ workflow failed; awaiting Boss recovery.",
     // The runtime's own account of the failure (Playbook DR-063,
-    // DR-075): the error it marked as the FSM failure, with the
-    // closed cause attached. Hand-authored against that contract
-    // while Playbook 14.1 is not yet installed — adopting it
-    // re-captures this stream from a real core.
+    // DR-075): the error it marked as the FSM failure, with the closed
+    // cause attached. Captured verbatim from a real core with
+    // substitute agents under Playbook 14.1 (DR-076) — the core's own
+    // `parkingScript`, whose coder committed its phase and left one
+    // file behind. The observation could name no single commit, so the
+    // evidence carries none. The same script runs in the core's
+    // integration suite and in the browser lane, so a Playbook that
+    // changed this shape fails a test rather than aging this fixture.
     data: {
       lastError: {
         name: "Error",
@@ -593,15 +600,11 @@ export const MACHINE_FAILED: FixtureEntry[] = [
         cause: {
           code: "commit-residual",
           evidence: {
-            required: "one-commit",
-            observed: "commit-and-worktree-change",
-            baselineHead: "9f21c0d4e6b78a15",
-            afterHead: "3b7de901aa45c2f8",
-            commitOid: "3b7de901aa45c2f8",
-            paths: {
-              uncommitted: ["src/session/refresh.ts"],
-              altered: ["src/session/index.ts"],
-            },
+            required: "one-descendant-commit",
+            observed: "observation-ambiguous",
+            baselineHead: "60147251bfe6d21c79279e74956f614a00ba2fb2",
+            afterHead: "b5852c25740b3b3d97722f87b46aeac2c47dfdfa",
+            paths: { uncommitted: ["stray-1.txt"], altered: [] },
           },
         },
       },
@@ -612,14 +615,22 @@ export const MACHINE_FAILED: FixtureEntry[] = [
     turnId: 14,
     timestamp: 14_012,
     topic: "playbook.fsm.state",
-    payload: { from: "runFirstPhase", to: "failed", event: "CODE_FAILED" },
+    payload: {
+      from: "runFirstPhase",
+      to: "failed",
+      event: "xstate.error.actor.0.runFirstPhase",
+    },
   }),
   rec(708, {
     type: "captain_telemetry",
     turnId: 14,
     timestamp: 14_013,
     topic: "playbook.fsm.state",
-    payload: { from: "hub", to: "deciding", event: { type: "BOSS_TURN" } },
+    payload: {
+      from: "deciding",
+      to: "reporting",
+      event: { type: "xstate.done.actor.0.deciding" },
+    },
   }),
   rec(709, {
     type: "captain_telemetry",
@@ -627,9 +638,9 @@ export const MACHINE_FAILED: FixtureEntry[] = [
     timestamp: 14_014,
     topic: "playbook.fsm.state",
     payload: {
-      from: "deciding",
+      from: "reporting",
       to: "hub",
-      event: { type: "xstate.error.actor.0.deciding" },
+      event: { type: "xstate.done.actor.0.reporting" },
     },
   }),
   rec(710, { type: "turn_finished", turnId: 14, timestamp: 14_015 }),
@@ -640,25 +651,24 @@ export const MACHINE_FAILED: FixtureEntry[] = [
  * standing the runtime reported for it, and the shell's own ending.
  * The reconciliation is the `no-op` a complete receipt makes pointless
  * — the case DR-075 was written on, where a host that took the first
- * advertised action offered a Retry that could never work. Hand-
- * authored against Playbook's contract while 14.1 is not yet
- * installed; adopting it re-captures this from a real core. */
+ * advertised action offered a Retry that could never work. Captured
+ * from the same real core run as MACHINE_FAILED (DR-076). */
 export const PARKED_FAILURE: ParkedRun = {
   reason: "failure",
   actions: [
     {
-      id: "reconcile-effects",
+      id: "reconcile:unresolved-effect",
       label: "Retry unresolved effect reconciliation",
       standing: "no-op",
       reason: "receipt-complete",
     },
     {
-      id: "abandon-attempt",
+      id: "abandon:unresolved-effect",
       label: "Abandon unresolved workflow attempt",
       standing: "ready",
     },
   ],
-  ending: { id: "give-up", label: "Give up on /code" },
+  ending: { id: "give-up", label: "Stop /code" },
 };
 
 /** A run parked on a Boss question (run-view-128, DR-073):

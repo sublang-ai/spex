@@ -2884,7 +2884,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     // attached, and what to do about it outside Spex (run-view-128,
     // DR-075) — no model composed either.
     expect(screen.getByTestId("failed-workflow-why").textContent).toBe(
-      "Committed 3b7de901 but left changes uncommitted: src/session/refresh.ts, src/session/index.ts",
+      "Committed, but left changes uncommitted: stray-1.txt",
     );
     // One control per advertised action, in the run's own labels, and
     // the no-op's reason where the what-now line names it.
@@ -2909,7 +2909,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     expect(action(ABANDON.id).disabled).toBe(false);
     expect(
       screen.getByTestId("failed-workflow-drop").getAttribute("title"),
-    ).toBe("Give up on /code");
+    ).toBe("Stop /code");
   });
 
   test("where the summary published no controls, Drop stands alone and the composer is the other door", () => {
@@ -2935,7 +2935,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       "/code failed at run first phase",
     );
     expect(screen.getByTestId("failure-card-why").textContent).toBe(
-      "Committed 3b7de901 but left changes uncommitted: src/session/refresh.ts, src/session/index.ts",
+      "Committed, but left changes uncommitted: stray-1.txt",
     );
     expect(screen.getByTestId("failure-card-next").textContent).toBe(
       "Commit or discard what is left · Retry unresolved effect reconciliation: nothing has changed since it failed",

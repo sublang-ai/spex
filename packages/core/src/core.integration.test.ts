@@ -24,6 +24,7 @@ import { pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
+import { parkingScript } from "./testing/demo.js";
 import type { LineSpawner } from "./compile.js";
 import { defaultSpawner } from "./compile.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
@@ -1163,44 +1164,6 @@ test("real captain shell: a Boss turn round-trips the captain reply", async () =
 // core-service-99/105: a parked run survives its settlement (DR-074)
 // ---------------------------------------------------------------------------
 
-/** A run that parks itself on real repository evidence: the Captain's
- * decision starts the real /code root, and its coder commits the phase
- * and leaves a stray file behind — the receipt Playbook classifies
- * observation-ambiguous, so the turn settles with one unresolved
- * effect and a fenced leaf advertising its two controls. */
-function parkingScript(): FakeScript {
-  let phase = 0;
-  return {
-    rules: [
-      {
-        // The coder's own call, inside the repository-effect boundary.
-        match: "Original request:",
-        response: {
-          result: "Committed the phase.",
-          effect: (cwd) => {
-            phase += 1;
-            writeFileSync(join(cwd, "work.txt"), `baseline\nphase ${phase}\n`);
-            execFileSync("git", ["-C", cwd, "add", "-A"]);
-            execFileSync("git", ["-C", cwd, "commit", "-q", "-m", `phase ${phase}`]);
-            writeFileSync(join(cwd, `stray-${phase}.txt`), "left behind\n");
-          },
-        },
-      },
-      {
-        match: /"action"/,
-        response: {
-          result: JSON.stringify({
-            action: "start",
-            playbookId: "code",
-            input: "Add a line to work.txt",
-          }),
-        },
-      },
-    ],
-    fallback: { result: "Done." },
-  };
-}
-
 /** Wait out a turn and the settlement that releases its runtime, and
  * return the summary published with that release. */
 async function settledSession(
@@ -1267,6 +1230,22 @@ test(
     ) as { state: string; unresolvedEffects: unknown[] };
     assert.equal(manifest.state, "settled");
     assert.equal(manifest.unresolvedEffects.length, 1);
+    // The failure the stream reports carries the runtime's own
+    // structured cause, so the interface phrases what the runtime
+    // decided rather than a message it parsed (core-service-49).
+    const failure = client
+      .records("session")
+      .flatMap(({ record }) => {
+        const entry = record as unknown as {
+          type: string;
+          data?: { lastError?: { cause?: { code?: string; evidence?: Record<string, unknown> } } };
+        };
+        const cause = entry.type === "captain_status" ? entry.data?.lastError?.cause : undefined;
+        return cause ? [cause] : [];
+      })
+      .at(-1);
+    assert.equal(failure?.code, "commit-residual");
+    assert.deepEqual((failure?.evidence?.paths as {uncommitted?: unknown})?.uncommitted, ["stray-1.txt"]);
     // Released at settlement all the same, and continuable exactly as
     // Playbook's validation says (core-service-91, core-service-73).
     assert.equal(released.live, false);

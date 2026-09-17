@@ -5,16 +5,19 @@
 // workflow parked in its recoverable failure state used to offer
 // nothing but prose in the composer. The notice now draws one control
 // per action the session summary publishes for that run, plus Drop,
-// and none asks a model to read prose. The served harness's shell
-// advertises nothing and restores no engagement on a continued
-// session, so this lane's parked run publishes no controls: what it
-// proves is the Drop-alone fallback — the notice appearing and
-// standing through settlement, naming the composer as the way on,
-// refusing an ending the opened run cannot satisfy with its cause and
-// leaving the page intact, backing out of Drop's confirm having sent
-// nothing, and no control's busy form widening it at 320 pixels. The
-// published-controls path is the fixture stream's to prove
-// (run-view-131).
+// and none asks a model to read prose. This file proves both shapes
+// against the served page (run-view-149, run-view-132):
+//
+// - a run the real shell parked on real repository evidence (DR-076),
+//   which really advertises its two controls — the reconciliation a
+//   complete receipt makes a no-op, disabled with its reason, and the
+//   abandonment that runs as a named turn;
+// - the Drop-alone fallback, for a session whose controls were never
+//   captured: the notice appearing and standing through settlement,
+//   naming the composer as the way on, refusing an ending the opened
+//   run cannot satisfy with its cause and leaving the page intact,
+//   backing out of Drop's confirm having sent nothing, and no
+//   control's busy form widening it at 320 pixels.
 
 import type { Page } from "@playwright/test";
 
@@ -152,10 +155,9 @@ test("run-view-132: the failed workflow's notice stands, refuses with its cause,
 
   // Activating a control the opened run cannot satisfy refuses with its
   // cause and costs neither the transcript nor the draft (run-view-130).
-  // The harness opens a continued session with a fresh shell, so no
-  // engagement is restored for it to advertise against — the successful
-  // round trips are covered by the fixture stream (run-view-131) and by
-  // the unit suite.
+  // The scripted Captain narrates this park without engaging a run, so
+  // nothing is restored for the ending to reach — the round trip over a
+  // run that really advertises its controls is run-view-149's below.
   await drop.click();
   await page.getByTestId("failed-workflow-drop-confirm").click();
   await expect(page.getByTestId("failed-workflow-error")).toContainText(
@@ -234,4 +236,72 @@ test("run-view-146: a run parked on a question carries Drop, and the composer an
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
   await expect(notice).toHaveCount(0);
+});
+
+// The published-control path, over a run the real shell really parked
+// (run-view-149, DR-076): the Captain's decision starts the real /code
+// root, its coder commits the phase and leaves a stray file behind, and
+// Playbook fences the run over the residual — so what the notice draws
+// is what the runtime advertised, standings and all.
+test.describe("a run parked on real repository evidence", () => {
+  test.use({ appOptions: { project: true, park: true } });
+
+  test("run-view-149: the notice draws one control per advertised action, and a named one runs", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await send(page, "Add a line to work.txt");
+
+    const notice = page.getByTestId("failed-workflow");
+    await expect(notice).toBeVisible({ timeout: 120_000 });
+    await expect(notice).toHaveAttribute("data-reason", "failure");
+    await expect(page.getByTestId("failed-workflow-what")).toHaveText(
+      "The /code workflow failed and is waiting for you.",
+    );
+    // Why, in the catalogue's phrase for the cause the runtime
+    // attached — the residual commit, with the path it left behind.
+    await expect(page.getByTestId("failed-workflow-why")).toContainText(
+      "left changes uncommitted: stray-1.txt",
+    );
+
+    // One control per advertised action, in the run's own labels: the
+    // reconciliation a complete receipt makes pointless, and the
+    // abandonment beside it.
+    const controls = page.getByTestId("failed-workflow-action");
+    await expect(controls).toHaveCount(2);
+    const control = (id: string) =>
+      page.locator(
+        `[data-testid="failed-workflow-action"][data-action-id="${id}"]`,
+      );
+    const reconcile = control("reconcile:unresolved-effect");
+    const abandon = control("abandon:unresolved-effect");
+    // The no-op stays visible and disabled, its reason a phrase in its
+    // tooltip — nothing is chosen for the Boss and nothing hidden.
+    await expect(reconcile).toBeDisabled();
+    await expect(reconcile).toHaveAttribute(
+      "title",
+      "Retry unresolved effect reconciliation: nothing has changed since it failed",
+    );
+    await expect(page.getByTestId("failed-workflow-next")).toContainText(
+      "nothing has changed since it failed",
+    );
+    await expect(abandon).toBeEnabled();
+    // Drop names the ending the shell itself advertised.
+    await expect(page.getByTestId("failed-workflow-drop")).toHaveAttribute(
+      "title",
+      "Stop /code",
+    );
+
+    // Activating one runs it as the next turn, which lands in the
+    // thread under the action's own Boss-facing label, and the run
+    // leaves its park with the notice.
+    await abandon.click();
+    await expect(page.getByTestId("captain-pane")).toContainText(
+      "Abandon unresolved workflow attempt",
+      { timeout: 120_000 },
+    );
+    await expect(notice).toHaveCount(0, { timeout: 120_000 });
+    await expect(page.getByTestId("failed-workflow-error")).toHaveCount(0);
+  });
 });

@@ -31,6 +31,17 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- The app requires Playbook 14.1 or later ([DR-076](specs/decisions/076-playbook-14-1-adoption.md)).
+  Uncommitted work already in your tree is now the Coder's context rather
+  than an ambiguity: a governed call may carry it in its one commit, the
+  Coder is told which changes predate its task and to leave them alone
+  otherwise, and a settled commit that absorbed or altered any of them
+  says so in the Boss's reply. Every parked failure carries a structured
+  cause and every advertised action its standing, so the failure card and
+  the per-action controls now read the runtime's own words rather than a
+  list mirrored by hand. Dropping a run over unresolved repository
+  effects records a durable abandonment and reports a failed stop
+  truthfully.
 - A parked run survives ([DR-074](specs/decisions/074-a-parked-run-survives.md)):
   a settled session releases its runtime even when unresolved repository
   effects stand, so its project is no longer refused as still working; its

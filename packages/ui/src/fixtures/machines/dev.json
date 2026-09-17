@@ -13,9 +13,17 @@
       "id": "planAnalysis",
       "kind": "state",
       "role": "analyst",
-      "description": "Analyst is analyzing the development request to choose the smallest sound next step.",
+      "description": "Analyst is choosing the development path.",
       "tags": [
         "playbook.busy"
+      ]
+    },
+    {
+      "id": "createBranch",
+      "kind": "state",
+      "description": "The BRANCH playbook is preparing the pull-request branch for the planned development path.",
+      "tags": [
+        "playbook.suspended"
       ]
     },
     {
@@ -38,6 +46,14 @@
       "id": "callCodeAfterDecide",
       "kind": "state",
       "description": "The CODE playbook is implementing the decided development path.",
+      "tags": [
+        "playbook.suspended"
+      ]
+    },
+    {
+      "id": "openPullRequest",
+      "kind": "state",
+      "description": "The PR playbook is delivering the implemented branch through a pull request.",
       "tags": [
         "playbook.suspended"
       ]
@@ -105,11 +121,23 @@
     {
       "id": "planAnalysis::done::3::0",
       "from": "planAnalysis",
-      "to": "awaitBossReply",
+      "to": "createBranch",
       "event": "done"
     },
     {
       "id": "planAnalysis::done::4::0",
+      "from": "planAnalysis",
+      "to": "createBranch",
+      "event": "done"
+    },
+    {
+      "id": "planAnalysis::done::5::0",
+      "from": "planAnalysis",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "planAnalysis::done::6::0",
       "from": "planAnalysis",
       "to": "failed",
       "event": "done"
@@ -121,13 +149,49 @@
       "event": "error"
     },
     {
+      "id": "createBranch::done::0::0",
+      "from": "createBranch",
+      "to": "callCode",
+      "event": "done"
+    },
+    {
+      "id": "createBranch::done::1::0",
+      "from": "createBranch",
+      "to": "callDecide",
+      "event": "done"
+    },
+    {
+      "id": "createBranch::done::2::0",
+      "from": "createBranch",
+      "to": "reportedChildFailure",
+      "event": "done"
+    },
+    {
+      "id": "createBranch::error::0::0",
+      "from": "createBranch",
+      "to": "reportedChildFailure",
+      "event": "error"
+    },
+    {
+      "id": "createBranch::error::1::0",
+      "from": "createBranch",
+      "to": "failed",
+      "event": "error"
+    },
+    {
       "id": "callCode::done::0::0",
+      "from": "callCode",
+      "to": "openPullRequest",
+      "event": "done"
+    },
+    {
+      "id": "callCode::done::1::0",
       "from": "callCode",
       "to": "done",
       "event": "done"
     },
     {
-      "id": "callCode::done::1::0",
+      "id": "callCode::done::2::0",
       "from": "callCode",
       "to": "reportedChildFailure",
       "event": "done"
@@ -171,11 +235,17 @@
     {
       "id": "callCodeAfterDecide::done::0::0",
       "from": "callCodeAfterDecide",
-      "to": "done",
+      "to": "openPullRequest",
       "event": "done"
     },
     {
       "id": "callCodeAfterDecide::done::1::0",
+      "from": "callCodeAfterDecide",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "callCodeAfterDecide::done::2::0",
       "from": "callCodeAfterDecide",
       "to": "reportedChildFailure",
       "event": "done"
@@ -189,6 +259,24 @@
     {
       "id": "callCodeAfterDecide::error::1::0",
       "from": "callCodeAfterDecide",
+      "to": "failed",
+      "event": "error"
+    },
+    {
+      "id": "openPullRequest::done::0::0",
+      "from": "openPullRequest",
+      "to": "done",
+      "event": "done"
+    },
+    {
+      "id": "openPullRequest::error::0::0",
+      "from": "openPullRequest",
+      "to": "reportedChildFailure",
+      "event": "error"
+    },
+    {
+      "id": "openPullRequest::error::1::0",
+      "from": "openPullRequest",
       "to": "failed",
       "event": "error"
     },

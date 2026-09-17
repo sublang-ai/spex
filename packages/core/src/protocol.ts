@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Spex WebSocket protocol: every message between core and UI is
-// defined here and nowhere else (CORE-12). This module must stay free
-// of Node-only imports so the UI can consume it directly; the record
-// type is imported type-only from cligent and erased at build time.
+// defined here and nowhere else (core-service-12). This module must
+// stay free of Node-only imports so the UI can consume it directly:
+// the record type is imported type-only from cligent and erased at
+// build time, and the one runtime value it takes from Playbook is a
+// pure-data module that imports nothing of its own.
 
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
@@ -178,12 +180,19 @@ export interface ProjectInfo {
   registeredAt: number;
 }
 
+/** Playbook's closed failure-code list, re-exported here unchanged
+ * rather than copied into a client (core-service-12, DR-076): the
+ * runtime owns the list, so a code it adds reaches the phrase
+ * catalogue as a failing test rather than as silence. */
+export { PLAYBOOK_FAILURE_CODES, type PlaybookFailureCode } from "@sublang/playbook/runtime";
+
 /** The structured cause the runtime attaches to a failure it decides
  * (core-service-49, DR-075): `code` from Playbook's closed list and
  * `evidence` the bounded JSON object that code carries. The core
  * neither interprets nor completes it — it validates the shape and
  * passes it on, so a client's phrase catalogue is the only place a
- * code becomes words. */
+ * code becomes words. A code outside the list still reads, since a
+ * stored record outlives the runtime that wrote it. */
 export interface FailureCause {
   code: string;
   evidence?: Record<string, unknown>;
