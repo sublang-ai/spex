@@ -14,6 +14,31 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Added
+
+- A failure says what, why, and what now. The failed status line becomes
+  a three-line card — the workflow and step that failed, the cause in a
+  plain phrase with its evidence, and what to do next — from the
+  structured cause Playbook attaches to a parked failure ([DR-075](specs/decisions/075-a-failure-says-what-and-what-now.md)).
+  One catalogue phrases every Playbook failure code, with a Boss step
+  where one exists, and a test fails when a code has no phrase. The
+  Dashboard's interrupted rows and the tab tooltip use the same phrase.
+- The parked-run notice draws one control per action the run advertises,
+  labelled with the action's own words, and disables one the runtime says
+  would do nothing, with its reason; the single Retry that sent the first
+  advertised action is gone. Drop stands as before. A session whose
+  controls were never captured offers Drop alone.
+
+### Changed
+
+- A parked run survives ([DR-074](specs/decisions/074-a-parked-run-survives.md)):
+  a settled session releases its runtime even when unresolved repository
+  effects stand, so its project is no longer refused as still working; its
+  controls are captured at settlement and kept locally, so they stand after
+  a restart; and a session whose run was ended over unresolved effects is
+  continuable, as Playbook's own validation says. The core's own refusal
+  "reconcile unresolved effects before continuation" is gone.
+
 ## [0.8.0] - 2026-09-14
 
 ### Added
