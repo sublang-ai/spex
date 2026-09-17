@@ -504,9 +504,10 @@ The `packages/core` workspace package shall build as a headless Node package tha
 
 #### core-service-12
 
-The core package shall define the WebSocket protocol — message schemas, protocol version, and TypeScript message types — in one module and export the types from a dedicated entry point free of Node-only runtime imports, so the UI package consumes the protocol as type-only imports and never redefines it:
+The core package shall define the WebSocket protocol — message schemas, protocol version, and TypeScript message types — in one module and export it from a dedicated entry point free of Node-only runtime imports, so the UI package consumes the protocol from that one entry point and never redefines it:
 
 - When the protocol changes incompatibly, the protocol version carried by the hello message [[core-service-1](#core-service-1)] is bumped.
+- A closed vocabulary a client must hold against the runtime's own — the embedded runtime's failure-code list — is re-exported here unchanged rather than copied into a client ([DR-076](../decisions/076-playbook-14-1-adoption.md)).
 
 #### core-service-13
 

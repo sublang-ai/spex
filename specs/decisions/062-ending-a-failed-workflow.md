@@ -12,6 +12,7 @@ Amends [DR-035](035-intent-ledger.md)'s failure acknowledgment: a later Boss tur
 Amended by [DR-073](073-letting-go-ends-the-parked-run.md) in scope: dropping interrupted work is the whole ruling rather than a verdict alone, and the run's own control covers any run parked on the Boss, a question park included; the deterministic Retry, the model-free give-up, the one-ruling gesture and the History tag stand.
 Amended by [DR-074](074-a-parked-run-survives.md): a session whose run ended with unresolved effects recorded is continuable, and every advertised action is published rather than the first taken.
 Amended by [DR-075](075-a-failure-says-what-and-what-now.md): one control per advertised action, each with its standing, replaces the single Retry.
+Floor raised by [DR-076](076-playbook-14-1-adoption.md): Spex requires Playbook 14.1 or later.
 
 ## Context
 

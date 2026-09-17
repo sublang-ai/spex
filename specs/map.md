@@ -101,6 +101,7 @@ meta.md       The spec of specs
 | [DR-073](decisions/073-letting-go-ends-the-parked-run.md) | 073-letting-go-ends-the-parked-run.md | Letting go ends the parked run: Drop on interrupted work ends the parked run before recording its verdict, and the run view's notice covers a question park |
 | [DR-074](decisions/074-a-parked-run-survives.md) | 074-a-parked-run-survives.md | A parked run survives: runtime released at settlement even with unresolved effects, a control opens the session it needs, continuable follows Playbook, busy means busy, every advertised action published with its standing |
 | [DR-075](decisions/075-a-failure-says-what-and-what-now.md) | 075-a-failure-says-what-and-what-now.md | A failure says what, why, and what now: one catalogue phrasing every Playbook failure code, a three-line card, one control per advertised action with its standing, cause phrased on every surface |
+| [DR-076](decisions/076-playbook-14-1-adoption.md) | 076-playbook-14-1-adoption.md | Playbook 14.1 adoption: floor to ^14.1.0, catalogue tested against the runtime's exported code list, parked-failure fixtures re-captured, browser lane proving real advertised actions |
 
 ## Packages
 
