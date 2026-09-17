@@ -2,11 +2,15 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The one queued-intent presentation (dashboard-59, DR-077): every
-// consumer reads the core-published standing and gets the same phrase.
-// Start availability travels beside it in QueueSchedule; callers place
+// consumer gets the same standing and after-link phrases. Start
+// availability travels beside a published QueueSchedule; callers place
 // the control where their surface owns it.
 
-import type { QueueSchedule } from "@sublang/spex-core/protocol";
+import type {
+  DerivedIntent,
+  ProjectInfo,
+  QueueSchedule,
+} from "@sublang/spex-core/protocol";
 
 import { causePhrase } from "../lib/failure-catalogue.js";
 
@@ -32,6 +36,20 @@ export function queueStandingPhrase(
     case "manual-ready":
       return undefined;
   }
+}
+
+/** The exact phrase for a queued row blocked by an after-link. */
+export function queueAfterLinkPhrase(
+  blockedBy: NonNullable<DerivedIntent["blockedBy"]>,
+  ownerProjectId: string,
+  projects: readonly ProjectInfo[],
+): string {
+  const foreignProject =
+    blockedBy.projectId === ownerProjectId
+      ? undefined
+      : (projects.find((project) => project.id === blockedBy.projectId)?.name ??
+        blockedBy.projectId);
+  return `after ${blockedBy.title}${foreignProject ? ` (${foreignProject})` : ""}`;
 }
 
 /** The neutral lifecycle mark every committed queue row carries. */

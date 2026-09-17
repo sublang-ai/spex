@@ -14,11 +14,13 @@ import type {
   IntentInfo,
   IntentSource,
   IntentStats,
+  ProjectInfo,
 } from "@sublang/spex-core/protocol";
 
 import { duration } from "../lib/time.js";
 import {
   QueuedMark,
+  queueAfterLinkPhrase,
   QueueStandingPhrase,
 } from "./QueuedIntentPresentation.js";
 
@@ -111,7 +113,7 @@ export function DeliveryCard({
   ownsConversation,
   next,
   blocked,
-  blockedProjectName,
+  projects,
   onClose,
   onStartNext,
   onQueueNext,
@@ -129,8 +131,8 @@ export function DeliveryCard({
   next?: DerivedIntent;
   /** The first ranked after-linked row when the project has no next. */
   blocked?: DerivedIntent;
-  /** A foreign predecessor project's display name, with id fallback. */
-  blockedProjectName?: string;
+  /** Registered projects resolve a foreign predecessor's display name. */
+  projects: readonly ProjectInfo[];
   onClose(as: "done" | "dropped"): Promise<void>;
   onStartNext(intent: IntentInfo): void | Promise<void>;
   onQueueNext(text: string): Promise<void>;
@@ -148,11 +150,11 @@ export function DeliveryCard({
   const blockedQueued = !publishedNext && blocked?.blockedBy ? blocked : undefined;
   const queued = publishedNext ?? blockedQueued;
   const blockedPhrase = blockedQueued?.blockedBy
-    ? `after ${blockedQueued.blockedBy.title}${
-        blockedQueued.blockedBy.projectId !== blockedQueued.intent.projectId
-          ? ` (${blockedProjectName ?? blockedQueued.blockedBy.projectId})`
-          : ""
-      }`
+    ? queueAfterLinkPhrase(
+        blockedQueued.blockedBy,
+        blockedQueued.intent.projectId,
+        projects,
+      )
     : undefined;
 
   // A verdict rules on the intent, not on the session: it is legal on

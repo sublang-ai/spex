@@ -35,3 +35,4 @@ Planned: task 1 runs `npm run build -w packages/core`, `npm test -w packages/cor
 Task 1 (2026-09-17): core build passed; focused ledger, session, and queue-advancement integration tests passed 67/67; the full core suite passed 316/316; the UI build passed against the extended protocol; and `spex lint` passed.
 Task 2 (2026-09-17): UI build passed; the focused Dashboard component suite passed 76/76; the full UI suite passed 675/675; and `spex lint` passed.
 Task 3 (2026-09-17): UI build passed; the focused Captain Home, Run View, and App suites passed 194/194; the full UI suite passed 688/688; and `spex lint` passed.
+Task 3 review fixes (2026-09-17): on the delivered Task 3 state, the UI build passed; the full UI suite passed 689/689; and `spex lint` passed.

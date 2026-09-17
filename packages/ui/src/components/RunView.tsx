@@ -414,13 +414,6 @@ export function RunView({
   const nextUp = projectQueue.find((entry) => entry.next);
   const blockedHead =
     !nextUp && projectQueue[0]?.blockedBy ? projectQueue[0] : undefined;
-  const blockedProjectName =
-    blockedHead?.blockedBy &&
-    blockedHead.blockedBy.projectId !== blockedHead.intent.projectId
-      ? (projects.find(
-          (project) => project.id === blockedHead.blockedBy?.projectId,
-        )?.name ?? blockedHead.blockedBy.projectId)
-      : undefined;
 
   // Delivery cards anchored at each intent's final turn's end.
   const extras = useMemo<ThreadExtra[]>(() => {
@@ -449,7 +442,7 @@ export function RunView({
             ownsConversation={to === Number.POSITIVE_INFINITY}
             next={nextUp}
             blocked={blockedHead}
-            blockedProjectName={blockedProjectName}
+            projects={projects}
             onClose={(as) => closeIntent(entry.intent.id, as)}
             onStartNext={(intent) => void stageDispatch(intent)}
             onQueueNext={async (text) => {
@@ -464,12 +457,12 @@ export function RunView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     blockedHead,
-    blockedProjectName,
     delivered,
     dispatchTurns,
     view.captain,
     ledger,
     nextUp,
+    projects,
     session,
   ]);
 

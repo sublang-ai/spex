@@ -51,6 +51,7 @@ import { RecordRow } from "./RecordRow.js";
 import { ResizableFrame } from "./ResizableFrame.js";
 import {
   QueuedMark,
+  queueAfterLinkPhrase,
   QueueStandingPhrase,
 } from "./QueuedIntentPresentation.js";
 
@@ -982,11 +983,9 @@ function QueueRow({
   // A blocked row cannot be next; fail closed if a malformed reply
   // ever combines the two.
   const schedule = blocked ? undefined : derived.next;
-  const blockedForeign =
-    blocked && blocked.projectId !== intent.projectId
-      ? (projects.find((p) => p.id === blocked.projectId)?.name ??
-        blocked.projectId)
-      : undefined;
+  const blockedPhrase = blocked
+    ? queueAfterLinkPhrase(blocked, intent.projectId, projects)
+    : undefined;
 
   // One move vocabulary (dashboard-29): the menu's Move up/down and
   // Alt+↑/↓ on the focused row take the same step.
@@ -1083,10 +1082,9 @@ function QueueRow({
           <span
             className="min-w-0 truncate text-xs text-neutral-500 @md:max-w-[45%]"
             data-testid={`upnext-blocked-${intent.id}`}
-            title={`after ${blocked.title}${blockedForeign ? ` (${blockedForeign})` : ""}`}
+            title={blockedPhrase}
           >
-            after {blocked.title}
-            {blockedForeign ? ` (${blockedForeign})` : ""}
+            {blockedPhrase}
           </span>
         ) : schedule ? (
           <QueueStandingPhrase
