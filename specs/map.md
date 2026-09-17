@@ -99,6 +99,8 @@ meta.md       The spec of specs
 | [DR-071](decisions/071-active-time-follows-held-calls.md) | 071-active-time-follows-held-calls.md | Active time follows each agent's completed prompt-to-finish spans, aligning shared shells while the durable fold stays order-neutral; backward spans amended by DR-072 |
 | [DR-072](decisions/072-backward-call-time-is-zero.md) | 072-backward-call-time-is-zero.md | A matched call whose finite clock moves backward closes normally and contributes measured zero |
 | [DR-073](decisions/073-letting-go-ends-the-parked-run.md) | 073-letting-go-ends-the-parked-run.md | Letting go ends the parked run: Drop on interrupted work ends the parked run before recording its verdict, and the run view's notice covers a question park |
+| [DR-074](decisions/074-a-parked-run-survives.md) | 074-a-parked-run-survives.md | A parked run survives: runtime released at settlement even with unresolved effects, a control opens the session it needs, continuable follows Playbook, busy means busy, every advertised action published with its standing |
+| [DR-075](decisions/075-a-failure-says-what-and-what-now.md) | 075-a-failure-says-what-and-what-now.md | A failure says what, why, and what now: one catalogue phrasing every Playbook failure code, a three-line card, one control per advertised action with its standing, cause phrased on every surface |
 
 ## Packages
 

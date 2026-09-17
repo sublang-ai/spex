@@ -80,9 +80,10 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 
 #### core-service-91
 
-When a Boss turn settles on a live session, the core service shall release the session's runtime — the Playbook lease with it — and report the session as no longer live, so the runtime is held only for a turn and every later message opens it again with the current config [[core-service-73](#core-service-73)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md)):
+When a Boss turn settles on a live session, the core service shall release the session's runtime — the Playbook lease with it — and report the session as no longer live, so the runtime is held only for a turn and every later message opens it again with the current config [[core-service-73](#core-service-73)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md), [DR-074](../decisions/074-a-parked-run-survives.md)):
 
-- a settled checkpoint the core could not continue from disk — unresolved repository effects — keeps its runtime held until a later turn leaves it continuable;
+- unresolved repository effects hold nothing back: the settled checkpoint releases with them recorded, because reopening the session fences them [[1]];
+- the release first records what a run of that session standing parked on the Boss advertises — its own actions and the shell's ending, this being the only moment they can be read without opening the session — and records nothing where no run stands parked [[core-service-32](#core-service-32)];
 - a failed or aborted turn releases the runtime as before, the session's recovery state reported [[core-service-32](#core-service-32)];
 - the release preserves the local provider hints written at settlement, so the next open resumes the Captain's and the players' provider conversations where they exist;
 - session and project admission wait through release and the resulting stored-summary refresh and publication, on successful and failed turns alike.
@@ -133,7 +134,7 @@ When a Boss turn or live session ends, the core service shall checkpoint through
 
 #### core-service-70
 
-When a client sends `session.delete` for a stored session, the core service shall delete the session's files and every in-memory trace of it — its records, turns, usage, viewed marker, and tuning [[core-service-100](#core-service-100)] — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
+When a client sends `session.delete` for a stored session, the core service shall delete the session's files and every in-memory trace of it — its records, turns, usage, viewed marker, tuning [[core-service-100](#core-service-100)] and the controls its parked run advertised [[core-service-32](#core-service-32)] — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
 
 - a live session is refused with a `busy` error naming it: its turn finishes or is aborted first [[core-service-4](#core-service-4)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - a session from either interface is deleted through the same shared-store operation and lease check [[core-service-75](#core-service-75)];
@@ -158,7 +159,8 @@ When a client requests the session list, the core service shall reply with every
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count and whether it ended holding a failure record;
 - each entry carries cumulative active time from complete stored history for every agent with a measured finished call [[core-service-102](#core-service-102)];
-- each entry carries the session's own agent settings [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md)).
+- each entry carries the session's own agent settings [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md));
+- each entry whose last settlement found a run parked on the Boss carries that park [[core-service-91](#core-service-91)] — its reason, the run's failure state or its question; every action that run advertised, in order; and the ending the shell advertised, each control by id and Boss-facing label with any standing the runtime reported for it — so a client draws one control per action and names the one it activates [[core-service-98](#core-service-98)] ([DR-074](../decisions/074-a-parked-run-survives.md)); the reading is this host's own, kept with its preferences [[storage-5](storage.md#storage-5)], and absent where that settlement found no parked run advertising anything.
 
 #### core-service-102
 
@@ -212,13 +214,12 @@ While a session is not live, when a client submits Boss text for it, the core se
 | Another session of the project is live, or a session lease is active | `busy`, naming the session working or the holder |
 | Unsupported recovery, no checkpoint, incomplete stream or digest mismatch | `invalid_request`, history-only with the failing condition |
 | Uncertain work | `invalid_request`, use explicit Retry or Discard [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)] |
-| Unresolved repository effects | `invalid_request`, reconcile the stored work before continuation |
 | Missing/ambiguous project binding | `invalid_request`, bind an existing project identity first |
 | Changed checkpoint repository/module paths | `invalid_request`, relocation unsupported; history remains readable |
 | Missing or invalid config | `invalid_config`, as for creation |
 | Structural or runtime mismatch | `invalid_config`, naming each changed field and offering a new session [[core-service-92](#core-service-92)] |
 
-- desktop and CLI checkpoints use the same cases; missing provider hints alone do not refuse continuation;
+- desktop and CLI checkpoints use the same cases; missing provider hints and recorded repository effects alone do not refuse continuation ([DR-074](../decisions/074-a-parked-run-survives.md));
 - parked questions resume in their retained frames; a refusal starts no turn and stamps no intent [[core-service-47](#core-service-47)].
 
 #### core-service-6
@@ -236,15 +237,15 @@ When a client sends `session.retry` with only a `sessionId`, the core shall retr
 
 #### core-service-98
 
-When a client sends `session.control` with a `sessionId` and a control kind, the core shall run that kind of control as the session's next turn through Playbook's shared lifecycle [[1]] under the same project and session admission checks as continuation [[core-service-73](#core-service-73)] ([DR-062](../decisions/062-ending-a-failed-workflow.md)):
+When a client sends `session.control` with a `sessionId`, a control kind and optionally the id of an advertised action [[core-service-32](#core-service-32)], the core shall run that control as the session's next turn through Playbook's shared lifecycle [[1]] under the same project and session admission checks as continuation [[core-service-73](#core-service-73)] ([DR-062](../decisions/062-ending-a-failed-workflow.md), [DR-074](../decisions/074-a-parked-run-survives.md)):
 
 | Kind | What runs |
 | --- | --- |
-| a recovery | the action the session's parked run advertises |
-| an ending | the shell's own control, which ends the run and spends no model call |
+| a recovery | the named action of the session's parked run, else the first that run advertises |
+| an ending | the named control of the shell's own, else the first it advertises, which ends the run and spends no model call |
 
 - the core shall open the session before reading what it advertises, because the runtime is held only for a turn [[core-service-91](#core-service-91)] and a settled session holds no shell to ask;
-- a kind the opened session advertises nothing for shall be refused with its cause, starting no turn;
+- a kind the opened session advertises nothing for, or a named action that session no longer advertises, shall be refused with its cause, starting no turn and releasing the runtime this command opened [[core-service-91](#core-service-91)];
 - the turn carries the control's own Boss-facing label as its text, creates no intent dispatch, and stamps none [[core-service-47](#core-service-47)];
 - records and the resulting session state publish as a continued turn's do [[core-service-5](#core-service-5)].
 
@@ -848,13 +849,24 @@ When an integration suite interrupts CLI-created and desktop-created sessions an
 
 ### core-service-99
 
-When an integration suite parks a real session's run in its recoverable failure state and drives that session's controls through core commands, it shall verify them [[core-service-98](#core-service-98)]:
+When an integration suite parks a real session's run in its recoverable failure state — a scripted player committing its phase and leaving behind the repository evidence Playbook cannot classify — and drives that park through core commands across a restart, it shall verify the named recovery [[core-service-98](#core-service-98)]:
 
-- each kind opens the settled session before reading what it advertises, so a control activated after the runtime was released still runs [[core-service-91](#core-service-91)];
-- a kind the opened session advertises nothing for is refused with its cause and starts no turn;
-- the recovery runs as one turn whose text is that action's own label, creating no intent dispatch and stamping none [[core-service-47](#core-service-47)];
-- the ending runs as one turn after which the session holds no parked run and offers no resumption of it;
-- a second request while the first turn runs starts no duplicate turn [[core-service-5](#core-service-5)].
+- settlement releases the runtime with the unresolved effect standing, and the session lists continuable with no reason [[core-service-91](#core-service-91)] [[core-service-73](#core-service-73)];
+- its summary carries the park's reason, every action the fenced run advertised in the order it advertised them, and the shell's own ending [[core-service-32](#core-service-32)];
+- a second session of the same project is created while that one stands parked and idle [[core-service-4](#core-service-4)];
+- a fresh core over the same state root lists the same continuability and the same advertised controls, no shell being held to read them from [[core-service-32](#core-service-32)] [[core-service-91](#core-service-91)];
+- a named action the opened run does not advertise is refused with its cause, starting no turn and leaving the session idle;
+- the action named rather than the first advertised — the run's abandonment beside the reconciliation it offers first — opens the settled session and runs as one turn whose text is that action's own label, after which the session carries no parked controls and continues [[core-service-32](#core-service-32)] [[core-service-73](#core-service-73)];
+- the abandoned run then stands interrupted on nobody, the session's only attention entry being its finished turn's [[core-service-49](#core-service-49)];
+- a repeated request starts no duplicate turn [[core-service-5](#core-service-5)].
+
+### core-service-105
+
+When an integration suite parks a real session's run in its recoverable failure state and drives it through an unnamed control, it shall verify the fallback, the continuation it leaves, and the deletion that follows [[core-service-98](#core-service-98)]:
+
+- an ending sent with no action named opens the settled session and runs the first control that shell advertises, as one turn after which the session carries no parked controls and continues [[core-service-32](#core-service-32)] [[core-service-91](#core-service-91)];
+- an ordinary Boss message then continues the session and its new run publishes its own park [[core-service-73](#core-service-73)] [[core-service-32](#core-service-32)];
+- deleting that session — idle, though its run stands parked — forgets what that run advertised [[core-service-70](#core-service-70)].
 
 ## References
 
