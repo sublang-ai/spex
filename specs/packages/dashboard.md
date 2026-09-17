@@ -54,7 +54,7 @@ While an attention entry is displayed, when its clearing condition arrives, the 
 | Session unread turn | the session's persisted last-viewed marker advancing past the turn — the reader having that session in front of them [[run-view-134](run-view.md#run-view-134)], or Reviewed on its row [[dashboard-55](#dashboard-55)] |
 
 - Resolving one entry removes no other entry, and viewing alone never clears an intent entry, whose verdict is owed regardless of reading.
-- An act taken on a row hands focus on as its entry leaves: to the entry now at its place, else the last entry, else the all-clear's Start — never to the page body ([DR-010](../decisions/010-interface-craft.md) §6).
+- An act taken on a row hands focus on as its entry leaves: to the entry now at its place, else the last entry, else the all-clear's Start where one is available [[dashboard-59](#dashboard-59)] or the all-clear region otherwise — never to the page body ([DR-010](../decisions/010-interface-craft.md) §6).
 
 #### dashboard-53
 
@@ -176,10 +176,11 @@ While the Now band shows the open intent the session serves [[dashboard-28](#das
 
 #### dashboard-29
 
-The group's Up next band shall list the project's queued intents in rank order, ending in an inline add row that captures a new queued intent, with the head unblocked intent emphasized as the project's next and carrying Start:
+The group's Up next band shall list the project's queued intents in rank order, every row carrying a neutral `Queued` tag, with the first unblocked intent emphasized as the project's next and rendering its scheduling standing [[dashboard-59](#dashboard-59)], followed by an inline add row whose one Queue action captures a new queued intent ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
-- the add field is one row while empty, soft-wraps and grows with its text to the smaller of eight lines and two fifths of the viewport, then scrolls with no native resize grip; Enter captures a nonblank draft after trimming its outer whitespace while preserving its internal line breaks, and Shift+Enter inserts a line ([DR-041](../decisions/041-chrome-that-fits.md));
-- a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with "after ⟨title⟩", the predecessor's project named when it lives in another project, its Start disabled with the reason ([DR-026](../decisions/026-data-graphics-craft.md) §2), and is never presented as next;
+- the next row carries Start only where its standing makes manual dispatch available, and otherwise carries the standing phrase with no Start; every later eligible row carries only its `Queued` tag, since rank says it is later;
+- the add field is one row while empty, soft-wraps and grows with its text to the smaller of eight lines and two fifths of the viewport, then scrolls with no native resize grip; Queue and Enter take the same capture of a nonblank draft after trimming its outer whitespace while preserving its internal line breaks, Shift+Enter inserts a line, and no Start stands beside Queue ([DR-041](../decisions/041-chrome-that-fits.md));
+- a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with `after ⟨title⟩`, the predecessor's project named when it lives in another project, carries no Start, and is never presented as next;
 - reorder works by drag — the grip at the row's left is the affordance — by keyboard (Alt+↑/↓ on the focused row), and by the row menu's Move up and Move down, which take the same step, are disabled at the queue's ends, and name the shortcut; a reorder changes only the queue's rank order;
 - each row's actions live in a ⋯ menu that follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) — focus moves into it on open and returns to the trigger on close, Escape and an outside click close it, at most one row menu is open — offering Move up, Move down, Edit text, Remove, and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, the record row [[dashboard-40](#dashboard-40)] opening the record, "Session" opening the capturing session;
 - Remove acts on the click with no confirmation and leaves no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", lasting six seconds beyond the last moment its control holds focus, which it takes from a keyboard-driven removal alone — re-queues the same text and provenance at the row's former place; a pointer removal leaves the pointer where it is, so the line lapses on schedule and never stands as a prompt.
@@ -197,7 +198,7 @@ Where a band or menu of the Dashboard lists a spec record, the row shall present
 
 #### dashboard-30
 
-Where a Sources row names an issue, pull request, or open intent record with no open intent sourced from that artifact, the row shall carry a Queue control that captures a queued intent for the project with editable seeded text and the source's URL and labels kept as provenance ([DR-038](../decisions/038-history-is-done-work.md)):
+Where a Sources row names an issue, pull request, or open intent record with no open intent sourced from that artifact, the row shall carry Queue as its one intent action — no sibling Start — capturing a queued intent for the project with editable seeded text and the source's URL and labels kept as provenance ([DR-038](../decisions/038-history-is-done-work.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 | Source | First line |
 | --- | --- |
@@ -211,7 +212,7 @@ Where a Sources row names an issue, pull request, or open intent record with no 
 
 #### dashboard-31
 
-When an intent is captured from any Dashboard gesture — a Queue control or the inline add row — the Up next band shall reveal the new row and briefly highlight it where it landed.
+When an intent is captured from any Dashboard Queue gesture, the Up next band shall reveal the new row in its derived scheduling standing [[dashboard-59](#dashboard-59)] and briefly highlight it where it landed, without dispatching it.
 
 ### Sources
 
@@ -255,7 +256,7 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 
 | Section | Empty condition | Guidance |
 | --- | --- | --- |
-| Attention queue | no entry, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — with Start, or plain all-clear copy when no unblocked head exists |
+| Attention queue | no entry, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — and mirroring its scheduling standing [[dashboard-59](#dashboard-59)], with Start only where manual dispatch is available; or plain all-clear copy when no unblocked head exists |
 | Running | no live session holds a turn in flight unattended by the queue [[dashboard-50](#dashboard-50)] | a quiet note that nothing is running |
 | Project groups | no registered project | how to register a project, with a navigation control to Projects |
 | History | no done work, once the first history page has answered | a note that nothing is done here yet — "Loading…" until then |
@@ -304,8 +305,25 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 - an intent a remove act retired [[core-service-79](core-service.md#core-service-79)] is absent from every state above: no History row, no source artifact held, no attention entry, and no band lists it ([DR-038](../decisions/038-history-is-done-work.md));
 - the fold produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md));
 - where several rows hold at once, the fold ranks failure, then working, then question, then finished — a standing summons is never masked by the running mark;
-- the per-project next is the first queued, unblocked intent in rank order;
+- the per-project next and its scheduling standing derive as one queue reading [[dashboard-59](#dashboard-59)];
 - a consumer reading the fold over the protocol applies replies in request order — an older read's reply landing after a newer one's is discarded — so a stale fold never overwrites a fresh one.
+
+#### dashboard-59
+
+Where the fold derives a project's queue reading, it shall choose the first queued, unblocked intent in rank order as next and derive that row's scheduling standing from the current conversation, latest attributed turn, and any parked run, with no stored queue state ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+
+| Condition | Phrase | Start |
+| --- | --- | --- |
+| no preceding work can hand off, including first capture into an idle project or capture after settlement | none | available |
+| an attributed turn is active or settling | `after this work` | absent |
+| a run is parked on a question | `waiting — your reply` | absent |
+| a failure stands with no run parked | `waiting — previous work failed`, followed by the failure's catalogue phrase when its cause is known [[run-view-147](run-view.md#run-view-147)] | available |
+| a run is parked on a failure | `waiting — ⟨catalogue phrase⟩`, or `waiting — current work failed` when no cause was reported [[run-view-147](run-view.md#run-view-147)] | absent |
+| the latest attributed turn aborted, whether a released dispatch or a follow-up after an older finish | `waiting — previous turn was stopped` | available |
+
+- an after-linked row whose predecessor remains open is excluded from next and keeps its row-local `after ⟨title⟩` phrase [[dashboard-29](#dashboard-29)];
+- a normal settlement that makes the next eligible for automatic advancement does not interpose a manual-ready standing [[core-service-94](core-service.md#core-service-94)];
+- a `Queued` row's scheduling standing is presentation, not another intent lifecycle state.
 
 #### dashboard-54
 
@@ -371,7 +389,7 @@ Where fixture intent rows and a fixture record stream span two projects — one 
 
 #### dashboard-16
 
-While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, the unread turn's Reviewed control, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry even when dispatching another intent before any machine transition [[dashboard-4](#dashboard-4)], that Reviewed cleared the unread-turn stand-in and no intent entry with the session never opened [[dashboard-55](#dashboard-55)] [[dashboard-4](#dashboard-4)], that a refused Reviewed left the entry standing and said so on its row [[dashboard-55](#dashboard-55)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's Start [[dashboard-4](#dashboard-4)], that an interrupted intent's Drop asked before acting and then took the whole ruling in that one close, with no control command of the row's own, while a refused close left the entry standing with its cause on the row [[dashboard-56](#dashboard-56)] [[dashboard-53](#dashboard-53)], that a Boss turn taken while a run of the failure intent's session stands parked in its failure state left that failure entry standing where the same turn would have cleared an unparked one, and that the parked run's disposal within a later turn cleared it [[dashboard-10](#dashboard-10)] [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
+While the attention queue holds interrupted and finished entries, when the fixture stream continues with a Boss turn in the question intent's session, the unread turn's Reviewed control, and a verdict on the finished intent, the test suite shall assert that the Boss turn cleared the question entry even when dispatching another intent before any machine transition [[dashboard-4](#dashboard-4)], that Reviewed cleared the unread-turn stand-in and no intent entry with the session never opened [[dashboard-55](#dashboard-55)] [[dashboard-4](#dashboard-4)], that a refused Reviewed left the entry standing and said so on its row [[dashboard-55](#dashboard-55)], that the verdict cleared the finished entry and handed focus to the entry at its place, then to the all-clear's live Start or the all-clear region according to the next standing [[dashboard-4](#dashboard-4)] [[dashboard-59](#dashboard-59)], that an interrupted intent's Drop asked before acting and then took the whole ruling in that one close, with no control command of the row's own, while a refused close left the entry standing with its cause on the row [[dashboard-56](#dashboard-56)] [[dashboard-53](#dashboard-53)], that a Boss turn taken while a run of the failure intent's session stands parked in its failure state left that failure entry standing where the same turn would have cleared an unparked one, and that the parked run's disposal within a later turn cleared it [[dashboard-10](#dashboard-10)] [[dashboard-4](#dashboard-4)], and that the published attention count tracked each removal [[dashboard-9](#dashboard-9)].
 
 #### dashboard-17
 
@@ -387,11 +405,22 @@ Where a fixture project holds a queue of three intents, the second after-linked 
 
 Where two ledger reads overlap and the older one's reply lands last, the test suite shall assert that the newer fold stays in place and the Up next band lists its queue, the older reply discarded [[dashboard-10](#dashboard-10)].
 
+#### dashboard-60
+
+Where fixture intent rows and record streams put projects into each queue-standing condition, when the Dashboard state is derived and rendered, the test suite shall assert the queue presentation case by case:
+
+- every Up next row carries `Queued`, exactly the first unblocked row is next, and every later eligible row carries no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- an idle next carries Start with no explanatory phrase, while a next behind active work reads `after this work` with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- a question park reads `waiting — your reply`, and a failure park reads `waiting — ⟨catalogue phrase⟩` with the fixture cause, each with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- an unparked failure reads `waiting — previous work failed` with its known catalogue cause and carries Start, while an aborted dispatch and an aborted follow-up each read `waiting — previous turn was stopped` and carry Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- an after-linked row reads `after ⟨title⟩`, names a foreign project where applicable, carries no Start, and is skipped when choosing next [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- the all-clear names the same global next with the same phrase and Start availability [[dashboard-8](#dashboard-8)] [[dashboard-59](#dashboard-59)].
+
 ### Capture Coverage
 
 #### dashboard-37
 
-Where a fixture Sources row lists issue #7, when the user activates its Queue control, the test suite shall assert that a queued intent is captured with the exact editable issue seed and provenance [[dashboard-30](#dashboard-30)], that the Up next band reveals and briefly highlights the new row [[dashboard-31](#dashboard-31)], that the issue row shows the open intent's derived state in place of its Queue control [[dashboard-30](#dashboard-30)], and that the row regains the control when the intent closes [[dashboard-30](#dashboard-30)].
+Where a fixture Sources row lists issue #7, when the user activates its sole intent action Queue, the test suite shall assert that no sibling Start is offered, that a queued intent is captured with the exact editable issue seed and provenance and no turn dispatched [[dashboard-30](#dashboard-30)], that the Up next band reveals and briefly highlights the new row in its derived standing [[dashboard-31](#dashboard-31)], that the issue row shows the open intent's derived state in place of its Queue control [[dashboard-30](#dashboard-30)], and that the row regains the control when the intent closes [[dashboard-30](#dashboard-30)].
 
 ### Sources Coverage
 
@@ -417,7 +446,7 @@ Where Dashboard state is derived across the empty conditions, the test suite sha
 
 - with no registered project, the attention queue and projects area render their empty-state guidance with an activatable navigation control to Projects [[dashboard-8](#dashboard-8)], and no welcome takeover replaces the surface [[dashboard-21](#dashboard-21)];
 - with a registered project whose ledger is empty, each band renders its guidance in place, the Sources line reading as loading until the project's forge state has been read and as not connected after [[dashboard-8](#dashboard-8)] [[dashboard-20](#dashboard-20)];
-- with one queued unblocked intent and no attention entry, the all-clear names that intent with Start [[dashboard-8](#dashboard-8)];
+- with one manually ready queued intent and no attention entry, the all-clear names that intent with Start, while a queued intent behind active work carries the same `after this work` standing as its Up next row and no Start [[dashboard-8](#dashboard-8)] [[dashboard-59](#dashboard-59)];
 - before the ledger is read, the attention queue and the Up next band show their loading notes and no all-clear; with a failed read, the failure strip with Retry stands alone, and Retry reads the ledger again [[dashboard-8](#dashboard-8)].
 
 ### Now-Band Coverage
@@ -433,7 +462,7 @@ Where a fixture stream holds a live session serving an open intent and carrying 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and the scripted Captain, when the journey works the ledger through the page, the test suite shall assert:
 
 - every empty band carries its guidance, and the Sources line reads collapsed with the seeded example's open records behind it, each with a Queue control [[dashboard-8](#dashboard-8)] [[dashboard-20](#dashboard-20)] [[dashboard-24](#dashboard-24)] [[dashboard-30](#dashboard-30)];
-- the inline add field begins one row high; a long line soft-wraps and grows it without adding a newline, Shift+Enter adds a line, text beyond its maximum leaves it capped and scrolling without a native resize grip, and Enter captures the trimmed multiline draft with its internal lines intact and clears the field, revealing its row while the all-clear names it next [[dashboard-29](#dashboard-29)] [[dashboard-31](#dashboard-31)];
+- the inline add field begins one row high with Queue and no Start beside it; a long line soft-wraps and grows it without adding a newline, Shift+Enter adds a line, text beyond its maximum leaves it capped and scrolling without a native resize grip, and Queue or Enter captures the trimmed multiline draft with its internal lines intact and clears the field without dispatching a turn, revealing its row with `Queued` while the all-clear names it next [[dashboard-29](#dashboard-29)] [[dashboard-31](#dashboard-31)];
 - a queued intent removed before any turn leaves History untouched [[dashboard-27](#dashboard-27)];
 - queuing from a record row lands a row wearing the record's identifier [[dashboard-30](#dashboard-30)] [[dashboard-31](#dashboard-31)];
 - while the dispatched intent's session runs, the Now band shows it [[dashboard-28](#dashboard-28)];

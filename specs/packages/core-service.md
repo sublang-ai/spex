@@ -334,15 +334,16 @@ While a session is live, when a Boss submission for it — from a client [[core-
 
 #### core-service-94
 
-When a locally owned intent-attributed turn completes full settlement [[core-service-91](#core-service-91)], the core service shall automatically submit the project's first queued, unblocked intent in current rank order into the same conversation only when the settled turn proves successful governed-root completion ([DR-055](../decisions/055-queue-advancement.md)):
+When a locally owned intent-attributed turn completes full settlement [[core-service-91](#core-service-91)], the core service shall, after publishing the released conversation, automatically submit the project's first queued, unblocked intent in current rank order into that same conversation exactly once only while the just-settled turn ended finished and would leave its attributed owner Finished rather than Interrupted if that owner remained open, no run of the conversation remains parked on the Boss, and the turn, dispatch boundary, project lane, and conversation remain current ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
-- proof is a stored `captain_telemetry` record on `playbook.trace` in that turn, whose trace has `schemaVersion: 4` and is `boss.input.settled` with `outcome: terminal` and `terminal.kind: success`, from a non-Captain root (`depth: 0`, `sessionId` equal to `rootSessionId`, no parent session), with no later unfinished governed work, root trace of an unsupported version or standing interruption;
-- completion follows the root playbook's declared success, including a concluded DEV discussion with no repository changes;
-- child completion, ordinary Captain replies, missing terminal evidence, unsupported or missing trace versions, failure, abort, questions and permissions do not prove success;
-- selection and submission use the intent's current text, identity and rank, retaining explicit after-link blocking [[core-service-45](#core-service-45)], normal admission [[core-service-5](#core-service-5)], and actual-start dispatch stamping and attribution [[core-service-47](#core-service-47)]; a refused admission causes no automatic retry;
-- the settled intent remains finished and awaiting its human verdict [[core-service-46](#core-service-46)] [[core-service-49](#core-service-49)], and a manual follow-up attributed to it may supply the successful settlement;
-- each eligible settlement initiates at most one next dispatch, only while the conversation and attributed turn remain current; no next eligible intent starts nothing;
-- queue capture or edits, ledger reads, confirmation, adoption and restart initiate no advancement, and no runner state is retained.
+- an ordinary Captain reply qualifies with no `playbook.trace` record or typed terminal evidence, as does a reply that sounds like a question but parks no run;
+- a Boss answer qualifies after its own turn settles finished and the question park has left; a question or failure park still standing, a failed turn, or an aborted turn starts no successor;
+- an aborted follow-up starts no successor even where an older finished turn leaves the intent's derived state Finished; a later clean attributed follow-up or recovery may qualify;
+- a permission record and absent, unsupported, child, failed, or non-terminal playbook trace evidence add no gate of their own;
+- a Done or Drop verdict accepted before or during the eligible settlement, and a later removal, neither authorizes nor cancels that settlement's successor; no verdict or removal initiates advancement;
+- selection and submission use the intent's current text, identity and rank, retaining explicit after-link blocking [[core-service-45](#core-service-45)], normal admission [[core-service-5](#core-service-5)], and actual-start dispatch stamping and attribution [[core-service-47](#core-service-47)]; a competing manual submission wins normal admission and a refused admission causes no automatic retry;
+- the settled intent remains finished and awaiting its human verdict unless that verdict already landed [[core-service-46](#core-service-46)] [[core-service-49](#core-service-49)];
+- no next eligible intent starts nothing, and queue capture or edits, ledger reads, verdicts after settlement, adoption and restart initiate no advancement or retained runner state.
 
 #### core-service-48
 
@@ -360,7 +361,7 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 | Attention entries | two bands — intents standing interrupted on the Boss (a pending question or an unacknowledged failure among their turns), then intents finished and awaiting a verdict — each band ordered longest waiting first by condition onset, and no entry from a project whose stored state refuses the acts that would end it [[core-service-86](#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md)) |
 | Run stats | each finished entry carries stats folded from its intent's attributed turns [[core-service-47](#core-service-47)]: turn count, elapsed time, and the review rounds when any |
 | Session stand-ins | a session bound to no intent enters the same bands for its own question, failure, or finished turn past the viewed marker [[core-service-48](#core-service-48)] |
-| Project groups | per project: the current conversation's state [[core-service-93](#core-service-93)], the queue in rank order with each blocked intent marked [[core-service-45](#core-service-45)], and the open intents' source-artifact references [[core-service-42](#core-service-42)] |
+| Project groups | per project: the current conversation's state [[core-service-93](#core-service-93)], the queue in rank order with each blocked intent marked [[core-service-45](#core-service-45)], its first unblocked intent as next with a derived scheduling standing and Start availability — manual-ready, after current work, waiting on a question park, waiting on an unparked or parked failure with its cause where known, or waiting after abort — and the open intents' source-artifact references [[core-service-42](#core-service-42)] ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)) |
 | Badge | the count of all attention entries |
 
 - a failure entry whose run stands parked carries the structured cause the runtime attached to that failure — the `{ code, evidence }` the stream reports beside the failure it decided — read defensively, so a shape that is not a code with an optional evidence object is dropped rather than half-read and the entry states no reason the runtime did not state ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
@@ -775,10 +776,13 @@ Where a session is live on the fake adapter, the test suite shall submit Boss te
 
 Where the integration suite starts intent-attributed work through real core commands with substitute agents, it shall verify automatic advancement [[core-service-94](#core-service-94)] across the following settlement cases:
 
-- successful governed-root completion in schema version four starts the next unblocked intent exactly once after release and publication, using its latest queued text and rank, while the first remains finished and unconfirmed;
-- a child success, ordinary Captain response, missing completion evidence, unsupported or missing trace version (including after an earlier valid success), failed root, aborted turn or standing question or permission starts no successor; a later manual follow-up with proven root success can advance, including a concluded DEV discussion with no repository changes;
-- an explicit after-link to the unconfirmed predecessor remains blocked, and a competing manual submission or admission refusal creates no duplicate turn or dispatch stamp;
-- adding or editing queued work during the active turn affects the next selection, while capture or edits after settlement, ledger reads, confirmation, adoption and restart start no work;
+- an ordinary Captain reply carrying no typed terminal evidence starts the next unblocked intent exactly once after release and publication, using its latest queued text and rank, while the first remains finished and unconfirmed;
+- a prose question that parks no run and permission telemetry add no hold, while an answered parked question starts the successor only after the answer turn settles and the park leaves;
+- a failed turn, an aborted dispatch, an aborted follow-up after an older finish, and a reply or control settling with a question or failure park still standing start no successor, while a later clean attributed follow-up or recovery may start one;
+- `ledger.get` publishes the same next standing for manual-ready, after-current-work, question-park, unparked-failure, parked-failure with its cause, and aborted cases [[core-service-49](#core-service-49)];
+- a Done or Drop verdict accepted before or during settlement preserves the one authorized successor, while either verdict after settlement and a later removal initiate nothing;
+- an explicit after-link to the unconfirmed predecessor remains blocked, and a competing manual submission or admission refusal creates no duplicate turn, dispatch stamp, or automatic retry;
+- adding or editing queued work during the active turn affects the next selection, while capture or edits after settlement, ledger reads, adoption and restart start no work;
 - subsequent dispatch bounds the first intent's attribution, and confirming that first intent changes neither the second intent nor its active turn.
 
 #### core-service-104

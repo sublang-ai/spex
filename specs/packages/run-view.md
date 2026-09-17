@@ -690,11 +690,11 @@ The tab strip shall end with pinned Specs and Overview tabs — one spec view an
 
 #### run-view-85
 
-When the composer's add-to-Up-next action is activated, the Boss composer shall capture the typed text as a queued intent for the session's project with chat provenance and acknowledge the capture in place, sending nothing ([DR-035](../decisions/035-intent-ledger.md)):
+When the composer's add-to-Up-next action is activated, the Boss composer shall capture the typed text as a queued intent for the session's project with chat provenance and acknowledge the capture in place, sending nothing ([DR-035](../decisions/035-intent-ledger.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
-- the capture starts no turn and queues no submission [[run-view-8](#run-view-8)] — the text is shelved, not sent;
+- the capture starts no turn and queues no submission [[run-view-8](#run-view-8)] — the text joins Up next but is not sent by capture;
 - the acknowledgment is an inline note in the composer's caption line [[run-view-106](#run-view-106)] naming where the row landed — "Added to Up next — see the project's Overview.", the project's Up next in its Overview tab, where the row's Remove waits [[dashboard-29](dashboard.md#dashboard-29)] — the run view's form of the shelf reveal;
-- the action stands beside send as the composer's one secondary action, labeled "Add to Up next" — by where the text goes, never by a mechanism.
+- the action stands beside send as the composer's one secondary action, labeled "Add to Up next" — by where the text goes, never by a mechanism — with no Start capture action beside it.
 
 #### run-view-86
 
@@ -710,15 +710,15 @@ When a dispatched intent's final turn ends finished, the run view shall render t
 
 - the run-stats line folds from the intent's own turns — its review rounds foremost, omitted when zero, then its turn count and its elapsed time from dispatch to the last turn's end, in the duration vocabulary [[run-view-145](#run-view-145)] — so the verdict is informed before the click;
 - the provenance chip with a canonical URL is a link that opens outside the page — a new browsing context, with no referrer — so the session never navigates away, and the same chip is the one the bound turn's bubble wears [[run-view-89](#run-view-89)];
-- the card says visibly that a follow-up message continues the intent only while it is the newest open dispatched intent owning the conversation [[run-view-90](#run-view-90)]; an automatic successor leaves this card and its verdict controls in place ([DR-055](../decisions/055-queue-advancement.md));
-- when a verdict is given, the card resolves in place into the project's next queued intent with Start, or into an inline add affordance when the queue holds none;
-- in an ended session the card replays identically from the stored fold [[run-view-14](#run-view-14)], its verdict controls still live wherever the intent is open — the ruling reads no runtime state and the Dashboard row takes the same act [[dashboard-56](dashboard.md#dashboard-56)] — and only the resolved card's Start and add are inert there, a new turn being what they need.
+- the card says visibly that a follow-up message continues the intent only while it is the newest open dispatched intent owning the conversation [[run-view-90](#run-view-90)]; a successor admitted by clean settlement leaves this card and its verdict controls in place ([DR-077](../decisions/077-up-next-is-a-committed-queue.md));
+- when a verdict is given, the card resolves in place into the project's core-published next queued intent with its `Queued` mark, scheduling phrase, and Start only where the standing makes manual dispatch available [[core-service-49](core-service.md#core-service-49)], or into an inline add affordance when the queue holds none;
+- in an ended session the card replays identically from the stored fold [[run-view-14](#run-view-14)], its verdict controls still live wherever the intent is open — the ruling reads no runtime state and the Dashboard row takes the same act [[dashboard-56](dashboard.md#dashboard-56)] — and any resolved-card Start or add is inert there, a new turn being what it needs.
 
 #### run-view-88
 
-While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the queue's head unblocked intent with Start, Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md)):
+While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the core-published next intent with its `Queued` mark and scheduling phrase [[core-service-49](core-service.md#core-service-49)], Start only where the standing makes manual dispatch available, Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
-- Start stages the intent into the home composer under its chip [[run-view-86](#run-view-86)], where sending creates the session and dispatches the text in one motion [[run-view-26](#run-view-26)].
+- where Start is available, it stages through [[run-view-86](#run-view-86)] into the current conversation's composer when one exists, or into the home composer when none does, where sending creates the session and dispatches the text in one motion [[run-view-26](#run-view-26)].
 
 #### run-view-89
 
@@ -1000,11 +1000,11 @@ Where a replayed fixture stream stands settled with a Captain and two player lan
 
 #### run-view-92
 
-While a replayed fixture stream holds a live session, when text is typed and the composer's queue-instead-of-send action is activated, the test suite shall assert the capture flow: a queue-intent command carrying the typed text and chat provenance for the session's project is sent over the protocol, no Boss turn is dispatched and no submission queues [[run-view-85](#run-view-85)], and an inline acknowledgment names where the row landed in the project's queue [[run-view-85](#run-view-85)].
+While a replayed fixture stream holds a live session, when text is typed and the composer's queue-instead-of-send action is activated, the test suite shall assert the capture flow: Add to Up next is the one secondary action with no Start beside it, a queue-intent command carrying the typed text and chat provenance for the session's project is sent over the protocol, no Boss turn is dispatched and no submission queues [[run-view-85](#run-view-85)], and an inline acknowledgment names where the row landed in the project's queue [[run-view-85](#run-view-85)].
 
 #### run-view-93
 
-Where a fixture project holds a queued intent and a live session, the test suite shall assert the staging flow:
+Where a fixture project holds a manually startable queued intent and an idle continuable session, the test suite shall assert the staging flow:
 
 - activating Start stages the intent's text into the session's composer, focused, under a chip carrying the intent's title [[run-view-86](#run-view-86)];
 - emptying the composer detaches the chip, and a subsequent send carries no intent id [[run-view-86](#run-view-86)];
@@ -1019,14 +1019,20 @@ Where a replayed fixture stream dispatches a queued intent whose turn then ends 
 - while the intent is open, the working line above the composer names it [[run-view-90](#run-view-90)];
 - Drop on the working line asks the inline confirm — Keep leaves the intent open with focus back on the control; Drop sends the close command as dropped, the line leaves with the outcome announced where it stood and focus in the composer; a refused drop keeps the line and names the refusal [[run-view-113](#run-view-113)];
 - the delivery card at the final turn's end carries the intent's title, its provenance chip, its review rounds, turn count, and elapsed time, a primary Confirm with Drop beside, and the visible follow-up note [[run-view-87](#run-view-87)];
-- while an automatic successor runs, the earlier card retains Confirm and Drop, loses its follow-up note, and confirming it neither starts another turn nor changes the successor's attribution [[run-view-87](#run-view-87)];
-- giving a verdict sends a close command over the protocol and resolves the card in place into the project's next queued intent with Start [[run-view-87](#run-view-87)];
+- while a clean-settlement successor runs, the earlier card retains Confirm and Drop, loses its follow-up note, and confirming it neither starts another turn nor changes the successor's attribution [[run-view-87](#run-view-87)];
+- giving a verdict sends a close command over the protocol and resolves the card in place into the project's next queued intent carrying `Queued` and its published scheduling phrase, with Start only in a manual-ready fixture [[run-view-87](#run-view-87)];
 - with an empty fixture queue, the card resolves into the inline add affordance instead [[run-view-87](#run-view-87)];
-- replaying the same stream as an ended session renders the identical card, its verdict controls still live and its resolved card's Start inert [[run-view-87](#run-view-87)] [[run-view-14](#run-view-14)].
+- replaying the same stream as an ended session renders the identical card, its verdict controls still live and any resolved-card Start inert [[run-view-87](#run-view-87)] [[run-view-14](#run-view-14)].
 
 #### run-view-95
 
-Where a fixture project holds a queue whose unblocked head intent has more intents behind it, when the Captain home renders, the test suite shall assert the next card names the head intent with Start and counts the rest while the quick start card stands beside it [[run-view-88](#run-view-88)], and that activating Start stages the intent into the home composer under its chip [[run-view-88](#run-view-88)] [[run-view-86](#run-view-86)], and that Remove closes the head intent dropped on the click — the Undo line taking focus from a keyboard activation and lapsing untouched after a pointer one — the card standing on that line alone once no next is served, and Undo re-queuing the same text and provenance at the head with the restored intent's Start focused [[run-view-114](#run-view-114)].
+Where fixture projects hold queues whose next intents span the published scheduling standings, when the Captain home renders, the test suite shall assert the next card case by case [[run-view-88](#run-view-88)]:
+
+- every next card names its intent with `Queued` and counts the rest while the quick start card stands beside it [[run-view-88](#run-view-88)];
+- a manual-ready next carries Start, whose activation stages the intent under its chip into the current conversation's composer when one exists and otherwise into the home composer [[run-view-88](#run-view-88)] [[run-view-86](#run-view-86)];
+- a next behind active work reads `after this work`, one behind a question park reads `waiting — your reply`, and one behind a parked failure carries its catalogue phrase, each with no Start [[run-view-88](#run-view-88)];
+- an unparked failure reads `waiting — previous work failed` and an abort reads `waiting — previous turn was stopped`, each with Start [[run-view-88](#run-view-88)];
+- Remove on the manual-ready head closes it dropped on the click — the Undo line taking focus from a keyboard activation and lapsing untouched after a pointer one — the card stands on that line alone once no next is served, and Undo re-queues the same text and provenance at the head with the restored intent's Start focused [[run-view-114](#run-view-114)].
 
 #### run-view-96
 

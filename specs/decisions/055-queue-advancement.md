@@ -7,6 +7,7 @@
 
 Accepted (2026-09-09) on the owner's request that completed queued work automatically starts the next intent while its finish confirmation remains visible.
 Amends [DR-035](035-intent-ledger.md)'s manual-only successor dispatch and confirmation-pulls-next policy, preserving human verdicts and explicit after-links.
+Amended by [DR-077](077-up-next-is-a-committed-queue.md) in scope: a clean settled attributed turn and a conversation with no run still parked replace typed governed-root success as the advancement gate; verdict independence, explicit after-links, settlement-only triggering, and no retained runner or automatic retry stand.
 
 ## Context
 
