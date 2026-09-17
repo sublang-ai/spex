@@ -176,14 +176,31 @@ While the Now band shows the open intent the session serves [[dashboard-28](#das
 
 #### dashboard-29
 
-The group's Up next band shall list the project's queued intents in rank order, every row carrying a neutral `Queued` tag, with the first unblocked intent emphasized as the project's next and rendering its scheduling standing [[dashboard-59](#dashboard-59)], followed by an inline add row whose one Queue action captures a new queued intent ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+The group's Up next band shall list the project's queued intents in rank order, every row carrying a neutral `Queued` tag, with the core-published first unblocked intent [[core-service-107](core-service.md#core-service-107)] emphasized as the project's next and rendering its scheduling standing [[dashboard-59](#dashboard-59)], followed by an inline add row whose one Queue action captures a new queued intent ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - the next row carries Start only where its standing makes manual dispatch available, and otherwise carries the standing phrase with no Start; every later eligible row carries only its `Queued` tag, since rank says it is later;
+- the title and standing form the row's sole shrinkable text stack, each truncating with its full text in its title; at the narrow step the standing takes its own line inside that stack, while the grip, `Queued` mark, available Start, and row menu remain visible ([DR-041](../decisions/041-chrome-that-fits.md));
 - the add field is one row while empty, soft-wraps and grows with its text to the smaller of eight lines and two fifths of the viewport, then scrolls with no native resize grip; Queue and Enter take the same capture of a nonblank draft after trimming its outer whitespace while preserving its internal line breaks, Shift+Enter inserts a line, and no Start stands beside Queue ([DR-041](../decisions/041-chrome-that-fits.md));
 - a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with `after ⟨title⟩`, the predecessor's project named when it lives in another project, carries no Start, and is never presented as next;
 - reorder works by drag — the grip at the row's left is the affordance — by keyboard (Alt+↑/↓ on the focused row), and by the row menu's Move up and Move down, which take the same step, are disabled at the queue's ends, and name the shortcut; a reorder changes only the queue's rank order;
 - each row's actions live in a ⋯ menu that follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) — focus moves into it on open and returns to the trigger on close, Escape and an outside click close it, at most one row menu is open — offering Move up, Move down, Edit text, Remove, and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, the record row [[dashboard-40](#dashboard-40)] opening the record, "Session" opening the capturing session;
 - Remove acts on the click with no confirmation and leaves no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", lasting six seconds beyond the last moment its control holds focus, which it takes from a keyboard-driven removal alone — re-queues the same text and provenance at the row's former place; a pointer removal leaves the pointer where it is, so the line lapses on schedule and never stands as a prompt.
+
+#### dashboard-59
+
+While the Dashboard renders the core-published next intent and scheduling standing [[core-service-107](core-service.md#core-service-107)], it shall render the standing's exact phrase and Start availability by this table ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+
+| Published standing | Phrase | Start |
+| --- | --- | --- |
+| `after-current-work` | `after current work` | absent |
+| `question-park` | `waiting — your reply` | absent |
+| `failure-park` | `waiting — current work failed`, followed by the failure's catalogue phrase when its cause is known [[run-view-147](run-view.md#run-view-147)] | absent |
+| `failed` | `waiting — previous work failed`, followed by the failure's catalogue phrase when its cause is known [[run-view-147](run-view.md#run-view-147)] | available |
+| `stopped` | `waiting — previous work stopped` | available |
+| `manual-ready` | none | available |
+
+- `waiting` marks an automatic handoff held rather than the absence of every possible act: where Start is present it is the explicit way to proceed, and where Start is absent the named current prerequisite resolves elsewhere;
+- the scheduling standing is presentation on a `Queued` row, not another intent lifecycle state.
 
 ### Record Rows
 
@@ -212,7 +229,7 @@ Where a Sources row names an issue, pull request, or open intent record with no 
 
 #### dashboard-31
 
-When an intent is captured from any Dashboard Queue gesture, the Up next band shall reveal the new row in its derived scheduling standing [[dashboard-59](#dashboard-59)] and briefly highlight it where it landed, without dispatching it.
+When an intent is captured from any Dashboard Queue gesture, the Up next band shall reveal the new row in its core-published scheduling standing [[core-service-107](core-service.md#core-service-107)] as rendered by [[dashboard-59](#dashboard-59)] and briefly highlight it where it landed, without dispatching it.
 
 ### Sources
 
@@ -305,25 +322,7 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 - an intent a remove act retired [[core-service-79](core-service.md#core-service-79)] is absent from every state above: no History row, no source artifact held, no attention entry, and no band lists it ([DR-038](../decisions/038-history-is-done-work.md));
 - the fold produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md));
 - where several rows hold at once, the fold ranks failure, then working, then question, then finished — a standing summons is never masked by the running mark;
-- the per-project next and its scheduling standing derive as one queue reading [[dashboard-59](#dashboard-59)];
 - a consumer reading the fold over the protocol applies replies in request order — an older read's reply landing after a newer one's is discarded — so a stale fold never overwrites a fresh one.
-
-#### dashboard-59
-
-Where the fold derives a project's queue reading, it shall choose the first queued, unblocked intent in rank order as next and derive that row's scheduling standing from the current conversation, latest attributed turn, and any parked run, with no stored queue state ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
-
-| Condition | Phrase | Start |
-| --- | --- | --- |
-| no preceding work can hand off, including first capture into an idle project or capture after settlement | none | available |
-| an attributed turn is active or settling | `after this work` | absent |
-| a run is parked on a question | `waiting — your reply` | absent |
-| a failure stands with no run parked | `waiting — previous work failed`, followed by the failure's catalogue phrase when its cause is known [[run-view-147](run-view.md#run-view-147)] | available |
-| a run is parked on a failure | `waiting — ⟨catalogue phrase⟩`, or `waiting — current work failed` when no cause was reported [[run-view-147](run-view.md#run-view-147)] | absent |
-| the latest attributed turn aborted, whether a released dispatch or a follow-up after an older finish | `waiting — previous turn was stopped` | available |
-
-- an after-linked row whose predecessor remains open is excluded from next and keeps its row-local `after ⟨title⟩` phrase [[dashboard-29](#dashboard-29)];
-- a normal settlement that makes the next eligible for automatic advancement does not interpose a manual-ready standing [[core-service-94](core-service.md#core-service-94)];
-- a `Queued` row's scheduling standing is presentation, not another intent lifecycle state.
 
 #### dashboard-54
 
@@ -407,13 +406,13 @@ Where two ledger reads overlap and the older one's reply lands last, the test su
 
 #### dashboard-60
 
-Where fixture intent rows and record streams put projects into each queue-standing condition, when the Dashboard state is derived and rendered, the test suite shall assert the queue presentation case by case:
+Where fixture ledger replies publish next intents spanning every scheduling standing, when the Dashboard renders them, the test suite shall assert the queue presentation case by case:
 
-- every Up next row carries `Queued`, exactly the first unblocked row is next, and every later eligible row carries no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
-- an idle next carries Start with no explanatory phrase, while a next behind active work reads `after this work` with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
-- a question park reads `waiting — your reply`, and a failure park reads `waiting — ⟨catalogue phrase⟩` with the fixture cause, each with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
-- an unparked failure reads `waiting — previous work failed` with its known catalogue cause and carries Start, while an aborted dispatch and an aborted follow-up each read `waiting — previous turn was stopped` and carry Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
-- an after-linked row reads `after ⟨title⟩`, names a foreign project where applicable, carries no Start, and is skipped when choosing next [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- every Up next row carries `Queued`, exactly the core-published first unblocked row is next, and every later eligible row carries no Start [[dashboard-29](#dashboard-29)];
+- a `manual-ready` next carries Start with no explanatory phrase, while `after-current-work` reads `after current work` with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- `question-park` reads `waiting — your reply`, and `failure-park` reads `waiting — current work failed` with the fixture catalogue cause, each with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- `failed` reads `waiting — previous work failed` with its known catalogue cause and carries Start, while `stopped` reads `waiting — previous work stopped` and carries Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
+- an after-linked row reads `after ⟨title⟩`, names a foreign project where applicable, carries no Start, and is skipped when choosing next [[dashboard-29](#dashboard-29)];
 - the all-clear names the same global next with the same phrase and Start availability [[dashboard-8](#dashboard-8)] [[dashboard-59](#dashboard-59)].
 
 ### Capture Coverage
@@ -446,7 +445,7 @@ Where Dashboard state is derived across the empty conditions, the test suite sha
 
 - with no registered project, the attention queue and projects area render their empty-state guidance with an activatable navigation control to Projects [[dashboard-8](#dashboard-8)], and no welcome takeover replaces the surface [[dashboard-21](#dashboard-21)];
 - with a registered project whose ledger is empty, each band renders its guidance in place, the Sources line reading as loading until the project's forge state has been read and as not connected after [[dashboard-8](#dashboard-8)] [[dashboard-20](#dashboard-20)];
-- with one manually ready queued intent and no attention entry, the all-clear names that intent with Start, while a queued intent behind active work carries the same `after this work` standing as its Up next row and no Start [[dashboard-8](#dashboard-8)] [[dashboard-59](#dashboard-59)];
+- with one manually ready queued intent and no attention entry, the all-clear names that intent with Start, while a queued intent behind active work carries the same `after current work` standing as its Up next row and no Start [[dashboard-8](#dashboard-8)] [[dashboard-59](#dashboard-59)];
 - before the ledger is read, the attention queue and the Up next band show their loading notes and no all-clear; with a failed read, the failure strip with Retry stands alone, and Retry reads the ledger again [[dashboard-8](#dashboard-8)].
 
 ### Now-Band Coverage
@@ -482,7 +481,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### dashboard-43
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and holding more closed work than one History page, a queued intent with a second queued behind it, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained and, wherever the centered column leaves empty space, a wheel over either its left or right margin advances that same surface scroll box [[dashboard-47](#dashboard-47)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], and every control keeps its accessible name at every size [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and holding more closed work than one History page, a queued intent with a second queued behind it and a current conversation parked on a failure whose catalogue phrase carries a long path, and ten further projects each holding a live session parked on a player question, when the journey shows the Dashboard and the project's Overview tab at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside a sideways-scrolling canvas is wider than its box, the surface scrolls inside its own box with nothing positioned past the viewport uncontained and, wherever the centered column leaves empty space, a wheel over either its left or right margin advances that same surface scroll box [[dashboard-47](#dashboard-47)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[dashboard-1](#dashboard-1)] [[dashboard-29](#dashboard-29)] [[dashboard-20](#dashboard-20)], the Up next title-and-standing stack alone owns its row's slack with both lines' full text in their titles while the long phrase truncates and `Queued` remains visible at 320 pixels [[dashboard-29](#dashboard-29)], and every control keeps its accessible name at every size [[dashboard-4](#dashboard-4)] [[dashboard-30](#dashboard-30)].
 
 #### dashboard-58
 

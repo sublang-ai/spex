@@ -33,13 +33,15 @@ Its standing is derived from the current conversation and record stream, never s
 
 | Condition | Phrase on the next row | Start |
 | --- | --- | --- |
-| No preceding work can hand off, including first capture into an idle project or capture after settlement | none | shown |
-| An attributed turn is active or settling | `after this work` | absent; a clean settlement hands off automatically |
+| Any turn in the project's current conversation is active or settling | `after current work` | absent; an eligible attributed settlement hands off automatically, while any other settlement reveals the next standing |
 | A run is waiting on a question | `waiting — your reply` | absent |
-| A failure stands and no run remains parked | `waiting — previous work failed`, followed by the catalogue cause when known | shown as the Boss's explicit decision to proceed |
-| A run remains parked on a failure | `waiting — ⟨catalogue cause⟩`, or `waiting — current work failed` when none was reported | absent |
-| The latest attributed turn aborted, including a released dispatch or an aborted follow-up | `waiting — previous turn was stopped` | shown as the Boss's explicit restart or move-on |
+| A run remains parked on a failure | `waiting — current work failed`, followed by the catalogue cause when known | absent |
+| The latest lane turn failed and no run remains parked | `waiting — previous work failed`, followed by the catalogue cause when known | shown as the Boss's explicit decision to proceed |
+| The latest lane turn aborted or ran an ending control | `waiting — previous work stopped` | shown as the Boss's explicit restart or move-on |
+| None of the preceding conditions holds, including first capture into an idle project or capture after settlement | none | shown |
 
+The table is ordered: the first matching condition is the standing, so active or settling work wins first, a surviving park wins over the turn that left it, and a failed outcome wins over a stopped outcome.
+`Waiting` means automatic handoff is held; where Start is present it is the explicit way to proceed, and where Start is absent the named current prerequisite must resolve elsewhere.
 An intent whose after-link names an open predecessor is not next, carries `after ⟨title⟩` with the other project named when needed, and carries no Start.
 A standing phrase replaces an inert Start rather than explaining a disabled control.
 The same next, phrase, and Start availability appear in Up next, the attention all-clear, a resolved delivery card, and the Captain home.
@@ -49,6 +51,7 @@ After a locally owned intent-attributed turn completes full settlement and publi
 
 - the just-settled turn ended finished rather than failed or aborted;
 - the turn would have left its attributed owner Finished rather than Interrupted had no verdict closed it;
+- the turn did not run an ending control;
 - no run of the conversation remains parked on the Boss;
 - the turn, dispatch boundary, project lane, and conversation remain current and normal admission accepts the submission.
 
@@ -56,7 +59,7 @@ A Done or Drop racing an eligible settlement neither authorizes nor cancels its 
 An ordinary Captain reply qualifies without playbook trace evidence.
 A reply that merely sounds like a question also qualifies unless the runtime actually parks a run; Spex does not classify prose.
 A Boss answer qualifies after its own turn settles cleanly and the question park has left.
-A failure, an abort, or a question or failure park starts nothing automatically; a later clean attributed follow-up or recovery may advance.
+A failure, a stopped turn — aborted or run by an ending control — or a question or failure park starts nothing automatically; a later clean attributed follow-up or recovery may advance.
 A permission record and absent, unsupported, child, or non-terminal trace evidence add no gate of their own.
 Explicit after-links remain eligibility blockers independent of the predecessor-outcome gate.
 Queue capture or edits, ledger reads, verdicts, adoption, and restart initiate no advancement, and a refused admission is not retried automatically.
@@ -64,7 +67,7 @@ Queue capture or edits, ledger reads, verdicts, adoption, and restart initiate n
 **Capture has one gesture.**
 Sources rows offer Queue, the inline add row offers Queue with Enter as its shortcut, and the composer offers Add to Up next.
 None offers Start beside its capture action, and capture itself sends no turn.
-Capture during active work joins the next eligible handoff; capture into a queue at rest reveals a next row whose Start is available.
+Capture during attributed queued work joins its next eligible handoff; capture during other active work waits for the lane to free and then reveals the next standing, while capture into a queue at rest reveals a next row whose Start is available.
 
 **Verdict and dispatch remain independent.**
 A finished intent continues to owe Confirm or Drop while later work runs.
@@ -84,5 +87,5 @@ A verdict may reveal a different next standing, but it neither starts, cancels, 
 - The core ledger read publishes each project's next intent and its derived standing so every surface uses one answer.
 - Dashboard rows gain the `Queued` mark, the next standing, conditional Start, and an explicit Queue action in the inline add row; Sources retain their single Queue action.
 - Delivery and Captain-home next cards use the same standing instead of manufacturing an unconditional Start.
-- The automatic-advancement integration matrix moves from trace shapes to ordinary finish, answered question, failure, abort, parked run, verdict race, dependency, and admission-race cases.
+- The automatic-advancement integration matrix moves from trace shapes to ordinary finish, answered question, failure, stopped turn, parked run, verdict race, dependency, and admission-race cases.
 - Typed playbook traces remain available for machine presentation but no longer decide whether the ledger advances.

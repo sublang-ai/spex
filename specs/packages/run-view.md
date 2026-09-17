@@ -711,12 +711,12 @@ When a dispatched intent's final turn ends finished, the run view shall render t
 - the run-stats line folds from the intent's own turns — its review rounds foremost, omitted when zero, then its turn count and its elapsed time from dispatch to the last turn's end, in the duration vocabulary [[run-view-145](#run-view-145)] — so the verdict is informed before the click;
 - the provenance chip with a canonical URL is a link that opens outside the page — a new browsing context, with no referrer — so the session never navigates away, and the same chip is the one the bound turn's bubble wears [[run-view-89](#run-view-89)];
 - the card says visibly that a follow-up message continues the intent only while it is the newest open dispatched intent owning the conversation [[run-view-90](#run-view-90)]; a successor admitted by clean settlement leaves this card and its verdict controls in place ([DR-077](../decisions/077-up-next-is-a-committed-queue.md));
-- when a verdict is given, the card resolves in place into the project's core-published next queued intent with its `Queued` mark, scheduling phrase, and Start only where the standing makes manual dispatch available [[core-service-49](core-service.md#core-service-49)], or into an inline add affordance when the queue holds none;
+- when a verdict is given, the card resolves in place into the project's core-published next queued intent and standing [[core-service-49](core-service.md#core-service-49)], with its `Queued` mark, scheduling phrase, and Start availability rendered by the shared mapping [[dashboard-59](dashboard.md#dashboard-59)], or into an inline add affordance when the queue holds none;
 - in an ended session the card replays identically from the stored fold [[run-view-14](#run-view-14)], its verdict controls still live wherever the intent is open — the ruling reads no runtime state and the Dashboard row takes the same act [[dashboard-56](dashboard.md#dashboard-56)] — and any resolved-card Start or add is inert there, a new turn being what it needs.
 
 #### run-view-88
 
-While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the core-published next intent with its `Queued` mark and scheduling phrase [[core-service-49](core-service.md#core-service-49)], Start only where the standing makes manual dispatch available, Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the core-published next intent and standing [[core-service-49](core-service.md#core-service-49)], with its `Queued` mark, scheduling phrase, and Start availability rendered by the shared mapping [[dashboard-59](dashboard.md#dashboard-59)], Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - where Start is available, it stages through [[run-view-86](#run-view-86)] into the current conversation's composer when one exists, or into the home composer when none does, where sending creates the session and dispatches the text in one motion [[run-view-26](#run-view-26)].
 
@@ -761,10 +761,10 @@ While the working line names an open intent [[run-view-90](#run-view-90)], the r
 
 #### run-view-114
 
-While the next card names the queue's head [[run-view-88](#run-view-88)], the Captain home shall offer Remove beside Start, acting on the click with no confirmation and leaving no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", lasting six seconds beyond the last moment its control holds focus, which it takes from a keyboard-driven removal alone — that re-queues the same text and provenance at the queue's head:
+While the next card names the queue's head [[run-view-88](#run-view-88)], the Captain home shall offer Remove on that card, beside Start where Start is available, acting on the click with no confirmation and leaving no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", lasting six seconds beyond the last moment its control holds focus, which it takes from a keyboard-driven removal alone — that re-queues the same text and provenance at the queue's head:
 
 - a pointer removal leaves the pointer where it is, so the line lapses on schedule and never stands as a prompt;
-- the card stays while the Undo line stands, even once no queued intent is left behind it, and a restored intent's Start takes focus.
+- the card stays while the Undo line stands, even once no queued intent is left behind it, and a restored intent's Start takes focus where available, otherwise its Remove does.
 
 ## Internal Behavior
 
@@ -1030,9 +1030,10 @@ Where fixture projects hold queues whose next intents span the published schedul
 
 - every next card names its intent with `Queued` and counts the rest while the quick start card stands beside it [[run-view-88](#run-view-88)];
 - a manual-ready next carries Start, whose activation stages the intent under its chip into the current conversation's composer when one exists and otherwise into the home composer [[run-view-88](#run-view-88)] [[run-view-86](#run-view-86)];
-- a next behind active work reads `after this work`, one behind a question park reads `waiting — your reply`, and one behind a parked failure carries its catalogue phrase, each with no Start [[run-view-88](#run-view-88)];
-- an unparked failure reads `waiting — previous work failed` and an abort reads `waiting — previous turn was stopped`, each with Start [[run-view-88](#run-view-88)];
-- Remove on the manual-ready head closes it dropped on the click — the Undo line taking focus from a keyboard activation and lapsing untouched after a pointer one — the card stands on that line alone once no next is served, and Undo re-queues the same text and provenance at the head with the restored intent's Start focused [[run-view-114](#run-view-114)].
+- a next behind active work reads `after current work`, one behind a question park reads `waiting — your reply`, and one behind a parked failure reads `waiting — current work failed` with its catalogue phrase, each with no Start [[run-view-88](#run-view-88)];
+- an unparked failure reads `waiting — previous work failed` and a stopped turn reads `waiting — previous work stopped`, each with Start [[run-view-88](#run-view-88)];
+- Remove on a manual-ready head closes it dropped on the click — the Undo line taking focus from a keyboard activation and lapsing untouched after a pointer one — the card stands on that line alone once no next is served, and Undo re-queues the same text and provenance at the head with the restored intent's Start focused [[run-view-114](#run-view-114)];
+- Remove remains available on an `after-current-work` head with no Start, and Undo restores that same standing with focus on Remove [[run-view-114](#run-view-114)].
 
 #### run-view-96
 
