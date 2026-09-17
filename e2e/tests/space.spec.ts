@@ -132,7 +132,7 @@ test.describe("first-time setup", () => {
     const setup = page.getByTestId("space-setup");
     await expect(setup.getByTestId("space-set-up")).toHaveText("Set up space");
     await expect(setup.getByTestId("space-initialize")).toHaveCount(0);
-    await expect(setup).toContainText("Sessions, queues, projects, Settings and playbook sources sync.");
+    await expect(setup).toContainText("Syncs sessions, queues, projects, Settings and playbook sources");
     await expect(header.getByTestId("space-outside-config")).toHaveCount(0);
     await expect(page.getByTestId("space-local-list")).toHaveCount(0);
 

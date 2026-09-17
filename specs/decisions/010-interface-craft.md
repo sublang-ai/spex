@@ -9,6 +9,7 @@ Accepted.
 §8's interaction hue is amended by [DR-013](013-sublang-brand.md): brand purple replaces indigo.
 A ninth principle, chrome that fits, is added by [DR-041](041-chrome-that-fits.md).
 §8's type scale is sharpened on the owner's audience review (2026-09-02): the small step is 12px, and an arbitrary 10–11px size lives only inside a tooltip.
+A tenth principle, key phrases rather than sentences, is added by [DR-069](069-key-phrases-not-sentences.md).
 
 ## Context
 

@@ -87,8 +87,8 @@ export function AgentChipButton({
 }
 
 /** This agent's settings for this conversation, anchored at its own
- * chip (run-view-138). Three fields, what it cannot change, and where
- * the change lands — the role-binding editor's shape, one scope over. */
+ * chip (run-view-138). Three fields under the agent's name and its
+ * scope — the role-binding editor's shape, one scope over. */
 export function AgentSettingsPopover({
   agent,
   side = "left",
@@ -135,7 +135,10 @@ export function AgentSettingsPopover({
       aria-label={`${agent.name} settings for this conversation`}
       className={`absolute ${side === "left" ? "left-0" : "right-0"} top-7 z-20 flex max-h-[min(26rem,calc(100vh-4rem))] w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900`}
     >
-      <p className="text-xs font-semibold">{agent.name}</p>
+      <div>
+        <p className="text-xs font-semibold">{agent.name}</p>
+        <p data-testid={`agent-scope-${agent.id}`} className="text-xs text-neutral-500 dark:text-neutral-400">This conversation only</p>
+      </div>
 
       {readOnly ? (
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -186,6 +189,12 @@ export function AgentSettingsPopover({
         </label>
       )}
 
+      {agent.divergentRoles.length > 0 ? (
+        <p data-testid={`agent-roles-${agent.id}`} className="text-xs text-brand-700 dark:text-brand-300">
+          Also sets {agent.divergentRoles.join(", ")}
+        </p>
+      ) : null}
+
       {discovery.loading && <p className="text-xs text-neutral-500">Loading model options…</p>}
       {unavailable !== undefined && (
         <p className="text-xs text-neutral-500">
@@ -199,17 +208,6 @@ export function AgentSettingsPopover({
       {invalidFastMode && <p role="alert" className="text-xs text-red-600">{adapterFastMode === false ? "Clear the fast-mode choice; this adapter does not accept it." : "Turn off fast mode for this model."}</p>}
       {invalidEffort && <p role="alert" className="text-xs text-red-600">Choose a listed effort, take the configured value, or use the provider default.</p>}
       {invalidModel && <p role="alert" className="text-xs text-red-600">Enter a model ID, take the configured value, or use the provider default.</p>}
-
-      {/* Where the change lands, and what it cannot reach. */}
-      <p data-testid={`agent-scope-${agent.id}`} className="text-xs text-neutral-500 dark:text-neutral-400">
-        This conversation only — your Settings do not change.
-        {agent.divergentRoles.length > 0
-          ? ` ${agent.divergentRoles.join(", ")} ${agent.divergentRoles.length === 1 ? "sets" : "set"} this agent too, and one choice here runs ${agent.divergentRoles.length === 1 ? "it" : "them"} alike.`
-          : ""}
-      </p>
-      <p className="text-xs text-neutral-500 dark:text-neutral-400">
-        Adapter, instruction and permissions live in Settings — changing them needs a new session.
-      </p>
 
       {error ? <p role="alert" data-testid={`agent-error-${agent.id}`} className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
 

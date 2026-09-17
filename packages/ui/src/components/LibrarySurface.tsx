@@ -230,9 +230,6 @@ function BuiltinCard({
         >
           {info.intent}
         </span>
-        <span className="ml-auto rounded bg-neutral-100 px-1.5 py-0.5 text-xs whitespace-nowrap text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
-          available built-in
-        </span>
         {info.source ? (
           <button
             type="button"

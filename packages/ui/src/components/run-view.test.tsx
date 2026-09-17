@@ -2917,8 +2917,8 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     expect(within(editor).getByTestId("agent-dev.coder-effort-mode")).toBeTruthy();
     // Where the change lands, and the binding it will run alike.
     expect(within(editor).getByTestId("agent-scope-dev.coder").textContent)
-      .toMatch(/This conversation only — your Settings do not change\./);
-    expect(within(editor).getByTestId("agent-scope-dev.coder").textContent).toMatch(/code\.coder/);
+      .toMatch(/This conversation only/);
+    expect(within(editor).getByTestId("agent-roles-dev.coder").textContent).toMatch(/code\.coder/);
     expect(command).not.toHaveBeenCalledWith("config.edit", expect.anything());
     restore();
   });

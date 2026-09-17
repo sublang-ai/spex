@@ -9,6 +9,7 @@ Accepted (2026-09-16) on the owner's review of the surface [DR-067](067-tuning-f
 
 Amends [DR-067](067-tuning-for-one-conversation.md), which remains accepted, in its §"Where it is shown and changed" alone.
 That record's scope, precedence, storage, application at the three projection sites, validation without discovery, and its rule that a chip is a setting rather than a receipt all stand unchanged; this record replaces only what the reader sees and what it is called.
+Amended by [DR-069](069-key-phrases-not-sentences.md) in §"One agent's control opens one agent's settings" alone: the editor's two sentences become the phrase "This conversation only".
 
 ## Context
 

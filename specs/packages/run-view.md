@@ -243,8 +243,8 @@ When the reader opens an agent's settings control — the chip in the Captain pa
 
 - it edits the agent whose chip was opened and no other, anchored at that chip and taking the side and the bound of the agent editor's popover [[run-view-32](#run-view-32)], under the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6): focus enters on open and returns to the chip on close, and Escape, an outside click, and Cancel close it;
 - each field offers the configured value named, the provider's current default, and a value pinned from the runtime's own choices [[settings-34](settings.md#settings-34)], and fast mode is offered where the adapter accepts the request or a choice already stands, so a stale one is always clearable;
-- it says in the reader's own words that the change reaches this conversation only and leaves Settings as it is, and that adapter, instruction and permissions live in Settings because changing them needs a new session [[core-service-92](core-service.md#core-service-92)];
-- where a playbook's binding tunes this agent of its own accord, the editor names those roles, because one choice here runs them alike and silence would be a lie;
+- it reads the agent's name with "This conversation only" beneath it, and explains neither Settings nor the adapter, instruction and permissions it does not offer, which a new session alone changes [[core-service-92](core-service.md#core-service-92)] ([DR-069](../decisions/069-key-phrases-not-sentences.md));
+- where a playbook's binding tunes this agent of its own accord, the editor names those roles in one phrase, because one choice here runs them alike and silence would be a lie;
 - one control returns the whole agent to its configured values while any of them stands, and a save is refused in the editor's own frame with the draft kept, unavailable model discovery showing its reason with a retry while every field stays usable ([DR-052](../decisions/052-runtime-model-options.md));
 - a session reporting external ownership [[run-view-125](#run-view-125)] or history the core cannot continue [[run-view-33](#run-view-33)] reads its agents' settings without writing them.
 
