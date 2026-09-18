@@ -12,6 +12,8 @@ import {
   type ServerMessage,
 } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
+
 export type ConnectionStatus = "connecting" | "open" | "closed" | "mismatch";
 
 export interface SpexClientOptions {
@@ -86,7 +88,11 @@ export class SpexClient {
     });
     socket.addEventListener("close", () => {
       for (const [, pending] of this.pending) {
-        pending.reject(new SpexCommandError("closed", "connection closed"));
+        // The code is the machine's; the words reach the reader
+        // wherever a surface prints the refusal (localization-4).
+        pending.reject(
+          new SpexCommandError("closed", i18n._("connection closed")),
+        );
       }
       this.pending.clear();
       if (!this.mismatched) this.options.onStatus("closed");
@@ -112,7 +118,7 @@ export class SpexClient {
   ): Promise<CommandResults[T]> {
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
-      throw new SpexCommandError("closed", "not connected");
+      throw new SpexCommandError("closed", i18n._("not connected"));
     }
     const id = `ui-${(this.nextId += 1)}`;
     // Timeouts are sized per command class (DR-010 §5): a lost reply
@@ -126,7 +132,14 @@ export class SpexClient {
         setTimeout(() => {
           if (this.pending.has(id)) {
             this.pending.delete(id);
-            reject(new SpexCommandError("timeout", `${type} timed out`));
+            reject(
+              new SpexCommandError(
+                "timeout",
+                // The command name is a machine word; it travels as it
+                // is in every language (localization-1).
+                i18n._("{command} timed out", { command: type }),
+              ),
+            );
           }
         }, timeoutMs);
       }

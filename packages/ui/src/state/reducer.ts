@@ -12,6 +12,7 @@ import {
 } from "@sublang/spex-core/protocol";
 
 import { contextGraphs } from "../lib/session-context.js";
+import { i18n } from "../i18n.js";
 import { plainFailure } from "../lib/labels.js";
 
 /** What one call reported spending, in tokens and tool uses. Every
@@ -252,9 +253,11 @@ export function resolvePlayerId(
   return Object.keys(view.players).find((id) => id === player) ?? player;
 }
 
-/** Abort reasons are runtime plumbing; translate the known ones. */
+/** Abort reasons are runtime plumbing; put the known ones in words.
+ * An unknown reason is the runtime's own prose — data, printed as it
+ * came (localization-4). */
 function friendlyAbortReason(reason: string): string {
-  if (reason === "runtime disposed") return "session shut down";
+  if (reason === "runtime disposed") return i18n._("session shut down");
   return reason;
 }
 
@@ -340,7 +343,8 @@ function applyAgentEvent(
     case "error": {
       closeStreamingText(segments);
       const message =
-        (event.payload as { message?: string })?.message ?? "agent error";
+        (event.payload as { message?: string })?.message ??
+        i18n._("agent error");
       // One failure, several channels (run-view-127, DR-003): an
       // adapter may say the same failure as prose, as repeated error
       // events, and in its result. The pane shows it once per call.
@@ -413,12 +417,14 @@ export function applyRecord(
     }
     case "turn_aborted": {
       view.turnActive = false;
-      const reason = r.reason
-        ? `: ${friendlyAbortReason(String(r.reason))}`
-        : "";
+      // One whole line per case (localization-4).
       pushCaptain(view, {
         kind: "status",
-        text: `◆ turn aborted${reason}`,
+        text: r.reason
+          ? i18n._("◆ turn aborted: {reason}", {
+              reason: friendlyAbortReason(String(r.reason)),
+            })
+          : i18n._("◆ turn aborted"),
         turnId: r.turnId,
         at: r.timestamp,
       });
@@ -507,7 +513,9 @@ export function applyRecord(
         pushCaptain(view, {
           kind: "error",
           ...plainFailure(
-            result.error ?? result.finalText ?? "the Captain's turn failed",
+            result.error ??
+              result.finalText ??
+              i18n._("the Captain's turn failed"),
           ),
           turnId: r.turnId,
           at: r.timestamp,
@@ -637,7 +645,9 @@ export function applyRecord(
         if (fold.closed) {
           pushCaptain(view, {
             kind: "machine",
-            text: `${fold.closed.playbookId} ${fold.closed.outcome ?? "finished"}`,
+            // The playbook id and the run's outcome are machine words
+            // the trace carries; only the stand-in is a text.
+            text: `${fold.closed.playbookId} ${fold.closed.outcome ?? i18n._({ id: "finished", comment: "a run that ended with no outcome reported" })}`,
             frame: fold.closed,
             turnId: r.turnId,
             at: r.timestamp,

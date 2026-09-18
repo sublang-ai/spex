@@ -18,6 +18,7 @@ import {
 } from "react";
 
 import type { SpecEditorState } from "../lib/spec-view-model.js";
+import { i18n } from "../i18n.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
@@ -110,7 +111,7 @@ export function SpecEditor({
     } catch (cause) {
       const code = (cause as { code?: string }).code;
       if (code === "conflict") setConflict(true);
-      else setError((cause as Error).message || "the save failed");
+      else setError((cause as Error).message || i18n._("the save failed"));
       setBusy(false);
     }
   };
@@ -129,7 +130,7 @@ export function SpecEditor({
       });
       setConflict(false);
     } catch (cause) {
-      setError((cause as Error).message || "the reload failed");
+      setError((cause as Error).message || i18n._("the reload failed"));
     } finally {
       setBusy(false);
     }
@@ -185,7 +186,12 @@ export function SpecEditor({
           {state.path}
           {dirty ? (
             <>
-              <span className="sr-only">, unsaved changes</span>
+              <span className="sr-only">
+                {i18n._({
+                  id: ", unsaved changes",
+                  comment: "follows the file's path in the editor's heading",
+                })}
+              </span>
               <span aria-hidden="true" data-testid="editor-dirty">
                 {" "}
                 •
@@ -195,7 +201,7 @@ export function SpecEditor({
         </h1>
         <span
           role="group"
-          aria-label="Editor mode"
+          aria-label={i18n._("Editor mode")}
           className="ml-auto flex items-center gap-1"
         >
           <button
@@ -205,7 +211,7 @@ export function SpecEditor({
             onClick={() => onState({ ...state, preview: false })}
             className={TOGGLE_CLASS(!state.preview)}
           >
-            Edit
+            {i18n._({ id: "Edit", comment: "editor mode: the plain text field" })}
           </button>
           <button
             type="button"
@@ -214,7 +220,7 @@ export function SpecEditor({
             onClick={() => onState({ ...state, preview: true })}
             className={TOGGLE_CLASS(state.preview)}
           >
-            Preview
+            {i18n._({ id: "Preview", comment: "editor mode: the rendered draft" })}
           </button>
         </span>
         <button
@@ -224,17 +230,19 @@ export function SpecEditor({
           disabled={busy}
           className={BUTTON_CLASS}
         >
-          Cancel
+          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
         </button>
         <button
           type="button"
           data-testid="editor-save"
           onClick={() => void save(state.version)}
           disabled={!dirty || busy || saveBlocked !== undefined}
-          title={saveBlocked ?? `Save (${keyLabel("S")})`}
+          title={saveBlocked ?? i18n._("Save ({key})", { key: keyLabel("S") })}
           className={BUTTON_CLASS}
         >
-          {busy ? "Saving…" : "Save"}
+          {busy
+            ? i18n._({ id: "Saving…", comment: "the Save control, while the save is in flight" })
+            : i18n._({ id: "Save", comment: "write the draft to the file" })}
         </button>
       </div>
       {pending ? (
@@ -242,11 +250,15 @@ export function SpecEditor({
           <InlineConfirm
             question={
               pending === "cancel"
-                ? "Discard unsaved changes?"
-                : "Reload from disk and lose unsaved changes?"
+                ? i18n._("Discard unsaved changes?")
+                : i18n._("Reload from disk and lose unsaved changes?")
             }
-            confirmLabel={pending === "cancel" ? "Discard" : "Reload"}
-            cancelLabel="Keep"
+            confirmLabel={
+              pending === "cancel"
+                ? i18n._({ id: "Discard", comment: "confirm: drop the unsaved draft" })
+                : i18n._({ id: "Reload", comment: "confirm: re-read the file from disk" })
+            }
+            cancelLabel={i18n._({ id: "Keep", comment: "cancel: keep the unsaved draft" })}
             onConfirm={() => {
               setPending(null);
               if (pending === "cancel") onCancel();
@@ -266,7 +278,7 @@ export function SpecEditor({
           className="flex flex-wrap items-center gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
         >
           <span className="min-w-0 flex-1">
-            This file changed on disk since you opened it.
+            {i18n._("This file changed on disk since you opened it.")}
           </span>
           <button
             type="button"
@@ -275,7 +287,7 @@ export function SpecEditor({
             disabled={busy}
             className="rounded-md border border-amber-400 px-2 py-0.5 text-xs hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
           >
-            Reload
+            {i18n._({ id: "Reload", comment: "confirm: re-read the file from disk" })}
           </button>
           <button
             type="button"
@@ -285,7 +297,7 @@ export function SpecEditor({
             title={saveBlocked}
             className="rounded-md border border-amber-400 px-2 py-0.5 text-xs hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
           >
-            Overwrite
+            {i18n._({ id: "Overwrite", comment: "save over the file that changed on disk" })}
           </button>
         </div>
       ) : null}
@@ -302,7 +314,7 @@ export function SpecEditor({
             disabled={busy}
             className="rounded-md border border-red-300 px-2 py-0.5 text-xs hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
           >
-            Retry
+            {i18n._({ id: "Retry", comment: "try the failed save again" })}
           </button>
         </div>
       ) : null}
@@ -318,7 +330,7 @@ export function SpecEditor({
         <textarea
           ref={fieldRef}
           data-testid="editor-text"
-          aria-label={`Edit ${state.path}`}
+          aria-label={i18n._("Edit {path}", { path: state.path })}
           spellCheck={false}
           value={state.draft}
           onChange={(event) => onState({ ...state, draft: event.target.value })}

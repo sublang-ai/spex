@@ -33,10 +33,11 @@ import {
   bindRole,
 } from "../lib/config-ops.js";
 import {
-  DRAFT_ID_CAPTION,
   DRAFT_ID_RULE,
-  DRAFT_ID_RULE_TEXT,
+  draftIdCaption,
+  draftIdRuleText,
 } from "../lib/drafts.js";
+import { i18n } from "../i18n.js";
 import { phaseLabel } from "../lib/compile-log.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
@@ -45,6 +46,7 @@ import { BindingEditorPopover } from "./BindingEditor.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
+import { Rich } from "./Rich.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import {
@@ -114,16 +116,16 @@ function PlaybookPipeline({ playbookId }: { playbookId: string }) {
           >
             {missingLabels.length > 0 ? (
               <div className="text-xs text-amber-600 dark:text-amber-400">
-                missing stages: {missingLabels.join(", ")}
+                {i18n._("missing stages: {stages}", { stages: missingLabels.join(", ") })}
               </div>
             ) : null}
             {error ? (
               <div className="text-xs text-red-500">{error}</div>
             ) : !artifacts ? (
-              <div className="text-xs text-neutral-500">loading…</div>
+              <div className="text-xs text-neutral-500">{i18n._({ id: "loading…", comment: "a request for this pane's content is in flight" })}</div>
             ) : content === null ? (
               <div className="text-xs text-neutral-500">
-                this stage was not found for this playbook
+                {i18n._("this stage was not found for this playbook")}
               </div>
             ) : open === "fsm" ? (
               <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
@@ -237,7 +239,7 @@ function BuiltinCard({
             onClick={() => setShowSource((current) => !current)}
             className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            {showSource ? "Hide source" : "View source"}
+            {showSource ? i18n._("Hide source") : i18n._("View source")}
           </button>
         ) : null}
       </div>
@@ -259,8 +261,8 @@ function BuiltinCard({
                 type="button"
                 ref={openRole === role ? roleGearRef : undefined}
                 data-testid={`builtin-player-${role}`}
-                title={`Tweak the ${role} agent in place`}
-                aria-label={`Configure ${role}`}
+                title={i18n._("Tweak the {name} agent in place", { name: role })}
+                aria-label={i18n._("Configure {name}", { name: role })}
                 onClick={() =>
                   setOpenRole((current) =>
                     current === role ? undefined : role,
@@ -272,7 +274,7 @@ function BuiltinCard({
               </button>
               {openRole === role ? (
                 <AgentEditorPopover
-                  title={`${role} agent`}
+                  title={i18n._("{name} agent", { name: role })}
                   direction="down"
                   initial={block}
                   readiness={readiness}
@@ -299,10 +301,10 @@ function BuiltinCard({
           data-testid={`builtin-add-${info.id}`}
           disabled={busy}
           onClick={add}
-          title="Enable this playbook — it is written to the shared config"
+          title={i18n._("Enable this playbook — it is written to the shared config")}
           className="ml-auto rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          {busy ? "Enabling…" : "Enable"}
+          {busy ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" }) : i18n._({ id: "Enable", comment: "add this built-in playbook to the config" })}
         </button>
       </div>
       {error ? (
@@ -319,24 +321,50 @@ function BuiltinCard({
   );
 }
 
+/** The demo's four stages. Each label and hint is read when the row
+ * draws, never when this module loads, so the table never freezes the
+ * language it was imported in (localization-4). */
 const EXAMPLE_STAGES = [
-  { key: "source", label: "Source", hint: "The raw prose the demo starts from" },
+  {
+    key: "source",
+    get label() {
+      return i18n._({ id: "Source", comment: "pipeline stage: the authored workflow" });
+    },
+    get hint() {
+      return i18n._("The raw prose the demo starts from");
+    },
+  },
   {
     key: "normalized",
     // The row is card chrome, so the label holds the 14-character
     // budget and the full truth lives in the title (DR-041).
-    label: "Normalized",
-    hint: "Normalized text: slc's normalize phase turns the prose into workflow markdown",
+    get label() {
+      return i18n._({ id: "Normalized", comment: "pipeline stage: slc's normalized workflow markdown" });
+    },
+    get hint() {
+      return i18n._("Normalized text: slc's normalize phase turns the prose into workflow markdown");
+    },
   },
   {
     key: "gears",
-    label: "Gears",
-    hint: "One normative spec item per state behavior — the compiler's middle stage",
+    get label() {
+      return i18n._({
+        id: "Gears",
+        comment: "pipeline stage: the compiler's normative spec items (a proper name)",
+      });
+    },
+    get hint() {
+      return i18n._("One normative spec item per state behavior — the compiler's middle stage");
+    },
   },
   {
     key: "fsm",
-    label: "State machine",
-    hint: "The compiled XState machine that drives the players",
+    get label() {
+      return i18n._({ id: "State machine", comment: "pipeline stage: the compiled machine" });
+    },
+    get hint() {
+      return i18n._("The compiled XState machine that drives the players");
+    },
   },
 ] as const;
 type ExampleStageKey = (typeof EXAMPLE_STAGES)[number]["key"];
@@ -361,25 +389,30 @@ function ExampleCard({
       className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900"
     >
       <div className="flex flex-wrap items-center gap-2">
+        {/* The demo's own name and credit are the example's content,
+            not words of ours; only the phrases around them are. */}
         <span className="min-w-0 truncate text-sm font-semibold">
-          Example: {SLC_DEMO.title}
+          {i18n._("Example: {title}", { title: SLC_DEMO.title })}
         </span>
         <span className="min-w-0 truncate text-xs text-neutral-500">
-          from {SLC_DEMO.credit}
+          {i18n._("from {credit}", { credit: SLC_DEMO.credit })}
         </span>
         <span className="ml-auto" />
         <button
           type="button"
           data-testid="example-prefill"
           disabled={busy}
-          title={`Opens a draft named ${SLC_DEMO.playbookId} with the normalized text ready to paste — nothing is written or compiled`}
+          title={i18n._(
+            "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled",
+            { id: SLC_DEMO.playbookId },
+          )}
           onClick={() => {
             setBusy(true);
             void onPrefill().finally(() => setBusy(false));
           }}
           className="rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          {busy ? "Opening…" : "Prefill"}
+          {busy ? i18n._({ id: "Opening…", comment: "a draft is being opened" }) : i18n._({ id: "Prefill", comment: "open a draft carrying the example's text" })}
         </button>
       </div>
       {error ? (
@@ -437,9 +470,9 @@ function DraftRow({
   const deleteRef = useRef<HTMLButtonElement>(null);
   const busyWith =
     draft.activity === "turn"
-      ? "Delete waits: the draft's turn is running"
+      ? i18n._("Delete waits: the draft's turn is running")
       : draft.activity === "compiling"
-        ? "Delete waits: the draft's compile is running"
+        ? i18n._("Delete waits: the draft's compile is running")
         : undefined;
 
   async function remove(): Promise<void> {
@@ -488,14 +521,14 @@ function DraftRow({
             onClick={onOpen}
             className="rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
           >
-            Open
+            {i18n._({ id: "Open", comment: "open this draft's authoring workspace" })}
           </button>
         ) : null}
         {confirming ? (
           <InlineConfirm
-            question="Delete this draft and its source?"
-            confirmLabel="Delete"
-            cancelLabel="Keep"
+            question={i18n._("Delete this draft and its source?")}
+            confirmLabel={i18n._({ id: "Delete", comment: "confirm: remove the draft for good" })}
+            cancelLabel={i18n._({ id: "Keep", comment: "cancel a removal: leave it as it is" })}
             onConfirm={() => void remove()}
             onCancel={() => {
               setConfirming(false);
@@ -508,12 +541,12 @@ function DraftRow({
             type="button"
             data-testid={`draft-delete-${draft.id}`}
             disabled={busy}
-            aria-label={`Delete draft ${draft.id}`}
-            title="Remove the draft, its conversation, and its source"
+            aria-label={i18n._("Delete draft {id}", { id: draft.id })}
+            title={i18n._("Remove the draft, its conversation, and its source")}
             onClick={() => setConfirming(true)}
             className="rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 hover:text-red-600 disabled:opacity-40 dark:hover:bg-neutral-800"
           >
-            {busy ? "Deleting…" : "Delete"}
+            {busy ? i18n._({ id: "Deleting…", comment: "the delete request is in flight" }) : i18n._({ id: "Delete", comment: "remove the draft for good" })}
           </button>
         )}
       </div>
@@ -522,7 +555,10 @@ function DraftRow({
           data-testid={`draft-row-diagnostic-${draft.id}`}
           className="text-xs text-red-600 [overflow-wrap:anywhere] dark:text-red-400"
         >
-          {draft.diagnostic} — delete the draft, or repair the file and restart Spex
+          {/* The core's own reading of the record, and what to do. */}
+          {i18n._("{diagnostic} — delete the draft, or repair the file and restart Spex", {
+            diagnostic: draft.diagnostic,
+          })}
         </div>
       ) : null}
       {error ? (
@@ -579,15 +615,15 @@ function NewPlaybookField({
     const id = value.trim();
     if (!id || busy) return;
     if (!DRAFT_ID_RULE.test(id)) {
-      setError(DRAFT_ID_RULE_TEXT);
+      setError(draftIdRuleText());
       return;
     }
     if (takenPlaybooks.has(id)) {
-      setError(`/${id} is already a configured playbook`);
+      setError(i18n._("/{id} is already a configured playbook", { id }));
       return;
     }
     if (takenBuiltins.has(id)) {
-      setError(`${id} is a built-in — enable it below instead`);
+      setError(i18n._("{id} is a built-in — enable it below instead", { id }));
       return;
     }
     if (drafts[id]) {
@@ -623,7 +659,7 @@ function NewPlaybookField({
     >
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-0 flex-1 basis-48 flex-col gap-0.5 text-sm">
-          <span className="text-xs text-neutral-500">Playbook id</span>
+          <span className="text-xs text-neutral-500">{i18n._("Playbook id")}</span>
           <input
             ref={inputRef}
             data-testid="new-playbook-id"
@@ -633,7 +669,7 @@ function NewPlaybookField({
               setError(undefined);
             }}
             onKeyDown={onKeyDown}
-            placeholder="e.g. triage"
+            placeholder={i18n._({ id: "e.g. triage", comment: "placeholder of the new-playbook id field; triage is an example id" })}
             spellCheck={false}
             aria-invalid={error !== undefined}
             aria-describedby="new-playbook-caption"
@@ -647,11 +683,11 @@ function NewPlaybookField({
           onClick={() => void submit()}
           className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
-          {busy ? "Opening…" : "New playbook"}
+          {busy ? i18n._({ id: "Opening…", comment: "a draft is being opened" }) : i18n._({ id: "New playbook", comment: "start a draft of one's own" })}
         </button>
       </div>
       <span id="new-playbook-caption" className="text-xs text-neutral-500">
-        {DRAFT_ID_CAPTION}
+        {draftIdCaption()}
       </span>
       {error ? (
         <span
@@ -671,11 +707,14 @@ function announcementFor(previous: DraftInfo | undefined, next: DraftInfo): stri
   if (previous?.state === next.state) return undefined;
   switch (next.state) {
     case "compiling":
-      return `Compiling ${next.id}`;
+      return i18n._("Compiling {id}", { id: next.id });
     case "failed":
-      return `Compile failed at ${next.compile?.phase ? phaseLabel(next.compile.phase) : "an unknown phase"}`;
+      // The pipeline names the phase; where it cannot, the line says so.
+      return next.compile?.phase
+        ? i18n._("Compile failed at {phase}", { phase: phaseLabel(next.compile.phase) })
+        : i18n._("Compile failed at an unknown phase");
     case "compiled":
-      return `Compiled ${next.id}`;
+      return i18n._("Compiled {id}", { id: next.id });
     default:
       return undefined;
   }
@@ -739,7 +778,14 @@ export function LibrarySurface({
     const id = consumeRevealPlaybook();
     if (!id) return;
     setRevealed(id);
-    setLiveNote(`Registered /${configState?.status === "valid" ? (configState.summary.playbooks.find((entry) => entry.id === id)?.command ?? id) : id}`);
+    setLiveNote(
+      i18n._("Registered /{command}", {
+        command:
+          configState?.status === "valid"
+            ? (configState.summary.playbooks.find((entry) => entry.id === id)?.command ?? id)
+            : id,
+      }),
+    );
     document.getElementById(`playbook-card-${id}`)?.scrollIntoView?.({ block: "center" });
   }, [revealPlaybook, consumeRevealPlaybook, configState]);
   useEffect(() => {
@@ -786,21 +832,25 @@ export function LibrarySurface({
   if (!configState || configState.status !== "valid") {
     return (
       <div className="relative m-auto max-h-full max-w-md overflow-y-auto p-6 text-center text-sm text-neutral-500">
-        <p>The Captain can only run playbooks listed here.</p>
+        <p>{i18n._("The Captain can only run playbooks listed here.")}</p>
+        {/* One sentence with the way to Settings inside it, so no
+            translation is assembled from pieces. */}
         <p className="mt-1">
-          Playbooks need a valid config — fix it in{" "}
-          {onNavigate ? (
-            <button
-              type="button"
-              onClick={() => onNavigate("Settings")}
-              className="text-brand-600 hover:underline dark:text-brand-300"
-            >
-              Settings
-            </button>
-          ) : (
-            <span className="font-medium">Settings</span>
-          )}
-          .
+          <Rich
+            text={i18n._("Playbooks need a valid config — fix it in <0>Settings</0>.")}
+            components={[
+              onNavigate ? (
+                <button
+                  type="button"
+                  key="settings"
+                  onClick={() => onNavigate("Settings")}
+                  className="text-brand-600 hover:underline dark:text-brand-300"
+                />
+              ) : (
+                <span className="font-medium" key="settings" />
+              ),
+            ]}
+          />
         </p>
       </div>
     );
@@ -857,7 +907,7 @@ export function LibrarySurface({
     // positioned content, so the page itself never scrolls.
     <div className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       {liveRegion}
-      <h1 className="text-lg font-semibold">Playbooks</h1>
+      <h1 className="text-lg font-semibold">{i18n._({ id: "Playbooks", comment: "the surface listing every playbook" })}</h1>
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           {error}
@@ -866,7 +916,7 @@ export function LibrarySurface({
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
-          Configured playbooks
+          {i18n._("Configured playbooks")}
         </h2>
         {summary.playbooks.map((playbook) => (
           <div
@@ -890,9 +940,9 @@ export function LibrarySurface({
               <span className="ml-auto" />
               {confirmDelete === playbook.id ? (
                 <InlineConfirm
-                  question="Remove this playbook from the config?"
-                  confirmLabel="Remove"
-                  cancelLabel="Keep"
+                  question={i18n._("Remove this playbook from the config?")}
+                  confirmLabel={i18n._({ id: "Remove", comment: "confirm: take this playbook out of the config" })}
+                  cancelLabel={i18n._({ id: "Keep", comment: "cancel a removal: leave it as it is" })}
                   onConfirm={() => {
                     setConfirmDelete(undefined);
                     edit({ kind: "playbook.delete", playbookId: playbook.id });
@@ -902,8 +952,8 @@ export function LibrarySurface({
               ) : (
                 <button
                   type="button"
-                  title="Remove from the config (compiled artifacts stay in the library)"
-                  aria-label={`Remove /${playbook.command} from the config`}
+                  title={i18n._("Remove from the config (compiled artifacts stay in the library)")}
+                  aria-label={i18n._("Remove /{command} from the config", { command: playbook.command })}
                   onClick={() => setConfirmDelete(playbook.id)}
                   className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
                 >
@@ -913,8 +963,7 @@ export function LibrarySurface({
             </div>
             {revealed === playbook.id ? (
               <p data-testid="registered-note" className="text-xs text-neutral-500">
-                Registered. Sessions started before this registration must be
-                restarted to use it.
+                {i18n._("Registered. Sessions started before this registration must be restarted to use it.")}
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
@@ -958,10 +1007,10 @@ export function LibrarySurface({
                     {sharedWith.length > 0 ? (
                       <span
                         data-testid={`role-shared-${playbook.id}-${role}`}
-                        title={`This lane also answers ${sharedWith.join(", ")} — one conversation across them`}
+                        title={i18n._("This lane also answers {positions} — one conversation across them", { positions: sharedWith.join(", ") })}
                         className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                       >
-                        shared
+                        {i18n._({ id: "shared", comment: "badge: this lane answers more than one role" })}
                       </span>
                     ) : null}
                     <button
@@ -973,8 +1022,8 @@ export function LibrarySurface({
                           : undefined
                       }
                       data-testid={`role-bind-${playbook.id}-${role}`}
-                      title={`Choose which session player answers ${role}`}
-                      aria-label={`Bind ${role}`}
+                      title={i18n._("Choose which session player answers {role}", { role })}
+                      aria-label={i18n._("Bind {role}", { role })}
                       onClick={() =>
                         setRolePopover((current) =>
                           current?.playbookId === playbook.id &&
@@ -1009,9 +1058,9 @@ export function LibrarySurface({
               })}
               <span
                 className="ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500"
-                title={`Source this playbook was loaded from: ${playbook.from}`}
+                title={i18n._("Source this playbook was loaded from: {from}", { from: playbook.from })}
               >
-                <span>from</span>
+                <span>{i18n._({ id: "from", comment: "label before the path a playbook was loaded from" })}</span>
                 <span className="max-w-[16rem] truncate font-mono">
                   {playbook.from}
                 </span>
@@ -1022,10 +1071,27 @@ export function LibrarySurface({
                 data-testid="dev-delivery-hint"
                 className="text-xs text-amber-700 dark:text-amber-300"
               >
-                Pull-request delivery is unavailable until{" "}
-                {missingDelivery.map((id) => `/${id}`).join(" and ")}{" "}
-                {missingDelivery.length === 1 ? "is" : "are"} enabled below; a
-                plain /dev request still runs.
+                {/* One sentence, its verb chosen by how many playbooks
+                    are missing — never an "is"/"are" switch spliced in. */}
+                {i18n._(
+                  "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}",
+                  {
+                    count: missingDelivery.length,
+                    // Two names at most, and the word between them is
+                    // a text of its own language, never English glue.
+                    names:
+                      missingDelivery.length > 1
+                        ? i18n._({
+                            id: "{first} and {second}",
+                            values: {
+                              first: `/${missingDelivery[0]}`,
+                              second: `/${missingDelivery[1]}`,
+                            },
+                            comment: "joins the two playbook names the /dev hint asks for",
+                          })
+                        : `/${missingDelivery[0]}`,
+                  },
+                )}
               </p>
             ) : null}
             <PlaybookPipeline playbookId={playbook.id} />
@@ -1036,8 +1102,7 @@ export function LibrarySurface({
             data-testid="playbooks-empty"
             className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
           >
-            No playbooks enabled yet — enable a built-in below, or make your
-            own with New playbook.
+            {i18n._("No playbooks enabled yet — enable a built-in below, or make your own with New playbook.")}
           </div>
         ) : null}
       </section>
@@ -1047,7 +1112,7 @@ export function LibrarySurface({
         // built-ins, the way to a new one at the section's foot
         // (playbook-library-50/51).
         <section data-testid="drafts-section" className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-500">Drafts</h2>
+          <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Drafts", comment: "section heading: playbooks being written" })}</h2>
           {draftList.map((draft) => (
             <DraftRow
               key={draft.id}
@@ -1066,7 +1131,7 @@ export function LibrarySurface({
           className="flex flex-col gap-2"
         >
           <h2 className="text-sm font-semibold text-neutral-500">
-            Available built-ins
+            {i18n._("Available built-ins")}
           </h2>
           {availableBuiltins.map((entry) => (
             <BuiltinCard
@@ -1084,13 +1149,13 @@ export function LibrarySurface({
         // With no draft the section is absent, and the way to a new
         // playbook stands below the built-ins (playbook-library-50).
         <section data-testid="new-playbook-section" className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-500">New playbook</h2>
+          <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "New playbook", comment: "start a draft of one's own" })}</h2>
           {newPlaybook}
         </section>
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-neutral-500">Example</h2>
+        <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Example", comment: "section heading: the demo playbook" })}</h2>
         <ExampleCard onPrefill={prefillFromExample} error={exampleError} />
       </section>
     </div>

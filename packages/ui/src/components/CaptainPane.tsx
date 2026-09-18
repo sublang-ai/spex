@@ -14,7 +14,7 @@ import { readRecordFailure } from "../lib/failure-catalogue.js";
 import { FailureCard, type FailureContext } from "./FailureCard.js";
 import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, clockTime, duration } from "../lib/time.js";
-import { currentLocale } from "../i18n.js";
+import { currentLocale, i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { latestCall } from "./PlayerPane.js";
@@ -90,7 +90,7 @@ export function ThreadLine({
       title={readiness.requirement}
       className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-300"
     >
-      Check agent readiness
+      {i18n._("Check agent readiness")}
     </button>
   ) : null;
   if (drawsCard) {
@@ -196,11 +196,20 @@ export function ThreadLine({
           {line.count !== undefined && line.count > 1 ? (
             <span
               data-testid="failure-count"
-              title={`The same failure ${line.count} times in this turn`}
+              title={i18n._(
+                "{count, plural, one {The same failure # time in this turn} other {The same failure # times in this turn}}",
+                { count: line.count },
+              )}
               className="shrink-0 font-medium"
             >
               <span aria-hidden="true">×{line.count}</span>
-              <span className="sr-only">, {line.count} times</span>
+              <span className="sr-only">
+                {i18n._({
+                  id: "{count, plural, one {, # time} other {, # times}}",
+                  values: { count: line.count },
+                  comment: "follows the ×N mark, for a screen reader: how many times",
+                })}
+              </span>
             </span>
           ) : null}
           {readinessLink}
@@ -459,9 +468,17 @@ export function CaptainPane({
         className="@container flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800"
       >
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
-          C
+          {i18n._({
+            id: "C",
+            comment: "the Captain's avatar: one letter standing for Captain",
+          })}
         </span>
-        <span className="text-sm font-semibold">Captain</span>
+        <span className="text-sm font-semibold">
+          {i18n._({
+            id: "Captain",
+            comment: "the agent that routes the Boss's message to a playbook",
+          })}
+        </span>
         {settings && onEditSettings ? (
           // The Captain is an agent like any other here: its chip reads
           // what it is set to run and opens its own settings for this
@@ -484,7 +501,15 @@ export function CaptainPane({
             {status.state || view.turnActive ? (
               <span
                 data-testid="state-chip"
-                title={status.state ? `state: ${status.state}` : undefined}
+                title={
+                  status.state
+                    ? i18n._({
+                        id: "state: {state}",
+                        values: { state: status.state },
+                        comment: "tooltip: the machine state the run stands in",
+                      })
+                    : undefined
+                }
                 className={`rounded px-1.5 py-0.5 text-xs ${STATE_TONE_CLASSES[status.tone]}`}
               >
                 {status.text}
@@ -593,10 +618,24 @@ export function CaptainPane({
                 </span>
                 <span className="text-xs text-neutral-500 dark:text-neutral-400">
                   {anyPlayerRunning
-                    ? `${working.map((entry) => entry.who).join(", ")} working${
-                        since !== undefined ? ` · ${duration(now - since)}` : "…"
-                      }`
-                    : "Captain is thinking…"}
+                    ? since !== undefined
+                      ? i18n._({
+                          id: "{who} working · {span}",
+                          values: {
+                            who: working.map((entry) => entry.who).join(", "),
+                            span: duration(now - since),
+                          },
+                          comment:
+                            "who is at work and how long the open call has run",
+                        })
+                      : i18n._({
+                          id: "{who} working…",
+                          values: {
+                            who: working.map((entry) => entry.who).join(", "),
+                          },
+                          comment: "who is at work, with no span to report yet",
+                        })
+                    : i18n._("Captain is thinking…")}
                 </span>
               </div>
             </div>
@@ -605,13 +644,16 @@ export function CaptainPane({
           !view.captainDraft &&
           !view.turnActive ? (
             <div className="m-auto text-xs text-neutral-500">
-              The Captain will report here.
+              {i18n._("The Captain will report here.")}
             </div>
           ) : null}
         </div>
         {newBelow ? (
           <button type="button" onClick={jump} className={jumpPillClasses()}>
-            ↓ Latest
+            {i18n._({
+              id: "↓ Latest",
+              comment: "act: jump to the end of the transcript; ↓ stays as it is",
+            })}
           </button>
         ) : null}
       </div>

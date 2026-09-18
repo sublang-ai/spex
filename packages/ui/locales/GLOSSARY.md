@@ -72,3 +72,20 @@ Product names and the role names Playbook defines stay as authored; everything e
 | {n}m ago, {n}h ago, {n}d ago, {n}w ago | {n} 分钟前, {n} 小时前, {n} 天前, {n} 周前 | compact forms drop 前 |
 | <1s, {n}s, {n}m {n}s, {n}h {n}m | <1 秒, {n} 秒, {n} 分 {n} 秒, {n} 小时 {n} 分 | durations |
 | System (language choice) | 跟随系统 | the Settings option |
+| agent | 智能体 | a configured AI agent (the Captain's, a player's) |
+| adapter-wide | 适配器级 | a setting applying to the whole adapter |
+| core | 核心 | the Spex core the page connects to |
+| ledger | 意图台账 | the intent ledger |
+| unit (Space) | 单元 | one unit of the shared home |
+| tree (specs) | 规约树 | |
+| record (open/closed) | 记录 / 未完成记录 | a decision or intent record |
+| bug / bug fixed | 缺陷 / 已修复缺陷 | history row tags |
+| All clear | 没有待办 | the Dashboard's empty attention state |
+| Source (tab, workflow source) | 源文 | not 来源, which is the Sources group |
+| Prompt | 提示词 | the text a playbook sent a player |
+| Gears | Gears | slc's stage name, a proper noun |
+| Finder | 访达 | macOS's own Chinese name |
+| token (a provider token) | 令牌 | `tok` as a usage unit stays Latin |
+| Working… (a control's busy form) / working (a state) | 执行中… / 工作中 | |
+| Keep mine / Take remote / All mine / All remote | 保留本机 / 取远程版 / 全用本地 / 全用远程 | Space conflict choices |
+| Queue (the capture control) / queue (a unit kind) | 加入队列 / 队列 | two ids: the verb and the noun |

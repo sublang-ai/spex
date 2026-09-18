@@ -24,7 +24,7 @@ import {
   safeStorageRemove,
   LANGUAGE_KEY,
 } from "../state/store.js";
-import { activateLanguage } from "../i18n.js";
+import { activateLanguage, i18n } from "../i18n.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import type { ConfigState, ReadinessEntry } from "@sublang/spex-core/protocol";
 
@@ -381,8 +381,10 @@ describe("settings-6: every edit acknowledges in place", () => {
     expect(within(section).queryByTestId("language-saved")).toBeNull();
     land({ language: "zh" });
     await vi.waitFor(() => expect(select.disabled).toBe(false));
+    // The page is in 简体中文 by the time it ticks, so the tick is read
+    // from the catalog rather than pinned to the English words.
     expect(within(section).getByTestId("language-saved").textContent).toBe(
-      "Saved ✓",
+      i18n._("Saved ✓"),
     );
     expect(select.value).toBe("zh");
   });

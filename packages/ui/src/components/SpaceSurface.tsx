@@ -19,19 +19,21 @@ import {
 import type { SpaceState } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
+import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import {
   STEP_LINES,
   STEP_NAMES,
   displayRemote,
-  plural,
+  noBranch,
   revealBridge,
   revealLabel,
   tildify,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { Rich } from "./Rich.js";
 import { SyncTab } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 
@@ -57,21 +59,34 @@ export const LINK =
  * refusals land here as well as in place. */
 export type Note = (text: string) => void;
 
-/** Why Sync is refused before its first step (space-11), in the words
- * shown beside the disabled control; undefined when it may run. */
-export function syncRefusal(space: SpaceState): string | undefined {
-  if (!space.git.ok) return space.git.guidance;
+/** Why Sync is refused before its first step (space-11): the words
+ * shown beside the disabled control, and — for the one refusal the
+ * caption turns into a control — a name for it, so the caption knows
+ * which refusal it has without matching a phrase that changes with
+ * the language. Undefined when Sync may run. */
+export function syncRefusal(
+  space: SpaceState,
+): { text: string; kind?: "add-remote" } | undefined {
+  if (!space.git.ok) return { text: space.git.guidance };
   const repo = space.repository;
-  if (!repo) return "Set this space up first";
-  if (!repo.remote) return "Add a remote first";
-  if (repo.branch !== "main") {
-    return `On ${repo.branch ?? "no branch"}; check out main in a terminal`;
+  if (!repo) return { text: i18n._("Set this space up first") };
+  if (!repo.remote) {
+    return { text: i18n._("Add a remote first"), kind: "add-remote" };
   }
-  if (repo.mergePending) return "Finish or abort the merge in your terminal";
+  if (repo.branch !== "main") {
+    return {
+      text: i18n._("On {branch}; check out main in a terminal", {
+        branch: repo.branch ?? noBranch(),
+      }),
+    };
+  }
+  if (repo.mergePending) {
+    return { text: i18n._("Finish or abort the merge in your terminal") };
+  }
   const blocking = space.diagnostics.find((entry) => entry.blocking);
-  if (blocking) return `${blocking.file}: ${blocking.reason}`;
+  if (blocking) return { text: `${blocking.file}: ${blocking.reason}` };
   if (space.sync.phase === "running" && space.sync.op !== "sync") {
-    return "Space is busy";
+    return { text: i18n._("Space is busy") };
   }
   return undefined;
 }
@@ -101,19 +116,19 @@ export function PathControls({
     const write = navigator.clipboard?.writeText?.(path);
     if (!write) {
       setFallback(true);
-      onNote("Copy is not available here; the path is shown to select.");
+      onNote(i18n._("Copy is not available here; the path is shown to select."));
       return;
     }
     void write
       .then(() => {
         setCopied(true);
         setFallback(false);
-        onNote(`Copied ${path}`);
+        onNote(i18n._("Copied {what}", { what: path }));
         setTimeout(() => setCopied(false), 1500);
       })
       .catch(() => {
         setFallback(true);
-        onNote("Copy is not available here; the path is shown to select.");
+        onNote(i18n._("Copy is not available here; the path is shown to select."));
       });
   };
 
@@ -131,7 +146,7 @@ export function PathControls({
             void reveal(path).then((shown) => {
               if (!shown) {
                 setRevealFailed(true);
-                onNote("Couldn't show it in the file manager");
+                onNote(i18n._("Couldn't show it in the file manager"));
               }
             });
           }}
@@ -142,31 +157,33 @@ export function PathControls({
       <button
         type="button"
         data-testid={`${testId}-copy`}
-        aria-label="Copy path"
-        title="Copy path"
+        aria-label={i18n._("Copy path")}
+        title={i18n._("Copy path")}
         className={SECONDARY}
         onClick={copy}
       >
         {compact ? (
           <Icon name="copy" className="h-3.5 w-3.5" />
         ) : copied ? (
-          "Copied"
+          i18n._({ id: "Copied", comment: "the copy control, just after it copied" })
         ) : (
-          "Copy path"
+          i18n._("Copy path")
         )}
       </button>
       {copied && compact ? (
-        <span className="text-xs text-neutral-500">Copied</span>
+        <span className="text-xs text-neutral-500">
+          {i18n._({ id: "Copied", comment: "the copy control, just after it copied" })}
+        </span>
       ) : null}
       {revealFailed ? (
         <span className="text-xs text-neutral-500">
-          Couldn't show it in the file manager
+          {i18n._("Couldn't show it in the file manager")}
         </span>
       ) : null}
       {fallback ? (
         <input
           readOnly
-          aria-label="Path"
+          aria-label={i18n._({ id: "Path", comment: "field holding a path to select and copy" })}
           data-testid={`${testId}-field`}
           value={path}
           onFocus={(event) => event.currentTarget.select()}
@@ -244,7 +261,7 @@ function RemoteRow({
           onKeyDown={onKeyDown}
         >
           <label className="sr-only" htmlFor="space-remote-input">
-            Remote URL
+            {i18n._("Remote URL")}
           </label>
           <input
             id="space-remote-input"
@@ -252,7 +269,7 @@ function RemoteRow({
             data-testid="space-remote-input"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="git@host:path or https://…"
+            placeholder={i18n._("git@host:path or https://…")}
             spellCheck={false}
             disabled={saving}
             className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-900"
@@ -263,7 +280,9 @@ function RemoteRow({
             disabled={saving || disabled}
             onClick={() => void save()}
           >
-            {saving ? "Saving…" : "Save"}
+            {saving
+              ? i18n._({ id: "Saving…", comment: "the Save control, while the save is in flight" })
+              : i18n._({ id: "Save", comment: "save the edited remote URL" })}
           </button>
           <button
             type="button"
@@ -271,7 +290,7 @@ function RemoteRow({
             disabled={saving}
             onClick={() => onEditing(false)}
           >
-            Cancel
+            {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
           </button>
           {error ? (
             <span role="alert" className="text-xs text-red-600 dark:text-red-400">
@@ -283,7 +302,9 @@ function RemoteRow({
         <>
           {remote ? (
             <span className="flex min-w-0 items-baseline gap-1 text-sm" title={remote}>
-              <span className="shrink-0 text-neutral-500">origin</span>
+              <span className="shrink-0 text-neutral-500">
+                {i18n._({ id: "origin", comment: "the Git remote's name; leave as Git spells it" })}
+              </span>
               {/* The URL truncates in its own box (DR-041): the text
                   lies directly in the truncating span. */}
               <span className="min-w-0 truncate font-mono text-xs" data-testid="space-remote-url">
@@ -291,7 +312,7 @@ function RemoteRow({
               </span>
             </span>
           ) : (
-            <span className="text-sm text-neutral-500">No remote</span>
+            <span className="text-sm text-neutral-500">{i18n._("No remote")}</span>
           )}
           <button
             type="button"
@@ -300,7 +321,7 @@ function RemoteRow({
             disabled={disabled}
             onClick={() => onEditing(true)}
           >
-            {remote ? "Change remote" : "Add remote"}
+            {remote ? i18n._("Change remote") : i18n._("Add remote")}
           </button>
         </>
       )}
@@ -335,9 +356,11 @@ function SetupCard({
       data-testid="space-setup"
       className="flex w-full flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900"
     >
-      <p className="font-medium">Keep this space in Git</p>
+      <p className="font-medium">{i18n._("Keep this space in Git")}</p>
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <span className="shrink-0 text-neutral-500">Remote</span>
+        <span className="shrink-0 text-neutral-500">
+          {i18n._({ id: "Remote", comment: "field label: the Git remote's URL" })}
+        </span>
         <input
           ref={inputRef}
           data-testid="space-setup-remote"
@@ -348,7 +371,7 @@ function SetupCard({
           }}
           aria-invalid={required || undefined}
           aria-describedby={required ? "space-setup-required" : undefined}
-          placeholder="git@host:path or https://…"
+          placeholder={i18n._("git@host:path or https://…")}
           spellCheck={false}
           disabled={disabled || busy}
           className={`min-w-0 flex-1 rounded border bg-white px-1.5 py-0.5 font-mono text-xs dark:bg-neutral-900 ${
@@ -363,7 +386,7 @@ function SetupCard({
             role="alert"
             className="text-xs text-red-600 dark:text-red-400"
           >
-            Required
+            {i18n._({ id: "Required", comment: "the field must be filled before the act runs" })}
           </span>
         ) : null}
       </label>
@@ -385,8 +408,9 @@ function SetupCard({
           {setupLabel}
         </button>
         <span className="min-w-0 text-xs text-neutral-500">
-          Empty remote: filled from this device · Existing space: joined,
-          differences asked
+          {i18n._(
+            "Empty remote: filled from this device · Existing space: joined, differences asked",
+          )}
         </span>
       </div>
       {error ? (
@@ -395,11 +419,14 @@ function SetupCard({
         </p>
       ) : null}
       <p className="text-xs text-neutral-500">
-        Syncs sessions, queues, projects, Settings and playbook sources —{" "}
-        <button type="button" className={LINK} onClick={onExplore}>
-          see what stays
-        </button>
-        . Nothing is contacted until you set up.
+        <Rich
+          text={i18n._(
+            "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up.",
+          )}
+          components={[
+            <button type="button" className={LINK} onClick={onExplore} key="explore" />,
+          ]}
+        />
       </p>
     </div>
   );
@@ -434,24 +461,37 @@ function Field({
 function statusDot(space: SpaceState): { className: string; word: string } {
   const sync = space.sync;
   if (sync.phase === "running") {
-    return { className: "bg-emerald-500 animate-pulse", word: STEP_LINES[sync.step] };
+    return { className: "bg-emerald-500 animate-pulse", word: STEP_LINES[sync.step]() };
   }
   if (sync.phase === "choices" || sync.phase === "unrelated") {
     return {
       className: "bg-amber-500",
-      word: sync.phase === "choices" ? "needs your choice" : "unrelated history",
+      word:
+        sync.phase === "choices"
+          ? i18n._({ id: "needs your choice", comment: "the space's status, read in a title" })
+          : i18n._({ id: "unrelated history", comment: "the space's status, read in a title" }),
     };
   }
   if (sync.phase === "stopped") {
     return {
       className: sync.cause === "rejected" ? "bg-amber-500" : "bg-red-500",
-      word: `${STEP_NAMES[sync.step]} stopped`,
+      word: i18n._({
+        id: "{step} stopped",
+        values: { step: STEP_NAMES[sync.step]() },
+        comment: "{step} is the sync step's name",
+      }),
     };
   }
   if (!space.repository) {
-    return { className: "border border-neutral-400 bg-transparent", word: "not a repository" };
+    return {
+      className: "border border-neutral-400 bg-transparent",
+      word: i18n._({ id: "not a repository", comment: "the space's status, read in a title" }),
+    };
   }
-  return { className: "bg-neutral-400", word: "idle" };
+  return {
+    className: "bg-neutral-400",
+    word: i18n._({ id: "idle", comment: "the space's status: nothing is running" }),
+  };
 }
 
 export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps) {
@@ -529,15 +569,25 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
   }, [accepted, syncKey]);
   useEffect(() => {
     if (!sync) return;
-    if (sync.phase === "running") setNote(STEP_LINES[sync.step]);
-    else if (sync.phase === "choices") setNote("Needs your choice");
-    else if (sync.phase === "unrelated") setNote("Unrelated history");
-    else if (sync.phase === "stopped") setNote(`${STEP_NAMES[sync.step]} stopped — ${sync.message}`);
-    else if (sync.phase === "done") {
+    if (sync.phase === "running") setNote(STEP_LINES[sync.step]());
+    else if (sync.phase === "choices") setNote(i18n._("Needs your choice"));
+    else if (sync.phase === "unrelated") setNote(i18n._("Unrelated history"));
+    else if (sync.phase === "stopped") {
+      setNote(
+        i18n._({
+          id: "{step} stopped — {message}",
+          values: { step: STEP_NAMES[sync.step](), message: sync.message },
+          comment: "{step} is the sync step's name; {message} is the cause the host gave",
+        }),
+      );
+    } else if (sync.phase === "done") {
       setNote(
         sync.sent + sync.received === 0
-          ? "Everything is in sync"
-          : `Synced · ${sync.sent} sent · ${sync.received} received`,
+          ? i18n._("Everything is in sync")
+          : i18n._("Synced · {sent} sent · {received} received", {
+              sent: sync.sent,
+              received: sync.received,
+            }),
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -655,7 +705,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
   return (
     <section
       data-testid="space-surface"
-      aria-label="Space"
+      aria-label={i18n._("Space")}
       // The surface root is the box the surface scrolls in, positioned
       // so what it holds is contained by it (DR-041 §9); its width is
       // the container every step queries.
@@ -665,11 +715,11 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
         {note}
       </div>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-lg font-semibold">Space</h1>
+        <h1 className="text-lg font-semibold">{i18n._("Space")}</h1>
         <span className="flex items-center gap-2 text-xs text-neutral-500">
           {spaceReadAt ? (
             <span title={absoluteTitle(spaceReadAt)} data-testid="space-read-at">
-              Read {relativeAge(spaceReadAt, now)}
+              {i18n._("Read {age}", { age: relativeAge(spaceReadAt, now) })}
             </span>
           ) : null}
           <button
@@ -679,13 +729,13 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
             disabled={!connected}
             onClick={() => void loadSpace()}
           >
-            Refresh
+            {i18n._({ id: "Refresh", comment: "re-read the space's state" })}
           </button>
         </span>
       </div>
       {spaceError ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          Couldn't read the space: {spaceError}
+          {i18n._("Couldn't read the space: {reason}", { reason: spaceError })}
         </p>
       ) : null}
       {header}
@@ -693,11 +743,17 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
         <>
           <div
             role="tablist"
-            aria-label="Space views"
+            aria-label={i18n._("Space views")}
             className="flex flex-wrap items-center gap-1 border-b border-neutral-200 pb-1 dark:border-neutral-800"
           >
-            {tabButton("sync", "Sync")}
-            {tabButton("explore", "Explore")}
+            {tabButton(
+              "sync",
+              i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" }),
+            )}
+            {tabButton(
+              "explore",
+              i18n._({ id: "Explore", comment: "tab: browse the files in the space" }),
+            )}
           </div>
           <div
             role="tabpanel"
@@ -726,7 +782,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
           </div>
         </>
       ) : !spaceError ? (
-        <p className="text-sm text-neutral-500">Reading the space…</p>
+        <p className="text-sm text-neutral-500">{i18n._("Reading the space…")}</p>
       ) : null}
     </section>
   );
@@ -794,8 +850,8 @@ function Header({
   // (space-6): the whole motion is one control's flight.
   const setupLabel =
     joining || busy === "init" || (running && sync.op === "init")
-      ? "Setting up…"
-      : "Set up space";
+      ? i18n._({ id: "Setting up…", comment: "the setup control, while the setup runs" })
+      : i18n._("Set up space");
 
   let primary: ReactNode = null;
   if (!space.git.ok) {
@@ -815,8 +871,8 @@ function Header({
     primary = joinConfirm ? (
       <span data-testid="space-join-confirm">
         <InlineConfirm
-          question="Join both spaces into one? Anything in both will ask you to choose."
-          confirmLabel="Join"
+          question={i18n._("Join both spaces into one? Anything in both will ask you to choose.")}
+          confirmLabel={i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
           onConfirm={onJoin}
           onCancel={() => onJoinConfirm(false)}
         />
@@ -830,7 +886,9 @@ function Header({
           disabled={disabled || pending}
           onClick={() => onJoinConfirm(true)}
         >
-          {joining ? "Joining…" : "Join"}
+          {joining
+            ? i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })
+            : i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
         </button>
         {actionError?.where === "primary" ? (
           <span role="alert" className="text-xs text-red-600 dark:text-red-400">
@@ -844,13 +902,17 @@ function Header({
     // A setup reads "Setting up…" from its init through its sync
     // (space-6); a sync reads "Syncing…" from the click through its
     // last frame. A Join begun from the card of space-45 reads its own.
+    const settingUp = i18n._({
+      id: "Setting up…",
+      comment: "the setup control, while the setup runs",
+    });
     const label = joining
-      ? "Setting up…"
+      ? settingUp
       : busy === "sync" || accepted === "sync" || (running && sync.op === "sync")
-        ? "Syncing…"
+        ? i18n._({ id: "Syncing…", comment: "the Sync control, while the sync runs" })
         : running && sync.op === "init"
-          ? "Setting up…"
-          : "Sync";
+          ? settingUp
+          : i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" });
     primary = (
       <span className="flex min-w-0 flex-wrap items-center gap-2">
         <button
@@ -869,12 +931,12 @@ function Header({
             data-testid="space-primary-caption"
             className="min-w-0 text-xs text-neutral-500"
           >
-            {refusal === "Add a remote first" ? (
+            {refusal.kind === "add-remote" ? (
               <button type="button" className={LINK} onClick={onFocusRemote}>
-                {refusal}
+                {refusal.text}
               </button>
             ) : (
-              refusal
+              refusal.text
             )}
           </span>
         ) : actionError?.where === "primary" ? (
@@ -910,7 +972,26 @@ function Header({
       {space.git.ok ? (
         <>
           <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
-            <Field testId="space-repository" title={repo ? `branch ${repo.branch ?? "none"} · ${dot.word}` : dot.word}>
+            <Field
+              testId="space-repository"
+              title={
+                repo
+                  ? i18n._({
+                      id: "branch {branch} · {status}",
+                      values: {
+                        branch:
+                          repo.branch ??
+                          i18n._({
+                            id: "none",
+                            comment: "stands where a branch name would; none is checked out",
+                          }),
+                        status: dot.word,
+                      },
+                      comment: "{status} is the space's status word",
+                    })
+                  : dot.word
+              }
+            >
               <span
                 aria-hidden
                 data-testid="space-status-dot"
@@ -919,23 +1000,28 @@ function Header({
               />
               {repo ? (
                 <>
-                  <span className="font-mono text-sm">{repo.branch ?? "no branch"}</span>
+                  <span className="font-mono text-sm">{repo.branch ?? noBranch()}</span>
                   {repo.branch !== "main" ? (
                     <span className="rounded-full border border-amber-400 px-1.5 text-xs text-amber-700 dark:text-amber-300">
-                      unsupported
+                      {i18n._({ id: "unsupported", comment: "mark on a branch the app cannot sync" })}
                     </span>
                   ) : null}
                   {repo.identityFallback ? (
                     <span
                       className="text-xs text-neutral-500"
-                      title="Git has no committer identity on this machine, so the app commits as Spex at the machine's host name"
+                      title={i18n._(
+                        "Git has no committer identity on this machine, so the app commits as Spex at the machine's host name",
+                      )}
                     >
-                      · committed as Spex
+                      {i18n._({
+                        id: "· committed as Spex",
+                        comment: "follows the branch name in the header",
+                      })}
                     </span>
                   ) : null}
                 </>
               ) : (
-                <span>Not a repository yet</span>
+                <span>{i18n._("Not a repository yet")}</span>
               )}
             </Field>
             {repo ? (
@@ -953,7 +1039,14 @@ function Header({
               {repo.checkedAt !== null && !unrelated ? (
                 <Field
                   testId="space-ahead-behind"
-                  title={`${plural(repo.ahead ?? 0, "commit")} ahead, ${plural(repo.behind ?? 0, "commit")} behind · checked ${absoluteTitle(repo.checkedAt)}`}
+                  title={i18n._(
+                    "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}",
+                    {
+                      ahead: repo.ahead ?? 0,
+                      behind: repo.behind ?? 0,
+                      at: absoluteTitle(repo.checkedAt),
+                    },
+                  )}
                 >
                   {/* The words yield after the times (space-28): below
                       28rem the numbers stand with the arrows, the words
@@ -961,15 +1054,25 @@ function Header({
                   <span aria-hidden>↑</span>
                   <span>
                     {repo.ahead ?? 0}
-                    <span className="sr-only @md:not-sr-only"> ahead</span>
+                    <span className="sr-only @md:not-sr-only">
+                      {i18n._({
+                        id: " ahead",
+                        comment: "follows the count of commits this device is ahead by",
+                      })}
+                    </span>
                   </span>
                   <span aria-hidden>↓</span>
                   <span>
                     {repo.behind ?? 0}
-                    <span className="sr-only @md:not-sr-only"> behind</span>
+                    <span className="sr-only @md:not-sr-only">
+                      {i18n._({
+                        id: " behind",
+                        comment: "follows the count of commits this device is behind by",
+                      })}
+                    </span>
                   </span>
                   <span className="hidden text-neutral-500 @2xl:inline">
-                    · checked {relativeAge(repo.checkedAt, now)}
+                    {i18n._("· checked {age}", { age: relativeAge(repo.checkedAt, now) })}
                   </span>
                 </Field>
               ) : null}
@@ -979,14 +1082,14 @@ function Header({
               >
                 {space.lastSync ? (
                   <span>
-                    Synced
+                    {i18n._({ id: "Synced", comment: "header field: this space last synced" })}
                     <span className="sr-only @2xl:not-sr-only">
                       {" "}
                       {relativeAge(space.lastSync.at, now)}
                     </span>
                   </span>
                 ) : (
-                  <span className="text-neutral-500">Never synced</span>
+                  <span className="text-neutral-500">{i18n._("Never synced")}</span>
                 )}
               </Field>
               <button
@@ -995,12 +1098,17 @@ function Header({
                 // The count links into the Sync tab; its words fit the
                 // control budget and the whole phrase rides the name
                 // (space-28, DR-041).
-                aria-label={`${plural(space.local.length, "local change")}`}
-                title="Units this device changed, listed under Sync"
+                aria-label={i18n._(
+                  "{count, plural, one {# local change} other {# local changes}}",
+                  { count: space.local.length },
+                )}
+                title={i18n._("Units this device changed, listed under Sync")}
                 className="text-sm hover:underline"
                 onClick={onShowSync}
               >
-                {plural(space.local.length, "change")}
+                {i18n._("{count, plural, one {# change} other {# changes}}", {
+                  count: space.local.length,
+                })}
               </button>
               {space.diagnostics.length > 0 ? (
                 <button
@@ -1018,7 +1126,11 @@ function Header({
                   onClick={() => onIssuesOpen(!issuesOpen)}
                 >
                   {issueCount > 0 ? <span aria-hidden>⚠</span> : null}
-                  {issueCount > 0 ? plural(issueCount, "issue") : "issues"}
+                  {issueCount > 0
+                    ? i18n._("{count, plural, one {# issue} other {# issues}}", {
+                        count: issueCount,
+                      })
+                    : i18n._({ id: "issues", comment: "the control's name when none are unanswered" })}
                 </button>
               ) : null}
             </div>
@@ -1026,7 +1138,7 @@ function Header({
         </>
       ) : (
         <div data-testid="space-no-git" className="text-sm">
-          <p className="font-medium">Git is not installed</p>
+          <p className="font-medium">{i18n._("Git is not installed")}</p>
           <p className="text-xs text-neutral-500">{space.git.guidance}</p>
         </div>
       )}
@@ -1037,8 +1149,9 @@ function Header({
           title={entry.path}
           className="text-xs text-neutral-500"
         >
-          {entry.what === "config" ? "Configuration" : "Sessions directory"} outside
-          the space; not shared
+          {entry.what === "config"
+            ? i18n._("Configuration outside the space; not shared")
+            : i18n._("Sessions directory outside the space; not shared")}
         </Field>
       ))}
       {primary ? (

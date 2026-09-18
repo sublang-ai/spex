@@ -36,6 +36,7 @@ import {
   widenLayout,
 } from "../lib/machine-labels.js";
 import { humanizeId } from "../lib/labels.js";
+import { i18n } from "../i18n.js";
 import { RunningMark } from "./RunningMark.js";
 import { Icon } from "./Icon.js";
 
@@ -66,9 +67,31 @@ export interface MachineCardProps {
   onlyRoot?: boolean;
 }
 
+/** How a settled run ended, in words: the runtime's closed outcome set,
+ * each read where it is shown (localization-4). */
+const OUTCOME_WORDS: Record<
+  NonNullable<MachineFrame["outcome"]>,
+  () => string
+> = {
+  done: () =>
+    i18n._({ id: "done", comment: "how a run ended: it finished its work" }),
+  failed: () =>
+    i18n._({ id: "failed", comment: "how a run ended: it failed" }),
+  stopped: () =>
+    i18n._({ id: "stopped", comment: "how a run ended: it was stopped" }),
+};
+
 function outcomeWord(frame: MachineFrame): string {
-  return frame.outcome ?? "done";
+  return OUTCOME_WORDS[frame.outcome ?? "done"]();
 }
+
+/** An edge with no event of its own: it is walked as soon as its state
+ * is entered. */
+const alwaysWord = (): string =>
+  i18n._({
+    id: "always",
+    comment: "a transition with no event: it is taken unconditionally",
+  });
 
 function stateTone(
   frame: MachineFrame,
@@ -125,15 +148,30 @@ function stateTone(
 export function stripLabel(frame: MachineFrame, running: boolean): string {
   const where = running
     ? frame.delegating
-      ? `at ${statePath(frame.delegating.stateId)} — calling /${frame.delegating.playbookId}`
+      ? i18n._("at {state} — calling /{playbookId}", {
+          state: statePath(frame.delegating.stateId),
+          playbookId: frame.delegating.playbookId,
+        })
       : frame.active
-        ? `at ${statePath(frame.active)}`
-        : "starting"
+        ? i18n._({
+            id: "at {state}",
+            values: { state: statePath(frame.active) },
+            comment: "where a running machine stands",
+          })
+        : i18n._({ id: "starting", comment: "a run that has entered no state yet" })
     : outcomeWord(frame);
   const from = frame.callerStateId
-    ? `, called from ${statePath(frame.callerStateId)}`
+    ? i18n._({
+        id: ", called from {state}",
+        values: { state: statePath(frame.callerStateId) },
+        comment: "tail of a run's one-line strip: the state that called it",
+      })
     : "";
-  return `/${frame.playbookId} — ${where}${from}`;
+  return i18n._({
+    id: "/{playbookId} — {where}{from}",
+    values: { playbookId: frame.playbookId, where, from },
+    comment: "a run's one-line strip: the workflow, where it stands, who called it",
+  });
 }
 
 /** Whether an edge's transition has been walked by the run. */
@@ -273,7 +311,11 @@ export function MachineCard({
         type="button"
         data-testid={`machine-disclose-${frame.traceSessionId}`}
         aria-expanded={expanded}
-        aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
+        aria-label={
+          expanded
+            ? i18n._("Collapse {run}", { run: label })
+            : i18n._("Expand {run}", { run: label })
+        }
         onClick={() => setOverride(!expanded)}
         className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
       >
@@ -300,12 +342,26 @@ export function MachineCard({
       <span className="min-w-0 flex-1 truncate text-neutral-500 dark:text-neutral-400">
         {running
           ? frame.delegating
-            ? `at ${statePath(frame.delegating.stateId)} → calling /${frame.delegating.playbookId}`
+            ? i18n._("at {state} → calling /{playbookId}", {
+                state: statePath(frame.delegating.stateId),
+                playbookId: frame.delegating.playbookId,
+              })
             : frame.active
-              ? `at ${statePath(frame.active)}`
-              : "starting"
+              ? i18n._({
+                  id: "at {state}",
+                  values: { state: statePath(frame.active) },
+                  comment: "where a running machine stands",
+                })
+              : i18n._({
+                  id: "starting",
+                  comment: "a run that has entered no state yet",
+                })
           : frame.callerStateId
-            ? `from ${statePath(frame.callerStateId)}`
+            ? i18n._({
+                id: "from {state}",
+                values: { state: statePath(frame.callerStateId) },
+                comment: "on a settled run's card: the state that called it",
+              })
             : ""}
       </span>
       <span
@@ -318,7 +374,12 @@ export function MachineCard({
               : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
         }`}
       >
-        {running ? "running" : outcomeWord(frame)}
+        {running
+          ? i18n._({
+              id: "running",
+              comment: "the aliveness mark's own word: this thing is at work",
+            })
+          : outcomeWord(frame)}
       </span>
     </div>
   );
@@ -355,7 +416,9 @@ export function MachineCard({
           // holds.
           tabIndex={0}
           role="group"
-          aria-label={`${frame.playbookId} machine drawing`}
+          aria-label={i18n._("{playbookId} machine drawing", {
+            playbookId: frame.playbookId,
+          })}
           style={
             {
               "--fit": rule.fit,
@@ -367,9 +430,16 @@ export function MachineCard({
         >
           <svg
             role="img"
-            aria-label={`${frame.playbookId} state machine${
-              frame.active ? `, ${statePath(frame.active)} active` : ""
-            }`}
+            aria-label={
+              frame.active
+                ? i18n._("{playbookId} state machine, {state} active", {
+                    playbookId: frame.playbookId,
+                    state: statePath(frame.active),
+                  })
+                : i18n._("{playbookId} state machine", {
+                    playbookId: frame.playbookId,
+                  })
+            }
             viewBox={`${-PAD} ${-PAD} ${width} ${height}`}
             data-natural-width={width}
             data-scale-floor={scaleFloor(width)}
@@ -419,7 +489,7 @@ export function MachineCard({
                   }`}
                 >
                   <title>
-                    {edge.event ? humanizeId(edge.event) : "always"}
+                    {edge.event ? humanizeId(edge.event) : alwaysWord()}
                   </title>
                 </path>
               );
@@ -487,8 +557,22 @@ export function MachineCard({
                     {caption && captionText !== caption.text
                       ? `${node.description ?? node.id} — ${caption.text}`
                       : (node.description ?? node.id)}
-                    {node.role ? ` — runs ${node.role}` : ""}
-                    {call ? ` — called /${call.playbookId}` : ""}
+                    {node.role
+                      ? i18n._({
+                          id: " — runs {role}",
+                          values: { role: node.role },
+                          comment:
+                            "tooltip tail, after the state's description: the role it runs",
+                        })
+                      : ""}
+                    {call
+                      ? i18n._({
+                          id: " — called /{playbookId}",
+                          values: { playbookId: call.playbookId },
+                          comment:
+                            "tooltip tail, after the state's description: the workflow it called",
+                        })
+                      : ""}
                   </title>
                   <rect
                     x={place.x}
@@ -582,7 +666,7 @@ export function MachineCard({
                       >
                         {`→ ${stateName(edge.to)}`}
                         <title>
-                          {edge.event ? humanizeId(edge.event) : "always"}
+                          {edge.event ? humanizeId(edge.event) : alwaysWord()}
                         </title>
                       </text>
                     );
@@ -601,7 +685,7 @@ export function MachineCard({
                           .map(
                             (edge) =>
                               `→ ${statePath(edge.to)} (${
-                                edge.event ? humanizeId(edge.event) : "always"
+                                edge.event ? humanizeId(edge.event) : alwaysWord()
                               })`,
                           )
                           .join("\n")}

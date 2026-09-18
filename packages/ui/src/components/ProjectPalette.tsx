@@ -20,6 +20,7 @@ import {
   type AttentionItem,
 } from "../state/dashboard.js";
 import { useAppStore } from "../state/store.js";
+import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
 
 export interface ProjectPaletteProps {
@@ -242,10 +243,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   }
 
   const academyHint = pathDraft.trim()
-    ? `— seeds ${pathDraft.trim()}`
+    ? i18n._("— seeds {path}", { path: pathDraft.trim() })
     : empty
-      ? "— a sample project with specs, ready to run"
-      : "— seeds a sample project";
+      ? i18n._("— a sample project with specs, ready to run")
+      : i18n._("— seeds a sample project");
 
   return (
     <div
@@ -263,7 +264,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={empty ? "Add a project" : "Choose a project"}
+        aria-label={
+          empty ? i18n._("Add a project") : i18n._("Choose a project")
+        }
         onKeyDown={dialogKeydown}
         className="flex max-h-full w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
       >
@@ -271,14 +274,14 @@ export function ProjectPalette(props: ProjectPaletteProps) {
           <input
             ref={searchRef}
             data-testid="palette-search"
-            aria-label="Filter projects"
+            aria-label={i18n._("Filter projects")}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
               setIndex(0);
             }}
             onKeyDown={searchKeydown}
-            placeholder="Switch to a project…"
+            placeholder={i18n._("Switch to a project…")}
             className="border-b border-neutral-200 bg-transparent px-4 py-3 text-sm outline-none dark:border-neutral-800"
           />
         )}
@@ -297,7 +300,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               }`}
             >
               <Icon name="book" className="h-3.5 w-3.5" />
-              {busy ? "Seeding…" : "Try the Academy example"}
+              {busy
+                ? i18n._({
+                    id: "Seeding…",
+                    comment: "busy: the Academy example is being written to disk",
+                  })
+                : i18n._("Try the Academy example")}
               <span className="text-xs text-neutral-500">{academyHint}</span>
             </button>
           ) : null}
@@ -317,7 +325,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 <Icon name="folder" className="h-3.5 w-3.5 text-neutral-500" />
                 <span className="truncate">{project.name}</span>
                 {project.id === props.currentProjectId ? (
-                  <span className="text-xs text-neutral-500">current</span>
+                  <span className="text-xs text-neutral-500">
+                    {i18n._({
+                      id: "current",
+                      comment: "tag on the project row the workspace is on",
+                    })}
+                  </span>
                 ) : null}
                 <span className="ml-auto flex items-center gap-2 text-xs text-neutral-500">
                   {row && row.attention > 0 ? (
@@ -327,25 +340,34 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                           ? "text-red-600 dark:text-red-400"
                           : "text-amber-700 dark:text-amber-300"
                       }`}
-                      title={`${row.attention} session${row.attention === 1 ? "" : "s"} need${row.attention === 1 ? "s" : ""} you`}
+                      title={i18n._(
+                        "{count, plural, one {# session needs you} other {# sessions need you}}",
+                        { count: row.attention },
+                      )}
                     >
                       <span
                         aria-hidden
                         className={`h-2 w-2 rounded-full ${ATTENTION_MARK_CLASS[row.worst!]}`}
                       />
-                      {row.attention} need{row.attention === 1 ? "s" : ""} you
+                      {i18n._(
+                        "{count, plural, one {# needs you} other {# need you}}",
+                        { count: row.attention },
+                      )}
                     </span>
                   ) : null}
                   {row && row.running > 0 ? (
                     <span
                       className="flex items-center gap-1"
-                      title={`${row.running} running session${row.running === 1 ? "" : "s"}`}
+                      title={i18n._(
+                        "{count, plural, one {# running session} other {# running sessions}}",
+                        { count: row.running },
+                      )}
                     >
                       <span
                         aria-hidden
                         className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"
                       />
-                      {row.running} running
+                      {i18n._("{count} running", { count: row.running })}
                     </span>
                   ) : null}
                 </span>
@@ -354,7 +376,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
           })}
           {filtered.length === 0 && query ? (
             <div className="px-4 py-2 text-sm text-neutral-500">
-              No project matches "{query}"
+              {i18n._('No project matches "{query}"', { query })}
             </div>
           ) : null}
           {props.onPickFolder ? (
@@ -367,7 +389,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 clamped === openFolderIndex ? ROW_ACTIVE : ""
               }`}
             >
-              Open folder…
+              {i18n._("Open folder…")}
             </button>
           ) : null}
         </div>
@@ -376,14 +398,14 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             <input
               ref={pathRef}
               data-testid="palette-path"
-              aria-label="Project path"
+              aria-label={i18n._("Project path")}
               value={pathDraft}
               onChange={(event) => setPathDraft(event.target.value)}
               onKeyDown={pathKeydown}
               placeholder={
                 empty
-                  ? "Add a project by path…"
-                  : "~/path — add an existing repo or create new"
+                  ? i18n._("Add a project by path…")
+                  : i18n._("~/path — add an existing repo or create new")
               }
               className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-950"
             />
@@ -394,7 +416,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               onClick={() => void runAdd(false)}
               className="rounded border border-brand-300 px-2 py-1 text-xs text-brand-600 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300"
             >
-              Add
+              {i18n._({
+                id: "Add",
+                comment: "register the typed path as an existing repository",
+              })}
             </button>
             <button
               type="button"
@@ -403,7 +428,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               onClick={() => void runAdd(true)}
               className="rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-40 dark:border-neutral-700"
             >
-              Create
+              {i18n._({
+                id: "Create",
+                comment: "start a new repository at the typed path",
+              })}
             </button>
           </div>
           {pathDraft.trim() ? (
@@ -413,7 +441,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 checked={scaffold}
                 onChange={(event) => setScaffold(event.target.checked)}
               />
-              Scaffold specs when creating
+              {i18n._("Scaffold specs when creating")}
             </label>
           ) : null}
           {empty ? null : (
@@ -424,7 +452,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               onClick={() => void runAcademy()}
               className="flex items-center gap-1.5 rounded px-0.5 py-0.5 text-left text-xs text-brand-600 hover:underline disabled:opacity-40 dark:text-brand-300"
             >
-              Try the Academy example
+              {i18n._("Try the Academy example")}
               <span className="text-xs text-neutral-500">{academyHint}</span>
             </button>
           )}

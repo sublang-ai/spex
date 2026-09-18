@@ -17,7 +17,7 @@ import {
   type AttentionItem,
 } from "./state/dashboard.js";
 import { setCaptain } from "./lib/config-ops.js";
-import { currentLocale } from "./i18n.js";
+import { currentLocale, i18n } from "./i18n.js";
 import { causePhrase } from "./lib/failure-catalogue.js";
 import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionView } from "./state/reducer.js";
@@ -49,12 +49,24 @@ export type { Surface };
 /** The pinned project views beside the sessions (run-view-58). "repo"
  * is the retired name of the Overview (DR-038): a remembered value
  * still lands there. */
-/** What a tab's name says about its entry (run-view-48). */
-const TAB_WORDS: Record<AttentionItem["kind"], string> = {
-  failure: "failed",
-  question: "needs your reply",
-  finish: "needs your verdict",
-  review: "unread turn",
+/** What a tab's name says about its entry (run-view-48). Each is a
+ * thunk, never a string: a table read at module load would freeze the
+ * language it was imported in (localization-4). */
+const TAB_WORDS: Record<AttentionItem["kind"], () => string> = {
+  failure: () =>
+    i18n._({ id: "failed", comment: "a piece of work's state: it failed" }),
+  question: () =>
+    i18n._({
+      id: "needs your reply",
+      comment: "tab name: the run parked on a question",
+    }),
+  finish: () =>
+    i18n._({
+      id: "needs your verdict",
+      comment: "tab name: delivered, a verdict is owed",
+    }),
+  review: () =>
+    i18n._({ id: "unread turn", comment: "tab name: a turn nobody has read" }),
 };
 
 function pinnedTab(tab: string | undefined): "start" | "specs" | "overview" | undefined {
@@ -146,15 +158,16 @@ function ConnectionBanner() {
         role="alert"
         className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
       >
-        Can't reach the Spex core at {scrubbed ?? "its endpoint"} — retrying
-        every second. On a served page, check the link's token; on the
-        desktop, restart the app.
+        {i18n._(
+          "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app.",
+          { endpoint: scrubbed ?? i18n._("its endpoint") },
+        )}
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="font-medium text-brand-700 hover:underline dark:text-brand-300"
         >
-          Retry
+          {i18n._({ id: "Retry", comment: "take the failed read again" })}
         </button>
       </div>
     );
@@ -162,15 +175,17 @@ function ConnectionBanner() {
   if (connection === "mismatch") {
     return (
       <div className="border-b border-red-300 bg-red-50 px-4 py-1.5 text-center text-xs text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-        The Spex window and its core speak different protocol versions —
-        restart the app (or update Spex) to fix this.
+        {i18n._(
+          "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this.",
+        )}
       </div>
     );
   }
   return (
     <div className="border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-      Reconnecting to the Spex core… actions are paused until the
-      connection returns.
+      {i18n._(
+        "Reconnecting to the Spex core… actions are paused until the connection returns.",
+      )}
     </div>
   );
 }
@@ -183,7 +198,9 @@ function RefreshErrorBanner() {
   if (!refreshError || connection !== "open") return null;
   return (
     <div className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-      Connected, but {refreshError}
+      {/* The core's own words for what failed ride as data inside the
+          one sentence the page owns (localization-4). */}
+      {i18n._("Connected, but {reason}", { reason: refreshError })}
       <button
         type="button"
         onClick={() =>
@@ -191,13 +208,15 @@ function RefreshErrorBanner() {
             .then(() => useAppStore.setState({ refreshError: undefined }))
             .catch((cause: Error) =>
               useAppStore.setState({
-                refreshError: `app state failed to load: ${cause.message}`,
+                refreshError: i18n._("app state failed to load: {reason}", {
+                  reason: cause.message,
+                }),
               }),
             )
         }
         className="font-medium text-brand-700 hover:underline dark:text-brand-300"
       >
-        Retry
+        {i18n._({ id: "Retry", comment: "take the failed read again" })}
       </button>
     </div>
   );
@@ -224,8 +243,13 @@ function Announcer() {
     if (blockingCount > lastCount.current) {
       setMessage(
         latestDetail
-          ? `A player is waiting for your reply: ${latestDetail}`
-          : `${blockingCount} session${blockingCount === 1 ? " needs" : "s need"} your attention`,
+          ? i18n._("A player is waiting for your reply: {detail}", {
+              detail: latestDetail,
+            })
+          : i18n._(
+              "{count, plural, one {# session needs your attention} other {# sessions need your attention}}",
+              { count: blockingCount },
+            ),
       );
     }
     lastCount.current = blockingCount;
@@ -235,10 +259,12 @@ function Announcer() {
     if (!everConnected) return;
     if (connection !== lastConnection.current) {
       if (connection === "open") {
-        if (lost.current) setMessage("Connection restored.");
+        if (lost.current) setMessage(i18n._("Connection restored."));
         lost.current = false;
       } else if (connection === "closed") {
-        setMessage("Connection to the Spex core lost — reconnecting.");
+        setMessage(
+          i18n._("Connection to the Spex core lost — reconnecting."),
+        );
         lost.current = true;
       }
       lastConnection.current = connection;
@@ -261,7 +287,7 @@ export function sessionTitle(
 ): string {
   const first = view?.captain.find((line) => line.kind === "boss");
   const text = first?.text ?? session?.title;
-  if (!text) return "new session";
+  if (!text) return i18n._("new session");
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > 26 ? `${flat.slice(0, 26)}…` : flat;
 }
@@ -273,7 +299,10 @@ function sessionTooltip(
   const first = view?.captain.find((line) => line.kind === "boss");
   const text = first?.text ?? session.title;
   const started = new Date(session.createdAt).toLocaleString(currentLocale());
-  return text ? `${text}\nstarted ${started}` : `started ${started}`;
+  // The session's own words are data on their own line; only the
+  // second line is a text (localization-4).
+  const line = i18n._("started {started}", { started });
+  return text ? `${text}\n${line}` : line;
 }
 
 function WorkspaceSurface({
@@ -568,7 +597,7 @@ function WorkspaceSurface({
   const strip = (
     <div
       role="tablist"
-      aria-label="Sessions and project views"
+      aria-label={i18n._("Sessions and project views")}
       className="flex items-center gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-neutral-800"
     >
       <div className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
@@ -580,10 +609,38 @@ function WorkspaceSurface({
           // color is never the only channel.
           // Only what the reader cannot act on is named: ownership, or
           // history the core cannot continue (run-view-48, DR-051).
+          // Each note is a whole phrase and the name is one whole
+          // message per case, never a translated stem with fragments
+          // glued on (localization-4).
+          const standing =
+            session.externalWriter === "unknown"
+              ? i18n._("ownership unknown")
+              : session.externalWriter
+                ? i18n._("in use elsewhere")
+                : session.recovery && !session.live
+                  ? i18n._("needs recovery")
+                  : isHistory(session)
+                    ? i18n._({
+                        id: "history",
+                        comment: "tab note: a conversation this core cannot continue",
+                      })
+                    : undefined;
+          const summons = attentionItem
+            ? TAB_WORDS[attentionItem.kind]()
+            : undefined;
+          const notes = [standing, summons].filter(
+            (note): note is string => note !== undefined,
+          );
           const name =
-            title +
-            (session.externalWriter === "unknown" ? " — ownership unknown" : session.externalWriter ? " — in use elsewhere" : session.recovery && !session.live ? " — needs recovery" : isHistory(session) ? " — history" : "") +
-            (attentionItem ? ` — ${TAB_WORDS[attentionItem.kind]}` : "");
+            notes.length === 2
+              ? i18n._("{title} — {note} — {more}", {
+                  title,
+                  note: notes[0],
+                  more: notes[1],
+                })
+              : notes.length === 1
+                ? i18n._("{title} — {note}", { title, note: notes[0] })
+                : title;
           return (
             <span
               key={session.id}
@@ -639,14 +696,17 @@ function WorkspaceSurface({
                     data-testid={`tab-history-${session.id}`}
                     className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
                   >
-                    history
+                    {i18n._({
+                      id: "history",
+                      comment: "tab note: a conversation this core cannot continue",
+                    })}
                   </span>
                 ) : null}
               </button>
               <button
                 type="button"
                 data-testid={`tab-close-${session.id}`}
-                title="Close this tab — the session stays in the sidebar"
+                title={i18n._("Close this tab — the session stays in the sidebar")}
                 aria-hidden
                 tabIndex={-1}
                 onClick={() => closeTabAt(session)}
@@ -666,8 +726,10 @@ function WorkspaceSurface({
             if (element) tabRefs.current.set("start", element);
             else tabRefs.current.delete("start");
           }}
-          title={`Start another session (${keyLabel("N")})`}
-          aria-label="Start another session"
+          title={i18n._("Start another session ({keys})", {
+            keys: keyLabel("N"),
+          })}
+          aria-label={i18n._("Start another session")}
           onKeyDown={(event) => walkTabs(event, "start")}
           onClick={() => pickTab("start")}
           className={`shrink-0 rounded-t-md px-3 py-1.5 text-sm ${
@@ -693,8 +755,12 @@ function WorkspaceSurface({
           }}
           title={
             pinned === "specs"
-              ? `The project's spec packages (${keyLabel("⇧S")})`
-              : "This project's overview: history, now, up next, sources, repo state"
+              ? i18n._("The project's spec packages ({keys})", {
+                  keys: keyLabel("⇧S"),
+                })
+              : i18n._(
+                  "This project's overview: history, now, up next, sources, repo state",
+                )
           }
           onKeyDown={(event) => walkTabs(event, pinned)}
           onClick={() => pickTab(pinned)}
@@ -706,10 +772,19 @@ function WorkspaceSurface({
         >
           {pinned === "specs" ? (
             <>
-              Specs
+              {i18n._({
+                id: "Specs",
+                comment: "tab name: the project's spec packages",
+              })}
               {project && editorDirty(specViewStates[project.id]) ? (
                 <>
-                  <span className="sr-only">, unsaved changes</span>
+                  <span className="sr-only">
+                    {i18n._({
+                      id: ", unsaved changes",
+                      comment:
+                        "spoken only, follows the Specs tab name when a draft is unsaved",
+                    })}
+                  </span>
                   <span aria-hidden="true" data-testid="specs-tab-unsaved">
                     {" "}
                     •
@@ -718,7 +793,10 @@ function WorkspaceSurface({
               ) : null}
             </>
           ) : (
-            "Overview"
+            i18n._({
+              id: "Overview",
+              comment: "tab name: the project's own history, now and queue",
+            })
           )}
         </button>
       ))}
@@ -747,7 +825,8 @@ function WorkspaceSurface({
             void openAcademyExample().catch((cause: Error) => {
               setSeedErrors((current) => ({
                 ...current,
-                [project.id]: cause.message || "seeding the example failed",
+                [project.id]:
+                  cause.message || i18n._("seeding the example failed"),
               }));
             });
           }}
@@ -779,7 +858,7 @@ function WorkspaceSurface({
       ) : activeSession && view ? (
         view.loading ? (
           <div className="m-auto text-sm text-neutral-500">
-            Loading transcript…
+            {i18n._("Loading transcript…")}
           </div>
         ) : (
           <RunView
@@ -1122,8 +1201,12 @@ export function App() {
         type="button"
         data-testid="config-status"
         onClick={() => setSurface("Settings")}
-        title="Open Settings to see what's wrong"
-        aria-label={`Config ${configState.status} — open Settings`}
+        title={i18n._("Open Settings to see what's wrong")}
+        // The status is the core's own enum: a machine word travels as
+        // it is in every language (localization-1).
+        aria-label={i18n._("Config {status} — open Settings", {
+          status: configState.status,
+        })}
         className={`flex shrink-0 items-center justify-center rounded border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 ${
           railCollapsed ? "h-6 w-6" : "px-1.5 py-0.5 text-xs"
         }`}
@@ -1131,14 +1214,16 @@ export function App() {
         {railCollapsed ? (
           <Icon name="gear" className="h-3.5 w-3.5" />
         ) : (
-          <>Config {configState.status} →</>
+          i18n._("Config {status} →", { status: configState.status })
         )}
       </button>
     ) : railCollapsed || playbookCount === undefined ? null : (
       <span className="px-1 text-xs text-neutral-500">
         {playbookCount === 0
-          ? "No playbooks yet"
-          : `${playbookCount} playbook${playbookCount === 1 ? "" : "s"}`}
+          ? i18n._("No playbooks yet")
+          : i18n._("{count, plural, one {# playbook} other {# playbooks}}", {
+              count: playbookCount,
+            })}
       </span>
     );
 

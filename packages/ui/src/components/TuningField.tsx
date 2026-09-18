@@ -8,6 +8,7 @@
 
 import type { AgentModelOption } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import { ModelField } from "./ModelField.js";
 
 /** A tuning field is tri-state: inherit, take the provider's current
@@ -16,7 +17,10 @@ export function TuningField({
   label,
   value,
   playerDefault,
-  inheritLabel = "inherit the player",
+  inheritLabel = i18n._({
+    id: "inherit the player",
+    comment: "tuning choice: take whatever the player lane resolves",
+  }),
   onChange,
   models,
   efforts,
@@ -36,9 +40,15 @@ export function TuningField({
   testIdPrefix?: string;
 }) {
   const mode = value === undefined ? "inherit" : value === false ? "provider" : "pin";
+  // `label` names the field it edits and keys its test ids; what the
+  // reader reads is the word for that field.
+  const fieldWord =
+    label === "model"
+      ? i18n._({ id: "model", comment: "the model field of a tuning editor" })
+      : i18n._({ id: "effort", comment: "the reasoning-effort field of a tuning editor" });
   return (
     <label className="flex flex-col gap-1 text-xs">
-      <span className="text-neutral-500 dark:text-neutral-400">{label}</span>
+      <span className="text-neutral-500 dark:text-neutral-400">{fieldWord}</span>
       <select
         data-testid={`${testIdPrefix}-${label}-mode`}
         value={mode}
@@ -53,8 +63,8 @@ export function TuningField({
         <option value="inherit">
           {inheritLabel}{playerDefault ? ` (${playerDefault})` : ""}
         </option>
-        <option value="provider">the provider's default</option>
-        <option value="pin">pin a value…</option>
+        <option value="provider">{i18n._({ id: "the provider's default", comment: "tuning choice: take the provider's own current default" })}</option>
+        <option value="pin">{i18n._({ id: "pin a value…", comment: "tuning choice: set an explicit value here" })}</option>
       </select>
       {mode === "pin" && (label === "model" ? (
         <ModelField value={typeof value === "string" ? value : ""} models={models ?? []}
@@ -63,9 +73,11 @@ export function TuningField({
         <select data-testid={`${testIdPrefix}-effort-value`} value={typeof value === "string" ? value : ""}
           onChange={(event) => onChange(event.target.value)}
           className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900">
-          <option value="">Choose effort…</option>
-          {typeof value === "string" && value && !efforts?.includes(value) && <option value={value}>{value} (current)</option>}
-          {(efforts ?? []).map((effort) => <option key={effort} value={effort}>{effort}{additionalEfforts?.includes(effort) ? " (adapter-wide)" : ""}</option>)}
+          {/* An effort key is the adapter's wire word; only what stands
+              beside it is ours. */}
+          <option value="">{i18n._({ id: "Choose effort…", comment: "empty choice of the reasoning-effort select" })}</option>
+          {typeof value === "string" && value && !efforts?.includes(value) && <option value={value}>{i18n._("{effort} (current)", { effort: value })}</option>}
+          {(efforts ?? []).map((effort) => <option key={effort} value={effort}>{additionalEfforts?.includes(effort) ? i18n._("{effort} (adapter-wide)", { effort }) : effort}</option>)}
         </select>
       ))}
     </label>

@@ -50,7 +50,10 @@ export interface CompileLogFold {
 
 /** The pipeline in order with its human names, and the name of one
  * phase id (playbook-library-6): the core's table, so the thread's ◇
- * lines and the band's row call a phase by one word. */
+ * lines and the band's row call a phase by one word. The table stays
+ * the core's, untranslated, because the core writes those same names
+ * into the thread lines this page prints verbatim; the UI's own words
+ * around a phase — its status, "Failed at …" — are catalog texts. */
 import { PIPELINE_PHASES, phaseLabel } from "@sublang/spex-core/protocol";
 
 export { PIPELINE_PHASES, phaseLabel };

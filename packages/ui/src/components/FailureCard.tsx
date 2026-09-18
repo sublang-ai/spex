@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 
 import type { FailureCause, ParkedRunAction } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import { causePhrase, causeStep, standingLine } from "../lib/failure-catalogue.js";
 import { stateName } from "../lib/machine-labels.js";
 
@@ -44,16 +45,16 @@ export function failureCardLines(
   const command = context?.command ? `/${context.command}` : undefined;
   const what =
     command && step
-      ? `${command} failed at ${step}`
+      ? i18n._("{command} failed at {step}", { command, step })
       : command
-        ? `${command} failed`
+        ? i18n._("{command} failed", { command })
         : step
-          ? `Failed at ${step}`
-          : "The workflow failed";
+          ? i18n._("Failed at {step}", { step })
+          : i18n._("The workflow failed");
   // The catalogue phrases the cause; a record from before the runtime
   // attached one falls back to the runtime's own words, spoken plain
   // (run-view-2).
-  const why = causePhrase(cause) ?? message ?? "No reason was reported";
+  const why = causePhrase(cause) ?? message ?? i18n._("No reason was reported");
   // What now: the Boss step the cause carries, then what each
   // published control would do — a no-op named here is a control the
   // reader can see is pointless before pressing it (DR-075).
@@ -67,7 +68,16 @@ export function failureCardLines(
   // The runtime's own message and the raw state id ride the tooltip
   // and never the copy (DR-010 §2).
   const title =
-    [message, context?.step ? `step: ${context.step}` : undefined]
+    [
+      message,
+      context?.step
+        ? i18n._({
+            id: "step: {state}",
+            values: { state: context.step },
+            comment: "tooltip: the machine state the run failed in",
+          })
+        : undefined,
+    ]
       .filter(Boolean)
       .join(" · ") || undefined;
   return {
@@ -114,11 +124,20 @@ export function FailureCard({
         {count !== undefined && count > 1 ? (
           <span
             data-testid="failure-count"
-            title={`The same failure ${count} times in this turn`}
+            title={i18n._(
+              "{count, plural, one {The same failure # time in this turn} other {The same failure # times in this turn}}",
+              { count },
+            )}
             className="shrink-0 font-medium"
           >
             <span aria-hidden="true">×{count}</span>
-            <span className="sr-only">, {count} times</span>
+            <span className="sr-only">
+              {i18n._({
+                id: "{count, plural, one {, # time} other {, # times}}",
+                values: { count },
+                comment: "follows the ×N mark, for a screen reader: how many times",
+              })}
+            </span>
           </span>
         ) : null}
         {extra}

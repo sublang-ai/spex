@@ -13,6 +13,7 @@ import { useMemo } from "react";
 import type { DraftInfo } from "@sublang/spex-core/protocol";
 
 import { foldCompileLog, phaseLabel, type PhaseView } from "../lib/compile-log.js";
+import { i18n } from "../i18n.js";
 import { duration, preciseAge, relativeAge } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { ResizableFrame } from "./ResizableFrame.js";
@@ -24,6 +25,23 @@ const GLYPH: Record<PhaseView["status"], string> = {
   done: "✓",
   failed: "✗",
 };
+
+/** How a phase stands, in the word a screen reader speaks and the
+ * tooltip repeats. A function, never a table of strings: a text read
+ * at module load would freeze the language the module was imported in
+ * (localization-4). */
+function statusWord(status: PhaseView["status"]): string {
+  switch (status) {
+    case "waiting":
+      return i18n._({ id: "waiting", comment: "compile phase: not started yet" });
+    case "running":
+      return i18n._({ id: "running", comment: "compile phase: under way" });
+    case "done":
+      return i18n._({ id: "done", comment: "compile phase: finished well" });
+    case "failed":
+      return i18n._({ id: "failed", comment: "compile phase: stopped on an error" });
+  }
+}
 
 const TONE: Record<PhaseView["status"], string> = {
   waiting: "text-neutral-400 dark:text-neutral-500",
@@ -47,18 +65,24 @@ function PhaseRow({ phases, now }: { phases: PhaseView[]; now: number }) {
             : phase.elapsed;
         return (
           <span key={phase.id} className="flex items-center gap-1">
+            {/* The phase's name and the compiler's id for it are the
+                pipeline's own words; how it stands is a text. */}
             <span
               data-testid={`phase-${phase.id}`}
               data-status={phase.status}
-              title={`${phase.label} — the compiler's ${phase.id} phase, ${phase.status}`}
+              title={i18n._("{label} — the compiler's {id} phase, {status}", {
+                label: phase.label,
+                id: phase.id,
+                status: statusWord(phase.status),
+              })}
               className={`inline-flex items-center gap-1 whitespace-nowrap ${TONE[phase.status]}`}
             >
               {phase.status === "running" ? (
-                <RunningMark running title="Running" />
+                <RunningMark running title={i18n._({ id: "Running", comment: "this compile phase is under way" })} />
               ) : (
                 <span aria-hidden="true">{GLYPH[phase.status]}</span>
               )}
-              <span className="sr-only">{phase.status}</span>
+              <span className="sr-only">{statusWord(phase.status)}</span>
               <span className={phase.status === "waiting" ? "" : "font-medium"}>
                 {phase.label}
               </span>
@@ -108,7 +132,7 @@ export function CompileBand({
   const outcome =
     compile?.outcome ??
     (fold.canceled ? "canceled" : fold.complete ? "ok" : fold.failed ? "failed" : "running");
-  const askedBy = compile ? (compile.by === "agent" ? "asked by the agent" : "asked by you") : undefined;
+  const askedBy = compile ? (compile.by === "agent" ? i18n._("asked by the agent") : i18n._("asked by you")) : undefined;
   // The phases as the lines drew them; a restored failure that kept no
   // lines draws its one failed phase with the output the draft holds.
   const folded: PhaseView[] =
@@ -165,14 +189,14 @@ export function CompileBand({
             <PhaseRow phases={phases} now={now} />
           ) : (
             <span className="flex items-center gap-1.5 text-xs text-neutral-500">
-              <RunningMark running title="Running" />
-              Starting the compiler…
+              <RunningMark running title={i18n._({ id: "Running", comment: "this compile phase is under way" })} />
+              {i18n._("Starting the compiler…")}
             </span>
           )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
             {lastOutputAt !== undefined ? (
               <span data-testid="last-output">
-                last output {preciseAge(lastOutputAt, now)}
+                {i18n._("last output {age}", { age: preciseAge(lastOutputAt, now) })}
               </span>
             ) : null}
             {askedBy ? <span data-testid="compile-by">{askedBy}</span> : null}
@@ -183,7 +207,7 @@ export function CompileBand({
               onClick={onCancel}
               className="ml-auto rounded-md border border-neutral-300 px-2.5 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
-              Cancel
+              {i18n._({ id: "Cancel", comment: "stop the running compile" })}
             </button>
           </div>
         </>
@@ -192,7 +216,8 @@ export function CompileBand({
           data-testid="compile-toolchain"
           className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
         >
-          {compile.output || "The compile toolchain is not ready."}
+          {/* What the toolchain check said, where it said anything. */}
+          {compile.output || i18n._("The compile toolchain is not ready.")}
         </div>
       ) : outcome === "failed" ? (
         <>
@@ -200,7 +225,7 @@ export function CompileBand({
           {questions.length > 0 ? (
             <ResizableFrame
               frameId={`draft-output:${draftId}`}
-              label="Resize the compiler's questions"
+              label={i18n._("Resize the compiler's questions")}
               unit={16}
               defaultSteps={14}
               minSteps={6}
@@ -237,7 +262,7 @@ export function CompileBand({
           ) : output.length > 0 ? (
             <ResizableFrame
               frameId={`draft-output:${draftId}`}
-              label="Resize the compiler output"
+              label={i18n._("Resize the compiler output")}
               unit={16}
               defaultSteps={12}
               minSteps={6}
@@ -251,11 +276,12 @@ export function CompileBand({
             </ResizableFrame>
           ) : null}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+            {/* What the thread's own line said, where it said anything. */}
             <span data-testid="compile-caption">
               {threadCaption ??
                 (draft.failures >= 3
-                  ? "three in a row — tell the agent how to proceed"
-                  : "sent to the agent")}
+                  ? i18n._("three in a row — tell the agent how to proceed")
+                  : i18n._("sent to the agent"))}
             </span>
             {askedBy ? <span data-testid="compile-by">{askedBy}</span> : null}
           </div>
@@ -265,12 +291,12 @@ export function CompileBand({
           data-testid="compile-interrupted"
           className="flex flex-wrap items-center gap-x-3 text-xs text-amber-700 dark:text-amber-300"
         >
-          <span>Compile interrupted when Spex closed</span>
+          <span>{i18n._("Compile interrupted when Spex closed")}</span>
           {askedBy ? <span className="text-neutral-500">{askedBy}</span> : null}
         </div>
       ) : outcome === "canceled" ? (
         <div data-testid="compile-canceled" className="text-xs text-neutral-500 dark:text-neutral-400">
-          Compile canceled
+          {i18n._("Compile canceled")}
         </div>
       ) : (
         <>
@@ -278,12 +304,13 @@ export function CompileBand({
             <PhaseRow phases={phases} now={now} />
           ) : compile ? (
             <span className="text-xs text-emerald-700 dark:text-emerald-400">
-              <span aria-hidden="true">✓ </span>Compiled {relativeAge(compile.at, now)}
+              <span aria-hidden="true">✓ </span>
+              {i18n._("Compiled {age}", { age: relativeAge(compile.at, now) })}
             </span>
           ) : null}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
             {roles && roles.length > 0 ? (
-              <span data-testid="compile-roles">roles: {roles.join(", ")}</span>
+              <span data-testid="compile-roles">{i18n._("roles: {roles}", { roles: roles.join(", ") })}</span>
             ) : null}
             {askedBy ? <span data-testid="compile-by">{askedBy}</span> : null}
           </div>
@@ -292,7 +319,7 @@ export function CompileBand({
       {lines.length > 0 ? (
         <details data-testid="compile-log" className="text-xs">
           <summary className="cursor-pointer select-none text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300">
-            Show log
+            {i18n._({ id: "Show log", comment: "unfold the compiler's raw output" })}
           </summary>
           <pre className="relative mt-1 max-h-48 overflow-y-auto rounded bg-neutral-100 p-2 font-mono text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400">
             {lines.join("\n")}

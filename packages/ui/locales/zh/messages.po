@@ -13,9 +13,288 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. tooltip tail, after the state's description: the workflow it called
+#: src/components/MachineCard.tsx
+msgid " — called /{playbookId}"
+msgstr " — 调用了 /{playbookId}"
+
+#. tooltip tail, after the state's description: the role it runs
+#: src/components/MachineCard.tsx
+msgid " — runs {role}"
+msgstr " — 运行 {role}"
+
+#. follows the project's name on a repair row
+#: src/components/SpaceSync.tsx
+msgid " · {count, plural, one {# session} other {# sessions}} ran in {path}"
+msgstr " · {count, plural, other {# 个会话}}曾在 {path} 运行"
+
+#. follows the issues heading: repairs the reader declined
+#: src/components/SpaceSync.tsx
+msgid " · {count} not added"
+msgstr " · {count} 项未添加"
+
+#. follows the project's name on a repair the reader declined
+#: src/components/SpaceSync.tsx
+msgid " · not added"
+msgstr " · 未添加"
+
+#. follows the count of commits this device is ahead by
+#: src/components/SpaceSurface.tsx
+msgid " ahead"
+msgstr " 领先"
+
+#. follows the count of commits this device is behind by
+#: src/components/SpaceSurface.tsx
+msgid " behind"
+msgstr " 落后"
+
+#. how old the listed data is; follows the Sources summary
+#: src/components/SourcesTabs.tsx
+msgid "— {age}"
+msgstr "— {age}"
+
+#: src/components/ProjectPalette.tsx
+msgid "— a sample project with specs, ready to run"
+msgstr "— 带规约的示例项目，可直接运行"
+
+#: src/components/ProjectPalette.tsx
+msgid "— seeds {path}"
+msgstr "— 在 {path} 生成"
+
+#: src/components/ProjectPalette.tsx
+msgid "— seeds a sample project"
+msgstr "— 生成一个示例项目"
+
+#. tail of a run's one-line strip: the state that called it
+#: src/components/MachineCard.tsx
+msgid ", called from {state}"
+msgstr "，由 {state} 调用"
+
+#. follows the file's path in the editor's heading
+#. spoken only, follows the Specs tab name when a draft is unsaved
+#: src/App.tsx
+#: src/components/SpecEditor.tsx
+msgid ", unsaved changes"
+msgstr "，有未保存的更改"
+
+#. tail of a list the interface cut short
+#. tail of a list the runtime cut short
+#: src/components/CaptainHome.tsx
+#: src/lib/failure-catalogue.ts
+msgid "… and {count} more"
+msgstr "… 还有 {count} 项"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "· checked {age}"
+msgstr "· {age}检查过"
+
+#. follows the branch name in the header
+#: src/components/SpaceSurface.tsx
+msgid "· committed as Spex"
+msgstr "· 以 Spex 身份提交"
+
+#. follows the record count on a session's record file
+#: src/components/SpaceExplorer.tsx
+msgid "· reads better as a conversation"
+msgstr "· 以对话形式阅读更佳"
+
+#. effort choice: leave the adapter's own default
+#: src/components/AgentEditor.tsx
+msgid "(default)"
+msgstr "（默认）"
+
+#: src/components/Markdown.tsx
+msgid "[external image blocked: {alt}]"
+msgstr "[外部图片已拦截：{alt}]"
+
+#: src/components/DraftConversation.tsx
+msgid "{adapter} is not ready — check Settings"
+msgstr "{adapter} 未就绪 — 请查看设置"
+
+#: src/components/SpaceSurface.tsx
+msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
+msgstr "领先 {ahead, plural, other {# 个提交}}，落后 {behind, plural, other {# 个提交}} · {at} 检查过"
+
+#. {annotation} is the core's word for the directory
+#: src/components/SpaceExplorer.tsx
+msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
+msgstr "{annotation} · {count, plural, other {# 项}}"
+
+#: src/components/SpaceSync.tsx
+msgid "{chosen} of {total} chosen"
+msgstr "已选 {chosen}/{total}"
+
+#: src/components/FailureCard.tsx
+msgid "{command} failed"
+msgstr "{command} 失败"
+
+#: src/components/FailureCard.tsx
+msgid "{command} failed at {step}"
+msgstr "{command} 在 {step} 失败"
+
+#: src/lib/labels.ts
+msgid "{command} is not installed"
+msgstr "未安装 {command}"
+
+#: src/lib/client.ts
+msgid "{command} timed out"
+msgstr "{command} 超时"
+
+#. follows the ×N mark, for a screen reader: how many times
+#. follows the ×N mark, for a screen reader: how many times
+#. follows the ×N mark, for a screen reader: how many times
+#: src/components/CaptainPane.tsx
+#: src/components/FailureCard.tsx
+#: src/components/PlayerPane.tsx
+msgid "{count, plural, one {, # time} other {, # times}}"
+msgstr "{count, plural, other {，# 次}}"
+
+#: src/components/SpaceSurface.tsx
+msgid "{count, plural, one {# change} other {# changes}}"
+msgstr "{count, plural, other {# 项更改}}"
+
+#: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# citation} other {# citations}}"
+msgstr "{count, plural, other {# 条引用}}"
+
+#: src/components/SpaceExplorer.tsx
+msgid "{count, plural, one {# entry} other {# entries}}"
+msgstr "{count, plural, other {# 项}}"
+
+#: src/components/SpaceExplorer.tsx
+msgid "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints."
+msgstr "{count, plural, other {# 个文件}} — 清单、记录，以及本设备运行过时留下的服务商提示。"
+
+#: src/components/SpaceSurface.tsx
+msgid "{count, plural, one {# issue} other {# issues}}"
+msgstr "{count, plural, other {# 个问题}}"
+
+#: src/components/SpaceSync.tsx
+msgid "{count, plural, one {# issue} other {# issues}} left."
+msgstr "{count, plural, other {剩余 # 个问题}}。"
+
+#: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# item} other {# items}} in total"
+msgstr "共 {count, plural, other {# 个条目}}"
+
+#: src/components/SpaceSurface.tsx
+msgid "{count, plural, one {# local change} other {# local changes}}"
+msgstr "{count, plural, other {# 项本地更改}}"
+
+#: src/components/SpecView.tsx
+msgid "{count, plural, one {# match} other {# matches}}"
+msgstr "{count, plural, other {# 个匹配}}"
+
+#: src/components/ProjectPalette.tsx
+msgid "{count, plural, one {# needs you} other {# need you}}"
+msgstr "{count, plural, other {# 项需要你}}"
+
+#: src/components/NavRail.tsx
+msgid "{count, plural, one {# needs your attention} other {# need your attention}}"
+msgstr "{count, plural, other {# 项需要关注}}"
+
+#: src/App.tsx
+msgid "{count, plural, one {# playbook} other {# playbooks}}"
+msgstr "{count, plural, other {# 个剧本}}"
+
+#: src/components/SpaceExplorer.tsx
+msgid "{count, plural, one {# record} other {# records}}"
+msgstr "{count, plural, other {# 条记录}}"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+msgid "{count, plural, one {# review round} other {# review rounds}}"
+msgstr "{count, plural, other {# 轮审阅}}"
+
+#: src/components/ProjectPalette.tsx
+msgid "{count, plural, one {# running session} other {# running sessions}}"
+msgstr "{count, plural, other {# 个会话运行中}}"
+
+#: src/components/ProjectPalette.tsx
+msgid "{count, plural, one {# session needs you} other {# sessions need you}}"
+msgstr "{count, plural, other {# 个会话需要你}}"
+
+#: src/App.tsx
+msgid "{count, plural, one {# session needs your attention} other {# sessions need your attention}}"
+msgstr "{count, plural, other {# 个会话需要关注}}"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/NavRail.tsx
+msgid "{count, plural, one {# turn} other {# turns}}"
+msgstr "{count, plural, other {# 个轮次}}"
+
+#: src/lib/failure-catalogue.ts
+msgid "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
+msgstr "{count, plural, other {改动了 # 个文件却未提交}}"
+
+#: src/components/SpaceSync.tsx
+msgid "{count, plural, one {Keep this device's version of the unit? The remote's version stays in Git history.} other {Keep this device's version of all # units? The remote's version stays in Git history.}}"
+msgstr "{count, plural, other {保留本设备版本的全部 # 个单元？远程版本仍留在 Git 历史中。}}"
+
+#: src/components/LibrarySurface.tsx
+msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
+msgstr "{count, plural, other {需在下方启用 {names} 才能交付 PR；普通的 /dev 请求仍可运行。}}"
+
+#: src/components/PlayerPane.tsx
+msgid "{count, plural, one {The same failure # time in this call} other {The same failure # times in this call}}"
+msgstr "{count, plural, other {本次调用中同一失败出现 # 次}}"
+
+#: src/components/CaptainPane.tsx
+#: src/components/FailureCard.tsx
+msgid "{count, plural, one {The same failure # time in this turn} other {The same failure # times in this turn}}"
+msgstr "{count, plural, other {本轮中同一失败出现 # 次}}"
+
+#: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
+msgid "{count} {group} items"
+msgstr "{count} 个{group}条目"
+
+#: src/components/ForgeItemRow.tsx
+msgid "{count} more labels: {rest}"
+msgstr "另有 {count} 个标签：{rest}"
+
+#: src/components/ProjectPalette.tsx
+msgid "{count} running"
+msgstr "{count} 个运行中"
+
+#: src/lib/spec-view-model.ts
 #: src/lib/time.ts
 msgid "{days}d ago"
 msgstr "{days} 天前"
+
+#: src/components/LibrarySurface.tsx
+msgid "{diagnostic} — delete the draft, or repair the file and restart Spex"
+msgstr "{diagnostic} — 删除草稿，或修复文件后重启 Spex"
+
+#: src/components/AgentEditor.tsx
+#: src/components/TuningField.tsx
+msgid "{effort} (adapter-wide)"
+msgstr "{effort}（适配器级）"
+
+#: src/components/AgentEditor.tsx
+#: src/components/TuningField.tsx
+msgid "{effort} (current)"
+msgstr "{effort}（当前）"
+
+#: src/components/AgentEditor.tsx
+msgid "{effort} (unsupported)"
+msgstr "{effort}（不支持）"
+
+#. joins the two playbook names the /dev hint asks for
+#: src/components/LibrarySurface.tsx
+msgid "{first} and {second}"
+msgstr "{first} 和 {second}"
+
+#. what failed, then what the agent said about it
+#: src/lib/failure-catalogue.ts
+msgid "{head} — {said}"
+msgstr "{head} — {said}"
+
+#: src/lib/failure-catalogue.ts
+msgid "{head} is no longer an ancestor"
+msgstr "{head} 已不再是祖先提交"
 
 #: src/lib/time.ts
 msgid "{hours}h"
@@ -25,9 +304,48 @@ msgstr "{hours} 小时"
 msgid "{hours}h {minutes}m"
 msgstr "{hours} 小时 {minutes} 分"
 
+#: src/lib/spec-view-model.ts
 #: src/lib/time.ts
 msgid "{hours}h ago"
 msgstr "{hours} 小时前"
+
+#: src/components/LibrarySurface.tsx
+msgid "{id} is a built-in — enable it below instead"
+msgstr "{id} 是内置剧本 — 请在下方启用"
+
+#: src/components/SpecView.tsx
+msgid "{id} not found"
+msgstr "未找到 {id}"
+
+#. a call's tokens in and out; tok is short for tokens
+#: src/components/PlayerPane.tsx
+msgid "{input}→{output} tok"
+msgstr "{input}→{output} token"
+
+#: src/components/DeliveryCard.tsx
+msgid "{kind} {ref}"
+msgstr "{kind} {ref}"
+
+#: src/components/DeliveryCard.tsx
+msgid "{kind} {ref} — {url}"
+msgstr "{kind} {ref} — {url}"
+
+#: src/components/NavRail.tsx
+msgid "{label} — {count, plural, one {# needs your attention} other {# need your attention}}"
+msgstr "{label} — {count, plural, other {# 项需要关注}}"
+
+#: src/components/CompileBand.tsx
+msgid "{label} — the compiler's {id} phase, {status}"
+msgstr "{label} — 编译器的 {id} 阶段，{status}"
+
+#: src/components/SettingsSurface.tsx
+msgid "{label} — where to notify"
+msgstr "{label} — 通知去向"
+
+#. a phrase followed by the detail it stands on
+#: src/lib/failure-catalogue.ts
+msgid "{label}: {why}"
+msgstr "{label}：{why}"
 
 #: src/lib/time.ts
 msgid "{minutes}m"
@@ -37,26 +355,480 @@ msgstr "{minutes} 分"
 msgid "{minutes}m {seconds}s"
 msgstr "{minutes} 分 {seconds} 秒"
 
+#: src/lib/spec-view-model.ts
 #: src/lib/time.ts
 msgid "{minutes}m ago"
 msgstr "{minutes} 分钟前"
+
+#: src/components/SpaceSync.tsx
+msgid "{name} · now a project at {path}"
+msgstr "{name} · 已成为项目，位于 {path}"
+
+#: src/components/SpaceSync.tsx
+msgid "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
+msgstr "{name} · 已成为项目，位于 {path}，已列出 {count, plural, other {# 个会话}}"
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "{name} agent"
+msgstr "{name} 智能体"
+
+#: src/components/SpaceSync.tsx
+msgid "{name} not added."
+msgstr "未添加 {name}。"
+
+#: src/components/AgentSettings.tsx
+msgid "{name} settings for this conversation"
+msgstr "{name} 在本次对话中的设置"
+
+#: src/components/AgentSettings.tsx
+msgid "{name} settings: {reading}"
+msgstr "{name} 设置：{reading}"
+
+#: src/components/SpecGraph.tsx
+msgid "{name}, {items} items, cites {out}, cited by {in}"
+msgstr "{name}，{items} 个条目，引用 {out}，被引用 {in}"
+
+#: src/components/NavRail.tsx
+msgid "{name}, a session failed"
+msgstr "{name}，有会话失败"
+
+#: src/components/NavRail.tsx
+msgid "{name}, a session has an unread turn"
+msgstr "{name}，有会话存在未读轮次"
+
+#: src/components/NavRail.tsx
+msgid "{name}, a session is waiting for your reply"
+msgstr "{name}，有会话在等待你的回复"
+
+#: src/components/NavRail.tsx
+msgid "{name}, a session is waiting for your verdict"
+msgstr "{name}，有会话在等待你的裁定"
+
+#: src/components/SpecView.tsx
+msgid "{packages, plural, one {# package} other {# packages}} · {items} items"
+msgstr "{packages, plural, other {# 个规约包}} · {items} 个条目"
+
+#: src/components/NavRail.tsx
+msgid "{path} — needs you"
+msgstr "{path} — 需要你处理"
+
+#: src/components/SpecView.tsx
+msgid "{path} is not in the tree"
+msgstr "{path} 不在规约树中"
+
+#: src/state/store.ts
+msgid "{path} is not the root of a git work tree. To start a new repository there, use Create instead."
+msgstr "{path} 不是 git 工作树的根目录。若要在此新建仓库，请改用“新建”。"
+
+#: src/components/MachineCard.tsx
+msgid "{playbookId} machine drawing"
+msgstr "{playbookId} 状态机图"
+
+#: src/components/MachineCard.tsx
+msgid "{playbookId} state machine"
+msgstr "{playbookId} 状态机"
+
+#: src/components/MachineCard.tsx
+msgid "{playbookId} state machine, {state} active"
+msgstr "{playbookId} 状态机，当前处于 {state}"
+
+#: src/components/BindingEditor.tsx
+msgid "{role} runs as"
+msgstr "{role} 的扮演者"
 
 #: src/lib/time.ts
 msgid "{seconds}s"
 msgstr "{seconds} 秒"
 
+#. a file size in bytes
+#: src/lib/space.ts
+msgid "{size} B"
+msgstr "{size} B"
+
+#. a file size in gigabytes
+#: src/lib/space.ts
+msgid "{size} GB"
+msgstr "{size} GB"
+
+#. a file size in kilobytes
+#: src/lib/space.ts
+msgid "{size} KB"
+msgstr "{size} KB"
+
+#. a file size in megabytes
+#: src/lib/space.ts
+msgid "{size} MB"
+msgstr "{size} MB"
+
 #: src/lib/time.ts
 msgid "{span} ago"
 msgstr "{span}前"
+
+#: src/components/PlaybookStages.tsx
+msgid "{stage} not found next to this playbook's registry"
+msgstr "在该剧本的注册表旁未找到 {stage}"
+
+#. {step} is the sync step's name
+#: src/components/SpaceSurface.tsx
+msgid "{step} stopped"
+msgstr "{step}已停止"
+
+#. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "{step} stopped — {message}"
+msgstr "{step}已停止 — {message}"
+
+#: src/components/ForgeItemRow.tsx
+msgid "{text} ({state})"
+msgstr "{text}（{state}）"
+
+#: src/components/ForgeItemRow.tsx
+msgid "{title} — {labels}"
+msgstr "{title} — {labels}"
+
+#: src/components/NavRail.tsx
+msgid "{title} — {life}, {age}, {turns}"
+msgstr "{title} — {life}，{age}，{turns}"
+
+#: src/components/NavRail.tsx
+msgid "{title} — {life}, {age}, {turns} — {detail}"
+msgstr "{title} — {life}，{age}，{turns} — {detail}"
+
+#: src/App.tsx
+msgid "{title} — {note}"
+msgstr "{title} — {note}"
+
+#: src/App.tsx
+msgid "{title} — {note} — {more}"
+msgstr "{title} — {note} — {more}"
 
 #: src/lib/time.ts
 msgid "{weeks}w ago"
 msgstr "{weeks} 周前"
 
+#: src/lib/failure-catalogue.ts
+msgid "{who} failed"
+msgstr "{who} 失败"
+
+#. who is at work and how long the open call has run
+#. who is at work and how long the open call has run
+#: src/components/CaptainPane.tsx
+#: src/components/PlayerPane.tsx
+msgid "{who} working · {span}"
+msgstr "{who} 工作中 · {span}"
+
+#: src/components/PlayerPane.tsx
+msgid "{who} working since {since}"
+msgstr "{who} 自 {since} 起工作中"
+
+#. who is at work, with no span to report yet
+#: src/components/CaptainPane.tsx
+msgid "{who} working…"
+msgstr "{who} 工作中…"
+
+#: src/components/Composer.tsx
+msgid "/ for playbooks · Enter sends"
+msgstr "/ 打开剧本 · Enter 发送"
+
+#: src/components/LibrarySurface.tsx
+msgid "/{id} is already a configured playbook"
+msgstr "/{id} 已是已配置的剧本"
+
+#. a run's one-line strip: the workflow, where it stands, who called it
+#: src/components/MachineCard.tsx
+msgid "/{playbookId} — {where}{from}"
+msgstr "/{playbookId} — {where}{from}"
+
+#: src/lib/failure-catalogue.ts
+msgid "/{playbookId} failed"
+msgstr "/{playbookId} 失败"
+
+#: src/components/SpecView.tsx
+msgid "← Back"
+msgstr "← 返回"
+
+#: src/components/SpecView.tsx
+msgid "← Back to {surface}"
+msgstr "← 返回{surface}"
+
+#. act: jump to the end of the transcript; ↓ stays as it is
+#. act: jump to the end of the transcript; ↓ stays as it is
+#. jump to the newest entry; the arrow is part of the pill
+#: src/components/CaptainPane.tsx
+#: src/components/DraftConversation.tsx
+#: src/components/PlayerPane.tsx
+msgid "↓ Latest"
+msgstr "↓ 最新"
+
+#: src/components/NextCard.tsx
+msgid "+{count} more queued"
+msgstr "+{count} 项已排队"
+
+#. the playbooks the card does not list; <0> holds the slash key
+#: src/components/CaptainHome.tsx
+msgid "+{count} more under <0>/</0>"
+msgstr "+{count} 个在 <0>/</0> 下"
+
+#. an agent runtime, then what it is missing
+#: src/components/CaptainHome.tsx
+msgid "<0>{adapter}</0> — {requirement}"
+msgstr "<0>{adapter}</0> — {requirement}"
+
+#: src/components/CitationPreview.tsx
+msgid "<0>{id}</0> — not in the tree"
+msgstr "<0>{id}</0> — 不在规约树中"
+
+#: src/components/Composer.tsx
+msgid "<0>{player}</0> is waiting for your reply — your next message answers it."
+msgstr "<0>{player}</0> 正在等待你的回复 — 你的下一条消息即为回答。"
+
 #. a span shorter than one second
 #: src/lib/time.ts
 msgid "<1s"
 msgstr "<1 秒"
+
+#: src/components/ProjectPalette.tsx
+msgid "~/path — add an existing repo or create new"
+msgstr "~/path — 添加已有仓库或新建"
+
+#: src/state/reducer.ts
+msgid "◆ turn aborted"
+msgstr "◆ 本轮已中止"
+
+#: src/state/reducer.ts
+msgid "◆ turn aborted: {reason}"
+msgstr "◆ 本轮已中止：{reason}"
+
+#. how a player's call ended; ◇ stays as it is
+#: src/components/PlayerPane.tsx
+msgid "◇ aborted"
+msgstr "◇ 已中止"
+
+#: src/state/store.ts
+msgid "✓ compiled and registered — see Configured playbooks"
+msgstr "✓ 已编译并注册 — 见“已配置的剧本”"
+
+#. how a player's call ended; ✓ stays as it is
+#: src/components/PlayerPane.tsx
+msgid "✓ finished"
+msgstr "✓ 已完成"
+
+#. a failed call and what it said; ✗ stays as it is
+#: src/components/PlayerPane.tsx
+msgid "✗ {error}"
+msgstr "✗ {error}"
+
+#: src/state/store.ts
+msgid "✗ cancel failed: {reason}"
+msgstr "✗ 取消失败：{reason}"
+
+#. how a player's call ended; ✗ stays as it is
+#: src/components/PlayerPane.tsx
+msgid "✗ failed"
+msgstr "✗ 失败"
+
+#: src/lib/labels.ts
+msgid "A command the run needs is not installed"
+msgstr "运行所需的命令未安装"
+
+#: src/components/DeliveryCard.tsx
+msgid "A follow-up message continues this intent."
+msgstr "再发一条消息即可继续该意图。"
+
+#: src/components/SpaceSync.tsx
+msgid "A Git merge is pending; finish or abort it in your terminal."
+msgstr "Git 合并尚未结束，请在终端中完成或中止。"
+
+#: src/components/SpaceSync.tsx
+msgid "A merge is in progress in your terminal. Finish or abort it there."
+msgstr "终端中有合并正在进行，请在那里完成或中止。"
+
+#: src/lib/failure-catalogue.ts
+msgid "A nested workflow failed"
+msgstr "嵌套工作流失败"
+
+#: src/lib/failure-catalogue.ts
+msgid "A Playbook defect"
+msgstr "Playbook 缺陷"
+
+#: src/lib/labels.ts
+msgid "A player finishes its step"
+msgstr "Player 完成步骤"
+
+#: src/App.tsx
+msgid "A player is waiting for your reply: {detail}"
+msgstr "有 Player 在等待你的回复：{detail}"
+
+#: src/components/SettingsSurface.tsx
+msgid "A player named {id} already exists — edit it above instead."
+msgstr "已存在名为 {id} 的 Player — 请在上方编辑。"
+
+#: src/state/dashboard.ts
+msgid "A session failed"
+msgstr "有会话失败"
+
+#: src/state/dashboard.ts
+msgid "A session has an unread turn"
+msgstr "有会话存在未读轮次"
+
+#: src/state/dashboard.ts
+msgid "A session is waiting for your reply"
+msgstr "有会话在等待你的回复"
+
+#: src/state/dashboard.ts
+msgid "A session is waiting for your verdict"
+msgstr "有会话在等待你的裁定"
+
+#: src/state/store.ts
+msgid "a tool"
+msgstr "某个工具"
+
+#: src/lib/labels.ts
+msgid "A turn finishes"
+msgstr "轮次完成"
+
+#: src/lib/labels.ts
+msgid "A turn is aborted"
+msgstr "轮次被中止"
+
+#. act: stop the running turn
+#. end the running turn now
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Abort"
+msgstr "中止"
+
+#: src/state/store.ts
+msgid "abort failed: {reason}"
+msgstr "中止失败：{reason}"
+
+#. the abort request is in flight
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Aborting…"
+msgstr "中止中…"
+
+#: src/components/ProjectGroup.tsx
+msgid "Actions for {title}"
+msgstr "{title} 的操作"
+
+#. compact reading in a pane header: time this agent was active
+#: src/components/AgentActiveTime.tsx
+msgid "active · {span}"
+msgstr "活跃 · {span}"
+
+#: src/components/DraftConversation.tsx
+msgid "Adapt a SKILL.md"
+msgstr "改编一个 SKILL.md"
+
+#. which agent runtime an agent runs on
+#. which agent runtime an agent runs on
+#: src/components/AgentEditor.tsx
+msgid "Adapter"
+msgstr "适配器"
+
+#: src/components/AgentEditor.tsx
+msgid "Adapter option; model support unverified"
+msgstr "适配器选项；模型支持未验证"
+
+#: src/components/BindingEditor.tsx
+msgid "Adapter option; model support unverified."
+msgstr "适配器选项；模型支持未验证。"
+
+#. register the typed path as an existing repository
+#: src/components/ProjectPalette.tsx
+msgid "Add"
+msgstr "添加"
+
+#: src/components/SettingsSurface.tsx
+msgid "Add a player"
+msgstr "添加 Player"
+
+#: src/components/ProjectPalette.tsx
+msgid "Add a project"
+msgstr "添加项目"
+
+#: src/components/ProjectPalette.tsx
+msgid "Add a project by path…"
+msgstr "按路径添加项目…"
+
+#: src/components/CaptainHome.tsx
+msgid "Add a project first ({keys})"
+msgstr "请先添加项目（{keys}）"
+
+#: src/components/CaptainHome.tsx
+#: src/components/NavRail.tsx
+msgid "Add a project…"
+msgstr "添加项目…"
+
+#: src/components/SpaceSurface.tsx
+msgid "Add a remote first"
+msgstr "请先添加远程仓库"
+
+#: src/components/SpaceSync.tsx
+msgid "Add a remote to share this space"
+msgstr "添加远程仓库以共享此空间"
+
+#: src/components/ProjectGroup.tsx
+msgid "Add an intent to {project}"
+msgstr "向 {project} 添加意图"
+
+#: src/components/ProjectGroup.tsx
+msgid "Add intent…"
+msgstr "添加意图…"
+
+#: src/components/SettingsSurface.tsx
+msgid "Add player"
+msgstr "添加 Player"
+
+#: src/components/SpaceSync.tsx
+msgid "Add project"
+msgstr "添加项目"
+
+#: src/components/SpaceSurface.tsx
+msgid "Add remote"
+msgstr "添加远程仓库"
+
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+msgid "Add this to the project's Up next without sending it"
+msgstr "加入项目的“接下来”，暂不发送"
+
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+msgid "Add to Up next"
+msgstr "加入“接下来”"
+
+#: src/components/SpaceSync.tsx
+msgid "Added {name}, but {reason}"
+msgstr "已添加 {name}，但{reason}"
+
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+msgid "Added to Up next — see the project's Overview."
+msgstr "已加入“接下来” — 见项目概览。"
+
+#. the Add project control, while the add is in flight
+#. the Add project control, while the add is in flight
+#: src/components/SpaceSync.tsx
+msgid "Adding…"
+msgstr "添加中…"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "after {title}"
+msgstr "在 {title} 之后"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "after {title} ({project})"
+msgstr "在 {title}（{project}）之后"
+
+#. queued row standing: it runs once the current work ends
+#: src/components/QueuedIntentPresentation.tsx
+msgid "after current work"
+msgstr "在当前工作之后"
 
 #. compact age in tight chrome: that many days ago
 #: src/lib/time.ts
@@ -83,37 +855,3724 @@ msgstr "刚刚"
 msgid "age.weeks"
 msgstr "{weeks} 周"
 
+#: src/state/reducer.ts
+msgid "agent error"
+msgstr "智能体错误"
+
+#: src/components/SettingsSurface.tsx
+msgid "Agents"
+msgstr "智能体"
+
+#: src/components/ProjectsSurface.tsx
+msgid "ahead of upstream"
+msgstr "领先于上游"
+
 #: src/components/NavRail.tsx
+msgid "all {count}…"
+msgstr "全部 {count} 个…"
+
+#: src/components/DashboardSurface.tsx
+msgid "All clear — nothing waiting, nothing queued to start."
+msgstr "没有待办 — 无等待，也无排队待启动的工作。"
+
+#: src/components/DashboardSurface.tsx
+msgid "All clear across projects — nothing waiting, nothing queued to start."
+msgstr "所有项目都没有待办 — 无等待，也无排队待启动的工作。"
+
+#: src/components/DashboardSurface.tsx
+msgid "All clear across projects. Next up: <0>{title}</0> <1>({project})</1>"
+msgstr "所有项目都没有待办。下一个：<0>{title}</0> <1>（{project}）</1>"
+
+#: src/components/DashboardSurface.tsx
+msgid "All clear. Next up: <0>{title}</0> <1>({project})</1>"
+msgstr "没有待办。下一个：<0>{title}</0> <1>（{project}）</1>"
+
+#: src/components/SpaceSync.tsx
+msgid "All issues resolved."
+msgstr "所有问题已解决。"
+
+#. choose this device's version for every conflict
+#: src/components/SpaceSync.tsx
+msgid "All mine"
+msgstr "全用本地"
+
+#: src/components/DashboardSurface.tsx
+msgid "All projects"
+msgstr "所有项目"
+
+#. choose the remote's version for every conflict
+#: src/components/SpaceSync.tsx
+msgid "All remote"
+msgstr "全用远程"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "also {position}"
+msgstr "兼 {position}"
+
+#: src/components/BindingEditor.tsx
+msgid "Also answers {positions}"
+msgstr "同时担任 {positions}"
+
+#: src/components/AgentSettings.tsx
+msgid "Also sets {positions}"
+msgstr "同时设定 {positions}"
+
+#. a transition with no event: it is taken unconditionally
+#: src/components/MachineCard.tsx
+msgid "always"
+msgstr "无条件"
+
+#: src/lib/failure-catalogue.ts
+msgid "An agent failed"
+msgstr "有智能体失败"
+
+#: src/components/ParkedRun.tsx
+msgid "Answer below, or drop the run"
+msgstr "在下方回答，或放弃该运行"
+
+#: src/components/Composer.tsx
+msgid "Answer the question…"
+msgstr "回答问题…"
+
+#. follows a role name, before the player that answers it
+#: src/components/DraftConversation.tsx
+msgid "answered by"
+msgstr "的答复者是"
+
+#: src/components/DraftConversation.tsx
+msgid "Answering agent"
+msgstr "答复智能体"
+
+#: src/components/SettingsSurface.tsx
+msgid "Answers {positions}"
+msgstr "担任 {positions}"
+
+#. keyboard shortcut column: pressing any letter key
+#: src/lib/shortcuts.ts
+msgid "any letter"
+msgstr "任意字母"
+
+#: src/App.tsx
+#: src/state/store.ts
+msgid "app state failed to load: {reason}"
+msgstr "应用状态加载失败：{reason}"
+
+#. confirm: apply the chosen versions
+#. confirm: apply the chosen versions
+#. sync step: applying the chosen versions
+#: src/components/SpaceSync.tsx
+#: src/lib/space.ts
+msgid "Apply"
+msgstr "应用"
+
+#. sync step running: applying the chosen versions
+#. sync step running: applying the chosen versions
+#: src/components/SpaceSync.tsx
+#: src/lib/space.ts
+msgid "Applying…"
+msgstr "应用中…"
+
+#. graph legend: an arrow points from the citing package to the cited one
+#: src/components/SpecGraph.tsx
+msgid "arrow — cites"
+msgstr "箭头 — 引用"
+
+#: src/components/CompileBand.tsx
+msgid "asked by the agent"
+msgstr "由智能体发起"
+
+#: src/components/CompileBand.tsx
+msgid "asked by you"
+msgstr "由你发起"
+
+#: src/state/store.ts
+msgid "Asked permission to use {tool} — {reason}; Spex answers no permission request, so the agent's own default decided"
+msgstr "请求使用 {tool} 的权限 — {reason}；Spex 不回应任何权限请求，因此由智能体自身的默认设置决定"
+
+#: src/state/store.ts
+msgid "Asked permission to use {tool}; Spex answers no permission request, so the agent's own default decided"
+msgstr "请求使用 {tool} 的权限；Spex 不回应任何权限请求，因此由智能体自身的默认设置决定"
+
+#: src/components/DraftConversation.tsx
+msgid "Asked to compile"
+msgstr "已请求编译"
+
+#. where a running machine stands
+#. where a running machine stands
+#: src/components/MachineCard.tsx
+msgid "at {state}"
+msgstr "位于 {state}"
+
+#: src/components/MachineCard.tsx
+msgid "at {state} — calling /{playbookId}"
+msgstr "位于 {state} — 正在调用 /{playbookId}"
+
+#: src/components/MachineCard.tsx
+msgid "at {state} → calling /{playbookId}"
+msgstr "位于 {state} → 正在调用 /{playbookId}"
+
+#: src/components/AgentEditor.tsx
+msgid "auto (protected)"
+msgstr "自动（受保护）"
+
+#: src/components/AgentEditor.tsx
+msgid "auto: the agent works on its own inside the repo, with the adapter's own protections on"
+msgstr "自动：智能体在仓库内自主工作，并启用适配器自带的保护"
+
+#: src/components/LibrarySurface.tsx
+msgid "Available built-ins"
+msgstr "可用内置剧本"
+
+#: src/components/SpecView.tsx
+msgid "back to {id}"
+msgstr "返回 {id}"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Back to the playbook list — the draft stays as it is"
+msgstr "返回剧本列表 — 草稿保持原样"
+
+#: src/components/ProjectsSurface.tsx
+msgid "behind upstream"
+msgstr "落后于上游"
+
+#. notification sink: the terminal bell
+#: src/components/SettingsSurface.tsx
+msgid "bell"
+msgstr "响铃"
+
+#: src/components/SpaceExplorer.tsx
+msgid "binary file"
+msgstr "二进制文件"
+
+#: src/components/SpaceExplorer.tsx
+msgid "binary file · {size}"
+msgstr "二进制文件 · {size}"
+
+#: src/components/BindingEditor.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Bind {role}"
+msgstr "绑定 {role}"
+
+#. mark on an issue that stops a sync
+#: src/components/SpaceSync.tsx
+msgid "blocking"
+msgstr "阻塞"
+
+#: src/components/SettingsSurface.tsx
+msgid "bound to no role yet"
+msgstr "尚未绑定任何角色"
+
+#. {status} is the space's status word
+#: src/components/SpaceSurface.tsx
+msgid "branch {branch} · {status}"
+msgstr "分支 {branch} · {status}"
+
+#. history row tag: a fixed bug
+#: src/components/ProjectGroup.tsx
+msgid "bug"
+msgstr "缺陷"
+
+#. history row, spoken only: a bug this work closed
+#: src/components/ProjectGroup.tsx
+msgid "bug fixed"
+msgstr "已修复缺陷"
+
+#. permission mode: no prompts at all
+#: src/components/AgentEditor.tsx
+msgid "bypass"
+msgstr "绕过"
+
+#: src/components/AgentEditor.tsx
+msgid "bypass: no permission prompts — sandboxed repos only"
+msgstr "绕过：不弹出任何权限提示 — 仅限沙箱仓库"
+
+#. the Captain's avatar: one letter standing for Captain
+#. the Captain's avatar: one letter standing for Captain
+#: src/components/CaptainHome.tsx
+#: src/components/CaptainPane.tsx
+msgid "C"
+msgstr "C"
+
+#. caption on a state box: the workflow this state called
+#: src/lib/machine-labels.ts
+msgid "call /{playbookId}"
+msgstr "调用 /{playbookId}"
+
+#: src/App.tsx
+msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
+msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页端请检查链接中的令牌；桌面端请重启应用。"
+
+#. default cancel button: back out of the act
+#. leave an editor without saving
+#. leave an editor without saving
+#. leave an editor without saving
+#. leave an editor without saving
+#. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
+#. stop the running compile
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+#: src/components/CompileBand.tsx
+#: src/components/DraftSourceTab.tsx
+#: src/components/InlineConfirm.tsx
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+#: src/components/SpecEditor.tsx
+msgid "Cancel"
+msgstr "取消"
+
+#: src/state/store.ts
+msgid "cancel failed: {reason}"
+msgstr "取消失败：{reason}"
+
+#: src/lib/drafts.ts
+msgid "Canceled {age}"
+msgstr "{age}取消"
+
+#. the agent that routes the Boss's message to a playbook
+#. the agent that routes the Boss's message to a playbook
+#. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#: src/components/CaptainHome.tsx
+#: src/components/CaptainPane.tsx
+#: src/components/DraftConversation.tsx
+#: src/components/SettingsSurface.tsx
+#: src/lib/session-agents.ts
+msgid "Captain"
+msgstr "Captain"
+
+#: src/components/CaptainHome.tsx
+msgid "Captain agent"
+msgstr "Captain 智能体"
+
+#: src/components/CaptainPane.tsx
+msgid "Captain is thinking…"
+msgstr "Captain 思考中…"
+
+#. label before the Captain agent's own chip
+#: src/components/CaptainHome.tsx
+msgid "Captain:"
+msgstr "Captain："
+
+#: src/components/SpaceSurface.tsx
+msgid "Change remote"
+msgstr "更改远程仓库"
+
+#. draft state chip, at most 14 characters: the source changed after the last compile
+#: src/lib/drafts.ts
+msgid "Changed"
+msgstr "已更改"
+
+#. an agent's setting departs from the configured one, for this session only
+#: src/components/AgentSettings.tsx
+msgid "changed for this conversation"
+msgstr "本次对话已更改"
+
+#: src/components/SpaceSync.tsx
+msgid "Changed on both sides — choose which version to keep"
+msgstr "两端都有更改 — 请选择保留哪个版本"
+
+#: src/lib/failure-catalogue.ts
+msgid "Changed the repository in a step that changes nothing"
+msgstr "在本不改动任何内容的步骤中改动了仓库"
+
+#: src/lib/failure-catalogue.ts
+msgid "Changes could not be attributed to the step"
+msgstr "更改无法归属到该步骤"
+
+#. provenance chip: captured from a conversation
+#: src/components/DeliveryCard.tsx
+msgid "chat"
+msgstr "对话"
+
+#. sync step: checking the remote
+#: src/lib/space.ts
+msgid "Check"
+msgstr "检查"
+
+#: src/components/CaptainPane.tsx
+msgid "Check agent readiness"
+msgstr "检查智能体就绪状态"
+
+#: src/components/SpaceSync.tsx
+msgid "Check remote"
+msgstr "检查远程仓库"
+
+#: src/lib/space.ts
+msgid "Checking remote…"
+msgstr "检查远程仓库中…"
+
+#. the Check remote control, while the check runs
+#: src/components/CaptainHome.tsx
+#: src/components/SpaceSync.tsx
+msgid "Checking…"
+msgstr "检查中…"
+
+#. mark on a unit changed on both sides
+#: src/components/SpaceSync.tsx
+msgid "choose"
+msgstr "待选择"
+
+#: src/components/AgentEditor.tsx
+msgid "Choose a listed effort or the provider default."
+msgstr "选择列出的推理强度，或使用服务商默认值。"
+
+#: src/components/BindingEditor.tsx
+msgid "Choose a listed effort, inherit, or use the provider default."
+msgstr "选择列出的推理强度、继承，或使用服务商默认值。"
+
+#: src/components/AgentSettings.tsx
+msgid "Choose a listed effort, take the configured value, or use the provider default."
+msgstr "选择列出的推理强度、采用配置值，或使用服务商默认值。"
+
+#: src/components/ProjectPalette.tsx
+msgid "Choose a project"
+msgstr "选择项目"
+
+#. empty choice of the reasoning-effort select
+#: src/components/TuningField.tsx
+msgid "Choose effort…"
+msgstr "选择推理强度…"
+
+#: src/components/SpaceSync.tsx
+msgid "Choose folder…"
+msgstr "选择文件夹…"
+
+#: src/components/SpaceSync.tsx
+msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
+msgstr "为 {count, plural, other {# 处冲突}}选择"
+
+#: src/components/DraftConversation.tsx
+msgid "Choose which agent answers"
+msgstr "选择由哪个智能体答复"
+
+#: src/components/LibrarySurface.tsx
+msgid "Choose which session player answers {role}"
+msgstr "选择由哪个会话 Player 答复 {role}"
+
+#: src/components/SpecView.tsx
+msgid "Citations: {summary}"
+msgstr "引用：{summary}"
+
+#. how many items cite this one
+#. how many items cite this one
+#: src/components/SpecItemRows.tsx
+#: src/lib/spec-view-model.ts
+msgid "cited by {in}"
+msgstr "被引用 {in}"
+
+#: src/components/SpecGraph.tsx
+msgid "cited by packages"
+msgstr "被规约包引用"
+
+#. row label over the items this one cites
+#: src/components/SpecItemRows.tsx
+msgid "cites"
+msgstr "引用"
+
+#. how many items this one cites
+#: src/lib/spec-view-model.ts
+msgid "cites {out}"
+msgstr "引用 {out}"
+
+#: src/components/SpecGraph.tsx
+#: src/lib/spec-view-model.ts
+msgid "cites {out} · cited by {in}"
+msgstr "引用 {out} · 被引用 {in}"
+
+#: src/components/AgentSettings.tsx
+msgid "Clear the fast-mode choice; this adapter does not accept it."
+msgstr "清除快速模式选择；该适配器不接受。"
+
+#: src/components/BindingEditor.tsx
+msgid "Clear the fast-mode override; this adapter does not accept it."
+msgstr "清除快速模式覆盖值；该适配器不接受。"
+
+#: src/components/SpecView.tsx
+msgid "Clear the search"
+msgstr "清除搜索"
+
+#: src/components/SpecView.tsx
+msgid "Clear the search (Escape)"
+msgstr "清除搜索（Esc）"
+
+#: src/components/SpecGraph.tsx
+msgid "click opens · drag moves · scroll zooms"
+msgstr "单击打开 · 拖动移动 · 滚动缩放"
+
+#: src/state/store.ts
+msgid "client not connected"
+msgstr "客户端未连接"
+
+#: src/lib/shortcuts.ts
+msgid "Close the focused session tab"
+msgstr "关闭当前会话标签页"
+
+#: src/lib/shortcuts.ts
+msgid "Close the menu, palette, or editor at hand"
+msgstr "关闭当前的菜单、面板或编辑器"
+
+#: src/components/ProjectGroup.tsx
+msgid "Close this intent as dropped — the session keeps running"
+msgstr "将该意图记为已放弃并关闭 — 会话继续运行"
+
+#: src/components/WorkingLine.tsx
+msgid "Close this intent as dropped — the turn keeps running"
+msgstr "将该意图记为已放弃并关闭 — 本轮继续运行"
+
+#: src/App.tsx
+msgid "Close this tab — the session stays in the sidebar"
+msgstr "关闭此标签页 — 会话仍留在侧栏"
+
+#: src/components/PlayerPane.tsx
+msgid "Collapse {player}"
+msgstr "折叠 {player}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Collapse {project}"
+msgstr "折叠 {project}"
+
+#: src/components/MachineCard.tsx
+msgid "Collapse {run}"
+msgstr "折叠 {run}"
+
+#: src/components/SpecView.tsx
+msgid "Collapse all"
+msgstr "全部折叠"
+
+#: src/components/SpecView.tsx
+msgid "Collapse all items in {name}"
+msgstr "折叠 {name} 中的全部条目"
+
+#: src/lib/shortcuts.ts
+msgid "Collapse or show the sidebar"
+msgstr "折叠或显示侧栏"
+
+#: src/components/NavRail.tsx
+msgid "Collapse the sidebar"
+msgstr "折叠侧栏"
+
+#: src/components/NavRail.tsx
+msgid "Collapse the sidebar ({keys})"
+msgstr "折叠侧栏（{keys}）"
+
+#: src/lib/failure-catalogue.ts
+msgid "Commit or discard them"
+msgstr "提交或丢弃它们"
+
+#: src/lib/failure-catalogue.ts
+msgid "Commit or discard what is left"
+msgstr "提交或丢弃剩余更改"
+
+#: src/lib/failure-catalogue.ts
+msgid "Committed {oid} but left changes uncommitted"
+msgstr "已提交 {oid}，但仍有更改未提交"
+
+#: src/lib/failure-catalogue.ts
+msgid "Committed nothing"
+msgstr "未做任何提交"
+
+#: src/lib/failure-catalogue.ts
+msgid "Committed, but left changes uncommitted"
+msgstr "已提交，但仍有更改未提交"
+
+#. sync step: comparing both sides
+#: src/lib/space.ts
+msgid "Compare"
+msgstr "比对"
+
+#. sync step running: comparing both sides
+#: src/lib/space.ts
+msgid "Comparing…"
+msgstr "比对中…"
+
+#. start a compile of the draft's source
+#: src/components/AuthoringWorkspace.tsx
+msgid "Compile"
+msgstr "编译"
+
+#: src/components/CompileBand.tsx
+msgid "Compile canceled"
+msgstr "编译已取消"
+
+#: src/components/LibrarySurface.tsx
+msgid "Compile failed at {phase}"
+msgstr "编译在 {phase} 阶段失败"
+
+#: src/components/LibrarySurface.tsx
+msgid "Compile failed at an unknown phase"
+msgstr "编译在未知阶段失败"
+
+#: src/components/CompileBand.tsx
+msgid "Compile interrupted when Spex closed"
+msgstr "Spex 关闭时编译被中断"
+
+#. draft state chip, at most 14 characters: the last compile succeeded
+#: src/lib/drafts.ts
+msgid "Compiled"
+msgstr "已编译"
+
+#: src/components/CompileBand.tsx
+#: src/lib/drafts.ts
+msgid "Compiled {age}"
+msgstr "{age}编译"
+
+#: src/lib/drafts.ts
+msgid "Compiled {age}; the source changed since"
+msgstr "{age}编译；此后源已更改"
+
+#: src/components/LibrarySurface.tsx
+msgid "Compiled {id}"
+msgstr "已编译 {id}"
+
+#. why a tab is disabled: nothing to show until a compile succeeds
+#: src/components/AuthoringWorkspace.tsx
+msgid "Compiles first"
+msgstr "需先编译"
+
+#. draft state chip, at most 14 characters: a compile is running
+#. the draft's compile is running
+#. why a control is held: the draft's compile is running
+#. why a control is held: the draft's compile is running
+#: src/components/AuthoringWorkspace.tsx
+#: src/lib/drafts.ts
+msgid "Compiling"
+msgstr "编译中"
+
+#: src/components/LibrarySurface.tsx
+msgid "Compiling {id}"
+msgstr "正在编译 {id}"
+
+#: src/lib/drafts.ts
+msgid "Compiling since {age}"
+msgstr "自 {age}起编译中"
+
+#. a compile is in flight
+#: src/components/AuthoringWorkspace.tsx
+msgid "Compiling…"
+msgstr "编译中…"
+
+#: src/components/AgentActiveTime.tsx
+msgid "Completed active time this session: {span} · parallel calls overlap"
+msgstr "本会话已完成的活跃时间：{span} · 并行调用会重叠"
+
+#: src/App.tsx
+msgid "Config {status} — open Settings"
+msgstr "配置 {status} — 打开设置"
+
+#: src/App.tsx
+msgid "Config {status} →"
+msgstr "配置 {status} →"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "config backups and temporary files"
+msgstr "配置备份与临时文件"
+
+#: src/components/SettingsSurface.tsx
+msgid "Config file invalid"
+msgstr "配置文件无效"
+
+#: src/components/SpaceSurface.tsx
+msgid "Configuration outside the space; not shared"
+msgstr "配置在空间之外，不共享"
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Configure {name}"
+msgstr "配置 {name}"
+
+#: src/components/CaptainHome.tsx
+msgid "Configure the Captain agent"
+msgstr "配置 Captain 智能体"
+
+#: src/components/LibrarySurface.tsx
+msgid "Configured playbooks"
+msgstr "已配置的剧本"
+
+#. default confirm button: go ahead with the act
+#. verdict control: accept the delivered work
+#. verdict control: accept the delivered work
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/InlineConfirm.tsx
+msgid "Confirm"
+msgstr "确认"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Confirm the command, intent, and players"
+msgstr "确认命令、意图与 Player"
+
+#. verdict control, busy: the verdict is in flight
+#. verdict control, busy: the verdict is in flight
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+msgid "Confirming…"
+msgstr "确认中…"
+
+#: src/App.tsx
+msgid "Connected, but {reason}"
+msgstr "已连接，但{reason}"
+
+#. the page is reaching for the core
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Connecting…"
+msgstr "连接中…"
+
+#: src/lib/client.ts
+msgid "connection closed"
+msgstr "连接已关闭"
+
+#: src/App.tsx
+msgid "Connection restored."
+msgstr "连接已恢复。"
+
+#: src/App.tsx
+msgid "Connection to the Spex core lost — reconnecting."
+msgstr "与 Spex 核心的连接已断开 — 正在重连。"
+
+#. the item's ID went to the clipboard
+#: src/components/SpecItemRows.tsx
+msgid "copied"
+msgstr "已复制"
+
+#. the copy control, just after it copied
+#. the copy control, just after it copied
+#. the path went to the clipboard
+#: src/components/SettingsSurface.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Copied"
+msgstr "已复制"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpecView.tsx
+msgid "Copied {what}"
+msgstr "已复制 {what}"
+
+#. the copy control, just after it copied
+#: src/components/SpecView.tsx
+msgid "Copied ✓"
+msgstr "已复制 ✓"
+
+#: src/lib/space.ts
+msgid "copies made while writing"
+msgstr "写入过程中产生的副本"
+
+#: src/components/AgentEditor.tsx
+msgid "Copies the Captain's adapter, model, effort, fast mode, and permissions"
+msgstr "沿用 Captain 的适配器、模型、推理强度、快速模式与权限"
+
+#. copy the command to the clipboard
+#: src/components/SpecView.tsx
+msgid "Copy"
+msgstr "复制"
+
+#: src/components/SpecItemRows.tsx
+msgid "Copy {id}"
+msgstr "复制 {id}"
+
+#: src/components/SpecView.tsx
+msgid "Copy command {command}"
+msgstr "复制命令 {command}"
+
+#. the item's ID could not be copied
+#: src/components/SpecItemRows.tsx
+msgid "copy failed"
+msgstr "复制失败"
+
+#. the command could not be copied
+#: src/components/SpecView.tsx
+msgid "Copy failed"
+msgstr "复制失败"
+
+#: src/components/SpecView.tsx
+msgid "Copy failed for {what}"
+msgstr "复制 {what} 失败"
+
+#: src/components/SpaceSurface.tsx
+msgid "Copy is not available here; the path is shown to select."
+msgstr "此处无法复制，路径已显示，可手动选中。"
+
+#: src/components/SettingsSurface.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Copy path"
+msgstr "复制路径"
+
+#: src/components/SpecView.tsx
+msgid "Could not open {path}"
+msgstr "无法打开 {path}"
+
+#: src/components/SpecView.tsx
+msgid "could not read the file"
+msgstr "无法读取该文件"
+
+#: src/components/ProjectGroup.tsx
+#: src/components/WorkingLine.tsx
+msgid "Couldn't drop “{title}”: {reason}"
+msgstr "无法放弃“{title}”：{reason}"
+
+#: src/lib/failure-catalogue.ts
+msgid "Couldn't judge the result"
+msgstr "无法判定结果"
+
+#: src/components/ProjectsSurface.tsx
+#: src/components/SourcesTabs.tsx
+msgid "Couldn't load GitHub data: {reason}"
+msgstr "无法加载 GitHub 数据：{reason}"
+
+#: src/components/SpaceSync.tsx
+msgid "Couldn't load the diff: {reason}"
+msgstr "无法加载差异：{reason}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Couldn't mark it reviewed: {reason}"
+msgstr "无法标记为已审阅：{reason}"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Couldn't read it: {reason}"
+msgstr "无法读取：{reason}"
+
+#: src/lib/failure-catalogue.ts
+msgid "Couldn't read the repository's state"
+msgstr "无法读取仓库状态"
+
+#: src/components/SpaceExplorer.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Couldn't read the space: {reason}"
+msgstr "无法读取空间：{reason}"
+
+#: src/lib/labels.ts
+msgid "Couldn't reconcile the repository: {detail}"
+msgstr "无法核对仓库改动：{detail}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Couldn't record the verdict: {reason}"
+msgstr "无法记录裁定：{reason}"
+
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Couldn't remove “{title}”: {reason}"
+msgstr "无法移除“{title}”：{reason}"
+
+#: src/components/SpaceSurface.tsx
+msgid "Couldn't show it in the file manager"
+msgstr "无法在文件管理器中显示"
+
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Couldn't undo: {reason}"
+msgstr "无法撤销：{reason}"
+
+#. start a new repository at the typed path
+#: src/components/ProjectPalette.tsx
+msgid "Create"
+msgstr "新建"
+
+#: src/components/SettingsSurface.tsx
+msgid "Created a starter config at <0>{path}</0>"
+msgstr "已在 <0>{path}</0> 创建初始配置"
+
+#. tag on the project row the workspace is on
+#: src/components/ProjectPalette.tsx
+msgid "current"
+msgstr "当前"
+
+#. the hand-typed model id field
+#: src/components/ModelField.tsx
+msgid "Custom model"
+msgstr "自定义模型"
+
+#. model choice: type a model id by hand
+#: src/components/ModelField.tsx
+msgid "Custom model…"
+msgstr "自定义模型…"
+
+#: src/components/NavRail.tsx
+#: src/components/SpecView.tsx
 msgid "Dashboard"
 msgstr "仪表盘"
+
+#. session status: the Captain has the floor
+#: src/lib/labels.ts
+msgid "deciding"
+msgstr "决策中"
+
+#. outline branch holding the decision records
+#: src/components/SpecView.tsx
+msgid "decisions"
+msgstr "决策记录"
+
+#: src/components/SpecView.tsx
+msgid "Decisions, {count} records"
+msgstr "决策记录，共 {count} 条"
+
+#. confirm: delete this session for good
+#. confirm: remove the draft for good
+#. remove the draft for good
+#: src/components/LibrarySurface.tsx
+#: src/components/NavRail.tsx
+msgid "Delete"
+msgstr "删除"
+
+#: src/components/LibrarySurface.tsx
+msgid "Delete draft {id}"
+msgstr "删除草稿 {id}"
+
+#: src/components/NavRail.tsx
+msgid "delete failed"
+msgstr "删除失败"
+
+#: src/components/NavRail.tsx
+msgid "Delete session {title}"
+msgstr "删除会话 {title}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Delete this draft and its source?"
+msgstr "删除该草稿及其源文件？"
+
+#: src/components/NavRail.tsx
+msgid "Delete this session and its transcript"
+msgstr "删除此会话及其对话记录"
+
+#: src/components/NavRail.tsx
+msgid "Delete this session and its transcript?"
+msgstr "删除此会话及其对话记录？"
+
+#: src/components/NavRail.tsx
+msgid "Delete this session and its transcript? Its unsent draft goes with it."
+msgstr "删除此会话及其对话记录？未发送的草稿也随之删除。"
+
+#: src/components/NavRail.tsx
+msgid "Delete this session? It was run from the terminal; its history goes too."
+msgstr "删除此会话？它由终端运行，其历史也会一并删除。"
+
+#: src/components/NavRail.tsx
+msgid "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
+msgstr "删除此会话？它由终端运行，其历史也会一并删除。未发送的草稿也随之删除。"
+
+#: src/components/LibrarySurface.tsx
+msgid "Delete waits: the draft's compile is running"
+msgstr "删除需等待：草稿正在编译"
+
+#: src/components/LibrarySurface.tsx
+msgid "Delete waits: the draft's turn is running"
+msgstr "删除需等待：草稿的轮次正在运行"
+
+#. a sync unit's change: it is gone on this side
+#: src/components/SpaceSync.tsx
+msgid "deleted"
+msgstr "已删除"
+
+#. session row, busy: the delete is in flight
+#: src/components/NavRail.tsx
+msgid "deleting…"
+msgstr "删除中…"
+
+#. the delete request is in flight
+#: src/components/LibrarySurface.tsx
+msgid "Deleting…"
+msgstr "删除中…"
+
+#. how a tool call ended: permission was refused
+#: src/components/PlayerPane.tsx
+msgid "denied"
+msgstr "已拒绝"
+
+#: src/components/DraftConversation.tsx
+msgid "Describe a workflow"
+msgstr "描述一个工作流"
+
+#: src/components/DraftConversation.tsx
+msgid "Describe the playbook…"
+msgstr "描述这个剧本…"
+
+#. notification sink: an OS notification
+#: src/components/SettingsSurface.tsx
+msgid "desktop"
+msgstr "桌面通知"
+
+#. act: throw the interrupted attempt away
+#. confirm: drop the unsaved draft
+#: src/components/SessionRecovery.tsx
+#: src/components/SpecEditor.tsx
+msgid "Discard"
+msgstr "丢弃"
+
+#: src/components/SessionRecovery.tsx
+msgid "Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed."
+msgstr "丢弃这次尝试？仅在未产生任何影响时才会恢复到上一个检查点。新建的会话可能会被移除。"
+
+#: src/components/SpecEditor.tsx
+msgid "Discard unsaved changes?"
+msgstr "丢弃未保存的更改？"
+
+#: src/components/SessionRecovery.tsx
+msgid "Discarding…"
+msgstr "丢弃中…"
+
+#. act: close the error strip
+#. close the error strip above the composer
+#. put this outcome card away
+#. put this outcome card away
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+#: src/components/SpaceSync.tsx
+msgid "Dismiss"
+msgstr "忽略"
+
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Dismiss error"
+msgstr "忽略错误"
+
+#. shortcut table column: what the keys do
+#: src/components/SettingsSurface.tsx
+msgid "Does"
+msgstr "功能"
+
+#. decline adding this folder as a project
+#: src/components/SpaceSync.tsx
+msgid "Don't add"
+msgstr "不添加"
+
+#. compile phase: finished well
+#. history row: work carried through and confirmed
+#. history row: work carried through and confirmed
+#. how a run ended: it finished its work
+#: src/components/CompileBand.tsx
+#: src/components/MachineCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "done"
+msgstr "完成"
+
+#. draft state chip, at most 14 characters: a source stands, never compiled
+#: src/lib/drafts.ts
+msgid "Draft"
+msgstr "草稿"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Draft artifacts"
+msgstr "草稿产物"
+
+#. section heading: playbooks being written
+#: src/components/LibrarySurface.tsx
+msgid "Drafts"
+msgstr "草稿"
+
+#: src/components/ProjectGroup.tsx
+msgid "Drag, Alt+↑/↓, or the row menu reorders"
+msgstr "拖拽、Alt+↑/↓ 或行菜单可重新排序"
+
+#. act: end the parked run
+#. act: end the parked run
+#. confirm: close the intent as dropped
+#. confirm: close the intent as dropped
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/ParkedRun.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/WorkingLine.tsx
+msgid "Drop"
+msgstr "放弃"
+
+#: src/components/ProjectGroup.tsx
+msgid "Drop “{title}”? Work is underway."
+msgstr "放弃“{title}”？工作正在进行中。"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/WorkingLine.tsx
+msgid "Drop {title}"
+msgstr "放弃 {title}"
+
+#. confirm: end the parked run without resuming it
+#: src/components/ParkedRun.tsx
+msgid "Drop it?"
+msgstr "确定放弃？"
+
+#: src/components/WorkingLine.tsx
+msgid "Drop this intent? Work is underway."
+msgstr "放弃此意图？工作正在进行中。"
+
+#: src/components/DashboardSurface.tsx
+msgid "Drop this work?"
+msgstr "放弃这项工作？"
+
+#. history row tag: work let go after it ran
+#. history row tag: work let go after it ran
+#: src/components/ProjectGroup.tsx
+msgid "dropped"
+msgstr "已放弃"
+
+#: src/components/ProjectGroup.tsx
+msgid "Dropped “{title}” — the session keeps running."
+msgstr "已放弃“{title}” — 会话仍在运行。"
+
+#: src/components/WorkingLine.tsx
+msgid "Dropped “{title}” — the turn keeps running."
+msgstr "已放弃“{title}” — 本轮仍在运行。"
+
+#: src/components/ParkedRun.tsx
+msgid "Dropping the workflow"
+msgstr "正在放弃该工作流"
+
+#. verdict control, busy: the verdict is in flight
+#. verdict control, busy: the verdict is in flight
+#. verdict control, busy: the verdict is in flight
+#. verdict control, busy: the verdict is in flight
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/ParkedRun.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/WorkingLine.tsx
+msgid "Dropping…"
+msgstr "放弃中…"
+
+#: src/components/AgentEditor.tsx
+msgid "e.g. .git, docs/generated"
+msgstr "例如 .git、docs/generated"
+
+#: src/components/LibrarySurface.tsx
+msgid "e.g. triage"
+msgstr "例如 triage"
+
+#. editor mode: the plain text field
+#. open the whole-file editor on the source
+#. open this file in the editor
+#. open this file in the editor
+#. open this file in the editor
+#: src/components/DraftSourceTab.tsx
+#: src/components/SpecEditor.tsx
+#: src/components/SpecItemRows.tsx
+#: src/components/SpecView.tsx
+msgid "Edit"
+msgstr "编辑"
+
+#: src/components/SettingsSurface.tsx
+msgid "Edit {id}"
+msgstr "编辑 {id}"
+
+#: src/components/SpecItemRows.tsx
+msgid "Edit {id} in its file"
+msgstr "在其文件中编辑 {id}"
+
+#: src/components/SpecView.tsx
+msgid "Edit {name}.md"
+msgstr "编辑 {name}.md"
+
+#: src/components/SpecEditor.tsx
+msgid "Edit {path}"
+msgstr "编辑 {path}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Edit intent text"
+msgstr "编辑意图文本"
+
+#. row menu item: rewrite this intent's words
+#: src/components/ProjectGroup.tsx
+msgid "Edit text"
+msgstr "编辑文本"
+
+#: src/components/SettingsSurface.tsx
+msgid "Edit the Captain"
+msgstr "编辑 Captain"
+
+#: src/components/SettingsSurface.tsx
+msgid "Edit the Captain's agent"
+msgstr "编辑 Captain 的智能体"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Edit the whole file"
+msgstr "编辑整个文件"
+
+#: src/components/SettingsSurface.tsx
+msgid "Edit this player's agent"
+msgstr "编辑此 Player 的智能体"
+
+#: src/components/SpecView.tsx
+msgid "Editing {path}"
+msgstr "正在编辑 {path}"
+
+#: src/components/SpecEditor.tsx
+msgid "Editor mode"
+msgstr "编辑器模式"
+
+#. the reasoning-effort field of a tuning editor
+#: src/components/TuningField.tsx
+msgid "effort"
+msgstr "推理强度"
+
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Effort options apply to the adapter; support for this model is unverified."
+msgstr "推理强度选项适用于适配器；该模型的支持情况未验证。"
+
+#: src/components/SpaceSurface.tsx
+msgid "Empty remote: filled from this device · Existing space: joined, differences asked"
+msgstr "空远程仓库：由本设备填充 · 已有空间：加入并询问差异"
+
+#. add this built-in playbook to the config
+#: src/components/LibrarySurface.tsx
+msgid "Enable"
+msgstr "启用"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enable this playbook — it is written to the shared config"
+msgstr "启用此剧本 — 会写入共享配置"
+
+#. the enable request is in flight
+#: src/components/LibrarySurface.tsx
+msgid "Enabling…"
+msgstr "启用中…"
+
+#: src/components/ParkedRun.tsx
+msgid "End this run. It will not be resumed."
+msgstr "结束此次运行。不会再恢复。"
+
+#: src/components/DraftConversation.tsx
+msgid "Ends the turn; the transcript keeps what it got"
+msgstr "结束本轮；对话记录保留已收到的内容"
+
+#: src/components/BindingEditor.tsx
+msgid "Enter a model ID, inherit, or use the provider default."
+msgstr "输入模型 ID、继承，或使用提供方默认。"
+
+#: src/components/AgentSettings.tsx
+msgid "Enter a model ID, take the configured value, or use the provider default."
+msgstr "输入模型 ID、采用已配置的值，或使用提供方默认。"
+
+#: src/components/DraftConversation.tsx
+msgid "Enter sends"
+msgstr "Enter 发送"
+
+#: src/components/Composer.tsx
+msgid "Enter to send · Shift+Enter for a new line"
+msgstr "Enter 发送 · Shift+Enter 换行"
+
+#. stands where a failed call named no reason
+#: src/components/PlayerPane.tsx
+msgid "error"
+msgstr "错误"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Every role needs a player, and the command and intent their words"
+msgstr "每个角色都要有 Player，命令与意图都要填写"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Everything is in sync"
+msgstr "全部已同步"
+
+#. section heading: the demo playbook
+#: src/components/LibrarySurface.tsx
+msgid "Example"
+msgstr "示例"
+
+#: src/components/LibrarySurface.tsx
+msgid "Example: {title}"
+msgstr "示例：{title}"
+
+#: src/components/PlayerPane.tsx
+msgid "Expand {player}"
+msgstr "展开 {player}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Expand {project}"
+msgstr "展开 {project}"
+
+#: src/components/MachineCard.tsx
+msgid "Expand {run}"
+msgstr "展开 {run}"
+
+#: src/components/SpecView.tsx
+msgid "Expand all"
+msgstr "全部展开"
+
+#: src/components/SpecView.tsx
+msgid "Expand all items in {name}"
+msgstr "展开 {name} 中的全部条目"
+
+#. tab: browse the files in the space
+#: src/components/SpaceSurface.tsx
+msgid "Explore"
+msgstr "浏览"
+
+#. item group: External Behavior, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "external"
+msgstr "外部"
+
+#. item group: External Behavior
+#. item group: External Behavior
+#: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
+msgid "External"
+msgstr "外部"
+
+#. a piece of work's state: it failed
+#. a piece of work's state: it failed
+#. a piece of work's state: it failed
+#. a piece of work's state: it failed
+#. compile phase: stopped on an error
+#. how a run ended: it failed
+#. how a tool call ended: it failed
+#. last resort: a failure with no words
+#: src/App.tsx
+#: src/components/CompileBand.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/ForgeItemRow.tsx
+#: src/components/MachineCard.tsx
+#: src/components/NavRail.tsx
+#: src/components/PlayerPane.tsx
+#: src/lib/labels.ts
+msgid "failed"
+msgstr "失败"
+
+#. draft state chip, at most 14 characters: the last compile failed
+#: src/lib/drafts.ts
+msgid "Failed"
+msgstr "失败"
+
+#: src/lib/drafts.ts
+msgid "Failed at {phase} ({id}), {age}"
+msgstr "{age}在 {phase}（{id}）失败"
+
+#: src/lib/drafts.ts
+msgid "Failed at {phase}, {age}"
+msgstr "{age}在 {phase} 失败"
+
+#: src/components/FailureCard.tsx
+msgid "Failed at {step}"
+msgstr "在 {step} 失败"
+
+#: src/lib/drafts.ts
+msgid "Failed at an unknown phase, {age}"
+msgstr "{age}在未知阶段失败"
+
+#: src/components/ParkedRun.tsx
+msgid "Failed workflow"
+msgstr "失败的工作流"
+
+#. an agent runs in its adapter's fast mode
+#. mark on an agent: it runs in the runtime's fast mode
+#. mark on an agent: it runs in the runtime's fast mode
+#: src/components/AgentChip.tsx
+#: src/components/PlayerPane.tsx
+msgid "fast mode"
+msgstr "快速模式"
+
+#. switch: run this agent in its adapter's fast mode
+#: src/components/BindingEditor.tsx
+msgid "Fast mode"
+msgstr "快速模式"
+
+#: src/components/AgentEditor.tsx
+msgid "Fast mode <0/>"
+msgstr "快速模式 <0/>"
+
+#: src/components/AgentEditor.tsx
+msgid "Fast mode <0/> (unsupported)"
+msgstr "快速模式 <0/>（不支持）"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Files in the space"
+msgstr "空间中的文件"
+
+#: src/components/DashboardSurface.tsx
+msgid "Filter by project"
+msgstr "按项目筛选"
+
+#: src/components/DashboardSurface.tsx
+msgid "Filter by project (visibility only)"
+msgstr "按项目筛选（仅影响显示）"
+
+#: src/components/SpecView.tsx
+msgid "Filter items — ID or text…"
+msgstr "筛选条目 — ID 或文本…"
+
+#: src/components/SpecView.tsx
+msgid "Filter items by ID or text"
+msgstr "按 ID 或文本筛选条目"
+
+#: src/components/ProjectPalette.tsx
+msgid "Filter projects"
+msgstr "筛选项目"
+
+#: src/components/SpaceSurface.tsx
+msgid "Finish or abort the merge in your terminal"
+msgstr "请在终端完成或中止合并"
+
+#. a run that ended with no outcome reported
+#: src/state/reducer.ts
+msgid "finished"
+msgstr "已结束"
+
+#. delivery card heading: the intent's work is delivered
+#: src/components/DeliveryCard.tsx
+msgid "Finished"
+msgstr "已完成"
+
+#. attention row: delivered, a verdict is owed
+#. captured artifact's state: delivered, a verdict is owed
+#: src/components/DashboardSurface.tsx
+#: src/components/ForgeItemRow.tsx
+msgid "finished — confirm?"
+msgstr "已完成 — 确认？"
+
+#. control: show the whole graph at once
+#: src/components/SpecGraph.tsx
+msgid "Fit"
+msgstr "全览"
+
+#: src/lib/labels.ts
+msgid "Fix the adapter in Settings"
+msgstr "在设置中修复适配器"
+
+#: src/components/SettingsSurface.tsx
+msgid "Fix the file in your editor; Spex reloads it live."
+msgstr "请在编辑器中修复该文件；Spex 会实时重新加载。"
+
+#: src/lib/labels.ts
+msgid "Fix the player in Settings"
+msgstr "在设置中修复 Player"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "forge cache"
+msgstr "GitHub 缓存"
+
+#. label before the path a playbook was loaded from
+#: src/components/LibrarySurface.tsx
+msgid "from"
+msgstr "来自"
+
+#: src/components/LibrarySurface.tsx
+msgid "from {credit}"
+msgstr "来自 {credit}"
+
+#. on a settled run's card: the state that called it
+#: src/components/MachineCard.tsx
+msgid "from {state}"
+msgstr "来自 {state}"
+
+#. tuning choice: take the value the Settings surface configured
+#: src/components/AgentSettings.tsx
+msgid "from Settings"
+msgstr "取自设置"
+
+#: src/components/AgentSettings.tsx
+msgid "from Settings (off)"
+msgstr "取自设置（关闭）"
+
+#: src/components/AgentSettings.tsx
+msgid "from Settings (on)"
+msgstr "取自设置（开启）"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "from the compile before this change"
+msgstr "来自本次更改前的编译"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "from the last good compile"
+msgstr "来自上次成功的编译"
+
+#: src/components/SpaceSync.tsx
+msgid "From the remote ({count})"
+msgstr "来自远程仓库（{count}）"
+
+#. pipeline stage: the compiled spec items
+#. pipeline stage: the compiler's normative spec items (a proper name)
+#. pipeline stage: the compiler's normative spec items (a proper name)
+#. pipeline stage: the compiler's normative spec items (a proper name)
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "Gears"
+msgstr "Gears"
+
+#. entry mark: the repository's own files
+#. entry mark: the repository's own files
+#: src/components/SpaceExplorer.tsx
+#: src/lib/space.ts
+msgid "Git data"
+msgstr "Git 数据"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Git data — the repository's own files; not shown."
+msgstr "Git 数据 — 仓库自身的文件；不予显示。"
+
+#: src/components/SpaceSurface.tsx
+msgid "Git has no committer identity on this machine, so the app commits as Spex at the machine's host name"
+msgstr "本机未配置 Git 提交者身份，应用将以 Spex 加本机主机名提交"
+
+#: src/components/SpaceSurface.tsx
+msgid "Git is not installed"
+msgstr "未安装 Git"
+
+#: src/components/SpaceSurface.tsx
+msgid "git@host:path or https://…"
+msgstr "git@host:path 或 https://…"
+
+#: src/lib/space.ts
+msgid "GitHub lists the app fetches again"
+msgstr "应用会重新获取的 GitHub 列表"
+
+#: src/components/SourcesTabs.tsx
+msgid "GitHub refresh failed — keeping the last data"
+msgstr "GitHub 刷新失败 — 保留上次的数据"
+
+#: src/components/ProjectsSurface.tsx
+msgid "GitHub: {state}"
+msgstr "GitHub：{state}"
+
+#: src/components/SettingsSurface.tsx
+msgid "Give the player an id first."
+msgstr "请先为该 Player 设置 id。"
+
+#: src/lib/shortcuts.ts
+msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
+msgstr "前往仪表盘、项目、剧本、空间、设置"
+
+#. toggle: show the citation graph
+#: src/components/SpecView.tsx
+msgid "Graph"
+msgstr "图谱"
+
+#: src/components/CaptainHome.tsx
+msgid "Heads up — some agents aren't ready yet:"
+msgstr "注意 — 部分智能体尚未就绪："
+
+#: src/components/CaptainHome.tsx
+msgid "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
+msgstr "你好！我是你的 Captain。先添加一个项目 — 任意本地 git 仓库 — 再告诉我要做什么；我会把它交给某个剧本，也就是由 AI Player 执行的脚本化工作流。"
+
+#: src/components/CaptainHome.tsx
+msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
+msgstr "你好！我是你的 Captain。在侧栏选择一个项目，再告诉我要做什么，我会把它交给某个剧本，也就是由 AI Player 执行的脚本化工作流。"
+
+#: src/components/CaptainHome.tsx
+msgid "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
+msgstr "你好！这里是 {project} — 告诉我要做什么，我会把它交给某个剧本，也就是由 AI Player 执行的脚本化工作流。"
+
+#: src/components/SpecView.tsx
+msgid "Hide {group} items"
+msgstr "隐藏{group}条目"
+
+#: src/components/SpaceSync.tsx
+msgid "Hide diff"
+msgstr "隐藏差异"
+
+#: src/components/CaptainHome.tsx
+msgid "Hide quick start (playbooks stay under / in the composer)"
+msgstr "隐藏快速开始（剧本仍在输入框的 / 菜单中）"
+
+#: src/components/NavRail.tsx
+msgid "Hide sessions in {project}"
+msgstr "隐藏 {project} 中的会话"
+
+#: src/components/LibrarySurface.tsx
+msgid "Hide source"
+msgstr "隐藏源文本"
+
+#: src/components/CaptainHome.tsx
+msgid "Hide the quick-start card"
+msgstr "隐藏快速开始卡片"
+
+#. tab note: a conversation this core cannot continue
+#. tab note: a conversation this core cannot continue
+#: src/App.tsx
+msgid "history"
+msgstr "历史"
+
+#. project band heading: work already finished
+#. project band heading: work already finished
+#: src/components/ProjectGroup.tsx
+msgid "History"
+msgstr "历史"
+
+#: src/components/RunView.tsx
+msgid "History — this session can't be continued"
+msgstr "历史 — 此会话无法继续"
+
+#: src/components/NavRail.tsx
+msgid "history, can't be continued"
+msgstr "历史，无法继续"
+
+#. session row: no turn in flight
+#. session status: nothing is running
+#. the aliveness mark's own word: at rest
+#. the space's status: nothing is running
+#: src/components/NavRail.tsx
+#: src/components/RunningMark.tsx
+#: src/components/SpaceSurface.tsx
+#: src/lib/labels.ts
+msgid "idle"
+msgstr "空闲"
+
+#: src/components/ProjectGroup.tsx
+msgid "Idle — no conversation yet."
+msgstr "空闲 — 还没有对话。"
+
+#: src/components/PlayerPane.tsx
+msgid "Idle until the playbook calls {player}"
+msgstr "在剧本调用 {player} 前保持空闲"
+
+#: src/components/NavRail.tsx
+msgid "idle, held a failure"
+msgstr "空闲，有失败未处理"
+
+#. stands in for a blocked image that carried no alt text
+#: src/components/Markdown.tsx
+msgid "image"
+msgstr "图片"
+
+#: src/App.tsx
+#: src/components/NavRail.tsx
+msgid "in use elsewhere"
+msgstr "他处占用"
+
+#. tuning choice: take whatever the player lane resolves
+#: src/components/TuningField.tsx
+msgid "inherit the player"
+msgstr "继承 Player"
+
+#: src/components/BindingEditor.tsx
+msgid "Inherit the player (off)"
+msgstr "继承 Player（关闭）"
+
+#: src/components/BindingEditor.tsx
+msgid "Inherit the player (on)"
+msgstr "继承 Player（开启）"
+
+#: src/lib/labels.ts
+msgid "Install {command}"
+msgstr "安装 {command}"
+
+#: src/lib/labels.ts
+msgid "Install the missing command"
+msgstr "安装缺失的命令"
+
+#. chip on a queued message: it carries a queued intent
+#: src/components/Composer.tsx
+msgid "intent"
+msgstr "意图"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Intent (one line; the Captain routes free text with it)"
+msgstr "意图（一行；Captain 据此路由自由文本）"
 
 #: src/components/SettingsSurface.tsx
 msgid "Interface language"
 msgstr "界面语言"
 
+#. item group: Internal Behavior, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "internal"
+msgstr "内部"
+
+#. item group: Internal Behavior
+#. item group: Internal Behavior
+#: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
+msgid "Internal"
+msgstr "内部"
+
+#. draft state chip, at most 14 characters: Spex closed while the draft compiled
+#: src/lib/drafts.ts
+msgid "Interrupted"
+msgstr "已中断"
+
+#: src/lib/drafts.ts
+msgid "Interrupted {age} — Spex closed while it compiled"
+msgstr "{age}中断 — 编译期间 Spex 被关闭"
+
+#: src/components/SessionRecovery.tsx
+msgid "Interrupted turn"
+msgstr "中断的轮次"
+
+#: src/components/ProjectGroup.tsx
+msgid "Issue #{ref} ↗"
+msgstr "Issue #{ref} ↗"
+
+#. the control's name when none are unanswered
+#: src/components/SpaceSurface.tsx
+msgid "issues"
+msgstr "问题"
+
+#. Sources tab: the repo's open issues
+#: src/components/SourcesTabs.tsx
+msgid "Issues"
+msgstr "Issue"
+
+#: src/components/SpaceSync.tsx
+msgid "Issues ({count})"
+msgstr "问题（{count}）"
+
+#. why a control is offered but blocked
+#: src/lib/failure-catalogue.ts
+msgid "it can't run now"
+msgstr "当前无法执行"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "It gives no player for {roles}."
+msgstr "它没有为 {roles} 指定 Player。"
+
+#. why a control is offered but inert
+#: src/lib/failure-catalogue.ts
+msgid "it would do nothing"
+msgstr "不会有任何作用"
+
+#: src/components/SpecView.tsx
+msgid "Its <0>specs/</0> tree still holds directories from an earlier layout — the <1>user/</1>, <2>dev/</2>, <3>test/</3>, or <4>items/</4> groups, or an <5>interactions/</5> or <6>compositions/</6> collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:"
+msgstr "它的 <0>specs/</0> 目录树仍保留着早期布局的目录 — <1>user/</1>、<2>dev/</2>、<3>test/</3> 或 <4>items/</4> 分组，或 <5>interactions/</5>、<6>compositions/</6> 集合。运行以下命令可刷新规约法则并打印迁移提示词；由 AI 智能体执行迁移，目录树迁移完成后此视图即可打开："
+
+#: src/App.tsx
+msgid "its endpoint"
+msgstr "该端点"
+
+#. confirm: join both spaces into one
+#. confirm: join both spaces into one
+#. confirm: join both spaces into one
+#. confirm: join both spaces into one
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Join"
+msgstr "加入"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Join both spaces into one? Anything in both will ask you to choose."
+msgstr "将两个空间合并为一个？双方都有的内容会让你选择。"
+
+#. the Join control, while the join runs
+#: src/components/SpaceSurface.tsx
+msgid "Joining…"
+msgstr "加入中…"
+
+#: src/components/SpecView.tsx
+msgid "Jumped to {id}"
+msgstr "已跳转到 {id}"
+
+#: src/components/SpecView.tsx
+msgid "Jumped to {id} — shown despite filter"
+msgstr "已跳转到 {id} — 已忽略筛选显示"
+
+#: src/lib/spec-view-model.ts
 #: src/lib/time.ts
 msgid "just now"
 msgstr "刚刚"
+
+#. cancel a destructive confirm: leave things as they are
+#. cancel a destructive confirm: leave things as they are
+#. cancel a destructive confirm: leave things as they are
+#. cancel a destructive confirm: leave things as they are
+#. cancel a destructive confirm: leave things as they are
+#. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
+#. cancel: keep the unsaved draft
+#. confirm: keep the intent open
+#. confirm: leave the run as it is
+#: src/components/DashboardSurface.tsx
+#: src/components/LibrarySurface.tsx
+#: src/components/NavRail.tsx
+#: src/components/ParkedRun.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/ProjectsSurface.tsx
+#: src/components/SettingsSurface.tsx
+#: src/components/SpecEditor.tsx
+#: src/components/WorkingLine.tsx
+msgid "Keep"
+msgstr "保留"
+
+#. conflict choice: keep this device's version
+#: src/components/SpaceSync.tsx
+msgid "Keep mine"
+msgstr "保留本机"
+
+#: src/components/SpaceSurface.tsx
+msgid "Keep this space in Git"
+msgstr "用 Git 保存此空间"
+
+#: src/components/SettingsSurface.tsx
+msgid "Keyboard shortcuts"
+msgstr "键盘快捷键"
+
+#. shortcut table column: the keys to press
+#: src/components/SettingsSurface.tsx
+msgid "Keys"
+msgstr "按键"
 
 #: src/components/SettingsSurface.tsx
 msgid "Language"
 msgstr "语言"
 
+#: src/components/RunView.tsx
+msgid "Last active {when}"
+msgstr "最后活动：{when}"
+
+#: src/components/CompileBand.tsx
+msgid "last output {age}"
+msgstr "最后输出：{age}"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "leases and locks"
+msgstr "租约与锁"
+
+#: src/components/SettingsSurface.tsx
+msgid "loading config…"
+msgstr "加载配置中…"
+
+#: src/components/SpaceSync.tsx
+msgid "Loading diff…"
+msgstr "加载差异中…"
+
+#: src/components/ProjectsSurface.tsx
+#: src/components/SourcesTabs.tsx
+msgid "Loading GitHub state…"
+msgstr "加载 GitHub 状态中…"
+
+#: src/components/AgentSettings.tsx
+#: src/components/ModelDiscoveryStatus.tsx
+msgid "Loading model options…"
+msgstr "加载模型选项中…"
+
+#: src/components/DraftConversation.tsx
+msgid "Loading the conversation…"
+msgstr "加载对话中…"
+
+#: src/App.tsx
+msgid "Loading transcript…"
+msgstr "加载对话记录中…"
+
+#. a request for this pane's content is in flight
+#. a request for this pane's content is in flight
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/LibrarySurface.tsx
+msgid "loading…"
+msgstr "加载中…"
+
+#. a read is still in flight
+#. a read is still in flight
+#. a read is still in flight
+#. a read is still in flight
+#: src/components/DashboardSurface.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/SpaceExplorer.tsx
+msgid "Loading…"
+msgstr "加载中…"
+
+#: src/components/SpaceSync.tsx
+msgid "Local changes ({count})"
+msgstr "本地更改（{count}）"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "local project paths"
+msgstr "本地项目路径"
+
+#: src/lib/drafts.ts
+msgid "Lowercase letters, digits, - or _, starting with a letter"
+msgstr "小写字母、数字、- 或 _，且以字母开头"
+
+#: src/lib/drafts.ts
+msgid "Lowercase; it names the file and the /command — the command can change at registration"
+msgstr "小写；它决定文件名和斜杠命令 — 该命令可在注册时更改"
+
+#. pipeline stage: the compiled state machine
+#. tab: the compiled state machine
+#: src/components/AuthoringWorkspace.tsx
+msgid "Machine"
+msgstr "状态机"
+
+#: src/lib/failure-catalogue.ts
+msgid "Made more than one commit"
+msgstr "产生了多次提交"
+
+#. a session's part: its manifest file
+#: src/lib/space.ts
+msgid "manifest"
+msgstr "清单"
+
+#: src/components/DashboardSurface.tsx
+msgid "Mark {title} reviewed"
+msgstr "将 {title} 标记为已审阅"
+
+#. attention row control, busy: the write is in flight
+#: src/components/DashboardSurface.tsx
+msgid "Marking…"
+msgstr "标记中…"
+
+#: src/lib/space.ts
+msgid "May hold provider tokens — not shown"
+msgstr "可能包含提供方令牌 — 不予显示"
+
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+msgid "Message the Captain…"
+msgstr "给 Captain 发消息…"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "migration receipts and inputs"
+msgstr "迁移回执与输入文件"
+
+#: src/components/LibrarySurface.tsx
+msgid "missing stages: {stages}"
+msgstr "缺少阶段：{stages}"
+
+#. the model field of a tuning editor
+#: src/components/TuningField.tsx
+msgid "model"
+msgstr "模型"
+
+#. the model field of an agent editor
+#: src/components/ModelField.tsx
+msgid "Model"
+msgstr "模型"
+
+#: src/components/AgentEditor.tsx
+msgid "Model (optional)"
+msgstr "模型（可选）"
+
+#: src/components/ModelField.tsx
+msgid "Model ID"
+msgstr "模型 ID"
+
+#: src/components/AgentSettings.tsx
+#: src/components/ModelDiscoveryStatus.tsx
+msgid "Model list unavailable: {reason}"
+msgstr "模型列表不可用：{reason}"
+
+#: src/components/ModelDiscoveryStatus.tsx
+msgid "Models reported by the installed runtime."
+msgstr "由已安装的运行时报告的模型。"
+
+#. row menu item: one step later in the queue
+#: src/components/ProjectGroup.tsx
+msgid "Move down"
+msgstr "下移"
+
+#: src/lib/shortcuts.ts
+msgid "Move the focused Up next row"
+msgstr "移动“接下来”中选中的行"
+
+#. row menu item: one step earlier in the queue
+#: src/components/ProjectGroup.tsx
+msgid "Move up"
+msgstr "上移"
+
+#: src/components/SpaceSync.tsx
+msgid "Name the folder on this device."
+msgstr "为本设备上的文件夹命名。"
+
+#. session status: the run failed and waits for the Boss
+#: src/lib/labels.ts
+msgid "needs attention"
+msgstr "需要关注"
+
+#: src/components/DashboardSurface.tsx
+msgid "Needs attention"
+msgstr "需要关注"
+
+#: src/App.tsx
+msgid "needs recovery"
+msgstr "需要恢复"
+
+#. the space's status, read in a title
+#: src/components/SpaceSurface.tsx
+msgid "needs your choice"
+msgstr "需要你选择"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Needs your choice"
+msgstr "需要你选择"
+
+#. attention row: the run parked on a question
+#. captured artifact's state: parked on a question
+#. tab name: the run parked on a question
+#: src/App.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/ForgeItemRow.tsx
+msgid "needs your reply"
+msgstr "需要你回复"
+
+#. tab name: delivered, a verdict is owed
+#: src/App.tsx
+msgid "needs your verdict"
+msgstr "需要你裁定"
+
+#: src/components/SpaceSurface.tsx
+msgid "Never synced"
+msgstr "从未同步"
+
+#. a sync unit's change: it is new on this side
+#: src/components/SpaceSync.tsx
+msgid "new"
+msgstr "新增"
+
+#. start a draft of one's own
+#. start a draft of one's own
+#: src/components/LibrarySurface.tsx
+msgid "New playbook"
+msgstr "新建剧本"
+
+#. slash menu's last entry: start authoring a playbook
+#: src/components/SlashMenu.tsx
+msgid "New playbook…"
+msgstr "新建剧本…"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "New player {id}"
+msgstr "新建 Player {id}"
+
+#. stands as the title of a conversation that has none yet
+#: src/App.tsx
+#: src/components/RunView.tsx
+msgid "new session"
+msgstr "新会话"
+
 #: src/components/NavRail.tsx
+#: src/components/RunView.tsx
+msgid "New session"
+msgstr "新建会话"
+
+#: src/components/NavRail.tsx
+msgid "New session in {project}"
+msgstr "在 {project} 中新建会话"
+
+#: src/components/SourcesTabs.tsx
+msgid "Next page"
+msgstr "下一页"
+
+#: src/lib/shortcuts.ts
+msgid "Next tab in Projects"
+msgstr "项目中的下一个标签页"
+
+#: src/lib/labels.ts
+msgid "No adapter named \"{adapter}\" — check the config"
+msgstr "没有名为“{adapter}”的适配器 — 请检查配置"
+
+#: src/components/SettingsSurface.tsx
+msgid "No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here."
+msgstr "尚未使用任何适配器 — 为 Captain 或某个剧本角色指定智能体后，其就绪状态会显示在这里。"
+
+#: src/components/AgentChip.tsx
+msgid "no automatic check for this adapter — verify sign-in yourself"
+msgstr "此适配器无自动检查 — 请自行确认登录状态"
+
+#. stands where a branch name would; none is checked out
+#: src/lib/space.ts
+msgid "no branch"
+msgstr "无分支"
+
+#: src/components/SettingsSurface.tsx
+msgid "No config file"
+msgstr "没有配置文件"
+
+#: src/components/SpaceSync.tsx
+msgid "No difference"
+msgstr "没有差异"
+
+#: src/components/SourcesTabs.tsx
+msgid "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here."
+msgstr "尚未连接 GitHub — 配置 GitHub origin 远程仓库并登录 gh CLI 后，Issue 与 PR 会显示在这里。"
+
+#: src/components/SpecView.tsx
+msgid "no items in active groups"
+msgstr "启用的分组中没有条目"
+
+#: src/components/SpecView.tsx
+msgid "no items match the search"
+msgstr "没有匹配搜索的条目"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/NavRail.tsx
+#: src/components/ProjectGroup.tsx
+msgid "no messages yet"
+msgstr "还没有消息"
+
+#: src/components/SourcesTabs.tsx
+msgid "No open issues."
+msgstr "没有未关闭的 Issue。"
+
+#: src/components/SourcesTabs.tsx
+msgid "No open pull requests."
+msgstr "没有未关闭的 PR。"
+
+#: src/components/LibrarySurface.tsx
+msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
+msgstr "尚未启用任何剧本 — 在下方启用内置剧本，或用“新建剧本”自己创建。"
+
+#: src/App.tsx
+msgid "No playbooks yet"
+msgstr "还没有剧本"
+
+#: src/lib/labels.ts
+msgid "No player named \"{player}\" — check the config"
+msgstr "没有名为“{player}”的 Player — 请检查配置"
+
+#: src/components/SettingsSurface.tsx
+msgid "No players yet — enabling a playbook in the Library adds the ones its roles need."
+msgstr "还没有 Player — 在库中启用剧本会自动添加其角色所需的 Player。"
+
+#: src/components/SpaceExplorer.tsx
+msgid "No preview for this file."
+msgstr "此文件无法预览。"
+
+#: src/components/ProjectPalette.tsx
+msgid "No project matches \"{query}\""
+msgstr "没有匹配“{query}”的项目"
+
+#: src/components/DashboardSurface.tsx
+msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
+msgstr "还没有项目 — 在<0>项目</0>中注册一个仓库，其工作就会出现在这里。"
+
+#: src/components/FailureCard.tsx
+msgid "No reason was reported"
+msgstr "未报告原因"
+
+#: src/components/SpaceSurface.tsx
+msgid "No remote"
+msgstr "无远程仓库"
+
+#. draft state chip, at most 14 characters: nothing written to the draft's source file yet
+#: src/lib/drafts.ts
+msgid "No source"
+msgstr "无源文本"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "No source yet"
+msgstr "还没有源文本"
+
+#: src/components/DraftSourceTab.tsx
+msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
+msgstr "还没有源文本 — 在你交谈的过程中，智能体会把 <0>{path}</0> 写到这里。"
+
+#: src/components/SourcesTabs.tsx
+msgid "No unfinished intent records."
+msgstr "没有未完成的意图记录。"
+
+#. stands where a branch name would; none is checked out
+#: src/components/SpaceSurface.tsx
+msgid "none"
+msgstr "无"
+
+#: src/components/AgentEditor.tsx
+msgid "none (adapter default)"
+msgstr "无（适配器默认）"
+
+#: src/components/AgentEditor.tsx
+msgid "none: the adapter's own default posture"
+msgstr "无：适配器自身的默认权限模式"
+
+#. pipeline stage: slc's normalized workflow markdown
+#: src/components/LibrarySurface.tsx
+msgid "Normalized"
+msgstr "规范化"
+
+#: src/components/LibrarySurface.tsx
+msgid "Normalized text: slc's normalize phase turns the prose into workflow markdown"
+msgstr "规范化文本：slc 的规范化阶段把散文转成工作流 markdown"
+
+#. the space's status, read in a title
+#: src/components/SpaceSurface.tsx
+msgid "not a repository"
+msgstr "不是仓库"
+
+#: src/components/SpaceSurface.tsx
+msgid "Not a repository yet"
+msgstr "还不是仓库"
+
+#: src/components/SpaceSync.tsx
+msgid "Not checked yet"
+msgstr "尚未检查"
+
+#: src/components/SpecGraph.tsx
+msgid "not cited by packages"
+msgstr "未被规约包引用"
+
+#: src/lib/client.ts
+msgid "not connected"
+msgstr "未连接"
+
+#. why a control is held: the page has no core
+#. why a control is held: the page has no core
+#. why a control is held: the page has no core
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Not connected"
+msgstr "未连接"
+
+#: src/components/NavRail.tsx
+msgid "not deleted"
+msgstr "未删除"
+
+#. the cited item is not in this tree
+#. the cited item is not in this tree
+#: src/components/SpecItemRows.tsx
+msgid "not found"
+msgstr "未找到"
+
+#: src/components/ModelField.tsx
+msgid "Not in this runtime's list. Check the model ID."
+msgstr "不在此运行时的列表中。请检查模型 ID。"
+
+#. the adapter needs something before it can run
+#: src/components/AgentChip.tsx
+msgid "not ready"
+msgstr "未就绪"
+
+#. stands where the Captain agent is not configured
+#: src/components/CaptainHome.tsx
+msgid "not set"
+msgstr "未设置"
+
+#: src/components/AgentEditor.tsx
+msgid "Not supported by this model"
+msgstr "此模型不支持"
+
+#: src/lib/space.ts
+msgid "Not yet shared"
+msgstr "尚未共享"
+
+#: src/components/ProjectGroup.tsx
+msgid "Nothing done here yet."
+msgstr "这里还没有完成的工作。"
+
+#. why a control published by the parked run would do nothing
+#: src/lib/failure-catalogue.ts
+msgid "nothing has changed since it failed"
+msgstr "自失败以来没有任何变化"
+
+#: src/components/DashboardSurface.tsx
+msgid "Nothing in {project} needs attention."
+msgstr "{project} 中没有需要关注的内容。"
+
+#: src/components/SpaceSync.tsx
+msgid "Nothing new on the remote"
+msgstr "远程仓库没有新内容"
+
+#: src/components/DashboardSurface.tsx
+msgid "Nothing owed — open it, or mark it reviewed."
+msgstr "没有待办 — 可以打开，或标记为已审阅。"
+
+#: src/components/ProjectGroup.tsx
+msgid "Nothing queued — add an intent below, or Queue an issue, PR, or record from Sources."
+msgstr "队列为空 — 在下方添加意图，或在来源中把 Issue、PR 或记录加入队列。"
+
+#: src/components/DeliveryCard.tsx
+msgid "Nothing queued — name the next intent…"
+msgstr "队列为空 — 写下下一个意图…"
+
+#: src/components/DashboardSurface.tsx
+msgid "Nothing running."
+msgstr "没有正在运行的工作。"
+
+#: src/components/SpaceSync.tsx
+msgid "Nothing to send from this device"
+msgstr "本设备没有要发送的内容"
+
+#: src/components/SpaceSync.tsx
+msgid "Nothing to stop"
+msgstr "没有可停止的操作"
+
+#: src/components/SettingsSurface.tsx
+msgid "Notifications"
+msgstr "通知"
+
+#. project band heading: the current conversation
+#. project band heading: the current conversation
+#: src/components/ProjectGroup.tsx
+msgid "Now"
+msgstr "当前"
+
+#. notification sink: notify nowhere
+#: src/components/SettingsSurface.tsx
+msgid "off"
+msgstr "关闭"
+
+#. fast mode is pinned off
+#. fast mode is pinned off
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Off"
+msgstr "关闭"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Off (current)"
+msgstr "关闭（当前）"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Off (unsupported)"
+msgstr "关闭（不支持）"
+
+#. how a tool call ended: it succeeded
+#: src/components/PlayerPane.tsx
+msgid "ok"
+msgstr "成功"
+
+#. History pager: fetch the next page back in time
+#: src/components/ProjectGroup.tsx
+msgid "Older…"
+msgstr "更早…"
+
+#. fast mode is pinned on
+#. fast mode is pinned on
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "On"
+msgstr "开启"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "On (current)"
+msgstr "开启（当前）"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "On (unsupported)"
+msgstr "开启（不支持）"
+
+#: src/components/SpaceSurface.tsx
+msgid "On {branch}; check out main in a terminal"
+msgstr "当前位于 {branch}；请在终端切换到 main"
+
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "One normative spec item per state behavior — the compiler's middle stage"
+msgstr "每个状态行为一条规范规约条目 — 编译器的中间阶段"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "One spec item per state behavior, from the last compile"
+msgstr "每个状态行为一条规约条目，来自上次编译"
+
+#: src/components/SettingsSurface.tsx
+msgid "Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme."
+msgstr "仅从 playbook CLI 运行的会话会用到 — tmux 窗格主题（例如某种 catppuccin 风格，或 auto）；Spex 本身跟随系统主题。"
+
+#. open this draft's authoring workspace
+#: src/components/LibrarySurface.tsx
+msgid "Open"
+msgstr "打开"
+
+#: src/components/RecordRow.tsx
+msgid "Open {id}"
+msgstr "打开 {id}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Open {id} in Specs"
+msgstr "在规约中打开 {id}"
+
+#: src/components/RecordRow.tsx
+msgid "Open {id}: {title}"
+msgstr "打开 {id}：{title}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open {title} — {reason}"
+msgstr "打开 {title} — {reason}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open {title} — running in {project}"
+msgstr "打开 {title} — 正在 {project} 中运行"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open and send a message to pick it up."
+msgstr "打开并发送一条消息即可接手。"
+
+#: src/components/ProjectPalette.tsx
+#: src/components/SpaceSync.tsx
+msgid "Open folder…"
+msgstr "打开文件夹…"
+
+#: src/components/SpaceSync.tsx
+msgid "Open project"
+msgstr "打开项目"
+
+#. Sources tab: intent records not yet finished
+#: src/components/SourcesTabs.tsx
+msgid "Open records"
+msgstr "未完成记录"
+
+#: src/components/DraftConversation.tsx
+msgid "Open Register"
+msgstr "打开注册"
+
+#: src/components/SpaceExplorer.tsx
+#: src/components/SpaceSync.tsx
+msgid "Open session"
+msgstr "打开会话"
+
+#: src/lib/shortcuts.ts
+msgid "Open Settings"
+msgstr "打开设置"
+
+#: src/components/CaptainHome.tsx
+msgid "Open Settings →"
+msgstr "打开设置 →"
+
+#: src/App.tsx
+msgid "Open Settings to see what's wrong"
+msgstr "打开设置查看问题所在"
+
+#: src/components/SourcesTabs.tsx
+msgid "Open the project's Overview"
+msgstr "打开项目的概览"
+
+#: src/lib/shortcuts.ts
+msgid "Open the project's Specs"
+msgstr "打开项目的规约"
+
+#: src/components/ProjectGroup.tsx
+msgid "Open the session this was captured from"
+msgstr "打开捕获它的会话"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open to reply — the run is waiting."
+msgstr "打开以回复 — 运行正在等待。"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open to reply, or drop the run."
+msgstr "打开以回复，或放弃该运行。"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open to retry or drop the run."
+msgstr "打开以重试或放弃该运行。"
+
+#: src/components/SpecView.tsx
+msgid "Opened {id}"
+msgstr "已打开 {id}"
+
+#. a draft is being opened
+#. a draft is being opened
+#: src/components/LibrarySurface.tsx
+msgid "Opening…"
+msgstr "打开中…"
+
+#: src/components/LibrarySurface.tsx
+msgid "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
+msgstr "打开名为 {id} 的草稿，规范化文本已备好可粘贴 — 不会写入或编译任何内容"
+
+#. the Git remote's name; leave as Git spells it
+#: src/components/SpaceSurface.tsx
+msgid "origin"
+msgstr "origin"
+
+#: src/lib/space.ts
+msgid "original files kept from an upgrade, some holding old tokens"
+msgstr "升级时保留的原始文件，其中部分含旧令牌"
+
+#. heading over units of no named kind
+#. heading over units of no named kind
+#: src/lib/space.ts
+msgid "Other"
+msgstr "其他"
+
+#. tab name: the project's own history, now and queue
+#. the project's Overview tab
+#: src/App.tsx
+#: src/components/SpecView.tsx
+msgid "Overview"
+msgstr "概览"
+
+#. save over the file that changed on disk
+#: src/components/SpecEditor.tsx
+msgid "Overwrite"
+msgstr "覆盖"
+
+#: src/App.tsx
+#: src/components/NavRail.tsx
+msgid "ownership unknown"
+msgstr "归属未知"
+
+#. bring in a source of one's own
+#. bring in a source of one's own
+#: src/components/DraftSourceTab.tsx
+msgid "Paste"
+msgstr "粘贴"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Paste a source or pick a file"
+msgstr "粘贴源文本或选择文件"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
+msgstr "粘贴剧本源文本 — 散文、SKILL.md 或工作流 markdown…"
+
+#. field holding a path to select and copy
+#: src/components/SpaceSurface.tsx
+msgid "Path"
+msgstr "路径"
+
+#: src/components/AgentEditor.tsx
+msgid "Permission mode"
+msgstr "权限模式"
+
+#: src/components/CaptainHome.tsx
+msgid "Pick a project first ({keys})"
+msgstr "请先选择项目（{keys}）"
+
+#. open the OS file picker
+#: src/components/DraftSourceTab.tsx
+msgid "Pick file"
+msgstr "选择文件"
+
+#. tuning choice: set an explicit value here
+#: src/components/TuningField.tsx
+msgid "pin a value…"
+msgstr "指定一个值…"
+
+#. one unit's kind: a playbook source
+#: src/lib/space.ts
+msgid "Playbook"
+msgstr "剧本"
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Playbook id"
+msgstr "剧本 id"
+
+#. tooltip: which workflow the parked run belongs to
+#: src/components/ParkedRun.tsx
+msgid "playbook: {playbookId}"
+msgstr "剧本：{playbookId}"
+
+#. the surface listing every playbook
+#. the surface listing every playbook
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/LibrarySurface.tsx
+#: src/components/NavRail.tsx
+#: src/lib/space.ts
 msgid "Playbooks"
 msgstr "剧本"
 
+#: src/components/LibrarySurface.tsx
+msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
+msgstr "剧本需要有效的配置 — 请在<0>设置</0>中修复。"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Player for {role}"
+msgstr "{role} 的 Player"
+
+#: src/components/SettingsSurface.tsx
+msgid "Player id — lowercase, dots to group (e.g. dev.coder)"
+msgstr "Player id — 小写，用点分组（例如 dev.coder）"
+
+#: src/components/DeliveryCard.tsx
+msgid "PR {ref}"
+msgstr "PR {ref}"
+
+#: src/components/ProjectGroup.tsx
+msgid "PR #{ref} ↗"
+msgstr "PR #{ref} ↗"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Prefer your own?"
+msgstr "想用自己的？"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "preferences"
+msgstr "偏好设置"
+
+#. open a draft carrying the example's text
+#: src/components/LibrarySurface.tsx
+msgid "Prefill"
+msgstr "预填"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Prefilled from the agent's proposal — edit anything"
+msgstr "已按智能体的提议预填 — 可随意修改"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Prefilled from the source and the compiled roles — edit anything"
+msgstr "已按源文本与编译出的角色预填 — 可随意修改"
+
+#. editor mode: the rendered draft
+#: src/components/SpecEditor.tsx
+msgid "Preview"
+msgstr "预览"
+
+#: src/components/SourcesTabs.tsx
+msgid "Previous page"
+msgstr "上一页"
+
+#: src/lib/shortcuts.ts
+msgid "Previous tab in Projects"
+msgstr "项目中的上一个标签页"
+
+#. one unit's kind: the project registrations
+#: src/lib/space.ts
+msgid "Project"
+msgstr "项目"
+
+#: src/components/ProjectPalette.tsx
+msgid "Project path"
+msgstr "项目路径"
+
+#. Dashboard band heading: one group per project
+#: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
+#: src/lib/space.ts
 msgid "Projects"
 msgstr "项目"
 
 #: src/components/NavRail.tsx
+msgid "Projects and sessions"
+msgstr "项目与会话"
+
+#. collapsed card: the text the playbook sent the player
+#: src/components/PlayerPane.tsx
+msgid "Prompt"
+msgstr "提示词"
+
+#: src/components/DraftConversation.tsx
+msgid "Proposed registration"
+msgstr "拟定的注册信息"
+
+#. an agent chip's model reading when the provider's own default is taken
+#: src/lib/session-agents.ts
+msgid "provider default"
+msgstr "提供方默认"
+
+#. model choice: let the provider pick its own default model
+#. model choice: let the provider pick its own default model
+#: src/components/ModelField.tsx
+msgid "Provider default"
+msgstr "提供方默认"
+
+#. a file family that stays on this device
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "provider hints"
+msgstr "提供方提示"
+
+#. Sources tab: the repo's open pull requests
+#: src/components/SourcesTabs.tsx
+msgid "PRs"
+msgstr "PR"
+
+#. sync step: sending to the remote
+#: src/lib/space.ts
+msgid "Push"
+msgstr "推送"
+
+#. sync step running: sending to the remote
+#: src/lib/space.ts
+msgid "Pushing…"
+msgstr "推送中…"
+
+#: src/components/NextCard.tsx
+msgid "Put this task in the message — Send starts it"
+msgstr "把这项任务放入消息 — 发送即开始"
+
+#. capture control: put this artifact in the queue
+#. capture control: put this artifact in the queue
+#. capture control: put this artifact in the queue
+#: src/components/DeliveryCard.tsx
+#: src/components/ForgeItemRow.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Queue"
+msgstr "加入队列"
+
+#: src/components/ProjectGroup.tsx
+msgid "Queue an intent in {project}"
+msgstr "在 {project} 中排入一个意图"
+
+#: src/components/ForgeItemRow.tsx
+msgid "Queue issue #{number} as an intent"
+msgstr "将 Issue #{number} 作为意图排入队列"
+
+#: src/components/ForgeItemRow.tsx
+msgid "Queue PR #{number} as an intent"
+msgstr "将 PR #{number} 作为意图排入队列"
+
+#: src/components/SourcesTabs.tsx
+msgid "Queue record {id} as an intent"
+msgstr "将记录 {id} 作为意图排入队列"
+
+#. captured artifact's state: waiting in the queue
+#: src/components/ForgeItemRow.tsx
+msgid "queued"
+msgstr "已排队"
+
+#. lifecycle mark on every committed queue row (DR-077)
+#: src/components/QueuedIntentPresentation.tsx
+msgid "Queued"
+msgstr "已排队"
+
+#. captured artifact's state: queued behind another intent
+#: src/components/ForgeItemRow.tsx
+msgid "queued — blocked"
+msgstr "已排队 — 受阻"
+
+#: src/state/store.ts
+msgid "queued submission failed: {reason}"
+msgstr "排队提交失败：{reason}"
+
+#: src/lib/space.ts
+msgid "Queues"
+msgstr "队列"
+
+#. capture control, busy: the queue write is in flight
+#. capture control, busy: the queue write is in flight
+#: src/components/DeliveryCard.tsx
+#: src/components/ForgeItemRow.tsx
+msgid "Queuing…"
+msgstr "加入中…"
+
+#: src/components/CaptainHome.tsx
+msgid "Quick start"
+msgstr "快速开始"
+
+#. act: ask the agents whether they are ready now
+#: src/components/CaptainHome.tsx
+msgid "Re-check"
+msgstr "重新检查"
+
+#: src/components/SettingsSurface.tsx
+msgid "Re-check readiness"
+msgstr "重新检查就绪状态"
+
+#: src/components/SpecView.tsx
+msgid "Re-read the specs/ tree"
+msgstr "重新读取 specs/ 目录树"
+
+#: src/components/SettingsSurface.tsx
+msgid "Re-run adapter readiness checks (e.g. after signing in)"
+msgstr "重新检查适配器就绪状态（例如登录之后）"
+
+#: src/components/SpecView.tsx
+msgid "read {age}"
+msgstr "{age}读取"
+
+#: src/components/SpaceSurface.tsx
+msgid "Read {age}"
+msgstr "{age}读取"
+
+#. no automatic check exists for this adapter
+#: src/components/AgentChip.tsx
+msgid "readiness unknown"
+msgstr "就绪状态未知"
+
+#: src/components/SpecView.tsx
+msgid "reading {id}…"
+msgstr "正在读取 {id}…"
+
+#: src/components/SpecView.tsx
+msgid "reading specs…"
+msgstr "正在读取规约…"
+
+#: src/components/SpaceSurface.tsx
+msgid "Reading the space…"
+msgstr "正在读取空间…"
+
+#. the specs tree is being re-read
+#: src/components/SpecView.tsx
+msgid "reading…"
+msgstr "读取中…"
+
+#. the tree is being read
+#: src/components/SpaceExplorer.tsx
+msgid "Reading…"
+msgstr "读取中…"
+
+#. session status: ready to be told what to do
+#. the adapter is signed in and usable
+#: src/components/AgentChip.tsx
+#: src/lib/labels.ts
+msgid "ready"
+msgstr "就绪"
+
+#: src/components/AgentEditor.tsx
+msgid "Reasoning effort"
+msgstr "推理强度"
+
+#: src/App.tsx
+msgid "Reconnecting to the Spex core… actions are paused until the connection returns."
+msgstr "正在重新连接 Spex 核心…连接恢复前操作暂停。"
+
+#: src/components/ParkedRun.tsx
+msgid "Reconnecting…"
+msgstr "重新连接中…"
+
+#. a session's part: its record file
+#: src/lib/space.ts
+msgid "records"
+msgstr "记录"
+
+#: src/state/store.ts
+msgid "Recover the interrupted turn before sending another message."
+msgstr "发送新消息前，请先恢复中断的轮次。"
+
+#: src/components/RunView.tsx
+msgid "Recover the interrupted turn before sending."
+msgstr "发送前请先恢复中断的轮次。"
+
+#: src/lib/failure-catalogue.ts
+msgid "Recover them from your editor's history, if it keeps one"
+msgstr "若编辑器保留历史，可从中恢复"
+
+#. re-read the space's state
+#. sync step: re-reading the space
+#: src/components/SpaceSurface.tsx
+#: src/lib/space.ts
+msgid "Refresh"
+msgstr "刷新"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Refresh {project}"
+msgstr "刷新 {project}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Refresh GitHub data"
+msgstr "刷新 GitHub 数据"
+
+#: src/components/AgentSettings.tsx
+#: src/components/ModelDiscoveryStatus.tsx
+msgid "Refresh models"
+msgstr "刷新模型"
+
+#: src/components/SourcesTabs.tsx
+msgid "Refresh sources for {project}"
+msgstr "刷新 {project} 的来源"
+
+#: src/components/SpecView.tsx
+msgid "Refresh specs"
+msgstr "刷新规约"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Refresh status and GitHub data"
+msgstr "刷新状态和 GitHub 数据"
+
+#. sync step running: re-reading the space
+#: src/lib/space.ts
+msgid "Refreshing…"
+msgstr "刷新中…"
+
+#. tab: write the compiled playbook into the config
+#. write the compiled playbook into the config
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/DraftRegisterTab.tsx
+msgid "Register"
+msgstr "注册"
+
+#: src/components/LibrarySurface.tsx
+msgid "Registered /{command}"
+msgstr "已注册 /{command}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Registered. Sessions started before this registration must be restarted to use it."
+msgstr "已注册。在此之前开始的会话须重启后才能使用。"
+
+#. the registration is in flight
+#: src/components/DraftRegisterTab.tsx
+msgid "Registering…"
+msgstr "注册中…"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Registers the last compile — the source changed since."
+msgstr "注册的是上次编译的结果 — 此后源文已更改。"
+
+#. confirm: re-read the file from disk
+#. confirm: re-read the file from disk
+#: src/components/SpecEditor.tsx
+msgid "Reload"
+msgstr "重新加载"
+
+#: src/components/SpecEditor.tsx
+msgid "Reload from disk and lose unsaved changes?"
+msgstr "从磁盘重新加载并丢弃未保存的更改？"
+
+#: src/main.tsx
+msgid "Reload the page"
+msgstr "重新加载页面"
+
+#. field label: the Git remote's URL
+#: src/components/SpaceSurface.tsx
+msgid "Remote"
+msgstr "远程仓库"
+
+#: src/components/SpaceSurface.tsx
+msgid "Remote URL"
+msgstr "远程仓库地址"
+
+#. confirm: forget this project, leaving the repo on disk
+#. confirm: take this playbook out of the config
+#. confirm: take this player out of the roster
+#. confirm: take this row off the record
+#. queue row control: take this row out of the queue
+#. row menu item: take this row out of the queue
+#: src/components/LibrarySurface.tsx
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/ProjectsSurface.tsx
+#: src/components/SettingsSurface.tsx
+msgid "Remove"
+msgstr "移除"
+
+#: src/components/SettingsSurface.tsx
+msgid "Remove {id}"
+msgstr "移除 {id}"
+
+#: src/components/SettingsSurface.tsx
+msgid "Remove {id}?"
+msgstr "移除 {id}？"
+
+#: src/components/NextCard.tsx
+msgid "Remove {title}"
+msgstr "移除 {title}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Remove {title} from history"
+msgstr "从历史中移除 {title}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Remove /{command} from the config"
+msgstr "从配置中移除 /{command}"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Remove from Spex (repo stays on disk)"
+msgstr "从 Spex 移除（仓库保留在磁盘上）"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Remove from Spex? The repo stays on disk."
+msgstr "从 Spex 移除？仓库会保留在磁盘上。"
+
+#: src/components/LibrarySurface.tsx
+msgid "Remove from the config (compiled artifacts stay in the library)"
+msgstr "从配置中移除（编译产物保留在库中）"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Remove project"
+msgstr "移除项目"
+
+#: src/components/LibrarySurface.tsx
+msgid "Remove the draft, its conversation, and its source"
+msgstr "移除草稿及其对话和源文"
+
+#: src/components/ProjectGroup.tsx
+msgid "Remove this intent from history"
+msgstr "从历史中移除此意图"
+
+#: src/components/ProjectGroup.tsx
+msgid "Remove this intent from history?"
+msgstr "从历史中移除此意图？"
+
+#: src/components/Composer.tsx
+msgid "Remove this message"
+msgstr "移除这条消息"
+
+#: src/components/LibrarySurface.tsx
+msgid "Remove this playbook from the config?"
+msgstr "从配置中移除此剧本？"
+
+#: src/components/SettingsSurface.tsx
+msgid "Remove this player from the roster"
+msgstr "从名单中移除此 Player"
+
+#: src/components/Composer.tsx
+msgid "Remove this queued message"
+msgstr "移除这条排队的消息"
+
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Removed “{title}”"
+msgstr "已移除“{title}”"
+
+#. queue row control, busy: the removal is in flight
+#: src/components/NextCard.tsx
+msgid "Removing…"
+msgstr "移除中…"
+
+#: src/components/SpaceSync.tsx
+msgid "Replace {count, plural, one {# unit} other {# units}} with the remote's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
+msgstr "用远程版本替换 {count, plural, other {# 个单元}}？另一版本仍保留在 Git 历史中；被替换的会话会丢失本地的续接提示和你读到的位置。"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replace the source with pasted text or a file"
+msgstr "用粘贴的文本或文件替换源文"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replaces the draft's source"
+msgstr "将替换草稿的源文"
+
+#: src/components/Composer.tsx
+msgid "Reply to {player}…"
+msgstr "回复 {player}…"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Repo unreadable — does the path still exist?"
+msgstr "仓库无法读取 — 路径还存在吗？"
+
+#: src/components/AgentEditor.tsx
+msgid "Repo-relative paths the agent may write under auto mode beyond its usual set — e.g. <0>.git</0> for commits"
+msgstr "自动模式下智能体可在常规范围之外写入的仓库相对路径 — 例如提交所需的 <0>.git</0>"
+
+#. what to do about a Playbook defect
+#: src/lib/failure-catalogue.ts
+msgid "Report it"
+msgstr "上报这个问题"
+
+#. the field must be filled before the act runs
+#: src/components/SpaceSurface.tsx
+msgid "Required"
+msgstr "必填"
+
+#: src/components/ProjectGroup.tsx
+msgid "Resize History"
+msgstr "调整历史区大小"
+
+#: src/components/PlaybookStages.tsx
+msgid "Resize the {stage} stage"
+msgstr "调整 {stage} 阶段区大小"
+
+#: src/components/RunView.tsx
+msgid "Resize the Captain pane"
+msgstr "调整 Captain 窗格大小"
+
+#: src/components/CompileBand.tsx
+msgid "Resize the compiler output"
+msgstr "调整编译器输出区大小"
+
+#: src/components/CompileBand.tsx
+msgid "Resize the compiler's questions"
+msgstr "调整编译器提问区大小"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Resize the conversation pane"
+msgstr "调整对话窗格大小"
+
+#: src/components/SpecView.tsx
+msgid "Resize the graph pane"
+msgstr "调整图谱窗格大小"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Resize the tree pane"
+msgstr "调整目录树窗格大小"
+
+#: src/lib/failure-catalogue.ts
+msgid "Restore the branch yourself"
+msgstr "自行恢复分支"
+
+#: src/lib/space.ts
+msgid "resume tokens for this machine's agent conversations; they work nowhere else"
+msgstr "本机智能体对话的续接令牌；在别处无效"
+
+#. act: load the transcript again
+#. act: run the interrupted turn again
+#. read the record again
+#. read the specs tree again
+#. run the stopped step again
+#. take the failed read again
+#. take the failed read again
+#. take the failed read again
+#. try creating the config file again
+#. try the failed save again
+#: src/App.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/RunView.tsx
+#: src/components/SessionRecovery.tsx
+#: src/components/SettingsSurface.tsx
+#: src/components/SpaceSync.tsx
+#: src/components/SpecEditor.tsx
+#: src/components/SpecView.tsx
+msgid "Retry"
+msgstr "重试"
+
+#: src/components/SessionRecovery.tsx
+msgid "Retry the saved input with its saved configuration after checking completed work?"
+msgstr "检查已完成的工作后，用保存的配置重试保存的输入？"
+
+#. a retry is in flight
+#. the Retry control, while the retry is in flight
+#: src/components/SessionRecovery.tsx
+#: src/components/SettingsSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Retrying…"
+msgstr "重试中…"
+
+#. attention row control: say this turn has been read
+#: src/components/DashboardSurface.tsx
+msgid "Reviewed"
+msgstr "已审阅"
+
+#: src/lib/failure-catalogue.ts
+msgid "Rewrote history"
+msgstr "重写了历史"
+
+#: src/components/CompileBand.tsx
+msgid "roles: {roles}"
+msgstr "角色：{roles}"
+
+#. compile phase: under way
+#. session row: a turn is in flight
+#. the aliveness mark's own word: this thing is at work
+#. the aliveness mark's own word: this thing is at work
+#: src/components/CompileBand.tsx
+#: src/components/MachineCard.tsx
+#: src/components/NavRail.tsx
+#: src/components/RunningMark.tsx
+msgid "running"
+msgstr "运行中"
+
+#. Dashboard band heading: sessions with a turn in flight
+#. this compile phase is under way
+#. this compile phase is under way
+#. tooltip on the aliveness mark: this lane is at work
+#. tooltip on the aliveness mark: this lane is at work
+#: src/components/CompileBand.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/PlayerPane.tsx
+msgid "Running"
+msgstr "运行中"
+
+#: src/components/ParkedRun.tsx
+msgid "Running the workflow's control"
+msgstr "正在执行工作流的操作"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Runs slc over the draft's source — 30 to 120 minutes"
+msgstr "对草稿源文运行 slc — 约 30 到 120 分钟"
+
+#: src/components/AgentEditor.tsx
+msgid "Same as Captain"
+msgstr "与 Captain 相同"
+
+#. commit the edits in this editor
+#. commit the edits in this editor
+#. commit the edits in this editor
+#. save the edited remote URL
+#. sync step: saving this device's changes
+#. write the draft to the file
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+#: src/components/SpaceSurface.tsx
+#: src/components/SpecEditor.tsx
+#: src/lib/space.ts
+msgid "Save"
+msgstr "保存"
+
+#: src/components/SpecEditor.tsx
+msgid "Save ({key})"
+msgstr "保存（{key}）"
+
+#: src/components/SpecView.tsx
+msgid "Saved {path}"
+msgstr "已保存 {path}"
+
+#. an edit landed; the tick is part of the word
+#: src/components/SettingsSurface.tsx
+msgid "Saved ✓"
+msgstr "已保存 ✓"
+
+#: src/components/SessionRecovery.tsx
+msgid "Saved input"
+msgstr "已保存的输入"
+
+#: src/lib/space.ts
+msgid "Saving changes…"
+msgstr "正在保存更改…"
+
+#. a save is in flight
+#. a save is in flight
+#. a save is in flight
+#. the Save control, while the save is in flight
+#. the Save control, while the save is in flight
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+#: src/components/SpaceSurface.tsx
+#: src/components/SpecEditor.tsx
+msgid "Saving…"
+msgstr "保存中…"
+
+#: src/components/SpecView.tsx
+msgid "Scaffold one in the project directory:"
+msgstr "在项目目录中生成一个："
+
+#: src/components/ProjectPalette.tsx
+msgid "Scaffold specs when creating"
+msgstr "创建时生成规约"
+
+#: src/App.tsx
+msgid "seeding the example failed"
+msgstr "生成示例失败"
+
+#. busy: the Academy example is being written to disk
+#: src/components/CaptainHome.tsx
+#: src/components/ProjectPalette.tsx
+msgid "Seeding…"
+msgstr "生成中…"
+
+#: src/components/CaptainHome.tsx
+msgid "Seeds a sample project with specs, ready to run"
+msgstr "生成带规约的示例项目，可直接运行"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Select an entry to preview it."
+msgstr "选择一个条目以预览。"
+
+#. act: send the typed message
+#. act: send the typed message
+#. send the composed message
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Send"
+msgstr "发送"
+
+#: src/components/ParkedRun.tsx
+msgid "Send a message to pick it up, or drop the run"
+msgstr "发送消息以接续，或放弃该运行"
+
+#. queue this message behind the work in flight
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Send next"
+msgstr "下轮发送"
+
+#: src/lib/shortcuts.ts
+msgid "Send the message; Shift+Enter adds a line"
+msgstr "发送消息；Shift+Enter 换行"
+
+#. the message is going out
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Sending…"
+msgstr "发送中…"
+
+#: src/components/DraftConversation.tsx
+msgid "sends after the compile"
+msgstr "编译后发送"
+
+#: src/components/DraftConversation.tsx
+msgid "Sends after the compile · {keys}"
+msgstr "编译后发送 · {keys}"
+
+#: src/components/DraftConversation.tsx
+msgid "Sends after the compile…"
+msgstr "编译后发送…"
+
+#: src/components/DraftConversation.tsx
+msgid "sends after the reply"
+msgstr "回复后发送"
+
+#: src/components/DraftConversation.tsx
+msgid "Sends after the reply · {keys}"
+msgstr "回复后发送 · {keys}"
+
+#: src/components/DraftConversation.tsx
+msgid "Sends after the reply…"
+msgstr "回复后发送…"
+
+#: src/components/Composer.tsx
+msgid "Sends after this turn…"
+msgstr "本轮结束后发送…"
+
+#: src/components/Composer.tsx
+msgid "sends when this turn ends"
+msgstr "本轮结束后发送"
+
+#: src/components/Composer.tsx
+msgid "Sends when this turn ends · {keys}"
+msgstr "本轮结束后发送 · {keys}"
+
+#: src/components/CompileBand.tsx
+msgid "sent to the agent"
+msgstr "已发送给智能体"
+
+#. one unit's kind: a session
+#. one unit's kind: a session
+#. row menu item: open the session this intent came from
+#: src/components/ProjectGroup.tsx
+#: src/components/SpaceExplorer.tsx
+#: src/lib/space.ts
+msgid "Session"
+msgstr "会话"
+
+#: src/components/RunView.tsx
+msgid "Session is in use elsewhere"
+msgstr "会话正在别处使用"
+
+#: src/components/RunView.tsx
+msgid "Session ownership is unknown · controls are unavailable"
+msgstr "会话归属未知 · 操作不可用"
+
+#: src/state/store.ts
+msgid "Session ownership must be idle before deleting it."
+msgstr "删除前，会话归属须处于空闲状态。"
+
+#: src/state/store.ts
+msgid "Session ownership must be idle before recovery."
+msgstr "恢复前，会话归属须处于空闲状态。"
+
+#: src/state/store.ts
+msgid "Session ownership must be idle before sending a message."
+msgstr "发送消息前，会话归属须处于空闲状态。"
+
+#: src/components/SettingsSurface.tsx
+msgid "Session players"
+msgstr "会话 Player"
+
+#: src/state/reducer.ts
+msgid "session shut down"
+msgstr "会话已关闭"
+
+#: src/lib/space.ts
+msgid "Sessions"
+msgstr "会话"
+
+#: src/App.tsx
+msgid "Sessions and project views"
+msgstr "会话与项目视图"
+
+#: src/components/SpaceSurface.tsx
+msgid "Sessions directory outside the space; not shared"
+msgstr "会话目录在空间之外；不共享"
+
+#: src/components/SpaceSurface.tsx
+msgid "Set this space up first"
+msgstr "请先设置此空间"
+
+#: src/components/SpaceSurface.tsx
+msgid "Set up space"
+msgstr "设置空间"
+
+#. one unit's kind: the settings file
+#: src/lib/space.ts
+msgid "Setting"
+msgstr "设置"
+
+#. the setup control, while the setup runs
+#. the setup control, while the setup runs
+#: src/components/SpaceSurface.tsx
+msgid "Setting up…"
+msgstr "设置中…"
+
+#: src/components/NavRail.tsx
+#: src/components/SettingsSurface.tsx
+#: src/lib/space.ts
 msgid "Settings"
 msgstr "设置"
 
+#: src/components/DeliveryCard.tsx
+msgid "Settled — {title}"
+msgstr "已裁定 — {title}"
+
+#. badge: this lane answers more than one role
+#: src/components/LibrarySurface.tsx
+msgid "shared"
+msgstr "共用"
+
+#. entry mark: this file syncs and is already sent
+#: src/lib/space.ts
+msgid "Shared"
+msgstr "已共享"
+
+#: src/components/SettingsSurface.tsx
+msgid "Shared with the playbook CLI — edits made outside appear here"
+msgstr "与 playbook CLI 共用 — 在外部所做的编辑会显示在这里"
+
+#: src/components/PlayerPane.tsx
+msgid "Show {count} of {rest} earlier entries"
+msgstr "显示更早的 {rest} 条中的 {count} 条"
+
+#: src/components/SpecView.tsx
+msgid "Show {group} items"
+msgstr "显示{group}条目"
+
+#: src/components/DraftConversation.tsx
+msgid "Show {shown} of {total} earlier entries"
+msgstr "显示更早的 {total} 条中的 {shown} 条"
+
 #: src/components/NavRail.tsx
+msgid "Show all {count} sessions in {project}"
+msgstr "显示 {project} 的全部 {count} 个会话"
+
+#. reveal a path in macOS Finder
+#: src/lib/space.ts
+msgid "Show in Finder"
+msgstr "在访达中显示"
+
+#. reveal a path in the file manager
+#: src/lib/space.ts
+msgid "Show in folder"
+msgstr "在文件夹中显示"
+
+#. unfold the compiler's raw output
+#: src/components/CompileBand.tsx
+msgid "Show log"
+msgstr "显示日志"
+
+#: src/components/DraftConversation.tsx
+msgid "Show me an example"
+msgstr "给我看个例子"
+
+#: src/components/NavRail.tsx
+msgid "Show sessions in {project}"
+msgstr "显示 {project} 的会话"
+
+#: src/components/SpecView.tsx
+msgid "Show the citation graph beside the outline"
+msgstr "在大纲旁显示引用图谱"
+
+#: src/components/DraftConversation.tsx
+msgid "Show the message"
+msgstr "显示消息"
+
+#: src/components/NavRail.tsx
+msgid "Show the sidebar"
+msgstr "显示侧边栏"
+
+#: src/components/NavRail.tsx
+msgid "Show the sidebar ({keys})"
+msgstr "显示侧边栏（{keys}）"
+
+#: src/components/SpecGraph.tsx
+msgid "Show the whole graph (0)"
+msgstr "显示完整图谱（0）"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Showing the first {lines} lines; the file is longer."
+msgstr "仅显示前 {lines} 行；文件更长。"
+
+#: src/components/SpecItemRows.tsx
+msgid "shown despite filter"
+msgstr "筛选外仍显示"
+
+#: src/components/SpecView.tsx
+msgid "shown despite search"
+msgstr "搜索外仍显示"
+
+#: src/lib/labels.ts
+msgid "Sign in again with that agent's CLI"
+msgstr "用该智能体的 CLI 重新登录"
+
+#: src/lib/failure-catalogue.ts
+msgid "Sign in to {who} again"
+msgstr "重新登录 {who}"
+
+#: src/components/CaptainHome.tsx
+msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
+msgstr "在终端登录后，重新检查即可识别；新导出的环境变量需重启 Spex。"
+
+#. graph legend: a node's size counts its items
+#: src/components/SpecGraph.tsx
+msgid "size — items"
+msgstr "大小 — 条目数"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Slash command"
+msgstr "斜杠命令"
+
+#: src/main.tsx
+msgid "Something broke in the UI"
+msgstr "界面出错了"
+
+#. pipeline stage: the authored workflow
+#. pipeline stage: the authored workflow
+#. pipeline stage: the authored workflow
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "Source"
+msgstr "源文"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Source file path (overrides the text)"
+msgstr "源文件路径（优先于文本）"
+
+#. draft state chip, at most 14 characters: the draft's library directory is gone
+#: src/lib/drafts.ts
+msgid "Source missing"
+msgstr "源文缺失"
+
+#: src/components/LibrarySurface.tsx
+msgid "Source this playbook was loaded from: {from}"
+msgstr "此剧本的来源：{from}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Sources: {issues, plural, one {# issue} other {# issues}} · {prs, plural, one {# PR} other {# PRs}} · {records, plural, one {# open record} other {# open records}}"
+msgstr "来源：{issues, plural, other {# 个 Issue}} · {prs, plural, other {# 个 PR}} · {records, plural, other {# 条未结记录}}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Sources: GitHub not connected · {records, plural, one {# open record} other {# open records}}"
+msgstr "来源：GitHub 未连接 · {records, plural, other {# 条未结记录}}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
+msgstr "来源：正在加载 GitHub… · {records, plural, other {# 条未结记录}}"
+
+#: src/components/NavRail.tsx
+#: src/components/SpaceSurface.tsx
 msgid "Space"
 msgstr "空间"
+
+#: src/components/SpaceSurface.tsx
+msgid "Space is busy"
+msgstr "空间忙碌中"
+
+#: src/components/SpaceSurface.tsx
+msgid "Space views"
+msgstr "空间视图"
+
+#. the list of unanswered space issues (problems, not GitHub issues)
+#: src/components/SpaceSync.tsx
+msgid "space.issues"
+msgstr "问题"
+
+#: src/components/SpecGraph.tsx
+msgid "Spec package citation graph"
+msgstr "规约包引用图谱"
+
+#. tab name: the project's spec packages
+#. the spec view's own heading
+#. the spec view's own heading
+#: src/App.tsx
+#: src/components/SpecView.tsx
+msgid "Specs"
+msgstr "规约"
+
+#: src/components/SpecView.tsx
+msgid "specs/ is present but holds no spec files yet."
+msgstr "specs/ 已存在，但还没有规约文件。"
+
+#: src/components/SettingsSurface.tsx
+msgid "Spex {version} · protocol {protocol}"
+msgstr "Spex {version} · 协议 {protocol}"
+
+#: src/components/SettingsSurface.tsx
+msgid "Spex could not create a starter config at <0>{path}</0> — check the folder is writable, then retry."
+msgstr "Spex 无法在 <0>{path}</0> 创建初始配置 — 请确认该文件夹可写后重试。"
+
+#: src/components/DraftConversation.tsx
+msgid "Spex could not read this block"
+msgstr "Spex 无法读取此代码块"
+
+#: src/components/CaptainHome.tsx
+msgid "Spex has no config file yet — playbooks are unavailable."
+msgstr "Spex 还没有配置文件 — 剧本不可用。"
+
+#: src/components/NavRail.tsx
+msgid "Spex navigation"
+msgstr "Spex 导航"
+
+#: src/lib/failure-catalogue.ts
+msgid "Squash or reset them yourself"
+msgstr "自行压缩或重置这些提交"
+
+#. queue row control: begin this queued intent
+#. queue row control: begin this queued intent
+#. queue row control: begin this queued intent
+#. queue row control: begin this queued intent
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Start"
+msgstr "开始"
+
+#: src/components/DeliveryCard.tsx
+#: src/components/NextCard.tsx
+msgid "Start {title}"
+msgstr "开始 {title}"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Start {title} in {project}"
+msgstr "在 {project} 中开始 {title}"
+
+#: src/lib/shortcuts.ts
+msgid "Start a new session in the current project"
+msgstr "在当前项目中开始新会话"
+
+#: src/components/RunView.tsx
+msgid "Start a new session in this project"
+msgstr "在此项目中开始新会话"
+
+#: src/App.tsx
+msgid "Start another session"
+msgstr "再开一个会话"
+
+#: src/App.tsx
+msgid "Start another session ({keys})"
+msgstr "再开一个会话（{keys}）"
+
+#: src/lib/shortcuts.ts
+msgid "Start typing in the composer from anywhere in Projects"
+msgstr "在项目界面任意位置输入，文字直接进入输入框"
+
+#: src/components/ProjectGroup.tsx
+msgid "started {age}"
+msgstr "{age}开始"
+
+#: src/App.tsx
+msgid "started {started}"
+msgstr "{started}开始"
+
+#. a run that has entered no state yet
+#. a run that has entered no state yet
+#: src/components/MachineCard.tsx
+msgid "starting"
+msgstr "启动中"
+
+#: src/components/CompileBand.tsx
+msgid "Starting the compiler…"
+msgstr "正在启动编译器…"
+
+#. chip on the composer: the task this message will start
+#: src/components/Composer.tsx
+msgid "Starting: {title}"
+msgstr "即将开始：{title}"
+
+#. queue row control, busy: the start is in flight
+#. queue row control, busy: the start is in flight
+#: src/components/CaptainHome.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/NextCard.tsx
+msgid "Starting…"
+msgstr "启动中…"
+
+#. pipeline stage: the compiled machine
+#. pipeline stage: the compiled machine
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "State machine"
+msgstr "状态机"
+
+#. tooltip: the machine state the run stands in
+#. tooltip: the machine state the run stands in
+#: src/components/CaptainPane.tsx
+#: src/components/ParkedRun.tsx
+msgid "state: {state}"
+msgstr "状态：{state}"
+
+#. heading over the machine's state chips
+#: src/components/PlaybookStages.tsx
+msgid "states"
+msgstr "状态"
+
+#. entry mark: this file never leaves the device
+#: src/lib/space.ts
+msgid "Stays here"
+msgstr "仅留本机"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Stays on this device ({count} kinds)"
+msgstr "仅留在本设备（{count} 类）"
+
+#. tooltip: the machine state the run failed in
+#: src/components/FailureCard.tsx
+msgid "step: {state}"
+msgstr "步骤：{state}"
+
+#. stop the running sync
+#: src/components/SpaceSync.tsx
+msgid "Stop"
+msgstr "停止"
+
+#. how a run ended: it was stopped
+#: src/components/MachineCard.tsx
+msgid "stopped"
+msgstr "已停止"
+
+#: src/lib/failure-catalogue.ts
+msgid "Stopped before it finished"
+msgstr "未完成即被停止"
+
+#. the Stop control, while the stop is in flight
+#: src/components/SpaceSync.tsx
+msgid "Stopping…"
+msgstr "停止中…"
+
+#. history row tag: a later record replaced this one
+#. history row tag: a later record replaced this one
+#: src/components/ProjectGroup.tsx
+msgid "superseded"
+msgstr "已被取代"
+
+#: src/components/AgentEditor.tsx
+msgid "Supported by this model"
+msgstr "此模型支持"
+
+#: src/components/NavRail.tsx
+#: src/lib/shortcuts.ts
+msgid "Switch or add a project"
+msgstr "切换或添加项目"
+
+#: src/components/NavRail.tsx
+msgid "Switch or add a project ({keys})"
+msgstr "切换或添加项目（{keys}）"
+
+#: src/components/ProjectPalette.tsx
+msgid "Switch to a project…"
+msgstr "切换到项目…"
+
+#. tab and control: send and bring back changes
+#. tab and control: send and bring back changes
+#: src/components/SpaceSurface.tsx
+msgid "Sync"
+msgstr "同步"
+
+#. one unit's kind: a sync rule file
+#: src/lib/space.ts
+msgid "Sync rule"
+msgstr "同步规则"
+
+#: src/lib/space.ts
+msgid "Sync rules"
+msgstr "同步规则"
+
+#: src/components/SpaceSync.tsx
+msgid "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs."
+msgstr "同步会发出这里的内容，并取回新的内容。若该地址上已有来自另一台机器的空间，请先加入 — 加入会把两者合为一个，并就有差异之处询问你。"
+
+#: src/components/SpaceSync.tsx
+msgid "Sync steps"
+msgstr "同步步骤"
+
+#. header field: this space last synced
+#: src/components/SpaceSurface.tsx
+msgid "Synced"
+msgstr "已同步"
+
+#: src/components/SpaceSurface.tsx
+msgid "Synced · {sent} sent · {received} received"
+msgstr "已同步 · 发出 {sent} · 收到 {received}"
+
+#: src/components/SpaceSync.tsx
+msgid "Synced {age} · {sent} sent · {received} received"
+msgstr "{age}同步 · 发出 {sent} · 收到 {received}"
+
+#. the Sync control, while the sync runs
+#: src/components/SpaceSurface.tsx
+msgid "Syncing…"
+msgstr "同步中…"
+
+#: src/components/SpaceSurface.tsx
+msgid "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up."
+msgstr "同步会话、队列、项目、设置和剧本源文 — <0>查看哪些留在本机</0>。设置之前不会联系任何地址。"
 
 #: src/components/SettingsSurface.tsx
 msgid "System"
@@ -122,3 +4581,596 @@ msgstr "跟随系统"
 #: src/components/SettingsSurface.tsx
 msgid "System follows your device"
 msgstr "跟随系统：设备的语言"
+
+#. conflict choice: take the remote's version
+#: src/components/SpaceSync.tsx
+msgid "Take remote"
+msgstr "取远程版"
+
+#: src/components/Composer.tsx
+msgid "Take the task out of the message"
+msgstr "从消息中移除该任务"
+
+#: src/components/NextCard.tsx
+msgid "Take this task out of the queue — Undo puts it back"
+msgstr "将此任务移出队列 — 撤销可放回"
+
+#: src/components/DraftConversation.tsx
+msgid "Tell the agent what the playbook does, who does what, and when it is done"
+msgstr "告诉智能体这个剧本做什么、谁做什么、何时算完成"
+
+#: src/components/SettingsSurface.tsx
+msgid "Terminal pane theme"
+msgstr "终端窗格主题"
+
+#: src/components/SettingsSurface.tsx
+msgid "Terminal pane theme (CLI only)"
+msgstr "终端窗格主题（仅 CLI）"
+
+#. item group: Verification, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "test"
+msgstr "测试"
+
+#. item group: Verification
+#. item group: Verification
+#: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
+msgid "Tests"
+msgstr "测试"
+
+#: src/components/SpaceSync.tsx
+msgid "That folder already belongs to {owner}."
+msgstr "该文件夹已属于 {owner}。"
+
+#: src/components/SpaceSync.tsx
+msgid "That folder is here and is a git repository. Add it as a project?"
+msgstr "该文件夹在本机，且是一个 git 仓库。添加为项目吗？"
+
+#: src/components/SpaceSync.tsx
+msgid "That folder is here but is not a git repository."
+msgstr "该文件夹在本机，但不是 git 仓库。"
+
+#: src/components/SpaceSync.tsx
+msgid "That folder is no longer on this device."
+msgstr "该文件夹已不在此设备上。"
+
+#: src/components/ParkedRun.tsx
+msgid "The /{command} workflow failed and is waiting for you."
+msgstr "/{command} 工作流失败，正在等待你处理。"
+
+#: src/components/ParkedRun.tsx
+msgid "The /{command} workflow is waiting for your answer."
+msgstr "/{command} 工作流正在等待你的答复。"
+
+#: src/lib/labels.ts
+msgid "The agent process exited unexpectedly ({code})"
+msgstr "智能体进程意外退出（{code}）"
+
+#: src/components/DraftConversation.tsx
+msgid "The agent's replies land here."
+msgstr "智能体的回复会显示在这里。"
+
+#: src/lib/labels.ts
+msgid "The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI"
+msgstr "智能体的登录已过期 — 请在终端用该智能体的 CLI 重新登录"
+
+#: src/lib/labels.ts
+msgid "The call timed out"
+msgstr "调用超时"
+
+#: src/components/LibrarySurface.tsx
+msgid "The Captain can only run playbooks listed here."
+msgstr "Captain 只能运行这里列出的剧本。"
+
+#: src/components/CaptainPane.tsx
+msgid "The Captain will report here."
+msgstr "Captain 会在这里汇报。"
+
+#: src/state/reducer.ts
+msgid "the Captain's turn failed"
+msgstr "Captain 的轮次失败"
+
+#: src/lib/labels.ts
+msgid "The Captain's turn failed — {cause}"
+msgstr "Captain 的轮次失败 — {cause}"
+
+#: src/components/ProjectGroup.tsx
+msgid "The capturing session is gone"
+msgstr "捕获它的会话已不存在"
+
+#: src/components/CompileBand.tsx
+msgid "The compile toolchain is not ready."
+msgstr "编译工具链尚未就绪。"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "The compiled roles stand: {roles}."
+msgstr "编译得到的角色为：{roles}。"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "The compiled state machine, from the last compile"
+msgstr "上次编译得到的状态机"
+
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "The compiled XState machine that drives the players"
+msgstr "驱动各 Player 的已编译 XState 状态机"
+
+#: src/state/store.ts
+msgid "The conversation could not be loaded: {reason}"
+msgstr "无法加载对话：{reason}"
+
+#: src/components/SpaceSync.tsx
+msgid "The diff is cut here; the file is longer."
+msgstr "差异在此截断；文件更长。"
+
+#: src/lib/drafts.ts
+msgid "The draft's library directory is gone; only Delete remains"
+msgstr "草稿的库目录已不存在；只能删除"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "The draft's markdown as it stands on disk"
+msgstr "草稿在磁盘上的 markdown 原文"
+
+#: src/components/DraftSourceTab.tsx
+msgid "The file is copied in as the draft's source"
+msgstr "该文件会被复制为草稿的源文"
+
+#: src/components/RunView.tsx
+msgid "The last turn failed. Send a message to pick it up."
+msgstr "上一轮失败。发送消息即可接续。"
+
+#: src/components/DashboardSurface.tsx
+msgid "The ledger could not be loaded: {reason}"
+msgstr "无法加载意图台账：{reason}"
+
+#: src/App.tsx
+msgid "The project's spec packages ({keys})"
+msgstr "项目的规约包（{keys}）"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "The proposal names {roles}, which the compiled entry lacks."
+msgstr "提案写明了 {roles}，但编译结果中没有。"
+
+#: src/lib/labels.ts
+msgid "The provider rate-limited the call — it can be retried"
+msgstr "服务商对该调用限流 — 可以重试"
+
+#. tuning choice: take the provider's own current default
+#: src/components/TuningField.tsx
+msgid "the provider's default"
+msgstr "服务商的默认值"
+
+#: src/components/ProjectGroup.tsx
+msgid "The queue could not be loaded. <0>Retry</0>"
+msgstr "无法加载队列。<0>重试</0>"
+
+#: src/components/LibrarySurface.tsx
+msgid "The raw prose the demo starts from"
+msgstr "演示所基于的原始文稿"
+
+#: src/components/SpecEditor.tsx
+msgid "the reload failed"
+msgstr "重新加载失败"
+
+#: src/components/SpaceSync.tsx
+msgid "The remote against the common ancestor"
+msgstr "远程仓库相对共同祖先的差异"
+
+#: src/components/SpaceSync.tsx
+msgid "The remote is empty; Sync will send this space"
+msgstr "远程仓库为空；同步会把此空间发出去"
+
+#: src/components/SpecEditor.tsx
+msgid "the save failed"
+msgstr "保存失败"
+
+#: src/App.tsx
+msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
+msgstr "Spex 窗口与其核心的协议版本不一致 — 请重启应用（或更新 Spex）来修复。"
+
+#: src/lib/failure-catalogue.ts
+msgid "The step left no record of what it changed"
+msgstr "该步骤没有留下任何更改记录"
+
+#: src/components/FailureCard.tsx
+msgid "The workflow failed"
+msgstr "工作流失败"
+
+#: src/components/ParkedRun.tsx
+msgid "The workflow failed and is waiting for you."
+msgstr "工作流失败，正在等待你处理。"
+
+#: src/components/ParkedRun.tsx
+msgid "The workflow is waiting for your answer."
+msgstr "工作流正在等待你的答复。"
+
+#: src/components/PlaybookStages.tsx
+msgid "The workflow markdown the playbook was compiled from"
+msgstr "剧本编译所用的工作流 markdown"
+
+#. stands where a project name would, for sessions with no folder
+#: src/components/SpaceSync.tsx
+msgid "these sessions"
+msgstr "这些会话"
+
+#. collapsed card: the agent's own reasoning summary
+#: src/components/PlayerPane.tsx
+msgid "Thinking"
+msgstr "思考过程"
+
+#: src/components/AgentSettings.tsx
+msgid "This conversation is in use elsewhere — its settings read only."
+msgstr "该对话正在别处使用 — 其设置为只读。"
+
+#: src/components/AgentSettings.tsx
+msgid "This conversation only"
+msgstr "仅限本对话"
+
+#: src/components/SpaceSync.tsx
+msgid "This device against the common ancestor"
+msgstr "本设备相对共同祖先的差异"
+
+#: src/components/SpaceSync.tsx
+msgid "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation."
+msgstr "本设备与远程仓库的历史互不相关。用上方的加入把两者并为一个空间 — 两边都有但内容不同的部分会让你选择。另一种可能是远程地址填错了。"
+
+#: src/components/SpecEditor.tsx
+msgid "This file changed on disk since you opened it."
+msgstr "打开之后，此文件在磁盘上已更改。"
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "This lane also answers {positions} — one conversation across them"
+msgstr "此 Player 还担任 {positions} — 它们共用一个对话"
+
+#: src/components/SpecView.tsx
+msgid "This project has no <0>specs/</0> directory yet — it holds the spec packages and the decision and intent records this view navigates."
+msgstr "此项目还没有 <0>specs/</0> 目录 — 该目录存放本视图浏览的规约包以及决策记录和意图记录。"
+
+#: src/components/ProjectsSurface.tsx
+msgid "This project is no longer registered."
+msgstr "此项目已不在注册列表中。"
+
+#: src/components/SpecView.tsx
+msgid "This project uses a legacy specs layout"
+msgstr "此项目使用旧版规约布局"
+
+#: src/App.tsx
+msgid "This project's overview: history, now, up next, sources, repo state"
+msgstr "此项目的概览：历史、当前、接下来、来源、仓库状态"
+
+#: src/components/ProjectGroup.tsx
+msgid "This record is not in the project's specs tree"
+msgstr "此记录不在项目的 specs 目录树中"
+
+#: src/components/DeliveryCard.tsx
+msgid "This session has ended — the replay is read-only"
+msgstr "此会话已结束 — 回放为只读"
+
+#: src/components/SpaceSync.tsx
+msgid "This space has not met that remote yet."
+msgstr "此空间尚未与该远程仓库建立关联。"
+
+#: src/components/SpaceSync.tsx
+msgid "This space is on <0>{branch}</0>. The app syncs <1>main</1>; check it out in a terminal."
+msgstr "此空间当前在 <0>{branch}</0> 上。应用只同步 <1>main</1>；请在终端切换过去。"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "this stage was not found for this draft"
+msgstr "此草稿未找到该阶段"
+
+#: src/components/LibrarySurface.tsx
+msgid "this stage was not found for this playbook"
+msgstr "此剧本未找到该阶段"
+
+#: src/components/CompileBand.tsx
+msgid "three in a row — tell the agent how to proceed"
+msgstr "连续三次 — 请告诉智能体如何继续"
+
+#: src/components/SpecView.tsx
+msgid "Toggle {name}"
+msgstr "展开或折叠 {name}"
+
+#: src/state/store.ts
+msgid "transcript could not be loaded: {reason}"
+msgstr "无法加载对话记录：{reason}"
+
+#. error boundary: re-render the surface in place
+#: src/main.tsx
+msgid "Try again"
+msgstr "重试"
+
+#: src/components/CaptainHome.tsx
+#: src/components/ProjectPalette.tsx
+#: src/components/SpecView.tsx
+msgid "Try the Academy example"
+msgstr "试试 Academy 示例"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Turn off fast mode for this model."
+msgstr "请为该模型关闭快速模式。"
+
+#: src/components/AgentEditor.tsx
+msgid "Turn off fast mode for this selection."
+msgstr "请为当前选择关闭快速模式。"
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Tweak the {name} agent in place"
+msgstr "就地调整 {name} 智能体"
+
+#: src/components/CaptainHome.tsx
+msgid "Tweak the Captain agent in place"
+msgstr "就地调整 Captain 智能体"
+
+#: src/components/ProjectsSurface.tsx
+msgid "uncommitted changes"
+msgstr "未提交的更改"
+
+#: src/lib/failure-catalogue.ts
+msgid "Uncommitted changes you had were lost"
+msgstr "你原有的未提交更改已丢失"
+
+#. put the row just removed back where it was
+#. put the row just removed back where it was
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Undo"
+msgstr "撤销"
+
+#. one unit's kind: a project's queue (the noun)
+#: src/lib/space.ts
+msgid "unit.queue"
+msgstr "队列"
+
+#: src/components/SpaceSurface.tsx
+msgid "Units this device changed, listed under Sync"
+msgstr "本设备更改过的单元，列在同步下"
+
+#. attention row: a turn nobody has read
+#. session row: a turn nobody has read
+#. tab name: a turn nobody has read
+#: src/App.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/NavRail.tsx
+msgid "unread turn"
+msgstr "未读轮次"
+
+#: src/components/DraftConversation.tsx
+msgid "Unreadable draft — delete it, or repair the file and restart Spex"
+msgstr "草稿无法读取 — 请删除，或修好文件后重启 Spex"
+
+#. the space's status, read in a title
+#: src/components/SpaceSurface.tsx
+msgid "unrelated history"
+msgstr "历史互不相关"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Unrelated history"
+msgstr "历史互不相关"
+
+#. mark on a branch the app cannot sync
+#: src/components/SpaceSurface.tsx
+msgid "unsupported"
+msgstr "不支持"
+
+#. a session with no title of its own
+#: src/components/SpaceExplorer.tsx
+msgid "untitled session"
+msgstr "未命名会话"
+
+#. readiness badge: no automatic check exists for this adapter
+#: src/components/SettingsSurface.tsx
+msgid "unverified"
+msgstr "未验证"
+
+#. band heading: the project's queued work
+#. band heading: the project's queued work
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Up next"
+msgstr "接下来"
+
+#: src/components/DeliveryCard.tsx
+msgid "Up next: <0>{title}</0>"
+msgstr "接下来：<0>{title}</0>"
+
+#. a sync unit's change: it changed on this side
+#: src/components/SpaceSync.tsx
+msgid "updated"
+msgstr "已更新"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Updated {age}"
+msgstr "{age}更新"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Updated {age} by the agent"
+msgstr "{age}由智能体更新"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Updated {age} by you"
+msgstr "{age}由你更新"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Use as source"
+msgstr "用作源文"
+
+#. drop this conversation's own settings and take the configured ones
+#: src/components/AgentSettings.tsx
+msgid "Use default"
+msgstr "使用默认"
+
+#: src/components/SpaceSync.tsx
+msgid "View diff"
+msgstr "查看差异"
+
+#: src/components/LibrarySurface.tsx
+msgid "View source"
+msgstr "查看源文"
+
+#: src/components/ParkedRun.tsx
+msgid "Wait for the running turn"
+msgstr "等待运行中的轮次"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Wait for the running turn to finish, or abort it, before removing"
+msgstr "移除前请等待运行中的轮次结束，或中止它"
+
+#. compile phase: not started yet
+#: src/components/CompileBand.tsx
+msgid "waiting"
+msgstr "等待"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — current work failed"
+msgstr "等待 — 当前工作失败"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — current work failed — {failure}"
+msgstr "等待 — 当前工作失败 — {failure}"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — previous work failed"
+msgstr "等待 — 前序工作失败"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — previous work failed — {failure}"
+msgstr "等待 — 前序工作失败 — {failure}"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — previous work stopped"
+msgstr "等待 — 前序工作已停止"
+
+#. queued row standing: the work ahead parked on a question
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — your reply"
+msgstr "等待 — 你的回复"
+
+#. session row: the run parked on a question
+#. session status: a player asked the Boss a question
+#: src/components/NavRail.tsx
+#: src/lib/labels.ts
+msgid "waiting for your reply"
+msgstr "等待你的回复"
+
+#: src/components/Composer.tsx
+msgid "Waiting for your reply — your next message answers it."
+msgstr "等待你的回复 — 你的下一条消息就是答复。"
+
+#. session row: work delivered, a verdict is owed
+#: src/components/NavRail.tsx
+msgid "waiting for your verdict"
+msgstr "等待你的裁定"
+
+#. why a control is held: the draft's agent turn is running
+#. why a control is held: the draft's agent turn is running
+#: src/components/AuthoringWorkspace.tsx
+#: src/lib/drafts.ts
+msgid "Waits for the reply"
+msgstr "等待回复"
+
+#: src/components/DraftConversation.tsx
+msgid "Waits for the reply — the agent switches on the next turn"
+msgstr "等待回复 — 智能体将在下一轮切换"
+
+#: src/components/SpaceSync.tsx
+msgid "Where a project lives is recorded on this device only; this never syncs."
+msgstr "项目所在位置只记录在本设备；从不同步。"
+
+#: src/lib/space.ts
+msgid "where you last stopped reading in each session"
+msgstr "每个会话中你上次读到的位置"
+
+#: src/lib/space.ts
+msgid "where your projects live on this machine"
+msgstr "你的项目在本机的位置"
+
+#: src/components/SpaceSync.tsx
+msgid "Which folder on this device is {name}?"
+msgstr "本设备上哪个文件夹是 {name}？"
+
+#: src/lib/space.ts
+msgid "which process is writing right now"
+msgstr "当前正在写入的进程"
+
+#. graph legend: an edge's width counts its citations
+#: src/components/SpecGraph.tsx
+msgid "width — citations"
+msgstr "宽度 — 引用数"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Workflow source"
+msgstr "工作流源文"
+
+#: src/components/ParkedRun.tsx
+msgid "Workflow waiting for you"
+msgstr "工作流等待你处理"
+
+#. captured artifact's state: a turn is running for it
+#. session status: a player is running its step
+#: src/components/ForgeItemRow.tsx
+#: src/lib/labels.ts
+msgid "working"
+msgstr "工作中"
+
+#. the draft's agent has a turn in flight
+#: src/components/DraftConversation.tsx
+msgid "Working"
+msgstr "工作中"
+
+#: src/components/DraftConversation.tsx
+msgid "working · {span}"
+msgstr "工作中 · {span}"
+
+#: src/components/DraftConversation.tsx
+msgid "Working since {moment}"
+msgstr "自 {moment} 起工作中"
+
+#. label before the intent the conversation is serving
+#: src/components/WorkingLine.tsx
+msgid "Working:"
+msgstr "正在处理："
+
+#. a turn is in flight, its span not yet known
+#: src/components/DraftConversation.tsx
+msgid "working…"
+msgstr "工作中…"
+
+#. busy form of a control the parked run advertises
+#: src/components/ParkedRun.tsx
+msgid "Working…"
+msgstr "执行中…"
+
+#: src/components/AgentEditor.tsx
+msgid "Writable paths (comma-separated)"
+msgstr "可写路径（逗号分隔）"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Writes the playbook and any new player to the shared config"
+msgstr "把剧本和新增的 Player 写入共享配置"
+
+#. the source is being written to disk
+#: src/components/DraftSourceTab.tsx
+msgid "Writing…"
+msgstr "写入中…"
+
+#: src/components/SpaceSync.tsx
+msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
+msgstr "更改已保存在本地（领先 {count, plural, other {# 个提交}}）。"
+
+#: src/components/SpaceSync.tsx
+msgid "Your changes are saved; nothing is pushed yet"
+msgstr "更改已保存；尚未推送"
+
+#: src/components/CaptainHome.tsx
+msgid "Your config file has errors — playbooks are unavailable."
+msgstr "配置文件有错误 — 剧本不可用。"
+
+#. stands in for a project with no name yet
+#: src/components/CaptainHome.tsx
+msgid "your project"
+msgstr "你的项目"

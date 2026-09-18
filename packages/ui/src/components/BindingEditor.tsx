@@ -13,6 +13,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
+import { i18n } from "../i18n.js";
 import { TuningField } from "./TuningField.js";
 import { ModelDiscoveryStatus } from "./ModelDiscoveryStatus.js";
 import { useFitInBox } from "../lib/popover-fit.js";
@@ -80,12 +81,12 @@ export function BindingEditorPopover({
       ref={boxRef}
       data-testid={`binding-editor-${role}`}
       role="dialog"
-      aria-label={`Bind ${role}`}
+      aria-label={i18n._("Bind {role}", { role })}
       className="absolute left-0 top-7 z-20 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
     >
       <label className="flex flex-col gap-1 text-xs">
         <span className="text-neutral-500 dark:text-neutral-400">
-          {role} runs as
+          {i18n._("{role} runs as", { role })}
         </span>
         <select
           data-testid="binding-player"
@@ -106,7 +107,7 @@ export function BindingEditorPopover({
             data-testid="binding-shared-note"
             className="text-xs text-brand-700 dark:text-brand-300"
           >
-            Also answers {others.join(", ")}
+            {i18n._("Also answers {positions}", { positions: others.join(", ") })}
           </span>
         ) : null}
       </label>
@@ -128,22 +129,26 @@ export function BindingEditorPopover({
       />
 
       {(adapterFastMode === true || draft.fastMode != null || effectiveFastMode) && <label className="flex flex-col gap-1 text-xs">
-        <span className="text-neutral-500 dark:text-neutral-400">Fast mode</span>
+        <span className="text-neutral-500 dark:text-neutral-400">{i18n._({ id: "Fast mode", comment: "switch: run this agent in its adapter's fast mode" })}</span>
         <select data-testid="binding-fast-mode" value={draft.fastMode == null ? "inherit" : draft.fastMode ? "on" : "off"}
           onChange={(event) => setDraft((current) => ({ ...current, fastMode: event.target.value === "inherit" ? null : event.target.value === "on" }))}
           className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900">
-          <option value="inherit">Inherit the player ({lane?.agent.fastMode ? "on" : "off"})</option>
-          {adapterFastMode === true && (tuning.fastModeSupported !== false || draft.fastMode === true) && <option value="on">On{tuning.fastModeSupported === false ? " (unsupported)" : ""}</option>}
-          {adapterFastMode === true && <option value="off">Off</option>}
-          {adapterFastMode !== true && draft.fastMode != null && <option value={draft.fastMode ? "on" : "off"}>{draft.fastMode ? "On" : "Off"} ({adapterFastMode === false ? "unsupported" : "current"})</option>}
+          {/* Each choice is one whole phrase: what it inherits, or what
+              it pins and how the runtime stands toward it. */}
+          <option value="inherit">{lane?.agent.fastMode ? i18n._("Inherit the player (on)") : i18n._("Inherit the player (off)")}</option>
+          {adapterFastMode === true && (tuning.fastModeSupported !== false || draft.fastMode === true) && <option value="on">{tuning.fastModeSupported === false ? i18n._("On (unsupported)") : i18n._({ id: "On", comment: "fast mode is pinned on" })}</option>}
+          {adapterFastMode === true && <option value="off">{i18n._({ id: "Off", comment: "fast mode is pinned off" })}</option>}
+          {adapterFastMode !== true && draft.fastMode != null && <option value={draft.fastMode ? "on" : "off"}>{draft.fastMode
+            ? (adapterFastMode === false ? i18n._("On (unsupported)") : i18n._("On (current)"))
+            : (adapterFastMode === false ? i18n._("Off (unsupported)") : i18n._("Off (current)"))}</option>}
         </select>
-        {!tuning.fastModeKnown && <span className="text-neutral-500">Adapter option; model support unverified.</span>}
+        {!tuning.fastModeKnown && <span className="text-neutral-500">{i18n._("Adapter option; model support unverified.")}</span>}
       </label>}
       <ModelDiscoveryStatus state={discovery} />
-      {!tuning.effortKnown && <p className="text-xs text-neutral-500">Effort options apply to the adapter; support for this model is unverified.</p>}
-      {invalidFastMode && <p role="alert" className="text-xs text-red-600">{adapterFastMode === false ? "Clear the fast-mode override; this adapter does not accept it." : "Turn off fast mode for this model."}</p>}
-      {invalidEffort && <p role="alert" className="text-xs text-red-600">Choose a listed effort, inherit, or use the provider default.</p>}
-      {invalidModel && <p role="alert" className="text-xs text-red-600">Enter a model ID, inherit, or use the provider default.</p>}
+      {!tuning.effortKnown && <p className="text-xs text-neutral-500">{i18n._("Effort options apply to the adapter; support for this model is unverified.")}</p>}
+      {invalidFastMode && <p role="alert" className="text-xs text-red-600">{adapterFastMode === false ? i18n._("Clear the fast-mode override; this adapter does not accept it.") : i18n._("Turn off fast mode for this model.")}</p>}
+      {invalidEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed effort, inherit, or use the provider default.")}</p>}
+      {invalidModel && <p role="alert" className="text-xs text-red-600">{i18n._("Enter a model ID, inherit, or use the provider default.")}</p>}
       {error ? (
         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
       ) : null}
@@ -153,7 +158,7 @@ export function BindingEditorPopover({
           onClick={onClose}
           className="min-h-6 rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
-          Cancel
+          {i18n._({ id: "Cancel", comment: "leave an editor without saving" })}
         </button>
         <button
           type="button"
@@ -168,7 +173,7 @@ export function BindingEditorPopover({
           }}
           className="min-h-6 rounded bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-50"
         >
-          {busy ? "Saving…" : "Save"}
+          {busy ? i18n._({ id: "Saving…", comment: "a save is in flight" }) : i18n._({ id: "Save", comment: "commit the edits in this editor" })}
         </button>
       </div>
     </div>

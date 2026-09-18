@@ -38,7 +38,8 @@ import {
   type GraphNode,
   type Placement,
 } from "../lib/spec-graph-layout.js";
-import type { SpecGroup } from "../lib/spec-view-model.js";
+import { GROUP_WORD, type SpecGroup } from "../lib/spec-view-model.js";
+import { i18n } from "../i18n.js";
 
 export {
   buildGraphModel,
@@ -89,10 +90,10 @@ const GROUP_TEXT: Record<SpecGroup, string> = {
   internal: "text-fuchsia-700 dark:text-fuchsia-300",
   test: "text-teal-700 dark:text-teal-300",
 };
-const GROUP_LABEL: Record<SpecGroup, string> = {
-  external: "External",
-  internal: "Internal",
-  test: "Tests",
+const GROUP_LABEL: Record<SpecGroup, () => string> = {
+  external: () => i18n._({ id: "External", comment: "item group: External Behavior" }),
+  internal: () => i18n._({ id: "Internal", comment: "item group: Internal Behavior" }),
+  test: () => i18n._({ id: "Tests", comment: "item group: Verification" }),
 };
 
 /** Ink at text-grade contrast on both grounds. The roles are
@@ -571,7 +572,7 @@ export function SpecGraph({
         className="min-h-0 w-full flex-1 cursor-grab touch-none select-none active:cursor-grabbing"
         role="application"
         tabIndex={0}
-        aria-label="Spec package citation graph"
+        aria-label={i18n._("Spec package citation graph")}
         onKeyDown={onSurfaceKeyDown}
         onClick={(event) => {
           const target = event.target as Element;
@@ -710,7 +711,15 @@ export function SpecGraph({
                 data-match={matched ? "true" : undefined}
                 tabIndex={0}
                 role="button"
-                aria-label={`${node.basename}, ${node.items} items, cites ${node.outbound}, cited by ${node.inbound}`}
+                aria-label={i18n._(
+                  "{name}, {items} items, cites {out}, cited by {in}",
+                  {
+                    name: node.basename,
+                    items: node.items,
+                    out: node.outbound,
+                    in: node.inbound,
+                  },
+                )}
                 className="cursor-pointer focus:outline-none"
                 opacity={dim}
                 onMouseEnter={() =>
@@ -844,18 +853,22 @@ export function SpecGraph({
                 {cardNode.basename}
               </div>
               <div className="mt-1 text-neutral-600 dark:text-neutral-300">
-                {cardNode.items} {cardNode.items === 1 ? "item" : "items"} in
-                total
+                {i18n._("{count, plural, one {# item} other {# items}} in total", {
+                  count: cardNode.items,
+                })}
               </div>
               <ul className="mt-1 space-y-0.5">
                 {GRAPH_GROUP_ORDER.map((group) => (
                   <li
                     key={group}
                     className="flex justify-between gap-3"
-                    aria-label={`${cardNode.groups[group]} ${group} items`}
+                    aria-label={i18n._("{count} {group} items", {
+                      count: cardNode.groups[group],
+                      group: GROUP_WORD[group](),
+                    })}
                   >
                     <span className={GROUP_TEXT[group]}>
-                      {GROUP_LABEL[group]}
+                      {GROUP_LABEL[group]()}
                     </span>
                     <span
                       className={
@@ -870,7 +883,10 @@ export function SpecGraph({
                 ))}
               </ul>
               <div className="mt-1.5 border-t border-neutral-200 pt-1.5 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-                cites {cardNode.outbound} · cited by {cardNode.inbound}
+                {i18n._("cites {out} · cited by {in}", {
+                  out: cardNode.outbound,
+                  in: cardNode.inbound,
+                })}
               </div>
             </>
           ) : cardEdge ? (
@@ -879,8 +895,9 @@ export function SpecGraph({
                 {cardEdge.sourceKey} → {cardEdge.targetKey}
               </div>
               <div className="mt-1 text-neutral-600 dark:text-neutral-300">
-                {cardEdge.weight}{" "}
-                {cardEdge.weight === 1 ? "citation" : "citations"}
+                {i18n._("{count, plural, one {# citation} other {# citations}}", {
+                  count: cardEdge.weight,
+                })}
               </div>
             </>
           ) : null}
@@ -891,27 +908,39 @@ export function SpecGraph({
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-2 text-xs text-neutral-600 dark:text-neutral-400">
         <span className="flex items-center gap-1.5 whitespace-nowrap">
           <span className="h-2.5 w-2.5 rounded-full bg-neutral-700 dark:bg-neutral-200" />
-          cited by packages
+          {i18n._("cited by packages")}
         </span>
         <span className="flex items-center gap-1.5 whitespace-nowrap">
           <span className="h-2.5 w-2.5 rounded-full border-2 border-neutral-700 bg-neutral-100 dark:border-neutral-200 dark:bg-neutral-800" />
-          not cited by packages
+          {i18n._("not cited by packages")}
         </span>
-        <span className="whitespace-nowrap">size — items</span>
-        <span className="whitespace-nowrap">width — citations</span>
-        <span className="whitespace-nowrap">arrow — cites</span>
+        <span className="whitespace-nowrap">
+          {i18n._({ id: "size — items", comment: "graph legend: a node's size counts its items" })}
+        </span>
+        <span className="whitespace-nowrap">
+          {i18n._({
+            id: "width — citations",
+            comment: "graph legend: an edge's width counts its citations",
+          })}
+        </span>
+        <span className="whitespace-nowrap">
+          {i18n._({
+            id: "arrow — cites",
+            comment: "graph legend: an arrow points from the citing package to the cited one",
+          })}
+        </span>
         <button
           type="button"
           data-testid="graph-fit"
-          title="Show the whole graph (0)"
+          title={i18n._("Show the whole graph (0)")}
           onClick={applyFit}
           className="rounded border border-neutral-300 px-1.5 py-0.5 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
-          Fit
+          {i18n._({ id: "Fit", comment: "control: show the whole graph at once" })}
         </button>
         {/* A tip, not a key: it yields first in a narrow pane (DR-041). */}
         <span className="ml-auto hidden whitespace-nowrap @md:inline">
-          click opens · drag moves · scroll zooms
+          {i18n._("click opens · drag moves · scroll zooms")}
         </span>
       </div>
     </div>

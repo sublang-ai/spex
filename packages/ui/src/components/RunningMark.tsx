@@ -6,6 +6,8 @@
 // run's strip, a player's pane. Static under reduced motion, and its
 // meaning is in the accessible name, never in the color alone.
 
+import { i18n } from "../i18n.js";
+
 export function RunningMark({
   running,
   className = "",
@@ -27,7 +29,14 @@ export function RunningMark({
           : "border-2 border-neutral-500"
       } ${className}`}
     >
-      <span className="sr-only">{running ? "running" : "idle"}</span>
+      <span className="sr-only">
+        {running
+          ? i18n._({
+              id: "running",
+              comment: "the aliveness mark's own word: this thing is at work",
+            })
+          : i18n._({ id: "idle", comment: "the aliveness mark's own word: at rest" })}
+      </span>
     </span>
   );
 }

@@ -3181,8 +3181,15 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
     const onRemoved = vi.fn();
     render(
       <>
-        <nav aria-label="Spex navigation">
-          <button type="button" aria-label="Dashboard — 2 need your attention">
+        {/* The rail and its Dashboard entry as the real one marks
+            them: focus follows what they are, never what they say
+            (localization-4). */}
+        <nav data-testid="sidebar" aria-label="Spex navigation">
+          <button
+            type="button"
+            data-surface="Dashboard"
+            aria-label="Dashboard — 2 need your attention"
+          >
             Dashboard
           </button>
         </nav>

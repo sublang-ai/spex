@@ -13,9 +13,288 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. tooltip tail, after the state's description: the workflow it called
+#: src/components/MachineCard.tsx
+msgid " — called /{playbookId}"
+msgstr " — called /{playbookId}"
+
+#. tooltip tail, after the state's description: the role it runs
+#: src/components/MachineCard.tsx
+msgid " — runs {role}"
+msgstr " — runs {role}"
+
+#. follows the project's name on a repair row
+#: src/components/SpaceSync.tsx
+msgid " · {count, plural, one {# session} other {# sessions}} ran in {path}"
+msgstr " · {count, plural, one {# session} other {# sessions}} ran in {path}"
+
+#. follows the issues heading: repairs the reader declined
+#: src/components/SpaceSync.tsx
+msgid " · {count} not added"
+msgstr " · {count} not added"
+
+#. follows the project's name on a repair the reader declined
+#: src/components/SpaceSync.tsx
+msgid " · not added"
+msgstr " · not added"
+
+#. follows the count of commits this device is ahead by
+#: src/components/SpaceSurface.tsx
+msgid " ahead"
+msgstr " ahead"
+
+#. follows the count of commits this device is behind by
+#: src/components/SpaceSurface.tsx
+msgid " behind"
+msgstr " behind"
+
+#. how old the listed data is; follows the Sources summary
+#: src/components/SourcesTabs.tsx
+msgid "— {age}"
+msgstr "— {age}"
+
+#: src/components/ProjectPalette.tsx
+msgid "— a sample project with specs, ready to run"
+msgstr "— a sample project with specs, ready to run"
+
+#: src/components/ProjectPalette.tsx
+msgid "— seeds {path}"
+msgstr "— seeds {path}"
+
+#: src/components/ProjectPalette.tsx
+msgid "— seeds a sample project"
+msgstr "— seeds a sample project"
+
+#. tail of a run's one-line strip: the state that called it
+#: src/components/MachineCard.tsx
+msgid ", called from {state}"
+msgstr ", called from {state}"
+
+#. follows the file's path in the editor's heading
+#. spoken only, follows the Specs tab name when a draft is unsaved
+#: src/App.tsx
+#: src/components/SpecEditor.tsx
+msgid ", unsaved changes"
+msgstr ", unsaved changes"
+
+#. tail of a list the interface cut short
+#. tail of a list the runtime cut short
+#: src/components/CaptainHome.tsx
+#: src/lib/failure-catalogue.ts
+msgid "… and {count} more"
+msgstr "… and {count} more"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "· checked {age}"
+msgstr "· checked {age}"
+
+#. follows the branch name in the header
+#: src/components/SpaceSurface.tsx
+msgid "· committed as Spex"
+msgstr "· committed as Spex"
+
+#. follows the record count on a session's record file
+#: src/components/SpaceExplorer.tsx
+msgid "· reads better as a conversation"
+msgstr "· reads better as a conversation"
+
+#. effort choice: leave the adapter's own default
+#: src/components/AgentEditor.tsx
+msgid "(default)"
+msgstr "(default)"
+
+#: src/components/Markdown.tsx
+msgid "[external image blocked: {alt}]"
+msgstr "[external image blocked: {alt}]"
+
+#: src/components/DraftConversation.tsx
+msgid "{adapter} is not ready — check Settings"
+msgstr "{adapter} is not ready — check Settings"
+
+#: src/components/SpaceSurface.tsx
+msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
+msgstr "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
+
+#. {annotation} is the core's word for the directory
+#: src/components/SpaceExplorer.tsx
+msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
+msgstr "{annotation} · {count, plural, one {# entry} other {# entries}}"
+
+#: src/components/SpaceSync.tsx
+msgid "{chosen} of {total} chosen"
+msgstr "{chosen} of {total} chosen"
+
+#: src/components/FailureCard.tsx
+msgid "{command} failed"
+msgstr "{command} failed"
+
+#: src/components/FailureCard.tsx
+msgid "{command} failed at {step}"
+msgstr "{command} failed at {step}"
+
+#: src/lib/labels.ts
+msgid "{command} is not installed"
+msgstr "{command} is not installed"
+
+#: src/lib/client.ts
+msgid "{command} timed out"
+msgstr "{command} timed out"
+
+#. follows the ×N mark, for a screen reader: how many times
+#. follows the ×N mark, for a screen reader: how many times
+#. follows the ×N mark, for a screen reader: how many times
+#: src/components/CaptainPane.tsx
+#: src/components/FailureCard.tsx
+#: src/components/PlayerPane.tsx
+msgid "{count, plural, one {, # time} other {, # times}}"
+msgstr "{count, plural, one {, # time} other {, # times}}"
+
+#: src/components/SpaceSurface.tsx
+msgid "{count, plural, one {# change} other {# changes}}"
+msgstr "{count, plural, one {# change} other {# changes}}"
+
+#: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# citation} other {# citations}}"
+msgstr "{count, plural, one {# citation} other {# citations}}"
+
+#: src/components/SpaceExplorer.tsx
+msgid "{count, plural, one {# entry} other {# entries}}"
+msgstr "{count, plural, one {# entry} other {# entries}}"
+
+#: src/components/SpaceExplorer.tsx
+msgid "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints."
+msgstr "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints."
+
+#: src/components/SpaceSurface.tsx
+msgid "{count, plural, one {# issue} other {# issues}}"
+msgstr "{count, plural, one {# issue} other {# issues}}"
+
+#: src/components/SpaceSync.tsx
+msgid "{count, plural, one {# issue} other {# issues}} left."
+msgstr "{count, plural, one {# issue} other {# issues}} left."
+
+#: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# item} other {# items}} in total"
+msgstr "{count, plural, one {# item} other {# items}} in total"
+
+#: src/components/SpaceSurface.tsx
+msgid "{count, plural, one {# local change} other {# local changes}}"
+msgstr "{count, plural, one {# local change} other {# local changes}}"
+
+#: src/components/SpecView.tsx
+msgid "{count, plural, one {# match} other {# matches}}"
+msgstr "{count, plural, one {# match} other {# matches}}"
+
+#: src/components/ProjectPalette.tsx
+msgid "{count, plural, one {# needs you} other {# need you}}"
+msgstr "{count, plural, one {# needs you} other {# need you}}"
+
+#: src/components/NavRail.tsx
+msgid "{count, plural, one {# needs your attention} other {# need your attention}}"
+msgstr "{count, plural, one {# needs your attention} other {# need your attention}}"
+
+#: src/App.tsx
+msgid "{count, plural, one {# playbook} other {# playbooks}}"
+msgstr "{count, plural, one {# playbook} other {# playbooks}}"
+
+#: src/components/SpaceExplorer.tsx
+msgid "{count, plural, one {# record} other {# records}}"
+msgstr "{count, plural, one {# record} other {# records}}"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+msgid "{count, plural, one {# review round} other {# review rounds}}"
+msgstr "{count, plural, one {# review round} other {# review rounds}}"
+
+#: src/components/ProjectPalette.tsx
+msgid "{count, plural, one {# running session} other {# running sessions}}"
+msgstr "{count, plural, one {# running session} other {# running sessions}}"
+
+#: src/components/ProjectPalette.tsx
+msgid "{count, plural, one {# session needs you} other {# sessions need you}}"
+msgstr "{count, plural, one {# session needs you} other {# sessions need you}}"
+
+#: src/App.tsx
+msgid "{count, plural, one {# session needs your attention} other {# sessions need your attention}}"
+msgstr "{count, plural, one {# session needs your attention} other {# sessions need your attention}}"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/NavRail.tsx
+msgid "{count, plural, one {# turn} other {# turns}}"
+msgstr "{count, plural, one {# turn} other {# turns}}"
+
+#: src/lib/failure-catalogue.ts
+msgid "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
+msgstr "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
+
+#: src/components/SpaceSync.tsx
+msgid "{count, plural, one {Keep this device's version of the unit? The remote's version stays in Git history.} other {Keep this device's version of all # units? The remote's version stays in Git history.}}"
+msgstr "{count, plural, one {Keep this device's version of the unit? The remote's version stays in Git history.} other {Keep this device's version of all # units? The remote's version stays in Git history.}}"
+
+#: src/components/LibrarySurface.tsx
+msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
+msgstr "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
+
+#: src/components/PlayerPane.tsx
+msgid "{count, plural, one {The same failure # time in this call} other {The same failure # times in this call}}"
+msgstr "{count, plural, one {The same failure # time in this call} other {The same failure # times in this call}}"
+
+#: src/components/CaptainPane.tsx
+#: src/components/FailureCard.tsx
+msgid "{count, plural, one {The same failure # time in this turn} other {The same failure # times in this turn}}"
+msgstr "{count, plural, one {The same failure # time in this turn} other {The same failure # times in this turn}}"
+
+#: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
+msgid "{count} {group} items"
+msgstr "{count} {group} items"
+
+#: src/components/ForgeItemRow.tsx
+msgid "{count} more labels: {rest}"
+msgstr "{count} more labels: {rest}"
+
+#: src/components/ProjectPalette.tsx
+msgid "{count} running"
+msgstr "{count} running"
+
+#: src/lib/spec-view-model.ts
 #: src/lib/time.ts
 msgid "{days}d ago"
 msgstr "{days}d ago"
+
+#: src/components/LibrarySurface.tsx
+msgid "{diagnostic} — delete the draft, or repair the file and restart Spex"
+msgstr "{diagnostic} — delete the draft, or repair the file and restart Spex"
+
+#: src/components/AgentEditor.tsx
+#: src/components/TuningField.tsx
+msgid "{effort} (adapter-wide)"
+msgstr "{effort} (adapter-wide)"
+
+#: src/components/AgentEditor.tsx
+#: src/components/TuningField.tsx
+msgid "{effort} (current)"
+msgstr "{effort} (current)"
+
+#: src/components/AgentEditor.tsx
+msgid "{effort} (unsupported)"
+msgstr "{effort} (unsupported)"
+
+#. joins the two playbook names the /dev hint asks for
+#: src/components/LibrarySurface.tsx
+msgid "{first} and {second}"
+msgstr "{first} and {second}"
+
+#. what failed, then what the agent said about it
+#: src/lib/failure-catalogue.ts
+msgid "{head} — {said}"
+msgstr "{head} — {said}"
+
+#: src/lib/failure-catalogue.ts
+msgid "{head} is no longer an ancestor"
+msgstr "{head} is no longer an ancestor"
 
 #: src/lib/time.ts
 msgid "{hours}h"
@@ -25,9 +304,48 @@ msgstr "{hours}h"
 msgid "{hours}h {minutes}m"
 msgstr "{hours}h {minutes}m"
 
+#: src/lib/spec-view-model.ts
 #: src/lib/time.ts
 msgid "{hours}h ago"
 msgstr "{hours}h ago"
+
+#: src/components/LibrarySurface.tsx
+msgid "{id} is a built-in — enable it below instead"
+msgstr "{id} is a built-in — enable it below instead"
+
+#: src/components/SpecView.tsx
+msgid "{id} not found"
+msgstr "{id} not found"
+
+#. a call's tokens in and out; tok is short for tokens
+#: src/components/PlayerPane.tsx
+msgid "{input}→{output} tok"
+msgstr "{input}→{output} tok"
+
+#: src/components/DeliveryCard.tsx
+msgid "{kind} {ref}"
+msgstr "{kind} {ref}"
+
+#: src/components/DeliveryCard.tsx
+msgid "{kind} {ref} — {url}"
+msgstr "{kind} {ref} — {url}"
+
+#: src/components/NavRail.tsx
+msgid "{label} — {count, plural, one {# needs your attention} other {# need your attention}}"
+msgstr "{label} — {count, plural, one {# needs your attention} other {# need your attention}}"
+
+#: src/components/CompileBand.tsx
+msgid "{label} — the compiler's {id} phase, {status}"
+msgstr "{label} — the compiler's {id} phase, {status}"
+
+#: src/components/SettingsSurface.tsx
+msgid "{label} — where to notify"
+msgstr "{label} — where to notify"
+
+#. a phrase followed by the detail it stands on
+#: src/lib/failure-catalogue.ts
+msgid "{label}: {why}"
+msgstr "{label}: {why}"
 
 #: src/lib/time.ts
 msgid "{minutes}m"
@@ -37,26 +355,480 @@ msgstr "{minutes}m"
 msgid "{minutes}m {seconds}s"
 msgstr "{minutes}m {seconds}s"
 
+#: src/lib/spec-view-model.ts
 #: src/lib/time.ts
 msgid "{minutes}m ago"
 msgstr "{minutes}m ago"
+
+#: src/components/SpaceSync.tsx
+msgid "{name} · now a project at {path}"
+msgstr "{name} · now a project at {path}"
+
+#: src/components/SpaceSync.tsx
+msgid "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
+msgstr "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "{name} agent"
+msgstr "{name} agent"
+
+#: src/components/SpaceSync.tsx
+msgid "{name} not added."
+msgstr "{name} not added."
+
+#: src/components/AgentSettings.tsx
+msgid "{name} settings for this conversation"
+msgstr "{name} settings for this conversation"
+
+#: src/components/AgentSettings.tsx
+msgid "{name} settings: {reading}"
+msgstr "{name} settings: {reading}"
+
+#: src/components/SpecGraph.tsx
+msgid "{name}, {items} items, cites {out}, cited by {in}"
+msgstr "{name}, {items} items, cites {out}, cited by {in}"
+
+#: src/components/NavRail.tsx
+msgid "{name}, a session failed"
+msgstr "{name}, a session failed"
+
+#: src/components/NavRail.tsx
+msgid "{name}, a session has an unread turn"
+msgstr "{name}, a session has an unread turn"
+
+#: src/components/NavRail.tsx
+msgid "{name}, a session is waiting for your reply"
+msgstr "{name}, a session is waiting for your reply"
+
+#: src/components/NavRail.tsx
+msgid "{name}, a session is waiting for your verdict"
+msgstr "{name}, a session is waiting for your verdict"
+
+#: src/components/SpecView.tsx
+msgid "{packages, plural, one {# package} other {# packages}} · {items} items"
+msgstr "{packages, plural, one {# package} other {# packages}} · {items} items"
+
+#: src/components/NavRail.tsx
+msgid "{path} — needs you"
+msgstr "{path} — needs you"
+
+#: src/components/SpecView.tsx
+msgid "{path} is not in the tree"
+msgstr "{path} is not in the tree"
+
+#: src/state/store.ts
+msgid "{path} is not the root of a git work tree. To start a new repository there, use Create instead."
+msgstr "{path} is not the root of a git work tree. To start a new repository there, use Create instead."
+
+#: src/components/MachineCard.tsx
+msgid "{playbookId} machine drawing"
+msgstr "{playbookId} machine drawing"
+
+#: src/components/MachineCard.tsx
+msgid "{playbookId} state machine"
+msgstr "{playbookId} state machine"
+
+#: src/components/MachineCard.tsx
+msgid "{playbookId} state machine, {state} active"
+msgstr "{playbookId} state machine, {state} active"
+
+#: src/components/BindingEditor.tsx
+msgid "{role} runs as"
+msgstr "{role} runs as"
 
 #: src/lib/time.ts
 msgid "{seconds}s"
 msgstr "{seconds}s"
 
+#. a file size in bytes
+#: src/lib/space.ts
+msgid "{size} B"
+msgstr "{size} B"
+
+#. a file size in gigabytes
+#: src/lib/space.ts
+msgid "{size} GB"
+msgstr "{size} GB"
+
+#. a file size in kilobytes
+#: src/lib/space.ts
+msgid "{size} KB"
+msgstr "{size} KB"
+
+#. a file size in megabytes
+#: src/lib/space.ts
+msgid "{size} MB"
+msgstr "{size} MB"
+
 #: src/lib/time.ts
 msgid "{span} ago"
 msgstr "{span} ago"
+
+#: src/components/PlaybookStages.tsx
+msgid "{stage} not found next to this playbook's registry"
+msgstr "{stage} not found next to this playbook's registry"
+
+#. {step} is the sync step's name
+#: src/components/SpaceSurface.tsx
+msgid "{step} stopped"
+msgstr "{step} stopped"
+
+#. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "{step} stopped — {message}"
+msgstr "{step} stopped — {message}"
+
+#: src/components/ForgeItemRow.tsx
+msgid "{text} ({state})"
+msgstr "{text} ({state})"
+
+#: src/components/ForgeItemRow.tsx
+msgid "{title} — {labels}"
+msgstr "{title} — {labels}"
+
+#: src/components/NavRail.tsx
+msgid "{title} — {life}, {age}, {turns}"
+msgstr "{title} — {life}, {age}, {turns}"
+
+#: src/components/NavRail.tsx
+msgid "{title} — {life}, {age}, {turns} — {detail}"
+msgstr "{title} — {life}, {age}, {turns} — {detail}"
+
+#: src/App.tsx
+msgid "{title} — {note}"
+msgstr "{title} — {note}"
+
+#: src/App.tsx
+msgid "{title} — {note} — {more}"
+msgstr "{title} — {note} — {more}"
 
 #: src/lib/time.ts
 msgid "{weeks}w ago"
 msgstr "{weeks}w ago"
 
+#: src/lib/failure-catalogue.ts
+msgid "{who} failed"
+msgstr "{who} failed"
+
+#. who is at work and how long the open call has run
+#. who is at work and how long the open call has run
+#: src/components/CaptainPane.tsx
+#: src/components/PlayerPane.tsx
+msgid "{who} working · {span}"
+msgstr "{who} working · {span}"
+
+#: src/components/PlayerPane.tsx
+msgid "{who} working since {since}"
+msgstr "{who} working since {since}"
+
+#. who is at work, with no span to report yet
+#: src/components/CaptainPane.tsx
+msgid "{who} working…"
+msgstr "{who} working…"
+
+#: src/components/Composer.tsx
+msgid "/ for playbooks · Enter sends"
+msgstr "/ for playbooks · Enter sends"
+
+#: src/components/LibrarySurface.tsx
+msgid "/{id} is already a configured playbook"
+msgstr "/{id} is already a configured playbook"
+
+#. a run's one-line strip: the workflow, where it stands, who called it
+#: src/components/MachineCard.tsx
+msgid "/{playbookId} — {where}{from}"
+msgstr "/{playbookId} — {where}{from}"
+
+#: src/lib/failure-catalogue.ts
+msgid "/{playbookId} failed"
+msgstr "/{playbookId} failed"
+
+#: src/components/SpecView.tsx
+msgid "← Back"
+msgstr "← Back"
+
+#: src/components/SpecView.tsx
+msgid "← Back to {surface}"
+msgstr "← Back to {surface}"
+
+#. act: jump to the end of the transcript; ↓ stays as it is
+#. act: jump to the end of the transcript; ↓ stays as it is
+#. jump to the newest entry; the arrow is part of the pill
+#: src/components/CaptainPane.tsx
+#: src/components/DraftConversation.tsx
+#: src/components/PlayerPane.tsx
+msgid "↓ Latest"
+msgstr "↓ Latest"
+
+#: src/components/NextCard.tsx
+msgid "+{count} more queued"
+msgstr "+{count} more queued"
+
+#. the playbooks the card does not list; <0> holds the slash key
+#: src/components/CaptainHome.tsx
+msgid "+{count} more under <0>/</0>"
+msgstr "+{count} more under <0>/</0>"
+
+#. an agent runtime, then what it is missing
+#: src/components/CaptainHome.tsx
+msgid "<0>{adapter}</0> — {requirement}"
+msgstr "<0>{adapter}</0> — {requirement}"
+
+#: src/components/CitationPreview.tsx
+msgid "<0>{id}</0> — not in the tree"
+msgstr "<0>{id}</0> — not in the tree"
+
+#: src/components/Composer.tsx
+msgid "<0>{player}</0> is waiting for your reply — your next message answers it."
+msgstr "<0>{player}</0> is waiting for your reply — your next message answers it."
+
 #. a span shorter than one second
 #: src/lib/time.ts
 msgid "<1s"
 msgstr "<1s"
+
+#: src/components/ProjectPalette.tsx
+msgid "~/path — add an existing repo or create new"
+msgstr "~/path — add an existing repo or create new"
+
+#: src/state/reducer.ts
+msgid "◆ turn aborted"
+msgstr "◆ turn aborted"
+
+#: src/state/reducer.ts
+msgid "◆ turn aborted: {reason}"
+msgstr "◆ turn aborted: {reason}"
+
+#. how a player's call ended; ◇ stays as it is
+#: src/components/PlayerPane.tsx
+msgid "◇ aborted"
+msgstr "◇ aborted"
+
+#: src/state/store.ts
+msgid "✓ compiled and registered — see Configured playbooks"
+msgstr "✓ compiled and registered — see Configured playbooks"
+
+#. how a player's call ended; ✓ stays as it is
+#: src/components/PlayerPane.tsx
+msgid "✓ finished"
+msgstr "✓ finished"
+
+#. a failed call and what it said; ✗ stays as it is
+#: src/components/PlayerPane.tsx
+msgid "✗ {error}"
+msgstr "✗ {error}"
+
+#: src/state/store.ts
+msgid "✗ cancel failed: {reason}"
+msgstr "✗ cancel failed: {reason}"
+
+#. how a player's call ended; ✗ stays as it is
+#: src/components/PlayerPane.tsx
+msgid "✗ failed"
+msgstr "✗ failed"
+
+#: src/lib/labels.ts
+msgid "A command the run needs is not installed"
+msgstr "A command the run needs is not installed"
+
+#: src/components/DeliveryCard.tsx
+msgid "A follow-up message continues this intent."
+msgstr "A follow-up message continues this intent."
+
+#: src/components/SpaceSync.tsx
+msgid "A Git merge is pending; finish or abort it in your terminal."
+msgstr "A Git merge is pending; finish or abort it in your terminal."
+
+#: src/components/SpaceSync.tsx
+msgid "A merge is in progress in your terminal. Finish or abort it there."
+msgstr "A merge is in progress in your terminal. Finish or abort it there."
+
+#: src/lib/failure-catalogue.ts
+msgid "A nested workflow failed"
+msgstr "A nested workflow failed"
+
+#: src/lib/failure-catalogue.ts
+msgid "A Playbook defect"
+msgstr "A Playbook defect"
+
+#: src/lib/labels.ts
+msgid "A player finishes its step"
+msgstr "A player finishes its step"
+
+#: src/App.tsx
+msgid "A player is waiting for your reply: {detail}"
+msgstr "A player is waiting for your reply: {detail}"
+
+#: src/components/SettingsSurface.tsx
+msgid "A player named {id} already exists — edit it above instead."
+msgstr "A player named {id} already exists — edit it above instead."
+
+#: src/state/dashboard.ts
+msgid "A session failed"
+msgstr "A session failed"
+
+#: src/state/dashboard.ts
+msgid "A session has an unread turn"
+msgstr "A session has an unread turn"
+
+#: src/state/dashboard.ts
+msgid "A session is waiting for your reply"
+msgstr "A session is waiting for your reply"
+
+#: src/state/dashboard.ts
+msgid "A session is waiting for your verdict"
+msgstr "A session is waiting for your verdict"
+
+#: src/state/store.ts
+msgid "a tool"
+msgstr "a tool"
+
+#: src/lib/labels.ts
+msgid "A turn finishes"
+msgstr "A turn finishes"
+
+#: src/lib/labels.ts
+msgid "A turn is aborted"
+msgstr "A turn is aborted"
+
+#. act: stop the running turn
+#. end the running turn now
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Abort"
+msgstr "Abort"
+
+#: src/state/store.ts
+msgid "abort failed: {reason}"
+msgstr "abort failed: {reason}"
+
+#. the abort request is in flight
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Aborting…"
+msgstr "Aborting…"
+
+#: src/components/ProjectGroup.tsx
+msgid "Actions for {title}"
+msgstr "Actions for {title}"
+
+#. compact reading in a pane header: time this agent was active
+#: src/components/AgentActiveTime.tsx
+msgid "active · {span}"
+msgstr "active · {span}"
+
+#: src/components/DraftConversation.tsx
+msgid "Adapt a SKILL.md"
+msgstr "Adapt a SKILL.md"
+
+#. which agent runtime an agent runs on
+#. which agent runtime an agent runs on
+#: src/components/AgentEditor.tsx
+msgid "Adapter"
+msgstr "Adapter"
+
+#: src/components/AgentEditor.tsx
+msgid "Adapter option; model support unverified"
+msgstr "Adapter option; model support unverified"
+
+#: src/components/BindingEditor.tsx
+msgid "Adapter option; model support unverified."
+msgstr "Adapter option; model support unverified."
+
+#. register the typed path as an existing repository
+#: src/components/ProjectPalette.tsx
+msgid "Add"
+msgstr "Add"
+
+#: src/components/SettingsSurface.tsx
+msgid "Add a player"
+msgstr "Add a player"
+
+#: src/components/ProjectPalette.tsx
+msgid "Add a project"
+msgstr "Add a project"
+
+#: src/components/ProjectPalette.tsx
+msgid "Add a project by path…"
+msgstr "Add a project by path…"
+
+#: src/components/CaptainHome.tsx
+msgid "Add a project first ({keys})"
+msgstr "Add a project first ({keys})"
+
+#: src/components/CaptainHome.tsx
+#: src/components/NavRail.tsx
+msgid "Add a project…"
+msgstr "Add a project…"
+
+#: src/components/SpaceSurface.tsx
+msgid "Add a remote first"
+msgstr "Add a remote first"
+
+#: src/components/SpaceSync.tsx
+msgid "Add a remote to share this space"
+msgstr "Add a remote to share this space"
+
+#: src/components/ProjectGroup.tsx
+msgid "Add an intent to {project}"
+msgstr "Add an intent to {project}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Add intent…"
+msgstr "Add intent…"
+
+#: src/components/SettingsSurface.tsx
+msgid "Add player"
+msgstr "Add player"
+
+#: src/components/SpaceSync.tsx
+msgid "Add project"
+msgstr "Add project"
+
+#: src/components/SpaceSurface.tsx
+msgid "Add remote"
+msgstr "Add remote"
+
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+msgid "Add this to the project's Up next without sending it"
+msgstr "Add this to the project's Up next without sending it"
+
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+msgid "Add to Up next"
+msgstr "Add to Up next"
+
+#: src/components/SpaceSync.tsx
+msgid "Added {name}, but {reason}"
+msgstr "Added {name}, but {reason}"
+
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+msgid "Added to Up next — see the project's Overview."
+msgstr "Added to Up next — see the project's Overview."
+
+#. the Add project control, while the add is in flight
+#. the Add project control, while the add is in flight
+#: src/components/SpaceSync.tsx
+msgid "Adding…"
+msgstr "Adding…"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "after {title}"
+msgstr "after {title}"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "after {title} ({project})"
+msgstr "after {title} ({project})"
+
+#. queued row standing: it runs once the current work ends
+#: src/components/QueuedIntentPresentation.tsx
+msgid "after current work"
+msgstr "after current work"
 
 #. compact age in tight chrome: that many days ago
 #: src/lib/time.ts
@@ -83,37 +855,3724 @@ msgstr "now"
 msgid "age.weeks"
 msgstr "{weeks}w"
 
+#: src/state/reducer.ts
+msgid "agent error"
+msgstr "agent error"
+
+#: src/components/SettingsSurface.tsx
+msgid "Agents"
+msgstr "Agents"
+
+#: src/components/ProjectsSurface.tsx
+msgid "ahead of upstream"
+msgstr "ahead of upstream"
+
 #: src/components/NavRail.tsx
+msgid "all {count}…"
+msgstr "all {count}…"
+
+#: src/components/DashboardSurface.tsx
+msgid "All clear — nothing waiting, nothing queued to start."
+msgstr "All clear — nothing waiting, nothing queued to start."
+
+#: src/components/DashboardSurface.tsx
+msgid "All clear across projects — nothing waiting, nothing queued to start."
+msgstr "All clear across projects — nothing waiting, nothing queued to start."
+
+#: src/components/DashboardSurface.tsx
+msgid "All clear across projects. Next up: <0>{title}</0> <1>({project})</1>"
+msgstr "All clear across projects. Next up: <0>{title}</0> <1>({project})</1>"
+
+#: src/components/DashboardSurface.tsx
+msgid "All clear. Next up: <0>{title}</0> <1>({project})</1>"
+msgstr "All clear. Next up: <0>{title}</0> <1>({project})</1>"
+
+#: src/components/SpaceSync.tsx
+msgid "All issues resolved."
+msgstr "All issues resolved."
+
+#. choose this device's version for every conflict
+#: src/components/SpaceSync.tsx
+msgid "All mine"
+msgstr "All mine"
+
+#: src/components/DashboardSurface.tsx
+msgid "All projects"
+msgstr "All projects"
+
+#. choose the remote's version for every conflict
+#: src/components/SpaceSync.tsx
+msgid "All remote"
+msgstr "All remote"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "also {position}"
+msgstr "also {position}"
+
+#: src/components/BindingEditor.tsx
+msgid "Also answers {positions}"
+msgstr "Also answers {positions}"
+
+#: src/components/AgentSettings.tsx
+msgid "Also sets {positions}"
+msgstr "Also sets {positions}"
+
+#. a transition with no event: it is taken unconditionally
+#: src/components/MachineCard.tsx
+msgid "always"
+msgstr "always"
+
+#: src/lib/failure-catalogue.ts
+msgid "An agent failed"
+msgstr "An agent failed"
+
+#: src/components/ParkedRun.tsx
+msgid "Answer below, or drop the run"
+msgstr "Answer below, or drop the run"
+
+#: src/components/Composer.tsx
+msgid "Answer the question…"
+msgstr "Answer the question…"
+
+#. follows a role name, before the player that answers it
+#: src/components/DraftConversation.tsx
+msgid "answered by"
+msgstr "answered by"
+
+#: src/components/DraftConversation.tsx
+msgid "Answering agent"
+msgstr "Answering agent"
+
+#: src/components/SettingsSurface.tsx
+msgid "Answers {positions}"
+msgstr "Answers {positions}"
+
+#. keyboard shortcut column: pressing any letter key
+#: src/lib/shortcuts.ts
+msgid "any letter"
+msgstr "any letter"
+
+#: src/App.tsx
+#: src/state/store.ts
+msgid "app state failed to load: {reason}"
+msgstr "app state failed to load: {reason}"
+
+#. confirm: apply the chosen versions
+#. confirm: apply the chosen versions
+#. sync step: applying the chosen versions
+#: src/components/SpaceSync.tsx
+#: src/lib/space.ts
+msgid "Apply"
+msgstr "Apply"
+
+#. sync step running: applying the chosen versions
+#. sync step running: applying the chosen versions
+#: src/components/SpaceSync.tsx
+#: src/lib/space.ts
+msgid "Applying…"
+msgstr "Applying…"
+
+#. graph legend: an arrow points from the citing package to the cited one
+#: src/components/SpecGraph.tsx
+msgid "arrow — cites"
+msgstr "arrow — cites"
+
+#: src/components/CompileBand.tsx
+msgid "asked by the agent"
+msgstr "asked by the agent"
+
+#: src/components/CompileBand.tsx
+msgid "asked by you"
+msgstr "asked by you"
+
+#: src/state/store.ts
+msgid "Asked permission to use {tool} — {reason}; Spex answers no permission request, so the agent's own default decided"
+msgstr "Asked permission to use {tool} — {reason}; Spex answers no permission request, so the agent's own default decided"
+
+#: src/state/store.ts
+msgid "Asked permission to use {tool}; Spex answers no permission request, so the agent's own default decided"
+msgstr "Asked permission to use {tool}; Spex answers no permission request, so the agent's own default decided"
+
+#: src/components/DraftConversation.tsx
+msgid "Asked to compile"
+msgstr "Asked to compile"
+
+#. where a running machine stands
+#. where a running machine stands
+#: src/components/MachineCard.tsx
+msgid "at {state}"
+msgstr "at {state}"
+
+#: src/components/MachineCard.tsx
+msgid "at {state} — calling /{playbookId}"
+msgstr "at {state} — calling /{playbookId}"
+
+#: src/components/MachineCard.tsx
+msgid "at {state} → calling /{playbookId}"
+msgstr "at {state} → calling /{playbookId}"
+
+#: src/components/AgentEditor.tsx
+msgid "auto (protected)"
+msgstr "auto (protected)"
+
+#: src/components/AgentEditor.tsx
+msgid "auto: the agent works on its own inside the repo, with the adapter's own protections on"
+msgstr "auto: the agent works on its own inside the repo, with the adapter's own protections on"
+
+#: src/components/LibrarySurface.tsx
+msgid "Available built-ins"
+msgstr "Available built-ins"
+
+#: src/components/SpecView.tsx
+msgid "back to {id}"
+msgstr "back to {id}"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Back to the playbook list — the draft stays as it is"
+msgstr "Back to the playbook list — the draft stays as it is"
+
+#: src/components/ProjectsSurface.tsx
+msgid "behind upstream"
+msgstr "behind upstream"
+
+#. notification sink: the terminal bell
+#: src/components/SettingsSurface.tsx
+msgid "bell"
+msgstr "bell"
+
+#: src/components/SpaceExplorer.tsx
+msgid "binary file"
+msgstr "binary file"
+
+#: src/components/SpaceExplorer.tsx
+msgid "binary file · {size}"
+msgstr "binary file · {size}"
+
+#: src/components/BindingEditor.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Bind {role}"
+msgstr "Bind {role}"
+
+#. mark on an issue that stops a sync
+#: src/components/SpaceSync.tsx
+msgid "blocking"
+msgstr "blocking"
+
+#: src/components/SettingsSurface.tsx
+msgid "bound to no role yet"
+msgstr "bound to no role yet"
+
+#. {status} is the space's status word
+#: src/components/SpaceSurface.tsx
+msgid "branch {branch} · {status}"
+msgstr "branch {branch} · {status}"
+
+#. history row tag: a fixed bug
+#: src/components/ProjectGroup.tsx
+msgid "bug"
+msgstr "bug"
+
+#. history row, spoken only: a bug this work closed
+#: src/components/ProjectGroup.tsx
+msgid "bug fixed"
+msgstr "bug fixed"
+
+#. permission mode: no prompts at all
+#: src/components/AgentEditor.tsx
+msgid "bypass"
+msgstr "bypass"
+
+#: src/components/AgentEditor.tsx
+msgid "bypass: no permission prompts — sandboxed repos only"
+msgstr "bypass: no permission prompts — sandboxed repos only"
+
+#. the Captain's avatar: one letter standing for Captain
+#. the Captain's avatar: one letter standing for Captain
+#: src/components/CaptainHome.tsx
+#: src/components/CaptainPane.tsx
+msgid "C"
+msgstr "C"
+
+#. caption on a state box: the workflow this state called
+#: src/lib/machine-labels.ts
+msgid "call /{playbookId}"
+msgstr "call /{playbookId}"
+
+#: src/App.tsx
+msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
+msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
+
+#. default cancel button: back out of the act
+#. leave an editor without saving
+#. leave an editor without saving
+#. leave an editor without saving
+#. leave an editor without saving
+#. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
+#. stop the running compile
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+#: src/components/CompileBand.tsx
+#: src/components/DraftSourceTab.tsx
+#: src/components/InlineConfirm.tsx
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+#: src/components/SpecEditor.tsx
+msgid "Cancel"
+msgstr "Cancel"
+
+#: src/state/store.ts
+msgid "cancel failed: {reason}"
+msgstr "cancel failed: {reason}"
+
+#: src/lib/drafts.ts
+msgid "Canceled {age}"
+msgstr "Canceled {age}"
+
+#. the agent that routes the Boss's message to a playbook
+#. the agent that routes the Boss's message to a playbook
+#. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#: src/components/CaptainHome.tsx
+#: src/components/CaptainPane.tsx
+#: src/components/DraftConversation.tsx
+#: src/components/SettingsSurface.tsx
+#: src/lib/session-agents.ts
+msgid "Captain"
+msgstr "Captain"
+
+#: src/components/CaptainHome.tsx
+msgid "Captain agent"
+msgstr "Captain agent"
+
+#: src/components/CaptainPane.tsx
+msgid "Captain is thinking…"
+msgstr "Captain is thinking…"
+
+#. label before the Captain agent's own chip
+#: src/components/CaptainHome.tsx
+msgid "Captain:"
+msgstr "Captain:"
+
+#: src/components/SpaceSurface.tsx
+msgid "Change remote"
+msgstr "Change remote"
+
+#. draft state chip, at most 14 characters: the source changed after the last compile
+#: src/lib/drafts.ts
+msgid "Changed"
+msgstr "Changed"
+
+#. an agent's setting departs from the configured one, for this session only
+#: src/components/AgentSettings.tsx
+msgid "changed for this conversation"
+msgstr "changed for this conversation"
+
+#: src/components/SpaceSync.tsx
+msgid "Changed on both sides — choose which version to keep"
+msgstr "Changed on both sides — choose which version to keep"
+
+#: src/lib/failure-catalogue.ts
+msgid "Changed the repository in a step that changes nothing"
+msgstr "Changed the repository in a step that changes nothing"
+
+#: src/lib/failure-catalogue.ts
+msgid "Changes could not be attributed to the step"
+msgstr "Changes could not be attributed to the step"
+
+#. provenance chip: captured from a conversation
+#: src/components/DeliveryCard.tsx
+msgid "chat"
+msgstr "chat"
+
+#. sync step: checking the remote
+#: src/lib/space.ts
+msgid "Check"
+msgstr "Check"
+
+#: src/components/CaptainPane.tsx
+msgid "Check agent readiness"
+msgstr "Check agent readiness"
+
+#: src/components/SpaceSync.tsx
+msgid "Check remote"
+msgstr "Check remote"
+
+#: src/lib/space.ts
+msgid "Checking remote…"
+msgstr "Checking remote…"
+
+#. the Check remote control, while the check runs
+#: src/components/CaptainHome.tsx
+#: src/components/SpaceSync.tsx
+msgid "Checking…"
+msgstr "Checking…"
+
+#. mark on a unit changed on both sides
+#: src/components/SpaceSync.tsx
+msgid "choose"
+msgstr "choose"
+
+#: src/components/AgentEditor.tsx
+msgid "Choose a listed effort or the provider default."
+msgstr "Choose a listed effort or the provider default."
+
+#: src/components/BindingEditor.tsx
+msgid "Choose a listed effort, inherit, or use the provider default."
+msgstr "Choose a listed effort, inherit, or use the provider default."
+
+#: src/components/AgentSettings.tsx
+msgid "Choose a listed effort, take the configured value, or use the provider default."
+msgstr "Choose a listed effort, take the configured value, or use the provider default."
+
+#: src/components/ProjectPalette.tsx
+msgid "Choose a project"
+msgstr "Choose a project"
+
+#. empty choice of the reasoning-effort select
+#: src/components/TuningField.tsx
+msgid "Choose effort…"
+msgstr "Choose effort…"
+
+#: src/components/SpaceSync.tsx
+msgid "Choose folder…"
+msgstr "Choose folder…"
+
+#: src/components/SpaceSync.tsx
+msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
+msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
+
+#: src/components/DraftConversation.tsx
+msgid "Choose which agent answers"
+msgstr "Choose which agent answers"
+
+#: src/components/LibrarySurface.tsx
+msgid "Choose which session player answers {role}"
+msgstr "Choose which session player answers {role}"
+
+#: src/components/SpecView.tsx
+msgid "Citations: {summary}"
+msgstr "Citations: {summary}"
+
+#. how many items cite this one
+#. how many items cite this one
+#: src/components/SpecItemRows.tsx
+#: src/lib/spec-view-model.ts
+msgid "cited by {in}"
+msgstr "cited by {in}"
+
+#: src/components/SpecGraph.tsx
+msgid "cited by packages"
+msgstr "cited by packages"
+
+#. row label over the items this one cites
+#: src/components/SpecItemRows.tsx
+msgid "cites"
+msgstr "cites"
+
+#. how many items this one cites
+#: src/lib/spec-view-model.ts
+msgid "cites {out}"
+msgstr "cites {out}"
+
+#: src/components/SpecGraph.tsx
+#: src/lib/spec-view-model.ts
+msgid "cites {out} · cited by {in}"
+msgstr "cites {out} · cited by {in}"
+
+#: src/components/AgentSettings.tsx
+msgid "Clear the fast-mode choice; this adapter does not accept it."
+msgstr "Clear the fast-mode choice; this adapter does not accept it."
+
+#: src/components/BindingEditor.tsx
+msgid "Clear the fast-mode override; this adapter does not accept it."
+msgstr "Clear the fast-mode override; this adapter does not accept it."
+
+#: src/components/SpecView.tsx
+msgid "Clear the search"
+msgstr "Clear the search"
+
+#: src/components/SpecView.tsx
+msgid "Clear the search (Escape)"
+msgstr "Clear the search (Escape)"
+
+#: src/components/SpecGraph.tsx
+msgid "click opens · drag moves · scroll zooms"
+msgstr "click opens · drag moves · scroll zooms"
+
+#: src/state/store.ts
+msgid "client not connected"
+msgstr "client not connected"
+
+#: src/lib/shortcuts.ts
+msgid "Close the focused session tab"
+msgstr "Close the focused session tab"
+
+#: src/lib/shortcuts.ts
+msgid "Close the menu, palette, or editor at hand"
+msgstr "Close the menu, palette, or editor at hand"
+
+#: src/components/ProjectGroup.tsx
+msgid "Close this intent as dropped — the session keeps running"
+msgstr "Close this intent as dropped — the session keeps running"
+
+#: src/components/WorkingLine.tsx
+msgid "Close this intent as dropped — the turn keeps running"
+msgstr "Close this intent as dropped — the turn keeps running"
+
+#: src/App.tsx
+msgid "Close this tab — the session stays in the sidebar"
+msgstr "Close this tab — the session stays in the sidebar"
+
+#: src/components/PlayerPane.tsx
+msgid "Collapse {player}"
+msgstr "Collapse {player}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Collapse {project}"
+msgstr "Collapse {project}"
+
+#: src/components/MachineCard.tsx
+msgid "Collapse {run}"
+msgstr "Collapse {run}"
+
+#: src/components/SpecView.tsx
+msgid "Collapse all"
+msgstr "Collapse all"
+
+#: src/components/SpecView.tsx
+msgid "Collapse all items in {name}"
+msgstr "Collapse all items in {name}"
+
+#: src/lib/shortcuts.ts
+msgid "Collapse or show the sidebar"
+msgstr "Collapse or show the sidebar"
+
+#: src/components/NavRail.tsx
+msgid "Collapse the sidebar"
+msgstr "Collapse the sidebar"
+
+#: src/components/NavRail.tsx
+msgid "Collapse the sidebar ({keys})"
+msgstr "Collapse the sidebar ({keys})"
+
+#: src/lib/failure-catalogue.ts
+msgid "Commit or discard them"
+msgstr "Commit or discard them"
+
+#: src/lib/failure-catalogue.ts
+msgid "Commit or discard what is left"
+msgstr "Commit or discard what is left"
+
+#: src/lib/failure-catalogue.ts
+msgid "Committed {oid} but left changes uncommitted"
+msgstr "Committed {oid} but left changes uncommitted"
+
+#: src/lib/failure-catalogue.ts
+msgid "Committed nothing"
+msgstr "Committed nothing"
+
+#: src/lib/failure-catalogue.ts
+msgid "Committed, but left changes uncommitted"
+msgstr "Committed, but left changes uncommitted"
+
+#. sync step: comparing both sides
+#: src/lib/space.ts
+msgid "Compare"
+msgstr "Compare"
+
+#. sync step running: comparing both sides
+#: src/lib/space.ts
+msgid "Comparing…"
+msgstr "Comparing…"
+
+#. start a compile of the draft's source
+#: src/components/AuthoringWorkspace.tsx
+msgid "Compile"
+msgstr "Compile"
+
+#: src/components/CompileBand.tsx
+msgid "Compile canceled"
+msgstr "Compile canceled"
+
+#: src/components/LibrarySurface.tsx
+msgid "Compile failed at {phase}"
+msgstr "Compile failed at {phase}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Compile failed at an unknown phase"
+msgstr "Compile failed at an unknown phase"
+
+#: src/components/CompileBand.tsx
+msgid "Compile interrupted when Spex closed"
+msgstr "Compile interrupted when Spex closed"
+
+#. draft state chip, at most 14 characters: the last compile succeeded
+#: src/lib/drafts.ts
+msgid "Compiled"
+msgstr "Compiled"
+
+#: src/components/CompileBand.tsx
+#: src/lib/drafts.ts
+msgid "Compiled {age}"
+msgstr "Compiled {age}"
+
+#: src/lib/drafts.ts
+msgid "Compiled {age}; the source changed since"
+msgstr "Compiled {age}; the source changed since"
+
+#: src/components/LibrarySurface.tsx
+msgid "Compiled {id}"
+msgstr "Compiled {id}"
+
+#. why a tab is disabled: nothing to show until a compile succeeds
+#: src/components/AuthoringWorkspace.tsx
+msgid "Compiles first"
+msgstr "Compiles first"
+
+#. draft state chip, at most 14 characters: a compile is running
+#. the draft's compile is running
+#. why a control is held: the draft's compile is running
+#. why a control is held: the draft's compile is running
+#: src/components/AuthoringWorkspace.tsx
+#: src/lib/drafts.ts
+msgid "Compiling"
+msgstr "Compiling"
+
+#: src/components/LibrarySurface.tsx
+msgid "Compiling {id}"
+msgstr "Compiling {id}"
+
+#: src/lib/drafts.ts
+msgid "Compiling since {age}"
+msgstr "Compiling since {age}"
+
+#. a compile is in flight
+#: src/components/AuthoringWorkspace.tsx
+msgid "Compiling…"
+msgstr "Compiling…"
+
+#: src/components/AgentActiveTime.tsx
+msgid "Completed active time this session: {span} · parallel calls overlap"
+msgstr "Completed active time this session: {span} · parallel calls overlap"
+
+#: src/App.tsx
+msgid "Config {status} — open Settings"
+msgstr "Config {status} — open Settings"
+
+#: src/App.tsx
+msgid "Config {status} →"
+msgstr "Config {status} →"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "config backups and temporary files"
+msgstr "config backups and temporary files"
+
+#: src/components/SettingsSurface.tsx
+msgid "Config file invalid"
+msgstr "Config file invalid"
+
+#: src/components/SpaceSurface.tsx
+msgid "Configuration outside the space; not shared"
+msgstr "Configuration outside the space; not shared"
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Configure {name}"
+msgstr "Configure {name}"
+
+#: src/components/CaptainHome.tsx
+msgid "Configure the Captain agent"
+msgstr "Configure the Captain agent"
+
+#: src/components/LibrarySurface.tsx
+msgid "Configured playbooks"
+msgstr "Configured playbooks"
+
+#. default confirm button: go ahead with the act
+#. verdict control: accept the delivered work
+#. verdict control: accept the delivered work
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/InlineConfirm.tsx
+msgid "Confirm"
+msgstr "Confirm"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Confirm the command, intent, and players"
+msgstr "Confirm the command, intent, and players"
+
+#. verdict control, busy: the verdict is in flight
+#. verdict control, busy: the verdict is in flight
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+msgid "Confirming…"
+msgstr "Confirming…"
+
+#: src/App.tsx
+msgid "Connected, but {reason}"
+msgstr "Connected, but {reason}"
+
+#. the page is reaching for the core
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Connecting…"
+msgstr "Connecting…"
+
+#: src/lib/client.ts
+msgid "connection closed"
+msgstr "connection closed"
+
+#: src/App.tsx
+msgid "Connection restored."
+msgstr "Connection restored."
+
+#: src/App.tsx
+msgid "Connection to the Spex core lost — reconnecting."
+msgstr "Connection to the Spex core lost — reconnecting."
+
+#. the item's ID went to the clipboard
+#: src/components/SpecItemRows.tsx
+msgid "copied"
+msgstr "copied"
+
+#. the copy control, just after it copied
+#. the copy control, just after it copied
+#. the path went to the clipboard
+#: src/components/SettingsSurface.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Copied"
+msgstr "Copied"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpecView.tsx
+msgid "Copied {what}"
+msgstr "Copied {what}"
+
+#. the copy control, just after it copied
+#: src/components/SpecView.tsx
+msgid "Copied ✓"
+msgstr "Copied ✓"
+
+#: src/lib/space.ts
+msgid "copies made while writing"
+msgstr "copies made while writing"
+
+#: src/components/AgentEditor.tsx
+msgid "Copies the Captain's adapter, model, effort, fast mode, and permissions"
+msgstr "Copies the Captain's adapter, model, effort, fast mode, and permissions"
+
+#. copy the command to the clipboard
+#: src/components/SpecView.tsx
+msgid "Copy"
+msgstr "Copy"
+
+#: src/components/SpecItemRows.tsx
+msgid "Copy {id}"
+msgstr "Copy {id}"
+
+#: src/components/SpecView.tsx
+msgid "Copy command {command}"
+msgstr "Copy command {command}"
+
+#. the item's ID could not be copied
+#: src/components/SpecItemRows.tsx
+msgid "copy failed"
+msgstr "copy failed"
+
+#. the command could not be copied
+#: src/components/SpecView.tsx
+msgid "Copy failed"
+msgstr "Copy failed"
+
+#: src/components/SpecView.tsx
+msgid "Copy failed for {what}"
+msgstr "Copy failed for {what}"
+
+#: src/components/SpaceSurface.tsx
+msgid "Copy is not available here; the path is shown to select."
+msgstr "Copy is not available here; the path is shown to select."
+
+#: src/components/SettingsSurface.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Copy path"
+msgstr "Copy path"
+
+#: src/components/SpecView.tsx
+msgid "Could not open {path}"
+msgstr "Could not open {path}"
+
+#: src/components/SpecView.tsx
+msgid "could not read the file"
+msgstr "could not read the file"
+
+#: src/components/ProjectGroup.tsx
+#: src/components/WorkingLine.tsx
+msgid "Couldn't drop “{title}”: {reason}"
+msgstr "Couldn't drop “{title}”: {reason}"
+
+#: src/lib/failure-catalogue.ts
+msgid "Couldn't judge the result"
+msgstr "Couldn't judge the result"
+
+#: src/components/ProjectsSurface.tsx
+#: src/components/SourcesTabs.tsx
+msgid "Couldn't load GitHub data: {reason}"
+msgstr "Couldn't load GitHub data: {reason}"
+
+#: src/components/SpaceSync.tsx
+msgid "Couldn't load the diff: {reason}"
+msgstr "Couldn't load the diff: {reason}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Couldn't mark it reviewed: {reason}"
+msgstr "Couldn't mark it reviewed: {reason}"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Couldn't read it: {reason}"
+msgstr "Couldn't read it: {reason}"
+
+#: src/lib/failure-catalogue.ts
+msgid "Couldn't read the repository's state"
+msgstr "Couldn't read the repository's state"
+
+#: src/components/SpaceExplorer.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Couldn't read the space: {reason}"
+msgstr "Couldn't read the space: {reason}"
+
+#: src/lib/labels.ts
+msgid "Couldn't reconcile the repository: {detail}"
+msgstr "Couldn't reconcile the repository: {detail}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Couldn't record the verdict: {reason}"
+msgstr "Couldn't record the verdict: {reason}"
+
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Couldn't remove “{title}”: {reason}"
+msgstr "Couldn't remove “{title}”: {reason}"
+
+#: src/components/SpaceSurface.tsx
+msgid "Couldn't show it in the file manager"
+msgstr "Couldn't show it in the file manager"
+
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Couldn't undo: {reason}"
+msgstr "Couldn't undo: {reason}"
+
+#. start a new repository at the typed path
+#: src/components/ProjectPalette.tsx
+msgid "Create"
+msgstr "Create"
+
+#: src/components/SettingsSurface.tsx
+msgid "Created a starter config at <0>{path}</0>"
+msgstr "Created a starter config at <0>{path}</0>"
+
+#. tag on the project row the workspace is on
+#: src/components/ProjectPalette.tsx
+msgid "current"
+msgstr "current"
+
+#. the hand-typed model id field
+#: src/components/ModelField.tsx
+msgid "Custom model"
+msgstr "Custom model"
+
+#. model choice: type a model id by hand
+#: src/components/ModelField.tsx
+msgid "Custom model…"
+msgstr "Custom model…"
+
+#: src/components/NavRail.tsx
+#: src/components/SpecView.tsx
 msgid "Dashboard"
 msgstr "Dashboard"
+
+#. session status: the Captain has the floor
+#: src/lib/labels.ts
+msgid "deciding"
+msgstr "deciding"
+
+#. outline branch holding the decision records
+#: src/components/SpecView.tsx
+msgid "decisions"
+msgstr "decisions"
+
+#: src/components/SpecView.tsx
+msgid "Decisions, {count} records"
+msgstr "Decisions, {count} records"
+
+#. confirm: delete this session for good
+#. confirm: remove the draft for good
+#. remove the draft for good
+#: src/components/LibrarySurface.tsx
+#: src/components/NavRail.tsx
+msgid "Delete"
+msgstr "Delete"
+
+#: src/components/LibrarySurface.tsx
+msgid "Delete draft {id}"
+msgstr "Delete draft {id}"
+
+#: src/components/NavRail.tsx
+msgid "delete failed"
+msgstr "delete failed"
+
+#: src/components/NavRail.tsx
+msgid "Delete session {title}"
+msgstr "Delete session {title}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Delete this draft and its source?"
+msgstr "Delete this draft and its source?"
+
+#: src/components/NavRail.tsx
+msgid "Delete this session and its transcript"
+msgstr "Delete this session and its transcript"
+
+#: src/components/NavRail.tsx
+msgid "Delete this session and its transcript?"
+msgstr "Delete this session and its transcript?"
+
+#: src/components/NavRail.tsx
+msgid "Delete this session and its transcript? Its unsent draft goes with it."
+msgstr "Delete this session and its transcript? Its unsent draft goes with it."
+
+#: src/components/NavRail.tsx
+msgid "Delete this session? It was run from the terminal; its history goes too."
+msgstr "Delete this session? It was run from the terminal; its history goes too."
+
+#: src/components/NavRail.tsx
+msgid "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
+msgstr "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
+
+#: src/components/LibrarySurface.tsx
+msgid "Delete waits: the draft's compile is running"
+msgstr "Delete waits: the draft's compile is running"
+
+#: src/components/LibrarySurface.tsx
+msgid "Delete waits: the draft's turn is running"
+msgstr "Delete waits: the draft's turn is running"
+
+#. a sync unit's change: it is gone on this side
+#: src/components/SpaceSync.tsx
+msgid "deleted"
+msgstr "deleted"
+
+#. session row, busy: the delete is in flight
+#: src/components/NavRail.tsx
+msgid "deleting…"
+msgstr "deleting…"
+
+#. the delete request is in flight
+#: src/components/LibrarySurface.tsx
+msgid "Deleting…"
+msgstr "Deleting…"
+
+#. how a tool call ended: permission was refused
+#: src/components/PlayerPane.tsx
+msgid "denied"
+msgstr "denied"
+
+#: src/components/DraftConversation.tsx
+msgid "Describe a workflow"
+msgstr "Describe a workflow"
+
+#: src/components/DraftConversation.tsx
+msgid "Describe the playbook…"
+msgstr "Describe the playbook…"
+
+#. notification sink: an OS notification
+#: src/components/SettingsSurface.tsx
+msgid "desktop"
+msgstr "desktop"
+
+#. act: throw the interrupted attempt away
+#. confirm: drop the unsaved draft
+#: src/components/SessionRecovery.tsx
+#: src/components/SpecEditor.tsx
+msgid "Discard"
+msgstr "Discard"
+
+#: src/components/SessionRecovery.tsx
+msgid "Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed."
+msgstr "Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed."
+
+#: src/components/SpecEditor.tsx
+msgid "Discard unsaved changes?"
+msgstr "Discard unsaved changes?"
+
+#: src/components/SessionRecovery.tsx
+msgid "Discarding…"
+msgstr "Discarding…"
+
+#. act: close the error strip
+#. close the error strip above the composer
+#. put this outcome card away
+#. put this outcome card away
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+#: src/components/SpaceSync.tsx
+msgid "Dismiss"
+msgstr "Dismiss"
+
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Dismiss error"
+msgstr "Dismiss error"
+
+#. shortcut table column: what the keys do
+#: src/components/SettingsSurface.tsx
+msgid "Does"
+msgstr "Does"
+
+#. decline adding this folder as a project
+#: src/components/SpaceSync.tsx
+msgid "Don't add"
+msgstr "Don't add"
+
+#. compile phase: finished well
+#. history row: work carried through and confirmed
+#. history row: work carried through and confirmed
+#. how a run ended: it finished its work
+#: src/components/CompileBand.tsx
+#: src/components/MachineCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "done"
+msgstr "done"
+
+#. draft state chip, at most 14 characters: a source stands, never compiled
+#: src/lib/drafts.ts
+msgid "Draft"
+msgstr "Draft"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Draft artifacts"
+msgstr "Draft artifacts"
+
+#. section heading: playbooks being written
+#: src/components/LibrarySurface.tsx
+msgid "Drafts"
+msgstr "Drafts"
+
+#: src/components/ProjectGroup.tsx
+msgid "Drag, Alt+↑/↓, or the row menu reorders"
+msgstr "Drag, Alt+↑/↓, or the row menu reorders"
+
+#. act: end the parked run
+#. act: end the parked run
+#. confirm: close the intent as dropped
+#. confirm: close the intent as dropped
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#. verdict control: let this work go, unaccepted
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/ParkedRun.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/WorkingLine.tsx
+msgid "Drop"
+msgstr "Drop"
+
+#: src/components/ProjectGroup.tsx
+msgid "Drop “{title}”? Work is underway."
+msgstr "Drop “{title}”? Work is underway."
+
+#: src/components/DashboardSurface.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/WorkingLine.tsx
+msgid "Drop {title}"
+msgstr "Drop {title}"
+
+#. confirm: end the parked run without resuming it
+#: src/components/ParkedRun.tsx
+msgid "Drop it?"
+msgstr "Drop it?"
+
+#: src/components/WorkingLine.tsx
+msgid "Drop this intent? Work is underway."
+msgstr "Drop this intent? Work is underway."
+
+#: src/components/DashboardSurface.tsx
+msgid "Drop this work?"
+msgstr "Drop this work?"
+
+#. history row tag: work let go after it ran
+#. history row tag: work let go after it ran
+#: src/components/ProjectGroup.tsx
+msgid "dropped"
+msgstr "dropped"
+
+#: src/components/ProjectGroup.tsx
+msgid "Dropped “{title}” — the session keeps running."
+msgstr "Dropped “{title}” — the session keeps running."
+
+#: src/components/WorkingLine.tsx
+msgid "Dropped “{title}” — the turn keeps running."
+msgstr "Dropped “{title}” — the turn keeps running."
+
+#: src/components/ParkedRun.tsx
+msgid "Dropping the workflow"
+msgstr "Dropping the workflow"
+
+#. verdict control, busy: the verdict is in flight
+#. verdict control, busy: the verdict is in flight
+#. verdict control, busy: the verdict is in flight
+#. verdict control, busy: the verdict is in flight
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/ParkedRun.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/WorkingLine.tsx
+msgid "Dropping…"
+msgstr "Dropping…"
+
+#: src/components/AgentEditor.tsx
+msgid "e.g. .git, docs/generated"
+msgstr "e.g. .git, docs/generated"
+
+#: src/components/LibrarySurface.tsx
+msgid "e.g. triage"
+msgstr "e.g. triage"
+
+#. editor mode: the plain text field
+#. open the whole-file editor on the source
+#. open this file in the editor
+#. open this file in the editor
+#. open this file in the editor
+#: src/components/DraftSourceTab.tsx
+#: src/components/SpecEditor.tsx
+#: src/components/SpecItemRows.tsx
+#: src/components/SpecView.tsx
+msgid "Edit"
+msgstr "Edit"
+
+#: src/components/SettingsSurface.tsx
+msgid "Edit {id}"
+msgstr "Edit {id}"
+
+#: src/components/SpecItemRows.tsx
+msgid "Edit {id} in its file"
+msgstr "Edit {id} in its file"
+
+#: src/components/SpecView.tsx
+msgid "Edit {name}.md"
+msgstr "Edit {name}.md"
+
+#: src/components/SpecEditor.tsx
+msgid "Edit {path}"
+msgstr "Edit {path}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Edit intent text"
+msgstr "Edit intent text"
+
+#. row menu item: rewrite this intent's words
+#: src/components/ProjectGroup.tsx
+msgid "Edit text"
+msgstr "Edit text"
+
+#: src/components/SettingsSurface.tsx
+msgid "Edit the Captain"
+msgstr "Edit the Captain"
+
+#: src/components/SettingsSurface.tsx
+msgid "Edit the Captain's agent"
+msgstr "Edit the Captain's agent"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Edit the whole file"
+msgstr "Edit the whole file"
+
+#: src/components/SettingsSurface.tsx
+msgid "Edit this player's agent"
+msgstr "Edit this player's agent"
+
+#: src/components/SpecView.tsx
+msgid "Editing {path}"
+msgstr "Editing {path}"
+
+#: src/components/SpecEditor.tsx
+msgid "Editor mode"
+msgstr "Editor mode"
+
+#. the reasoning-effort field of a tuning editor
+#: src/components/TuningField.tsx
+msgid "effort"
+msgstr "effort"
+
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Effort options apply to the adapter; support for this model is unverified."
+msgstr "Effort options apply to the adapter; support for this model is unverified."
+
+#: src/components/SpaceSurface.tsx
+msgid "Empty remote: filled from this device · Existing space: joined, differences asked"
+msgstr "Empty remote: filled from this device · Existing space: joined, differences asked"
+
+#. add this built-in playbook to the config
+#: src/components/LibrarySurface.tsx
+msgid "Enable"
+msgstr "Enable"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enable this playbook — it is written to the shared config"
+msgstr "Enable this playbook — it is written to the shared config"
+
+#. the enable request is in flight
+#: src/components/LibrarySurface.tsx
+msgid "Enabling…"
+msgstr "Enabling…"
+
+#: src/components/ParkedRun.tsx
+msgid "End this run. It will not be resumed."
+msgstr "End this run. It will not be resumed."
+
+#: src/components/DraftConversation.tsx
+msgid "Ends the turn; the transcript keeps what it got"
+msgstr "Ends the turn; the transcript keeps what it got"
+
+#: src/components/BindingEditor.tsx
+msgid "Enter a model ID, inherit, or use the provider default."
+msgstr "Enter a model ID, inherit, or use the provider default."
+
+#: src/components/AgentSettings.tsx
+msgid "Enter a model ID, take the configured value, or use the provider default."
+msgstr "Enter a model ID, take the configured value, or use the provider default."
+
+#: src/components/DraftConversation.tsx
+msgid "Enter sends"
+msgstr "Enter sends"
+
+#: src/components/Composer.tsx
+msgid "Enter to send · Shift+Enter for a new line"
+msgstr "Enter to send · Shift+Enter for a new line"
+
+#. stands where a failed call named no reason
+#: src/components/PlayerPane.tsx
+msgid "error"
+msgstr "error"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Every role needs a player, and the command and intent their words"
+msgstr "Every role needs a player, and the command and intent their words"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Everything is in sync"
+msgstr "Everything is in sync"
+
+#. section heading: the demo playbook
+#: src/components/LibrarySurface.tsx
+msgid "Example"
+msgstr "Example"
+
+#: src/components/LibrarySurface.tsx
+msgid "Example: {title}"
+msgstr "Example: {title}"
+
+#: src/components/PlayerPane.tsx
+msgid "Expand {player}"
+msgstr "Expand {player}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Expand {project}"
+msgstr "Expand {project}"
+
+#: src/components/MachineCard.tsx
+msgid "Expand {run}"
+msgstr "Expand {run}"
+
+#: src/components/SpecView.tsx
+msgid "Expand all"
+msgstr "Expand all"
+
+#: src/components/SpecView.tsx
+msgid "Expand all items in {name}"
+msgstr "Expand all items in {name}"
+
+#. tab: browse the files in the space
+#: src/components/SpaceSurface.tsx
+msgid "Explore"
+msgstr "Explore"
+
+#. item group: External Behavior, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "external"
+msgstr "external"
+
+#. item group: External Behavior
+#. item group: External Behavior
+#: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
+msgid "External"
+msgstr "External"
+
+#. a piece of work's state: it failed
+#. a piece of work's state: it failed
+#. a piece of work's state: it failed
+#. a piece of work's state: it failed
+#. compile phase: stopped on an error
+#. how a run ended: it failed
+#. how a tool call ended: it failed
+#. last resort: a failure with no words
+#: src/App.tsx
+#: src/components/CompileBand.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/ForgeItemRow.tsx
+#: src/components/MachineCard.tsx
+#: src/components/NavRail.tsx
+#: src/components/PlayerPane.tsx
+#: src/lib/labels.ts
+msgid "failed"
+msgstr "failed"
+
+#. draft state chip, at most 14 characters: the last compile failed
+#: src/lib/drafts.ts
+msgid "Failed"
+msgstr "Failed"
+
+#: src/lib/drafts.ts
+msgid "Failed at {phase} ({id}), {age}"
+msgstr "Failed at {phase} ({id}), {age}"
+
+#: src/lib/drafts.ts
+msgid "Failed at {phase}, {age}"
+msgstr "Failed at {phase}, {age}"
+
+#: src/components/FailureCard.tsx
+msgid "Failed at {step}"
+msgstr "Failed at {step}"
+
+#: src/lib/drafts.ts
+msgid "Failed at an unknown phase, {age}"
+msgstr "Failed at an unknown phase, {age}"
+
+#: src/components/ParkedRun.tsx
+msgid "Failed workflow"
+msgstr "Failed workflow"
+
+#. an agent runs in its adapter's fast mode
+#. mark on an agent: it runs in the runtime's fast mode
+#. mark on an agent: it runs in the runtime's fast mode
+#: src/components/AgentChip.tsx
+#: src/components/PlayerPane.tsx
+msgid "fast mode"
+msgstr "fast mode"
+
+#. switch: run this agent in its adapter's fast mode
+#: src/components/BindingEditor.tsx
+msgid "Fast mode"
+msgstr "Fast mode"
+
+#: src/components/AgentEditor.tsx
+msgid "Fast mode <0/>"
+msgstr "Fast mode <0/>"
+
+#: src/components/AgentEditor.tsx
+msgid "Fast mode <0/> (unsupported)"
+msgstr "Fast mode <0/> (unsupported)"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Files in the space"
+msgstr "Files in the space"
+
+#: src/components/DashboardSurface.tsx
+msgid "Filter by project"
+msgstr "Filter by project"
+
+#: src/components/DashboardSurface.tsx
+msgid "Filter by project (visibility only)"
+msgstr "Filter by project (visibility only)"
+
+#: src/components/SpecView.tsx
+msgid "Filter items — ID or text…"
+msgstr "Filter items — ID or text…"
+
+#: src/components/SpecView.tsx
+msgid "Filter items by ID or text"
+msgstr "Filter items by ID or text"
+
+#: src/components/ProjectPalette.tsx
+msgid "Filter projects"
+msgstr "Filter projects"
+
+#: src/components/SpaceSurface.tsx
+msgid "Finish or abort the merge in your terminal"
+msgstr "Finish or abort the merge in your terminal"
+
+#. a run that ended with no outcome reported
+#: src/state/reducer.ts
+msgid "finished"
+msgstr "finished"
+
+#. delivery card heading: the intent's work is delivered
+#: src/components/DeliveryCard.tsx
+msgid "Finished"
+msgstr "Finished"
+
+#. attention row: delivered, a verdict is owed
+#. captured artifact's state: delivered, a verdict is owed
+#: src/components/DashboardSurface.tsx
+#: src/components/ForgeItemRow.tsx
+msgid "finished — confirm?"
+msgstr "finished — confirm?"
+
+#. control: show the whole graph at once
+#: src/components/SpecGraph.tsx
+msgid "Fit"
+msgstr "Fit"
+
+#: src/lib/labels.ts
+msgid "Fix the adapter in Settings"
+msgstr "Fix the adapter in Settings"
+
+#: src/components/SettingsSurface.tsx
+msgid "Fix the file in your editor; Spex reloads it live."
+msgstr "Fix the file in your editor; Spex reloads it live."
+
+#: src/lib/labels.ts
+msgid "Fix the player in Settings"
+msgstr "Fix the player in Settings"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "forge cache"
+msgstr "forge cache"
+
+#. label before the path a playbook was loaded from
+#: src/components/LibrarySurface.tsx
+msgid "from"
+msgstr "from"
+
+#: src/components/LibrarySurface.tsx
+msgid "from {credit}"
+msgstr "from {credit}"
+
+#. on a settled run's card: the state that called it
+#: src/components/MachineCard.tsx
+msgid "from {state}"
+msgstr "from {state}"
+
+#. tuning choice: take the value the Settings surface configured
+#: src/components/AgentSettings.tsx
+msgid "from Settings"
+msgstr "from Settings"
+
+#: src/components/AgentSettings.tsx
+msgid "from Settings (off)"
+msgstr "from Settings (off)"
+
+#: src/components/AgentSettings.tsx
+msgid "from Settings (on)"
+msgstr "from Settings (on)"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "from the compile before this change"
+msgstr "from the compile before this change"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "from the last good compile"
+msgstr "from the last good compile"
+
+#: src/components/SpaceSync.tsx
+msgid "From the remote ({count})"
+msgstr "From the remote ({count})"
+
+#. pipeline stage: the compiled spec items
+#. pipeline stage: the compiler's normative spec items (a proper name)
+#. pipeline stage: the compiler's normative spec items (a proper name)
+#. pipeline stage: the compiler's normative spec items (a proper name)
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "Gears"
+msgstr "Gears"
+
+#. entry mark: the repository's own files
+#. entry mark: the repository's own files
+#: src/components/SpaceExplorer.tsx
+#: src/lib/space.ts
+msgid "Git data"
+msgstr "Git data"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Git data — the repository's own files; not shown."
+msgstr "Git data — the repository's own files; not shown."
+
+#: src/components/SpaceSurface.tsx
+msgid "Git has no committer identity on this machine, so the app commits as Spex at the machine's host name"
+msgstr "Git has no committer identity on this machine, so the app commits as Spex at the machine's host name"
+
+#: src/components/SpaceSurface.tsx
+msgid "Git is not installed"
+msgstr "Git is not installed"
+
+#: src/components/SpaceSurface.tsx
+msgid "git@host:path or https://…"
+msgstr "git@host:path or https://…"
+
+#: src/lib/space.ts
+msgid "GitHub lists the app fetches again"
+msgstr "GitHub lists the app fetches again"
+
+#: src/components/SourcesTabs.tsx
+msgid "GitHub refresh failed — keeping the last data"
+msgstr "GitHub refresh failed — keeping the last data"
+
+#: src/components/ProjectsSurface.tsx
+msgid "GitHub: {state}"
+msgstr "GitHub: {state}"
+
+#: src/components/SettingsSurface.tsx
+msgid "Give the player an id first."
+msgstr "Give the player an id first."
+
+#: src/lib/shortcuts.ts
+msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
+msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
+
+#. toggle: show the citation graph
+#: src/components/SpecView.tsx
+msgid "Graph"
+msgstr "Graph"
+
+#: src/components/CaptainHome.tsx
+msgid "Heads up — some agents aren't ready yet:"
+msgstr "Heads up — some agents aren't ready yet:"
+
+#: src/components/CaptainHome.tsx
+msgid "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
+msgstr "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
+
+#: src/components/CaptainHome.tsx
+msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
+msgstr "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
+
+#: src/components/CaptainHome.tsx
+msgid "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
+msgstr "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
+
+#: src/components/SpecView.tsx
+msgid "Hide {group} items"
+msgstr "Hide {group} items"
+
+#: src/components/SpaceSync.tsx
+msgid "Hide diff"
+msgstr "Hide diff"
+
+#: src/components/CaptainHome.tsx
+msgid "Hide quick start (playbooks stay under / in the composer)"
+msgstr "Hide quick start (playbooks stay under / in the composer)"
+
+#: src/components/NavRail.tsx
+msgid "Hide sessions in {project}"
+msgstr "Hide sessions in {project}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Hide source"
+msgstr "Hide source"
+
+#: src/components/CaptainHome.tsx
+msgid "Hide the quick-start card"
+msgstr "Hide the quick-start card"
+
+#. tab note: a conversation this core cannot continue
+#. tab note: a conversation this core cannot continue
+#: src/App.tsx
+msgid "history"
+msgstr "history"
+
+#. project band heading: work already finished
+#. project band heading: work already finished
+#: src/components/ProjectGroup.tsx
+msgid "History"
+msgstr "History"
+
+#: src/components/RunView.tsx
+msgid "History — this session can't be continued"
+msgstr "History — this session can't be continued"
+
+#: src/components/NavRail.tsx
+msgid "history, can't be continued"
+msgstr "history, can't be continued"
+
+#. session row: no turn in flight
+#. session status: nothing is running
+#. the aliveness mark's own word: at rest
+#. the space's status: nothing is running
+#: src/components/NavRail.tsx
+#: src/components/RunningMark.tsx
+#: src/components/SpaceSurface.tsx
+#: src/lib/labels.ts
+msgid "idle"
+msgstr "idle"
+
+#: src/components/ProjectGroup.tsx
+msgid "Idle — no conversation yet."
+msgstr "Idle — no conversation yet."
+
+#: src/components/PlayerPane.tsx
+msgid "Idle until the playbook calls {player}"
+msgstr "Idle until the playbook calls {player}"
+
+#: src/components/NavRail.tsx
+msgid "idle, held a failure"
+msgstr "idle, held a failure"
+
+#. stands in for a blocked image that carried no alt text
+#: src/components/Markdown.tsx
+msgid "image"
+msgstr "image"
+
+#: src/App.tsx
+#: src/components/NavRail.tsx
+msgid "in use elsewhere"
+msgstr "in use elsewhere"
+
+#. tuning choice: take whatever the player lane resolves
+#: src/components/TuningField.tsx
+msgid "inherit the player"
+msgstr "inherit the player"
+
+#: src/components/BindingEditor.tsx
+msgid "Inherit the player (off)"
+msgstr "Inherit the player (off)"
+
+#: src/components/BindingEditor.tsx
+msgid "Inherit the player (on)"
+msgstr "Inherit the player (on)"
+
+#: src/lib/labels.ts
+msgid "Install {command}"
+msgstr "Install {command}"
+
+#: src/lib/labels.ts
+msgid "Install the missing command"
+msgstr "Install the missing command"
+
+#. chip on a queued message: it carries a queued intent
+#: src/components/Composer.tsx
+msgid "intent"
+msgstr "intent"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Intent (one line; the Captain routes free text with it)"
+msgstr "Intent (one line; the Captain routes free text with it)"
 
 #: src/components/SettingsSurface.tsx
 msgid "Interface language"
 msgstr "Interface language"
 
+#. item group: Internal Behavior, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "internal"
+msgstr "internal"
+
+#. item group: Internal Behavior
+#. item group: Internal Behavior
+#: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
+msgid "Internal"
+msgstr "Internal"
+
+#. draft state chip, at most 14 characters: Spex closed while the draft compiled
+#: src/lib/drafts.ts
+msgid "Interrupted"
+msgstr "Interrupted"
+
+#: src/lib/drafts.ts
+msgid "Interrupted {age} — Spex closed while it compiled"
+msgstr "Interrupted {age} — Spex closed while it compiled"
+
+#: src/components/SessionRecovery.tsx
+msgid "Interrupted turn"
+msgstr "Interrupted turn"
+
+#: src/components/ProjectGroup.tsx
+msgid "Issue #{ref} ↗"
+msgstr "Issue #{ref} ↗"
+
+#. the control's name when none are unanswered
+#: src/components/SpaceSurface.tsx
+msgid "issues"
+msgstr "issues"
+
+#. Sources tab: the repo's open issues
+#: src/components/SourcesTabs.tsx
+msgid "Issues"
+msgstr "Issues"
+
+#: src/components/SpaceSync.tsx
+msgid "Issues ({count})"
+msgstr "Issues ({count})"
+
+#. why a control is offered but blocked
+#: src/lib/failure-catalogue.ts
+msgid "it can't run now"
+msgstr "it can't run now"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "It gives no player for {roles}."
+msgstr "It gives no player for {roles}."
+
+#. why a control is offered but inert
+#: src/lib/failure-catalogue.ts
+msgid "it would do nothing"
+msgstr "it would do nothing"
+
+#: src/components/SpecView.tsx
+msgid "Its <0>specs/</0> tree still holds directories from an earlier layout — the <1>user/</1>, <2>dev/</2>, <3>test/</3>, or <4>items/</4> groups, or an <5>interactions/</5> or <6>compositions/</6> collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:"
+msgstr "Its <0>specs/</0> tree still holds directories from an earlier layout — the <1>user/</1>, <2>dev/</2>, <3>test/</3>, or <4>items/</4> groups, or an <5>interactions/</5> or <6>compositions/</6> collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:"
+
+#: src/App.tsx
+msgid "its endpoint"
+msgstr "its endpoint"
+
+#. confirm: join both spaces into one
+#. confirm: join both spaces into one
+#. confirm: join both spaces into one
+#. confirm: join both spaces into one
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Join"
+msgstr "Join"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Join both spaces into one? Anything in both will ask you to choose."
+msgstr "Join both spaces into one? Anything in both will ask you to choose."
+
+#. the Join control, while the join runs
+#: src/components/SpaceSurface.tsx
+msgid "Joining…"
+msgstr "Joining…"
+
+#: src/components/SpecView.tsx
+msgid "Jumped to {id}"
+msgstr "Jumped to {id}"
+
+#: src/components/SpecView.tsx
+msgid "Jumped to {id} — shown despite filter"
+msgstr "Jumped to {id} — shown despite filter"
+
+#: src/lib/spec-view-model.ts
 #: src/lib/time.ts
 msgid "just now"
 msgstr "just now"
+
+#. cancel a destructive confirm: leave things as they are
+#. cancel a destructive confirm: leave things as they are
+#. cancel a destructive confirm: leave things as they are
+#. cancel a destructive confirm: leave things as they are
+#. cancel a destructive confirm: leave things as they are
+#. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
+#. cancel: keep the unsaved draft
+#. confirm: keep the intent open
+#. confirm: leave the run as it is
+#: src/components/DashboardSurface.tsx
+#: src/components/LibrarySurface.tsx
+#: src/components/NavRail.tsx
+#: src/components/ParkedRun.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/ProjectsSurface.tsx
+#: src/components/SettingsSurface.tsx
+#: src/components/SpecEditor.tsx
+#: src/components/WorkingLine.tsx
+msgid "Keep"
+msgstr "Keep"
+
+#. conflict choice: keep this device's version
+#: src/components/SpaceSync.tsx
+msgid "Keep mine"
+msgstr "Keep mine"
+
+#: src/components/SpaceSurface.tsx
+msgid "Keep this space in Git"
+msgstr "Keep this space in Git"
+
+#: src/components/SettingsSurface.tsx
+msgid "Keyboard shortcuts"
+msgstr "Keyboard shortcuts"
+
+#. shortcut table column: the keys to press
+#: src/components/SettingsSurface.tsx
+msgid "Keys"
+msgstr "Keys"
 
 #: src/components/SettingsSurface.tsx
 msgid "Language"
 msgstr "Language"
 
+#: src/components/RunView.tsx
+msgid "Last active {when}"
+msgstr "Last active {when}"
+
+#: src/components/CompileBand.tsx
+msgid "last output {age}"
+msgstr "last output {age}"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "leases and locks"
+msgstr "leases and locks"
+
+#: src/components/SettingsSurface.tsx
+msgid "loading config…"
+msgstr "loading config…"
+
+#: src/components/SpaceSync.tsx
+msgid "Loading diff…"
+msgstr "Loading diff…"
+
+#: src/components/ProjectsSurface.tsx
+#: src/components/SourcesTabs.tsx
+msgid "Loading GitHub state…"
+msgstr "Loading GitHub state…"
+
+#: src/components/AgentSettings.tsx
+#: src/components/ModelDiscoveryStatus.tsx
+msgid "Loading model options…"
+msgstr "Loading model options…"
+
+#: src/components/DraftConversation.tsx
+msgid "Loading the conversation…"
+msgstr "Loading the conversation…"
+
+#: src/App.tsx
+msgid "Loading transcript…"
+msgstr "Loading transcript…"
+
+#. a request for this pane's content is in flight
+#. a request for this pane's content is in flight
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/LibrarySurface.tsx
+msgid "loading…"
+msgstr "loading…"
+
+#. a read is still in flight
+#. a read is still in flight
+#. a read is still in flight
+#. a read is still in flight
+#: src/components/DashboardSurface.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/SpaceExplorer.tsx
+msgid "Loading…"
+msgstr "Loading…"
+
+#: src/components/SpaceSync.tsx
+msgid "Local changes ({count})"
+msgstr "Local changes ({count})"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "local project paths"
+msgstr "local project paths"
+
+#: src/lib/drafts.ts
+msgid "Lowercase letters, digits, - or _, starting with a letter"
+msgstr "Lowercase letters, digits, - or _, starting with a letter"
+
+#: src/lib/drafts.ts
+msgid "Lowercase; it names the file and the /command — the command can change at registration"
+msgstr "Lowercase; it names the file and the /command — the command can change at registration"
+
+#. pipeline stage: the compiled state machine
+#. tab: the compiled state machine
+#: src/components/AuthoringWorkspace.tsx
+msgid "Machine"
+msgstr "Machine"
+
+#: src/lib/failure-catalogue.ts
+msgid "Made more than one commit"
+msgstr "Made more than one commit"
+
+#. a session's part: its manifest file
+#: src/lib/space.ts
+msgid "manifest"
+msgstr "manifest"
+
+#: src/components/DashboardSurface.tsx
+msgid "Mark {title} reviewed"
+msgstr "Mark {title} reviewed"
+
+#. attention row control, busy: the write is in flight
+#: src/components/DashboardSurface.tsx
+msgid "Marking…"
+msgstr "Marking…"
+
+#: src/lib/space.ts
+msgid "May hold provider tokens — not shown"
+msgstr "May hold provider tokens — not shown"
+
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+msgid "Message the Captain…"
+msgstr "Message the Captain…"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "migration receipts and inputs"
+msgstr "migration receipts and inputs"
+
+#: src/components/LibrarySurface.tsx
+msgid "missing stages: {stages}"
+msgstr "missing stages: {stages}"
+
+#. the model field of a tuning editor
+#: src/components/TuningField.tsx
+msgid "model"
+msgstr "model"
+
+#. the model field of an agent editor
+#: src/components/ModelField.tsx
+msgid "Model"
+msgstr "Model"
+
+#: src/components/AgentEditor.tsx
+msgid "Model (optional)"
+msgstr "Model (optional)"
+
+#: src/components/ModelField.tsx
+msgid "Model ID"
+msgstr "Model ID"
+
+#: src/components/AgentSettings.tsx
+#: src/components/ModelDiscoveryStatus.tsx
+msgid "Model list unavailable: {reason}"
+msgstr "Model list unavailable: {reason}"
+
+#: src/components/ModelDiscoveryStatus.tsx
+msgid "Models reported by the installed runtime."
+msgstr "Models reported by the installed runtime."
+
+#. row menu item: one step later in the queue
+#: src/components/ProjectGroup.tsx
+msgid "Move down"
+msgstr "Move down"
+
+#: src/lib/shortcuts.ts
+msgid "Move the focused Up next row"
+msgstr "Move the focused Up next row"
+
+#. row menu item: one step earlier in the queue
+#: src/components/ProjectGroup.tsx
+msgid "Move up"
+msgstr "Move up"
+
+#: src/components/SpaceSync.tsx
+msgid "Name the folder on this device."
+msgstr "Name the folder on this device."
+
+#. session status: the run failed and waits for the Boss
+#: src/lib/labels.ts
+msgid "needs attention"
+msgstr "needs attention"
+
+#: src/components/DashboardSurface.tsx
+msgid "Needs attention"
+msgstr "Needs attention"
+
+#: src/App.tsx
+msgid "needs recovery"
+msgstr "needs recovery"
+
+#. the space's status, read in a title
+#: src/components/SpaceSurface.tsx
+msgid "needs your choice"
+msgstr "needs your choice"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Needs your choice"
+msgstr "Needs your choice"
+
+#. attention row: the run parked on a question
+#. captured artifact's state: parked on a question
+#. tab name: the run parked on a question
+#: src/App.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/ForgeItemRow.tsx
+msgid "needs your reply"
+msgstr "needs your reply"
+
+#. tab name: delivered, a verdict is owed
+#: src/App.tsx
+msgid "needs your verdict"
+msgstr "needs your verdict"
+
+#: src/components/SpaceSurface.tsx
+msgid "Never synced"
+msgstr "Never synced"
+
+#. a sync unit's change: it is new on this side
+#: src/components/SpaceSync.tsx
+msgid "new"
+msgstr "new"
+
+#. start a draft of one's own
+#. start a draft of one's own
+#: src/components/LibrarySurface.tsx
+msgid "New playbook"
+msgstr "New playbook"
+
+#. slash menu's last entry: start authoring a playbook
+#: src/components/SlashMenu.tsx
+msgid "New playbook…"
+msgstr "New playbook…"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "New player {id}"
+msgstr "New player {id}"
+
+#. stands as the title of a conversation that has none yet
+#: src/App.tsx
+#: src/components/RunView.tsx
+msgid "new session"
+msgstr "new session"
+
 #: src/components/NavRail.tsx
+#: src/components/RunView.tsx
+msgid "New session"
+msgstr "New session"
+
+#: src/components/NavRail.tsx
+msgid "New session in {project}"
+msgstr "New session in {project}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Next page"
+msgstr "Next page"
+
+#: src/lib/shortcuts.ts
+msgid "Next tab in Projects"
+msgstr "Next tab in Projects"
+
+#: src/lib/labels.ts
+msgid "No adapter named \"{adapter}\" — check the config"
+msgstr "No adapter named \"{adapter}\" — check the config"
+
+#: src/components/SettingsSurface.tsx
+msgid "No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here."
+msgstr "No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here."
+
+#: src/components/AgentChip.tsx
+msgid "no automatic check for this adapter — verify sign-in yourself"
+msgstr "no automatic check for this adapter — verify sign-in yourself"
+
+#. stands where a branch name would; none is checked out
+#: src/lib/space.ts
+msgid "no branch"
+msgstr "no branch"
+
+#: src/components/SettingsSurface.tsx
+msgid "No config file"
+msgstr "No config file"
+
+#: src/components/SpaceSync.tsx
+msgid "No difference"
+msgstr "No difference"
+
+#: src/components/SourcesTabs.tsx
+msgid "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here."
+msgstr "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here."
+
+#: src/components/SpecView.tsx
+msgid "no items in active groups"
+msgstr "no items in active groups"
+
+#: src/components/SpecView.tsx
+msgid "no items match the search"
+msgstr "no items match the search"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/NavRail.tsx
+#: src/components/ProjectGroup.tsx
+msgid "no messages yet"
+msgstr "no messages yet"
+
+#: src/components/SourcesTabs.tsx
+msgid "No open issues."
+msgstr "No open issues."
+
+#: src/components/SourcesTabs.tsx
+msgid "No open pull requests."
+msgstr "No open pull requests."
+
+#: src/components/LibrarySurface.tsx
+msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
+msgstr "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
+
+#: src/App.tsx
+msgid "No playbooks yet"
+msgstr "No playbooks yet"
+
+#: src/lib/labels.ts
+msgid "No player named \"{player}\" — check the config"
+msgstr "No player named \"{player}\" — check the config"
+
+#: src/components/SettingsSurface.tsx
+msgid "No players yet — enabling a playbook in the Library adds the ones its roles need."
+msgstr "No players yet — enabling a playbook in the Library adds the ones its roles need."
+
+#: src/components/SpaceExplorer.tsx
+msgid "No preview for this file."
+msgstr "No preview for this file."
+
+#: src/components/ProjectPalette.tsx
+msgid "No project matches \"{query}\""
+msgstr "No project matches \"{query}\""
+
+#: src/components/DashboardSurface.tsx
+msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
+msgstr "No projects yet — register a repository in the <0>Projects</0> to put its work here."
+
+#: src/components/FailureCard.tsx
+msgid "No reason was reported"
+msgstr "No reason was reported"
+
+#: src/components/SpaceSurface.tsx
+msgid "No remote"
+msgstr "No remote"
+
+#. draft state chip, at most 14 characters: nothing written to the draft's source file yet
+#: src/lib/drafts.ts
+msgid "No source"
+msgstr "No source"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "No source yet"
+msgstr "No source yet"
+
+#: src/components/DraftSourceTab.tsx
+msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
+msgstr "No source yet — the agent writes <0>{path}</0> here as you talk."
+
+#: src/components/SourcesTabs.tsx
+msgid "No unfinished intent records."
+msgstr "No unfinished intent records."
+
+#. stands where a branch name would; none is checked out
+#: src/components/SpaceSurface.tsx
+msgid "none"
+msgstr "none"
+
+#: src/components/AgentEditor.tsx
+msgid "none (adapter default)"
+msgstr "none (adapter default)"
+
+#: src/components/AgentEditor.tsx
+msgid "none: the adapter's own default posture"
+msgstr "none: the adapter's own default posture"
+
+#. pipeline stage: slc's normalized workflow markdown
+#: src/components/LibrarySurface.tsx
+msgid "Normalized"
+msgstr "Normalized"
+
+#: src/components/LibrarySurface.tsx
+msgid "Normalized text: slc's normalize phase turns the prose into workflow markdown"
+msgstr "Normalized text: slc's normalize phase turns the prose into workflow markdown"
+
+#. the space's status, read in a title
+#: src/components/SpaceSurface.tsx
+msgid "not a repository"
+msgstr "not a repository"
+
+#: src/components/SpaceSurface.tsx
+msgid "Not a repository yet"
+msgstr "Not a repository yet"
+
+#: src/components/SpaceSync.tsx
+msgid "Not checked yet"
+msgstr "Not checked yet"
+
+#: src/components/SpecGraph.tsx
+msgid "not cited by packages"
+msgstr "not cited by packages"
+
+#: src/lib/client.ts
+msgid "not connected"
+msgstr "not connected"
+
+#. why a control is held: the page has no core
+#. why a control is held: the page has no core
+#. why a control is held: the page has no core
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Not connected"
+msgstr "Not connected"
+
+#: src/components/NavRail.tsx
+msgid "not deleted"
+msgstr "not deleted"
+
+#. the cited item is not in this tree
+#. the cited item is not in this tree
+#: src/components/SpecItemRows.tsx
+msgid "not found"
+msgstr "not found"
+
+#: src/components/ModelField.tsx
+msgid "Not in this runtime's list. Check the model ID."
+msgstr "Not in this runtime's list. Check the model ID."
+
+#. the adapter needs something before it can run
+#: src/components/AgentChip.tsx
+msgid "not ready"
+msgstr "not ready"
+
+#. stands where the Captain agent is not configured
+#: src/components/CaptainHome.tsx
+msgid "not set"
+msgstr "not set"
+
+#: src/components/AgentEditor.tsx
+msgid "Not supported by this model"
+msgstr "Not supported by this model"
+
+#: src/lib/space.ts
+msgid "Not yet shared"
+msgstr "Not yet shared"
+
+#: src/components/ProjectGroup.tsx
+msgid "Nothing done here yet."
+msgstr "Nothing done here yet."
+
+#. why a control published by the parked run would do nothing
+#: src/lib/failure-catalogue.ts
+msgid "nothing has changed since it failed"
+msgstr "nothing has changed since it failed"
+
+#: src/components/DashboardSurface.tsx
+msgid "Nothing in {project} needs attention."
+msgstr "Nothing in {project} needs attention."
+
+#: src/components/SpaceSync.tsx
+msgid "Nothing new on the remote"
+msgstr "Nothing new on the remote"
+
+#: src/components/DashboardSurface.tsx
+msgid "Nothing owed — open it, or mark it reviewed."
+msgstr "Nothing owed — open it, or mark it reviewed."
+
+#: src/components/ProjectGroup.tsx
+msgid "Nothing queued — add an intent below, or Queue an issue, PR, or record from Sources."
+msgstr "Nothing queued — add an intent below, or Queue an issue, PR, or record from Sources."
+
+#: src/components/DeliveryCard.tsx
+msgid "Nothing queued — name the next intent…"
+msgstr "Nothing queued — name the next intent…"
+
+#: src/components/DashboardSurface.tsx
+msgid "Nothing running."
+msgstr "Nothing running."
+
+#: src/components/SpaceSync.tsx
+msgid "Nothing to send from this device"
+msgstr "Nothing to send from this device"
+
+#: src/components/SpaceSync.tsx
+msgid "Nothing to stop"
+msgstr "Nothing to stop"
+
+#: src/components/SettingsSurface.tsx
+msgid "Notifications"
+msgstr "Notifications"
+
+#. project band heading: the current conversation
+#. project band heading: the current conversation
+#: src/components/ProjectGroup.tsx
+msgid "Now"
+msgstr "Now"
+
+#. notification sink: notify nowhere
+#: src/components/SettingsSurface.tsx
+msgid "off"
+msgstr "off"
+
+#. fast mode is pinned off
+#. fast mode is pinned off
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Off"
+msgstr "Off"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Off (current)"
+msgstr "Off (current)"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Off (unsupported)"
+msgstr "Off (unsupported)"
+
+#. how a tool call ended: it succeeded
+#: src/components/PlayerPane.tsx
+msgid "ok"
+msgstr "ok"
+
+#. History pager: fetch the next page back in time
+#: src/components/ProjectGroup.tsx
+msgid "Older…"
+msgstr "Older…"
+
+#. fast mode is pinned on
+#. fast mode is pinned on
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "On"
+msgstr "On"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "On (current)"
+msgstr "On (current)"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "On (unsupported)"
+msgstr "On (unsupported)"
+
+#: src/components/SpaceSurface.tsx
+msgid "On {branch}; check out main in a terminal"
+msgstr "On {branch}; check out main in a terminal"
+
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "One normative spec item per state behavior — the compiler's middle stage"
+msgstr "One normative spec item per state behavior — the compiler's middle stage"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "One spec item per state behavior, from the last compile"
+msgstr "One spec item per state behavior, from the last compile"
+
+#: src/components/SettingsSurface.tsx
+msgid "Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme."
+msgstr "Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme."
+
+#. open this draft's authoring workspace
+#: src/components/LibrarySurface.tsx
+msgid "Open"
+msgstr "Open"
+
+#: src/components/RecordRow.tsx
+msgid "Open {id}"
+msgstr "Open {id}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Open {id} in Specs"
+msgstr "Open {id} in Specs"
+
+#: src/components/RecordRow.tsx
+msgid "Open {id}: {title}"
+msgstr "Open {id}: {title}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open {title} — {reason}"
+msgstr "Open {title} — {reason}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open {title} — running in {project}"
+msgstr "Open {title} — running in {project}"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open and send a message to pick it up."
+msgstr "Open and send a message to pick it up."
+
+#: src/components/ProjectPalette.tsx
+#: src/components/SpaceSync.tsx
+msgid "Open folder…"
+msgstr "Open folder…"
+
+#: src/components/SpaceSync.tsx
+msgid "Open project"
+msgstr "Open project"
+
+#. Sources tab: intent records not yet finished
+#: src/components/SourcesTabs.tsx
+msgid "Open records"
+msgstr "Open records"
+
+#: src/components/DraftConversation.tsx
+msgid "Open Register"
+msgstr "Open Register"
+
+#: src/components/SpaceExplorer.tsx
+#: src/components/SpaceSync.tsx
+msgid "Open session"
+msgstr "Open session"
+
+#: src/lib/shortcuts.ts
+msgid "Open Settings"
+msgstr "Open Settings"
+
+#: src/components/CaptainHome.tsx
+msgid "Open Settings →"
+msgstr "Open Settings →"
+
+#: src/App.tsx
+msgid "Open Settings to see what's wrong"
+msgstr "Open Settings to see what's wrong"
+
+#: src/components/SourcesTabs.tsx
+msgid "Open the project's Overview"
+msgstr "Open the project's Overview"
+
+#: src/lib/shortcuts.ts
+msgid "Open the project's Specs"
+msgstr "Open the project's Specs"
+
+#: src/components/ProjectGroup.tsx
+msgid "Open the session this was captured from"
+msgstr "Open the session this was captured from"
+
+#: src/components/DashboardSurface.tsx
+msgid "Open to reply — the run is waiting."
+msgstr "Open to reply — the run is waiting."
+
+#: src/components/DashboardSurface.tsx
+msgid "Open to reply, or drop the run."
+msgstr "Open to reply, or drop the run."
+
+#: src/components/DashboardSurface.tsx
+msgid "Open to retry or drop the run."
+msgstr "Open to retry or drop the run."
+
+#: src/components/SpecView.tsx
+msgid "Opened {id}"
+msgstr "Opened {id}"
+
+#. a draft is being opened
+#. a draft is being opened
+#: src/components/LibrarySurface.tsx
+msgid "Opening…"
+msgstr "Opening…"
+
+#: src/components/LibrarySurface.tsx
+msgid "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
+msgstr "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
+
+#. the Git remote's name; leave as Git spells it
+#: src/components/SpaceSurface.tsx
+msgid "origin"
+msgstr "origin"
+
+#: src/lib/space.ts
+msgid "original files kept from an upgrade, some holding old tokens"
+msgstr "original files kept from an upgrade, some holding old tokens"
+
+#. heading over units of no named kind
+#. heading over units of no named kind
+#: src/lib/space.ts
+msgid "Other"
+msgstr "Other"
+
+#. tab name: the project's own history, now and queue
+#. the project's Overview tab
+#: src/App.tsx
+#: src/components/SpecView.tsx
+msgid "Overview"
+msgstr "Overview"
+
+#. save over the file that changed on disk
+#: src/components/SpecEditor.tsx
+msgid "Overwrite"
+msgstr "Overwrite"
+
+#: src/App.tsx
+#: src/components/NavRail.tsx
+msgid "ownership unknown"
+msgstr "ownership unknown"
+
+#. bring in a source of one's own
+#. bring in a source of one's own
+#: src/components/DraftSourceTab.tsx
+msgid "Paste"
+msgstr "Paste"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Paste a source or pick a file"
+msgstr "Paste a source or pick a file"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
+msgstr "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
+
+#. field holding a path to select and copy
+#: src/components/SpaceSurface.tsx
+msgid "Path"
+msgstr "Path"
+
+#: src/components/AgentEditor.tsx
+msgid "Permission mode"
+msgstr "Permission mode"
+
+#: src/components/CaptainHome.tsx
+msgid "Pick a project first ({keys})"
+msgstr "Pick a project first ({keys})"
+
+#. open the OS file picker
+#: src/components/DraftSourceTab.tsx
+msgid "Pick file"
+msgstr "Pick file"
+
+#. tuning choice: set an explicit value here
+#: src/components/TuningField.tsx
+msgid "pin a value…"
+msgstr "pin a value…"
+
+#. one unit's kind: a playbook source
+#: src/lib/space.ts
+msgid "Playbook"
+msgstr "Playbook"
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Playbook id"
+msgstr "Playbook id"
+
+#. tooltip: which workflow the parked run belongs to
+#: src/components/ParkedRun.tsx
+msgid "playbook: {playbookId}"
+msgstr "playbook: {playbookId}"
+
+#. the surface listing every playbook
+#. the surface listing every playbook
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/LibrarySurface.tsx
+#: src/components/NavRail.tsx
+#: src/lib/space.ts
 msgid "Playbooks"
 msgstr "Playbooks"
 
+#: src/components/LibrarySurface.tsx
+msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
+msgstr "Playbooks need a valid config — fix it in <0>Settings</0>."
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Player for {role}"
+msgstr "Player for {role}"
+
+#: src/components/SettingsSurface.tsx
+msgid "Player id — lowercase, dots to group (e.g. dev.coder)"
+msgstr "Player id — lowercase, dots to group (e.g. dev.coder)"
+
+#: src/components/DeliveryCard.tsx
+msgid "PR {ref}"
+msgstr "PR {ref}"
+
+#: src/components/ProjectGroup.tsx
+msgid "PR #{ref} ↗"
+msgstr "PR #{ref} ↗"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Prefer your own?"
+msgstr "Prefer your own?"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "preferences"
+msgstr "preferences"
+
+#. open a draft carrying the example's text
+#: src/components/LibrarySurface.tsx
+msgid "Prefill"
+msgstr "Prefill"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Prefilled from the agent's proposal — edit anything"
+msgstr "Prefilled from the agent's proposal — edit anything"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Prefilled from the source and the compiled roles — edit anything"
+msgstr "Prefilled from the source and the compiled roles — edit anything"
+
+#. editor mode: the rendered draft
+#: src/components/SpecEditor.tsx
+msgid "Preview"
+msgstr "Preview"
+
+#: src/components/SourcesTabs.tsx
+msgid "Previous page"
+msgstr "Previous page"
+
+#: src/lib/shortcuts.ts
+msgid "Previous tab in Projects"
+msgstr "Previous tab in Projects"
+
+#. one unit's kind: the project registrations
+#: src/lib/space.ts
+msgid "Project"
+msgstr "Project"
+
+#: src/components/ProjectPalette.tsx
+msgid "Project path"
+msgstr "Project path"
+
+#. Dashboard band heading: one group per project
+#: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
+#: src/lib/space.ts
 msgid "Projects"
 msgstr "Projects"
 
 #: src/components/NavRail.tsx
+msgid "Projects and sessions"
+msgstr "Projects and sessions"
+
+#. collapsed card: the text the playbook sent the player
+#: src/components/PlayerPane.tsx
+msgid "Prompt"
+msgstr "Prompt"
+
+#: src/components/DraftConversation.tsx
+msgid "Proposed registration"
+msgstr "Proposed registration"
+
+#. an agent chip's model reading when the provider's own default is taken
+#: src/lib/session-agents.ts
+msgid "provider default"
+msgstr "provider default"
+
+#. model choice: let the provider pick its own default model
+#. model choice: let the provider pick its own default model
+#: src/components/ModelField.tsx
+msgid "Provider default"
+msgstr "Provider default"
+
+#. a file family that stays on this device
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "provider hints"
+msgstr "provider hints"
+
+#. Sources tab: the repo's open pull requests
+#: src/components/SourcesTabs.tsx
+msgid "PRs"
+msgstr "PRs"
+
+#. sync step: sending to the remote
+#: src/lib/space.ts
+msgid "Push"
+msgstr "Push"
+
+#. sync step running: sending to the remote
+#: src/lib/space.ts
+msgid "Pushing…"
+msgstr "Pushing…"
+
+#: src/components/NextCard.tsx
+msgid "Put this task in the message — Send starts it"
+msgstr "Put this task in the message — Send starts it"
+
+#. capture control: put this artifact in the queue
+#. capture control: put this artifact in the queue
+#. capture control: put this artifact in the queue
+#: src/components/DeliveryCard.tsx
+#: src/components/ForgeItemRow.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Queue"
+msgstr "Queue"
+
+#: src/components/ProjectGroup.tsx
+msgid "Queue an intent in {project}"
+msgstr "Queue an intent in {project}"
+
+#: src/components/ForgeItemRow.tsx
+msgid "Queue issue #{number} as an intent"
+msgstr "Queue issue #{number} as an intent"
+
+#: src/components/ForgeItemRow.tsx
+msgid "Queue PR #{number} as an intent"
+msgstr "Queue PR #{number} as an intent"
+
+#: src/components/SourcesTabs.tsx
+msgid "Queue record {id} as an intent"
+msgstr "Queue record {id} as an intent"
+
+#. captured artifact's state: waiting in the queue
+#: src/components/ForgeItemRow.tsx
+msgid "queued"
+msgstr "queued"
+
+#. lifecycle mark on every committed queue row (DR-077)
+#: src/components/QueuedIntentPresentation.tsx
+msgid "Queued"
+msgstr "Queued"
+
+#. captured artifact's state: queued behind another intent
+#: src/components/ForgeItemRow.tsx
+msgid "queued — blocked"
+msgstr "queued — blocked"
+
+#: src/state/store.ts
+msgid "queued submission failed: {reason}"
+msgstr "queued submission failed: {reason}"
+
+#: src/lib/space.ts
+msgid "Queues"
+msgstr "Queues"
+
+#. capture control, busy: the queue write is in flight
+#. capture control, busy: the queue write is in flight
+#: src/components/DeliveryCard.tsx
+#: src/components/ForgeItemRow.tsx
+msgid "Queuing…"
+msgstr "Queuing…"
+
+#: src/components/CaptainHome.tsx
+msgid "Quick start"
+msgstr "Quick start"
+
+#. act: ask the agents whether they are ready now
+#: src/components/CaptainHome.tsx
+msgid "Re-check"
+msgstr "Re-check"
+
+#: src/components/SettingsSurface.tsx
+msgid "Re-check readiness"
+msgstr "Re-check readiness"
+
+#: src/components/SpecView.tsx
+msgid "Re-read the specs/ tree"
+msgstr "Re-read the specs/ tree"
+
+#: src/components/SettingsSurface.tsx
+msgid "Re-run adapter readiness checks (e.g. after signing in)"
+msgstr "Re-run adapter readiness checks (e.g. after signing in)"
+
+#: src/components/SpecView.tsx
+msgid "read {age}"
+msgstr "read {age}"
+
+#: src/components/SpaceSurface.tsx
+msgid "Read {age}"
+msgstr "Read {age}"
+
+#. no automatic check exists for this adapter
+#: src/components/AgentChip.tsx
+msgid "readiness unknown"
+msgstr "readiness unknown"
+
+#: src/components/SpecView.tsx
+msgid "reading {id}…"
+msgstr "reading {id}…"
+
+#: src/components/SpecView.tsx
+msgid "reading specs…"
+msgstr "reading specs…"
+
+#: src/components/SpaceSurface.tsx
+msgid "Reading the space…"
+msgstr "Reading the space…"
+
+#. the specs tree is being re-read
+#: src/components/SpecView.tsx
+msgid "reading…"
+msgstr "reading…"
+
+#. the tree is being read
+#: src/components/SpaceExplorer.tsx
+msgid "Reading…"
+msgstr "Reading…"
+
+#. session status: ready to be told what to do
+#. the adapter is signed in and usable
+#: src/components/AgentChip.tsx
+#: src/lib/labels.ts
+msgid "ready"
+msgstr "ready"
+
+#: src/components/AgentEditor.tsx
+msgid "Reasoning effort"
+msgstr "Reasoning effort"
+
+#: src/App.tsx
+msgid "Reconnecting to the Spex core… actions are paused until the connection returns."
+msgstr "Reconnecting to the Spex core… actions are paused until the connection returns."
+
+#: src/components/ParkedRun.tsx
+msgid "Reconnecting…"
+msgstr "Reconnecting…"
+
+#. a session's part: its record file
+#: src/lib/space.ts
+msgid "records"
+msgstr "records"
+
+#: src/state/store.ts
+msgid "Recover the interrupted turn before sending another message."
+msgstr "Recover the interrupted turn before sending another message."
+
+#: src/components/RunView.tsx
+msgid "Recover the interrupted turn before sending."
+msgstr "Recover the interrupted turn before sending."
+
+#: src/lib/failure-catalogue.ts
+msgid "Recover them from your editor's history, if it keeps one"
+msgstr "Recover them from your editor's history, if it keeps one"
+
+#. re-read the space's state
+#. sync step: re-reading the space
+#: src/components/SpaceSurface.tsx
+#: src/lib/space.ts
+msgid "Refresh"
+msgstr "Refresh"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Refresh {project}"
+msgstr "Refresh {project}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Refresh GitHub data"
+msgstr "Refresh GitHub data"
+
+#: src/components/AgentSettings.tsx
+#: src/components/ModelDiscoveryStatus.tsx
+msgid "Refresh models"
+msgstr "Refresh models"
+
+#: src/components/SourcesTabs.tsx
+msgid "Refresh sources for {project}"
+msgstr "Refresh sources for {project}"
+
+#: src/components/SpecView.tsx
+msgid "Refresh specs"
+msgstr "Refresh specs"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Refresh status and GitHub data"
+msgstr "Refresh status and GitHub data"
+
+#. sync step running: re-reading the space
+#: src/lib/space.ts
+msgid "Refreshing…"
+msgstr "Refreshing…"
+
+#. tab: write the compiled playbook into the config
+#. write the compiled playbook into the config
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/DraftRegisterTab.tsx
+msgid "Register"
+msgstr "Register"
+
+#: src/components/LibrarySurface.tsx
+msgid "Registered /{command}"
+msgstr "Registered /{command}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Registered. Sessions started before this registration must be restarted to use it."
+msgstr "Registered. Sessions started before this registration must be restarted to use it."
+
+#. the registration is in flight
+#: src/components/DraftRegisterTab.tsx
+msgid "Registering…"
+msgstr "Registering…"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Registers the last compile — the source changed since."
+msgstr "Registers the last compile — the source changed since."
+
+#. confirm: re-read the file from disk
+#. confirm: re-read the file from disk
+#: src/components/SpecEditor.tsx
+msgid "Reload"
+msgstr "Reload"
+
+#: src/components/SpecEditor.tsx
+msgid "Reload from disk and lose unsaved changes?"
+msgstr "Reload from disk and lose unsaved changes?"
+
+#: src/main.tsx
+msgid "Reload the page"
+msgstr "Reload the page"
+
+#. field label: the Git remote's URL
+#: src/components/SpaceSurface.tsx
+msgid "Remote"
+msgstr "Remote"
+
+#: src/components/SpaceSurface.tsx
+msgid "Remote URL"
+msgstr "Remote URL"
+
+#. confirm: forget this project, leaving the repo on disk
+#. confirm: take this playbook out of the config
+#. confirm: take this player out of the roster
+#. confirm: take this row off the record
+#. queue row control: take this row out of the queue
+#. row menu item: take this row out of the queue
+#: src/components/LibrarySurface.tsx
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+#: src/components/ProjectsSurface.tsx
+#: src/components/SettingsSurface.tsx
+msgid "Remove"
+msgstr "Remove"
+
+#: src/components/SettingsSurface.tsx
+msgid "Remove {id}"
+msgstr "Remove {id}"
+
+#: src/components/SettingsSurface.tsx
+msgid "Remove {id}?"
+msgstr "Remove {id}?"
+
+#: src/components/NextCard.tsx
+msgid "Remove {title}"
+msgstr "Remove {title}"
+
+#: src/components/ProjectGroup.tsx
+msgid "Remove {title} from history"
+msgstr "Remove {title} from history"
+
+#: src/components/LibrarySurface.tsx
+msgid "Remove /{command} from the config"
+msgstr "Remove /{command} from the config"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Remove from Spex (repo stays on disk)"
+msgstr "Remove from Spex (repo stays on disk)"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Remove from Spex? The repo stays on disk."
+msgstr "Remove from Spex? The repo stays on disk."
+
+#: src/components/LibrarySurface.tsx
+msgid "Remove from the config (compiled artifacts stay in the library)"
+msgstr "Remove from the config (compiled artifacts stay in the library)"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Remove project"
+msgstr "Remove project"
+
+#: src/components/LibrarySurface.tsx
+msgid "Remove the draft, its conversation, and its source"
+msgstr "Remove the draft, its conversation, and its source"
+
+#: src/components/ProjectGroup.tsx
+msgid "Remove this intent from history"
+msgstr "Remove this intent from history"
+
+#: src/components/ProjectGroup.tsx
+msgid "Remove this intent from history?"
+msgstr "Remove this intent from history?"
+
+#: src/components/Composer.tsx
+msgid "Remove this message"
+msgstr "Remove this message"
+
+#: src/components/LibrarySurface.tsx
+msgid "Remove this playbook from the config?"
+msgstr "Remove this playbook from the config?"
+
+#: src/components/SettingsSurface.tsx
+msgid "Remove this player from the roster"
+msgstr "Remove this player from the roster"
+
+#: src/components/Composer.tsx
+msgid "Remove this queued message"
+msgstr "Remove this queued message"
+
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Removed “{title}”"
+msgstr "Removed “{title}”"
+
+#. queue row control, busy: the removal is in flight
+#: src/components/NextCard.tsx
+msgid "Removing…"
+msgstr "Removing…"
+
+#: src/components/SpaceSync.tsx
+msgid "Replace {count, plural, one {# unit} other {# units}} with the remote's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
+msgstr "Replace {count, plural, one {# unit} other {# units}} with the remote's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replace the source with pasted text or a file"
+msgstr "Replace the source with pasted text or a file"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replaces the draft's source"
+msgstr "Replaces the draft's source"
+
+#: src/components/Composer.tsx
+msgid "Reply to {player}…"
+msgstr "Reply to {player}…"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Repo unreadable — does the path still exist?"
+msgstr "Repo unreadable — does the path still exist?"
+
+#: src/components/AgentEditor.tsx
+msgid "Repo-relative paths the agent may write under auto mode beyond its usual set — e.g. <0>.git</0> for commits"
+msgstr "Repo-relative paths the agent may write under auto mode beyond its usual set — e.g. <0>.git</0> for commits"
+
+#. what to do about a Playbook defect
+#: src/lib/failure-catalogue.ts
+msgid "Report it"
+msgstr "Report it"
+
+#. the field must be filled before the act runs
+#: src/components/SpaceSurface.tsx
+msgid "Required"
+msgstr "Required"
+
+#: src/components/ProjectGroup.tsx
+msgid "Resize History"
+msgstr "Resize History"
+
+#: src/components/PlaybookStages.tsx
+msgid "Resize the {stage} stage"
+msgstr "Resize the {stage} stage"
+
+#: src/components/RunView.tsx
+msgid "Resize the Captain pane"
+msgstr "Resize the Captain pane"
+
+#: src/components/CompileBand.tsx
+msgid "Resize the compiler output"
+msgstr "Resize the compiler output"
+
+#: src/components/CompileBand.tsx
+msgid "Resize the compiler's questions"
+msgstr "Resize the compiler's questions"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Resize the conversation pane"
+msgstr "Resize the conversation pane"
+
+#: src/components/SpecView.tsx
+msgid "Resize the graph pane"
+msgstr "Resize the graph pane"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Resize the tree pane"
+msgstr "Resize the tree pane"
+
+#: src/lib/failure-catalogue.ts
+msgid "Restore the branch yourself"
+msgstr "Restore the branch yourself"
+
+#: src/lib/space.ts
+msgid "resume tokens for this machine's agent conversations; they work nowhere else"
+msgstr "resume tokens for this machine's agent conversations; they work nowhere else"
+
+#. act: load the transcript again
+#. act: run the interrupted turn again
+#. read the record again
+#. read the specs tree again
+#. run the stopped step again
+#. take the failed read again
+#. take the failed read again
+#. take the failed read again
+#. try creating the config file again
+#. try the failed save again
+#: src/App.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/RunView.tsx
+#: src/components/SessionRecovery.tsx
+#: src/components/SettingsSurface.tsx
+#: src/components/SpaceSync.tsx
+#: src/components/SpecEditor.tsx
+#: src/components/SpecView.tsx
+msgid "Retry"
+msgstr "Retry"
+
+#: src/components/SessionRecovery.tsx
+msgid "Retry the saved input with its saved configuration after checking completed work?"
+msgstr "Retry the saved input with its saved configuration after checking completed work?"
+
+#. a retry is in flight
+#. the Retry control, while the retry is in flight
+#: src/components/SessionRecovery.tsx
+#: src/components/SettingsSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Retrying…"
+msgstr "Retrying…"
+
+#. attention row control: say this turn has been read
+#: src/components/DashboardSurface.tsx
+msgid "Reviewed"
+msgstr "Reviewed"
+
+#: src/lib/failure-catalogue.ts
+msgid "Rewrote history"
+msgstr "Rewrote history"
+
+#: src/components/CompileBand.tsx
+msgid "roles: {roles}"
+msgstr "roles: {roles}"
+
+#. compile phase: under way
+#. session row: a turn is in flight
+#. the aliveness mark's own word: this thing is at work
+#. the aliveness mark's own word: this thing is at work
+#: src/components/CompileBand.tsx
+#: src/components/MachineCard.tsx
+#: src/components/NavRail.tsx
+#: src/components/RunningMark.tsx
+msgid "running"
+msgstr "running"
+
+#. Dashboard band heading: sessions with a turn in flight
+#. this compile phase is under way
+#. this compile phase is under way
+#. tooltip on the aliveness mark: this lane is at work
+#. tooltip on the aliveness mark: this lane is at work
+#: src/components/CompileBand.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/PlayerPane.tsx
+msgid "Running"
+msgstr "Running"
+
+#: src/components/ParkedRun.tsx
+msgid "Running the workflow's control"
+msgstr "Running the workflow's control"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "Runs slc over the draft's source — 30 to 120 minutes"
+msgstr "Runs slc over the draft's source — 30 to 120 minutes"
+
+#: src/components/AgentEditor.tsx
+msgid "Same as Captain"
+msgstr "Same as Captain"
+
+#. commit the edits in this editor
+#. commit the edits in this editor
+#. commit the edits in this editor
+#. save the edited remote URL
+#. sync step: saving this device's changes
+#. write the draft to the file
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+#: src/components/SpaceSurface.tsx
+#: src/components/SpecEditor.tsx
+#: src/lib/space.ts
+msgid "Save"
+msgstr "Save"
+
+#: src/components/SpecEditor.tsx
+msgid "Save ({key})"
+msgstr "Save ({key})"
+
+#: src/components/SpecView.tsx
+msgid "Saved {path}"
+msgstr "Saved {path}"
+
+#. an edit landed; the tick is part of the word
+#: src/components/SettingsSurface.tsx
+msgid "Saved ✓"
+msgstr "Saved ✓"
+
+#: src/components/SessionRecovery.tsx
+msgid "Saved input"
+msgstr "Saved input"
+
+#: src/lib/space.ts
+msgid "Saving changes…"
+msgstr "Saving changes…"
+
+#. a save is in flight
+#. a save is in flight
+#. a save is in flight
+#. the Save control, while the save is in flight
+#. the Save control, while the save is in flight
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+#: src/components/SpaceSurface.tsx
+#: src/components/SpecEditor.tsx
+msgid "Saving…"
+msgstr "Saving…"
+
+#: src/components/SpecView.tsx
+msgid "Scaffold one in the project directory:"
+msgstr "Scaffold one in the project directory:"
+
+#: src/components/ProjectPalette.tsx
+msgid "Scaffold specs when creating"
+msgstr "Scaffold specs when creating"
+
+#: src/App.tsx
+msgid "seeding the example failed"
+msgstr "seeding the example failed"
+
+#. busy: the Academy example is being written to disk
+#: src/components/CaptainHome.tsx
+#: src/components/ProjectPalette.tsx
+msgid "Seeding…"
+msgstr "Seeding…"
+
+#: src/components/CaptainHome.tsx
+msgid "Seeds a sample project with specs, ready to run"
+msgstr "Seeds a sample project with specs, ready to run"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Select an entry to preview it."
+msgstr "Select an entry to preview it."
+
+#. act: send the typed message
+#. act: send the typed message
+#. send the composed message
+#: src/components/CaptainHome.tsx
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Send"
+msgstr "Send"
+
+#: src/components/ParkedRun.tsx
+msgid "Send a message to pick it up, or drop the run"
+msgstr "Send a message to pick it up, or drop the run"
+
+#. queue this message behind the work in flight
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Send next"
+msgstr "Send next"
+
+#: src/lib/shortcuts.ts
+msgid "Send the message; Shift+Enter adds a line"
+msgstr "Send the message; Shift+Enter adds a line"
+
+#. the message is going out
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+msgid "Sending…"
+msgstr "Sending…"
+
+#: src/components/DraftConversation.tsx
+msgid "sends after the compile"
+msgstr "sends after the compile"
+
+#: src/components/DraftConversation.tsx
+msgid "Sends after the compile · {keys}"
+msgstr "Sends after the compile · {keys}"
+
+#: src/components/DraftConversation.tsx
+msgid "Sends after the compile…"
+msgstr "Sends after the compile…"
+
+#: src/components/DraftConversation.tsx
+msgid "sends after the reply"
+msgstr "sends after the reply"
+
+#: src/components/DraftConversation.tsx
+msgid "Sends after the reply · {keys}"
+msgstr "Sends after the reply · {keys}"
+
+#: src/components/DraftConversation.tsx
+msgid "Sends after the reply…"
+msgstr "Sends after the reply…"
+
+#: src/components/Composer.tsx
+msgid "Sends after this turn…"
+msgstr "Sends after this turn…"
+
+#: src/components/Composer.tsx
+msgid "sends when this turn ends"
+msgstr "sends when this turn ends"
+
+#: src/components/Composer.tsx
+msgid "Sends when this turn ends · {keys}"
+msgstr "Sends when this turn ends · {keys}"
+
+#: src/components/CompileBand.tsx
+msgid "sent to the agent"
+msgstr "sent to the agent"
+
+#. one unit's kind: a session
+#. one unit's kind: a session
+#. row menu item: open the session this intent came from
+#: src/components/ProjectGroup.tsx
+#: src/components/SpaceExplorer.tsx
+#: src/lib/space.ts
+msgid "Session"
+msgstr "Session"
+
+#: src/components/RunView.tsx
+msgid "Session is in use elsewhere"
+msgstr "Session is in use elsewhere"
+
+#: src/components/RunView.tsx
+msgid "Session ownership is unknown · controls are unavailable"
+msgstr "Session ownership is unknown · controls are unavailable"
+
+#: src/state/store.ts
+msgid "Session ownership must be idle before deleting it."
+msgstr "Session ownership must be idle before deleting it."
+
+#: src/state/store.ts
+msgid "Session ownership must be idle before recovery."
+msgstr "Session ownership must be idle before recovery."
+
+#: src/state/store.ts
+msgid "Session ownership must be idle before sending a message."
+msgstr "Session ownership must be idle before sending a message."
+
+#: src/components/SettingsSurface.tsx
+msgid "Session players"
+msgstr "Session players"
+
+#: src/state/reducer.ts
+msgid "session shut down"
+msgstr "session shut down"
+
+#: src/lib/space.ts
+msgid "Sessions"
+msgstr "Sessions"
+
+#: src/App.tsx
+msgid "Sessions and project views"
+msgstr "Sessions and project views"
+
+#: src/components/SpaceSurface.tsx
+msgid "Sessions directory outside the space; not shared"
+msgstr "Sessions directory outside the space; not shared"
+
+#: src/components/SpaceSurface.tsx
+msgid "Set this space up first"
+msgstr "Set this space up first"
+
+#: src/components/SpaceSurface.tsx
+msgid "Set up space"
+msgstr "Set up space"
+
+#. one unit's kind: the settings file
+#: src/lib/space.ts
+msgid "Setting"
+msgstr "Setting"
+
+#. the setup control, while the setup runs
+#. the setup control, while the setup runs
+#: src/components/SpaceSurface.tsx
+msgid "Setting up…"
+msgstr "Setting up…"
+
+#: src/components/NavRail.tsx
+#: src/components/SettingsSurface.tsx
+#: src/lib/space.ts
 msgid "Settings"
 msgstr "Settings"
 
+#: src/components/DeliveryCard.tsx
+msgid "Settled — {title}"
+msgstr "Settled — {title}"
+
+#. badge: this lane answers more than one role
+#: src/components/LibrarySurface.tsx
+msgid "shared"
+msgstr "shared"
+
+#. entry mark: this file syncs and is already sent
+#: src/lib/space.ts
+msgid "Shared"
+msgstr "Shared"
+
+#: src/components/SettingsSurface.tsx
+msgid "Shared with the playbook CLI — edits made outside appear here"
+msgstr "Shared with the playbook CLI — edits made outside appear here"
+
+#: src/components/PlayerPane.tsx
+msgid "Show {count} of {rest} earlier entries"
+msgstr "Show {count} of {rest} earlier entries"
+
+#: src/components/SpecView.tsx
+msgid "Show {group} items"
+msgstr "Show {group} items"
+
+#: src/components/DraftConversation.tsx
+msgid "Show {shown} of {total} earlier entries"
+msgstr "Show {shown} of {total} earlier entries"
+
 #: src/components/NavRail.tsx
+msgid "Show all {count} sessions in {project}"
+msgstr "Show all {count} sessions in {project}"
+
+#. reveal a path in macOS Finder
+#: src/lib/space.ts
+msgid "Show in Finder"
+msgstr "Show in Finder"
+
+#. reveal a path in the file manager
+#: src/lib/space.ts
+msgid "Show in folder"
+msgstr "Show in folder"
+
+#. unfold the compiler's raw output
+#: src/components/CompileBand.tsx
+msgid "Show log"
+msgstr "Show log"
+
+#: src/components/DraftConversation.tsx
+msgid "Show me an example"
+msgstr "Show me an example"
+
+#: src/components/NavRail.tsx
+msgid "Show sessions in {project}"
+msgstr "Show sessions in {project}"
+
+#: src/components/SpecView.tsx
+msgid "Show the citation graph beside the outline"
+msgstr "Show the citation graph beside the outline"
+
+#: src/components/DraftConversation.tsx
+msgid "Show the message"
+msgstr "Show the message"
+
+#: src/components/NavRail.tsx
+msgid "Show the sidebar"
+msgstr "Show the sidebar"
+
+#: src/components/NavRail.tsx
+msgid "Show the sidebar ({keys})"
+msgstr "Show the sidebar ({keys})"
+
+#: src/components/SpecGraph.tsx
+msgid "Show the whole graph (0)"
+msgstr "Show the whole graph (0)"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Showing the first {lines} lines; the file is longer."
+msgstr "Showing the first {lines} lines; the file is longer."
+
+#: src/components/SpecItemRows.tsx
+msgid "shown despite filter"
+msgstr "shown despite filter"
+
+#: src/components/SpecView.tsx
+msgid "shown despite search"
+msgstr "shown despite search"
+
+#: src/lib/labels.ts
+msgid "Sign in again with that agent's CLI"
+msgstr "Sign in again with that agent's CLI"
+
+#: src/lib/failure-catalogue.ts
+msgid "Sign in to {who} again"
+msgstr "Sign in to {who} again"
+
+#: src/components/CaptainHome.tsx
+msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
+msgstr "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
+
+#. graph legend: a node's size counts its items
+#: src/components/SpecGraph.tsx
+msgid "size — items"
+msgstr "size — items"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Slash command"
+msgstr "Slash command"
+
+#: src/main.tsx
+msgid "Something broke in the UI"
+msgstr "Something broke in the UI"
+
+#. pipeline stage: the authored workflow
+#. pipeline stage: the authored workflow
+#. pipeline stage: the authored workflow
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "Source"
+msgstr "Source"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Source file path (overrides the text)"
+msgstr "Source file path (overrides the text)"
+
+#. draft state chip, at most 14 characters: the draft's library directory is gone
+#: src/lib/drafts.ts
+msgid "Source missing"
+msgstr "Source missing"
+
+#: src/components/LibrarySurface.tsx
+msgid "Source this playbook was loaded from: {from}"
+msgstr "Source this playbook was loaded from: {from}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Sources: {issues, plural, one {# issue} other {# issues}} · {prs, plural, one {# PR} other {# PRs}} · {records, plural, one {# open record} other {# open records}}"
+msgstr "Sources: {issues, plural, one {# issue} other {# issues}} · {prs, plural, one {# PR} other {# PRs}} · {records, plural, one {# open record} other {# open records}}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Sources: GitHub not connected · {records, plural, one {# open record} other {# open records}}"
+msgstr "Sources: GitHub not connected · {records, plural, one {# open record} other {# open records}}"
+
+#: src/components/SourcesTabs.tsx
+msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
+msgstr "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
+
+#: src/components/NavRail.tsx
+#: src/components/SpaceSurface.tsx
 msgid "Space"
 msgstr "Space"
+
+#: src/components/SpaceSurface.tsx
+msgid "Space is busy"
+msgstr "Space is busy"
+
+#: src/components/SpaceSurface.tsx
+msgid "Space views"
+msgstr "Space views"
+
+#. the list of unanswered space issues (problems, not GitHub issues)
+#: src/components/SpaceSync.tsx
+msgid "space.issues"
+msgstr "Issues"
+
+#: src/components/SpecGraph.tsx
+msgid "Spec package citation graph"
+msgstr "Spec package citation graph"
+
+#. tab name: the project's spec packages
+#. the spec view's own heading
+#. the spec view's own heading
+#: src/App.tsx
+#: src/components/SpecView.tsx
+msgid "Specs"
+msgstr "Specs"
+
+#: src/components/SpecView.tsx
+msgid "specs/ is present but holds no spec files yet."
+msgstr "specs/ is present but holds no spec files yet."
+
+#: src/components/SettingsSurface.tsx
+msgid "Spex {version} · protocol {protocol}"
+msgstr "Spex {version} · protocol {protocol}"
+
+#: src/components/SettingsSurface.tsx
+msgid "Spex could not create a starter config at <0>{path}</0> — check the folder is writable, then retry."
+msgstr "Spex could not create a starter config at <0>{path}</0> — check the folder is writable, then retry."
+
+#: src/components/DraftConversation.tsx
+msgid "Spex could not read this block"
+msgstr "Spex could not read this block"
+
+#: src/components/CaptainHome.tsx
+msgid "Spex has no config file yet — playbooks are unavailable."
+msgstr "Spex has no config file yet — playbooks are unavailable."
+
+#: src/components/NavRail.tsx
+msgid "Spex navigation"
+msgstr "Spex navigation"
+
+#: src/lib/failure-catalogue.ts
+msgid "Squash or reset them yourself"
+msgstr "Squash or reset them yourself"
+
+#. queue row control: begin this queued intent
+#. queue row control: begin this queued intent
+#. queue row control: begin this queued intent
+#. queue row control: begin this queued intent
+#: src/components/DashboardSurface.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Start"
+msgstr "Start"
+
+#: src/components/DeliveryCard.tsx
+#: src/components/NextCard.tsx
+msgid "Start {title}"
+msgstr "Start {title}"
+
+#: src/components/DashboardSurface.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Start {title} in {project}"
+msgstr "Start {title} in {project}"
+
+#: src/lib/shortcuts.ts
+msgid "Start a new session in the current project"
+msgstr "Start a new session in the current project"
+
+#: src/components/RunView.tsx
+msgid "Start a new session in this project"
+msgstr "Start a new session in this project"
+
+#: src/App.tsx
+msgid "Start another session"
+msgstr "Start another session"
+
+#: src/App.tsx
+msgid "Start another session ({keys})"
+msgstr "Start another session ({keys})"
+
+#: src/lib/shortcuts.ts
+msgid "Start typing in the composer from anywhere in Projects"
+msgstr "Start typing in the composer from anywhere in Projects"
+
+#: src/components/ProjectGroup.tsx
+msgid "started {age}"
+msgstr "started {age}"
+
+#: src/App.tsx
+msgid "started {started}"
+msgstr "started {started}"
+
+#. a run that has entered no state yet
+#. a run that has entered no state yet
+#: src/components/MachineCard.tsx
+msgid "starting"
+msgstr "starting"
+
+#: src/components/CompileBand.tsx
+msgid "Starting the compiler…"
+msgstr "Starting the compiler…"
+
+#. chip on the composer: the task this message will start
+#: src/components/Composer.tsx
+msgid "Starting: {title}"
+msgstr "Starting: {title}"
+
+#. queue row control, busy: the start is in flight
+#. queue row control, busy: the start is in flight
+#: src/components/CaptainHome.tsx
+#: src/components/DeliveryCard.tsx
+#: src/components/NextCard.tsx
+msgid "Starting…"
+msgstr "Starting…"
+
+#. pipeline stage: the compiled machine
+#. pipeline stage: the compiled machine
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "State machine"
+msgstr "State machine"
+
+#. tooltip: the machine state the run stands in
+#. tooltip: the machine state the run stands in
+#: src/components/CaptainPane.tsx
+#: src/components/ParkedRun.tsx
+msgid "state: {state}"
+msgstr "state: {state}"
+
+#. heading over the machine's state chips
+#: src/components/PlaybookStages.tsx
+msgid "states"
+msgstr "states"
+
+#. entry mark: this file never leaves the device
+#: src/lib/space.ts
+msgid "Stays here"
+msgstr "Stays here"
+
+#: src/components/SpaceExplorer.tsx
+msgid "Stays on this device ({count} kinds)"
+msgstr "Stays on this device ({count} kinds)"
+
+#. tooltip: the machine state the run failed in
+#: src/components/FailureCard.tsx
+msgid "step: {state}"
+msgstr "step: {state}"
+
+#. stop the running sync
+#: src/components/SpaceSync.tsx
+msgid "Stop"
+msgstr "Stop"
+
+#. how a run ended: it was stopped
+#: src/components/MachineCard.tsx
+msgid "stopped"
+msgstr "stopped"
+
+#: src/lib/failure-catalogue.ts
+msgid "Stopped before it finished"
+msgstr "Stopped before it finished"
+
+#. the Stop control, while the stop is in flight
+#: src/components/SpaceSync.tsx
+msgid "Stopping…"
+msgstr "Stopping…"
+
+#. history row tag: a later record replaced this one
+#. history row tag: a later record replaced this one
+#: src/components/ProjectGroup.tsx
+msgid "superseded"
+msgstr "superseded"
+
+#: src/components/AgentEditor.tsx
+msgid "Supported by this model"
+msgstr "Supported by this model"
+
+#: src/components/NavRail.tsx
+#: src/lib/shortcuts.ts
+msgid "Switch or add a project"
+msgstr "Switch or add a project"
+
+#: src/components/NavRail.tsx
+msgid "Switch or add a project ({keys})"
+msgstr "Switch or add a project ({keys})"
+
+#: src/components/ProjectPalette.tsx
+msgid "Switch to a project…"
+msgstr "Switch to a project…"
+
+#. tab and control: send and bring back changes
+#. tab and control: send and bring back changes
+#: src/components/SpaceSurface.tsx
+msgid "Sync"
+msgstr "Sync"
+
+#. one unit's kind: a sync rule file
+#: src/lib/space.ts
+msgid "Sync rule"
+msgstr "Sync rule"
+
+#: src/lib/space.ts
+msgid "Sync rules"
+msgstr "Sync rules"
+
+#: src/components/SpaceSync.tsx
+msgid "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs."
+msgstr "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs."
+
+#: src/components/SpaceSync.tsx
+msgid "Sync steps"
+msgstr "Sync steps"
+
+#. header field: this space last synced
+#: src/components/SpaceSurface.tsx
+msgid "Synced"
+msgstr "Synced"
+
+#: src/components/SpaceSurface.tsx
+msgid "Synced · {sent} sent · {received} received"
+msgstr "Synced · {sent} sent · {received} received"
+
+#: src/components/SpaceSync.tsx
+msgid "Synced {age} · {sent} sent · {received} received"
+msgstr "Synced {age} · {sent} sent · {received} received"
+
+#. the Sync control, while the sync runs
+#: src/components/SpaceSurface.tsx
+msgid "Syncing…"
+msgstr "Syncing…"
+
+#: src/components/SpaceSurface.tsx
+msgid "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up."
+msgstr "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up."
 
 #: src/components/SettingsSurface.tsx
 msgid "System"
@@ -122,3 +4581,596 @@ msgstr "System"
 #: src/components/SettingsSurface.tsx
 msgid "System follows your device"
 msgstr "System follows your device"
+
+#. conflict choice: take the remote's version
+#: src/components/SpaceSync.tsx
+msgid "Take remote"
+msgstr "Take remote"
+
+#: src/components/Composer.tsx
+msgid "Take the task out of the message"
+msgstr "Take the task out of the message"
+
+#: src/components/NextCard.tsx
+msgid "Take this task out of the queue — Undo puts it back"
+msgstr "Take this task out of the queue — Undo puts it back"
+
+#: src/components/DraftConversation.tsx
+msgid "Tell the agent what the playbook does, who does what, and when it is done"
+msgstr "Tell the agent what the playbook does, who does what, and when it is done"
+
+#: src/components/SettingsSurface.tsx
+msgid "Terminal pane theme"
+msgstr "Terminal pane theme"
+
+#: src/components/SettingsSurface.tsx
+msgid "Terminal pane theme (CLI only)"
+msgstr "Terminal pane theme (CLI only)"
+
+#. item group: Verification, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "test"
+msgstr "test"
+
+#. item group: Verification
+#. item group: Verification
+#: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
+msgid "Tests"
+msgstr "Tests"
+
+#: src/components/SpaceSync.tsx
+msgid "That folder already belongs to {owner}."
+msgstr "That folder already belongs to {owner}."
+
+#: src/components/SpaceSync.tsx
+msgid "That folder is here and is a git repository. Add it as a project?"
+msgstr "That folder is here and is a git repository. Add it as a project?"
+
+#: src/components/SpaceSync.tsx
+msgid "That folder is here but is not a git repository."
+msgstr "That folder is here but is not a git repository."
+
+#: src/components/SpaceSync.tsx
+msgid "That folder is no longer on this device."
+msgstr "That folder is no longer on this device."
+
+#: src/components/ParkedRun.tsx
+msgid "The /{command} workflow failed and is waiting for you."
+msgstr "The /{command} workflow failed and is waiting for you."
+
+#: src/components/ParkedRun.tsx
+msgid "The /{command} workflow is waiting for your answer."
+msgstr "The /{command} workflow is waiting for your answer."
+
+#: src/lib/labels.ts
+msgid "The agent process exited unexpectedly ({code})"
+msgstr "The agent process exited unexpectedly ({code})"
+
+#: src/components/DraftConversation.tsx
+msgid "The agent's replies land here."
+msgstr "The agent's replies land here."
+
+#: src/lib/labels.ts
+msgid "The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI"
+msgstr "The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI"
+
+#: src/lib/labels.ts
+msgid "The call timed out"
+msgstr "The call timed out"
+
+#: src/components/LibrarySurface.tsx
+msgid "The Captain can only run playbooks listed here."
+msgstr "The Captain can only run playbooks listed here."
+
+#: src/components/CaptainPane.tsx
+msgid "The Captain will report here."
+msgstr "The Captain will report here."
+
+#: src/state/reducer.ts
+msgid "the Captain's turn failed"
+msgstr "the Captain's turn failed"
+
+#: src/lib/labels.ts
+msgid "The Captain's turn failed — {cause}"
+msgstr "The Captain's turn failed — {cause}"
+
+#: src/components/ProjectGroup.tsx
+msgid "The capturing session is gone"
+msgstr "The capturing session is gone"
+
+#: src/components/CompileBand.tsx
+msgid "The compile toolchain is not ready."
+msgstr "The compile toolchain is not ready."
+
+#: src/components/DraftRegisterTab.tsx
+msgid "The compiled roles stand: {roles}."
+msgstr "The compiled roles stand: {roles}."
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "The compiled state machine, from the last compile"
+msgstr "The compiled state machine, from the last compile"
+
+#: src/components/LibrarySurface.tsx
+#: src/components/PlaybookStages.tsx
+msgid "The compiled XState machine that drives the players"
+msgstr "The compiled XState machine that drives the players"
+
+#: src/state/store.ts
+msgid "The conversation could not be loaded: {reason}"
+msgstr "The conversation could not be loaded: {reason}"
+
+#: src/components/SpaceSync.tsx
+msgid "The diff is cut here; the file is longer."
+msgstr "The diff is cut here; the file is longer."
+
+#: src/lib/drafts.ts
+msgid "The draft's library directory is gone; only Delete remains"
+msgstr "The draft's library directory is gone; only Delete remains"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "The draft's markdown as it stands on disk"
+msgstr "The draft's markdown as it stands on disk"
+
+#: src/components/DraftSourceTab.tsx
+msgid "The file is copied in as the draft's source"
+msgstr "The file is copied in as the draft's source"
+
+#: src/components/RunView.tsx
+msgid "The last turn failed. Send a message to pick it up."
+msgstr "The last turn failed. Send a message to pick it up."
+
+#: src/components/DashboardSurface.tsx
+msgid "The ledger could not be loaded: {reason}"
+msgstr "The ledger could not be loaded: {reason}"
+
+#: src/App.tsx
+msgid "The project's spec packages ({keys})"
+msgstr "The project's spec packages ({keys})"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "The proposal names {roles}, which the compiled entry lacks."
+msgstr "The proposal names {roles}, which the compiled entry lacks."
+
+#: src/lib/labels.ts
+msgid "The provider rate-limited the call — it can be retried"
+msgstr "The provider rate-limited the call — it can be retried"
+
+#. tuning choice: take the provider's own current default
+#: src/components/TuningField.tsx
+msgid "the provider's default"
+msgstr "the provider's default"
+
+#: src/components/ProjectGroup.tsx
+msgid "The queue could not be loaded. <0>Retry</0>"
+msgstr "The queue could not be loaded. <0>Retry</0>"
+
+#: src/components/LibrarySurface.tsx
+msgid "The raw prose the demo starts from"
+msgstr "The raw prose the demo starts from"
+
+#: src/components/SpecEditor.tsx
+msgid "the reload failed"
+msgstr "the reload failed"
+
+#: src/components/SpaceSync.tsx
+msgid "The remote against the common ancestor"
+msgstr "The remote against the common ancestor"
+
+#: src/components/SpaceSync.tsx
+msgid "The remote is empty; Sync will send this space"
+msgstr "The remote is empty; Sync will send this space"
+
+#: src/components/SpecEditor.tsx
+msgid "the save failed"
+msgstr "the save failed"
+
+#: src/App.tsx
+msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
+msgstr "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
+
+#: src/lib/failure-catalogue.ts
+msgid "The step left no record of what it changed"
+msgstr "The step left no record of what it changed"
+
+#: src/components/FailureCard.tsx
+msgid "The workflow failed"
+msgstr "The workflow failed"
+
+#: src/components/ParkedRun.tsx
+msgid "The workflow failed and is waiting for you."
+msgstr "The workflow failed and is waiting for you."
+
+#: src/components/ParkedRun.tsx
+msgid "The workflow is waiting for your answer."
+msgstr "The workflow is waiting for your answer."
+
+#: src/components/PlaybookStages.tsx
+msgid "The workflow markdown the playbook was compiled from"
+msgstr "The workflow markdown the playbook was compiled from"
+
+#. stands where a project name would, for sessions with no folder
+#: src/components/SpaceSync.tsx
+msgid "these sessions"
+msgstr "these sessions"
+
+#. collapsed card: the agent's own reasoning summary
+#: src/components/PlayerPane.tsx
+msgid "Thinking"
+msgstr "Thinking"
+
+#: src/components/AgentSettings.tsx
+msgid "This conversation is in use elsewhere — its settings read only."
+msgstr "This conversation is in use elsewhere — its settings read only."
+
+#: src/components/AgentSettings.tsx
+msgid "This conversation only"
+msgstr "This conversation only"
+
+#: src/components/SpaceSync.tsx
+msgid "This device against the common ancestor"
+msgstr "This device against the common ancestor"
+
+#: src/components/SpaceSync.tsx
+msgid "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation."
+msgstr "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation."
+
+#: src/components/SpecEditor.tsx
+msgid "This file changed on disk since you opened it."
+msgstr "This file changed on disk since you opened it."
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "This lane also answers {positions} — one conversation across them"
+msgstr "This lane also answers {positions} — one conversation across them"
+
+#: src/components/SpecView.tsx
+msgid "This project has no <0>specs/</0> directory yet — it holds the spec packages and the decision and intent records this view navigates."
+msgstr "This project has no <0>specs/</0> directory yet — it holds the spec packages and the decision and intent records this view navigates."
+
+#: src/components/ProjectsSurface.tsx
+msgid "This project is no longer registered."
+msgstr "This project is no longer registered."
+
+#: src/components/SpecView.tsx
+msgid "This project uses a legacy specs layout"
+msgstr "This project uses a legacy specs layout"
+
+#: src/App.tsx
+msgid "This project's overview: history, now, up next, sources, repo state"
+msgstr "This project's overview: history, now, up next, sources, repo state"
+
+#: src/components/ProjectGroup.tsx
+msgid "This record is not in the project's specs tree"
+msgstr "This record is not in the project's specs tree"
+
+#: src/components/DeliveryCard.tsx
+msgid "This session has ended — the replay is read-only"
+msgstr "This session has ended — the replay is read-only"
+
+#: src/components/SpaceSync.tsx
+msgid "This space has not met that remote yet."
+msgstr "This space has not met that remote yet."
+
+#: src/components/SpaceSync.tsx
+msgid "This space is on <0>{branch}</0>. The app syncs <1>main</1>; check it out in a terminal."
+msgstr "This space is on <0>{branch}</0>. The app syncs <1>main</1>; check it out in a terminal."
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "this stage was not found for this draft"
+msgstr "this stage was not found for this draft"
+
+#: src/components/LibrarySurface.tsx
+msgid "this stage was not found for this playbook"
+msgstr "this stage was not found for this playbook"
+
+#: src/components/CompileBand.tsx
+msgid "three in a row — tell the agent how to proceed"
+msgstr "three in a row — tell the agent how to proceed"
+
+#: src/components/SpecView.tsx
+msgid "Toggle {name}"
+msgstr "Toggle {name}"
+
+#: src/state/store.ts
+msgid "transcript could not be loaded: {reason}"
+msgstr "transcript could not be loaded: {reason}"
+
+#. error boundary: re-render the surface in place
+#: src/main.tsx
+msgid "Try again"
+msgstr "Try again"
+
+#: src/components/CaptainHome.tsx
+#: src/components/ProjectPalette.tsx
+#: src/components/SpecView.tsx
+msgid "Try the Academy example"
+msgstr "Try the Academy example"
+
+#: src/components/AgentSettings.tsx
+#: src/components/BindingEditor.tsx
+msgid "Turn off fast mode for this model."
+msgstr "Turn off fast mode for this model."
+
+#: src/components/AgentEditor.tsx
+msgid "Turn off fast mode for this selection."
+msgstr "Turn off fast mode for this selection."
+
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Tweak the {name} agent in place"
+msgstr "Tweak the {name} agent in place"
+
+#: src/components/CaptainHome.tsx
+msgid "Tweak the Captain agent in place"
+msgstr "Tweak the Captain agent in place"
+
+#: src/components/ProjectsSurface.tsx
+msgid "uncommitted changes"
+msgstr "uncommitted changes"
+
+#: src/lib/failure-catalogue.ts
+msgid "Uncommitted changes you had were lost"
+msgstr "Uncommitted changes you had were lost"
+
+#. put the row just removed back where it was
+#. put the row just removed back where it was
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Undo"
+msgstr "Undo"
+
+#. one unit's kind: a project's queue (the noun)
+#: src/lib/space.ts
+msgid "unit.queue"
+msgstr "Queue"
+
+#: src/components/SpaceSurface.tsx
+msgid "Units this device changed, listed under Sync"
+msgstr "Units this device changed, listed under Sync"
+
+#. attention row: a turn nobody has read
+#. session row: a turn nobody has read
+#. tab name: a turn nobody has read
+#: src/App.tsx
+#: src/components/DashboardSurface.tsx
+#: src/components/NavRail.tsx
+msgid "unread turn"
+msgstr "unread turn"
+
+#: src/components/DraftConversation.tsx
+msgid "Unreadable draft — delete it, or repair the file and restart Spex"
+msgstr "Unreadable draft — delete it, or repair the file and restart Spex"
+
+#. the space's status, read in a title
+#: src/components/SpaceSurface.tsx
+msgid "unrelated history"
+msgstr "unrelated history"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Unrelated history"
+msgstr "Unrelated history"
+
+#. mark on a branch the app cannot sync
+#: src/components/SpaceSurface.tsx
+msgid "unsupported"
+msgstr "unsupported"
+
+#. a session with no title of its own
+#: src/components/SpaceExplorer.tsx
+msgid "untitled session"
+msgstr "untitled session"
+
+#. readiness badge: no automatic check exists for this adapter
+#: src/components/SettingsSurface.tsx
+msgid "unverified"
+msgstr "unverified"
+
+#. band heading: the project's queued work
+#. band heading: the project's queued work
+#: src/components/NextCard.tsx
+#: src/components/ProjectGroup.tsx
+msgid "Up next"
+msgstr "Up next"
+
+#: src/components/DeliveryCard.tsx
+msgid "Up next: <0>{title}</0>"
+msgstr "Up next: <0>{title}</0>"
+
+#. a sync unit's change: it changed on this side
+#: src/components/SpaceSync.tsx
+msgid "updated"
+msgstr "updated"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Updated {age}"
+msgstr "Updated {age}"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Updated {age} by the agent"
+msgstr "Updated {age} by the agent"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Updated {age} by you"
+msgstr "Updated {age} by you"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Use as source"
+msgstr "Use as source"
+
+#. drop this conversation's own settings and take the configured ones
+#: src/components/AgentSettings.tsx
+msgid "Use default"
+msgstr "Use default"
+
+#: src/components/SpaceSync.tsx
+msgid "View diff"
+msgstr "View diff"
+
+#: src/components/LibrarySurface.tsx
+msgid "View source"
+msgstr "View source"
+
+#: src/components/ParkedRun.tsx
+msgid "Wait for the running turn"
+msgstr "Wait for the running turn"
+
+#: src/components/ProjectsSurface.tsx
+msgid "Wait for the running turn to finish, or abort it, before removing"
+msgstr "Wait for the running turn to finish, or abort it, before removing"
+
+#. compile phase: not started yet
+#: src/components/CompileBand.tsx
+msgid "waiting"
+msgstr "waiting"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — current work failed"
+msgstr "waiting — current work failed"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — current work failed — {failure}"
+msgstr "waiting — current work failed — {failure}"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — previous work failed"
+msgstr "waiting — previous work failed"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — previous work failed — {failure}"
+msgstr "waiting — previous work failed — {failure}"
+
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — previous work stopped"
+msgstr "waiting — previous work stopped"
+
+#. queued row standing: the work ahead parked on a question
+#: src/components/QueuedIntentPresentation.tsx
+msgid "waiting — your reply"
+msgstr "waiting — your reply"
+
+#. session row: the run parked on a question
+#. session status: a player asked the Boss a question
+#: src/components/NavRail.tsx
+#: src/lib/labels.ts
+msgid "waiting for your reply"
+msgstr "waiting for your reply"
+
+#: src/components/Composer.tsx
+msgid "Waiting for your reply — your next message answers it."
+msgstr "Waiting for your reply — your next message answers it."
+
+#. session row: work delivered, a verdict is owed
+#: src/components/NavRail.tsx
+msgid "waiting for your verdict"
+msgstr "waiting for your verdict"
+
+#. why a control is held: the draft's agent turn is running
+#. why a control is held: the draft's agent turn is running
+#: src/components/AuthoringWorkspace.tsx
+#: src/lib/drafts.ts
+msgid "Waits for the reply"
+msgstr "Waits for the reply"
+
+#: src/components/DraftConversation.tsx
+msgid "Waits for the reply — the agent switches on the next turn"
+msgstr "Waits for the reply — the agent switches on the next turn"
+
+#: src/components/SpaceSync.tsx
+msgid "Where a project lives is recorded on this device only; this never syncs."
+msgstr "Where a project lives is recorded on this device only; this never syncs."
+
+#: src/lib/space.ts
+msgid "where you last stopped reading in each session"
+msgstr "where you last stopped reading in each session"
+
+#: src/lib/space.ts
+msgid "where your projects live on this machine"
+msgstr "where your projects live on this machine"
+
+#: src/components/SpaceSync.tsx
+msgid "Which folder on this device is {name}?"
+msgstr "Which folder on this device is {name}?"
+
+#: src/lib/space.ts
+msgid "which process is writing right now"
+msgstr "which process is writing right now"
+
+#. graph legend: an edge's width counts its citations
+#: src/components/SpecGraph.tsx
+msgid "width — citations"
+msgstr "width — citations"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Workflow source"
+msgstr "Workflow source"
+
+#: src/components/ParkedRun.tsx
+msgid "Workflow waiting for you"
+msgstr "Workflow waiting for you"
+
+#. captured artifact's state: a turn is running for it
+#. session status: a player is running its step
+#: src/components/ForgeItemRow.tsx
+#: src/lib/labels.ts
+msgid "working"
+msgstr "working"
+
+#. the draft's agent has a turn in flight
+#: src/components/DraftConversation.tsx
+msgid "Working"
+msgstr "Working"
+
+#: src/components/DraftConversation.tsx
+msgid "working · {span}"
+msgstr "working · {span}"
+
+#: src/components/DraftConversation.tsx
+msgid "Working since {moment}"
+msgstr "Working since {moment}"
+
+#. label before the intent the conversation is serving
+#: src/components/WorkingLine.tsx
+msgid "Working:"
+msgstr "Working:"
+
+#. a turn is in flight, its span not yet known
+#: src/components/DraftConversation.tsx
+msgid "working…"
+msgstr "working…"
+
+#. busy form of a control the parked run advertises
+#: src/components/ParkedRun.tsx
+msgid "Working…"
+msgstr "Working…"
+
+#: src/components/AgentEditor.tsx
+msgid "Writable paths (comma-separated)"
+msgstr "Writable paths (comma-separated)"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Writes the playbook and any new player to the shared config"
+msgstr "Writes the playbook and any new player to the shared config"
+
+#. the source is being written to disk
+#: src/components/DraftSourceTab.tsx
+msgid "Writing…"
+msgstr "Writing…"
+
+#: src/components/SpaceSync.tsx
+msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
+msgstr "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
+
+#: src/components/SpaceSync.tsx
+msgid "Your changes are saved; nothing is pushed yet"
+msgstr "Your changes are saved; nothing is pushed yet"
+
+#: src/components/CaptainHome.tsx
+msgid "Your config file has errors — playbooks are unavailable."
+msgstr "Your config file has errors — playbooks are unavailable."
+
+#. stands in for a project with no name yet
+#: src/components/CaptainHome.tsx
+msgid "your project"
+msgstr "your project"

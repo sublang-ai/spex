@@ -16,11 +16,18 @@ import {
 } from "@sublang/spex-core/protocol";
 
 import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
+import { i18n } from "../i18n.js";
 import { ModelField } from "./ModelField.js";
 import { ModelDiscoveryStatus } from "./ModelDiscoveryStatus.js";
 import type { AgentPatch } from "../lib/config-ops.js";
 import { useFitInBox } from "../lib/popover-fit.js";
-import { FAST_MODE_MARK, type ChipAgent } from "./AgentChip.js";
+import {
+  FAST_MODE_MARK,
+  noCheckNote,
+  readinessWord,
+  type ChipAgent,
+} from "./AgentChip.js";
+import { Rich } from "./Rich.js";
 
 export const ADAPTERS = adapterNameSchema.options;
 
@@ -28,11 +35,13 @@ const MODES = ["auto", "bypass", "none"] as const;
 type Mode = (typeof MODES)[number];
 
 /** What each permission mode means, in the reader's words
- * (settings-10): the select alone says nothing about the stakes. */
-export const MODE_HELP: Record<Mode, string> = {
-  auto: "auto: the agent works on its own inside the repo, with the adapter's own protections on",
-  bypass: "bypass: no permission prompts — sandboxed repos only",
-  none: "none: the adapter's own default posture",
+ * (settings-10): the select alone says nothing about the stakes. Each
+ * is a thunk, never a string: a table read at module load would freeze
+ * the language the module was imported in (localization-4). */
+export const MODE_HELP: Record<Mode, () => string> = {
+  auto: () => i18n._("auto: the agent works on its own inside the repo, with the adapter's own protections on"),
+  bypass: () => i18n._("bypass: no permission prompts — sandboxed repos only"),
+  none: () => i18n._("none: the adapter's own default posture"),
 };
 
 function knownAdapter(adapter: string | undefined): AdapterName {
@@ -173,8 +182,8 @@ export function AgentEditor(props: AgentEditorProps) {
       className="flex flex-col gap-2 rounded-lg border border-brand-200 bg-brand-50/40 p-3 dark:border-brand-900 dark:bg-brand-950/30"
     >
       <div className="flex flex-col gap-0.5 text-sm">
-        <span className="text-xs text-neutral-500">Adapter</span>
-        <div role="radiogroup" aria-label="Adapter" className="flex flex-wrap gap-1">
+        <span className="text-xs text-neutral-500">{i18n._({ id: "Adapter", comment: "which agent runtime an agent runs on" })}</span>
+        <div role="radiogroup" aria-label={i18n._({ id: "Adapter", comment: "which agent runtime an agent runs on" })} className="flex flex-wrap gap-1">
           {ADAPTERS.map((name) => {
             const entry = readinessByAdapter.get(name);
             return (
@@ -191,17 +200,19 @@ export function AgentEditor(props: AgentEditorProps) {
                     : "border-neutral-300 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 }`}
               >
+                {/* An adapter's id is its name; what the dot says about
+                    it is a text, and its requirement is the core's. */}
                 {name}
                 {entry ? (
                   entry.ready === true ? (
-                    <span aria-hidden className="text-emerald-500" title="ready">
+                    <span aria-hidden className="text-emerald-500" title={readinessWord(true)}>
                       ●
                     </span>
                   ) : entry.ready === false ? (
                     <span
                       aria-hidden
                       className="text-red-500"
-                      title={entry.requirement ?? "not ready"}
+                      title={entry.requirement ?? readinessWord(false)}
                     >
                       ●
                     </span>
@@ -209,10 +220,7 @@ export function AgentEditor(props: AgentEditorProps) {
                     <span
                       aria-hidden
                       className="text-neutral-500"
-                      title={
-                        entry.requirement ??
-                        "no automatic check for this adapter — verify sign-in yourself"
-                      }
+                      title={entry.requirement ?? noCheckNote()}
                     >
                       ●
                     </span>
@@ -225,22 +233,24 @@ export function AgentEditor(props: AgentEditorProps) {
       </div>
       <div className="grid grid-cols-2 gap-2 text-sm">
         <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Model (optional)</span>
+          <span className="text-xs text-neutral-500">{i18n._("Model (optional)")}</span>
           <ModelField value={model} models={models} onChange={setModel} testId="agent-model" />
         </label>
         <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Reasoning effort</span>
+          <span className="text-xs text-neutral-500">{i18n._("Reasoning effort")}</span>
           <select
             data-testid="agent-effort"
             value={effort}
             onChange={(event) => setEffort(event.target.value)}
             className="w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
           >
-            <option value="">(default)</option>
-            {effort && !tuning.efforts.includes(effort) && <option value={effort}>{effort}{discovery.options ? " (unsupported)" : " (current)"}</option>}
+            {/* An effort key is the adapter's wire word; only what
+                stands beside it is a text. */}
+            <option value="">{i18n._({ id: "(default)", comment: "effort choice: leave the adapter's own default" })}</option>
+            {effort && !tuning.efforts.includes(effort) && <option value={effort}>{discovery.options ? i18n._("{effort} (unsupported)", { effort }) : i18n._("{effort} (current)", { effort })}</option>}
             {tuning.efforts.map((name) => (
               <option key={name} value={name}>
-                {name}{tuning.additionalEfforts.includes(name) ? " (adapter-wide)" : ""}
+                {tuning.additionalEfforts.includes(name) ? i18n._("{effort} (adapter-wide)", { effort: name }) : name}
               </option>
             ))}
           </select>
@@ -254,55 +264,69 @@ export function AgentEditor(props: AgentEditorProps) {
               onChange={(event) => setFastMode(event.target.checked)}
               className="accent-brand-600"
             />
+            {/* The label carries the mark inside it, so a translation
+                places the mark rather than being assembled around it. */}
             <span>
-              Fast mode <span aria-hidden>{FAST_MODE_MARK}</span>{invalidFastMode ? " (unsupported)" : ""}
+              <Rich
+                text={
+                  invalidFastMode
+                    ? i18n._("Fast mode <0/> (unsupported)")
+                    : i18n._("Fast mode <0/>")
+                }
+                components={[<span aria-hidden key="mark">{FAST_MODE_MARK}</span>]}
+              />
             </span>
             <span className="text-xs text-neutral-500">
-              {tuning.fastModeKnown ? (supportsFastMode ? "Supported by this model" : "Not supported by this model") : "Adapter option; model support unverified"}
+              {tuning.fastModeKnown ? (supportsFastMode ? i18n._("Supported by this model") : i18n._("Not supported by this model")) : i18n._("Adapter option; model support unverified")}
             </span>
           </label>
         ) : null}
         <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Permission mode</span>
+          <span className="text-xs text-neutral-500">{i18n._("Permission mode")}</span>
           <select
             data-testid="agent-mode"
             value={mode}
             onChange={(event) => setMode(event.target.value as Mode)}
             className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
           >
-            <option value="auto">auto (protected)</option>
-            <option value="bypass">bypass</option>
-            <option value="none">none (adapter default)</option>
+            {/* A mode's own word is what the config file carries; the
+                gloss beside it is a text. */}
+            <option value="auto">{i18n._("auto (protected)")}</option>
+            <option value="bypass">{i18n._({ id: "bypass", comment: "permission mode: no prompts at all" })}</option>
+            <option value="none">{i18n._("none (adapter default)")}</option>
           </select>
           <span
             data-testid="agent-mode-help"
             className="text-xs text-neutral-500"
           >
-            {MODE_HELP[mode]}
+            {MODE_HELP[mode]()}
           </span>
         </label>
         <label className="flex flex-col gap-0.5">
           <span className="text-xs text-neutral-500">
-            Writable paths (comma-separated)
+            {i18n._("Writable paths (comma-separated)")}
           </span>
           <input
             data-testid="agent-paths"
             value={writablePaths}
             onChange={(event) => setWritablePaths(event.target.value)}
-            placeholder="e.g. .git, docs/generated"
+            placeholder={i18n._({ id: "e.g. .git, docs/generated", comment: "placeholder of the writable-paths field; the paths are examples" })}
             className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
           />
           <span className="text-xs text-neutral-500">
-            Repo-relative paths the agent may write under auto mode beyond
-            its usual set — e.g. <span className="font-mono">.git</span> for
-            commits
+            <Rich
+              text={i18n._(
+                "Repo-relative paths the agent may write under auto mode beyond its usual set — e.g. <0>.git</0> for commits",
+              )}
+              components={[<span className="font-mono" key="path" />]}
+            />
           </span>
         </label>
       </div>
       <ModelDiscoveryStatus state={discovery} />
-      {!tuning.effortKnown && <p className="text-xs text-neutral-500">Effort options apply to the adapter; support for this model is unverified.</p>}
-      {invalidEffort && <p role="alert" className="text-xs text-red-600">Choose a listed effort or the provider default.</p>}
-      {invalidFastMode && <p role="alert" className="text-xs text-red-600">Turn off fast mode for this selection.</p>}
+      {!tuning.effortKnown && <p className="text-xs text-neutral-500">{i18n._("Effort options apply to the adapter; support for this model is unverified.")}</p>}
+      {invalidEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed effort or the provider default.")}</p>}
+      {invalidFastMode && <p role="alert" className="text-xs text-red-600">{i18n._("Turn off fast mode for this selection.")}</p>}
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           {error}
@@ -316,7 +340,7 @@ export function AgentEditor(props: AgentEditorProps) {
           onClick={save}
           className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
-          {busy ? "Saving…" : (props.saveLabel ?? "Save")}
+          {busy ? i18n._({ id: "Saving…", comment: "a save is in flight" }) : (props.saveLabel ?? i18n._({ id: "Save", comment: "commit the edits in this editor" }))}
         </button>
         {props.onCancel ? (
           <button
@@ -325,14 +349,14 @@ export function AgentEditor(props: AgentEditorProps) {
             onClick={props.onCancel}
             className="rounded-md px-3 py-1 text-sm text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
           >
-            Cancel
+            {i18n._({ id: "Cancel", comment: "leave an editor without saving" })}
           </button>
         ) : null}
         {props.captain ? (
           <button
             type="button"
             data-testid="agent-same-as-captain"
-            title="Copies the Captain's adapter, model, effort, fast mode, and permissions"
+            title={i18n._("Copies the Captain's adapter, model, effort, fast mode, and permissions")}
             onClick={() => {
               const captain = props.captain!;
               const nextAdapter = knownAdapter(captain.adapter);
@@ -348,7 +372,7 @@ export function AgentEditor(props: AgentEditorProps) {
             }}
             className="ml-auto rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            Same as Captain
+            {i18n._("Same as Captain")}
           </button>
         ) : null}
       </div>

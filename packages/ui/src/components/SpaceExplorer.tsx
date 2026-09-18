@@ -27,17 +27,17 @@ import {
 } from "../state/store.js";
 import {
   SHARING_LABELS,
-  STAYS_HERE,
-  WITHHELD_PHRASE,
+  WITHHELD_REASON,
   absolutePath,
   formatSize,
-  plural,
   prettyJson,
   previewKindOf,
   sessionPartName,
+  staysHere,
+  withheldPhrase,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
-import { currentLocale } from "../i18n.js";
+import { currentLocale, i18n } from "../i18n.js";
 import { Markdown } from "./Markdown.js";
 import { PathControls, SECONDARY, type Note } from "./SpaceSurface.js";
 
@@ -82,7 +82,9 @@ function nodesOf(entries: SpaceEntry[]): Node[] {
           kind: "session",
           id: `session:${sessionId}`,
           sessionId,
-          title: entry.owner?.title?.trim() || "untitled session",
+          title:
+            entry.owner?.title?.trim() ||
+            i18n._({ id: "untitled session", comment: "a session with no title of its own" }),
           projectName: entry.owner?.name,
           path: entry.path.replace(/\/[^/]*$/, ""),
           children: [],
@@ -136,19 +138,24 @@ function SharingChip({ sync }: { sync: SpaceEntry["sync"] }) {
         : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400";
   return (
     <span data-sync={sync} className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs ${tone}`}>
-      {SHARING_LABELS[sync]}
+      {SHARING_LABELS[sync]()}
     </span>
   );
 }
 
 function entryAnnotation(entry: SpaceEntry): string {
-  if (entry.kind === "git") return "Git data";
+  if (entry.kind === "git") {
+    return i18n._({ id: "Git data", comment: "entry mark: the repository's own files" });
+  }
+  // The family is the core's own word for the entry (space-23).
   return entry.family;
 }
 
 function entrySize(entry: SpaceEntry): string | undefined {
   if (entry.kind === "dir") {
-    return entry.count !== undefined ? plural(entry.count, "entry", "entries") : undefined;
+    return entry.count !== undefined
+      ? i18n._("{count, plural, one {# entry} other {# entries}}", { count: entry.count })
+      : undefined;
   }
   return entry.size !== undefined ? formatSize(entry.size) : undefined;
 }
@@ -158,6 +165,7 @@ function entrySize(entry: SpaceEntry): string | undefined {
 function PrivacyPanel() {
   const collapsed = useAppStore((state) => state.spacePrivacyCollapsed);
   const setCollapsed = useAppStore((state) => state.setSpacePrivacyCollapsed);
+  const families = staysHere();
   return (
     <div
       data-testid="space-privacy"
@@ -172,11 +180,11 @@ function PrivacyPanel() {
         onClick={() => setCollapsed(!collapsed)}
       >
         <Icon name={collapsed ? "caretRight" : "caretDown"} className="h-3.5 w-3.5" />
-        Stays on this device ({STAYS_HERE.length} kinds)
+        {i18n._("Stays on this device ({count} kinds)", { count: families.length })}
       </button>
       {collapsed ? null : (
         <dl id="space-privacy-list" className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-xs @md:grid-cols-[auto_1fr]">
-          {STAYS_HERE.map(({ family, reason }) => (
+          {families.map(({ family, reason }) => (
             <div key={family} className="contents">
               <dt className="font-medium">{family}</dt>
               <dd className="text-neutral-500">{reason}</dd>
@@ -213,7 +221,7 @@ function SplitDivider({
       data-testid="space-divider"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize the tree pane"
+      aria-label={i18n._("Resize the tree pane")}
       aria-valuenow={percent}
       aria-valuemin={SPACE_SPLIT_MIN}
       aria-valuemax={SPACE_SPLIT_MAX}
@@ -268,58 +276,78 @@ function PreviewBody({
   onOpenSession(sessionId: string): void;
 }) {
   if (entry.kind === "git") {
-    return <p className="text-sm text-neutral-500">Git data — the repository's own files; not shown.</p>;
+    return (
+      <p className="text-sm text-neutral-500">
+        {i18n._("Git data — the repository's own files; not shown.")}
+      </p>
+    );
   }
   if (entry.kind === "dir") {
     return (
       <p className="text-sm text-neutral-500">
-        {entryAnnotation(entry)}
-        {entry.count !== undefined ? ` · ${plural(entry.count, "entry", "entries")}` : ""}
+        {entry.count !== undefined
+          ? i18n._({
+              id: "{annotation} · {count, plural, one {# entry} other {# entries}}",
+              values: { annotation: entryAnnotation(entry), count: entry.count },
+              comment: "{annotation} is the core's word for the directory",
+            })
+          : entryAnnotation(entry)}
       </p>
     );
   }
   if (entry.preview === "withheld") {
     return (
       <p data-testid="space-preview-withheld" className="text-sm text-neutral-500">
-        {WITHHELD_PHRASE}
+        {withheldPhrase()}
       </p>
     );
   }
   if (entry.preview === "binary") {
     return (
       <p className="text-sm text-neutral-500">
-        binary file{entry.size !== undefined ? ` · ${formatSize(entry.size)}` : ""}
+        {entry.size !== undefined
+          ? i18n._("binary file · {size}", { size: formatSize(entry.size) })
+          : i18n._("binary file")}
       </p>
     );
   }
   if (entry.preview === "none") {
-    return <p className="text-sm text-neutral-500">No preview for this file.</p>;
+    return <p className="text-sm text-neutral-500">{i18n._("No preview for this file.")}</p>;
   }
   if (error) {
     return (
       <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-        Couldn't read it: {error}
+        {i18n._("Couldn't read it: {reason}", { reason: error })}
       </p>
     );
   }
-  if (loading || !result) return <p className="text-sm text-neutral-500">Loading…</p>;
+  if (loading || !result) {
+    return <p className="text-sm text-neutral-500">{i18n._("Loading…")}</p>;
+  }
   if (result.kind === "withheld") {
     return (
       <p data-testid="space-preview-withheld" className="text-sm text-neutral-500">
-        {WITHHELD_PHRASE}
-        {result.reason && result.reason !== WITHHELD_PHRASE ? (
+        {withheldPhrase()}
+        {/* The core's own reason, where it says more than the phrase. */}
+        {result.reason && result.reason !== WITHHELD_REASON ? (
           <span className="block text-xs">{result.reason}</span>
         ) : null}
       </p>
     );
   }
   if (result.kind === "binary") {
-    return <p className="text-sm text-neutral-500">binary file · {formatSize(result.size)}</p>;
+    return (
+      <p className="text-sm text-neutral-500">
+        {i18n._("binary file · {size}", { size: formatSize(result.size) })}
+      </p>
+    );
   }
   const kind = previewKindOf(entry.name);
   const cut = result.truncated ? (
     <p className="text-xs text-neutral-500">
-      Showing the first {result.lines.toLocaleString(currentLocale())} lines; the file is longer.
+      {i18n._("Showing the first {lines} lines; the file is longer.", {
+        lines: result.lines.toLocaleString(currentLocale()),
+      })}
     </p>
   ) : null;
   if (kind === "markdown") {
@@ -336,16 +364,25 @@ function PreviewBody({
     return (
       <div data-testid="space-preview-jsonl" className="flex min-h-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-          <span>{plural(records.length, "record")}</span>
+          <span>
+            {i18n._("{count, plural, one {# record} other {# records}}", {
+              count: records.length,
+            })}
+          </span>
           {isSession ? (
             <>
-              <span>· reads better as a conversation</span>
+              <span>
+                {i18n._({
+                  id: "· reads better as a conversation",
+                  comment: "follows the record count on a session's record file",
+                })}
+              </span>
               <button
                 type="button"
                 className={SECONDARY}
                 onClick={() => onOpenSession(entry.owner!.sessionId!)}
               >
-                Open session
+                {i18n._("Open session")}
               </button>
             </>
           ) : null}
@@ -544,14 +581,16 @@ export function ExploreTab({
           </div>
           {rootError ? (
             <p role="alert" className="p-2 text-sm text-red-600 dark:text-red-400">
-              Couldn't read the space: {rootError}
+              {i18n._("Couldn't read the space: {reason}", { reason: rootError })}
             </p>
           ) : !roots ? (
-            <p className="p-2 text-sm text-neutral-500">Reading…</p>
+            <p className="p-2 text-sm text-neutral-500">
+              {i18n._({ id: "Reading…", comment: "the tree is being read" })}
+            </p>
           ) : (
             <ul
               role="tree"
-              aria-label="Files in the space"
+              aria-label={i18n._("Files in the space")}
               data-testid="space-tree"
               className="min-h-0 flex-1 overflow-y-auto p-1"
               onKeyDown={onTreeKeyDown}
@@ -651,7 +690,7 @@ export function ExploreTab({
               onNote={onNote}
             />
           ) : (
-            <p className="text-sm text-neutral-500">Select an entry to preview it.</p>
+            <p className="text-sm text-neutral-500">{i18n._("Select an entry to preview it.")}</p>
           )}
         </div>
       </div>
@@ -682,7 +721,7 @@ function PreviewPane({
           title={node.title}
           path={node.path}
           home={home}
-          annotation="Session"
+          annotation={i18n._({ id: "Session", comment: "one unit's kind: a session" })}
           owner={node.projectName}
           onNote={onNote}
           controls={
@@ -692,13 +731,15 @@ function PreviewPane({
               disabled={!connected}
               onClick={() => onOpenSession(node.sessionId)}
             >
-              Open session
+              {i18n._("Open session")}
             </button>
           }
         />
         <p className="text-sm text-neutral-500">
-          {plural(node.children.length, "file")} — the manifest, the records and, where this device
-          ran it, its provider hints.
+          {i18n._(
+            "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints.",
+            { count: node.children.length },
+          )}
         </p>
       </>
     );
@@ -730,7 +771,7 @@ function PreviewPane({
               disabled={!connected}
               onClick={() => onOpenSession(entry.owner!.sessionId!)}
             >
-              Open session
+              {i18n._("Open session")}
             </button>
           ) : undefined
         }

@@ -28,6 +28,7 @@ import {
   firstProseParagraph,
   newPlayerId,
 } from "../lib/drafts.js";
+import { i18n } from "../i18n.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
@@ -166,12 +167,12 @@ export function DraftRegisterTab({
     <div data-testid="register-form" className="flex flex-col gap-3">
       <p className="text-xs text-neutral-500">
         {draft.proposal
-          ? "Prefilled from the agent's proposal — edit anything"
-          : "Prefilled from the source and the compiled roles — edit anything"}
+          ? i18n._("Prefilled from the agent's proposal — edit anything")
+          : i18n._("Prefilled from the source and the compiled roles — edit anything")}
       </p>
       {draft.state === "changed" ? (
         <p data-testid="register-changed" className="text-xs text-amber-700 dark:text-amber-300">
-          Registers the last compile — the source changed since.
+          {i18n._("Registers the last compile — the source changed since.")}
         </p>
       ) : null}
       {resolved.mismatch ? (
@@ -179,18 +180,19 @@ export function DraftRegisterTab({
           data-testid="register-mismatch"
           className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
         >
+          {/* Whole sentences, each standing or not on its own. */}
           {resolved.mismatch.extra.length > 0
-            ? `The proposal names ${resolved.mismatch.extra.join(", ")}, which the compiled entry lacks. `
+            ? `${i18n._("The proposal names {roles}, which the compiled entry lacks.", { roles: resolved.mismatch.extra.join(", ") })} `
             : ""}
           {resolved.mismatch.missing.length > 0
-            ? `It gives no player for ${resolved.mismatch.missing.join(", ")}. `
+            ? `${i18n._("It gives no player for {roles}.", { roles: resolved.mismatch.missing.join(", ") })} `
             : ""}
-          The compiled roles stand: {resolved.roles.join(", ")}.
+          {i18n._("The compiled roles stand: {roles}.", { roles: resolved.roles.join(", ") })}
         </p>
       ) : null}
       <div className="grid grid-cols-1 gap-2 @md:grid-cols-2">
         <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Playbook id</span>
+          <span className="text-xs text-neutral-500">{i18n._("Playbook id")}</span>
           <input
             data-testid="register-id"
             value={draft.id}
@@ -199,7 +201,7 @@ export function DraftRegisterTab({
           />
         </label>
         <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">Slash command</span>
+          <span className="text-xs text-neutral-500">{i18n._("Slash command")}</span>
           <input
             data-testid="register-command"
             value={resolved.command}
@@ -209,7 +211,7 @@ export function DraftRegisterTab({
         </label>
         <label className="flex flex-col gap-0.5 @md:col-span-2">
           <span className="text-xs text-neutral-500">
-            Intent (one line; the Captain routes free text with it)
+            {i18n._("Intent (one line; the Captain routes free text with it)")}
           </span>
           <input
             data-testid="register-intent"
@@ -241,7 +243,7 @@ export function DraftRegisterTab({
               </span>
               <select
                 data-testid={`register-player-${role}`}
-                aria-label={`Player for ${role}`}
+                aria-label={i18n._("Player for {role}", { role })}
                 value={choice}
                 onChange={(event) =>
                   onForm({
@@ -256,7 +258,7 @@ export function DraftRegisterTab({
                     {player.id} — {player.display}
                   </option>
                 ))}
-                <option value={`${NEW_PREFIX}${newId}`}>New player {newId}</option>
+                <option value={`${NEW_PREFIX}${newId}`}>{i18n._("New player {id}", { id: newId })}</option>
               </select>
               <AgentChip
                 agent={block}
@@ -266,10 +268,10 @@ export function DraftRegisterTab({
               {sharedWith.length > 0 ? (
                 <span
                   data-testid={`register-shared-${role}`}
-                  title={`This lane also answers ${sharedWith.join(", ")} — one conversation across them`}
+                  title={i18n._("This lane also answers {positions} — one conversation across them", { positions: sharedWith.join(", ") })}
                   className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                 >
-                  also {sharedWith[0]}
+                  {i18n._("also {position}", { position: sharedWith[0] })}
                   {sharedWith.length > 1 ? ` +${sharedWith.length - 1}` : ""}
                 </span>
               ) : null}
@@ -279,8 +281,8 @@ export function DraftRegisterTab({
                     type="button"
                     ref={openRole === role ? gearRef : undefined}
                     data-testid={`register-configure-${role}`}
-                    title={`Tweak the ${newId} agent in place`}
-                    aria-label={`Configure ${newId}`}
+                    title={i18n._("Tweak the {name} agent in place", { name: newId })}
+                    aria-label={i18n._("Configure {name}", { name: newId })}
                     onClick={() =>
                       setOpenRole((open) => (open === role ? undefined : role))
                     }
@@ -290,7 +292,7 @@ export function DraftRegisterTab({
                   </button>
                   {openRole === role ? (
                     <AgentEditorPopover
-                      title={`${newId} agent`}
+                      title={i18n._("{name} agent", { name: newId })}
                       direction="down"
                       initial={blockFor(newId)}
                       readiness={readiness}
@@ -328,8 +330,8 @@ export function DraftRegisterTab({
         <span className="text-xs text-neutral-500">
           {waiting ??
             (complete
-              ? "Writes the playbook and any new player to the shared config"
-              : "Every role needs a player, and the command and intent their words")}
+              ? i18n._("Writes the playbook and any new player to the shared config")
+              : i18n._("Every role needs a player, and the command and intent their words"))}
         </span>
         <button
           type="button"
@@ -339,7 +341,7 @@ export function DraftRegisterTab({
           onClick={() => void register()}
           className="ml-auto rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
-          {busy ? "Registering…" : "Register"}
+          {busy ? i18n._({ id: "Registering…", comment: "the registration is in flight" }) : i18n._({ id: "Register", comment: "write the compiled playbook into the config" })}
         </button>
       </div>
     </div>

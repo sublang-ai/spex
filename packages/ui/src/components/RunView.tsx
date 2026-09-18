@@ -28,7 +28,7 @@ import {
   useAppStore,
 } from "../state/store.js";
 import { SessionRecovery } from "./SessionRecovery.js";
-import { currentLocale } from "../i18n.js";
+import { currentLocale, i18n } from "../i18n.js";
 import { ParkedRun } from "./ParkedRun.js";
 import { Composer } from "./Composer.js";
 import { DeliveryCard } from "./DeliveryCard.js";
@@ -101,7 +101,7 @@ export function SplitDivider({
   onChange,
   containerRef,
   orientation = "vertical",
-  label = "Resize the Captain pane",
+  label,
   testId = "captain-divider",
   min = CAPTAIN_SPLIT_MIN,
   max = CAPTAIN_SPLIT_MAX,
@@ -159,7 +159,7 @@ export function SplitDivider({
       data-dragging={dragging ? "1" : "0"}
       role="separator"
       aria-orientation={orientation}
-      aria-label={label}
+      aria-label={label ?? i18n._("Resize the Captain pane")}
       aria-valuenow={percent}
       aria-valuemin={min}
       aria-valuemax={max}
@@ -583,7 +583,12 @@ export function RunView({
         : {}),
     };
   };
-  const title = session.title ?? "new session";
+  const title =
+    session.title ??
+    i18n._({
+      id: "new session",
+      comment: "stands as the title of a conversation that has none yet",
+    });
   const uncertain = !externalWriter && !!session.recovery && !session.turnActive;
   // The runtime is held only for a turn (DR-051): whether it is held
   // is not the reader's business, so nothing here says "ended". Only
@@ -635,16 +640,19 @@ export function RunView({
             className="text-xs text-neutral-500 dark:text-neutral-400"
           >
             {externalWriter === "active"
-              ? "Session is in use elsewhere"
-              : "Session ownership is unknown · controls are unavailable"}
+              ? i18n._("Session is in use elsewhere")
+              : i18n._("Session ownership is unknown · controls are unavailable")}
           </span>
         ) : history ? (
           <span
             data-testid="session-last-active"
             className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
           >
-            Last active{" "}
-            {session.endedAt ? new Date(session.endedAt).toLocaleString(currentLocale()) : ""}
+            {i18n._("Last active {when}", {
+              when: session.endedAt
+                ? new Date(session.endedAt).toLocaleString(currentLocale())
+                : "",
+            })}
           </span>
         ) : null}
       </div>
@@ -712,7 +720,7 @@ export function RunView({
                   onClick={onRetryLoad}
                   className="font-medium text-brand-600 hover:underline dark:text-brand-300"
                 >
-                  Retry
+                  {i18n._({ id: "Retry", comment: "act: load the transcript again" })}
                 </button>
               ) : null}
             </div>
@@ -726,7 +734,7 @@ export function RunView({
               data-testid="unparked-failure-notice"
               className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
             >
-              <p>The last turn failed. Send a message to pick it up.</p>
+              <p>{i18n._("The last turn failed. Send a message to pick it up.")}</p>
               {/* Why, and what to do about it outside Spex (DR-075):
                   the same catalogue phrase every other mention uses. */}
               {causePhrase(failureCause) ? (
@@ -784,16 +792,17 @@ export function RunView({
                 className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900"
               >
                 <span className="min-w-0 flex-1 basis-40">
-                  {session.continuationReason ?? "History — this session can't be continued"}
+                  {session.continuationReason ??
+                    i18n._("History — this session can't be continued")}
                 </span>
                 {onStartNew ? (
                   <button
                     type="button"
                     onClick={onStartNew}
-                    title="Start a new session in this project"
+                    title={i18n._("Start a new session in this project")}
                     className="ml-auto shrink-0 rounded-md border border-brand-300 px-2.5 py-1 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
                   >
-                    New session
+                    {i18n._("New session")}
                   </button>
                 ) : null}
               </div>
@@ -804,7 +813,11 @@ export function RunView({
               view={view}
               composer={composer}
               connected={connected}
-              blockedReason={uncertain ? "Recover the interrupted turn before sending." : undefined}
+              blockedReason={
+                uncertain
+                  ? i18n._("Recover the interrupted turn before sending.")
+                  : undefined
+              }
               error={error}
               playbooks={playbooks}
               staged={staged}

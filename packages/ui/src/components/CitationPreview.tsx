@@ -12,7 +12,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SpecItemInfo } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import { Markdown } from "./Markdown.js";
+import { Rich } from "./Rich.js";
 
 /** How long a pointer settles on an entry before its card opens: long
  * enough that crossing a row of chips flashes nothing, short enough
@@ -245,8 +247,10 @@ export function CitationPreview({
         </>
       ) : (
         <div className="text-sm text-neutral-600 dark:text-neutral-300">
-          <span className="font-mono text-xs">{open.target}</span> — not in the
-          tree
+          <Rich
+            text={i18n._("<0>{id}</0> — not in the tree", { id: open.target })}
+            components={[<span className="font-mono text-xs" key="id" />]}
+          />
         </div>
       )}
     </div>

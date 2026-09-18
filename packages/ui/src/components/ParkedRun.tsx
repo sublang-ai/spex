@@ -35,6 +35,7 @@ import type {
   ParkedRun as ParkedRunSummary,
 } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import { causePhrase, causeStep, standingLine } from "../lib/failure-catalogue.js";
 
 /** The busy form is the longer word, so each control reserves its width
@@ -113,9 +114,9 @@ export function ParkedRun({
   const group = useRef<HTMLDivElement>(null);
 
   const blocked = !connected
-    ? "Reconnecting…"
+    ? i18n._("Reconnecting…")
     : turnActive
-      ? "Wait for the running turn"
+      ? i18n._("Wait for the running turn")
       : undefined;
   // run-view-130: while either turn is in flight neither control may be
   // activated, so the whole group disables together.
@@ -172,23 +173,37 @@ export function ParkedRun({
     const standing = standingLine(action);
     if (standing) nextParts.push(standing);
   }
-  if (!failed) nextParts.push("Answer below, or drop the run");
+  if (!failed) nextParts.push(i18n._("Answer below, or drop the run"));
   else if (actions.length === 0) {
     // No recovery is published, so the composer is the way on
     // (run-view-128): the notice names it rather than leaving the
     // reader with Drop and no account of the other door.
-    nextParts.push("Send a message to pick it up, or drop the run");
+    nextParts.push(i18n._("Send a message to pick it up, or drop the run"));
   }
 
   return (
     <section
-      aria-label={failed ? "Failed workflow" : "Workflow waiting for you"}
+      aria-label={
+        failed ? i18n._("Failed workflow") : i18n._("Workflow waiting for you")
+      }
       data-testid="failed-workflow"
       data-reason={reason}
       title={
         [
-          playbookId ? `playbook: ${playbookId}` : undefined,
-          state ? `state: ${state}` : undefined,
+          playbookId
+            ? i18n._({
+                id: "playbook: {playbookId}",
+                values: { playbookId },
+                comment: "tooltip: which workflow the parked run belongs to",
+              })
+            : undefined,
+          state
+            ? i18n._({
+                id: "state: {state}",
+                values: { state },
+                comment: "tooltip: the machine state the run stands in",
+              })
+            : undefined,
         ]
           .filter(Boolean)
           .join(" · ") || undefined
@@ -204,11 +219,16 @@ export function ParkedRun({
           <p data-testid="failed-workflow-what">
             {failed
               ? command
-                ? `The /${command} workflow failed and is waiting for you.`
-                : "The workflow failed and is waiting for you."
+                ? i18n._(
+                    "The /{command} workflow failed and is waiting for you.",
+                    { command },
+                  )
+                : i18n._("The workflow failed and is waiting for you.")
               : command
-                ? `The /${command} workflow is waiting for your answer.`
-                : "The workflow is waiting for your answer."}
+                ? i18n._("The /{command} workflow is waiting for your answer.", {
+                    command,
+                  })
+                : i18n._("The workflow is waiting for your answer.")}
           </p>
           {why ? (
             <p
@@ -267,7 +287,10 @@ export function ParkedRun({
                     </span>
                     {pending === action.id ? (
                       <span className="absolute inset-0 flex items-center justify-center">
-                        Working…
+                        {i18n._({
+                          id: "Working…",
+                          comment: "busy form of a control the parked run advertises",
+                        })}
                       </span>
                     ) : null}
                   </button>
@@ -277,7 +300,12 @@ export function ParkedRun({
             // DR-010 §4: ending a run is the Boss's ruling, so it
             // asks in place. Keep backs out having sent nothing.
             <>
-              <span data-testid="failed-workflow-confirm-ask">Drop it?</span>
+              <span data-testid="failed-workflow-confirm-ask">
+                {i18n._({
+                  id: "Drop it?",
+                  comment: "confirm: end the parked run without resuming it",
+                })}
+              </span>
               <button
                 type="button"
                 data-testid="failed-workflow-drop-confirm"
@@ -290,7 +318,9 @@ export function ParkedRun({
                 }
                 className={`${CONTROL_WIDTH} ${fixed} ${controlClass}`}
               >
-                {pending === "ending" ? "Dropping…" : "Drop"}
+                {pending === "ending"
+                  ? i18n._("Dropping…")
+                  : i18n._({ id: "Drop", comment: "act: end the parked run" })}
               </button>
               <button
                 type="button"
@@ -299,7 +329,7 @@ export function ParkedRun({
                 onClick={() => setConfirming(false)}
                 className={`${CONTROL_WIDTH} ${fixed} ${controlClass}`}
               >
-                Keep
+                {i18n._({ id: "Keep", comment: "confirm: leave the run as it is" })}
               </button>
             </>
           ) : (
@@ -307,11 +337,15 @@ export function ParkedRun({
               type="button"
               data-testid="failed-workflow-drop"
               disabled={disabled}
-              title={blocked ?? parked?.ending?.label ?? "End this run. It will not be resumed."}
+              title={
+                blocked ??
+                parked?.ending?.label ??
+                i18n._("End this run. It will not be resumed.")
+              }
               onClick={() => setConfirming(true)}
               className={`${CONTROL_WIDTH} ${fixed} ${controlClass}`}
             >
-              Drop
+              {i18n._({ id: "Drop", comment: "act: end the parked run" })}
             </button>
           )}
         </div>
@@ -319,8 +353,8 @@ export function ParkedRun({
       {pending !== undefined ? (
         <p className="sr-only" role="status">
           {pending === "ending"
-            ? "Dropping the workflow"
-            : "Running the workflow's control"}
+            ? i18n._("Dropping the workflow")
+            : i18n._("Running the workflow's control")}
         </p>
       ) : null}
       {error ? (

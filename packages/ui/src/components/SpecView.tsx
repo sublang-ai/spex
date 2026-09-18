@@ -53,6 +53,7 @@ import {
   treeCounts,
   visibleFileItems,
   GROUP_ORDER,
+  GROUP_WORD,
   MAX_GRAPH_WIDTH,
   MIN_GRAPH_WIDTH,
   type CitationModel,
@@ -62,8 +63,10 @@ import {
   type SpecViewState,
 } from "../lib/spec-view-model.js";
 import { Icon } from "./Icon.js";
+import { i18n } from "../i18n.js";
 import { Markdown } from "./Markdown.js";
 import { RecordRow } from "./RecordRow.js";
+import { Rich } from "./Rich.js";
 import {
   itemDomId,
   SpecItemRows,
@@ -74,11 +77,12 @@ import {
 export { initialSpecViewState };
 export type { SpecViewState };
 
-/** Filter toggle labels (DR-015). */
-const FILTER_LABEL: Record<SpecGroup, string> = {
-  external: "External",
-  internal: "Internal",
-  test: "Tests",
+/** Filter toggle labels (DR-015); thunks, read at render, so the
+ * table never freezes the language it was imported in. */
+const FILTER_LABEL: Record<SpecGroup, () => string> = {
+  external: () => i18n._({ id: "External", comment: "item group: External Behavior" }),
+  internal: () => i18n._({ id: "Internal", comment: "item group: Internal Behavior" }),
+  test: () => i18n._({ id: "Tests", comment: "item group: Verification" }),
 };
 
 const MUTED_CHIP =
@@ -185,9 +189,9 @@ export type RecordOrigin = {
 };
 
 /** The Back control's name for each origin. */
-const ORIGIN_NAMES: Record<RecordOrigin["surface"], string> = {
-  dashboard: "Dashboard",
-  overview: "Overview",
+const ORIGIN_NAMES: Record<RecordOrigin["surface"], () => string> = {
+  dashboard: () => i18n._("Dashboard"),
+  overview: () => i18n._({ id: "Overview", comment: "the project's Overview tab" }),
 };
 
 type ReaderState = {
@@ -335,7 +339,7 @@ export function SpecView(props: SpecViewProps) {
       (entry) => entry.path === requestedRecord,
     );
     if (record) openRecord(record, undefined, props.openRecordOrigin);
-    else setLiveNote(`${requestedRecord} is not in the tree`);
+    else setLiveNote(i18n._("{path} is not in the tree", { path: requestedRecord }));
     onRecordOpened?.();
     // openRecord is stable for this purpose: it only reads props.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -445,17 +449,17 @@ export function SpecView(props: SpecViewProps) {
     const write = navigator.clipboard?.writeText(text);
     if (!write) {
       setCopyFailedId(text);
-      setLiveNote(`Copy failed for ${text}`);
+      setLiveNote(i18n._("Copy failed for {what}", { what: text }));
       return;
     }
     void write
       .then(() => {
         setCopiedId(text);
-        setLiveNote(`Copied ${text}`);
+        setLiveNote(i18n._("Copied {what}", { what: text }));
       })
       .catch(() => {
         setCopyFailedId(text);
-        setLiveNote(`Copy failed for ${text}`);
+        setLiveNote(i18n._("Copy failed for {what}", { what: text }));
       });
   }
 
@@ -498,8 +502,8 @@ export function SpecView(props: SpecViewProps) {
     });
     setLiveNote(
       hidden
-        ? `Jumped to ${targetId} — shown despite filter`
-        : `Jumped to ${targetId}`,
+        ? i18n._("Jumped to {id} — shown despite filter", { id: targetId })
+        : i18n._("Jumped to {id}", { id: targetId }),
     );
     setPendingJump(targetId);
     return true;
@@ -514,7 +518,7 @@ export function SpecView(props: SpecViewProps) {
     preview.close();
     if (!revealTarget(targetId)) {
       setNotFoundKey(linkKey);
-      setLiveNote(`${targetId} not found`);
+      setLiveNote(i18n._("{id} not found", { id: targetId }));
       return;
     }
     setJumpOrigins((stack) => [...stack, originId]);
@@ -538,7 +542,7 @@ export function SpecView(props: SpecViewProps) {
     origin?: RecordOrigin,
   ) {
     if (returnFocusId) readerReturnId.current = returnFocusId;
-    setLiveNote(`Opened ${record.id}`);
+    setLiveNote(i18n._("Opened {id}", { id: record.id }));
     setReader({ record, loading: true, origin });
     readSpec(record.path)
       .then(({ markdown, version }) =>
@@ -581,7 +585,7 @@ export function SpecView(props: SpecViewProps) {
         caretLine: itemId ? headingLine(served.markdown, itemId) : undefined,
       },
     });
-    setLiveNote(`Editing ${path}`);
+    setLiveNote(i18n._("Editing {path}", { path }));
   }
 
   /** Open the editor from the outline: fetch the file first, and say
@@ -593,9 +597,9 @@ export function SpecView(props: SpecViewProps) {
       .catch((cause: Error) => {
         setOpenFailure({
           anchor,
-          message: cause.message || "could not read the file",
+          message: cause.message || i18n._("could not read the file"),
         });
-        setLiveNote(`Could not open ${path}`);
+        setLiveNote(i18n._("Could not open {path}", { path }));
       });
   }
 
@@ -629,7 +633,7 @@ export function SpecView(props: SpecViewProps) {
       ? "reader"
       : (fileKeyOf(path) ?? null);
     if (saved) {
-      setLiveNote(`Saved ${path}`);
+      setLiveNote(i18n._("Saved {path}", { path }));
       props.onRefresh();
     }
   }
@@ -803,8 +807,10 @@ export function SpecView(props: SpecViewProps) {
             className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
             {reader.origin
-              ? `← Back to ${ORIGIN_NAMES[reader.origin.surface]}`
-              : "← Back"}
+              ? i18n._("← Back to {surface}", {
+                  surface: ORIGIN_NAMES[reader.origin.surface](),
+                })
+              : i18n._("← Back")}
           </button>
           {canEdit && !reader.loading && !reader.error ? (
             <button
@@ -818,7 +824,7 @@ export function SpecView(props: SpecViewProps) {
               }
               className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
-              Edit
+              {i18n._({ id: "Edit", comment: "open this file in the editor" })}
             </button>
           ) : null}
         </div>
@@ -830,7 +836,7 @@ export function SpecView(props: SpecViewProps) {
         </h1>
         {reader.loading ? (
           <div className="text-sm text-neutral-500">
-            reading {reader.record.id}…
+            {i18n._("reading {id}…", { id: reader.record.id })}
           </div>
         ) : reader.error ? (
           <div className="flex items-center gap-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
@@ -840,7 +846,7 @@ export function SpecView(props: SpecViewProps) {
               onClick={() => openRecord(reader.record, undefined, reader.origin)}
               className="rounded-md border border-red-300 px-2 py-0.5 text-xs hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
             >
-              Retry
+              {i18n._({ id: "Retry", comment: "read the record again" })}
             </button>
           </div>
         ) : (
@@ -877,7 +883,9 @@ export function SpecView(props: SpecViewProps) {
           type="button"
           data-testid="decisions-toggle"
           aria-expanded={open}
-          aria-label={`Decisions, ${tree.decisions.length} records`}
+          aria-label={i18n._("Decisions, {count} records", {
+            count: tree.decisions.length,
+          })}
           onClick={() =>
             setCollapsedDirs((current) => {
               // The set holds the branch when it is OPEN, since the
@@ -896,7 +904,7 @@ export function SpecView(props: SpecViewProps) {
               open ? "" : "-rotate-90"
             }`}
           />
-          decisions
+          {i18n._({ id: "decisions", comment: "outline branch holding the decision records" })}
           <span className="text-neutral-500">{tree.decisions.length}</span>
         </button>
         {open ? (
@@ -931,15 +939,15 @@ export function SpecView(props: SpecViewProps) {
       </code>
       <button
         type="button"
-        aria-label={`Copy command ${command}`}
+        aria-label={i18n._("Copy command {command}", { command })}
         onClick={() => copyText(command)}
         className={COPY_BUTTON_CLASS}
       >
         {copiedId === command
-          ? "Copied ✓"
+          ? i18n._({ id: "Copied ✓", comment: "the copy control, just after it copied" })
           : copyFailedId === command
-            ? "Copy failed"
-            : "Copy"}
+            ? i18n._({ id: "Copy failed", comment: "the command could not be copied" })
+            : i18n._({ id: "Copy", comment: "copy the command to the clipboard" })}
       </button>
     </div>
   );
@@ -948,7 +956,7 @@ export function SpecView(props: SpecViewProps) {
     if (props.loading) {
       return (
         <div className="m-auto p-6 text-sm text-neutral-500">
-          reading specs…
+          {i18n._("reading specs…")}
         </div>
       );
     }
@@ -966,14 +974,17 @@ export function SpecView(props: SpecViewProps) {
       >
         {liveRegion}
         <h1 className="text-lg font-semibold text-neutral-700 dark:text-neutral-200">
-          Specs
+          {i18n._({ id: "Specs", comment: "the spec view's own heading" })}
         </h1>
         <p>
-          This project has no <span className="font-mono">specs/</span>{" "}
-          directory yet — it holds the spec packages and the decision and
-          intent records this view navigates.
+          <Rich
+            text={i18n._(
+              "This project has no <0>specs/</0> directory yet — it holds the spec packages and the decision and intent records this view navigates.",
+            )}
+            components={[<span className="font-mono" key="specs" />]}
+          />
         </p>
-        <p>Scaffold one in the project directory:</p>
+        <p>{i18n._("Scaffold one in the project directory:")}</p>
         {copyCommand("npx @sublang/spex")}
         {props.onSeedExample ? (
           <div>
@@ -983,7 +994,7 @@ export function SpecView(props: SpecViewProps) {
               onClick={props.onSeedExample}
               className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
-              Try the Academy example
+              {i18n._("Try the Academy example")}
             </button>
           </div>
         ) : null}
@@ -1011,20 +1022,23 @@ export function SpecView(props: SpecViewProps) {
       >
         {liveRegion}
         <h1 className="text-lg font-semibold text-neutral-700 dark:text-neutral-200">
-          This project uses a legacy specs layout
+          {i18n._("This project uses a legacy specs layout")}
         </h1>
         <p>
-          Its <span className="font-mono">specs/</span> tree still holds
-          directories from an earlier layout — the{" "}
-          <span className="font-mono">user/</span>,{" "}
-          <span className="font-mono">dev/</span>,{" "}
-          <span className="font-mono">test/</span>, or{" "}
-          <span className="font-mono">items/</span> groups, or an{" "}
-          <span className="font-mono">interactions/</span> or{" "}
-          <span className="font-mono">compositions/</span> collection.
-          Run this to refresh the spec law and print a migration prompt;
-          an AI agent applies it, and this view opens once the tree is
-          migrated:
+          <Rich
+            text={i18n._(
+              "Its <0>specs/</0> tree still holds directories from an earlier layout — the <1>user/</1>, <2>dev/</2>, <3>test/</3>, or <4>items/</4> groups, or an <5>interactions/</5> or <6>compositions/</6> collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:",
+            )}
+            components={[
+              <span className="font-mono" key="specs" />,
+              <span className="font-mono" key="user" />,
+              <span className="font-mono" key="dev" />,
+              <span className="font-mono" key="test" />,
+              <span className="font-mono" key="items" />,
+              <span className="font-mono" key="interactions" />,
+              <span className="font-mono" key="compositions" />,
+            ]}
+          />
         </p>
         {copyCommand("npx @sublang/spex scaffold --update")}
         {/* A legacy tree parses no packages, but its records are read
@@ -1086,7 +1100,7 @@ export function SpecView(props: SpecViewProps) {
       // row's title.
       <li key={key} data-testid={`file-${key}`} className="@container">
         <div
-          title={rollup ? `Citations: ${rollup}` : undefined}
+          title={rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined}
           className={`flex items-center gap-2 rounded px-1 py-1 ${
             dimmed ? "opacity-50" : ""
           } ${
@@ -1155,8 +1169,14 @@ export function SpecView(props: SpecViewProps) {
             {GROUP_ORDER.map((group) => (
               <span
                 key={group}
-                aria-label={`${counts[group]} ${group} items`}
-                title={`${counts[group]} ${group} items`}
+                aria-label={i18n._("{count} {group} items", {
+                  count: counts[group],
+                  group: GROUP_WORD[group](),
+                })}
+                title={i18n._("{count} {group} items", {
+                  count: counts[group],
+                  group: GROUP_WORD[group](),
+                })}
                 className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs ${
                   counts[group] > 0 && viewState.filters[group]
                     ? GROUP_CHIP[group]
@@ -1164,7 +1184,7 @@ export function SpecView(props: SpecViewProps) {
                 }`}
               >
                 {counts[group]}
-                <span className="hidden @md:inline"> {group}</span>
+                <span className="hidden @md:inline"> {GROUP_WORD[group]()}</span>
               </span>
             ))}
             {searching && !search.fileKeys.has(key) && selected ? (
@@ -1172,13 +1192,13 @@ export function SpecView(props: SpecViewProps) {
                 data-testid={`retained-${key}`}
                 className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
               >
-                shown despite search
+                {i18n._("shown despite search")}
               </span>
             ) : null}
             {rollup ? (
               <span
                 data-testid={`rollup-${key}`}
-                aria-label={`Citations: ${rollup}`}
+                aria-label={i18n._("Citations: {summary}", { summary: rollup })}
                 className="ml-1 hidden whitespace-nowrap text-xs text-neutral-500 @md:inline"
               >
                 {rollup}
@@ -1215,24 +1235,28 @@ export function SpecView(props: SpecViewProps) {
                   <button
                     type="button"
                     data-testid={`expand-all-${key}`}
-                    aria-label={`${allExpanded ? "Collapse" : "Expand"} all items in ${file.basename}`}
+                    aria-label={
+                      allExpanded
+                        ? i18n._("Collapse all items in {name}", { name: file.basename })
+                        : i18n._("Expand all items in {name}", { name: file.basename })
+                    }
                     onClick={() => setAllItems(file, !allExpanded)}
                     className={`text-xs ${LINK_CLASS}`}
                   >
-                    {allExpanded ? "Collapse all" : "Expand all"}
+                    {allExpanded ? i18n._("Collapse all") : i18n._("Expand all")}
                   </button>
                 ) : null}
                 {canEdit ? (
                   <button
                     type="button"
                     data-testid={`file-edit-${key}`}
-                    aria-label={`Edit ${file.basename}.md`}
+                    aria-label={i18n._("Edit {name}.md", { name: file.basename })}
                     onClick={() =>
                       openEditor(`file:${key}`, `packages/${key}.md`)
                     }
                     className={`text-xs ${LINK_CLASS}`}
                   >
-                    Edit
+                    {i18n._({ id: "Edit", comment: "open this file in the editor" })}
                   </button>
                 ) : null}
                 {openFailure?.anchor === `file:${key}` ? (
@@ -1278,8 +1302,8 @@ export function SpecView(props: SpecViewProps) {
             {items.length === 0 ? (
               <div className="text-xs text-neutral-500">
                 {searching
-                  ? "no items match the search"
-                  : "no items in active groups"}
+                  ? i18n._("no items match the search")
+                  : i18n._("no items in active groups")}
               </div>
             ) : null}
           </div>
@@ -1310,7 +1334,7 @@ export function SpecView(props: SpecViewProps) {
         <button
           type="button"
           aria-expanded={open}
-          aria-label={`Toggle ${label ?? `${dir.name}/`}`}
+          aria-label={i18n._("Toggle {name}", { name: label ?? `${dir.name}/` })}
           data-testid={label ? `branch-${dir.path}` : undefined}
           onClick={() =>
             setCollapsedDirs((current) => {
@@ -1427,11 +1451,13 @@ export function SpecView(props: SpecViewProps) {
       {liveRegion}
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold">
-          {props.projectName ?? "Specs"}
+          {props.projectName ?? i18n._({ id: "Specs", comment: "the spec view's own heading" })}
         </h1>
         <span className="text-xs text-neutral-500">
-          {totals.packages} package{totals.packages === 1 ? "" : "s"} ·{" "}
-          {totals.items} items
+          {i18n._(
+            "{packages, plural, one {# package} other {# packages}} · {items} items",
+            { packages: totals.packages, items: totals.items },
+          )}
         </span>
         <span className="ml-auto flex items-center gap-1.5">
           {/* One toggle, not a mode set: the outline never leaves, so
@@ -1440,7 +1466,7 @@ export function SpecView(props: SpecViewProps) {
             type="button"
             data-testid="view-graph"
             aria-pressed={viewState.graph}
-            title="Show the citation graph beside the outline"
+            title={i18n._("Show the citation graph beside the outline")}
             onClick={() =>
               onViewState({ ...viewState, graph: !viewState.graph })
             }
@@ -1450,12 +1476,12 @@ export function SpecView(props: SpecViewProps) {
                 : "border-neutral-300 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             }`}
           >
-            Graph
+            {i18n._({ id: "Graph", comment: "toggle: show the citation graph" })}
           </button>
           <button
             type="button"
-            aria-label="Refresh specs"
-            title="Re-read the specs/ tree"
+            aria-label={i18n._("Refresh specs")}
+            title={i18n._("Re-read the specs/ tree")}
             disabled={props.loading}
             onClick={props.onRefresh}
             className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
@@ -1464,8 +1490,8 @@ export function SpecView(props: SpecViewProps) {
           </button>
           <span className="text-xs text-neutral-500">
             {props.loading
-              ? "reading…"
-              : `read ${relativeReadTime(tree.readAt, now)}`}
+              ? i18n._({ id: "reading…", comment: "the specs tree is being re-read" })
+              : i18n._("read {age}", { age: relativeReadTime(tree.readAt, now) })}
           </span>
         </span>
       </div>
@@ -1496,8 +1522,8 @@ export function SpecView(props: SpecViewProps) {
                   aria-pressed={on}
                   title={
                     on
-                      ? `Hide ${group} items`
-                      : `Show ${group} items`
+                      ? i18n._("Hide {group} items", { group: GROUP_WORD[group]() })
+                      : i18n._("Show {group} items", { group: GROUP_WORD[group]() })
                   }
                   onClick={() => toggleFilter(group)}
                   className={`rounded-full border px-2.5 py-0.5 text-xs ${
@@ -1506,9 +1532,12 @@ export function SpecView(props: SpecViewProps) {
                       : "border-neutral-200 text-neutral-500 dark:border-neutral-700 dark:text-neutral-500"
                   }`}
                 >
-                  {FILTER_LABEL[group]}{" "}
+                  {FILTER_LABEL[group]()}{" "}
                   <span
-                    aria-label={`${totals.perGroup[group]} ${group} items`}
+                    aria-label={i18n._("{count} {group} items", {
+                      count: totals.perGroup[group],
+                      group: GROUP_WORD[group](),
+                    })}
                     className={on ? "font-semibold" : "opacity-60"}
                   >
                     {totals.perGroup[group]}
@@ -1530,16 +1559,16 @@ export function SpecView(props: SpecViewProps) {
                   onViewState({ ...viewState, search: "" });
                 }
               }}
-              placeholder="Filter items — ID or text…"
-              aria-label="Filter items by ID or text"
+              placeholder={i18n._("Filter items — ID or text…")}
+              aria-label={i18n._("Filter items by ID or text")}
               className="min-w-40 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
             />
             {searching ? (
               <button
                 type="button"
                 data-testid="search-clear"
-                aria-label="Clear the search"
-                title="Clear the search (Escape)"
+                aria-label={i18n._("Clear the search")}
+                title={i18n._("Clear the search (Escape)")}
                 onClick={() => onViewState({ ...viewState, search: "" })}
                 className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
@@ -1551,7 +1580,9 @@ export function SpecView(props: SpecViewProps) {
                 data-testid="match-count"
                 className="text-xs text-neutral-500"
               >
-                {search.count} {search.count === 1 ? "match" : "matches"}
+                {i18n._("{count, plural, one {# match} other {# matches}}", {
+                  count: search.count,
+                })}
               </span>
             ) : null}
           </div>
@@ -1626,7 +1657,7 @@ export function SpecView(props: SpecViewProps) {
             <div
               role="separator"
               aria-orientation="vertical"
-              aria-label="Resize the graph pane"
+              aria-label={i18n._("Resize the graph pane")}
               aria-valuenow={Math.round((dragSplit ?? viewState.graphWidth) * 100)}
               aria-valuemin={Math.round(MIN_GRAPH_WIDTH * 100)}
               aria-valuemax={Math.round(MAX_GRAPH_WIDTH * 100)}
@@ -1689,7 +1720,7 @@ export function SpecView(props: SpecViewProps) {
       })()}
       {tree.files.length === 0 ? (
         <div className="text-sm text-neutral-500">
-          specs/ is present but holds no spec files yet.
+          {i18n._("specs/ is present but holds no spec files yet.")}
         </div>
       ) : null}
 
@@ -1723,7 +1754,7 @@ export function SpecView(props: SpecViewProps) {
           onClick={popJumpOrigin}
           className="sticky bottom-2 z-10 self-center rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs text-neutral-600 shadow-md hover:bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
-          back to {jumpOrigins[jumpOrigins.length - 1]}
+          {i18n._("back to {id}", { id: jumpOrigins[jumpOrigins.length - 1] })}
         </button>
       ) : null}
     </div>
@@ -1745,7 +1776,7 @@ function ErrorStrip({
         onClick={onRetry}
         className="rounded-md border border-red-300 px-2 py-0.5 text-xs hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
       >
-        Retry
+        {i18n._({ id: "Retry", comment: "read the specs tree again" })}
       </button>
     </div>
   );

@@ -15,19 +15,44 @@ import type {
   LedgerState,
 } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
+
 /** Human words for a derived intent state (DR-010 §2): the raw enum
  * rides in tooltips, never as primary copy. */
 export function intentStateText(derived: DerivedIntent): string {
   switch (derived.state) {
     case "queued":
-      return derived.blockedBy ? "queued — blocked" : "queued";
+      return derived.blockedBy
+        ? i18n._({
+            id: "queued — blocked",
+            comment: "captured artifact's state: queued behind another intent",
+          })
+        : i18n._({
+            id: "queued",
+            comment: "captured artifact's state: waiting in the queue",
+          });
     case "working":
-      return "working";
+      return i18n._({
+        id: "working",
+        comment: "captured artifact's state: a turn is running for it",
+      });
     case "interrupted":
-      return derived.reason === "failure" ? "failed" : "needs your reply";
+      return derived.reason === "failure"
+        ? i18n._({
+            id: "failed",
+            comment: "a piece of work's state: it failed",
+          })
+        : i18n._({
+            id: "needs your reply",
+            comment: "captured artifact's state: parked on a question",
+          });
     case "finished":
-      return "finished — confirm?";
+      return i18n._({
+        id: "finished — confirm?",
+        comment: "captured artifact's state: delivered, a verdict is owed",
+      });
     default:
+      // A state the client does not know: the raw enum is data.
       return derived.state;
   }
 }
@@ -82,7 +107,15 @@ export function QueueControl({
       }}
       className="min-h-6 shrink-0 rounded border border-brand-300 px-2 text-xs text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-950"
     >
-      {busy ? "Queuing…" : "Queue"}
+      {busy
+        ? i18n._({
+            id: "Queuing…",
+            comment: "capture control, busy: the queue write is in flight",
+          })
+        : i18n._({
+            id: "Queue",
+            comment: "capture control: put this artifact in the queue",
+          })}
     </button>
   );
 }
@@ -103,7 +136,11 @@ export function CapturedState({
       // No chip refuses to shrink past about 6rem (DR-041): the words
       // truncate, and the tooltip carries them whole — with the raw
       // enum beside them where the two differ.
-      title={text === derived.state ? text : `${text} (${derived.state})`}
+      title={
+        text === derived.state
+          ? text
+          : i18n._("{text} ({state})", { text, state: derived.state })
+      }
       className="min-w-0 max-w-24 truncate rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
     >
       {text}
@@ -140,7 +177,14 @@ export function ForgeItemRow({
         target="_blank"
         rel="noreferrer"
         // Every label rides the row's own title, so the tags can go.
-        title={labels.length > 0 ? `${item.title} — ${labels.join(", ")}` : item.title}
+        title={
+          labels.length > 0
+            ? i18n._("{title} — {labels}", {
+                title: item.title,
+                labels: labels.join(", "),
+              })
+            : item.title
+        }
         className="min-w-0 flex-1 truncate text-left hover:underline"
       >
         <span className="text-brand-600 dark:text-brand-300">
@@ -164,7 +208,10 @@ export function ForgeItemRow({
         <span
           data-testid={testId ? `${testId}-more-labels` : undefined}
           title={labels.join(", ")}
-          aria-label={`${labels.length - 2} more labels: ${labels.slice(2).join(", ")}`}
+          aria-label={i18n._("{count} more labels: {rest}", {
+            count: labels.length - 2,
+            rest: labels.slice(2).join(", "),
+          })}
           className="hidden shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 @md:inline-block dark:bg-neutral-800 dark:text-neutral-400"
         >
           +{labels.length - 2}
@@ -177,7 +224,17 @@ export function ForgeItemRow({
         />
       ) : (
         <QueueControl
-          ariaLabel={`Queue ${kind === "pr" ? "PR" : "issue"} #${item.number} as an intent`}
+          // One whole accessible name per kind, never a translated
+          // stem with a noun glued in (localization-4).
+          ariaLabel={
+            kind === "pr"
+              ? i18n._("Queue PR #{number} as an intent", {
+                  number: item.number,
+                })
+              : i18n._("Queue issue #{number} as an intent", {
+                  number: item.number,
+                })
+          }
           onQueue={() => onQueue(item)}
         />
       )}

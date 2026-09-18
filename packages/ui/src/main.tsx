@@ -4,6 +4,7 @@
 import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { i18n } from "./i18n.js";
 import { Root } from "./Root.js";
 import { useAppStore } from "./state/store.js";
 import "./index.css";
@@ -24,7 +25,9 @@ class ErrorBoundary extends React.Component<
     if (this.state.error) {
       return (
         <div className="m-auto flex max-w-md flex-col items-center gap-3 p-8 text-center">
-          <h1 className="text-lg font-semibold">Something broke in the UI</h1>
+          <h1 className="text-lg font-semibold">
+            {i18n._("Something broke in the UI")}
+          </h1>
           <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-neutral-100 p-2 text-left text-xs text-red-600 dark:bg-neutral-900">
             {this.state.error.message}
           </pre>
@@ -36,14 +39,17 @@ class ErrorBoundary extends React.Component<
               onClick={() => this.setState({ error: undefined })}
               className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500"
             >
-              Try again
+              {i18n._({
+                id: "Try again",
+                comment: "error boundary: re-render the surface in place",
+              })}
             </button>
             <button
               type="button"
               onClick={() => window.location.reload()}
               className="text-sm text-brand-600 hover:underline dark:text-brand-300"
             >
-              Reload the page
+              {i18n._("Reload the page")}
             </button>
           </div>
         </div>

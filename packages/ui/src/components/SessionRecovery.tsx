@@ -2,9 +2,17 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { useEffect, useRef, useState } from "react";
+import { i18n } from "../i18n.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 
 type Action = "retry" | "discard";
+
+/** The two acts an interrupted turn offers, each read where it is
+ * shown so the control and its confirm always say the same word. */
+const retryLabel = (): string =>
+  i18n._({ id: "Retry", comment: "act: run the interrupted turn again" });
+const discardLabel = (): string =>
+  i18n._({ id: "Discard", comment: "act: throw the interrupted attempt away" });
 
 export function SessionRecovery({ input, connected, onRecover }: {
   input: string;
@@ -41,21 +49,21 @@ export function SessionRecovery({ input, connected, onRecover }: {
   }
 
   return (
-    <section aria-label="Interrupted turn" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-800 dark:bg-amber-950">
-      <p className="font-medium">Interrupted turn</p>
+    <section aria-label={i18n._("Interrupted turn")} className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-800 dark:bg-amber-950">
+      <p className="font-medium">{i18n._("Interrupted turn")}</p>
       <details className="my-1" open>
-        <summary>Saved input</summary>
+        <summary>{i18n._("Saved input")}</summary>
         <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words">{input}</p>
       </details>
       {error ? <p role="alert" className="my-2 text-red-700 dark:text-red-300">{error}</p> : null}
-      {pending ? <p role="status">{pending === "retry" ? "Retrying…" : "Discarding…"}</p> : null}
+      {pending ? <p role="status">{pending === "retry" ? i18n._("Retrying…") : i18n._("Discarding…")}</p> : null}
       <div ref={controls}>
         {confirm ? (
           <InlineConfirm
             question={confirm === "retry"
-              ? "Retry the saved input with its saved configuration after checking completed work?"
-              : "Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed."}
-            confirmLabel={confirm === "retry" ? "Retry" : "Discard"}
+              ? i18n._("Retry the saved input with its saved configuration after checking completed work?")
+              : i18n._("Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed.")}
+            confirmLabel={confirm === "retry" ? retryLabel() : discardLabel()}
             disabled={!connected || !!pending || !onRecover}
             onConfirm={() => void recover(confirm)}
             onCancel={() => { returnFocus.current = confirm; setConfirm(undefined); }}
@@ -70,7 +78,7 @@ export function SessionRecovery({ input, connected, onRecover }: {
                 disabled={!connected || !!pending || !onRecover}
                 onClick={() => setConfirm(action)}
                 className="min-h-6 rounded border border-neutral-400 px-2 py-1 disabled:opacity-40 dark:border-neutral-600"
-              >{action === "retry" ? "Retry" : "Discard"}</button>
+              >{action === "retry" ? retryLabel() : discardLabel()}</button>
             ))}
           </div>
         )}

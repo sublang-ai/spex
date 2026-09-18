@@ -10,7 +10,7 @@ import type { SessionInfo } from "@sublang/spex-core/protocol";
 import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { absoluteTitle, clockTime, duration } from "../lib/time.js";
-import { currentLocale } from "../i18n.js";
+import { currentLocale, i18n } from "../i18n.js";
 import { inputBlocks, outputBlock } from "../lib/tool-body.js";
 import { useClock } from "../lib/useClock.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
@@ -39,9 +39,14 @@ function Usage({ usage }: { usage: UsageView }) {
   }
   return (
     <span className="text-xs text-neutral-500">
-      {`${(usage.inputTokens ?? 0).toLocaleString(currentLocale())}→${(
-        usage.outputTokens ?? 0
-      ).toLocaleString(currentLocale())} tok`}
+      {i18n._({
+        id: "{input}→{output} tok",
+        values: {
+          input: (usage.inputTokens ?? 0).toLocaleString(currentLocale()),
+          output: (usage.outputTokens ?? 0).toLocaleString(currentLocale()),
+        },
+        comment: "a call's tokens in and out; tok is short for tokens",
+      })}
     </span>
   );
 }
@@ -134,7 +139,10 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
                 {segment.role}
               </span>
             ) : null}
-            Prompt
+            {i18n._({
+              id: "Prompt",
+              comment: "collapsed card: the text the playbook sent the player",
+            })}
             {/* The call's clock, in the thread's one vocabulary
                 (run-view-41); the exact moment stays in the tooltip. */}
             <time
@@ -162,7 +170,10 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
       return (
         <details className="rounded border border-dashed border-neutral-300 px-2 py-1 text-xs italic text-neutral-500 dark:border-neutral-700">
           <summary className="cursor-pointer select-none not-italic">
-            Thinking
+            {i18n._({
+              id: "Thinking",
+              comment: "collapsed card: the agent's own reasoning summary",
+            })}
           </summary>
           <div className="mt-1 whitespace-pre-wrap">{segment.summary}</div>
         </details>
@@ -174,11 +185,32 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
       // (run-view-50).
       const outcome =
         segment.status === "success"
-          ? { word: "ok", mark: "✓", tone: "text-emerald-700 dark:text-emerald-400" }
+          ? {
+              word: i18n._({
+                id: "ok",
+                comment: "how a tool call ended: it succeeded",
+              }),
+              mark: "✓",
+              tone: "text-emerald-700 dark:text-emerald-400",
+            }
           : segment.status === "error"
-            ? { word: "failed", mark: "✗", tone: "text-red-600 dark:text-red-400" }
+            ? {
+                word: i18n._({
+                  id: "failed",
+                  comment: "how a tool call ended: it failed",
+                }),
+                mark: "✗",
+                tone: "text-red-600 dark:text-red-400",
+              }
             : segment.status === "denied"
-              ? { word: "denied", mark: "✗", tone: "text-red-600 dark:text-red-400" }
+              ? {
+                  word: i18n._({
+                    id: "denied",
+                    comment: "how a tool call ended: permission was refused",
+                  }),
+                  mark: "✗",
+                  tone: "text-red-600 dark:text-red-400",
+                }
               : undefined;
       return (
         <details className="rounded border border-neutral-200 bg-white px-2 py-1 text-xs dark:border-neutral-800 dark:bg-neutral-900">
@@ -263,11 +295,20 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
           {segment.count !== undefined && segment.count > 1 ? (
             <span
               data-testid="player-failure-count"
-              title={`The same failure ${segment.count} times in this call`}
+              title={i18n._(
+                "{count, plural, one {The same failure # time in this call} other {The same failure # times in this call}}",
+                { count: segment.count },
+              )}
               className="shrink-0 font-medium"
             >
               <span aria-hidden="true">×{segment.count}</span>
-              <span className="sr-only">, {segment.count} times</span>
+              <span className="sr-only">
+                {i18n._({
+                  id: "{count, plural, one {, # time} other {, # times}}",
+                  values: { count: segment.count },
+                  comment: "follows the ×N mark, for a screen reader: how many times",
+                })}
+              </span>
             </span>
           ) : null}
         </div>
@@ -292,12 +333,32 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
             }
           >
             {segment.status === "ok"
-              ? "✓ finished"
+              ? i18n._({
+                  id: "✓ finished",
+                  comment: "how a player's call ended; ✓ stays as it is",
+                })
               : segment.status === "aborted"
-                ? "◇ aborted"
+                ? i18n._({
+                    id: "◇ aborted",
+                    comment: "how a player's call ended; ◇ stays as it is",
+                  })
                 : segment.errorAbove
-                  ? "✗ failed"
-                  : `✗ ${segment.error ?? "error"}`}
+                  ? i18n._({
+                      id: "✗ failed",
+                      comment: "how a player's call ended; ✗ stays as it is",
+                    })
+                  : i18n._({
+                      id: "✗ {error}",
+                      values: {
+                        error:
+                          segment.error ??
+                          i18n._({
+                            id: "error",
+                            comment: "stands where a failed call named no reason",
+                          }),
+                      },
+                      comment: "a failed call and what it said; ✗ stays as it is",
+                    })}
           </span>
           {segment.usage ? <Usage usage={segment.usage} /> : null}
         </div>
@@ -397,14 +458,21 @@ export function PlayerPane({
       >
         <button
           {...toggleProps}
-          title={`Expand ${view.id}`}
-          aria-label={`Expand ${view.id}`}
+          title={i18n._("Expand {player}", { player: view.id })}
+          aria-label={i18n._("Expand {player}", { player: view.id })}
           aria-expanded={false}
         >
           <span aria-hidden="true">⇥</span>
         </button>
         {view.running ? (
-          <RunningMark running data-testid="player-running" title="Running" />
+          <RunningMark
+            running
+            data-testid="player-running"
+            title={i18n._({
+              id: "Running",
+              comment: "tooltip on the aliveness mark: this lane is at work",
+            })}
+          />
         ) : null}
         <span
           data-testid={`player-name-${view.id}`}
@@ -470,8 +538,14 @@ export function PlayerPane({
               // (DR-038, run-view-25).
               <span
                 data-testid="player-fast-mode"
-                title="fast mode"
-                aria-label="fast mode"
+                title={i18n._({
+                  id: "fast mode",
+                  comment: "mark on an agent: it runs in the runtime's fast mode",
+                })}
+                aria-label={i18n._({
+                  id: "fast mode",
+                  comment: "mark on an agent: it runs in the runtime's fast mode",
+                })}
                 className="ml-1 text-amber-500"
               >
                 {FAST_MODE_MARK}
@@ -488,15 +562,25 @@ export function PlayerPane({
               <RunningMark
                 running
                 data-testid="player-running"
-                title="Running"
+                title={i18n._({
+                  id: "Running",
+                  comment: "tooltip on the aliveness mark: this lane is at work",
+                })}
               />
               {call ? (
                 <span
                   data-testid="player-working"
-                  title={`${who} working since ${absoluteTitle(call.at)}`}
+                  title={i18n._("{who} working since {since}", {
+                    who,
+                    since: absoluteTitle(call.at),
+                  })}
                   className="hidden whitespace-nowrap text-xs text-neutral-500 @md:inline dark:text-neutral-400"
                 >
-                  {who} working · {duration(now - call.at)}
+                  {i18n._({
+                    id: "{who} working · {span}",
+                    values: { who, span: duration(now - call.at) },
+                    comment: "who is at work and how long the open call has run",
+                  })}
                 </span>
               ) : null}
             </>
@@ -511,8 +595,8 @@ export function PlayerPane({
         </span>
         <button
           {...toggleProps}
-          title={`Collapse ${view.id}`}
-          aria-label={`Collapse ${view.id}`}
+          title={i18n._("Collapse {player}", { player: view.id })}
+          aria-label={i18n._("Collapse {player}", { player: view.id })}
           aria-expanded
         >
           <span aria-hidden="true">⇤</span>
@@ -533,8 +617,13 @@ export function PlayerPane({
               }}
               className="text-center text-xs text-neutral-500 hover:text-brand-500"
             >
-              Show {Math.min(RENDER_WINDOW, view.segments.length - windowSize)}{" "}
-              of {view.segments.length - windowSize} earlier entries
+              {i18n._("Show {count} of {rest} earlier entries", {
+                count: Math.min(
+                  RENDER_WINDOW,
+                  view.segments.length - windowSize,
+                ),
+                rest: view.segments.length - windowSize,
+              })}
             </button>
           ) : null}
           {segments.map((segment) => (
@@ -542,13 +631,18 @@ export function PlayerPane({
           ))}
           {view.segments.length === 0 ? (
             <div className="m-auto text-xs text-neutral-500">
-              Idle until the playbook calls {view.id}
+              {i18n._("Idle until the playbook calls {player}", {
+                player: view.id,
+              })}
             </div>
           ) : null}
         </div>
         {newBelow ? (
           <button type="button" onClick={jump} className={jumpPillClasses()}>
-            ↓ Latest
+            {i18n._({
+              id: "↓ Latest",
+              comment: "act: jump to the end of the transcript; ↓ stays as it is",
+            })}
           </button>
         ) : null}
       </div>

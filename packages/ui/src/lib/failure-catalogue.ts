@@ -12,9 +12,15 @@
 // explaining what a control already shows. A `bossStep` names what the
 // Boss does outside Spex, and exists only where something out there
 // answers the failure.
+//
+// Every phrase is a message of the catalog, composed when the row is
+// read rather than when this module loads (localization-4), and every
+// join is a message of its own: a language orders and punctuates
+// "<phrase>: <detail>" its own way.
 
 import type { FailureCause } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import { failureRemedy, humanizeId, plainFailure } from "./labels.js";
 
 // The codes this catalogue must cover are Playbook's own closed list,
@@ -69,7 +75,15 @@ function paths(evidence: Evidence, ...keys: string[]): string {
     typeof omitted === "number" && Number.isFinite(omitted) && omitted > 0
       ? Math.trunc(omitted)
       : 0;
-  if (more > 0) list.push(`… and ${more} more`);
+  if (more > 0) {
+    list.push(
+      i18n._({
+        id: "… and {count} more",
+        values: { count: more },
+        comment: "tail of a list the runtime cut short",
+      }),
+    );
+  }
   return list.join(", ");
 }
 
@@ -94,10 +108,19 @@ function pathCount(evidence: Evidence, ...keys: string[]): number {
   );
 }
 
+/** A phrase and what it stands on, joined — one message, so a language
+ * may order or punctuate the join its own way. */
+const joined = (label: string, why: string): string =>
+  i18n._({
+    id: "{label}: {why}",
+    values: { label, why },
+    comment: "a phrase followed by the detail it stands on",
+  });
+
 /** `<phrase>: <detail>` where a detail was given, the phrase alone
  * where none was — an empty evidence never leaves a dangling colon. */
 const withDetail = (phrase: string, detail: string | undefined): string =>
-  detail ? `${phrase}: ${detail}` : phrase;
+  detail ? joined(phrase, detail) : phrase;
 
 /** The agent an evidence names, for a step that speaks to it. */
 const agentOf = (evidence: Evidence): string | undefined =>
@@ -139,15 +162,18 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
     phrase: (evidence) => {
       const count = pathCount(evidence, "uncommitted");
       return count === 0
-        ? "Committed nothing"
+        ? i18n._("Committed nothing")
         : withDetail(
-            `Changed ${count} file${count === 1 ? "" : "s"} without committing`,
+            i18n._(
+              "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}",
+              { count },
+            ),
             paths(evidence, "uncommitted"),
           );
     },
     bossStep: (evidence) =>
       pathCount(evidence, "uncommitted") > 0
-        ? "Commit or discard them"
+        ? i18n._("Commit or discard them")
         : undefined,
   },
   "commit-residual": {
@@ -155,47 +181,51 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
       const oid = shortOid(evidence?.commitOid);
       return withDetail(
         oid
-          ? `Committed ${oid} but left changes uncommitted`
-          : "Committed, but left changes uncommitted",
+          ? i18n._("Committed {oid} but left changes uncommitted", { oid })
+          : i18n._("Committed, but left changes uncommitted"),
         paths(evidence, "uncommitted", "altered"),
       );
     },
-    bossStep: () => "Commit or discard what is left",
+    bossStep: () => i18n._("Commit or discard what is left"),
   },
   "pre-existing-lost": {
     phrase: (evidence) =>
       withDetail(
-        "Uncommitted changes you had were lost",
+        i18n._("Uncommitted changes you had were lost"),
         paths(evidence, "lost"),
       ),
-    bossStep: () => "Recover them from your editor's history, if it keeps one",
+    bossStep: () =>
+      i18n._("Recover them from your editor's history, if it keeps one"),
   },
   "commits-more-than-one": {
-    phrase: () => "Made more than one commit",
-    bossStep: () => "Squash or reset them yourself",
+    phrase: () => i18n._("Made more than one commit"),
+    bossStep: () => i18n._("Squash or reset them yourself"),
   },
   "history-rewritten": {
-    phrase: (evidence) =>
-      withDetail("Rewrote history", shortOid(evidence?.baselineHead)
-        ? `${shortOid(evidence?.baselineHead)} is no longer an ancestor`
-        : undefined),
-    bossStep: () => "Restore the branch yourself",
+    phrase: (evidence) => {
+      const head = shortOid(evidence?.baselineHead);
+      return withDetail(
+        i18n._("Rewrote history"),
+        head ? i18n._("{head} is no longer an ancestor", { head }) : undefined,
+      );
+    },
+    bossStep: () => i18n._("Restore the branch yourself"),
   },
   "foreign-change": {
     phrase: (evidence) =>
       withDetail(
-        "Changed the repository in a step that changes nothing",
+        i18n._("Changed the repository in a step that changes nothing"),
         paths(evidence, "changed"),
       ),
   },
   "observation-unstable": {
-    phrase: () => "Couldn't read the repository's state",
+    phrase: () => i18n._("Couldn't read the repository's state"),
   },
   "attribution-ambiguous": {
-    phrase: () => "Changes could not be attributed to the step",
+    phrase: () => i18n._("Changes could not be attributed to the step"),
   },
   "receipt-missing": {
-    phrase: () => "The step left no record of what it changed",
+    phrase: () => i18n._("The step left no record of what it changed"),
   },
   "judge-failed": {
     // The runtime's reason names the step that failed ("judge
@@ -203,11 +233,17 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
     // phrase carries both where both were attached.
     phrase: (evidence) => {
       const head = withDetail(
-        "Couldn't judge the result",
+        i18n._("Couldn't judge the result"),
         text(evidence?.reason),
       );
       const said = adapterSaid(evidence?.error);
-      return said ? `${head} — ${said}` : head;
+      return said
+        ? i18n._({
+            id: "{head} — {said}",
+            values: { head, said },
+            comment: "what failed, then what the agent said about it",
+          })
+        : head;
     },
   },
   "player-failed": {
@@ -218,7 +254,7 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
     phrase: (evidence) => {
       const who = agentOf(evidence);
       return withDetail(
-        who ? `${who} failed` : "An agent failed",
+        who ? i18n._("{who} failed", { who }) : i18n._("An agent failed"),
         adapterSaid(evidence?.error),
       );
     },
@@ -229,13 +265,15 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
       const remedy = error ? failureRemedy(error) : undefined;
       if (!remedy) return undefined;
       const who = agentOf(evidence);
-      return remedy === "Sign in again with that agent's CLI" && who
-        ? `Sign in to ${who} again`
-        : remedy;
+      // The remedy is recognized by its kind, never by its words: the
+      // words are the catalog's and change with the language.
+      return remedy.kind === "sign-in" && who
+        ? i18n._("Sign in to {who} again", { who })
+        : remedy.text;
     },
   },
   aborted: {
-    phrase: () => "Stopped before it finished",
+    phrase: () => i18n._("Stopped before it finished"),
   },
   "child-failed": {
     // The child's own cause is the reason this run failed, so it is
@@ -244,7 +282,9 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
       const playbookId = text(evidence?.playbookId);
       const child = causePhrase(readCause(evidence?.cause));
       return withDetail(
-        playbookId ? `/${playbookId} failed` : "A nested workflow failed",
+        playbookId
+          ? i18n._("/{playbookId} failed", { playbookId })
+          : i18n._("A nested workflow failed"),
         child,
       );
     },
@@ -252,8 +292,9 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
   },
   "runtime-defect": {
     phrase: (evidence) =>
-      withDetail("A Playbook defect", text(evidence?.reason)),
-    bossStep: () => "Report it",
+      withDetail(i18n._("A Playbook defect"), text(evidence?.reason)),
+    bossStep: () =>
+      i18n._({ id: "Report it", comment: "what to do about a Playbook defect" }),
   },
 };
 
@@ -313,17 +354,22 @@ export function causeStep(cause: FailureCause | undefined): string | undefined {
 // An advertised control's standing
 // ---------------------------------------------------------------------------
 
-/** Playbook's standing reasons, phrased (Playbook DR-063 §3). An
- * unreported reason reads as its humanized id, so a reason this
- * catalogue has not met still says something true. */
-const STANDING_REASONS: Record<string, string> = {
-  "receipt-complete": "nothing has changed since it failed",
+/** Playbook's standing reasons, phrased (Playbook DR-063 §3), each a
+ * thunk read at the moment it is shown (localization-4). An unreported
+ * reason reads as its humanized id, so a reason this catalogue has not
+ * met still says something true. */
+const STANDING_REASONS: Record<string, () => string> = {
+  "receipt-complete": () =>
+    i18n._({
+      id: "nothing has changed since it failed",
+      comment: "why a control published by the parked run would do nothing",
+    }),
 };
 
 export function standingReason(reason: string | undefined): string | undefined {
   const key = text(reason);
   if (!key) return undefined;
-  return STANDING_REASONS[key] ?? humanizeId(key);
+  return STANDING_REASONS[key]?.() ?? humanizeId(key);
 }
 
 /** What one advertised control's standing says, as the what-now line
@@ -337,6 +383,15 @@ export function standingLine(action: {
   if (!action.standing || action.standing === "ready") return undefined;
   const why =
     standingReason(action.reason) ??
-    (action.standing === "no-op" ? "it would do nothing" : "it can't run now");
-  return `${action.label}: ${why}`;
+    (action.standing === "no-op"
+      ? i18n._({
+          id: "it would do nothing",
+          comment: "why a control is offered but inert",
+        })
+      : i18n._({
+          id: "it can't run now",
+          comment: "why a control is offered but blocked",
+        }));
+  // The label is the runtime's own word; only the join is ours.
+  return joined(action.label, why);
 }

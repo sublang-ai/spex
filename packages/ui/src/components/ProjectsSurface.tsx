@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { IntentInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
+import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import {
@@ -28,7 +29,7 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
         className="text-xs text-red-500"
         title={meta.statusError}
       >
-        Repo unreadable — does the path still exist?
+        {i18n._("Repo unreadable — does the path still exist?")}
       </span>
     );
   }
@@ -40,12 +41,19 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
         {status.branch}
       </span>
       {status.dirty ? (
-        <span className="text-amber-600 dark:text-amber-400" title="uncommitted changes">
+        <span
+          className="text-amber-600 dark:text-amber-400"
+          title={i18n._("uncommitted changes")}
+        >
           ●
         </span>
       ) : null}
-      {status.ahead > 0 ? <span title="ahead of upstream">↑{status.ahead}</span> : null}
-      {status.behind > 0 ? <span title="behind upstream">↓{status.behind}</span> : null}
+      {status.ahead > 0 ? (
+        <span title={i18n._("ahead of upstream")}>↑{status.ahead}</span>
+      ) : null}
+      {status.behind > 0 ? (
+        <span title={i18n._("behind upstream")}>↓{status.behind}</span>
+      ) : null}
       {meta?.forge?.repo ? (
         <span className="text-neutral-500">{meta.forge.repo}</span>
       ) : null}
@@ -64,9 +72,11 @@ function GitHubLine({ meta }: { meta?: ProjectMeta }) {
   const text = forge?.guidance
     ? forge.guidance
     : meta?.forgeError
-      ? `Couldn't load GitHub data: ${meta.forgeError}`
+      ? i18n._("Couldn't load GitHub data: {reason}", {
+          reason: meta.forgeError,
+        })
       : meta?.loading
-        ? "Loading GitHub state…"
+        ? i18n._("Loading GitHub state…")
         : undefined;
   if (!text) return null;
   return (
@@ -74,24 +84,19 @@ function GitHubLine({ meta }: { meta?: ProjectMeta }) {
       data-testid="overview-github"
       className="text-xs text-neutral-500 [overflow-wrap:anywhere]"
     >
-      GitHub: {text}
+      {i18n._("GitHub: {state}", { state: text })}
     </div>
   );
 }
 
-/** The sidebar's Dashboard entry, found by its accessible name — the
- * place focus lands once this project is gone (projects-9, DR-010
- * §6), since the Overview it stood on goes with it. */
+/** The sidebar's Dashboard entry — the place focus lands once this
+ * project is gone (projects-9, DR-010 §6), since the Overview it
+ * stood on goes with it. The rail and the entry are found by what
+ * they are, never by what they say: an accessible name is a text and
+ * reads differently in every language (localization-4). */
 function focusDashboardEntry(): void {
-  const rail = document.querySelector('[aria-label="Spex navigation"]');
-  const entry = Array.from(
-    rail?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-  ).find((button) =>
-    /^Dashboard( —|$)/.test(
-      button.getAttribute("aria-label") ?? button.textContent ?? "",
-    ),
-  );
-  entry?.focus();
+  const rail = document.querySelector('[data-testid="sidebar"]');
+  rail?.querySelector<HTMLButtonElement>('[data-surface="Dashboard"]')?.focus();
 }
 
 export function OverviewTab({
@@ -147,7 +152,7 @@ export function OverviewTab({
   if (!project) {
     return (
       <div className="m-auto text-sm text-neutral-500">
-        This project is no longer registered.
+        {i18n._("This project is no longer registered.")}
       </div>
     );
   }
@@ -177,8 +182,8 @@ export function OverviewTab({
         </div>
         <button
           type="button"
-          title="Refresh status and GitHub data"
-          aria-label={`Refresh ${project.name}`}
+          title={i18n._("Refresh status and GitHub data")}
+          aria-label={i18n._("Refresh {project}", { project: project.name })}
           disabled={meta?.loading}
           className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:animate-pulse dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           onClick={() => void loadProjectMeta(project.id, true)}
@@ -189,9 +194,15 @@ export function OverviewTab({
           // Removal forgets a project: the one confirm this tab keeps
           // (projects-9, DR-010 §4).
           <InlineConfirm
-            question="Remove from Spex? The repo stays on disk."
-            confirmLabel="Remove"
-            cancelLabel="Keep"
+            question={i18n._("Remove from Spex? The repo stays on disk.")}
+            confirmLabel={i18n._({
+              id: "Remove",
+              comment: "confirm: forget this project, leaving the repo on disk",
+            })}
+            cancelLabel={i18n._({
+              id: "Keep",
+              comment: "cancel a destructive confirm: leave things as they are",
+            })}
             onConfirm={() => {
               setConfirmRemove(false);
               removeProject(project.id)
@@ -216,13 +227,15 @@ export function OverviewTab({
             disabled={liveCount > 0}
             title={
               liveCount > 0
-                ? "Wait for the running turn to finish, or abort it, before removing"
-                : "Remove from Spex (repo stays on disk)"
+                ? i18n._(
+                    "Wait for the running turn to finish, or abort it, before removing",
+                  )
+                : i18n._("Remove from Spex (repo stays on disk)")
             }
             onClick={() => setConfirmRemove(true)}
             className="rounded-md border border-neutral-300 px-2.5 py-1 text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            Remove project
+            {i18n._("Remove project")}
           </button>
         )}
       </div>

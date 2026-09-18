@@ -6,11 +6,22 @@
 // cancels, and the confirm never moves focus to <body>. Labels are
 // sentence-case verbs (DR-010 §8); callers name the act ("Remove",
 // "Keep") where a bare Confirm would not say what is lost.
+//
+// The two defaults are read from the catalog as the confirm renders
+// (localization-4), never held as module constants.
+
+import { i18n } from "../i18n.js";
 
 export function InlineConfirm({
   question,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel = i18n._({
+    id: "Confirm",
+    comment: "default confirm button: go ahead with the act",
+  }),
+  cancelLabel = i18n._({
+    id: "Cancel",
+    comment: "default cancel button: back out of the act",
+  }),
   disabled = false,
   onConfirm,
   onCancel,

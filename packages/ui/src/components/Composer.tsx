@@ -27,24 +27,30 @@ import {
 } from "react";
 import type { PlaybookSummary } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import { useAutoGrow } from "../lib/useAutoGrow.js";
 import type { ComposerState, StagedIntent } from "../state/store.js";
 import type { SessionView } from "../state/reducer.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
+import { Rich } from "./Rich.js";
 import { Icon } from "./Icon.js";
 
 /** The caption every composer carries when nothing else needs the
- * line (run-view-106). */
-export const COMPOSER_HINT = "/ for playbooks · Enter sends";
+ * line (run-view-106). Read where it is shown, never at module load
+ * (localization-4). */
+export const composerHint = (): string =>
+  i18n._("/ for playbooks · Enter sends");
 
 /** The primary control's key hint (run-view-8). */
-export const SEND_KEYS = "Enter to send · Shift+Enter for a new line";
+export const sendKeys = (): string =>
+  i18n._("Enter to send · Shift+Enter for a new line");
 
 /** A placeholder is at most 24 characters (run-view-106); a player
- * whose id would push past that is not named. */
+ * whose id would push past that is not named — the measure is taken on
+ * the words the reader sees, whatever language they are in. */
 export function replyPlaceholder(player?: string): string {
-  const named = player ? `Reply to ${player}…` : undefined;
-  return named && named.length <= 24 ? named : "Answer the question…";
+  const named = player ? i18n._("Reply to {player}…", { player }) : undefined;
+  return named && named.length <= 24 ? named : i18n._("Answer the question…");
 }
 
 const PRIMARY_CLASS =
@@ -113,7 +119,7 @@ export function ComposerCaption({
   staged,
   onDetachStaged,
   note,
-  hint = COMPOSER_HINT,
+  hint,
 }: {
   staged?: StagedIntent;
   onDetachStaged?: () => void;
@@ -133,12 +139,16 @@ export function ComposerCaption({
           className="flex min-w-0 max-w-full items-center gap-1 rounded-full border border-brand-300 bg-brand-50 pl-2.5 font-medium text-brand-700 dark:border-brand-700 dark:bg-brand-950 dark:text-brand-300"
         >
           <span className="min-w-0 truncate" title={staged.title}>
-            Starting: {staged.title}
+            {i18n._({
+              id: "Starting: {title}",
+              values: { title: staged.title },
+              comment: "chip on the composer: the task this message will start",
+            })}
           </span>
           <button
             type="button"
-            title="Take the task out of the message"
-            aria-label="Take the task out of the message"
+            title={i18n._("Take the task out of the message")}
+            aria-label={i18n._("Take the task out of the message")}
             onClick={onDetachStaged}
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-900"
           >
@@ -155,7 +165,7 @@ export function ComposerCaption({
           {note}
         </span>
       ) : (
-        <span className="min-w-0 truncate">{hint}</span>
+        <span className="min-w-0 truncate">{hint ?? composerHint()}</span>
       )}
     </div>
   );
@@ -260,12 +270,12 @@ export function Composer({
   }
 
   const placeholder = !connected
-    ? "Connecting…"
+    ? i18n._("Connecting…")
     : awaiting
       ? replyPlaceholder(view.pendingQuestionPlayer)
       : view.turnActive
-        ? "Sends after this turn…"
-        : "Message the Captain…";
+        ? i18n._("Sends after this turn…")
+        : i18n._("Message the Captain…");
 
   return (
     // The composer yields inside its column (DR-041 §9): what it holds
@@ -283,8 +293,8 @@ export function Composer({
             type="button"
             onClick={onDismissError}
             className="flex h-6 w-6 items-center justify-center rounded text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900"
-            title="Dismiss"
-            aria-label="Dismiss error"
+            title={i18n._({ id: "Dismiss", comment: "act: close the error strip" })}
+            aria-label={i18n._("Dismiss error")}
           >
             <Icon name="close" className="h-3.5 w-3.5" />
           </button>
@@ -296,14 +306,19 @@ export function Composer({
           className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
         >
           {view.pendingQuestionPlayer ? (
-            <>
-              <span className="font-mono font-semibold">
-                {view.pendingQuestionPlayer}
-              </span>{" "}
-              is waiting for your reply — your next message answers it.
-            </>
+            // One sentence, with the asking player's name inside it, so
+            // a language may put the name where it belongs.
+            <Rich
+              text={i18n._(
+                "<0>{player}</0> is waiting for your reply — your next message answers it.",
+                { player: view.pendingQuestionPlayer },
+              )}
+              components={[
+                <span key="player" className="font-mono font-semibold" />,
+              ]}
+            />
           ) : (
-            <>Waiting for your reply — your next message answers it.</>
+            i18n._("Waiting for your reply — your next message answers it.")
           )}
         </div>
       ) : null}
@@ -332,14 +347,17 @@ export function Composer({
                     data-testid="queued-intent-chip"
                     className="rounded-full border border-brand-300 px-1.5 font-medium text-brand-600 dark:border-brand-700 dark:text-brand-300"
                   >
-                    intent
+                    {i18n._({
+                      id: "intent",
+                      comment: "chip on a queued message: it carries a queued intent",
+                    })}
                   </span>
                 ) : null}
-                sends when this turn ends
+                {i18n._("sends when this turn ends")}
                 <button
                   type="button"
-                  title="Remove this message"
-                  aria-label="Remove this queued message"
+                  title={i18n._("Remove this message")}
+                  aria-label={i18n._("Remove this queued message")}
                   onClick={() => onRemoveQueued(index)}
                   className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
                 >
@@ -434,7 +452,7 @@ export function Composer({
               <button
                 type="button"
                 data-testid="queue-intent-button"
-                title="Add this to the project's Up next without sending it"
+                title={i18n._("Add this to the project's Up next without sending it")}
                 onClick={() => {
                   const trimmed = text.trim();
                   if (!trimmed || sending) return;
@@ -443,7 +461,7 @@ export function Composer({
                     .then(() => {
                       setText("");
                       setQueuedNote(
-                        "Added to Up next — see the project's Overview.",
+                        i18n._("Added to Up next — see the project's Overview."),
                       );
                     })
                     .catch(() => {
@@ -457,7 +475,7 @@ export function Composer({
                 disabled={text.trim().length === 0 || sending || !connected || !!blockedReason}
                 className={SECONDARY_CLASS}
               >
-                Add to Up next
+                {i18n._("Add to Up next")}
               </button>
             ) : null
           }
@@ -476,10 +494,12 @@ export function Composer({
                     textareaRef.current?.focus();
                   }}
                   disabled={aborting || !connected}
-                  title={!connected ? "Not connected" : undefined}
+                  title={!connected ? i18n._("Not connected") : undefined}
                   className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
                 >
-                  {aborting ? "Aborting…" : "Abort"}
+                  {aborting
+                    ? i18n._("Aborting…")
+                    : i18n._({ id: "Abort", comment: "act: stop the running turn" })}
                 </button>
               ) : null}
               <button
@@ -490,13 +510,19 @@ export function Composer({
                 disabled={text.trim().length === 0 || sending || !connected || !!blockedReason}
                 title={
                   !connected
-                    ? "Not connected"
+                    ? i18n._("Not connected")
                     : view.turnActive
-                      ? `Sends when this turn ends · ${SEND_KEYS}`
-                      : SEND_KEYS
+                      ? i18n._("Sends when this turn ends · {keys}", {
+                          keys: sendKeys(),
+                        })
+                      : sendKeys()
                 }
               >
-                {sending ? "Sending…" : view.turnActive ? "Send next" : "Send"}
+                {sending
+                  ? i18n._("Sending…")
+                  : view.turnActive
+                    ? i18n._("Send next")
+                    : i18n._({ id: "Send", comment: "act: send the typed message" })}
               </button>
             </>
           }

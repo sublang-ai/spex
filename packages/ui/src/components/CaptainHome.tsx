@@ -14,15 +14,22 @@ import type {
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { useAppStore, type StagedIntent } from "../state/store.js";
+import { Rich } from "./Rich.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { NextCard, type NextCardIntent } from "./NextCard.js";
-import { ComposerBox, ComposerCaption, ComposerField } from "./Composer.js";
+import {
+  ComposerBox,
+  ComposerCaption,
+  ComposerField,
+  sendKeys,
+} from "./Composer.js";
 
 export const QUICK_START_KEY = "spex.quickStartDismissed";
 
@@ -132,7 +139,10 @@ function CaptainBubble({
   return (
     <div className="flex items-start gap-2">
       <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
-        C
+        {i18n._({
+          id: "C",
+          comment: "the Captain's avatar: one letter standing for Captain",
+        })}
       </span>
       <div
         className={`max-w-[85%] rounded-2xl rounded-bl-md px-3 py-2 text-sm ${
@@ -260,25 +270,25 @@ export function CaptainHome(props: CaptainHomeProps) {
       >
         <CaptainBubble>
           <p>
-            {props.hasProject ? (
-              <>
-                Hello! This is {props.projectName ?? "your project"} — tell
-                me what to do with it and I'll route it to a playbook, a
-                scripted workflow the AI players run.
-              </>
-            ) : props.hasProjects ? (
-              <>
-                Hello! I'm your Captain. Pick a project in the sidebar,
-                then tell me what to do with it and I'll route it to a
-                playbook, a scripted workflow the AI players run.
-              </>
-            ) : (
-              <>
-                Hello! I'm your Captain. Add a project — any local git
-                repo — and tell me what to do with it; I'll route it to a
-                playbook, a scripted workflow the AI players run.
-              </>
-            )}
+            {props.hasProject
+              ? i18n._(
+                  "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
+                  {
+                    project:
+                      props.projectName ??
+                      i18n._({
+                        id: "your project",
+                        comment: "stands in for a project with no name yet",
+                      }),
+                  },
+                )
+              : props.hasProjects
+                ? i18n._(
+                    "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
+                  )
+                : i18n._(
+                    "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run.",
+                  )}
           </p>
           {!props.hasProject && !props.hasProjects ? (
             // The two ways in, in the greeting itself: nothing in the
@@ -290,17 +300,17 @@ export function CaptainHome(props: CaptainHomeProps) {
                 onClick={props.onOpenPalette}
                 className="rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500"
               >
-                Add a project…
+                {i18n._("Add a project…")}
               </button>
               <button
                 type="button"
                 data-testid="home-academy"
                 disabled={seeding || !connected}
-                title="Seeds a sample project with specs, ready to run"
+                title={i18n._("Seeds a sample project with specs, ready to run")}
                 onClick={() => void runAcademy()}
                 className="rounded-md border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-950"
               >
-                {seeding ? "Seeding…" : "Try the Academy example"}
+                {seeding ? i18n._("Seeding…") : i18n._("Try the Academy example")}
               </button>
             </div>
           ) : null}
@@ -310,8 +320,8 @@ export function CaptainHome(props: CaptainHomeProps) {
           <CaptainBubble tone="error">
             <p className="text-xs font-semibold">
               {props.configStatus === "missing"
-                ? "Spex has no config file yet — playbooks are unavailable."
-                : "Your config file has errors — playbooks are unavailable."}
+                ? i18n._("Spex has no config file yet — playbooks are unavailable.")
+                : i18n._("Your config file has errors — playbooks are unavailable.")}
             </p>
             {props.configErrors && props.configErrors.length > 0 ? (
               <ul className="mt-1 flex flex-col gap-0.5 font-mono text-xs">
@@ -319,7 +329,13 @@ export function CaptainHome(props: CaptainHomeProps) {
                   <li key={index}>{entry}</li>
                 ))}
                 {props.configErrors.length > 3 ? (
-                  <li>… and {props.configErrors.length - 3} more</li>
+                  <li>
+                    {i18n._({
+                      id: "… and {count} more",
+                      values: { count: props.configErrors.length - 3 },
+                      comment: "tail of a list the interface cut short",
+                    })}
+                  </li>
                 ) : null}
               </ul>
             ) : null}
@@ -328,7 +344,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               onClick={() => props.onNavigate("Settings")}
               className="mt-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-300"
             >
-              Open Settings →
+              {i18n._("Open Settings →")}
             </button>
           </CaptainBubble>
         ) : null}
@@ -336,21 +352,33 @@ export function CaptainHome(props: CaptainHomeProps) {
         {notReady.length > 0 ? (
           <CaptainBubble>
             <p className="text-xs">
-              Heads up — some agents aren't ready yet:
+              {i18n._("Heads up — some agents aren't ready yet:")}
             </p>
             <ul className="mt-1 flex flex-col gap-0.5 text-xs text-neutral-600 dark:text-neutral-300">
               {notReady.map((entry) => (
+                // The adapter's name and what it asks for are both the
+                // core's words; the line that joins them is ours.
                 <li key={entry.adapter}>
-                  <span className="font-mono font-semibold">
-                    {entry.adapter}
-                  </span>{" "}
-                  — {entry.requirement}
+                  <Rich
+                    text={i18n._({
+                      id: "<0>{adapter}</0> — {requirement}",
+                      values: {
+                        adapter: entry.adapter,
+                        requirement: entry.requirement,
+                      },
+                      comment: "an agent runtime, then what it is missing",
+                    })}
+                    components={[
+                      <span key="adapter" className="font-mono font-semibold" />,
+                    ]}
+                  />
                 </li>
               ))}
             </ul>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-              Signing in from a terminal is picked up on re-check; a
-              newly exported env var needs a Spex restart.
+              {i18n._(
+                "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart.",
+              )}
             </p>
             {props.onRecheckReadiness ? (
               <button
@@ -365,7 +393,12 @@ export function CaptainHome(props: CaptainHomeProps) {
                 }}
                 className="mt-1 text-xs font-medium text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-300"
               >
-                {rechecking ? "Checking…" : "Re-check"}
+                {rechecking
+                  ? i18n._("Checking…")
+                  : i18n._({
+                      id: "Re-check",
+                      comment: "act: ask the agents whether they are ready now",
+                    })}
               </button>
             ) : null}
           </CaptainBubble>
@@ -388,13 +421,13 @@ export function CaptainHome(props: CaptainHomeProps) {
           >
             <div className="flex items-center">
               <span className="text-xs font-semibold text-neutral-500">
-                Quick start
+                {i18n._("Quick start")}
               </span>
               <button
                 type="button"
                 data-testid="quick-start-dismiss"
-                title="Hide quick start (playbooks stay under / in the composer)"
-                aria-label="Hide the quick-start card"
+                title={i18n._("Hide quick start (playbooks stay under / in the composer)")}
+                aria-label={i18n._("Hide the quick-start card")}
                 onClick={() => {
                   safeWrite(storage, QUICK_START_KEY, "1");
                   setQuickStartHidden(true);
@@ -422,8 +455,15 @@ export function CaptainHome(props: CaptainHomeProps) {
             ))}
             {playbooks.length > 4 ? (
               <span className="px-2 text-xs text-neutral-500">
-                +{playbooks.length - 4} more under{" "}
-                <span className="font-mono">/</span>
+                <Rich
+                  text={i18n._({
+                    id: "+{count} more under <0>/</0>",
+                    values: { count: playbooks.length - 4 },
+                    comment:
+                      "the playbooks the card does not list; <0> holds the slash key",
+                  })}
+                  components={[<span key="slash" className="font-mono" />]}
+                />
               </span>
             ) : null}
           </div>
@@ -451,22 +491,33 @@ export function CaptainHome(props: CaptainHomeProps) {
             }
             className="relative ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500 [&>[data-testid=agent-popover]]:max-h-(--popover-room) [&>[data-testid=agent-popover]]:overflow-y-auto"
           >
-            Captain:{" "}
+            {i18n._({
+              id: "Captain:",
+              comment: "label before the Captain agent's own chip",
+            })}{" "}
             {captain ? (
               <AgentChip
                 agent={captain}
                 readiness={captainReadiness}
-                label="Captain"
+                label={i18n._({
+                  id: "Captain",
+                  comment: "the agent that routes the Boss's message to a playbook",
+                })}
               />
             ) : (
-              <span className="font-mono">not set</span>
+              <span className="font-mono">
+                {i18n._({
+                  id: "not set",
+                  comment: "stands where the Captain agent is not configured",
+                })}
+              </span>
             )}
             <button
               ref={gearRef}
               type="button"
               data-testid="captain-settings"
-              title="Tweak the Captain agent in place"
-              aria-label="Configure the Captain agent"
+              title={i18n._("Tweak the Captain agent in place")}
+              aria-label={i18n._("Configure the Captain agent")}
               disabled={!captain}
               onClick={() => {
                 const placed = popoverRoom(gearRef.current);
@@ -478,7 +529,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             </button>
             {captainPopover && captain ? (
               <AgentEditorPopover
-                title="Captain agent"
+                title={i18n._("Captain agent")}
                 anchorRef={gearRef}
                 direction={captainPopover.direction}
                 initial={captain}
@@ -564,7 +615,9 @@ export function CaptainHome(props: CaptainHomeProps) {
                     void start();
                   }
                 }}
-                placeholder={connected ? "Message the Captain…" : "Connecting…"}
+                placeholder={
+                  connected ? i18n._("Message the Captain…") : i18n._("Connecting…")
+                }
                 disabled={!connected}
               />
             }
@@ -580,7 +633,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 <button
                   type="button"
                   data-testid="queue-intent-button"
-                  title="Add this to the project's Up next without sending it"
+                  title={i18n._("Add this to the project's Up next without sending it")}
                   disabled={
                     text.trim().length === 0 || busy || queueing || !connected
                   }
@@ -592,7 +645,9 @@ export function CaptainHome(props: CaptainHomeProps) {
                       .onQueueInstead!(trimmed)
                       .then(() => {
                         setText("");
-                        setQueueNote("Added to Up next — see the project's Overview.");
+                        setQueueNote(
+                          i18n._("Added to Up next — see the project's Overview."),
+                        );
                       })
                       .catch((cause: Error) => setError(cause.message))
                       .finally(() => {
@@ -602,7 +657,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                   }}
                   className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
-                  Add to Up next
+                  {i18n._("Add to Up next")}
                 </button>
               ) : null
             }
@@ -614,14 +669,20 @@ export function CaptainHome(props: CaptainHomeProps) {
                 onClick={() => void start()}
                 title={
                   props.hasProject
-                    ? "Enter to send · Shift+Enter for a new line"
+                    ? sendKeys()
                     : props.hasProjects
-                      ? `Pick a project first (${keyLabel("P")})`
-                      : `Add a project first (${keyLabel("P")})`
+                      ? i18n._("Pick a project first ({keys})", {
+                          keys: keyLabel("P"),
+                        })
+                      : i18n._("Add a project first ({keys})", {
+                          keys: keyLabel("P"),
+                        })
                 }
                 className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
               >
-                {busy ? "Starting…" : "Send"}
+                {busy
+                  ? i18n._("Starting…")
+                  : i18n._({ id: "Send", comment: "act: send the typed message" })}
               </button>
             }
           />

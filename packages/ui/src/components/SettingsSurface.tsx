@@ -40,10 +40,11 @@ import {
   keyLabel,
   modKey,
 } from "../lib/shortcuts.js";
-import { AgentChip } from "./AgentChip.js";
+import { AgentChip, noCheckNote, readinessWord } from "./AgentChip.js";
 import { AgentEditor } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { Rich } from "./Rich.js";
 import { appVersion } from "../lib/version.js";
 
 const NOTIFICATION_EVENTS = [
@@ -53,8 +54,12 @@ const NOTIFICATION_EVENTS = [
 ] as const;
 const SINKS = ["off", "bell", "desktop"] as const;
 
-/** The one acknowledgment a landed edit gets (settings-6). */
-const SAVED = "Saved ✓";
+/** The one acknowledgment a landed edit gets (settings-6). A function,
+ * never a constant: a text read at module load would freeze the
+ * language the module was imported in (localization-4). */
+function savedWord(): string {
+  return i18n._({ id: "Saved ✓", comment: "an edit landed; the tick is part of the word" });
+}
 
 /** Transient text that clears itself — the saved tick — with the
  * timer dying alongside the component. */
@@ -87,7 +92,7 @@ function SavedTick({ testId }: { testId: string }) {
       data-testid={testId}
       className="text-xs text-emerald-700 dark:text-emerald-300"
     >
-      {SAVED}
+      {savedWord()}
     </span>
   );
 }
@@ -237,29 +242,27 @@ function ReadinessBadge({ entry }: { entry?: ReadinessEntry }) {
   if (entry.ready === true) {
     return (
       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-        ready
+        {readinessWord(true)}
       </span>
     );
   }
   if (entry.ready === false) {
+    // What the adapter requires is the core's own sentence.
     return (
       <span
         className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700 dark:bg-red-950 dark:text-red-300"
         title={entry.requirement}
       >
-        not ready
+        {readinessWord(false)}
       </span>
     );
   }
   return (
     <span
       className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800"
-      title={
-        entry.requirement ??
-        "no automatic check for this adapter — verify sign-in yourself"
-      }
+      title={entry.requirement ?? noCheckNote()}
     >
-      unverified
+      {i18n._({ id: "unverified", comment: "readiness badge: no automatic check exists for this adapter" })}
     </span>
   );
 }
@@ -268,7 +271,9 @@ function ReadinessBadge({ entry }: { entry?: ReadinessEntry }) {
  * `dev.coder (code.coder, fix.coder)` → chip copy (DR-010 §2). The
  * chip shows the lane; the whole string stays in its title. */
 function positionLabel(position: string): string {
-  if (position === "captain") return "Captain";
+  if (position === "captain") {
+    return i18n._({ id: "Captain", comment: "the session's controlling agent, by name" });
+  }
   const paren = position.indexOf(" (");
   return paren === -1 ? position : position.slice(0, paren);
 }
@@ -289,8 +294,9 @@ function ThemeInput({
   };
   return (
     <input
-      aria-label="Terminal pane theme"
+      aria-label={i18n._("Terminal pane theme")}
       value={draft}
+      // `auto` is the value the field takes when left empty, not a word.
       placeholder="auto"
       disabled={disabled}
       onChange={(event) => setDraft(event.target.value)}
@@ -357,7 +363,7 @@ function PlayerRoster({
     <section data-testid="players-section" className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
-          Session players
+          {i18n._("Session players")}
         </h2>
       </div>
       {players.map((player) => (
@@ -376,7 +382,7 @@ function PlayerRoster({
             {player.boundBy.length > 0 ? (
               <span
                 data-testid={`player-bound-${player.id}`}
-                title={`Answers ${player.boundBy.join(", ")}`}
+                title={i18n._("Answers {positions}", { positions: player.boundBy.join(", ") })}
                 className="flex flex-wrap gap-1"
               >
                 {player.boundBy.map((position) => (
@@ -390,7 +396,7 @@ function PlayerRoster({
               </span>
             ) : (
               <span className="text-xs text-neutral-500">
-                bound to no role yet
+                {i18n._("bound to no role yet")}
               </span>
             )}
             <span className="ml-auto flex items-center gap-1">
@@ -400,15 +406,15 @@ function PlayerRoster({
               <EditToggle
                 rows={rows}
                 rowKey={player.id}
-                label={`Edit ${player.id}`}
-                title="Edit this player's agent"
+                label={i18n._("Edit {id}", { id: player.id })}
+                title={i18n._("Edit this player's agent")}
                 testId={`player-edit-${player.id}`}
               />
               {confirmDelete === player.id ? (
                 <InlineConfirm
-                  question={`Remove ${player.id}?`}
-                  confirmLabel="Remove"
-                  cancelLabel="Keep"
+                  question={i18n._("Remove {id}?", { id: player.id })}
+                  confirmLabel={i18n._({ id: "Remove", comment: "confirm: take this player out of the roster" })}
+                  cancelLabel={i18n._({ id: "Keep", comment: "cancel a removal: leave it as it is" })}
                   onConfirm={() => remove(player.id)}
                   onCancel={() => setConfirmDelete(undefined)}
                 />
@@ -416,8 +422,8 @@ function PlayerRoster({
                 <button
                   type="button"
                   data-testid={`player-delete-${player.id}`}
-                  aria-label={`Remove ${player.id}`}
-                  title="Remove this player from the roster"
+                  aria-label={i18n._("Remove {id}", { id: player.id })}
+                  title={i18n._("Remove this player from the roster")}
                   onClick={() => setConfirmDelete(player.id)}
                   className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
                 >
@@ -456,8 +462,7 @@ function PlayerRoster({
       ))}
       {players.length === 0 ? (
         <p className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700">
-          No players yet — enabling a playbook in the Library adds the ones
-          its roles need.
+          {i18n._("No players yet — enabling a playbook in the Library adds the ones its roles need.")}
         </p>
       ) : null}
       {adding ? (
@@ -467,7 +472,7 @@ function PlayerRoster({
         >
           <label className="flex flex-col gap-1 text-xs">
             <span className="text-neutral-500 dark:text-neutral-400">
-              Player id — lowercase, dots to group (e.g. dev.coder)
+              {i18n._("Player id — lowercase, dots to group (e.g. dev.coder)")}
             </span>
             <input
               data-testid="player-add-id"
@@ -488,20 +493,21 @@ function PlayerRoster({
             initial={NEW_PLAYER_BLOCK}
             readiness={readiness}
             captain={captain}
-            saveLabel="Add player"
+            saveLabel={i18n._("Add player")}
             allowUnchanged
             onSave={(patch) => {
               // Adding never overwrites: an id already in the roster
               // is turned back to its own editor (settings-27).
               const id = newId.trim();
               if (!id) {
-                setError({ playerId: "", message: "Give the player an id first." });
+                setError({ playerId: "", message: i18n._("Give the player an id first.") });
+                // The rejection never reaches the page; the line above does.
                 return Promise.reject(new Error("no id"));
               }
               if (players.some((player) => player.id === id)) {
                 setError({
                   playerId: "",
-                  message: `A player named ${id} already exists — edit it above instead.`,
+                  message: i18n._("A player named {id} already exists — edit it above instead.", { id }),
                 });
                 return Promise.reject(new Error("duplicate id"));
               }
@@ -532,7 +538,7 @@ function PlayerRoster({
           onClick={() => setAdding(true)}
           className="self-start rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
-          Add a player
+          {i18n._("Add a player")}
         </button>
       )}
     </section>
@@ -555,7 +561,7 @@ export function SettingsSurface() {
 
   if (!configState) {
     return (
-      <div className="m-auto text-sm text-neutral-500">loading config…</div>
+      <div className="m-auto text-sm text-neutral-500">{i18n._("loading config…")}</div>
     );
   }
   if (configState.status !== "valid") {
@@ -567,13 +573,17 @@ export function SettingsSurface() {
           className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
         >
           <div className="font-semibold">
-            {missing ? "No config file" : "Config file invalid"}
+            {missing ? i18n._("No config file") : i18n._("Config file invalid")}
           </div>
           {missing ? (
             <p className="mt-1 text-xs">
-              Spex could not create a starter config at{" "}
-              <span className="font-mono">{configState.path}</span> — check
-              the folder is writable, then retry.
+              <Rich
+                text={i18n._(
+                  "Spex could not create a starter config at <0>{path}</0> — check the folder is writable, then retry.",
+                  { path: configState.path },
+                )}
+                components={[<span className="font-mono" key="path" />]}
+              />
             </p>
           ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -589,7 +599,7 @@ export function SettingsSurface() {
               }}
               className="rounded border border-red-300 px-1.5 py-0.5 text-xs hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
             >
-              {copied ? "Copied" : "Copy path"}
+              {copied ? i18n._({ id: "Copied", comment: "the path went to the clipboard" }) : i18n._("Copy path")}
             </button>
             {missing ? (
               <button
@@ -605,19 +615,20 @@ export function SettingsSurface() {
                 }}
                 className="rounded border border-red-300 px-1.5 py-0.5 text-xs font-medium hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-900"
               >
-                {retrying ? "Retrying…" : "Retry"}
+                {retrying ? i18n._({ id: "Retrying…", comment: "a retry is in flight" }) : i18n._({ id: "Retry", comment: "try creating the config file again" })}
               </button>
             ) : null}
           </div>
           {configState.status === "invalid" ? (
             <>
+              {/* Each line is the core's own reading of the file. */}
               <ul className="mt-2 list-disc pl-5">
                 {configState.errors.map((entry) => (
                   <li key={entry}>{entry}</li>
                 ))}
               </ul>
               <div className="mt-2 text-xs">
-                Fix the file in your editor; Spex reloads it live.
+                {i18n._("Fix the file in your editor; Spex reloads it live.")}
               </div>
             </>
           ) : null}
@@ -652,23 +663,28 @@ export function SettingsSurface() {
     // included — so the page itself never scrolls.
     <div className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       <div>
-        <h1 className="text-lg font-semibold">Settings</h1>
+        <h1 className="text-lg font-semibold">{i18n._("Settings")}</h1>
         <p className="mt-0.5 text-xs text-neutral-500">
-          <span className="font-mono break-all" title="Shared with the playbook CLI — edits made outside appear here">{summary.path}</span>
+          <span className="font-mono break-all" title={i18n._("Shared with the playbook CLI — edits made outside appear here")}>{summary.path}</span>
         </p>
         {configState.seeded ? (
           <p
             data-testid="config-seeded"
             className="mt-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
           >
-            Created a starter config at{" "}
-            <span className="font-mono">{summary.path}</span>
+            <Rich
+              text={i18n._("Created a starter config at <0>{path}</0>", {
+                path: summary.path,
+              })}
+              components={[<span className="font-mono" key="path" />]}
+            />
           </p>
         ) : null}
         <p className="mt-0.5 text-xs text-neutral-500">
-          Spex {appVersion()}
-          {" · protocol "}
-          {PROTOCOL_VERSION}
+          {i18n._("Spex {version} · protocol {protocol}", {
+            version: appVersion(),
+            protocol: PROTOCOL_VERSION,
+          })}
         </p>
       </div>
       {error ? (
@@ -678,7 +694,7 @@ export function SettingsSurface() {
       ) : null}
 
       <section data-testid="captain-section" className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-neutral-500">Captain</h2>
+        <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Captain", comment: "the session's controlling agent, by name" })}</h2>
         {/* The Captain is a row of the players' shape (settings-1): its
             chip, opened by the pencil into the shared editor, which
             closes on Save or Cancel — no removal, since a session has
@@ -688,19 +704,20 @@ export function SettingsSurface() {
           className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900"
         >
           <div className="flex flex-wrap items-center gap-2">
+            {/* The row's own word is the config's key, not a name. */}
             <span className="font-mono font-medium">captain</span>
             <AgentChip
               agent={summary.captain}
               readiness={readinessByAdapter.get(summary.captain.adapter)}
-              label="Captain"
+              label={i18n._({ id: "Captain", comment: "the session's controlling agent, by name" })}
             />
             <span className="ml-auto flex items-center gap-1">
               {saved === "captain" ? <SavedTick testId="captain-saved" /> : null}
               <EditToggle
                 rows={rows}
                 rowKey="captain"
-                label="Edit the Captain"
-                title="Edit the Captain's agent"
+                label={i18n._("Edit the Captain")}
+                title={i18n._("Edit the Captain's agent")}
                 testId="captain-edit"
               />
             </span>
@@ -734,14 +751,14 @@ export function SettingsSurface() {
 
       <section data-testid="agents-section" className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-neutral-500">Agents</h2>
+          <h2 className="text-sm font-semibold text-neutral-500">{i18n._("Agents")}</h2>
           <button
             type="button"
-            title="Re-run adapter readiness checks (e.g. after signing in)"
+            title={i18n._("Re-run adapter readiness checks (e.g. after signing in)")}
             onClick={() => void refreshReadiness()}
             className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
           >
-            Re-check readiness
+            {i18n._("Re-check readiness")}
           </button>
         </div>
         {readiness.map((entry) => (
@@ -772,8 +789,7 @@ export function SettingsSurface() {
         ))}
         {readiness.length === 0 ? (
           <div className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700">
-            No adapters in use yet — assign agents to the Captain or a
-            playbook role and their readiness shows here.
+            {i18n._("No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here.")}
           </div>
         ) : null}
       </section>
@@ -783,7 +799,7 @@ export function SettingsSurface() {
         className="flex flex-col gap-2"
       >
         <h2 className="text-sm font-semibold text-neutral-500">
-          Notifications
+          {i18n._("Notifications")}
         </h2>
         <div className="flex flex-col gap-1.5">
           {NOTIFICATION_EVENTS.map((event) => {
@@ -796,10 +812,12 @@ export function SettingsSurface() {
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
               >
                 <span className="min-w-0 shrink basis-56 text-xs" title={event}>
-                  {NOTIFICATION_LABELS[event] ?? event}
+                  {NOTIFICATION_LABELS[event]?.() ?? event}
                 </span>
                 <select
-                  aria-label={`${NOTIFICATION_LABELS[event] ?? event} — where to notify`}
+                  aria-label={i18n._("{label} — where to notify", {
+                    label: NOTIFICATION_LABELS[event]?.() ?? event,
+                  })}
                   value={summary.notifications?.[event] ?? "off"}
                   disabled={pending === key}
                   onChange={(changeEvent) =>
@@ -816,8 +834,16 @@ export function SettingsSurface() {
                   }
                   className="rounded border border-neutral-300 bg-white px-2 py-1 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
                 >
+                  {/* The sink's own id is what the config carries, so
+                      the option states it and reads its own word. */}
                   {SINKS.map((sink) => (
-                    <option key={sink}>{sink}</option>
+                    <option key={sink} value={sink}>
+                      {sink === "off"
+                        ? i18n._({ id: "off", comment: "notification sink: notify nowhere" })
+                        : sink === "bell"
+                          ? i18n._({ id: "bell", comment: "notification sink: the terminal bell" })
+                          : i18n._({ id: "desktop", comment: "notification sink: an OS notification" })}
+                    </option>
                   ))}
                 </select>
                 {saved === key ? (
@@ -833,18 +859,18 @@ export function SettingsSurface() {
 
       <section data-testid="shortcuts-section" className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
-          Keyboard shortcuts
+          {i18n._("Keyboard shortcuts")}
         </h2>
         <div className="relative overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
           <table className="w-full text-left text-sm">
-            <caption className="sr-only">Keyboard shortcuts</caption>
+            <caption className="sr-only">{i18n._("Keyboard shortcuts")}</caption>
             <thead>
               <tr className="text-xs text-neutral-500">
                 <th scope="col" className="px-3 py-1.5 font-medium">
-                  Keys
+                  {i18n._({ id: "Keys", comment: "shortcut table column: the keys to press" })}
                 </th>
                 <th scope="col" className="px-3 py-1.5 font-medium">
-                  Does
+                  {i18n._({ id: "Does", comment: "shortcut table column: what the keys do" })}
                 </th>
               </tr>
             </thead>
@@ -882,7 +908,7 @@ export function SettingsSurface() {
 
       <section data-testid="theme-section" className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
-          Terminal pane theme (CLI only)
+          {i18n._("Terminal pane theme (CLI only)")}
         </h2>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <ThemeInput
@@ -894,9 +920,7 @@ export function SettingsSurface() {
           />
           {saved === "theme" ? <SavedTick testId="theme-saved" /> : null}
           <span className="text-xs text-neutral-500">
-            Only sessions run from the playbook CLI use it — the tmux pane
-            theme (e.g. a catppuccin flavor, or auto); Spex itself follows
-            your OS theme.
+            {i18n._("Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme.")}
           </span>
         </div>
       </section>

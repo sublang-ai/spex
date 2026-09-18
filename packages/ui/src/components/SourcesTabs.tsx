@@ -21,6 +21,7 @@ import type {
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
+import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
 import { RecordRow } from "./RecordRow.js";
 import {
@@ -31,10 +32,6 @@ import {
 } from "./ForgeItemRow.js";
 
 const PAGE_SIZE = 6;
-
-function plural(count: number, noun: string, nouns = `${noun}s`): string {
-  return `${count} ${count === 1 ? noun : nouns}`;
-}
 
 /** The records the core's read classifies as open (spec-view-14,
  * dashboard-24): a finished one lists in History instead, so every
@@ -70,7 +67,7 @@ function Paged<T>({
         <div className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
           <button
             type="button"
-            aria-label="Previous page"
+            aria-label={i18n._("Previous page")}
             disabled={clamped === 0}
             onClick={() => onPage(clamped - 1)}
             className="min-h-6 min-w-6 rounded px-1 hover:bg-neutral-100 disabled:opacity-40 dark:hover:bg-neutral-800"
@@ -82,7 +79,7 @@ function Paged<T>({
           </span>
           <button
             type="button"
-            aria-label="Next page"
+            aria-label={i18n._("Next page")}
             disabled={clamped === pageCount - 1}
             onClick={() => onPage(clamped + 1)}
             className="min-h-6 min-w-6 rounded px-1 hover:bg-neutral-100 disabled:opacity-40 dark:hover:bg-neutral-800"
@@ -159,17 +156,21 @@ export function SourcesBand({
     >
       {forge?.guidance ??
         (meta?.forgeError
-          ? `Couldn't load GitHub data: ${meta.forgeError}`
+          ? i18n._("Couldn't load GitHub data: {reason}", {
+              reason: meta.forgeError,
+            })
           : forgeLoading
-            ? "Loading GitHub state…"
-            : "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here.")}{" "}
+            ? i18n._("Loading GitHub state…")
+            : i18n._(
+                "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here.",
+              ))}{" "}
       {onOpenOverview ? (
         <button
           type="button"
           onClick={onOpenOverview}
           className="text-brand-600 hover:underline dark:text-brand-300"
         >
-          Open the project's Overview
+          {i18n._("Open the project's Overview")}
         </button>
       ) : null}
     </div>
@@ -209,29 +210,49 @@ export function SourcesBand({
           <span className="truncate">
             {/* Zero counts would read as "no issues" when GitHub is
                 simply not connected: the summary names the state
-                instead (dashboard-20, projects-7). */}
-            Sources:{" "}
+                instead (dashboard-20, projects-7). One whole line per
+                state, never a stem with counts glued on
+                (localization-4). */}
             {forgeReady
-              ? `${plural(issues.length, "issue")} · ${plural(prs.length, "PR")}`
+              ? i18n._(
+                  "Sources: {issues, plural, one {# issue} other {# issues}} · {prs, plural, one {# PR} other {# PRs}} · {records, plural, one {# open record} other {# open records}}",
+                  {
+                    issues: issues.length,
+                    prs: prs.length,
+                    records: records.length,
+                  },
+                )
               : forgeLoading
-                ? "Loading GitHub…"
-                : "GitHub not connected"}{" "}
-            · {plural(records.length, "open record")}
+                ? i18n._(
+                    "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}",
+                    { records: records.length },
+                  )
+                : i18n._(
+                    "Sources: GitHub not connected · {records, plural, one {# open record} other {# open records}}",
+                    { records: records.length },
+                  )}
             {fetchedAt !== undefined ? (
               <span
                 className="text-neutral-500"
                 title={absoluteTitle(fetchedAt)}
               >
                 {" "}
-                — {relativeAge(fetchedAt, now)}
+                {i18n._({
+                  id: "— {age}",
+                  comment:
+                    "how old the listed data is; follows the Sources summary",
+                  values: { age: relativeAge(fetchedAt, now) },
+                })}
               </span>
             ) : null}
           </span>
         </button>
         <button
           type="button"
-          aria-label={`Refresh sources for ${project.name}`}
-          title="Refresh GitHub data"
+          aria-label={i18n._("Refresh sources for {project}", {
+            project: project.name,
+          })}
+          title={i18n._("Refresh GitHub data")}
           disabled={meta?.loading}
           onClick={onRefresh}
           data-testid={`sources-refresh-${project.id}`}
@@ -247,7 +268,7 @@ export function SourcesBand({
             title={meta.forgeError}
             data-testid={`sources-error-${project.id}`}
           >
-            GitHub refresh failed — keeping the last data
+            {i18n._("GitHub refresh failed — keeping the last data")}
           </span>
         ) : null}
       </div>
@@ -257,16 +278,28 @@ export function SourcesBand({
               the 320px floor with the sidebar open, three tabs do not
               fit one line on every platform's metrics. */}
           <div role="tablist" className="flex flex-wrap items-center gap-1">
-            {tabButton("issues", "Issues")}
-            {tabButton("prs", "PRs")}
-            {tabButton("records", "Open records")}
+            {tabButton(
+              "issues",
+              i18n._({ id: "Issues", comment: "Sources tab: the repo's open issues" }),
+            )}
+            {tabButton(
+              "prs",
+              i18n._({ id: "PRs", comment: "Sources tab: the repo's open pull requests" }),
+            )}
+            {tabButton(
+              "records",
+              i18n._({
+                id: "Open records",
+                comment: "Sources tab: intent records not yet finished",
+              }),
+            )}
           </div>
           {tab === "records" ? (
             <Paged
               items={records}
               page={pages.records}
               onPage={setPage("records")}
-              empty="No unfinished intent records."
+              empty={i18n._("No unfinished intent records.")}
               render={(record) => {
                 const captured = openSources.get(`record:${record.id}`);
                 return (
@@ -299,7 +332,9 @@ export function SourcesBand({
                       />
                     ) : (
                       <QueueControl
-                        ariaLabel={`Queue record ${record.id} as an intent`}
+                        ariaLabel={i18n._("Queue record {id} as an intent", {
+                          id: record.id,
+                        })}
                         onQueue={() =>
                           onQueue(`Resume ${record.id}: ${record.title}`, {
                             kind: "record",
@@ -319,7 +354,11 @@ export function SourcesBand({
               items={tab === "issues" ? issues : prs}
               page={pages[tab]}
               onPage={setPage(tab)}
-              empty={tab === "issues" ? "No open issues." : "No open pull requests."}
+              empty={
+                tab === "issues"
+                  ? i18n._("No open issues.")
+                  : i18n._("No open pull requests.")
+              }
               render={(item: ForgeItem) => {
                 const kind = tab === "issues" ? "issue" : "pr";
                 return (

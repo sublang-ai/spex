@@ -29,6 +29,7 @@ import {
   useAppStore,
 } from "../state/store.js";
 import { draftChipTitle, draftChipTone, draftChipWord } from "../lib/drafts.js";
+import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { CompileBand } from "./CompileBand.js";
 import { DraftConversation } from "./DraftConversation.js";
@@ -42,11 +43,53 @@ import { SplitDivider } from "./RunView.js";
 type Toolchain = CommandResults["compile.check"];
 type Tab = "source" | "gears" | "machine" | "register";
 
+/** The four tabs. Each label and hint is read when the strip draws,
+ * never when this module loads, so the table never freezes the
+ * language it was imported in (localization-4). */
 const TABS: readonly { key: Tab; label: string; icon: IconName; hint: string }[] = [
-  { key: "source", label: "Source", icon: "file", hint: "The draft's markdown as it stands on disk" },
-  { key: "gears", label: "Gears", icon: "list", hint: "One spec item per state behavior, from the last compile" },
-  { key: "machine", label: "Machine", icon: "hexagon", hint: "The compiled state machine, from the last compile" },
-  { key: "register", label: "Register", icon: "check", hint: "Confirm the command, intent, and players" },
+  {
+    key: "source",
+    get label() {
+      return i18n._({ id: "Source", comment: "pipeline stage: the authored workflow" });
+    },
+    icon: "file",
+    get hint() {
+      return i18n._("The draft's markdown as it stands on disk");
+    },
+  },
+  {
+    key: "gears",
+    get label() {
+      return i18n._({
+        id: "Gears",
+        comment: "pipeline stage: the compiler's normative spec items (a proper name)",
+      });
+    },
+    icon: "list",
+    get hint() {
+      return i18n._("One spec item per state behavior, from the last compile");
+    },
+  },
+  {
+    key: "machine",
+    get label() {
+      return i18n._({ id: "Machine", comment: "tab: the compiled state machine" });
+    },
+    icon: "hexagon",
+    get hint() {
+      return i18n._("The compiled state machine, from the last compile");
+    },
+  },
+  {
+    key: "register",
+    get label() {
+      return i18n._({ id: "Register", comment: "tab: write the compiled playbook into the config" });
+    },
+    icon: "check",
+    get hint() {
+      return i18n._("Confirm the command, intent, and players");
+    },
+  },
 ];
 
 const TONE_CLASSES: Record<string, string> = {
@@ -70,7 +113,7 @@ export function DraftStateChip({ draft }: { draft: DraftInfo }) {
       className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs whitespace-nowrap ${TONE_CLASSES[draftChipTone(draft)]}`}
     >
       {draft.state === "compiling" && !draft.sourceMissing ? (
-        <RunningMark running title="Compiling" />
+        <RunningMark running title={i18n._({ id: "Compiling", comment: "the draft's compile is running" })} />
       ) : null}
       {word}
     </span>
@@ -78,7 +121,9 @@ export function DraftStateChip({ draft }: { draft: DraftInfo }) {
 }
 
 /** What the thread's last compile line said about the failure, so the
- * band repeats it rather than guessing (playbook-library-58). */
+ * band repeats it rather than guessing (playbook-library-58). The line
+ * is the core's, printed verbatim, so both the pattern and what it
+ * yields are data, never texts of the catalog. */
 function threadCompileCaption(lines: readonly { kind: string; text: string }[]): string | undefined {
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const line = lines[index];
@@ -185,14 +230,16 @@ export function AuthoringWorkspace({
   if (!draft) return null;
   const summary = configState?.status === "valid" ? configState.summary : undefined;
   const compiling = draft.activity === "compiling";
+  // A diagnostic and the toolchain's guidance are the core's own
+  // words; the rest is ours.
   const compileReason = draft.diagnostic
     ? draft.diagnostic
     : !source
-    ? "No source yet"
+    ? i18n._("No source yet")
     : draft.activity === "turn"
-      ? "Waits for the reply"
+      ? i18n._({ id: "Waits for the reply", comment: "why a control is held: the draft's agent turn is running" })
       : compiling
-        ? "Compiling"
+        ? i18n._({ id: "Compiling", comment: "why a control is held: the draft's compile is running" })
         : toolchain && !toolchain.node.ok
           ? toolchain.node.guidance
           : toolchain?.slc.guidance && !toolchain.slc.ok
@@ -200,9 +247,9 @@ export function AuthoringWorkspace({
             : undefined;
   const staleCaption =
     draft.state === "changed"
-      ? "from the compile before this change"
+      ? i18n._("from the compile before this change")
       : !compiledOk && hasArtifacts
-        ? "from the last good compile"
+        ? i18n._("from the last good compile")
         : undefined;
   const sourceDot = Boolean(source) && (!compiledOk || draft.state === "changed");
   const registerDot = registerKey !== undefined && registerSeen !== registerKey;
@@ -221,7 +268,7 @@ export function AuthoringWorkspace({
     if (artifactsError && !loaded) {
       return <div className="text-xs text-red-500">{artifactsError}</div>;
     }
-    if (!loaded) return <div className="text-xs text-neutral-500">loading…</div>;
+    if (!loaded) return <div className="text-xs text-neutral-500">{i18n._({ id: "loading…", comment: "a request for this pane's content is in flight" })}</div>;
     return (
       <div className="flex flex-col gap-2">
         {staleCaption ? (
@@ -230,7 +277,7 @@ export function AuthoringWorkspace({
           </span>
         ) : null}
         {kind === "gears" ? (
-          <StageBox id={`draft-${draftId}`} stage="Gears">
+          <StageBox id={`draft-${draftId}`} stage={i18n._({ id: "Gears", comment: "pipeline stage: the compiled spec items" })}>
             {loaded.gearsItems ? (
               <GearsItems id={`draft-${draftId}`} file={loaded.gearsItems} />
             ) : loaded.gears ? (
@@ -238,13 +285,13 @@ export function AuthoringWorkspace({
                 {loaded.gears}
               </pre>
             ) : (
-              <div className="text-xs text-neutral-500">this stage was not found for this draft</div>
+              <div className="text-xs text-neutral-500">{i18n._("this stage was not found for this draft")}</div>
             )}
           </StageBox>
         ) : (
           <StageBox
             id={`draft-${draftId}`}
-            stage="Machine"
+            stage={i18n._({ id: "Machine", comment: "pipeline stage: the compiled state machine" })}
             header={
               loaded.stateIds ? <StateList id={`draft-${draftId}`} states={loaded.stateIds} /> : undefined
             }
@@ -254,7 +301,7 @@ export function AuthoringWorkspace({
                 {loaded.fsm}
               </pre>
             ) : (
-              <div className="text-xs text-neutral-500">this stage was not found for this draft</div>
+              <div className="text-xs text-neutral-500">{i18n._("this stage was not found for this draft")}</div>
             )}
           </StageBox>
         )}
@@ -269,11 +316,11 @@ export function AuthoringWorkspace({
           type="button"
           data-testid="workspace-back"
           onClick={onBack}
-          title="Back to the playbook list — the draft stays as it is"
+          title={i18n._("Back to the playbook list — the draft stays as it is")}
           className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           <span aria-hidden="true">‹</span>
-          Playbooks
+          {i18n._({ id: "Playbooks", comment: "the surface listing every playbook" })}
         </button>
         <span className="min-w-0 truncate font-mono font-semibold" title={draft.id}>
           {draft.id}
@@ -321,7 +368,7 @@ export function AuthoringWorkspace({
               percent={draftSplit}
               onChange={setDraftSplit}
               containerRef={splitRef}
-              label="Resize the conversation pane"
+              label={i18n._("Resize the conversation pane")}
               testId="authoring-divider"
               min={DRAFT_SPLIT_MIN}
               max={DRAFT_SPLIT_MAX}
@@ -334,7 +381,7 @@ export function AuthoringWorkspace({
               percent={draftStackSplit}
               onChange={setDraftStackSplit}
               containerRef={splitRef}
-              label="Resize the conversation pane"
+              label={i18n._("Resize the conversation pane")}
               testId="authoring-grip"
               min={DRAFT_STACK_MIN}
               max={DRAFT_STACK_MAX}
@@ -343,7 +390,7 @@ export function AuthoringWorkspace({
           </div>
           <section
             data-testid="artifacts-pane"
-            aria-label="Draft artifacts"
+            aria-label={i18n._("Draft artifacts")}
             className="@container flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white @2xl:min-w-[280px] dark:border-neutral-800 dark:bg-neutral-900"
           >
             {/* The strip: the tab list, then the Compile control at its
@@ -351,11 +398,12 @@ export function AuthoringWorkspace({
             <div className="flex flex-wrap items-center gap-1 border-b border-neutral-200 px-2 py-1.5 dark:border-neutral-800">
               <div
                 role="tablist"
-                aria-label="Draft artifacts"
+                aria-label={i18n._("Draft artifacts")}
                 className="flex flex-wrap items-center gap-1"
               >
               {TABS.map((entry) => {
                 const on = tab === entry.key;
+                const label = entry.label;
                 const dot =
                   entry.key === "source" ? sourceDot : entry.key === "register" ? registerDot : false;
                 return (
@@ -367,10 +415,10 @@ export function AuthoringWorkspace({
                     data-testid={`tab-${entry.key}`}
                     aria-selected={on}
                     aria-controls="draft-tabpanel"
-                    aria-label={entry.label}
+                    aria-label={label}
                     aria-disabled={!enabled[entry.key]}
                     disabled={!enabled[entry.key]}
-                    title={enabled[entry.key] ? entry.hint : "Compiles first"}
+                    title={enabled[entry.key] ? entry.hint : i18n._({ id: "Compiles first", comment: "why a tab is disabled: nothing to show until a compile succeeds" })}
                     onClick={() => setTab(entry.key)}
                     className={`inline-flex min-h-6 items-center gap-1 rounded-md px-2 text-xs ${
                       on
@@ -381,7 +429,7 @@ export function AuthoringWorkspace({
                     {/* Below @xs the tab is its icon and tooltip; the
                         accessible name never changes (DR-041 §9). */}
                     <Icon name={entry.icon} className="h-3.5 w-3.5 @xs:hidden" />
-                    <span className="hidden @xs:inline">{entry.label}</span>
+                    <span className="hidden @xs:inline">{label}</span>
                     {dot ? (
                       <span
                         data-testid={`tab-dot-${entry.key}`}
@@ -400,13 +448,13 @@ export function AuthoringWorkspace({
                 disabled={compiling || compileReason !== undefined || !connected}
                 title={
                   !connected
-                    ? "Not connected"
-                    : (compileReason ?? "Runs slc over the draft's source — 30 to 120 minutes")
+                    ? i18n._({ id: "Not connected", comment: "why a control is held: the page has no core" })
+                    : (compileReason ?? i18n._("Runs slc over the draft's source — 30 to 120 minutes"))
                 }
                 onClick={() => void compileDraft(draftId)}
                 className="rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
               >
-                {compiling ? "Compiling…" : "Compile"}
+                {compiling ? i18n._({ id: "Compiling…", comment: "a compile is in flight" }) : i18n._({ id: "Compile", comment: "start a compile of the draft's source" })}
               </button>
             </div>
             <CompileBand

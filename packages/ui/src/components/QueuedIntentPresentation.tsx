@@ -13,6 +13,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { causePhrase } from "../lib/failure-catalogue.js";
+import { i18n } from "../i18n.js";
 
 const QUEUED_CLASS =
   "shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400";
@@ -24,15 +25,27 @@ export function queueStandingPhrase(
   const failure = causePhrase(schedule.cause);
   switch (schedule.standing) {
     case "after-current-work":
-      return "after current work";
+      return i18n._({
+        id: "after current work",
+        comment: "queued row standing: it runs once the current work ends",
+      });
     case "question-park":
-      return "waiting — your reply";
+      return i18n._({
+        id: "waiting — your reply",
+        comment: "queued row standing: the work ahead parked on a question",
+      });
     case "failure-park":
-      return `waiting — current work failed${failure ? ` — ${failure}` : ""}`;
+      // One whole phrase per case, never a translated stem with a
+      // cause glued on (localization-4).
+      return failure
+        ? i18n._("waiting — current work failed — {failure}", { failure })
+        : i18n._("waiting — current work failed");
     case "failed":
-      return `waiting — previous work failed${failure ? ` — ${failure}` : ""}`;
+      return failure
+        ? i18n._("waiting — previous work failed — {failure}", { failure })
+        : i18n._("waiting — previous work failed");
     case "stopped":
-      return "waiting — previous work stopped";
+      return i18n._("waiting — previous work stopped");
     case "manual-ready":
       return undefined;
   }
@@ -49,14 +62,22 @@ export function queueAfterLinkPhrase(
       ? undefined
       : (projects.find((project) => project.id === blockedBy.projectId)?.name ??
         blockedBy.projectId);
-  return `after ${blockedBy.title}${foreignProject ? ` (${foreignProject})` : ""}`;
+  return foreignProject
+    ? i18n._("after {title} ({project})", {
+        title: blockedBy.title,
+        project: foreignProject,
+      })
+    : i18n._("after {title}", { title: blockedBy.title });
 }
 
 /** The neutral lifecycle mark every committed queue row carries. */
 export function QueuedMark({ testId }: { testId?: string }) {
   return (
     <span data-testid={testId} className={QUEUED_CLASS}>
-      Queued
+      {i18n._({
+        id: "Queued",
+        comment: "lifecycle mark on every committed queue row (DR-077)",
+      })}
     </span>
   );
 }

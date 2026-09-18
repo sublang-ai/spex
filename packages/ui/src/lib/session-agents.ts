@@ -13,9 +13,18 @@ import {
   type SessionInfo,
 } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
+
 /** How a value reads once the provider's own default is chosen: there
- * is no id to print, and printing nothing would read as unset. */
-export const PROVIDER_DEFAULT_READING = "provider default";
+ * is no id to print, and printing nothing would read as unset. A
+ * function, never a constant: a text read at module load would freeze
+ * the language the module was imported in (localization-4). */
+export function providerDefaultReading(): string {
+  return i18n._({
+    id: "provider default",
+    comment: "an agent chip's model reading when the provider's own default is taken",
+  });
+}
 
 export interface SessionAgent {
   /** The reserved `captain`, or a player of the session's roster. */
@@ -38,7 +47,7 @@ export function effectiveSettings(agent: SessionAgent): {
   fastMode?: boolean;
 } {
   const pick = (chosen: string | false | undefined, configured: string | undefined): string | undefined =>
-    chosen === false ? PROVIDER_DEFAULT_READING : chosen ?? configured;
+    chosen === false ? providerDefaultReading() : chosen ?? configured;
   return {
     ...(pick(agent.settings?.model, agent.configured.model) !== undefined ? { model: pick(agent.settings?.model, agent.configured.model) } : {}),
     ...(pick(agent.settings?.effort, agent.configured.effort) !== undefined ? { effort: pick(agent.settings?.effort, agent.configured.effort) } : {}),
@@ -88,7 +97,15 @@ export function sessionAgents(
   // not finished loading — contributes no Captain row rather than an
   // agent whose adapter nothing could name.
   const agents = summary.captain
-    ? [agentOf(CAPTAIN_AGENT_ID, "Captain", summary.captain, summary.captain.adapter, [])]
+    ? [
+        agentOf(
+          CAPTAIN_AGENT_ID,
+          i18n._({ id: "Captain", comment: "the session's controlling agent, by name" }),
+          summary.captain,
+          summary.captain.adapter,
+          [],
+        ),
+      ]
     : [];
   for (const player of session.players) {
     // A player the config no longer holds still has a lane and a

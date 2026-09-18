@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import { i18n } from "../i18n.js";
 import { duration } from "../lib/time.js";
 
 export function activeTimeDescription(ms: number): string {
-  return `Completed active time this session: ${duration(ms)} · parallel calls overlap`;
+  return i18n._("Completed active time this session: {span} · parallel calls overlap", {
+    span: duration(ms),
+  });
 }
 
 export function activeTimeDescriptionId(agentId: string): string {
@@ -41,7 +44,11 @@ export function AgentActiveTime({
           title={description}
           className="hidden whitespace-nowrap text-xs text-neutral-500 @lg:inline dark:text-neutral-400"
         >
-          active · {value}
+          {i18n._({
+            id: "active · {span}",
+            values: { span: value },
+            comment: "compact reading in a pane header: time this agent was active",
+          })}
         </span>
       ) : null}
     </>

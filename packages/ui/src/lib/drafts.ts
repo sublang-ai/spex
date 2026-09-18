@@ -14,39 +14,72 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { phaseLabel } from "./compile-log.js";
-import { relativeAge } from "./time.js";
+import { ageSpan, relativeAge } from "./time.js";
+import { i18n } from "../i18n.js";
 import type { StatusTone } from "./labels.js";
 
 /** A draft id names the file, the directory, and the /command. */
 export const DRAFT_ID_RULE = /^[a-z][a-z0-9_-]*$/u;
 
-/** The id field's caption (playbook-library-51). */
-export const DRAFT_ID_CAPTION =
-  "Lowercase; it names the file and the /command — the command can change at registration";
+/** The id field's caption (playbook-library-51). A function, never a
+ * constant: a text read at module load would freeze the language the
+ * module was imported in (localization-4). */
+export function draftIdCaption(): string {
+  return i18n._(
+    "Lowercase; it names the file and the /command — the command can change at registration",
+  );
+}
 
 /** The rule, as the refusal names it. */
-export const DRAFT_ID_RULE_TEXT =
-  "Lowercase letters, digits, - or _, starting with a letter";
+export function draftIdRuleText(): string {
+  return i18n._("Lowercase letters, digits, - or _, starting with a letter");
+}
 
 /** The chip's word (playbook-library-50): at most 14 characters, the
  * details in its title (DR-041 §9). */
 export function draftChipWord(draft: DraftInfo): string {
-  if (draft.sourceMissing) return "Source missing";
+  if (draft.sourceMissing) {
+    return i18n._({
+      id: "Source missing",
+      comment: "draft state chip, at most 14 characters: the draft's library directory is gone",
+    });
+  }
   switch (draft.state) {
     case "no-source":
-      return "No source";
+      return i18n._({
+        id: "No source",
+        comment: "draft state chip, at most 14 characters: nothing written to the draft's source file yet",
+      });
     case "draft":
-      return "Draft";
+      return i18n._({
+        id: "Draft",
+        comment: "draft state chip, at most 14 characters: a source stands, never compiled",
+      });
     case "compiling":
-      return "Compiling";
+      return i18n._({
+        id: "Compiling",
+        comment: "draft state chip, at most 14 characters: a compile is running",
+      });
     case "failed":
-      return "Failed";
+      return i18n._({
+        id: "Failed",
+        comment: "draft state chip, at most 14 characters: the last compile failed",
+      });
     case "interrupted":
-      return "Interrupted";
+      return i18n._({
+        id: "Interrupted",
+        comment: "draft state chip, at most 14 characters: Spex closed while the draft compiled",
+      });
     case "compiled":
-      return "Compiled";
+      return i18n._({
+        id: "Compiled",
+        comment: "draft state chip, at most 14 characters: the last compile succeeded",
+      });
     case "changed":
-      return "Changed";
+      return i18n._({
+        id: "Changed",
+        comment: "draft state chip, at most 14 characters: the source changed after the last compile",
+      });
   }
 }
 
@@ -72,38 +105,56 @@ export function draftChipTone(draft: DraftInfo): StatusTone {
 /** The chip's tooltip: the failed phase and the compile's age, never
  * in the chip itself (playbook-library-50). */
 export function draftChipTitle(draft: DraftInfo, now: number): string | undefined {
-  if (draft.sourceMissing) return "The draft's library directory is gone; only Delete remains";
+  if (draft.sourceMissing) {
+    return i18n._("The draft's library directory is gone; only Delete remains");
+  }
   const compile = draft.compile;
   if (!compile) return undefined;
   const age = relativeAge(compile.at, now);
   switch (compile.outcome) {
     case "failed": {
+      // The compiler's own phase id rides along where the pipeline
+      // table names that phase; where it does not, the id stands alone.
       const phase = compile.phase;
-      const where = phase
-        ? phaseLabel(phase) === phase
-          ? phase
-          : `${phaseLabel(phase)} (${phase})`
-        : "an unknown phase";
-      return `Failed at ${where}, ${age}`;
+      if (!phase) return i18n._("Failed at an unknown phase, {age}", { age });
+      return phaseLabel(phase) === phase
+        ? i18n._("Failed at {phase}, {age}", { phase, age })
+        : i18n._("Failed at {phase} ({id}), {age}", {
+            phase: phaseLabel(phase),
+            id: phase,
+            age,
+          });
     }
     case "running":
-      return `Compiling since ${age.replace(" ago", "")}`;
+      // "since" already says it is an age, so the span comes without
+      // "ago" rather than having the word cut off a translated text.
+      return i18n._("Compiling since {age}", { age: ageSpan(compile.at, now) });
     case "interrupted":
-      return `Interrupted ${age} — Spex closed while it compiled`;
+      return i18n._("Interrupted {age} — Spex closed while it compiled", { age });
     case "canceled":
-      return `Canceled ${age}`;
+      return i18n._("Canceled {age}", { age });
     case "ok":
       return draft.state === "changed"
-        ? `Compiled ${age}; the source changed since`
-        : `Compiled ${age}`;
+        ? i18n._("Compiled {age}; the source changed since", { age })
+        : i18n._("Compiled {age}", { age });
   }
 }
 
 /** Why a control that writes the source or starts a compile must wait,
  * in the words its tooltip or caption uses (playbook-library-56/57). */
 export function busyReason(draft: DraftInfo): string | undefined {
-  if (draft.activity === "turn") return "Waits for the reply";
-  if (draft.activity === "compiling") return "Compiling";
+  if (draft.activity === "turn") {
+    return i18n._({
+      id: "Waits for the reply",
+      comment: "why a control is held: the draft's agent turn is running",
+    });
+  }
+  if (draft.activity === "compiling") {
+    return i18n._({
+      id: "Compiling",
+      comment: "why a control is held: the draft's compile is running",
+    });
+  }
   return undefined;
 }
 

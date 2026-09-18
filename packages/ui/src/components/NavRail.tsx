@@ -120,17 +120,30 @@ function lifeOf(session: SessionInfo, item: AttentionItem | undefined): Life {
   return session.failed ? "idle-failed" : "idle";
 }
 
-const LIFE_WORDS: Record<Life, string> = {
-  question: "waiting for your reply",
-  failure: "failed",
-  finish: "waiting for your verdict",
-  review: "unread turn",
-  running: "running",
-  "idle-failed": "idle, held a failure",
-  idle: "idle",
-  history: "history, can't be continued",
-  "external-active": "in use elsewhere",
-  "external-unknown": "ownership unknown",
+/** Each phrase is a thunk, never a string: a table read at module load
+ * would freeze the language it was imported in (localization-4). */
+const LIFE_WORDS: Record<Life, () => string> = {
+  question: () =>
+    i18n._({
+      id: "waiting for your reply",
+      comment: "session row: the run parked on a question",
+    }),
+  failure: () => i18n._({ id: "failed", comment: "a piece of work's state: it failed" }),
+  finish: () =>
+    i18n._({
+      id: "waiting for your verdict",
+      comment: "session row: work delivered, a verdict is owed",
+    }),
+  review: () =>
+    i18n._({ id: "unread turn", comment: "session row: a turn nobody has read" }),
+  running: () =>
+    i18n._({ id: "running", comment: "session row: a turn is in flight" }),
+  "idle-failed": () => i18n._("idle, held a failure"),
+  idle: () =>
+    i18n._({ id: "idle", comment: "session row: no turn in flight" }),
+  history: () => i18n._("history, can't be continued"),
+  "external-active": () => i18n._("in use elsewhere"),
+  "external-unknown": () => i18n._("ownership unknown"),
 };
 
 // A failure that summons is filled red; one the session's last turn
@@ -155,11 +168,50 @@ function sessionLabel(
   now: number,
   item: AttentionItem | undefined,
 ): string {
-  const title = session.title ?? "no messages yet";
+  const title = session.title ?? i18n._("no messages yet");
   const when = session.endedAt ?? session.createdAt;
-  const turns = `${session.turns} turn${session.turns === 1 ? "" : "s"}`;
-  const detail = item?.text ? ` — ${item.text}` : "";
-  return `${title} — ${LIFE_WORDS[life]}, ${relativeAge(when, now)}, ${turns}${detail}`;
+  const turns = i18n._("{count, plural, one {# turn} other {# turns}}", {
+    count: session.turns,
+  });
+  const life_ = LIFE_WORDS[life]();
+  const age = relativeAge(when, now);
+  // One whole accessible name per case, so no text is assembled from
+  // fragments (localization-4).
+  return item?.text
+    ? i18n._("{title} — {life}, {age}, {turns} — {detail}", {
+        title,
+        life: life_,
+        age,
+        turns,
+        detail: item.text,
+      })
+    : i18n._("{title} — {life}, {age}, {turns}", {
+        title,
+        life: life_,
+        age,
+        turns,
+      });
+}
+
+/** The project row's accessible name: one whole name per attention
+ * kind, never the row's own words glued to a shared clause
+ * (localization-4). */
+function projectRowName(
+  name: string,
+  worst: AttentionItem["kind"] | undefined,
+): string {
+  switch (worst) {
+    case "failure":
+      return i18n._("{name}, a session failed", { name });
+    case "question":
+      return i18n._("{name}, a session is waiting for your reply", { name });
+    case "finish":
+      return i18n._("{name}, a session is waiting for your verdict", { name });
+    case "review":
+      return i18n._("{name}, a session has an unread turn", { name });
+    default:
+      return name;
+  }
 }
 
 interface Row {
@@ -375,7 +427,7 @@ export function NavRail(props: NavRailProps) {
       .catch((cause: Error) =>
         setDeleteErrors((current) => ({
           ...current,
-          [sessionId]: cause.message || "delete failed",
+          [sessionId]: cause.message || i18n._("delete failed"),
         })),
       )
       .finally(() =>
@@ -395,12 +447,18 @@ export function NavRail(props: NavRailProps) {
       <button
         key={name}
         type="button"
+        // The entry is found by which surface it is, never by what it
+        // says: an accessible name is a text (localization-4).
+        data-surface={name}
         onClick={() => onSurface(name)}
         aria-current={active ? "page" : undefined}
         title={collapsed ? label : undefined}
         aria-label={
           badge
-            ? `${label} — ${attentionCount} need${attentionCount === 1 ? "s" : ""} your attention`
+            ? i18n._(
+                "{label} — {count, plural, one {# needs your attention} other {# need your attention}}",
+                { label, count: attentionCount },
+              )
             : label
         }
         className={`relative flex items-center gap-2 rounded-md py-1.5 pr-2.5 pl-2 text-left text-sm ${
@@ -413,7 +471,10 @@ export function NavRail(props: NavRailProps) {
           <span
             data-testid="nav-attention-badge"
             aria-hidden
-            title={`${attentionCount} need${attentionCount === 1 ? "s" : ""} your attention`}
+            title={i18n._(
+              "{count, plural, one {# needs your attention} other {# need your attention}}",
+              { count: attentionCount },
+            )}
             className={`rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-200 ${
               // Positioned at the entry's corner, beside the glyph,
               // never over it (run-view-108).
@@ -454,8 +515,8 @@ export function NavRail(props: NavRailProps) {
       type="button"
       data-testid="sidebar-palette"
       onClick={props.onOpenPalette}
-      title={`Switch or add a project (${keyLabel("P")})`}
-      aria-label="Switch or add a project"
+      title={i18n._("Switch or add a project ({keys})", { keys: keyLabel("P") })}
+      aria-label={i18n._("Switch or add a project")}
       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
         collapsed ? "self-center" : "-my-0.5"
       }`}
@@ -468,7 +529,7 @@ export function NavRail(props: NavRailProps) {
     <div
       ref={treeRef}
       role="tree"
-      aria-label="Projects and sessions"
+      aria-label={i18n._("Projects and sessions")}
       aria-multiselectable={false}
       onKeyDown={onTreeKeyDown}
       className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
@@ -480,7 +541,7 @@ export function NavRail(props: NavRailProps) {
           onClick={props.onOpenPalette}
           className="rounded-md border border-brand-300 px-2 py-1 text-left text-[13px] text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          Add a project…
+          {i18n._("Add a project…")}
         </button>
       ) : null}
       {projects.map((project) => {
@@ -502,8 +563,12 @@ export function NavRail(props: NavRailProps) {
               tabIndex={focused === `p:${project.id}` ? 0 : -1}
               onFocus={() => setFocusKey(`p:${project.id}`)}
               onClick={() => props.onPickProject(project.id)}
-              title={`${project.path}${worst ? ` — needs you` : ""}`}
-              aria-label={`${project.name}${worst ? `, a session ${PROJECT_ATTENTION_WORDS[worst]}` : ""}`}
+              title={
+                worst
+                  ? i18n._("{path} — needs you", { path: project.path })
+                  : project.path
+              }
+              aria-label={projectRowName(project.name, worst)}
               className={`${rowClass(
                 project.id === selectedProjectId && !shownSessionId,
               )} pl-0.5`}
@@ -512,7 +577,15 @@ export function NavRail(props: NavRailProps) {
                 type="button"
                 tabIndex={-1}
                 data-testid={`sidebar-disclose-${project.id}`}
-                aria-label={`${open ? "Hide" : "Show"} sessions in ${project.name}`}
+                aria-label={
+                  open
+                    ? i18n._("Hide sessions in {project}", {
+                        project: project.name,
+                      })
+                    : i18n._("Show sessions in {project}", {
+                        project: project.name,
+                      })
+                }
                 onClick={(event) => {
                   // Disclosure is its own axis (DR-027): opening a
                   // project never moves the workspace into it.
@@ -535,7 +608,7 @@ export function NavRail(props: NavRailProps) {
                   data-testid={`sidebar-project-attention-${project.id}`}
                   aria-hidden
                   className={`h-2 w-2 shrink-0 rounded-full ${ATTENTION_MARK_CLASS[worst]}`}
-                  title={`A session ${PROJECT_ATTENTION_WORDS[worst]}`}
+                  title={PROJECT_ATTENTION_WORDS[worst]()}
                 />
               ) : null}
             </div>
@@ -576,16 +649,35 @@ export function NavRail(props: NavRailProps) {
                           className="min-w-0 flex-1"
                         >
                           <InlineConfirm
+                            // One whole question per case (localization-4):
+                            // where it ran, and whether an unsent draft
+                            // goes with it.
                             question={
-                              (session.foreign
-                                ? "Delete this session? It was run from the terminal; its history goes too."
-                                : "Delete this session and its transcript?") +
-                              (drafts[session.id]?.draft?.trim()
-                                ? " Its unsent draft goes with it."
-                                : "")
+                              session.foreign
+                                ? drafts[session.id]?.draft?.trim()
+                                  ? i18n._(
+                                      "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it.",
+                                    )
+                                  : i18n._(
+                                      "Delete this session? It was run from the terminal; its history goes too.",
+                                    )
+                                : drafts[session.id]?.draft?.trim()
+                                  ? i18n._(
+                                      "Delete this session and its transcript? Its unsent draft goes with it.",
+                                    )
+                                  : i18n._(
+                                      "Delete this session and its transcript?",
+                                    )
                             }
-                            confirmLabel="Delete"
-                            cancelLabel="Keep"
+                            confirmLabel={i18n._({
+                              id: "Delete",
+                              comment: "confirm: delete this session for good",
+                            })}
+                            cancelLabel={i18n._({
+                              id: "Keep",
+                              comment:
+                                "cancel a destructive confirm: leave things as they are",
+                            })}
                             onConfirm={() => deleteSession(session.id)}
                             onCancel={() => setConfirmDelete(undefined)}
                           />
@@ -599,7 +691,7 @@ export function NavRail(props: NavRailProps) {
                                 : "italic text-neutral-500 dark:text-neutral-400"
                             }`}
                           >
-                            {session.title ?? "no messages yet"}
+                            {session.title ?? i18n._("no messages yet")}
                           </span>
                           {deleteErrors[session.id] ? (
                             <span
@@ -607,7 +699,7 @@ export function NavRail(props: NavRailProps) {
                               title={deleteErrors[session.id]}
                               className="shrink-0 truncate text-xs text-red-600 dark:text-red-400"
                             >
-                              not deleted
+                              {i18n._("not deleted")}
                             </span>
                           ) : (
                             // The one time vocabulary (run-view-73): a
@@ -620,7 +712,11 @@ export function NavRail(props: NavRailProps) {
                               className="shrink-0 text-xs tabular-nums text-neutral-500 dark:text-neutral-400"
                             >
                               {deleting[session.id]
-                                ? "deleting…"
+                                ? i18n._({
+                                    id: "deleting…",
+                                    comment:
+                                      "session row, busy: the delete is in flight",
+                                  })
                                 : compactAge(
                                     session.endedAt ?? session.createdAt,
                                     now,
@@ -633,8 +729,13 @@ export function NavRail(props: NavRailProps) {
                             <button
                               type="button"
                               data-testid={`sidebar-delete-${session.id}`}
-                              aria-label={`Delete session ${session.title ?? "no messages yet"}`}
-                              title="Delete this session and its transcript"
+                              aria-label={i18n._("Delete session {title}", {
+                                title:
+                                  session.title ?? i18n._("no messages yet"),
+                              })}
+                              title={i18n._(
+                                "Delete this session and its transcript",
+                              )}
                               disabled={deleting[session.id]}
                               onClick={(event) => {
                                 event.stopPropagation();
@@ -665,10 +766,13 @@ export function NavRail(props: NavRailProps) {
                         [project.id]: true,
                       }))
                     }
-                    aria-label={`Show all ${bucket.idle.length} sessions in ${project.name}`}
+                    aria-label={i18n._(
+                      "Show all {count} sessions in {project}",
+                      { count: bucket.idle.length, project: project.name },
+                    )}
                     className={`${rowClass(false)} pl-6 text-xs text-brand-600 dark:text-brand-300`}
                   >
-                    all {bucket.idle.length}…
+                    {i18n._("all {count}…", { count: bucket.idle.length })}
                   </div>
                 ) : null}
                 <div
@@ -679,11 +783,13 @@ export function NavRail(props: NavRailProps) {
                   tabIndex={focused === `n:${project.id}` ? 0 : -1}
                   onFocus={() => setFocusKey(`n:${project.id}`)}
                   onClick={() => props.onNewSession(project.id)}
-                  aria-label={`New session in ${project.name}`}
+                  aria-label={i18n._("New session in {project}", {
+                    project: project.name,
+                  })}
                   className={`${rowClass(false)} pl-6 text-neutral-500`}
                 >
                   <Icon name="plus" className="h-3 w-3 shrink-0" />
-                  New session
+                  {i18n._("New session")}
                 </div>
               </div>
             ) : null}
@@ -697,7 +803,7 @@ export function NavRail(props: NavRailProps) {
     <nav
       data-testid="sidebar"
       data-collapsed={collapsed ? "1" : "0"}
-      aria-label="Spex navigation"
+      aria-label={i18n._("Spex navigation")}
       className={`flex flex-col gap-1 border-r border-neutral-200 bg-white p-2 dark:border-neutral-800 dark:bg-neutral-900 ${
         collapsed ? "w-14 items-stretch" : "w-56"
       }`}
@@ -757,8 +863,16 @@ export function NavRail(props: NavRailProps) {
           type="button"
           data-testid="sidebar-collapse"
           onClick={() => onCollapsed(!collapsed)}
-          title={`${collapsed ? "Show" : "Collapse"} the sidebar (${keyLabel("B")})`}
-          aria-label={collapsed ? "Show the sidebar" : "Collapse the sidebar"}
+          title={
+            collapsed
+              ? i18n._("Show the sidebar ({keys})", { keys: keyLabel("B") })
+              : i18n._("Collapse the sidebar ({keys})", { keys: keyLabel("B") })
+          }
+          aria-label={
+            collapsed
+              ? i18n._("Show the sidebar")
+              : i18n._("Collapse the sidebar")
+          }
           aria-expanded={!collapsed}
           className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
         >

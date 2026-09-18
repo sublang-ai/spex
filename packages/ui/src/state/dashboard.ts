@@ -6,6 +6,8 @@
 // summons of its own, so every dot, badge and row says the same thing
 // and clears on the same act (DR-066).
 
+import { i18n } from "../i18n.js";
+
 /** The attention kinds a session's mark can wear, worst first: every
  * one of them names an act the reader can reach (dashboard-53). */
 export type AttentionKind = "failure" | "question" | "finish" | "review";
@@ -36,10 +38,13 @@ export const ATTENTION_MARK_CLASS: Record<AttentionKind, string> = {
   review: "bg-amber-500",
 };
 
-/** What a project's mark says, in its worst entry's own words. */
-export const PROJECT_ATTENTION_WORDS: Record<AttentionKind, string> = {
-  failure: "failed",
-  question: "is waiting for your reply",
-  finish: "is waiting for your verdict",
-  review: "has an unread turn",
+/** What a project's mark says, in its worst entry's own words: one
+ * whole sentence per kind, never a fragment another surface completes
+ * (localization-4). Each is a thunk, never a string, because a table
+ * read at module load would freeze the language it was imported in. */
+export const PROJECT_ATTENTION_WORDS: Record<AttentionKind, () => string> = {
+  failure: () => i18n._("A session failed"),
+  question: () => i18n._("A session is waiting for your reply"),
+  finish: () => i18n._("A session is waiting for your verdict"),
+  review: () => i18n._("A session has an unread turn"),
 };

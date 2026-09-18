@@ -10,6 +10,7 @@
 
 import type { MachineGraph, MachineGraphNode } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import type {
   MachineFrame,
   MachineLayout,
@@ -71,7 +72,15 @@ export function stateCaption(
   frame: MachineFrame,
 ): { text: string; role?: string } | undefined {
   const call = [...frame.calls].reverse().find((c) => c.stateId === node.id);
-  if (call) return { text: `call /${call.playbookId}` };
+  if (call) {
+    return {
+      text: i18n._({
+        id: "call /{playbookId}",
+        values: { playbookId: call.playbookId },
+        comment: "caption on a state box: the workflow this state called",
+      }),
+    };
+  }
   const player =
     frame.activePlayer && frame.activePlayer.stateId === node.id
       ? frame.activePlayer

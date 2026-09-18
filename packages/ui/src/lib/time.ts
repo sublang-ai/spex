@@ -49,6 +49,15 @@ export function compactAge(at: number, now: number): string {
   return i18n._("age.weeks", { weeks: Math.round(days / 7) }, { message: "{weeks}w", comment: "compact age in tight chrome: that many weeks ago" });
 }
 
+/** The same age for a phrase that already says it is an age — "since
+ * {age}", "for {age}" — so a caller never strips "ago" back off a
+ * translated text, which only English spells that way
+ * (localization-4). */
+export function ageSpan(at: number, now: number): string {
+  const seconds = Math.max(0, Math.round((now - at) / 1000));
+  return seconds < 60 ? i18n._("just now") : compactAge(at, now);
+}
+
 /** A span in words: "<1s", "12s", "3m 12s", "2h 5m" — every span the
  * app shows, a tool call's included, so milliseconds never reach the
  * reader. */

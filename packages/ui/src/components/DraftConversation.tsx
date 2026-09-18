@@ -19,6 +19,7 @@ import type {
 import type { CaptainLine, TranscriptSegment } from "../state/reducer.js";
 import { AUTHOR_PLAYER, type DraftView } from "../state/store.js";
 import { splitDirectives, type TextPart } from "../lib/directives.js";
+import { i18n } from "../i18n.js";
 import { absoluteTitle, duration } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { usePopover } from "../lib/usePopover.js";
@@ -29,7 +30,7 @@ import {
   ComposerBox,
   ComposerCaption,
   ComposerField,
-  SEND_KEYS,
+  sendKeys,
 } from "./Composer.js";
 import { Icon } from "./Icon.js";
 import { Markdown } from "./Markdown.js";
@@ -39,15 +40,20 @@ import { RunningMark } from "./RunningMark.js";
 const RENDER_WINDOW = 200;
 
 /** The starter chips an empty thread offers (playbook-library-54):
- * each places its text in the field without sending. */
-export const STARTER_CHIPS = [
-  "Describe a workflow",
-  "Adapt a SKILL.md",
-  "Show me an example",
-] as const;
+ * each places its text in the field without sending. Each is a thunk,
+ * never a string: a table read at module load would freeze the
+ * language the module was imported in (localization-4). */
+export const STARTER_CHIPS: readonly (() => string)[] = [
+  () => i18n._("Describe a workflow"),
+  () => i18n._("Adapt a SKILL.md"),
+  () => i18n._("Show me an example"),
+];
 
-export const EMPTY_THREAD_CAPTION =
-  "Tell the agent what the playbook does, who does what, and when it is done";
+export function emptyThreadCaption(): string {
+  return i18n._(
+    "Tell the agent what the playbook does, who does what, and when it is done",
+  );
+}
 
 type ThreadEntry =
   | { kind: "line"; seq: number; line: CaptainLine }
@@ -89,7 +95,7 @@ function SystemTurn({ text, at }: { text: string; at: number }) {
       <SystemLine text={`◇ ${first}`} title={absoluteTitle(at)} />
       {more ? (
         <details className="pl-4 text-xs text-neutral-500">
-          <summary className="cursor-pointer select-none">Show the message</summary>
+          <summary className="cursor-pointer select-none">{i18n._("Show the message")}</summary>
           <pre className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] font-mono">
             {more}
           </pre>
@@ -118,8 +124,9 @@ function DirectiveCard({
         <pre className="whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-xs text-neutral-700 dark:text-neutral-300">
           {part.body}
         </pre>
+        {/* Why the block would not parse is the reader's diagnostic. */}
         <span className="text-xs text-amber-800 dark:text-amber-200" title={part.error}>
-          Spex could not read this block
+          {i18n._("Spex could not read this block")}
         </span>
       </div>
     );
@@ -131,7 +138,7 @@ function DirectiveCard({
         data-kind="compile"
         className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium dark:border-neutral-700 dark:bg-neutral-900"
       >
-        Asked to compile
+        {i18n._("Asked to compile")}
       </div>
     );
   }
@@ -143,14 +150,14 @@ function DirectiveCard({
       className="flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">Proposed registration</span>
+        <span className="font-medium">{i18n._("Proposed registration")}</span>
         <button
           type="button"
           data-testid="open-register"
           onClick={onOpenRegister}
           className="ml-auto rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          Open Register
+          {i18n._("Open Register")}
         </button>
       </div>
       <div className="font-mono text-xs">/{proposal.command}</div>
@@ -162,7 +169,9 @@ function DirectiveCard({
             <span aria-hidden="true" className="text-neutral-400">
               →
             </span>
-            <span className="sr-only">answered by</span>
+            {/* Spoken between the role and its player, where the arrow
+                beside it says nothing (playbook-library-53). */}
+            <span className="sr-only">{i18n._({ id: "answered by", comment: "follows a role name, before the player that answers it" })}</span>
             <span>{playerId}</span>
           </li>
         ))}
@@ -226,9 +235,12 @@ function AgentPicker({
   const disabled = draft.activity === "turn";
   const readinessOf = (adapter: string) =>
     readiness.find((entry) => entry.adapter === adapter);
-  const name = draft.player ?? "Captain";
+  // A player answers under its own lane id; the Captain answers under
+  // its name.
+  const captainName = i18n._({ id: "Captain", comment: "the session's controlling agent, by name" });
+  const name = draft.player ?? captainName;
   const options: { id: string | null; name: string; agent: AgentSummary }[] = [
-    { id: null, name: "Captain", agent: captain ?? draft.agent },
+    { id: null, name: captainName, agent: captain ?? draft.agent },
     ...players.map((player) => ({ id: player.id, name: player.id, agent: player.agent })),
   ];
 
@@ -253,8 +265,8 @@ function AgentPicker({
         disabled={disabled}
         title={
           disabled
-            ? "Waits for the reply — the agent switches on the next turn"
-            : "Choose which agent answers"
+            ? i18n._("Waits for the reply — the agent switches on the next turn")
+            : i18n._("Choose which agent answers")
         }
         onClick={() => setOpen((current) => !current)}
         className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-semibold hover:bg-neutral-100 disabled:opacity-60 disabled:hover:bg-transparent dark:hover:bg-neutral-800"
@@ -277,7 +289,7 @@ function AgentPicker({
         <div
           ref={rootRef}
           role="menu"
-          aria-label="Answering agent"
+          aria-label={i18n._("Answering agent")}
           data-testid="agent-picker"
           className="absolute left-0 top-full z-20 mt-1 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-0.5 rounded-lg border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
         >
@@ -378,20 +390,21 @@ export function DraftConversation({
 
   // What holds Send: an unreadable draft (playbook-library-70), else an
   // agent that is not ready (playbook-library-55).
+  // What the adapter itself requires is the core's own sentence.
   const requirement = draft.diagnostic
-    ? "Unreadable draft — delete it, or repair the file and restart Spex"
+    ? i18n._("Unreadable draft — delete it, or repair the file and restart Spex")
     : draft.ready === false
       ? (readinessOf(draft.agent.adapter)?.requirement ??
-        `${draft.agent.adapter} is not ready — check Settings`)
+        i18n._("{adapter} is not ready — check Settings", { adapter: draft.agent.adapter }))
       : undefined;
   const busyKind = turnRunning ? "reply" : compiling ? "compile" : undefined;
   const placeholder = !connected
-    ? "Connecting…"
+    ? i18n._({ id: "Connecting…", comment: "the page is reaching for the core" })
     : busyKind === "reply"
-      ? "Sends after the reply…"
+      ? i18n._("Sends after the reply…")
       : busyKind === "compile"
-        ? "Sends after the compile…"
-        : "Describe the playbook…";
+        ? i18n._("Sends after the compile…")
+        : i18n._("Describe the playbook…");
 
   function submit(): void {
     const trimmed = composerText.trim();
@@ -433,13 +446,15 @@ export function DraftConversation({
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {turnRunning ? (
               <>
-                <RunningMark running data-testid="draft-running" title="Working" />
+                <RunningMark running data-testid="draft-running" title={i18n._({ id: "Working", comment: "the draft's agent has a turn in flight" })} />
                 <span
                   data-testid="draft-working"
-                  title={since !== undefined ? `Working since ${absoluteTitle(since)}` : undefined}
+                  title={since !== undefined ? i18n._("Working since {moment}", { moment: absoluteTitle(since) }) : undefined}
                   className="whitespace-nowrap text-xs text-neutral-500 dark:text-neutral-400"
                 >
-                  working{since !== undefined ? ` · ${duration(now - since)}` : "…"}
+                  {since !== undefined
+                    ? i18n._("working · {span}", { span: duration(now - since) })
+                    : i18n._({ id: "working…", comment: "a turn is in flight, its span not yet known" })}
                 </span>
               </>
             ) : null}
@@ -462,7 +477,7 @@ export function DraftConversation({
               </div>
             ) : null}
             {draftView?.loading && entries.length === 0 ? (
-              <div className="m-auto text-xs text-neutral-500">Loading the conversation…</div>
+              <div className="m-auto text-xs text-neutral-500">{i18n._("Loading the conversation…")}</div>
             ) : null}
             {entries.length > windowSize ? (
               <button
@@ -473,8 +488,10 @@ export function DraftConversation({
                 }}
                 className="text-center text-xs text-neutral-500 hover:text-brand-500"
               >
-                Show {Math.min(RENDER_WINDOW, entries.length - windowSize)} of{" "}
-                {entries.length - windowSize} earlier entries
+                {i18n._("Show {shown} of {total} earlier entries", {
+                  shown: Math.min(RENDER_WINDOW, entries.length - windowSize),
+                  total: entries.length - windowSize,
+                })}
               </button>
             ) : null}
             {shown.map((entry) =>
@@ -497,13 +514,13 @@ export function DraftConversation({
             )}
             {empty ? (
               <div className="m-auto text-xs text-neutral-500">
-                The agent's replies land here.
+                {i18n._("The agent's replies land here.")}
               </div>
             ) : null}
           </div>
           {newBelow ? (
             <button type="button" onClick={jump} className={jumpPillClasses()}>
-              ↓ Latest
+              {i18n._({ id: "↓ Latest", comment: "jump to the newest entry; the arrow is part of the pill" })}
             </button>
           ) : null}
         </div>
@@ -521,8 +538,8 @@ export function DraftConversation({
               type="button"
               onClick={onDismissError}
               className="flex h-6 w-6 items-center justify-center rounded text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900"
-              title="Dismiss"
-              aria-label="Dismiss error"
+              title={i18n._({ id: "Dismiss", comment: "close the error strip above the composer" })}
+              aria-label={i18n._("Dismiss error")}
             >
               <Icon name="close" className="h-3.5 w-3.5" />
             </button>
@@ -533,9 +550,9 @@ export function DraftConversation({
             data-testid="draft-starters"
             className="flex flex-col gap-1.5 px-1 text-xs text-neutral-500 dark:text-neutral-400"
           >
-            <span>{EMPTY_THREAD_CAPTION}</span>
+            <span>{emptyThreadCaption()}</span>
             <div className="flex flex-wrap gap-1.5">
-              {STARTER_CHIPS.map((starter) => (
+              {STARTER_CHIPS.map((chip) => chip()).map((starter) => (
                 <button
                   key={starter}
                   type="button"
@@ -566,7 +583,7 @@ export function DraftConversation({
               >
                 <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</span>
                 <span className="mt-0.5 text-xs text-neutral-500">
-                  {busyKind === "compile" ? "sends after the compile" : "sends after the reply"}
+                  {busyKind === "compile" ? i18n._("sends after the compile") : i18n._("sends after the reply")}
                 </span>
               </div>
             ))}
@@ -590,7 +607,7 @@ export function DraftConversation({
               disabled={!connected}
             />
           }
-          caption={<ComposerCaption hint={requirement ?? "Enter sends"} />}
+          caption={<ComposerCaption hint={requirement ?? i18n._("Enter sends")} />}
           actions={
             <>
               {turnRunning ? (
@@ -603,10 +620,10 @@ export function DraftConversation({
                     fieldRef.current?.focus();
                   }}
                   disabled={aborting || !connected}
-                  title={!connected ? "Not connected" : "Ends the turn; the transcript keeps what it got"}
+                  title={!connected ? i18n._({ id: "Not connected", comment: "why a control is held: the page has no core" }) : i18n._("Ends the turn; the transcript keeps what it got")}
                   className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
                 >
-                  {aborting ? "Aborting…" : "Abort"}
+                  {aborting ? i18n._({ id: "Aborting…", comment: "the abort request is in flight" }) : i18n._({ id: "Abort", comment: "end the running turn now" })}
                 </button>
               ) : null}
               <button
@@ -621,13 +638,17 @@ export function DraftConversation({
                 }
                 title={
                   !connected
-                    ? "Not connected"
+                    ? i18n._({ id: "Not connected", comment: "why a control is held: the page has no core" })
                     : (requirement ??
-                      (busyKind ? `Sends after the ${busyKind} · ${SEND_KEYS}` : SEND_KEYS))
+                      (busyKind === "compile"
+                        ? i18n._("Sends after the compile · {keys}", { keys: sendKeys() })
+                        : busyKind === "reply"
+                          ? i18n._("Sends after the reply · {keys}", { keys: sendKeys() })
+                          : sendKeys()))
                 }
                 className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
               >
-                {sending ? "Sending…" : busyKind ? "Send next" : "Send"}
+                {sending ? i18n._({ id: "Sending…", comment: "the message is going out" }) : busyKind ? i18n._({ id: "Send next", comment: "queue this message behind the work in flight" }) : i18n._({ id: "Send", comment: "send the composed message" })}
               </button>
             </>
           }

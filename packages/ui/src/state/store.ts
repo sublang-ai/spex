@@ -39,7 +39,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { SpexClient, defaultCoreUrl, type ConnectionStatus } from "../lib/client.js";
-import { activateLanguage } from "../i18n.js";
+import { activateLanguage, i18n } from "../i18n.js";
 import { currentSessionOf } from "../lib/sessions.js";
 import type { SpecEditorState } from "../lib/spec-view-model.js";
 import {
@@ -552,15 +552,25 @@ function permissionAsFailure(record: FoldedRecord): FoldedRecord {
   if (record.type !== "player_event") return record;
   const event = (record as { event?: { type?: string; payload?: { toolName?: string; reason?: string } } }).event;
   if (event?.type !== "permission_request") return record;
-  const tool = event.payload?.toolName ?? "a tool";
-  const reason = event.payload?.reason ? ` — ${event.payload.reason}` : "";
+  const tool = event.payload?.toolName ?? i18n._("a tool");
+  const reason = event.payload?.reason;
   return {
     ...record,
     event: {
       ...event,
       type: "error",
       payload: {
-        message: `Asked permission to use ${tool}${reason}; Spex answers no permission request, so the agent's own default decided`,
+        // One whole line per case, never a translated stem with the
+        // runtime's reason glued on (localization-4).
+        message: reason
+          ? i18n._(
+              "Asked permission to use {tool} — {reason}; Spex answers no permission request, so the agent's own default decided",
+              { tool, reason },
+            )
+          : i18n._(
+              "Asked permission to use {tool}; Spex answers no permission request, so the agent's own default decided",
+              { tool },
+            ),
         recoverable: true,
       },
     },
@@ -677,7 +687,7 @@ const backfilling = new Map<
 const draftBackfilling = new Map<string, DraftRecord[]>();
 
 export function getClient(): SpexClient {
-  if (!client) throw new Error("client not connected");
+  if (!client) throw new Error(i18n._("client not connected"));
   return client;
 }
 
@@ -773,7 +783,12 @@ export const useAppStore = create<AppState>((set, get) => {
       .catch((cause: Error) => {
         const current = get().composers[sessionId] ?? {queued: []};
         set({composers: {...get().composers, [sessionId]: {...current, queued:[next, ...current.queued]}}});
-        setRunError(sessionId, `queued submission failed: ${cause.message}`);
+        setRunError(
+          sessionId,
+          i18n._("queued submission failed: {reason}", {
+            reason: cause.message,
+          }),
+        );
       })
       .finally(() => queuedInFlight.delete(sessionId));
   }
@@ -836,7 +851,9 @@ export const useAppStore = create<AppState>((set, get) => {
     } catch (cause) {
       const failed = get().views[sessionId];
       if (backfilling.get(sessionId) !== pending) return;
-      const message = `transcript could not be loaded: ${(cause as Error).message}`;
+      const message = i18n._("transcript could not be loaded: {reason}", {
+        reason: (cause as Error).message,
+      });
       if (failed) {
         failed.loading = false;
         failed.loadError = message;
@@ -924,7 +941,9 @@ export const useAppStore = create<AppState>((set, get) => {
           [draftId]: {
             ...view,
             loading: false,
-            loadError: `The conversation could not be loaded: ${(cause as Error).message}`,
+            loadError: i18n._("The conversation could not be loaded: {reason}", {
+              reason: (cause as Error).message,
+            }),
           },
         },
       });
@@ -1301,7 +1320,9 @@ export const useAppStore = create<AppState>((set, get) => {
               .then(() => set({ refreshError: undefined }))
               .catch((cause: Error) =>
                 set({
-                  refreshError: `app state failed to load: ${cause.message}`,
+                  refreshError: i18n._("app state failed to load: {reason}", {
+                    reason: cause.message,
+                  }),
                 }),
               );
           }
@@ -1488,7 +1509,10 @@ export const useAppStore = create<AppState>((set, get) => {
         // the user's back (projects-1, projects-22).
         if (/not the root of a git work tree/.test((cause as Error).message)) {
           throw new Error(
-            `${path} is not the root of a git work tree. To start a new repository there, use Create instead.`,
+            i18n._(
+              "{path} is not the root of a git work tree. To start a new repository there, use Create instead.",
+              { path },
+            ),
           );
         }
         throw cause;
@@ -1708,7 +1732,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async deleteSession(sessionId: string): Promise<void> {
       const session = get().sessions.find((s) => s.id === sessionId);
-      if (session?.externalWriter) throw new Error("Session ownership must be idle before deleting it.");
+      if (session?.externalWriter) {
+        throw new Error(
+          i18n._("Session ownership must be idle before deleting it."),
+        );
+      }
       await getClient().command("session.delete", { sessionId });
       // The broadcast follows; the reply is proof enough to forget it.
       if (session) get().forgetSession(sessionId, session.projectId);
@@ -1716,7 +1744,9 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async recoverSession(sessionId: string, action: "retry" | "discard"): Promise<void> {
       if (get().sessions.find((session) => session.id === sessionId)?.externalWriter) {
-        throw new Error("Session ownership must be idle before recovery.");
+        throw new Error(
+          i18n._("Session ownership must be idle before recovery."),
+        );
       }
       if (action === "retry") {
         await getClient().command("session.retry", { sessionId });
@@ -1760,9 +1790,15 @@ export const useAppStore = create<AppState>((set, get) => {
     ): Promise<void> {
       const state = get();
       const session = state.sessions.find((s) => s.id === sessionId);
-      if (session?.externalWriter) throw new Error("Session ownership must be idle before sending a message.");
+      if (session?.externalWriter) {
+        throw new Error(
+          i18n._("Session ownership must be idle before sending a message."),
+        );
+      }
       if (session?.recovery && !session.turnActive) {
-        throw new Error("Recover the interrupted turn before sending another message.");
+        throw new Error(
+          i18n._("Recover the interrupted turn before sending another message."),
+        );
       }
       try {
         if (session && !session.live) await ensureSubscribed(sessionId);
@@ -1783,9 +1819,15 @@ export const useAppStore = create<AppState>((set, get) => {
     async submitBossText(sessionId: string, text: string): Promise<void> {
       const state = get();
       const session = state.sessions.find((s) => s.id === sessionId);
-      if (session?.externalWriter) throw new Error("Session ownership must be idle before sending a message.");
+      if (session?.externalWriter) {
+        throw new Error(
+          i18n._("Session ownership must be idle before sending a message."),
+        );
+      }
       if (session?.recovery && !session.turnActive) {
-        throw new Error("Recover the interrupted turn before sending another message.");
+        throw new Error(
+          i18n._("Recover the interrupted turn before sending another message."),
+        );
       }
       const view = state.views[sessionId];
       // A staged intent dispatches with the text that carries it
@@ -2029,7 +2071,12 @@ export const useAppStore = create<AppState>((set, get) => {
       try {
         await getClient().command("turn.abort", { sessionId });
       } catch (cause) {
-        setRunError(sessionId, `abort failed: ${(cause as Error).message}`);
+        setRunError(
+          sessionId,
+          i18n._("abort failed: {reason}", {
+            reason: (cause as Error).message,
+          }),
+        );
       }
     },
 
@@ -2066,7 +2113,9 @@ export const useAppStore = create<AppState>((set, get) => {
             ...progress,
             [active.playbookId]: [
               ...(progress[active.playbookId] ?? []),
-              `✗ cancel failed: ${(cause as Error).message}`,
+              i18n._("✗ cancel failed: {reason}", {
+                reason: (cause as Error).message,
+              }),
             ],
           },
         });
@@ -2120,7 +2169,12 @@ export const useAppStore = create<AppState>((set, get) => {
       try {
         await getClient().command("draft.abort", { draftId });
       } catch (cause) {
-        setDraftError(draftId, `abort failed: ${(cause as Error).message}`);
+        setDraftError(
+          draftId,
+          i18n._("abort failed: {reason}", {
+            reason: (cause as Error).message,
+          }),
+        );
       }
     },
 
@@ -2189,7 +2243,12 @@ export const useAppStore = create<AppState>((set, get) => {
       try {
         await getClient().command("compile.abort", { playbookId: draftId });
       } catch (cause) {
-        setDraftError(draftId, `cancel failed: ${(cause as Error).message}`);
+        setDraftError(
+          draftId,
+          i18n._("cancel failed: {reason}", {
+            reason: (cause as Error).message,
+          }),
+        );
       }
     },
 
@@ -2310,7 +2369,7 @@ export const useAppStore = create<AppState>((set, get) => {
         // Compiles legitimately run for minutes: no client timeout
         // (DR-010 §5) — a dropped socket still rejects the call.
         await getClient().command("compile.run", input, { timeoutMs: 0 });
-        appendLine("✓ compiled and registered — see Configured playbooks");
+        appendLine(i18n._("✓ compiled and registered — see Configured playbooks"));
         set({ activeCompile: { playbookId, running: false, ok: true } });
       } catch (cause) {
         const error = cause as { code?: string; message: string };

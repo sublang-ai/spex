@@ -15,6 +15,7 @@ import { useState, type RefObject } from "react";
 import type { SessionAgentSettings } from "@sublang/spex-core/protocol";
 
 import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
+import { i18n } from "../i18n.js";
 import { usePopover } from "../lib/usePopover.js";
 import { useFitInBox } from "../lib/popover-fit.js";
 import {
@@ -22,8 +23,25 @@ import {
   effectiveSettings,
   type SessionAgent,
 } from "../lib/session-agents.js";
-import { FAST_MODE_MARK } from "./AgentChip.js";
+import { FAST_MODE_MARK, fastModeWord } from "./AgentChip.js";
 import { TuningField } from "./TuningField.js";
+
+/** What this conversation's own choice departs from, named where the
+ * chip and its editor both say it (run-view-138/139). */
+function changedForThisConversation(): string {
+  return i18n._({
+    id: "changed for this conversation",
+    comment: "an agent's setting departs from the configured one, for this session only",
+  });
+}
+
+/** What the editor inherits from when nothing is pinned here. */
+function fromSettings(): string {
+  return i18n._({
+    id: "from Settings",
+    comment: "tuning choice: take the value the Settings surface configured",
+  });
+}
 
 /** One agent's change, in the tri-state the config's own bindings use:
  * a value pins, `false` takes the provider's default, `null` clears
@@ -67,8 +85,10 @@ export function AgentChipButton({
       data-testid={`agent-chip-${agent.id}`}
       data-changed={changed ? "true" : undefined}
       aria-expanded={open}
-      aria-label={`${agent.name} settings: ${reading}${fastMode ? ", fast mode" : ""}${changed ? ", changed for this conversation" : ""}`}
-      title={`${reading}${changed ? " — changed for this conversation" : ""}`}
+      // The name is the agent's own, its reading a run of ids, and the
+      // clauses below whole phrases: only punctuation joins them.
+      aria-label={`${i18n._("{name} settings: {reading}", { name: agent.name, reading })}${fastMode ? `, ${fastModeWord()}` : ""}${changed ? `, ${changedForThisConversation()}` : ""}`}
+      title={`${reading}${changed ? ` — ${changedForThisConversation()}` : ""}`}
       className={`flex min-h-6 min-w-0 max-w-full items-center rounded px-1.5 py-0.5 text-xs whitespace-nowrap hover:bg-neutral-200 dark:hover:bg-neutral-700 ${
         changed
           ? "bg-neutral-100 text-neutral-700 ring-1 ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-200 dark:ring-neutral-500"
@@ -78,7 +98,7 @@ export function AgentChipButton({
     >
       <span className="min-w-0 truncate">{reading}</span>
       {fastMode ? (
-        <span data-testid={`agent-fast-mode-${agent.id}`} aria-hidden title="fast mode" className="ml-1 text-amber-500">
+        <span data-testid={`agent-fast-mode-${agent.id}`} aria-hidden title={fastModeWord()} className="ml-1 text-amber-500">
           {FAST_MODE_MARK}
         </span>
       ) : null}
@@ -132,24 +152,24 @@ export function AgentSettingsPopover({
       ref={boxRef}
       data-testid={`agent-settings-${agent.id}`}
       role="dialog"
-      aria-label={`${agent.name} settings for this conversation`}
+      aria-label={i18n._("{name} settings for this conversation", { name: agent.name })}
       className={`absolute ${side === "left" ? "left-0" : "right-0"} top-7 z-20 flex max-h-[min(26rem,calc(100vh-4rem))] w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900`}
     >
       <div>
         <p className="text-xs font-semibold">{agent.name}</p>
-        <p data-testid={`agent-scope-${agent.id}`} className="text-xs text-neutral-500 dark:text-neutral-400">This conversation only</p>
+        <p data-testid={`agent-scope-${agent.id}`} className="text-xs text-neutral-500 dark:text-neutral-400">{i18n._("This conversation only")}</p>
       </div>
 
       {readOnly ? (
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          This conversation is in use elsewhere — its settings read only.
+          {i18n._("This conversation is in use elsewhere — its settings read only.")}
         </p>
       ) : null}
 
       <TuningField
         label="model"
         testIdPrefix={`agent-${agent.id}`}
-        inheritLabel="from Settings"
+        inheritLabel={fromSettings()}
         value={draft.model}
         playerDefault={agent.configured.model}
         models={models}
@@ -158,7 +178,7 @@ export function AgentSettingsPopover({
       <TuningField
         label="effort"
         testIdPrefix={`agent-${agent.id}`}
-        inheritLabel="from Settings"
+        inheritLabel={fromSettings()}
         value={draft.effort}
         playerDefault={agent.configured.effort}
         efforts={tuning.efforts}
@@ -167,7 +187,7 @@ export function AgentSettingsPopover({
       />
       {(adapterFastMode === true || draft.fastMode != null || effectiveFastMode) && (
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-neutral-500 dark:text-neutral-400">fast mode</span>
+          <span className="text-neutral-500 dark:text-neutral-400">{fastModeWord()}</span>
           <select
             data-testid={`agent-${agent.id}-fast-mode`}
             value={draft.fastMode == null ? "inherit" : draft.fastMode ? "on" : "off"}
@@ -177,13 +197,17 @@ export function AgentSettingsPopover({
             }))}
             className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
           >
-            <option value="inherit">from Settings ({agent.configured.fastMode ? "on" : "off"})</option>
+            {/* Each choice is one whole phrase: what it inherits, or
+                what it pins and how the runtime stands toward it. */}
+            <option value="inherit">{agent.configured.fastMode ? i18n._("from Settings (on)") : i18n._("from Settings (off)")}</option>
             {adapterFastMode === true && (tuning.fastModeSupported !== false || draft.fastMode === true) && (
-              <option value="on">On{tuning.fastModeSupported === false ? " (unsupported)" : ""}</option>
+              <option value="on">{tuning.fastModeSupported === false ? i18n._("On (unsupported)") : i18n._({ id: "On", comment: "fast mode is pinned on" })}</option>
             )}
-            {adapterFastMode === true && <option value="off">Off</option>}
+            {adapterFastMode === true && <option value="off">{i18n._({ id: "Off", comment: "fast mode is pinned off" })}</option>}
             {adapterFastMode !== true && draft.fastMode != null && (
-              <option value={draft.fastMode ? "on" : "off"}>{draft.fastMode ? "On" : "Off"} ({adapterFastMode === false ? "unsupported" : "current"})</option>
+              <option value={draft.fastMode ? "on" : "off"}>{draft.fastMode
+                ? (adapterFastMode === false ? i18n._("On (unsupported)") : i18n._("On (current)"))
+                : (adapterFastMode === false ? i18n._("Off (unsupported)") : i18n._("Off (current)"))}</option>
             )}
           </select>
         </label>
@@ -191,23 +215,24 @@ export function AgentSettingsPopover({
 
       {agent.divergentRoles.length > 0 ? (
         <p data-testid={`agent-roles-${agent.id}`} className="text-xs text-brand-700 dark:text-brand-300">
-          Also sets {agent.divergentRoles.join(", ")}
+          {i18n._("Also sets {positions}", { positions: agent.divergentRoles.join(", ") })}
         </p>
       ) : null}
 
-      {discovery.loading && <p className="text-xs text-neutral-500">Loading model options…</p>}
+      {discovery.loading && <p className="text-xs text-neutral-500">{i18n._("Loading model options…")}</p>}
+      {/* Why the runtime could not list its models is its own words. */}
       {unavailable !== undefined && (
         <p className="text-xs text-neutral-500">
-          Model list unavailable: {unavailable}{" "}
+          {i18n._("Model list unavailable: {reason}", { reason: unavailable })}{" "}
           <button type="button" data-testid={`agent-${agent.id}-refresh`} onClick={discovery.refresh} className="underline">
-            Refresh models
+            {i18n._("Refresh models")}
           </button>
         </p>
       )}
-      {!tuning.effortKnown && <p className="text-xs text-neutral-500">Effort options apply to the adapter; support for this model is unverified.</p>}
-      {invalidFastMode && <p role="alert" className="text-xs text-red-600">{adapterFastMode === false ? "Clear the fast-mode choice; this adapter does not accept it." : "Turn off fast mode for this model."}</p>}
-      {invalidEffort && <p role="alert" className="text-xs text-red-600">Choose a listed effort, take the configured value, or use the provider default.</p>}
-      {invalidModel && <p role="alert" className="text-xs text-red-600">Enter a model ID, take the configured value, or use the provider default.</p>}
+      {!tuning.effortKnown && <p className="text-xs text-neutral-500">{i18n._("Effort options apply to the adapter; support for this model is unverified.")}</p>}
+      {invalidFastMode && <p role="alert" className="text-xs text-red-600">{adapterFastMode === false ? i18n._("Clear the fast-mode choice; this adapter does not accept it.") : i18n._("Turn off fast mode for this model.")}</p>}
+      {invalidEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed effort, take the configured value, or use the provider default.")}</p>}
+      {invalidModel && <p role="alert" className="text-xs text-red-600">{i18n._("Enter a model ID, take the configured value, or use the provider default.")}</p>}
 
       {error ? <p role="alert" data-testid={`agent-error-${agent.id}`} className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
 
@@ -220,7 +245,7 @@ export function AgentSettingsPopover({
               onClick={() => setDraft({})}
               className="mr-auto min-h-6 rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
-              Use default
+              {i18n._({ id: "Use default", comment: "drop this conversation's own settings and take the configured ones" })}
             </button>
           ) : null}
           <button
@@ -228,7 +253,7 @@ export function AgentSettingsPopover({
             onClick={onClose}
             className="min-h-6 rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            Cancel
+            {i18n._({ id: "Cancel", comment: "leave an editor without saving" })}
           </button>
           <button
             type="button"
@@ -247,7 +272,7 @@ export function AgentSettingsPopover({
             }}
             className="min-h-6 rounded bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-50"
           >
-            {busy ? "Saving…" : "Save"}
+            {busy ? i18n._({ id: "Saving…", comment: "a save is in flight" }) : i18n._({ id: "Save", comment: "commit the edits in this editor" })}
           </button>
         </div>
       )}

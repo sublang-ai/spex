@@ -18,6 +18,8 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { duration } from "../lib/time.js";
+import { i18n } from "../i18n.js";
+import { Rich } from "./Rich.js";
 import {
   QueuedMark,
   queueAfterLinkPhrase,
@@ -31,9 +33,13 @@ export function intentTitle(intent: IntentInfo): string {
 
 const SOURCE_LABEL: Record<IntentSource["kind"], (ref: string) => string> = {
   issue: (ref) => `#${ref}`,
-  pr: (ref) => `PR ${ref}`,
+  pr: (ref) => i18n._("PR {ref}", { ref }),
   record: (ref) => ref,
-  chat: () => "chat",
+  chat: () =>
+    i18n._({
+      id: "chat",
+      comment: "provenance chip: captured from a conversation",
+    }),
 };
 
 /** The intent's provenance chip: the source ref as the label, the raw
@@ -52,7 +58,15 @@ export function SourceChip({
 }) {
   if (!source) return null;
   const label = SOURCE_LABEL[source.kind](source.ref);
-  const tooltip = `${source.kind} ${source.ref}${source.url ? ` — ${source.url}` : ""}`;
+  // The raw kind and ref are machine identifiers; only the frame
+  // around them is a text.
+  const tooltip = source.url
+    ? i18n._("{kind} {ref} — {url}", {
+        kind: source.kind,
+        ref: source.ref,
+        url: source.url,
+      })
+    : i18n._("{kind} {ref}", { kind: source.kind, ref: source.ref });
   const base =
     "inline-flex max-w-full items-center truncate rounded-full border px-1.5 text-xs font-medium";
   if (source.url) {
@@ -98,10 +112,16 @@ export function statsLine(stats?: IntentStats): string | undefined {
   const parts: string[] = [];
   if (stats.reviewRounds) {
     parts.push(
-      `${stats.reviewRounds} review round${stats.reviewRounds === 1 ? "" : "s"}`,
+      i18n._("{count, plural, one {# review round} other {# review rounds}}", {
+        count: stats.reviewRounds,
+      }),
     );
   }
-  parts.push(`${stats.turns} turn${stats.turns === 1 ? "" : "s"}`);
+  parts.push(
+    i18n._("{count, plural, one {# turn} other {# turns}}", {
+      count: stats.turns,
+    }),
+  );
   if (stats.elapsedMs !== undefined) parts.push(duration(stats.elapsedMs));
   return parts.join(" · ");
 }
@@ -145,7 +165,7 @@ export function DeliveryCard({
   const stats = statsLine(derived.stats);
   const inertTitle = live
     ? undefined
-    : "This session has ended — the replay is read-only";
+    : i18n._("This session has ended — the replay is read-only");
   const publishedNext = next?.next ? next : undefined;
   const blockedQueued = !publishedNext && blocked?.blockedBy ? blocked : undefined;
   const queued = publishedNext ?? blockedQueued;
@@ -179,7 +199,7 @@ export function DeliveryCard({
       >
         <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
           <span className="min-w-0 truncate" title={derived.intent.text}>
-            Settled — {title}
+            {i18n._("Settled — {title}", { title })}
           </span>
           <SourceChip source={derived.intent.source} />
         </div>
@@ -197,8 +217,20 @@ export function DeliveryCard({
                 className="min-w-0 truncate text-sm @md:flex-1"
                 title={queued.intent.text}
               >
-                {publishedNext ? "Up next: " : null}
-                <span className="font-medium">{intentTitle(queued.intent)}</span>
+                {publishedNext ? (
+                  // One whole sentence with its emphasis inside it, so
+                  // no text is assembled from fragments (localization-4).
+                  <Rich
+                    text={i18n._("Up next: <0>{title}</0>", {
+                      title: intentTitle(queued.intent),
+                    })}
+                    components={[
+                      <span key="title" className="font-medium" />,
+                    ]}
+                  />
+                ) : (
+                  <span className="font-medium">{intentTitle(queued.intent)}</span>
+                )}
               </span>
               {publishedNext?.next ? (
                 <QueueStandingPhrase
@@ -221,7 +253,9 @@ export function DeliveryCard({
               <button
                 type="button"
                 data-testid="upnext-start"
-                aria-label={`Start ${intentTitle(publishedNext.intent)}`}
+                aria-label={i18n._("Start {title}", {
+                  title: intentTitle(publishedNext.intent),
+                })}
                 disabled={starting || !live}
                 title={inertTitle}
                 onClick={() => {
@@ -232,7 +266,15 @@ export function DeliveryCard({
                 }}
                 className="shrink-0 rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
               >
-                {starting ? "Starting…" : "Start"}
+                {starting
+                  ? i18n._({
+                      id: "Starting…",
+                      comment: "queue row control, busy: the start is in flight",
+                    })
+                  : i18n._({
+                      id: "Start",
+                      comment: "queue row control: begin this queued intent",
+                    })}
               </button>
             ) : null}
           </div>
@@ -258,7 +300,7 @@ export function DeliveryCard({
               disabled={!live}
               title={inertTitle}
               onChange={(event) => setAddText(event.target.value)}
-              placeholder="Nothing queued — name the next intent…"
+              placeholder={i18n._("Nothing queued — name the next intent…")}
               className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm outline-none focus:border-neutral-500 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-950 dark:focus:border-neutral-400"
             />
             <button
@@ -268,7 +310,15 @@ export function DeliveryCard({
               title={inertTitle}
               className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
-              {adding ? "Queuing…" : "Queue"}
+              {adding
+                ? i18n._({
+                    id: "Queuing…",
+                    comment: "capture control, busy: the queue write is in flight",
+                  })
+                : i18n._({
+                    id: "Queue",
+                    comment: "capture control: put this artifact in the queue",
+                  })}
             </button>
           </form>
         )}
@@ -284,7 +334,10 @@ export function DeliveryCard({
     >
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-          Finished
+          {i18n._({
+            id: "Finished",
+            comment: "delivery card heading: the intent's work is delivered",
+          })}
         </span>
         <SourceChip source={derived.intent.source} />
       </div>
@@ -310,7 +363,15 @@ export function DeliveryCard({
           onClick={() => verdict("done")}
           className="rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
-          {busy === "done" ? "Confirming…" : "Confirm"}
+          {busy === "done"
+            ? i18n._({
+                id: "Confirming…",
+                comment: "verdict control, busy: the verdict is in flight",
+              })
+            : i18n._({
+                id: "Confirm",
+                comment: "verdict control: accept the delivered work",
+              })}
         </button>
         <button
           type="button"
@@ -319,11 +380,19 @@ export function DeliveryCard({
           onClick={() => verdict("dropped")}
           className="rounded-md border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
-          {busy === "dropped" ? "Dropping…" : "Drop"}
+          {busy === "dropped"
+            ? i18n._({
+                id: "Dropping…",
+                comment: "verdict control, busy: the verdict is in flight",
+              })
+            : i18n._({
+                id: "Drop",
+                comment: "verdict control: let this work go, unaccepted",
+              })}
         </button>
         {ownsConversation ? (
           <span className="min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-500">
-            A follow-up message continues this intent.
+            {i18n._("A follow-up message continues this intent.")}
           </span>
         ) : null}
       </div>

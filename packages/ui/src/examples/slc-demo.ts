@@ -5,6 +5,12 @@
 // review workflow in its `Roles:` grammar, staged through the compile
 // pipeline and vendored as raw text. Display content owned by the UI —
 // it never touches config, protocol, or the library.
+//
+// Nothing here is a text of the catalog (localization-4): the stages
+// are the vendored workflow, the id, command, intent and roles are the
+// values a prefill writes into a draft, and the title and credit name
+// the example itself. The card's own phrases around them — "Example:
+// {title}", "from {credit}" — are the texts, and live with the card.
 
 import source from "./slc-demo/workflow.txt?raw";
 import normalized from "./slc-demo/workflow.text.md.txt?raw";

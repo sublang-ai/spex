@@ -25,11 +25,13 @@ import {
   citationSummary,
   groupOf,
   itemMatches,
+  GROUP_WORD,
   type CitationModel,
   type ItemLocation,
   type SpecGroup,
   type SpecViewState,
 } from "../lib/spec-view-model.js";
+import { i18n } from "../i18n.js";
 import { Markdown } from "./Markdown.js";
 
 // Group colors keep DR-011's three hues under DR-015's section-kind
@@ -275,7 +277,9 @@ function ItemRow({
           {target}
         </button>
         {notFoundKey === linkKey ? (
-          <span className="text-xs text-neutral-500">not found</span>
+          <span className="text-xs text-neutral-500">
+            {i18n._({ id: "not found", comment: "the cited item is not in this tree" })}
+          </span>
         ) : null}
       </span>
     );
@@ -303,8 +307,8 @@ function ItemRow({
         {onCopy ? (
           <button
             type="button"
-            aria-label={`Copy ${item.id}`}
-            title={`Copy ${item.id}`}
+            aria-label={i18n._("Copy {id}", { id: item.id })}
+            title={i18n._("Copy {id}", { id: item.id })}
             onClick={onCopy}
             className={`cursor-pointer hover:ring-1 hover:ring-neutral-400 dark:hover:ring-neutral-500 ${chipClass}`}
           >
@@ -318,18 +322,18 @@ function ItemRow({
             data-testid={`copied-${item.id}`}
             className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
           >
-            copied
+            {i18n._({ id: "copied", comment: "the item's ID went to the clipboard" })}
           </span>
         ) : null}
         {copyFailed ? (
           <span className="shrink-0 text-xs text-red-600 dark:text-red-400">
-            copy failed
+            {i18n._({ id: "copy failed", comment: "the item's ID could not be copied" })}
           </span>
         ) : null}
         {/* The group word duplicates the chip's color and accessible
             name, so it hides first below @md (spec-view-55). */}
         <span className={`hidden shrink-0 text-xs @md:inline ${GROUP_TEXT[group]}`}>
-          {group}
+          {GROUP_WORD[group]()}
         </span>
         <button
           type="button"
@@ -352,7 +356,7 @@ function ItemRow({
         </button>
         {despiteFilter ? (
           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-            shown despite filter
+            {i18n._("shown despite filter")}
           </span>
         ) : null}
         {/* The row's own action, at its end: the row's hover or a
@@ -362,11 +366,11 @@ function ItemRow({
           <button
             type="button"
             data-testid={`item-edit-${item.id}`}
-            aria-label={`Edit ${item.id} in its file`}
+            aria-label={i18n._("Edit {id} in its file", { id: item.id })}
             onClick={onEdit}
             className={`ml-auto shrink-0 rounded px-1 text-xs opacity-0 focus:opacity-100 group-hover/item:opacity-100 group-focus-within/item:opacity-100 ${LINK_CLASS}`}
           >
-            Edit
+            {i18n._({ id: "Edit", comment: "open this file in the editor" })}
           </button>
         ) : null}
         {editFailure ? (
@@ -409,7 +413,9 @@ function ItemRow({
               <span className="font-mono text-neutral-500">
                 {notFoundKey.slice(`body:${item.id}:`.length)}
               </span>
-              <span className="text-xs text-neutral-500">not found</span>
+              <span className="text-xs text-neutral-500">
+                {i18n._({ id: "not found", comment: "the cited item is not in this tree" })}
+              </span>
             </div>
           ) : null}
           {/* One citations block: the outbound row and the backlink
@@ -422,7 +428,9 @@ function ItemRow({
                   data-testid={`cites-${item.id}`}
                   className="flex items-start gap-2"
                 >
-                  <span className="w-20 shrink-0 text-neutral-500">cites</span>
+                  <span className="w-20 shrink-0 text-neutral-500">
+                    {i18n._({ id: "cites", comment: "row label over the items this one cites" })}
+                  </span>
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                     {item.cites.map(citation)}
                   </span>
@@ -437,7 +445,11 @@ function ItemRow({
                     onClick={() => setInboundOpen((open) => !open)}
                     className="w-20 shrink-0 text-left text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300"
                   >
-                    cited by {inbound.length}
+                    {i18n._({
+                      id: "cited by {in}",
+                      values: { in: inbound.length },
+                      comment: "how many items cite this one",
+                    })}
                   </button>
                   {inboundOpen ? (
                     <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">

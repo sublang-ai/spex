@@ -14,7 +14,7 @@ import type {
   SpecRecordInfo,
 } from "@sublang/spex-core/protocol";
 
-import { currentLocale } from "../i18n.js";
+import { currentLocale, i18n } from "../i18n.js";
 
 export type { SpecGroup };
 
@@ -24,6 +24,18 @@ export const GROUP_ORDER: readonly SpecGroup[] = [
   "internal",
   "test",
 ];
+
+/** A group's word where it stands inside a phrase — the row's label,
+ * a count's accessible name, a filter's title (spec-view-2). A thunk,
+ * never a string: a table read at module load would freeze the
+ * language it was imported in (localization-4). */
+export const GROUP_WORD: Record<SpecGroup, () => string> = {
+  external: () =>
+    i18n._({ id: "external", comment: "item group: External Behavior, inside a phrase" }),
+  internal: () =>
+    i18n._({ id: "internal", comment: "item group: Internal Behavior, inside a phrase" }),
+  test: () => i18n._({ id: "test", comment: "item group: Verification, inside a phrase" }),
+};
 
 // ---------------------------------------------------------------------------
 // View state (lifted to the host so it survives project switches)
@@ -393,10 +405,24 @@ export function citationSummary(
   outbound: number,
   inbound: number,
 ): string | undefined {
-  const parts: string[] = [];
-  if (outbound > 0) parts.push(`cites ${outbound}`);
-  if (inbound > 0) parts.push(`cited by ${inbound}`);
-  return parts.length > 0 ? parts.join(" · ") : undefined;
+  if (outbound > 0 && inbound > 0) {
+    return i18n._("cites {out} · cited by {in}", { out: outbound, in: inbound });
+  }
+  if (outbound > 0) {
+    return i18n._({
+      id: "cites {out}",
+      values: { out: outbound },
+      comment: "how many items this one cites",
+    });
+  }
+  if (inbound > 0) {
+    return i18n._({
+      id: "cited by {in}",
+      values: { in: inbound },
+      comment: "how many items cite this one",
+    });
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -515,14 +541,14 @@ export function searchDigest(
 // Freshness
 // ---------------------------------------------------------------------------
 
-/** "just now" / "2m ago" / "3h ago" / "2d ago" — tiny on purpose,
- * no dependency (DR-011 freshness display). */
+/** "just now" / "2m ago" / "3h ago" / "2d ago" — the age vocabulary of
+ * the house, at this view's own grain (DR-011 freshness display). */
 export function relativeReadTime(readAt: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - readAt) / 1000));
-  if (seconds < 60) return "just now";
+  if (seconds < 60) return i18n._("just now");
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return i18n._("{minutes}m ago", { minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return i18n._("{hours}h ago", { hours });
+  return i18n._("{days}d ago", { days: Math.floor(hours / 24) });
 }

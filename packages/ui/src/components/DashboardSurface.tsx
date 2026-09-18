@@ -11,7 +11,7 @@
 // derived — the surface writes only Boss acts (queue, close) and its
 // reader-owned project disclosure preference.
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type {
   AttentionEntry,
   DerivedIntent,
@@ -24,6 +24,8 @@ import type {
 import { useAppStore } from "../state/store.js";
 import { causePhrase } from "../lib/failure-catalogue.js";
 import { absoluteTitle, duration, relativeAge } from "../lib/time.js";
+import { i18n } from "../i18n.js";
+import { Rich } from "./Rich.js";
 import { RunningMark } from "./RunningMark.js";
 import { QueueStandingPhrase } from "./QueuedIntentPresentation.js";
 import {
@@ -45,12 +47,24 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Human reason labels for attention entries (DR-010 §2): each names
- * the state the entry is in, never a band or an activity. */
-const REASON_LABEL: Record<AttentionEntry["kind"], string> = {
-  question: "needs your reply",
-  failure: "failed",
-  finish: "finished — confirm?",
-  review: "unread turn",
+ * the state the entry is in, never a band or an activity. Each is a
+ * thunk, never a string: a table read at module load would freeze the
+ * language it was imported in (localization-4). */
+const REASON_LABEL: Record<AttentionEntry["kind"], () => string> = {
+  question: () =>
+    i18n._({
+      id: "needs your reply",
+      comment: "attention row: the run parked on a question",
+    }),
+  failure: () =>
+    i18n._({ id: "failed", comment: "a piece of work's state: it failed" }),
+  finish: () =>
+    i18n._({
+      id: "finished — confirm?",
+      comment: "attention row: delivered, a verdict is owed",
+    }),
+  review: () =>
+    i18n._({ id: "unread turn", comment: "attention row: a turn nobody has read" }),
 };
 
 /** What the reader does next, in the row's own words (dashboard-53):
@@ -59,18 +73,18 @@ const REASON_LABEL: Record<AttentionEntry["kind"], string> = {
 function actLine(entry: AttentionEntry): string | undefined {
   switch (entry.kind) {
     case "review":
-      return "Nothing owed — open it, or mark it reviewed.";
+      return i18n._("Nothing owed — open it, or mark it reviewed.");
     case "question":
       // Both doors (dashboard-4, DR-073): a session's question ends on
       // a reply or on the run's own ending, and an intent's row carries
       // the Drop that takes both, so its line names the reply alone.
       return entry.intentId
-        ? "Open to reply — the run is waiting."
-        : "Open to reply, or drop the run.";
+        ? i18n._("Open to reply — the run is waiting.")
+        : i18n._("Open to reply, or drop the run.");
     case "failure":
       return entry.parked
-        ? "Open to retry or drop the run."
-        : "Open and send a message to pick it up.";
+        ? i18n._("Open to retry or drop the run.")
+        : i18n._("Open and send a message to pick it up.");
     default:
       // A finish carries its stats line instead: the verdict's
       // controls are right here, and the stats inform it.
@@ -96,10 +110,16 @@ export function statsLine(stats: IntentStats): string {
   const parts: string[] = [];
   if (stats.reviewRounds) {
     parts.push(
-      `${stats.reviewRounds} review round${stats.reviewRounds === 1 ? "" : "s"}`,
+      i18n._("{count, plural, one {# review round} other {# review rounds}}", {
+        count: stats.reviewRounds,
+      }),
     );
   }
-  parts.push(`${stats.turns} turn${stats.turns === 1 ? "" : "s"}`);
+  parts.push(
+    i18n._("{count, plural, one {# turn} other {# turns}}", {
+      count: stats.turns,
+    }),
+  );
   if (stats.elapsedMs !== undefined) parts.push(duration(stats.elapsedMs));
   return parts.join(" · ");
 }
@@ -184,11 +204,14 @@ function AttentionRow({
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Open ${entry.title} — ${REASON_LABEL[entry.kind]}`}
+        aria-label={i18n._("Open {title} — {reason}", {
+          title: entry.title,
+          reason: REASON_LABEL[entry.kind](),
+        })}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
         <span className="shrink-0 rounded-full border border-current px-2 py-0.5 text-xs font-medium">
-          {REASON_LABEL[entry.kind]}
+          {REASON_LABEL[entry.kind]()}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate">{entry.title}</span>
@@ -222,8 +245,12 @@ function AttentionRow({
           {error ? (
             <span className="block truncate text-xs" role="alert">
               {entry.kind === "review"
-                ? `Couldn't mark it reviewed: ${error}`
-                : `Couldn't record the verdict: ${error}`}
+                ? i18n._("Couldn't mark it reviewed: {reason}", {
+                    reason: error,
+                  })
+                : i18n._("Couldn't record the verdict: {reason}", {
+                    reason: error,
+                  })}
             </span>
           ) : null}
         </span>
@@ -246,11 +273,19 @@ function AttentionRow({
             type="button"
             disabled={busy !== undefined}
             data-testid={`attention-reviewed-${entry.sessionId}`}
-            aria-label={`Mark ${entry.title} reviewed`}
+            aria-label={i18n._("Mark {title} reviewed", { title: entry.title })}
             onClick={review}
             className="min-h-6 rounded border border-current px-2 py-0.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50 dark:hover:bg-black/20"
           >
-            {busy === "reviewed" ? "Marking…" : "Reviewed"}
+            {busy === "reviewed"
+              ? i18n._({
+                  id: "Marking…",
+                  comment: "attention row control, busy: the write is in flight",
+                })
+              : i18n._({
+                  id: "Reviewed",
+                  comment: "attention row control: say this turn has been read",
+                })}
           </button>
         </span>
       ) : null}
@@ -263,7 +298,15 @@ function AttentionRow({
             onClick={() => close("done")}
             className="min-h-6 rounded border border-current px-2 py-0.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50 dark:hover:bg-black/20"
           >
-            {busy === "done" ? "Confirming…" : "Confirm"}
+            {busy === "done"
+              ? i18n._({
+                  id: "Confirming…",
+                  comment: "verdict control, busy: the verdict is in flight",
+                })
+              : i18n._({
+                  id: "Confirm",
+                  comment: "verdict control: accept the delivered work",
+                })}
           </button>
           <button
             type="button"
@@ -272,7 +315,15 @@ function AttentionRow({
             onClick={() => close("dropped")}
             className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
           >
-            {busy === "dropped" ? "Dropping…" : "Drop"}
+            {busy === "dropped"
+              ? i18n._({
+                  id: "Dropping…",
+                  comment: "verdict control, busy: the verdict is in flight",
+                })
+              : i18n._({
+                  id: "Drop",
+                  comment: "verdict control: let this work go, unaccepted",
+                })}
           </button>
         </span>
       ) : null}
@@ -280,7 +331,7 @@ function AttentionRow({
         <span className="flex shrink-0 items-center gap-1.5">
           {confirmDrop ? (
             <>
-              <span className="text-xs">Drop this work?</span>
+              <span className="text-xs">{i18n._("Drop this work?")}</span>
               <button
                 type="button"
                 disabled={busy !== undefined}
@@ -288,7 +339,15 @@ function AttentionRow({
                 onClick={() => close("dropped")}
                 className="min-h-6 rounded border border-current px-2 py-0.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50 dark:hover:bg-black/20"
               >
-                {busy === "dropped" ? "Dropping…" : "Drop"}
+                {busy === "dropped"
+                  ? i18n._({
+                      id: "Dropping…",
+                      comment: "verdict control, busy: the verdict is in flight",
+                    })
+                  : i18n._({
+                      id: "Drop",
+                      comment: "verdict control: let this work go, unaccepted",
+                    })}
               </button>
               <button
                 type="button"
@@ -297,7 +356,11 @@ function AttentionRow({
                 onClick={() => setConfirmDrop(false)}
                 className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
               >
-                Keep
+                {i18n._({
+                  id: "Keep",
+                  comment:
+                    "cancel a destructive confirm: leave things as they are",
+                })}
               </button>
             </>
           ) : (
@@ -305,11 +368,14 @@ function AttentionRow({
               type="button"
               disabled={busy !== undefined}
               data-testid={`attention-drop-${entry.intentId}`}
-              aria-label={`Drop ${entry.title}`}
+              aria-label={i18n._("Drop {title}", { title: entry.title })}
               onClick={() => setConfirmDrop(true)}
               className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
             >
-              Drop
+              {i18n._({
+                id: "Drop",
+                comment: "verdict control: let this work go, unaccepted",
+              })}
             </button>
           )}
         </span>
@@ -342,7 +408,7 @@ function RunningRow({
   const startedAt = turnStartedAt(view);
   // The sidebar's title rule: the session's own words, a plain
   // stand-in until its first Boss turn lands.
-  const title = session.title ?? "no messages yet";
+  const title = session.title ?? i18n._("no messages yet");
   return (
     <button
       type="button"
@@ -351,7 +417,10 @@ function RunningRow({
       onClick={onOpen}
       // The name holds still while the run advances (DR-041 §9): the
       // state is live content, read from the row, not from its name.
-      aria-label={`Open ${title} — running in ${projectName}`}
+      aria-label={i18n._("Open {title} — running in {project}", {
+        title,
+        project: projectName,
+      })}
       // The row fits its pane (dashboard-1's grammar, DR-041): the
       // title owns the slack, the state chip truncates beside it, and
       // the yield ladder drops the running player below @sm, the
@@ -504,18 +573,18 @@ export function DashboardSurface({
     setHandOff(undefined);
   }, [handOff]);
 
-  const workspaceLink = (label: string) =>
-    onNavigate ? (
-      <button
-        type="button"
-        onClick={() => onNavigate("Workspace")}
-        className="text-brand-600 hover:underline dark:text-brand-300"
-      >
-        {label}
-      </button>
-    ) : (
-      <>{label}</>
-    );
+  // The element the guidance's own words sit inside (localization-4):
+  // a link where the App wired one, and the bare words where it did
+  // not — a Fragment, so the unwired case adds no element of its own.
+  const workspaceLink = onNavigate ? (
+    <button
+      type="button"
+      onClick={() => onNavigate("Workspace")}
+      className="text-brand-600 hover:underline dark:text-brand-300"
+    />
+  ) : (
+    <Fragment />
+  );
 
   // The Sources guidance points at the project's Overview, where the
   // repository header shows the GitHub binding (dashboard-8, DR-038).
@@ -545,14 +614,16 @@ export function DashboardSurface({
           className="flex items-center gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
           <span className="min-w-0 flex-1 truncate">
-            The ledger could not be loaded: {ledgerError}
+            {i18n._("The ledger could not be loaded: {reason}", {
+              reason: ledgerError,
+            })}
           </span>
           <button
             type="button"
             onClick={() => void loadLedger()}
             className="min-h-6 shrink-0 rounded border border-current px-2 py-0.5 text-xs"
           >
-            Retry
+            {i18n._({ id: "Retry", comment: "take the failed read again" })}
           </button>
         </div>
       ) : null}
@@ -560,16 +631,16 @@ export function DashboardSurface({
       <section>
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-sm font-semibold text-neutral-500">
-            Needs attention
+            {i18n._("Needs attention")}
           </h2>
           <select
             value={effectiveProjectFilter}
             onChange={(event) => setProjectFilter(event.target.value)}
             className="ml-auto rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
-            title="Filter by project (visibility only)"
-            aria-label="Filter by project"
+            title={i18n._("Filter by project (visibility only)")}
+            aria-label={i18n._("Filter by project")}
           >
-            <option value="all">All projects</option>
+            <option value="all">{i18n._("All projects")}</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
@@ -607,7 +678,7 @@ export function DashboardSurface({
               data-testid="attention-loading"
               className="rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-center text-sm text-neutral-500 dark:border-neutral-700"
             >
-              Loading…
+              {i18n._({ id: "Loading…", comment: "a read is still in flight" })}
             </div>
           ) : null}
           {ledger &&
@@ -622,15 +693,35 @@ export function DashboardSurface({
               {nextHead ? (
                 <>
                   <span className="min-w-0 flex-1 truncate">
-                    {selectedProject
-                      ? "All clear across projects. Next up: "
-                      : "All clear. Next up: "}
-                    <span className="font-medium text-neutral-700 dark:text-neutral-200">
-                      {firstLine(nextHead.intent.text)}
-                    </span>{" "}
-                    <span className="text-neutral-500">
-                      ({projectName(nextHead.intent.projectId)})
-                    </span>
+                    {/* One whole sentence carrying its own emphasis, so
+                        nothing is assembled from fragments
+                        (localization-4). */}
+                    <Rich
+                      text={
+                        selectedProject
+                          ? i18n._(
+                              "All clear across projects. Next up: <0>{title}</0> <1>({project})</1>",
+                              {
+                                title: firstLine(nextHead.intent.text),
+                                project: projectName(nextHead.intent.projectId),
+                              },
+                            )
+                          : i18n._(
+                              "All clear. Next up: <0>{title}</0> <1>({project})</1>",
+                              {
+                                title: firstLine(nextHead.intent.text),
+                                project: projectName(nextHead.intent.projectId),
+                              },
+                            )
+                      }
+                      components={[
+                        <span
+                          key="title"
+                          className="font-medium text-neutral-700 dark:text-neutral-200"
+                        />,
+                        <span key="project" className="text-neutral-500" />,
+                      ]}
+                    />
                     {nextHead.next ? (
                       <>
                         {" "}
@@ -646,19 +737,29 @@ export function DashboardSurface({
                     <button
                       type="button"
                       data-testid="all-clear-start"
-                      aria-label={`Start ${firstLine(nextHead.intent.text)} in ${projectName(nextHead.intent.projectId)}`}
+                      aria-label={i18n._("Start {title} in {project}", {
+                        title: firstLine(nextHead.intent.text),
+                        project: projectName(nextHead.intent.projectId),
+                      })}
                       onClick={() => void onStartIntent(nextHead.intent)}
                       className="min-h-6 shrink-0 rounded bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
                     >
-                      Start
+                      {i18n._({
+                        id: "Start",
+                        comment: "queue row control: begin this queued intent",
+                      })}
                     </button>
                   ) : null}
                 </>
               ) : (
                 <span className="flex-1 text-center">
                   {selectedProject
-                    ? "All clear across projects — nothing waiting, nothing queued to start."
-                    : "All clear — nothing waiting, nothing queued to start."}
+                    ? i18n._(
+                        "All clear across projects — nothing waiting, nothing queued to start.",
+                      )
+                    : i18n._(
+                        "All clear — nothing waiting, nothing queued to start.",
+                      )}
                 </span>
               )}
             </div>
@@ -673,7 +774,9 @@ export function DashboardSurface({
               tabIndex={-1}
               className="rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-center text-sm text-neutral-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:border-neutral-700"
             >
-              Nothing in {selectedProject.name} needs attention.
+              {i18n._("Nothing in {project} needs attention.", {
+                project: selectedProject.name,
+              })}
             </div>
           ) : null}
         </div>
@@ -682,7 +785,12 @@ export function DashboardSurface({
       {/* What is working, with nothing to answer (dashboard-50): the
           band keeps its place whether or not anything runs. */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-500">Running</h2>
+        <h2 className="mb-2 text-sm font-semibold text-neutral-500">
+          {i18n._({
+            id: "Running",
+            comment: "Dashboard band heading: sessions with a turn in flight",
+          })}
+        </h2>
         <div className="flex flex-col gap-2" data-testid="running-band">
           {running.map((session) => (
             <RunningRow
@@ -698,21 +806,30 @@ export function DashboardSurface({
               data-testid="running-empty"
               className="rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-center text-sm text-neutral-500 dark:border-neutral-700"
             >
-              Nothing running.
+              {i18n._("Nothing running.")}
             </div>
           ) : null}
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-neutral-500">Projects</h2>
+        <h2 className="text-sm font-semibold text-neutral-500">
+          {i18n._({
+            id: "Projects",
+            comment: "Dashboard band heading: one group per project",
+          })}
+        </h2>
         {projects.length === 0 ? (
           <div
             data-testid="projects-empty"
             className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
           >
-            No projects yet — register a repository in the{" "}
-            {workspaceLink("Projects")} to put its work here.
+            <Rich
+              text={i18n._(
+                "No projects yet — register a repository in the <0>Projects</0> to put its work here.",
+              )}
+              components={[workspaceLink]}
+            />
           </div>
         ) : (
           filtered.map((project) => (

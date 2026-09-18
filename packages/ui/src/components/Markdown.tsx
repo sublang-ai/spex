@@ -4,6 +4,8 @@
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { i18n } from "../i18n.js";
+
 const WEB_URL = /^https?:\/\//i;
 
 /** A web link leaves the page rather than replacing it: a new tab when
@@ -28,7 +30,14 @@ const components: Components = {
       <img src={src} alt={alt ?? ""} />
     ) : (
       <span className="text-xs text-neutral-500">
-        [external image blocked: {alt || "image"}]
+        {i18n._("[external image blocked: {alt}]", {
+          alt:
+            alt ||
+            i18n._({
+              id: "image",
+              comment: "stands in for a blocked image that carried no alt text",
+            }),
+        })}
       </span>
     ),
   a: ({ href, children }) =>

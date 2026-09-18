@@ -14,6 +14,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
+import { i18n } from "../i18n.js";
 import { activatedByKeyboard, useUndoLine } from "../lib/useUndoLine.js";
 import { intentTitle } from "./DeliveryCard.js";
 import {
@@ -79,7 +80,10 @@ export function NextCard({
       show(
         {
           intent,
-          error: `Couldn't remove “${intentTitle(intent)}”: ${(cause as Error).message}`,
+          error: i18n._("Couldn't remove “{title}”: {reason}", {
+            title: intentTitle(intent),
+            reason: (cause as Error).message,
+          }),
         },
         { byKeyboard },
       );
@@ -102,7 +106,12 @@ export function NextCard({
       setRefocusIntentId(restored.id);
     } catch (cause) {
       show(
-        { intent, error: `Couldn't undo: ${(cause as Error).message}` },
+        {
+          intent,
+          error: i18n._("Couldn't undo: {reason}", {
+            reason: (cause as Error).message,
+          }),
+        },
         { byKeyboard: true },
       );
     }
@@ -114,7 +123,12 @@ export function NextCard({
       data-testid="next-card"
       className="ml-8 flex max-w-[85%] flex-col gap-1 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
     >
-      <span className="text-xs font-semibold text-neutral-500">Up next</span>
+      <span className="text-xs font-semibold text-neutral-500">
+        {i18n._({
+          id: "Up next",
+          comment: "band heading: the project's queued work",
+        })}
+      </span>
       {next ? (
         <div
           data-testid="next-row"
@@ -140,7 +154,7 @@ export function NextCard({
             </div>
             {next.more > 0 ? (
               <span className="text-xs text-neutral-500">
-                +{next.more} more queued
+                {i18n._("+{count} more queued", { count: next.more })}
               </span>
             ) : null}
           </div>
@@ -150,9 +164,11 @@ export function NextCard({
               ref={startRef}
               type="button"
               data-testid="next-start"
-              aria-label={`Start ${intentTitle(next.intent)}`}
+              aria-label={i18n._("Start {title}", {
+                title: intentTitle(next.intent),
+              })}
               disabled={staging || !connected}
-              title="Put this task in the message — Send starts it"
+              title={i18n._("Put this task in the message — Send starts it")}
               onClick={() => {
                 setStaging(true);
                 void Promise.resolve(onStartIntent?.(next.intent))
@@ -164,7 +180,15 @@ export function NextCard({
               }}
               className="shrink-0 rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
-              {staging ? "Starting…" : "Start"}
+              {staging
+                ? i18n._({
+                    id: "Starting…",
+                    comment: "queue row control, busy: the start is in flight",
+                  })
+                : i18n._({
+                    id: "Start",
+                    comment: "queue row control: begin this queued intent",
+                  })}
             </button>
           ) : null}
           <button
@@ -172,12 +196,22 @@ export function NextCard({
             type="button"
             data-testid="next-remove"
             disabled={removing || !connected}
-            aria-label={`Remove ${intentTitle(next.intent)}`}
-            title="Take this task out of the queue — Undo puts it back"
+            aria-label={i18n._("Remove {title}", {
+              title: intentTitle(next.intent),
+            })}
+            title={i18n._("Take this task out of the queue — Undo puts it back")}
             onClick={(event) => void remove(activatedByKeyboard(event))}
             className="shrink-0 rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            {removing ? "Removing…" : "Remove"}
+            {removing
+              ? i18n._({
+                  id: "Removing…",
+                  comment: "queue row control, busy: the removal is in flight",
+                })
+              : i18n._({
+                  id: "Remove",
+                  comment: "queue row control: take this row out of the queue",
+                })}
           </button>
         </div>
       ) : null}
@@ -194,7 +228,9 @@ export function NextCard({
           ) : (
             <>
               <span className="min-w-0 truncate">
-                Removed “{intentTitle(removed.intent)}”
+                {i18n._("Removed “{title}”", {
+                  title: intentTitle(removed.intent),
+                })}
               </span>
               <span aria-hidden="true">—</span>
               <button
@@ -203,7 +239,10 @@ export function NextCard({
                 onClick={() => void undo()}
                 className="min-h-6 rounded px-1 text-brand-600 hover:underline dark:text-brand-300"
               >
-                Undo
+                {i18n._({
+                  id: "Undo",
+                  comment: "put the row just removed back where it was",
+                })}
               </button>
             </>
           )}

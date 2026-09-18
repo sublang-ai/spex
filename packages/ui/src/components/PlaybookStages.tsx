@@ -18,15 +18,50 @@ import {
 } from "react";
 import type { SpecFileInfo } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
 import { ResizableFrame } from "./ResizableFrame.js";
 import { CitationPreview, useCitationPreview } from "./CitationPreview.js";
 import { GROUP_CHIP, itemDomId, SpecItemRows } from "./SpecItemRows.js";
 import { buildItemIndex } from "../lib/spec-view-model.js";
 
+/** The pipeline's stages. Each label and hint is read when the row
+ * draws, never when this module loads, so the table never freezes the
+ * language it was imported in (localization-4); the key stays a plain
+ * identifier, and a stage row takes the words as the strings they
+ * already are. */
 export const STAGES = [
-  { key: "source", label: "Source", hint: "The workflow markdown the playbook was compiled from" },
-  { key: "gears", label: "Gears", hint: "One normative spec item per state behavior — the compiler's middle stage" },
-  { key: "fsm", label: "State machine", hint: "The compiled XState machine that drives the players" },
+  {
+    key: "source",
+    get label() {
+      return i18n._({ id: "Source", comment: "pipeline stage: the authored workflow" });
+    },
+    get hint() {
+      return i18n._("The workflow markdown the playbook was compiled from");
+    },
+  },
+  {
+    key: "gears",
+    get label() {
+      return i18n._({
+        id: "Gears",
+        comment: "pipeline stage: the compiler's normative spec items (a proper name)",
+      });
+    },
+    get hint() {
+      return i18n._(
+        "One normative spec item per state behavior — the compiler's middle stage",
+      );
+    },
+  },
+  {
+    key: "fsm",
+    get label() {
+      return i18n._({ id: "State machine", comment: "pipeline stage: the compiled machine" });
+    },
+    get hint() {
+      return i18n._("The compiled XState machine that drives the players");
+    },
+  },
 ] as const;
 export type StageKey = (typeof STAGES)[number]["key"];
 
@@ -64,7 +99,9 @@ export function StageRow<Key extends string>({
               disabled={missing}
               title={
                 missing
-                  ? `${entry.label} not found next to this playbook's registry`
+                  ? i18n._("{stage} not found next to this playbook's registry", {
+                      stage: entry.label,
+                    })
                   : entry.hint
               }
               onClick={() => onPress(entry.key)}
@@ -122,7 +159,7 @@ export function StageBox({
       {header}
       <ResizableFrame
         frameId={`stage:${id}`}
-        label={`Resize the ${stage} stage`}
+        label={i18n._("Resize the {stage} stage", { stage })}
         unit={STAGE_UNIT}
         defaultSteps={STAGE_DEFAULT}
         minSteps={STAGE_MIN}
@@ -146,7 +183,10 @@ export function StateList({ id, states }: { id: string; states: string[] }) {
       className="flex flex-wrap items-center gap-1"
     >
       <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-        states
+        {i18n._({
+          id: "states",
+          comment: "heading over the machine's state chips",
+        })}
       </span>
       {states.map((state) => (
         <span

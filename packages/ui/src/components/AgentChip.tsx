@@ -11,6 +11,36 @@ import type {
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
+
+/** The words a chip lends its tooltip and its accessible name: one
+ * for fast mode, one per readiness state. Functions, never constants:
+ * a text read at module load would freeze the language the module was
+ * imported in (localization-4). */
+export function fastModeWord(): string {
+  return i18n._({
+    id: "fast mode",
+    comment: "an agent runs in its adapter's fast mode",
+  });
+}
+
+export function readinessWord(ready: boolean | null | undefined): string {
+  if (ready === true) {
+    return i18n._({ id: "ready", comment: "the adapter is signed in and usable" });
+  }
+  if (ready === false) {
+    return i18n._({ id: "not ready", comment: "the adapter needs something before it can run" });
+  }
+  return i18n._({
+    id: "readiness unknown",
+    comment: "no automatic check exists for this adapter",
+  });
+}
+
+export function noCheckNote(): string {
+  return i18n._("no automatic check for this adapter — verify sign-in yourself");
+}
+
 /** An agent block as the chip reads it: the config's inline block,
  * plus the adapter-scoped fast mode a summary carries (DR-038). */
 export type ChipAgent = AgentBlockInput & { fastMode?: boolean };
@@ -42,18 +72,13 @@ export function AgentChip({
   label?: string;
 }) {
   const text = chipBase(agent);
-  const state =
-    readiness === undefined
-      ? undefined
-      : readiness.ready === true
-        ? "ready"
-        : readiness.ready === false
-          ? "not ready"
-          : "readiness unknown";
+  const state = readiness === undefined ? undefined : readinessWord(readiness.ready);
+  // The name is a position, a run of ids, and the words above: only
+  // the punctuation between them is assembled here.
   return (
     <span
       data-testid="agent-chip"
-      aria-label={`${label ? `${label}: ` : ""}${text}${agent.fastMode ? ", fast mode" : ""}${state ? ` (${state})` : ""}`}
+      aria-label={`${label ? `${label}: ` : ""}${text}${agent.fastMode ? `, ${fastModeWord()}` : ""}${state ? ` (${state})` : ""}`}
       className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
     >
       {/* The words truncate in a narrow row (DR-041); the accessible
@@ -63,7 +88,7 @@ export function AgentChip({
         <span
           aria-hidden
           data-testid="fast-mode-mark"
-          title="fast mode"
+          title={fastModeWord()}
           className="text-amber-500"
         >
           {FAST_MODE_MARK}
@@ -71,14 +96,15 @@ export function AgentChip({
       ) : null}
       {readiness ? (
         readiness.ready === true ? (
-          <span aria-hidden className="text-emerald-500" title="ready">
+          <span aria-hidden className="text-emerald-500" title={readinessWord(true)}>
             ●
           </span>
         ) : readiness.ready === false ? (
+          // What the adapter requires is the core's own sentence.
           <span
             aria-hidden
             className="text-red-500"
-            title={readiness.requirement ?? "not ready"}
+            title={readiness.requirement ?? readinessWord(false)}
           >
             ●
           </span>
@@ -86,10 +112,7 @@ export function AgentChip({
           <span
             aria-hidden
             className="text-neutral-500"
-            title={
-              readiness.requirement ??
-              "no automatic check for this adapter — verify sign-in yourself"
-            }
+            title={readiness.requirement ?? noCheckNote()}
           >
             ●
           </span>

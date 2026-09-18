@@ -8,6 +8,8 @@
 
 import type { PlaybookSummary } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
+
 /** Playbooks matching a composer draft, or null when the menu is closed. */
 export function slashMatches(
   text: string,
@@ -80,7 +82,11 @@ export function SlashMenuList({
           }}
           className="flex w-full items-baseline gap-2 border-t border-neutral-100 px-3 py-1.5 text-left text-xs text-neutral-500 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800"
         >
-          <span aria-hidden="true">+</span> New playbook…
+          <span aria-hidden="true">+</span>{" "}
+          {i18n._({
+            id: "New playbook…",
+            comment: "slash menu's last entry: start authoring a playbook",
+          })}
         </button>
       ) : null}
     </div>

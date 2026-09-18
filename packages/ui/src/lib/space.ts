@@ -6,6 +6,10 @@
 // order and labels (space-7), the sync steps' names (space-12), the
 // catalog's sharing marks and the families that stay on this device
 // (space-23, space-25). Pure functions; the surface renders them.
+//
+// Every word here is a message of the catalog (localization-4), so a
+// table of phrases holds thunks read at render — a table of strings
+// would freeze the language this module was imported in.
 
 import type {
   SpaceEntry,
@@ -13,6 +17,8 @@ import type {
   SpaceUnitKind,
   SyncStep,
 } from "@sublang/spex-core/protocol";
+
+import { i18n } from "../i18n.js";
 
 /** The home's path with the user's home directory as `~` (space-1):
  * the full path rides the title. Only the two POSIX layouts the app
@@ -30,6 +36,12 @@ export function displayRemote(url: string): string {
   return embedded ? `${embedded[1]}${embedded[3]}` : url;
 }
 
+/** What stands where a branch name would, in a repository with no
+ * branch checked out (space-1). */
+export function noBranch(): string {
+  return i18n._({ id: "no branch", comment: "stands where a branch name would; none is checked out" });
+}
+
 /** The kinds in the order the lists group them (space-7). */
 export const KIND_ORDER: readonly SpaceUnitKind[] = [
   "session",
@@ -41,14 +53,27 @@ export const KIND_ORDER: readonly SpaceUnitKind[] = [
   "other",
 ];
 
-export const KIND_LABELS: Record<SpaceUnitKind, string> = {
-  session: "Sessions",
-  queue: "Queues",
-  projects: "Projects",
-  settings: "Settings",
-  playbook: "Playbooks",
-  rules: "Sync rules",
-  other: "Other",
+export const KIND_LABELS: Record<SpaceUnitKind, () => string> = {
+  session: () => i18n._("Sessions"),
+  queue: () => i18n._("Queues"),
+  projects: () => i18n._("Projects"),
+  settings: () => i18n._("Settings"),
+  playbook: () => i18n._("Playbooks"),
+  rules: () => i18n._("Sync rules"),
+  other: () => i18n._({ id: "Other", comment: "heading over units of no named kind" }),
+};
+
+/** One unit of a kind, for the row that names a single conflict
+ * (space-17): the singular each language forms for itself. */
+export const KIND_SINGULAR: Record<SpaceUnitKind, () => string> = {
+  session: () => i18n._({ id: "Session", comment: "one unit's kind: a session" }),
+  // Its own id: the noun, apart from the capture control's verb "Queue".
+  queue: () => i18n._({ id: "unit.queue", message: "Queue", comment: "one unit's kind: a project's queue (the noun)" }),
+  projects: () => i18n._({ id: "Project", comment: "one unit's kind: the project registrations" }),
+  settings: () => i18n._({ id: "Setting", comment: "one unit's kind: the settings file" }),
+  playbook: () => i18n._({ id: "Playbook", comment: "one unit's kind: a playbook source" }),
+  rules: () => i18n._({ id: "Sync rule", comment: "one unit's kind: a sync rule file" }),
+  other: () => i18n._({ id: "Other", comment: "heading over units of no named kind" }),
 };
 
 /** Units grouped by kind in the kinds' order, empty kinds omitted. */
@@ -72,80 +97,109 @@ export const STEP_ORDER: readonly SyncStep[] = [
 ];
 
 /** A step's name on the rail. */
-export const STEP_NAMES: Record<SyncStep, string> = {
-  save: "Save",
-  check: "Check",
-  compare: "Compare",
-  apply: "Apply",
-  refresh: "Refresh",
-  push: "Push",
+export const STEP_NAMES: Record<SyncStep, () => string> = {
+  save: () => i18n._({ id: "Save", comment: "sync step: saving this device's changes" }),
+  check: () => i18n._({ id: "Check", comment: "sync step: checking the remote" }),
+  compare: () => i18n._({ id: "Compare", comment: "sync step: comparing both sides" }),
+  apply: () => i18n._({ id: "Apply", comment: "sync step: applying the chosen versions" }),
+  refresh: () => i18n._({ id: "Refresh", comment: "sync step: re-reading the space" }),
+  push: () => i18n._({ id: "Push", comment: "sync step: sending to the remote" }),
 };
 
 /** What the step line reads while a step runs (space-12). */
-export const STEP_LINES: Record<SyncStep, string> = {
-  save: "Saving changes…",
-  check: "Checking remote…",
-  compare: "Comparing…",
-  apply: "Applying…",
-  refresh: "Refreshing…",
-  push: "Pushing…",
+export const STEP_LINES: Record<SyncStep, () => string> = {
+  save: () => i18n._("Saving changes…"),
+  check: () => i18n._("Checking remote…"),
+  compare: () => i18n._({ id: "Comparing…", comment: "sync step running: comparing both sides" }),
+  apply: () => i18n._({ id: "Applying…", comment: "sync step running: applying the chosen versions" }),
+  refresh: () => i18n._({ id: "Refreshing…", comment: "sync step running: re-reading the space" }),
+  push: () => i18n._({ id: "Pushing…", comment: "sync step running: sending to the remote" }),
 };
 
 /** A byte count in the reader's units: "312 B", "4.1 KB", "2.3 MB". */
 export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024) {
+    return i18n._({ id: "{size} B", values: { size: bytes }, comment: "a file size in bytes" });
+  }
   const kb = bytes / 1024;
-  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
+  if (kb < 1024) {
+    const size = kb < 10 ? kb.toFixed(1) : String(Math.round(kb));
+    return i18n._({ id: "{size} KB", values: { size }, comment: "a file size in kilobytes" });
+  }
   const mb = kb / 1024;
-  if (mb < 1024) return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
-  return `${(mb / 1024).toFixed(1)} GB`;
+  if (mb < 1024) {
+    const size = mb < 10 ? mb.toFixed(1) : String(Math.round(mb));
+    return i18n._({ id: "{size} MB", values: { size }, comment: "a file size in megabytes" });
+  }
+  return i18n._({
+    id: "{size} GB",
+    values: { size: (mb / 1024).toFixed(1) },
+    comment: "a file size in gigabytes",
+  });
 }
 
 /** The sharing mark's words (space-23): color never carries it alone. */
-export const SHARING_LABELS: Record<SpaceEntry["sync"], string> = {
-  shared: "Shared",
-  pending: "Not yet shared",
-  local: "Stays here",
-  git: "Git data",
+export const SHARING_LABELS: Record<SpaceEntry["sync"], () => string> = {
+  shared: () => i18n._({ id: "Shared", comment: "entry mark: this file syncs and is already sent" }),
+  pending: () => i18n._("Not yet shared"),
+  local: () => i18n._({ id: "Stays here", comment: "entry mark: this file never leaves the device" }),
+  git: () => i18n._({ id: "Git data", comment: "entry mark: the repository's own files" }),
 };
 
-/** Every ignored family with its one plain reason (space-25). */
-export const STAYS_HERE: readonly { family: string; reason: string }[] = [
-  {
-    family: "provider hints",
-    reason:
-      "resume tokens for this machine's agent conversations; they work nowhere else",
-  },
-  { family: "leases and locks", reason: "which process is writing right now" },
-  {
-    family: "local project paths",
-    reason: "where your projects live on this machine",
-  },
-  {
-    family: "preferences",
-    reason: "where you last stopped reading in each session",
-  },
-  { family: "forge cache", reason: "GitHub lists the app fetches again" },
-  {
-    family: "migration receipts and inputs",
-    reason: "original files kept from an upgrade, some holding old tokens",
-  },
-  {
-    family: "config backups and temporary files",
-    reason: "copies made while writing",
-  },
-];
+/** Every ignored family with its one plain reason (space-25); read at
+ * render, never at module load. */
+export function staysHere(): readonly { family: string; reason: string }[] {
+  return [
+    {
+      family: i18n._({ id: "provider hints", comment: "a file family that stays on this device" }),
+      reason: i18n._(
+        "resume tokens for this machine's agent conversations; they work nowhere else",
+      ),
+    },
+    {
+      family: i18n._({ id: "leases and locks", comment: "a file family that stays on this device" }),
+      reason: i18n._("which process is writing right now"),
+    },
+    {
+      family: i18n._({ id: "local project paths", comment: "a file family that stays on this device" }),
+      reason: i18n._("where your projects live on this machine"),
+    },
+    {
+      family: i18n._({ id: "preferences", comment: "a file family that stays on this device" }),
+      reason: i18n._("where you last stopped reading in each session"),
+    },
+    {
+      family: i18n._({ id: "forge cache", comment: "a file family that stays on this device" }),
+      reason: i18n._("GitHub lists the app fetches again"),
+    },
+    {
+      family: i18n._({
+        id: "migration receipts and inputs",
+        comment: "a file family that stays on this device",
+      }),
+      reason: i18n._("original files kept from an upgrade, some holding old tokens"),
+    },
+    {
+      family: i18n._({
+        id: "config backups and temporary files",
+        comment: "a file family that stays on this device",
+      }),
+      reason: i18n._("copies made while writing"),
+    },
+  ];
+}
 
 /** A session's files under its node read by their part, not their
- * file name (space-23). */
+ * file name (space-23). The family the core sent names the part; the
+ * word the row reads is this interface's own. */
 export function sessionPartName(entry: SpaceEntry): string {
   switch (entry.family) {
     case "session manifest":
-      return "manifest";
+      return i18n._({ id: "manifest", comment: "a session's part: its manifest file" });
     case "session records":
-      return "records";
+      return i18n._({ id: "records", comment: "a session's part: its record file" });
     case "provider hints":
-      return "provider hints";
+      return i18n._({ id: "provider hints", comment: "a file family that stays on this device" });
     default:
       return entry.name;
   }
@@ -171,7 +225,13 @@ export function prettyJson(text: string): string {
 }
 
 /** The phrase a withheld preview reads (space-24). */
-export const WITHHELD_PHRASE = "May hold provider tokens — not shown";
+export function withheldPhrase(): string {
+  return i18n._("May hold provider tokens — not shown");
+}
+
+/** The same phrase as the core states it (space-24), for recognizing a
+ * reason it sent: data, never shown, so it is never translated. */
+export const WITHHELD_REASON = "May hold provider tokens — not shown";
 
 /** Whether the page runs on a Mac, for the reveal control's name. */
 export function isMacPlatform(): boolean {
@@ -186,7 +246,9 @@ export function isMacPlatform(): boolean {
 
 /** The reveal control's name (space-26): the file manager's own. */
 export function revealLabel(): string {
-  return isMacPlatform() ? "Show in Finder" : "Show in folder";
+  return isMacPlatform()
+    ? i18n._({ id: "Show in Finder", comment: "reveal a path in macOS Finder" })
+    : i18n._({ id: "Show in folder", comment: "reveal a path in the file manager" });
 }
 
 /** The native bridge's reveal capability, feature-detected
@@ -197,11 +259,6 @@ export function revealBridge(): ((path: string) => Promise<boolean>) | undefined
   return typeof native?.revealPath === "function"
     ? (native.revealPath as (path: string) => Promise<boolean>)
     : undefined;
-}
-
-/** "1 unit" / "3 units". */
-export function plural(count: number, noun: string, nouns = `${noun}s`): string {
-  return `${count} ${count === 1 ? noun : nouns}`;
 }
 
 /** The absolute path of an entry under the home. */

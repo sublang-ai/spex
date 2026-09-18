@@ -13,6 +13,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { SpecRecordInfo } from "@sublang/spex-core/protocol";
 
+import { i18n } from "../i18n.js";
+
 /** The identifier chip the package rows of the Specs outline wear
  * (spec-view-2): a record's ID wears the same one. */
 export const RECORD_CHIP =
@@ -34,13 +36,13 @@ export function RecordRow({
   ...rest
 }: RecordRowProps) {
   const opener = record.title
-    ? `Open ${record.id}: ${record.title}`
-    : `Open ${record.id}`;
+    ? i18n._("Open {id}: {title}", { id: record.id, title: record.title })
+    : i18n._("Open {id}", { id: record.id });
   return (
     <button
       type="button"
       data-testid={`record-row-${record.id}`}
-      title={`Open ${record.id}`}
+      title={i18n._("Open {id}", { id: record.id })}
       aria-label={opener}
       className={`flex min-h-6 min-w-0 cursor-pointer items-center gap-2 rounded px-1 text-left hover:bg-neutral-100 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-neutral-800 ${className}`}
       {...rest}

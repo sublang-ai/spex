@@ -22,16 +22,19 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
+import { i18n } from "../i18n.js";
 import { relativeAge } from "../lib/time.js";
 import {
   KIND_LABELS,
+  KIND_SINGULAR,
   STEP_LINES,
   STEP_NAMES,
   STEP_ORDER,
   groupUnits,
-  plural,
+  noBranch,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
+import { Rich } from "./Rich.js";
 import { LINK } from "./SpaceSurface.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
@@ -76,14 +79,14 @@ function DiffBox({
   if (error) {
     return (
       <p role="alert" data-testid={testId} className="text-xs text-red-600 dark:text-red-400">
-        Couldn't load the diff: {error}
+        {i18n._("Couldn't load the diff: {reason}", { reason: error })}
       </p>
     );
   }
   if (!patches) {
     return (
       <p data-testid={testId} className="text-xs text-neutral-500">
-        Loading diff…
+        {i18n._("Loading diff…")}
       </p>
     );
   }
@@ -93,7 +96,9 @@ function DiffBox({
       className="flex flex-col gap-1 rounded border border-neutral-200 bg-neutral-50 p-2 dark:border-neutral-800 dark:bg-neutral-950"
     >
       <span className="text-xs text-neutral-500">
-        {side === "mine" ? "This device against the common ancestor" : "The remote against the common ancestor"}
+        {side === "mine"
+          ? i18n._("This device against the common ancestor")
+          : i18n._("The remote against the common ancestor")}
       </span>
       {patches.map(({ path, patch, truncated }) => (
         <div key={path} className="flex min-w-0 flex-col">
@@ -110,7 +115,7 @@ function DiffBox({
             className="max-h-64 overflow-auto font-mono text-xs leading-5 whitespace-pre"
           >
             {patch === "" ? (
-              <span className="text-neutral-500">No difference</span>
+              <span className="text-neutral-500">{i18n._("No difference")}</span>
             ) : (
               patch.split("\n").map((line, index) => {
                 const tone =
@@ -131,7 +136,9 @@ function DiffBox({
             )}
           </pre>
           {truncated ? (
-            <span className="text-xs text-neutral-500">The diff is cut here; the file is longer.</span>
+            <span className="text-xs text-neutral-500">
+              {i18n._("The diff is cut here; the file is longer.")}
+            </span>
           ) : null}
         </div>
       ))}
@@ -190,38 +197,41 @@ function UnitRow({
             {detailLines[0]}
           </span>
         ) : null}
-        <span className="shrink-0 text-xs text-neutral-500">{unit.change}</span>
+        <span className="shrink-0 text-xs text-neutral-500">{changeWord(unit.change)}</span>
         {conflict ? (
           <span
             data-testid={`space-choose-${unit.unit}`}
             className="shrink-0 text-xs text-amber-700 dark:text-amber-300"
-            title="Changed on both sides — choose which version to keep"
+            title={i18n._("Changed on both sides — choose which version to keep")}
           >
-            <span aria-hidden>⚠ </span>choose
+            <span aria-hidden>⚠ </span>
+            {i18n._({ id: "choose", comment: "mark on a unit changed on both sides" })}
           </span>
         ) : null}
         {canOpen ? (
           <button
             type="button"
-            aria-label="Open session"
-            title="Open session"
+            aria-label={i18n._("Open session")}
+            title={i18n._("Open session")}
             className={`${SECONDARY} shrink-0`}
             onClick={() => onOpenSession(unit.sessionId!)}
           >
-            <span className="hidden @md:inline">Open session</span>
+            <span className="hidden @md:inline">{i18n._("Open session")}</span>
             <Icon name="open" className="h-3.5 w-3.5 @md:hidden" />
           </button>
         ) : null}
         {unit.diff ? (
           <button
             type="button"
-            aria-label={diffOpen ? "Hide diff" : "View diff"}
-            title={diffOpen ? "Hide diff" : "View diff"}
+            aria-label={diffOpen ? i18n._("Hide diff") : i18n._("View diff")}
+            title={diffOpen ? i18n._("Hide diff") : i18n._("View diff")}
             aria-expanded={diffOpen}
             className={`${SECONDARY} shrink-0`}
             onClick={() => setDiffOpen((open) => !open)}
           >
-            <span className="hidden @md:inline">{diffOpen ? "Hide diff" : "View diff"}</span>
+            <span className="hidden @md:inline">
+              {diffOpen ? i18n._("Hide diff") : i18n._("View diff")}
+            </span>
             <Icon name="diff" className="h-3.5 w-3.5 @md:hidden" />
           </button>
         ) : null}
@@ -266,7 +276,7 @@ function UnitList({
     <div data-testid={testId} className="flex flex-col gap-2">
       {groupUnits(units).map((group) => (
         <div key={group.kind} className="flex flex-col gap-1">
-          <h3 className="text-xs font-medium text-neutral-500">{KIND_LABELS[group.kind]}</h3>
+          <h3 className="text-xs font-medium text-neutral-500">{KIND_LABELS[group.kind]()}</h3>
           <ul className="flex flex-col gap-1 pl-2">
             {group.units.map((unit) => (
               <UnitRow
@@ -286,10 +296,25 @@ function UnitList({
   );
 }
 
+/** A unit's change as a word (space-17): the protocol's enum, phrased
+ * for the reader; an enum value the page does not know reads as itself. */
+function changeWord(change: SpaceSide["change"]): string {
+  switch (change) {
+    case "new":
+      return i18n._({ id: "new", comment: "a sync unit's change: it is new on this side" });
+    case "updated":
+      return i18n._({ id: "updated", comment: "a sync unit's change: it changed on this side" });
+    case "deleted":
+      return i18n._({ id: "deleted", comment: "a sync unit's change: it is gone on this side" });
+    default:
+      return change;
+  }
+}
+
 /** A side's summary in the picker (space-17): its change, when, and its
  * detail — a deleting side reads "deleted" once, never twice. */
 function sideSummary(side: SpaceSide, now: number): string {
-  const parts: string[] = [side.change];
+  const parts: string[] = [changeWord(side.change)];
   if (side.at !== undefined) parts.push(relativeAge(side.at, now));
   const text = parts.join(" ");
   return side.detail && side.detail !== side.change ? `${text} · ${side.detail}` : text;
@@ -373,12 +398,12 @@ function ConflictRow({
         {summary.diff ? (
           <button
             type="button"
-            aria-label={diffSide === side ? `Hide diff` : `View diff`}
+            aria-label={diffSide === side ? i18n._("Hide diff") : i18n._("View diff")}
             aria-expanded={diffSide === side}
             className={SECONDARY}
             onClick={() => setDiffSide((open) => (open === side ? undefined : side))}
           >
-            {diffSide === side ? "Hide diff" : "View diff"}
+            {diffSide === side ? i18n._("Hide diff") : i18n._("View diff")}
           </button>
         ) : null}
       </div>
@@ -400,7 +425,7 @@ function ConflictRow({
       }`}
     >
       <div className="flex min-w-0 items-center gap-2 text-sm">
-        <span className="shrink-0 text-xs text-neutral-500">{KIND_LABELS[unit.kind].replace(/s$/, "")}</span>
+        <span className="shrink-0 text-xs text-neutral-500">{KIND_SINGULAR[unit.kind]()}</span>
         <span className="min-w-0 flex-1 truncate font-medium" title={unit.label}>
           {label.first}
         </span>
@@ -419,8 +444,16 @@ function ConflictRow({
           ))}
         </ul>
       ) : null}
-      {option("mine", "Keep mine", conflict.mine)}
-      {option("remote", "Take remote", conflict.remote)}
+      {option(
+        "mine",
+        i18n._({ id: "Keep mine", comment: "conflict choice: keep this device's version" }),
+        conflict.mine,
+      )}
+      {option(
+        "remote",
+        i18n._({ id: "Take remote", comment: "conflict choice: take the remote's version" }),
+        conflict.remote,
+      )}
       {diffSide ? (
         <DiffBox unit={unit} side={diffSide} testId={`space-diff-${diffSide}-${unit.unit}`} />
       ) : null}
@@ -451,7 +484,10 @@ function Rail({
       className="flex flex-col gap-2 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950"
     >
       {op !== "check" ? (
-        <ol className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" aria-label="Sync steps">
+        <ol
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+          aria-label={i18n._("Sync steps")}
+        >
           {STEP_ORDER.map((name, index) => {
             const state = index < current ? "done" : index === current ? "current" : "upcoming";
             return (
@@ -477,7 +513,7 @@ function Rail({
                     }`}
                   />
                 )}
-                {STEP_NAMES[name]}
+                {STEP_NAMES[name]()}
               </li>
             );
           })}
@@ -485,7 +521,7 @@ function Rail({
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <span data-testid="space-step-line" className="font-medium">
-          {STEP_LINES[step]}
+          {STEP_LINES[step]()}
         </span>
         {cancelable ? (
           <button
@@ -495,7 +531,9 @@ function Rail({
             disabled={stopping}
             onClick={onStop}
           >
-            {stopping ? "Stopping…" : "Stop"}
+            {stopping
+              ? i18n._({ id: "Stopping…", comment: "the Stop control, while the stop is in flight" })
+              : i18n._({ id: "Stop", comment: "stop the running sync" })}
           </button>
         ) : null}
       </div>
@@ -581,7 +619,7 @@ function RepairRow({
         <span className="min-w-0 flex-1">{resolved}</span>
         {repair.projectId ? (
           <button type="button" className={LINK} onClick={() => onOpenProject(repair.projectId!)}>
-            Open project
+            {i18n._("Open project")}
           </button>
         ) : null}
       </li>
@@ -590,7 +628,14 @@ function RepairRow({
 
   const declined = repair.declined !== undefined;
   const lastSegment = (p: string): string => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? p;
-  const name = repair.projectName ?? (recorded ? lastSegment(recorded) : "these sessions");
+  const name =
+    repair.projectName ??
+    (recorded
+      ? lastSegment(recorded)
+      : i18n._({
+          id: "these sessions",
+          comment: "stands where a project name would, for sessions with no folder",
+        }));
 
   /** Adding a project is picking a folder: where the space already
    * carries the project, its folder is set here; where it does not, it
@@ -608,12 +653,26 @@ function RepairRow({
         try {
           await rebindProject(project.id, project.path, repair.directories);
         } catch (cause) {
-          setRefusal(`Added ${project.name}, but ${(cause as Error).message}`);
+          setRefusal(
+            i18n._("Added {name}, but {reason}", {
+              name: project.name,
+              reason: (cause as Error).message,
+            }),
+          );
           return;
         }
       }
-      const sessions = repair.sessions > 0 ? `, ${plural(repair.sessions, "session")} listed` : "";
-      onResolved(repair.key, `${project.name} · now a project at ${project.path}${sessions}`, project.id);
+      const summary =
+        repair.sessions > 0
+          ? i18n._(
+              "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed",
+              { name: project.name, path: project.path, count: repair.sessions },
+            )
+          : i18n._("{name} · now a project at {path}", {
+              name: project.name,
+              path: project.path,
+            });
+      onResolved(repair.key, summary, project.id);
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
@@ -625,7 +684,7 @@ function RepairRow({
     setBusy(true);
     try {
       await decline(repair.key, next);
-      if (next) onNote(`${name} not added.`);
+      if (next) onNote(i18n._("{name} not added.", { name }));
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
@@ -635,13 +694,15 @@ function RepairRow({
 
   const checkedRecorded = (repair.checked ?? []).find((entry) => entry.path === recorded);
   const evidence = proposal
-    ? `That folder is here and is a git repository. Add it as a project?`
+    ? i18n._("That folder is here and is a git repository. Add it as a project?")
     : checkedRecorded?.here === false
-      ? "That folder is no longer on this device."
+      ? i18n._("That folder is no longer on this device.")
       : checkedRecorded?.claimedBy
-        ? `That folder already belongs to ${checkedRecorded.claimedBy}.`
+        ? i18n._("That folder already belongs to {owner}.", {
+            owner: checkedRecorded.claimedBy,
+          })
         : checkedRecorded?.here && !checkedRecorded.repo
-          ? "That folder is here but is not a git repository."
+          ? i18n._("That folder is here but is not a git repository.")
           : undefined;
 
   const controls = (
@@ -655,7 +716,9 @@ function RepairRow({
           disabled={disabled || busy}
           onClick={() => void add(proposal.path)}
         >
-          {busy ? "Adding…" : "Add project"}
+          {busy
+            ? i18n._({ id: "Adding…", comment: "the Add project control, while the add is in flight" })
+            : i18n._("Add project")}
         </button>
       ) : null}
       <button
@@ -666,7 +729,7 @@ function RepairRow({
         disabled={disabled || busy}
         onClick={() => setEditing(true)}
       >
-        Choose folder…
+        {i18n._("Choose folder…")}
       </button>
       {!declined ? (
         <button
@@ -676,7 +739,7 @@ function RepairRow({
           disabled={disabled || busy}
           onClick={() => void setDeclined(true)}
         >
-          Don&apos;t add
+          {i18n._({ id: "Don't add", comment: "decline adding this folder as a project" })}
         </button>
       ) : null}
       {refusal ? (
@@ -690,7 +753,9 @@ function RepairRow({
   const editor = (
     <div className="flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700">
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <span className="shrink-0 text-neutral-500">Which folder on this device is {name}?</span>
+        <span className="shrink-0 text-neutral-500">
+          {i18n._("Which folder on this device is {name}?", { name })}
+        </span>
         <input
           ref={fieldRef}
           data-testid="space-repair-path"
@@ -714,19 +779,21 @@ function RepairRow({
               if (picked) setPath(picked);
             }}
           >
-            Open folder…
+            {i18n._("Open folder…")}
           </button>
         ) : null}
       </label>
       <p className="text-xs text-neutral-500">
-        Where a project lives is recorded on this device only; this never syncs.
+        {i18n._("Where a project lives is recorded on this device only; this never syncs.")}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className={SECONDARY} disabled={busy} onClick={() => void submit()}>
-          {busy ? "Adding…" : "Add project"}
+          {busy
+            ? i18n._({ id: "Adding…", comment: "the Add project control, while the add is in flight" })
+            : i18n._("Add project")}
         </button>
         <button type="button" className={SECONDARY} disabled={busy} onClick={() => setEditing(false)}>
-          Cancel
+          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
         </button>
         {refusal ? (
           <span role="alert" className="text-xs text-red-600 dark:text-red-400">
@@ -746,8 +813,19 @@ function RepairRow({
         <span aria-hidden>{declined ? "○" : "●"}</span>
         <span className="min-w-0 flex-1">
           <span className="font-medium">{name}</span>
-          {repair.sessions > 0 ? ` · ${plural(repair.sessions, "session")} ran in ${recorded}` : ""}
-          {declined ? " · not added" : ""}
+          {repair.sessions > 0
+            ? i18n._({
+                id: " · {count, plural, one {# session} other {# sessions}} ran in {path}",
+                values: { count: repair.sessions, path: recorded },
+                comment: "follows the project's name on a repair row",
+              })
+            : ""}
+          {declined
+            ? i18n._({
+                id: " · not added",
+                comment: "follows the project's name on a repair the reader declined",
+              })
+            : ""}
         </span>
       </div>
       {!declined && evidence ? <p className="text-xs text-neutral-500">{evidence}</p> : null}
@@ -757,7 +835,7 @@ function RepairRow({
 
   function submit(): void {
     const chosen = path.trim();
-    if (!chosen) { setRefusal("Name the folder on this device."); return; }
+    if (!chosen) { setRefusal(i18n._("Name the folder on this device.")); return; }
     void add(chosen);
   }
 }
@@ -884,7 +962,7 @@ export function SyncTab({
     try {
       const stopped = await spaceCancel();
       if (stopped) setAccepted({ where: "stop", key });
-      else onNote("Nothing to stop");
+      else onNote(i18n._("Nothing to stop"));
     } catch (cause) {
       onNote((cause as Error).message);
     } finally {
@@ -909,7 +987,12 @@ export function SyncTab({
     space.diagnostics.length > 0 && listOpen ? (
       <section
         data-testid="space-issues-list"
-        aria-label="Issues"
+        aria-label={i18n._({
+          // Its own id: these are problems, apart from the Sources tab's GitHub issues.
+          id: "space.issues",
+          message: "Issues",
+          comment: "the list of unanswered space issues (problems, not GitHub issues)",
+        })}
         // Amber is attention. With nothing unanswered there is none to
         // pay, so the card stands neutral and the rows stay readable.
         className={`flex flex-col gap-1 rounded-lg border p-3 text-sm ${
@@ -925,8 +1008,14 @@ export function SyncTab({
               : "text-neutral-500"
           }`}
         >
-          Issues ({issueCount})
-          {declinedCount > 0 ? ` · ${declinedCount} not added` : ""}
+          {i18n._("Issues ({count})", { count: issueCount })}
+          {declinedCount > 0
+            ? i18n._({
+                id: " · {count} not added",
+                values: { count: declinedCount },
+                comment: "follows the issues heading: repairs the reader declined",
+              })
+            : ""}
         </h2>
         <ul className="flex flex-col gap-1">
           {/* A repair the core no longer reports is resolved; its
@@ -940,7 +1029,7 @@ export function SyncTab({
                 <span className="min-w-0 flex-1">{summary}</span>
                 {resolvedProjects[key] ? (
                   <button type="button" className={LINK} onClick={() => onOpenProject(resolvedProjects[key]!)}>
-                    Open project
+                    {i18n._("Open project")}
                   </button>
                 ) : null}
               </li>
@@ -948,7 +1037,7 @@ export function SyncTab({
           {ordered.map((entry) => (
             entry.file === MERGE_HEAD_FILE ? (
               <li key={entry.file} title={entry.file}>
-                A Git merge is pending; finish or abort it in your terminal.
+                {i18n._("A Git merge is pending; finish or abort it in your terminal.")}
               </li>
             ) : entry.repair ? (
               <RepairRow
@@ -967,8 +1056,10 @@ export function SyncTab({
                     .filter((k): k is string => Boolean(k) && k !== key && !resolved[k!]);
                   setAdvanceTo(standing[0]);
                   onNote(standing.length
-                    ? `${plural(standing.length, "issue")} left.`
-                    : "All issues resolved.");
+                    ? i18n._("{count, plural, one {# issue} other {# issues}} left.", {
+                        count: standing.length,
+                      })
+                    : i18n._("All issues resolved."));
                 }}
                 onNote={onNote}
               />
@@ -979,7 +1070,9 @@ export function SyncTab({
               </span>
               <span className="min-w-0 flex-1">— {entry.reason}</span>
               {entry.blocking ? (
-                <span className="shrink-0 rounded-full border border-current px-1.5 text-xs">blocking</span>
+                <span className="shrink-0 rounded-full border border-current px-1.5 text-xs">
+                  {i18n._({ id: "blocking", comment: "mark on an issue that stops a sync" })}
+                </span>
               ) : null}
             </li>
             )
@@ -1004,8 +1097,8 @@ export function SyncTab({
 
   const checkLabel =
     busy === "check" || accepted?.where === "check" || (running && sync.op === "check")
-      ? "Checking…"
-      : "Check remote";
+      ? i18n._({ id: "Checking…", comment: "the Check remote control, while the check runs" })
+      : i18n._("Check remote");
   const checkDisabled = disabled || running || pending || !repo.remote || repo.branch !== "main";
 
   return (
@@ -1013,13 +1106,21 @@ export function SyncTab({
       {blocking ? issues : null}
       {repo.branch !== "main" ? (
         <Card testId="space-branch-note" tone="amber">
-          This space is on <span className="font-mono">{repo.branch ?? "no branch"}</span>. The app
-          syncs <span className="font-mono">main</span>; check it out in a terminal.
+          <Rich
+            text={i18n._(
+              "This space is on <0>{branch}</0>. The app syncs <1>main</1>; check it out in a terminal.",
+              { branch: repo.branch ?? noBranch() },
+            )}
+            components={[
+              <span className="font-mono" key="branch" />,
+              <span className="font-mono" key="main" />,
+            ]}
+          />
         </Card>
       ) : null}
       {repo.mergePending ? (
         <Card testId="space-merge-note" tone="amber">
-          A merge is in progress in your terminal. Finish or abort it there.
+          {i18n._("A merge is in progress in your terminal. Finish or abort it there.")}
         </Card>
       ) : null}
       {/* Before this space has met that remote, Join stands by name
@@ -1027,16 +1128,18 @@ export function SyncTab({
           ancestor, so offering it costs nothing and needs no transport. */}
       {repo.remote && repo.branch === "main" && repo.checkedAt === null && !space.lastSync && !repo.unrelated && !running ? (
         <Card testId="space-first-meeting" tone="neutral">
-          <span className="font-medium">This space has not met that remote yet.</span>
+          <span className="font-medium">{i18n._("This space has not met that remote yet.")}</span>
           <span className="text-xs">
-            Sync sends what is here and brings back anything new. If that address
-            already holds a space from another machine, Join first — it brings
-            both into one and asks about anything that differs.
+            {i18n._(
+              "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs.",
+            )}
           </span>
           {firstJoin ? (
             <InlineConfirm
-              question="Join both spaces into one? Anything in both will ask you to choose."
-              confirmLabel="Join"
+              question={i18n._(
+                "Join both spaces into one? Anything in both will ask you to choose.",
+              )}
+              confirmLabel={i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
               onConfirm={() => { setFirstJoin(false); void spaceSync({ join: true }); }}
               onCancel={() => setFirstJoin(false)}
             />
@@ -1049,7 +1152,7 @@ export function SyncTab({
                 disabled={disabled || pending}
                 onClick={() => setFirstJoin(true)}
               >
-                Join
+                {i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
               </button>
             </span>
           )}
@@ -1068,32 +1171,41 @@ export function SyncTab({
       {sync.phase === "choices" ? (
         <Card testId="space-choices-note" tone="amber">
           <span data-testid="space-step-line" className="font-medium">
-            Needs your choice
+            {i18n._("Needs your choice")}
           </span>
-          <span className="text-xs">Your changes are saved; nothing is pushed yet</span>
+          <span className="text-xs">
+            {i18n._("Your changes are saved; nothing is pushed yet")}
+          </span>
         </Card>
       ) : null}
       {sync.phase === "unrelated" ? (
         <Card testId="space-unrelated" tone="amber">
-          <span className="font-medium">Unrelated history</span>
+          <span className="font-medium">{i18n._("Unrelated history")}</span>
           <span>
-            This device and the remote have separate histories. Join both into one space with
-            Join above — anything present in both differently will ask you to choose. A wrong
-            remote URL is the other explanation.
+            {i18n._(
+              "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation.",
+            )}
           </span>
         </Card>
       ) : null}
       {showStopped && sync.phase === "stopped" ? (
         <Card testId="space-stopped" tone={sync.cause === "rejected" ? "amber" : "red"}>
           <span className="font-medium" data-testid="space-stopped-title">
-            {STEP_NAMES[sync.step]} stopped — {sync.message}
+            {i18n._({
+              id: "{step} stopped — {message}",
+              values: { step: STEP_NAMES[sync.step](), message: sync.message },
+              comment: "{step} is the sync step's name; {message} is the cause the host gave",
+            })}
           </span>
           {/* One block: the guidance names the act that gives access,
               this remote's form saying which (space-50). */}
           {sync.guidance ? <span className="text-xs">{sync.guidance}</span> : null}
           {sync.step === "push" && (repo.ahead ?? 0) > 0 ? (
             <span className="text-xs">
-              Your changes are saved locally ({plural(repo.ahead ?? 0, "commit")} ahead).
+              {i18n._(
+                "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead).",
+                { count: repo.ahead ?? 0 },
+              )}
             </span>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
@@ -1105,7 +1217,9 @@ export function SyncTab({
                 disabled={disabled || pending}
                 onClick={() => void retry()}
               >
-                {busy === "retry" || accepted?.where === "retry" ? "Retrying…" : "Retry"}
+                {busy === "retry" || accepted?.where === "retry"
+                  ? i18n._({ id: "Retrying…", comment: "the Retry control, while the retry is in flight" })
+                  : i18n._({ id: "Retry", comment: "run the stopped step again" })}
               </button>
             ) : null}
             <button
@@ -1114,7 +1228,7 @@ export function SyncTab({
               className={SECONDARY}
               onClick={() => setDismissed(phaseKey)}
             >
-              Dismiss
+              {i18n._({ id: "Dismiss", comment: "put this outcome card away" })}
             </button>
             {error?.where === "retry" ? (
               <span role="alert" className="text-xs text-red-600 dark:text-red-400">
@@ -1130,8 +1244,12 @@ export function SyncTab({
             <Icon name="check" className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
             <span className="font-medium" data-testid="space-done-line">
               {sync.sent + sync.received === 0
-                ? "Everything is in sync"
-                : `Synced ${relativeAge(sync.at, now)} · ${sync.sent} sent · ${sync.received} received`}
+                ? i18n._("Everything is in sync")
+                : i18n._("Synced {age} · {sent} sent · {received} received", {
+                    age: relativeAge(sync.at, now),
+                    sent: sync.sent,
+                    received: sync.received,
+                  })}
             </span>
             <button
               type="button"
@@ -1139,7 +1257,7 @@ export function SyncTab({
               className={SECONDARY}
               onClick={() => setDismissed(phaseKey)}
             >
-              Dismiss
+              {i18n._({ id: "Dismiss", comment: "put this outcome card away" })}
             </button>
           </div>
         </Card>
@@ -1147,10 +1265,12 @@ export function SyncTab({
 
       <section aria-labelledby="space-local-heading" className="flex flex-col gap-2">
         <h2 id="space-local-heading" className="text-sm font-medium">
-          Local changes ({space.local.length})
+          {i18n._("Local changes ({count})", { count: space.local.length })}
         </h2>
         {space.local.length === 0 ? (
-          <p className="text-sm text-neutral-500">Nothing to send from this device</p>
+          <p className="text-sm text-neutral-500">
+            {i18n._("Nothing to send from this device")}
+          </p>
         ) : (
           <UnitList
             units={space.local}
@@ -1165,11 +1285,11 @@ export function SyncTab({
       <section aria-labelledby="space-incoming-heading" className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h2 id="space-incoming-heading" className="min-w-0 flex-1 text-sm font-medium">
-            From the remote ({incomingUnits.length})
+            {i18n._("From the remote ({count})", { count: incomingUnits.length })}
             {repo.checkedAt !== null ? (
               <span className="hidden text-xs font-normal text-neutral-500 @2xl:inline">
                 {" "}
-                · checked {relativeAge(repo.checkedAt, now)}
+                {i18n._("· checked {age}", { age: relativeAge(repo.checkedAt, now) })}
               </span>
             ) : null}
           </h2>
@@ -1189,18 +1309,20 @@ export function SyncTab({
           ) : null}
         </div>
         {!repo.remote ? (
-          <p className="text-sm text-neutral-500">Add a remote to share this space</p>
+          <p className="text-sm text-neutral-500">{i18n._("Add a remote to share this space")}</p>
         ) : sync.phase === "unrelated" || (repo.unrelated && sync.phase !== "choices") ? (
           // Unrelated histories list nothing (space-8) — until a join has
           // compared them against the empty tree and asks its choices,
           // whereupon the incoming list stands above the picker (space-9).
-          <p className="text-sm text-neutral-500">Unrelated history</p>
+          <p className="text-sm text-neutral-500">{i18n._("Unrelated history")}</p>
         ) : repo.remoteEmpty ? (
-          <p className="text-sm text-neutral-500">The remote is empty; Sync will send this space</p>
+          <p className="text-sm text-neutral-500">
+            {i18n._("The remote is empty; Sync will send this space")}
+          </p>
         ) : repo.checkedAt === null ? (
-          <p className="text-sm text-neutral-500">Not checked yet</p>
+          <p className="text-sm text-neutral-500">{i18n._("Not checked yet")}</p>
         ) : incomingUnits.length === 0 ? (
-          <p className="text-sm text-neutral-500">Nothing new on the remote</p>
+          <p className="text-sm text-neutral-500">{i18n._("Nothing new on the remote")}</p>
         ) : (
           <UnitList
             units={incomingUnits}
@@ -1220,10 +1342,13 @@ export function SyncTab({
         >
           <div className="flex flex-wrap items-center gap-2">
             <h2 id="space-picker-heading" className="min-w-0 flex-1 text-sm font-medium">
-              Choose for {plural(total, "conflict")}
+              {i18n._(
+                "Choose for {count, plural, one {# conflict} other {# conflicts}}",
+                { count: total },
+              )}
             </h2>
             <span id="space-chosen" data-testid="space-chosen" className="text-xs text-neutral-500">
-              {chosen.length} of {total} chosen
+              {i18n._("{chosen} of {total} chosen", { chosen: chosen.length, total })}
             </span>
           </div>
           <div className="flex flex-col gap-2">
@@ -1249,7 +1374,7 @@ export function SyncTab({
                 setChoices(Object.fromEntries(space.conflicts.map((c) => [c.unit.unit, "mine" as Side])))
               }
             >
-              All mine
+              {i18n._({ id: "All mine", comment: "choose this device's version for every conflict" })}
             </button>
             <button
               type="button"
@@ -1260,7 +1385,7 @@ export function SyncTab({
                 setChoices(Object.fromEntries(space.conflicts.map((c) => [c.unit.unit, "remote" as Side])))
               }
             >
-              All remote
+              {i18n._({ id: "All remote", comment: "choose the remote's version for every conflict" })}
             </button>
             <span className="flex-1" />
             {confirming ? (
@@ -1268,10 +1393,16 @@ export function SyncTab({
                 <InlineConfirm
                   question={
                     remoteCount === 0
-                      ? `Keep this device's version of ${total === 1 ? "the unit" : `all ${total} units`}? The remote's version stays in Git history.`
-                      : `Replace ${plural(remoteCount, "unit")} with the remote's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading.`
+                      ? i18n._(
+                          "{count, plural, one {Keep this device's version of the unit? The remote's version stays in Git history.} other {Keep this device's version of all # units? The remote's version stays in Git history.}}",
+                          { count: total },
+                        )
+                      : i18n._(
+                          "Replace {count, plural, one {# unit} other {# units}} with the remote's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading.",
+                          { count: remoteCount },
+                        )
                   }
-                  confirmLabel="Apply"
+                  confirmLabel={i18n._({ id: "Apply", comment: "confirm: apply the chosen versions" })}
                   onConfirm={() => {
                     setConfirming(false);
                     void apply();
@@ -1288,7 +1419,9 @@ export function SyncTab({
                 disabled={disabled || chosen.length < total || pending}
                 onClick={() => setConfirming(true)}
               >
-                {busy === "apply" || accepted?.where === "apply" ? "Applying…" : "Apply"}
+                {busy === "apply" || accepted?.where === "apply"
+                  ? i18n._({ id: "Applying…", comment: "sync step running: applying the chosen versions" })
+                  : i18n._({ id: "Apply", comment: "confirm: apply the chosen versions" })}
               </button>
             )}
             {error?.where === "apply" ? (

@@ -17,9 +17,10 @@ import type { SpecEditorState } from "../lib/spec-view-model.js";
 import type { DraftSourceMode, DraftSourceState } from "../state/store.js";
 import { busyReason } from "../lib/drafts.js";
 import { relativeAge } from "../lib/time.js";
-import { currentLocale } from "../i18n.js";
+import { currentLocale, i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { Markdown } from "./Markdown.js";
+import { Rich } from "./Rich.js";
 import { SpecEditor } from "./SpecEditor.js";
 
 const BUTTON_CLASS =
@@ -123,23 +124,24 @@ export function DraftSourceTab({
     return (
       <div data-testid="source-paste" className="flex min-h-0 flex-1 flex-col gap-2">
         <label className="flex min-h-0 flex-col gap-0.5 text-sm">
-          <span className="text-xs text-neutral-500">Workflow source</span>
+          <span className="text-xs text-neutral-500">{i18n._("Workflow source")}</span>
           <textarea
             data-testid="paste-text"
             value={mode.pasteText}
             onChange={(event) => onMode({ pasteText: event.target.value })}
             rows={6}
-            placeholder="Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
+            placeholder={i18n._("Paste the playbook source — prose, a SKILL.md, or workflow markdown…")}
             className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950"
           />
         </label>
         <label className="flex flex-col gap-0.5 text-sm">
-          <span className="text-xs text-neutral-500">Source file path (overrides the text)</span>
+          <span className="text-xs text-neutral-500">{i18n._("Source file path (overrides the text)")}</span>
           <span className="flex items-center gap-1.5">
             <input
               data-testid="paste-path"
               value={mode.pastePath}
               onChange={(event) => onMode({ pastePath: event.target.value })}
+              // The placeholder is the shape of a path, not a phrase.
               placeholder="/path/to/workflow.md"
               className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
             />
@@ -154,7 +156,7 @@ export function DraftSourceTab({
                 }}
                 className={BUTTON_CLASS}
               >
-                Pick file
+                {i18n._({ id: "Pick file", comment: "open the OS file picker" })}
               </button>
             ) : null}
           </span>
@@ -172,8 +174,8 @@ export function DraftSourceTab({
           <span data-testid="paste-caption" className="text-xs text-neutral-500">
             {waiting ??
               (mode.pastePath.trim()
-                ? "The file is copied in as the draft's source"
-                : "Replaces the draft's source")}
+                ? i18n._("The file is copied in as the draft's source")
+                : i18n._("Replaces the draft's source"))}
           </span>
           <span className="ml-auto flex items-center gap-1.5">
             <button
@@ -182,7 +184,7 @@ export function DraftSourceTab({
               onClick={() => onMode({ mode: "view" })}
               className={BUTTON_CLASS}
             >
-              Cancel
+              {i18n._({ id: "Cancel", comment: "leave an editor without saving" })}
             </button>
             <button
               type="button"
@@ -192,7 +194,7 @@ export function DraftSourceTab({
               onClick={() => void useAsSource()}
               className="rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
-              {pasteBusy ? "Writing…" : "Use as source"}
+              {pasteBusy ? i18n._({ id: "Writing…", comment: "the source is being written to disk" }) : i18n._("Use as source")}
             </button>
           </span>
         </div>
@@ -218,27 +220,30 @@ export function DraftSourceTab({
         className="m-auto flex max-w-sm flex-col items-center gap-2 text-center text-sm text-neutral-500"
       >
         <span>
-          No source yet — the agent writes <span className="font-mono">{path}</span> here as
-          you talk.
+          <Rich
+            text={i18n._(
+              "No source yet — the agent writes <0>{path}</0> here as you talk.",
+              { path },
+            )}
+            components={[<span className="font-mono" key="path" />]}
+          />
         </span>
         <span className="flex items-center gap-2 text-xs">
-          Prefer your own?
+          {i18n._("Prefer your own?")}
           <button
             type="button"
             data-testid="source-paste"
-            title="Paste a source or pick a file"
+            title={i18n._("Paste a source or pick a file")}
             onClick={() => onMode({ mode: "paste" })}
             className={BUTTON_CLASS}
           >
-            Paste
+            {i18n._({ id: "Paste", comment: "bring in a source of one's own" })}
           </button>
         </span>
       </div>
     );
   }
 
-  const who =
-    source.by === "agent" ? " by the agent" : source.by === "you" ? " by you" : "";
   return (
     <div data-testid="source-view" className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -247,27 +252,32 @@ export function DraftSourceTab({
           title={new Date(source.mtime).toLocaleString(currentLocale())}
           className="min-w-0 truncate text-xs text-neutral-500"
         >
-          Updated {relativeAge(source.mtime, now)}
-          {who}
+          {/* One caption per hand, so no phrase is assembled: who last
+              wrote the source, and how long ago. */}
+          {source.by === "agent"
+            ? i18n._("Updated {age} by the agent", { age: relativeAge(source.mtime, now) })
+            : source.by === "you"
+              ? i18n._("Updated {age} by you", { age: relativeAge(source.mtime, now) })
+              : i18n._("Updated {age}", { age: relativeAge(source.mtime, now) })}
         </span>
         <span className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
             data-testid="source-edit"
-            title="Edit the whole file"
+            title={i18n._("Edit the whole file")}
             onClick={openEditor}
             className={BUTTON_CLASS}
           >
-            Edit
+            {i18n._({ id: "Edit", comment: "open the whole-file editor on the source" })}
           </button>
           <button
             type="button"
             data-testid="source-paste"
-            title="Replace the source with pasted text or a file"
+            title={i18n._("Replace the source with pasted text or a file")}
             onClick={() => onMode({ mode: "paste" })}
             className={BUTTON_CLASS}
           >
-            Paste
+            {i18n._({ id: "Paste", comment: "bring in a source of one's own" })}
           </button>
         </span>
       </div>

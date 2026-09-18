@@ -35,6 +35,7 @@ import {
   PROJECT_ATTENTION_WORDS,
   type AttentionKind,
 } from "../state/dashboard.js";
+import { i18n } from "../i18n.js";
 import { stateLabel, type StatusTone } from "../lib/labels.js";
 import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
@@ -49,6 +50,7 @@ import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { RecordRow } from "./RecordRow.js";
 import { ResizableFrame } from "./ResizableFrame.js";
+import { Rich } from "./Rich.js";
 import {
   QueuedMark,
   queueAfterLinkPhrase,
@@ -359,9 +361,15 @@ function IntentHistoryRow({
           className="min-w-0 flex-1"
         >
           <InlineConfirm
-            question="Remove this intent from history?"
-            confirmLabel="Remove"
-            cancelLabel="Keep"
+            question={i18n._("Remove this intent from history?")}
+            confirmLabel={i18n._({
+              id: "Remove",
+              comment: "confirm: take this row off the record",
+            })}
+            cancelLabel={i18n._({
+              id: "Keep",
+              comment: "cancel a destructive confirm: leave things as they are",
+            })}
             onConfirm={onRemove}
             onCancel={onKeep}
           />
@@ -370,16 +378,32 @@ function IntentHistoryRow({
         <>
           {verdict === "done" ? <Check /> : null}
           <span className="sr-only">
-            {verdict === "bug" ? "bug fixed" : verdict}
+            {verdict === "bug"
+              ? i18n._({
+                  id: "bug fixed",
+                  comment: "history row, spoken only: a bug this work closed",
+                })
+              : verdict === "dropped"
+                ? i18n._({
+                    id: "dropped",
+                    comment: "history row tag: work let go after it ran",
+                  })
+                : i18n._({
+                    id: "done",
+                    comment: "history row: work carried through and confirmed",
+                  })}
           </span>
           {verdict === "bug" ? (
             <span data-testid="history-tag" className={BUG_TAG}>
-              bug
+              {i18n._({ id: "bug", comment: "history row tag: a fixed bug" })}
             </span>
           ) : null}
           {verdict === "dropped" ? (
             <span data-testid="history-tag" className={NEUTRAL_TAG}>
-              dropped
+              {i18n._({
+                id: "dropped",
+                comment: "history row tag: work let go after it ran",
+              })}
             </span>
           ) : null}
           <span
@@ -394,8 +418,8 @@ function IntentHistoryRow({
           <button
             type="button"
             data-testid={`history-remove-${intent.id}`}
-            aria-label={`Remove ${title} from history`}
-            title="Remove this intent from history"
+            aria-label={i18n._("Remove {title} from history", { title })}
+            title={i18n._("Remove this intent from history")}
             onClick={onAsk}
             className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:text-red-400"
           >
@@ -430,7 +454,17 @@ function RecordHistoryRow({
       }`}
     >
       {superseded ? null : <Check />}
-      <span className="sr-only">{superseded ? "superseded" : "done"}</span>
+      <span className="sr-only">
+        {superseded
+          ? i18n._({
+              id: "superseded",
+              comment: "history row tag: a later record replaced this one",
+            })
+          : i18n._({
+              id: "done",
+              comment: "history row: work carried through and confirmed",
+            })}
+      </span>
       <RecordRow
         record={record}
         onClick={onOpen}
@@ -438,7 +472,10 @@ function RecordHistoryRow({
         trailing={
           superseded ? (
             <span data-testid="history-tag" className={NEUTRAL_TAG}>
-              superseded
+              {i18n._({
+                id: "superseded",
+                comment: "history row tag: a later record replaced this one",
+              })}
             </span>
           ) : undefined
         }
@@ -523,13 +560,20 @@ function HistoryBand({
       className="flex flex-col gap-1 focus:outline-none"
       data-testid={`history-${project.id}`}
     >
-      <BandHeading>History</BandHeading>
+      <BandHeading>
+        {i18n._({
+          id: "History",
+          comment: "project band heading: work already finished",
+        })}
+      </BandHeading>
       {rows.length === 0 ? (
         <div
           className="text-xs text-neutral-500"
           data-testid={`history-empty-${project.id}`}
         >
-          {inFlight ? "Loading…" : "Nothing done here yet."}
+          {inFlight
+            ? i18n._({ id: "Loading…", comment: "a read is still in flight" })
+            : i18n._("Nothing done here yet.")}
         </div>
       ) : (
         // The cut edges draw only where the frame overflows, so a short
@@ -538,14 +582,17 @@ function HistoryBand({
         <ResizableFrame
           as="ul"
           frameId={`history:${project.id}`}
-          label="Resize History"
+          label={i18n._("Resize History")}
           unit={HISTORY_ROW}
           defaultSteps={HISTORY_FRAME}
           minSteps={HISTORY_MIN}
           maxSteps={HISTORY_MAX}
           onOverflow={setOverflowing}
           data-testid={`history-frame-${project.id}`}
-          aria-label="History"
+          aria-label={i18n._({
+            id: "History",
+            comment: "project band heading: work already finished",
+          })}
           // A frame that scrolls is reachable by keyboard as well as
           // through the controls it holds (DR-010 §5).
           tabIndex={overflowing ? 0 : undefined}
@@ -593,7 +640,12 @@ function HistoryBand({
                 onClick={fetchOlder}
                 className={`${TEXT_LINK} text-xs disabled:opacity-50`}
               >
-                {inFlight ? "Loading…" : "Older…"}
+                {inFlight
+                  ? i18n._({ id: "Loading…", comment: "a read is still in flight" })
+                  : i18n._({
+                      id: "Older…",
+                      comment: "History pager: fetch the next page back in time",
+                    })}
               </button>
             </li>
           ) : null}
@@ -630,7 +682,10 @@ function NowBand({
   // control has left with the intent, to the session row.
   const [confirmDrop, setConfirmDrop] = useState(false);
   const [dropping, setDropping] = useState(false);
-  const [dropNote, setDropNote] = useState<string>();
+  // The note carries whether it failed, never a phrase the tone is
+  // read back out of: a text is no longer the same string in every
+  // language (localization-4).
+  const [dropNote, setDropNote] = useState<{ text: string; failed?: boolean }>();
   const [refocusDrop, setRefocusDrop] = useState(false);
   const dropRef = useRef<HTMLButtonElement>(null);
   const rowRef = useRef<HTMLButtonElement>(null);
@@ -650,8 +705,15 @@ function NowBand({
     // Quiet when the project has no conversation yet (dashboard-8/28).
     return (
       <div className="flex flex-col gap-1" data-testid={`now-${project.id}`}>
-        <BandHeading>Now</BandHeading>
-        <div className="text-xs text-neutral-500">Idle — no conversation yet.</div>
+        <BandHeading>
+          {i18n._({
+            id: "Now",
+            comment: "project band heading: the current conversation",
+          })}
+        </BandHeading>
+        <div className="text-xs text-neutral-500">
+          {i18n._("Idle — no conversation yet.")}
+        </div>
       </div>
     );
   }
@@ -674,7 +736,7 @@ function NowBand({
     served?.intent.text ??
       bossTurns[bossTurns.length - 1]?.text ??
       session.title ??
-      "no messages yet",
+      i18n._("no messages yet"),
   );
   const playbook = view?.frames[0]?.playbookId;
 
@@ -688,11 +750,19 @@ function NowBand({
       // The verdict closes the intent; the session keeps its turn
       // (dashboard-41) — History lists the drop once that turn ends.
       await closeIntent(dropped.id, "dropped");
-      setDropNote(`Dropped “${droppedTitle}” — the session keeps running.`);
+      setDropNote({
+        text: i18n._("Dropped “{title}” — the session keeps running.", {
+          title: droppedTitle,
+        }),
+      });
     } catch (cause) {
-      setDropNote(
-        `Couldn't drop “${droppedTitle}”: ${(cause as Error).message}`,
-      );
+      setDropNote({
+        text: i18n._("Couldn't drop “{title}”: {reason}", {
+          title: droppedTitle,
+          reason: (cause as Error).message,
+        }),
+        failed: true,
+      });
     } finally {
       setDropping(false);
       setRefocusDrop(true);
@@ -703,7 +773,12 @@ function NowBand({
 
   return (
     <div className="flex flex-col gap-1" data-testid={`now-${project.id}`}>
-      <BandHeading>Now</BandHeading>
+      <BandHeading>
+        {i18n._({
+          id: "Now",
+          comment: "project band heading: the current conversation",
+        })}
+      </BandHeading>
       {/* The row fits its band (DR-041): the title owns the slack, the
           age hides below @md and the playbook name below @xs. */}
       <div className="@container flex items-center gap-2">
@@ -736,7 +811,9 @@ function NowBand({
             className="hidden shrink-0 text-xs text-neutral-500 @md:inline"
             title={absoluteTitle(session.createdAt)}
           >
-            started {relativeAge(session.createdAt, now)}
+            {i18n._("started {age}", {
+              age: relativeAge(session.createdAt, now),
+            })}
           </span>
         </button>
         {served ? (
@@ -745,21 +822,37 @@ function NowBand({
             type="button"
             data-testid={`now-drop-${project.id}`}
             disabled={dropping}
-            aria-label={`Drop ${title}`}
-            title="Close this intent as dropped — the session keeps running"
+            aria-label={i18n._("Drop {title}", { title })}
+            title={i18n._(
+              "Close this intent as dropped — the session keeps running",
+            )}
             onClick={() => setConfirmDrop(true)}
             className="min-h-6 shrink-0 rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:border-red-300 hover:text-red-600 disabled:animate-pulse dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-red-800 dark:hover:text-red-400"
           >
-            {dropping ? "Dropping…" : "Drop"}
+            {dropping
+              ? i18n._({
+                  id: "Dropping…",
+                  comment: "verdict control, busy: the verdict is in flight",
+                })
+              : i18n._({
+                  id: "Drop",
+                  comment: "verdict control: let this work go, unaccepted",
+                })}
           </button>
         ) : null}
       </div>
       {confirmDrop && served ? (
         <div data-testid={`now-drop-confirm-${project.id}`}>
           <InlineConfirm
-            question={`Drop “${title}”? Work is underway.`}
-            confirmLabel="Drop"
-            cancelLabel="Keep"
+            question={i18n._("Drop “{title}”? Work is underway.", { title })}
+            confirmLabel={i18n._({
+              id: "Drop",
+              comment: "verdict control: let this work go, unaccepted",
+            })}
+            cancelLabel={i18n._({
+              id: "Keep",
+              comment: "cancel a destructive confirm: leave things as they are",
+            })}
             onConfirm={() => void drop()}
             onCancel={() => {
               setConfirmDrop(false);
@@ -773,12 +866,12 @@ function NowBand({
           role="status"
           data-testid={`now-note-${project.id}`}
           className={`text-xs ${
-            dropNote.startsWith("Couldn't")
+            dropNote.failed
               ? "text-red-600 dark:text-red-400"
               : "text-neutral-500"
           }`}
         >
-          {dropNote}
+          {dropNote.text}
         </div>
       ) : null}
     </div>
@@ -850,7 +943,9 @@ function ProvenanceAction({
         onClick={onDone}
         className={MENU_ITEM}
       >
-        {source.kind === "issue" ? "Issue" : "PR"} #{source.ref} ↗
+        {source.kind === "issue"
+          ? i18n._("Issue #{ref} ↗", { ref: source.ref })
+          : i18n._("PR #{ref} ↗", { ref: source.ref })}
       </a>
     );
   }
@@ -864,8 +959,8 @@ function ProvenanceAction({
         disabled={!recordPath}
         title={
           recordPath
-            ? `Open ${source.ref} in Specs`
-            : "This record is not in the project's specs tree"
+            ? i18n._("Open {id} in Specs", { id: source.ref })
+            : i18n._("This record is not in the project's specs tree")
         }
         onClick={() => {
           onDone();
@@ -889,15 +984,18 @@ function ProvenanceAction({
       disabled={!sessionKnown}
       title={
         sessionKnown
-          ? "Open the session this was captured from"
-          : "The capturing session is gone"
+          ? i18n._("Open the session this was captured from")
+          : i18n._("The capturing session is gone")
       }
       onClick={() => {
         onDone();
         onOpenSession(source.ref);
       }}
     >
-      Session
+      {i18n._({
+        id: "Session",
+        comment: "row menu item: open the session this intent came from",
+      })}
     </MenuItem>
   );
 }
@@ -1034,7 +1132,7 @@ function QueueRow({
               leaveEdit();
             }
           }}
-          aria-label="Edit intent text"
+          aria-label={i18n._("Edit intent text")}
           className="min-h-6 w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
         />
       </li>
@@ -1059,7 +1157,7 @@ function QueueRow({
       }}
       tabIndex={0}
       onKeyDown={onKeyDown}
-      title="Drag, Alt+↑/↓, or the row menu reorders"
+      title={i18n._("Drag, Alt+↑/↓, or the row menu reorders")}
       className={`@container group relative flex min-h-6 items-center gap-2 rounded px-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
         highlighted ? "ring-2 ring-brand-400" : ""
       }`}
@@ -1099,17 +1197,23 @@ function QueueRow({
         <button
           type="button"
           data-testid={`upnext-start-${intent.id}`}
-          aria-label={`Start ${title} in ${ownerName}`}
+          aria-label={i18n._("Start {title} in {project}", {
+            title,
+            project: ownerName,
+          })}
           onClick={onStart}
           className="min-h-6 shrink-0 rounded bg-brand-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
         >
-          Start
+          {i18n._({
+            id: "Start",
+            comment: "queue row control: begin this queued intent",
+          })}
         </button>
       ) : null}
       <button
         ref={triggerRef}
         type="button"
-        aria-label={`Actions for ${title}`}
+        aria-label={i18n._("Actions for {title}", { title })}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         aria-controls={menuOpen ? menuId : undefined}
@@ -1124,7 +1228,7 @@ function QueueRow({
           ref={menuRef}
           id={menuId}
           role="menu"
-          aria-label={`Actions for ${title}`}
+          aria-label={i18n._("Actions for {title}", { title })}
           className="absolute right-0 top-full z-10 mt-0.5 flex min-w-44 flex-col rounded-md border border-neutral-200 bg-white p-1 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
         >
           {/* A single-pointer alternative to dragging (WCAG 2.2 2.5.7). */}
@@ -1138,7 +1242,10 @@ function QueueRow({
               moveUp();
             }}
           >
-            Move up
+            {i18n._({
+              id: "Move up",
+              comment: "row menu item: one step earlier in the queue",
+            })}
           </MenuItem>
           <MenuItem
             data-testid={`upnext-movedown-action-${intent.id}`}
@@ -1150,7 +1257,10 @@ function QueueRow({
               moveDown();
             }}
           >
-            Move down
+            {i18n._({
+              id: "Move down",
+              comment: "row menu item: one step later in the queue",
+            })}
           </MenuItem>
           <MenuItem
             data-testid={`upnext-edit-action-${intent.id}`}
@@ -1159,7 +1269,10 @@ function QueueRow({
               setEditing(intent.text);
             }}
           >
-            Edit text
+            {i18n._({
+              id: "Edit text",
+              comment: "row menu item: rewrite this intent's words",
+            })}
           </MenuItem>
           <MenuItem
             data-testid={`upnext-remove-action-${intent.id}`}
@@ -1171,7 +1284,10 @@ function QueueRow({
               void onRemove(activatedByKeyboard(event));
             }}
           >
-            Remove
+            {i18n._({
+              id: "Remove",
+              comment: "row menu item: take this row out of the queue",
+            })}
           </MenuItem>
           <ProvenanceAction
             intent={intent}
@@ -1268,7 +1384,10 @@ function UpNextBand({
         {
           intent,
           afterId,
-          error: `Couldn't remove “${firstLine(intent.text)}”: ${(cause as Error).message}`,
+          error: i18n._("Couldn't remove “{title}”: {reason}", {
+            title: firstLine(intent.text),
+            reason: (cause as Error).message,
+          }),
         },
         { byKeyboard },
       );
@@ -1295,7 +1414,13 @@ function UpNextBand({
       setFocusRowId(restored.id);
     } catch (cause) {
       show(
-        { intent, afterId, error: `Couldn't undo: ${(cause as Error).message}` },
+        {
+          intent,
+          afterId,
+          error: i18n._("Couldn't undo: {reason}", {
+            reason: (cause as Error).message,
+          }),
+        },
         { byKeyboard: true },
       );
     }
@@ -1307,24 +1432,34 @@ function UpNextBand({
       className="flex flex-col gap-1"
       data-testid={`upnext-${project.id}`}
     >
-      <BandHeading>Up next</BandHeading>
+      <BandHeading>
+        {i18n._({
+          id: "Up next",
+          comment: "band heading: the project's queued work",
+        })}
+      </BandHeading>
       {queue.length === 0 ? (
         <div className="text-xs text-neutral-500">
           {ledgerState === "ready" ? (
-            "Nothing queued — add an intent below, or Queue an issue, PR, or record from Sources."
+            i18n._(
+              "Nothing queued — add an intent below, or Queue an issue, PR, or record from Sources.",
+            )
           ) : ledgerState === "loading" ? (
-            "Loading…"
+            i18n._({ id: "Loading…", comment: "a read is still in flight" })
           ) : (
-            <>
-              The queue could not be loaded.{" "}
-              <button
-                type="button"
-                onClick={() => void loadLedger()}
-                className={TEXT_LINK}
-              >
-                Retry
-              </button>
-            </>
+            // One whole sentence with its control inside it
+            // (localization-4).
+            <Rich
+              text={i18n._("The queue could not be loaded. <0>Retry</0>")}
+              components={[
+                <button
+                  key="retry"
+                  type="button"
+                  onClick={() => void loadLedger()}
+                  className={TEXT_LINK}
+                />,
+              ]}
+            />
           )}
         </div>
       ) : null}
@@ -1399,7 +1534,9 @@ function UpNextBand({
           ) : (
             <>
               <span className="min-w-0 truncate">
-                Removed “{firstLine(removed.intent.text)}”
+                {i18n._("Removed “{title}”", {
+                  title: firstLine(removed.intent.text),
+                })}
               </span>
               <span aria-hidden="true">—</span>
               <button
@@ -1408,7 +1545,10 @@ function UpNextBand({
                 onClick={() => void undo()}
                 className={TEXT_LINK}
               >
-                Undo
+                {i18n._({
+                  id: "Undo",
+                  comment: "put the row just removed back where it was",
+                })}
               </button>
             </>
           )}
@@ -1431,19 +1571,26 @@ function UpNextBand({
               add();
             }
           }}
-          placeholder="Add intent…"
-          aria-label={`Add an intent to ${project.name}`}
+          placeholder={i18n._("Add intent…")}
+          aria-label={i18n._("Add an intent to {project}", {
+            project: project.name,
+          })}
           className="min-h-6 min-w-0 flex-1 resize-none rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none [field-sizing:content] max-h-[max(40vh,1.75rem)] dark:border-neutral-700"
         />
         <button
           type="button"
           data-testid={`queue-intent-${project.id}`}
-          aria-label={`Queue an intent in ${project.name}`}
+          aria-label={i18n._("Queue an intent in {project}", {
+            project: project.name,
+          })}
           disabled={!draft.trim()}
           onClick={add}
           className="min-h-6 shrink-0 rounded bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700 disabled:bg-neutral-200 disabled:text-neutral-500 dark:bg-brand-500 dark:hover:bg-brand-400 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500"
         >
-          Queue
+          {i18n._({
+            id: "Queue",
+            comment: "capture control: put this artifact in the queue",
+          })}
         </button>
       </div>
     </div>
@@ -1522,7 +1669,7 @@ export function ProjectGroup({
     undefined,
   );
   const attentionDescription = attentionKind
-    ? `A session ${PROJECT_ATTENTION_WORDS[attentionKind]}`
+    ? PROJECT_ATTENTION_WORDS[attentionKind]()
     : undefined;
   const bodyId = `project-bands-${project.id}`;
   const attentionId = `project-attention-description-${project.id}`;
@@ -1540,7 +1687,11 @@ export function ProjectGroup({
               data-testid={`project-toggle-${project.id}`}
               aria-expanded={!collapsed}
               aria-controls={bodyId}
-              aria-label={`${collapsed ? "Expand" : "Collapse"} ${project.name}`}
+              aria-label={
+                collapsed
+                  ? i18n._("Expand {project}", { project: project.name })
+                  : i18n._("Collapse {project}", { project: project.name })
+              }
               aria-describedby={attentionDescription ? attentionId : undefined}
               title={attentionDescription}
               onClick={() => setCollapsed(project.id, !collapsed)}
