@@ -16,6 +16,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- The interface speaks your language ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md)).
+  Settings offers System, English and 简体中文, one choice per Spex home
+  that reaches every page of it on both shells and the desktop's own
+  notifications; with no choice stored, each client follows its own
+  system, reading Simplified Chinese as Chinese and everything else as
+  English. Moments, clock times, numbers, sorted names, ages and
+  durations all follow the chosen language. Each language is one
+  gettext catalog beside the source that a human reads and edits in
+  place, and a build refuses a language whose translation is
+  incomplete, so no page mixes two.
 - A failure says what, why, and what now. The failed status line becomes
   a three-line card — the workflow and step that failed, the cause in a
   plain phrase with its evidence, and what to do next — from the
@@ -31,6 +41,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- The app requires Node.js 22.19 or later, the floor of the catalog
+  tooling ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md));
+  CI drops Node 20, which reached end of life in April 2026.
 - The app requires Playbook 14.1 or later ([DR-076](specs/decisions/076-playbook-14-1-adoption.md)).
   Uncommitted work already in your tree is now the Coder's context rather
   than an ambiguity: a governed call may carry it in its one commit, the

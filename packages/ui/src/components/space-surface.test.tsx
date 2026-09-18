@@ -29,6 +29,7 @@ import {
   setClientForTests,
   useAppStore,
 } from "../state/store.js";
+import { currentLocale } from "../i18n.js";
 
 const NOW = Date.now();
 const MIN = 60_000;
@@ -357,7 +358,7 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     const lastSync = screen.getByTestId("space-last-sync");
     expect(lastSync.textContent).toContain("Synced");
     expect(lastSync.textContent).toContain("2h ago");
-    expect(lastSync.getAttribute("title")).toBe(new Date(NOW - 2 * HOUR).toLocaleString());
+    expect(lastSync.getAttribute("title")).toBe(new Date(NOW - 2 * HOUR).toLocaleString(currentLocale()));
     expect(screen.getByTestId("space-local-count").textContent).toBe("8 changes");
     expect(screen.getByTestId("space-local-count").getAttribute("aria-label")).toBe("8 local changes");
     // Issues count the diagnostics — the pending merge among them, once —

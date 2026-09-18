@@ -13,6 +13,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./protocol": "./dist/protocol.js",
+    "./language": "./dist/language.js",
     "./directives": "./dist/directives.js",
     "./testing": "./dist/testing/index.js"
   },

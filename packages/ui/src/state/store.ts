@@ -9,6 +9,7 @@
 
 import { create } from "zustand";
 import { hasPresentationHeader } from "@sublang/spex-core/protocol";
+import { isLanguage, resolveLanguage, type Language } from "@sublang/spex-core/language";
 import type {
   AgentBlockInput,
   AdapterName,
@@ -38,6 +39,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { SpexClient, defaultCoreUrl, type ConnectionStatus } from "../lib/client.js";
+import { activateLanguage } from "../i18n.js";
 import { currentSessionOf } from "../lib/sessions.js";
 import type { SpecEditorState } from "../lib/spec-view-model.js";
 import {
@@ -168,6 +170,12 @@ export interface AppState {
   openTabs: Record<string, string[]>;
   /** Sidebar chrome (DR-030), persisted app-wide. */
   railCollapsed: boolean;
+  /** The interface language (localization-2, localization-3): the
+   * home's stored choice — null meaning the reader's system — and the
+   * language this page therefore renders in. The choice is mirrored in
+   * this page's own storage so the first paint already speaks it,
+   * before the core has answered. */
+  language: { choice: Language | null; resolved: Language };
   /** The Captain pane's share of the run view, as a percentage. A
    * machine drawing has a natural width that text does not, so the
    * split is the reader's to set (DR-030). */
@@ -349,6 +357,10 @@ export interface AppState {
   /** File a session out of the working set — never ends it. */
   closeTab(projectId: string, sessionId: string): void;
   setRailCollapsed(collapsed: boolean): void;
+  /** Write the home's interface language (localization-3): an offered
+   * code, or null for the reader's system. Resolves once the core has
+   * taken it; rejects with the core's reason, which the control shows. */
+  setLanguage(choice: Language | null): Promise<void>;
   setCaptainSplit(percent: number): void;
   /** Set a capped frame's height, in that frame's own steps. */
   setFrameHeight(frameId: string, steps: number): void;
@@ -467,6 +479,9 @@ let client: SpexClient | undefined;
 
 const CURRENT_PROJECT_KEY = "spex.currentProject";
 const RAIL_COLLAPSED_KEY = "spex.railCollapsed";
+/** This page's mirror of the home's choice (localization-3), so the
+ * first paint already speaks it rather than waiting for the core. */
+export const LANGUAGE_KEY = "spex.language";
 const EXPANDED_PROJECTS_KEY = "spex.expandedProjects";
 const DASHBOARD_GROUPS_COLLAPSED_KEY = "spex.dashboardGroupsCollapsed";
 const CAPTAIN_SPLIT_KEY = "spex.captainSplit";
@@ -593,6 +608,40 @@ export function safeStorageSet(key: string, value: string): void {
   }
 }
 
+export function safeStorageRemove(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Persistence is best-effort.
+  }
+}
+
+/** The languages this client itself prefers (localization-2): the
+ * browser's, which the desktop window inherits from the OS. */
+function preferredLanguages(): readonly string[] {
+  try {
+    if (navigator.languages?.length) return navigator.languages;
+    return navigator.language ? [navigator.language] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The mirrored choice, an unoffered code counting as none. */
+function readLanguageChoice(): Language | null {
+  const stored = safeStorageGet(LANGUAGE_KEY);
+  return isLanguage(stored) ? stored : null;
+}
+
+/** The language this page paints in, settled before the first render
+ * (localization-3) — the store initializer runs on import. */
+const initialLanguage = (() => {
+  const choice = readLanguageChoice();
+  const resolved = resolveLanguage(choice, preferredLanguages());
+  activateLanguage(resolved);
+  return { choice, resolved };
+})();
+
 function readExpandedProjects(): Record<string, boolean> {
   try {
     const raw = safeStorageGet(EXPANDED_PROJECTS_KEY);
@@ -671,6 +720,23 @@ export const useAppStore = create<AppState>((set, get) => {
 
   function setRunError(sessionId: string, message: string): void {
     set({ runErrors: { ...get().runErrors, [sessionId]: message } });
+  }
+
+  /** The home's choice, from wherever it reached this page — the reply
+   * to `language.get`, the reply to this page's own `language.set`, or
+   * the broadcast that followed anyone's (localization-3). Idempotent:
+   * the setter gets both its reply and the broadcast. */
+  function applyLanguageChoice(choice: Language | null | undefined): void {
+    const stored = isLanguage(choice) ? choice : null;
+    if (stored) safeStorageSet(LANGUAGE_KEY, stored);
+    else safeStorageRemove(LANGUAGE_KEY);
+    const resolved = resolveLanguage(stored, preferredLanguages());
+    const current = get().language;
+    if (current.choice === stored && current.resolved === resolved) return;
+    // Only a changed resolution reloads the catalog; the root re-renders
+    // off the resolved language, so nothing else need subscribe.
+    if (current.resolved !== resolved) activateLanguage(resolved);
+    set({ language: { choice: stored, resolved } });
   }
 
   /** Dispatch the next queued composer message when a turn is idle
@@ -918,6 +984,11 @@ export const useAppStore = create<AppState>((set, get) => {
       case "readiness.state":
         set({ readiness: message.entries });
         break;
+      case "language.state":
+        // One choice per home (localization-3): it reaches every page
+        // with no subscription, this one's own setter included.
+        applyLanguageChoice(message.language);
+        break;
       case "compile.progress": {
         const progress = get().compileProgress;
         const times = get().compileProgressAt;
@@ -1084,6 +1155,7 @@ export const useAppStore = create<AppState>((set, get) => {
     workspaceTabs: {},
     openTabs: {},
     railCollapsed: safeStorageGet(RAIL_COLLAPSED_KEY) === "1",
+    language: initialLanguage,
     captainSplit: readCaptainSplit(),
     frameHeights: readFrameHeights(),
     expandedProjects: readExpandedProjects(),
@@ -1245,6 +1317,17 @@ export const useAppStore = create<AppState>((set, get) => {
         getClient().command("project.list", {}),
         getClient().command("session.list", {}),
       ]);
+      // The home's choice, once connected (localization-3). A
+      // preference never blocks the app: the page keeps painting in
+      // what it last read until the core answers.
+      void (async () => {
+        try {
+          const result = await getClient().command("language.get", {});
+          applyLanguageChoice(result?.language ?? null);
+        } catch {
+          // Unreadable: this page's mirror stands.
+        }
+      })();
       const loaded = new Set(Object.keys(get().views));
       for (const old of get().sessions) if (!sessions.some((session) => session.id === old.id)) get().forgetSession(old.id, old.projectId);
       set({ configState, readiness, projects, sessions, views:{} });
@@ -1339,6 +1422,13 @@ export const useAppStore = create<AppState>((set, get) => {
     setRailCollapsed(collapsed: boolean): void {
       set({ railCollapsed: collapsed });
       safeStorageSet(RAIL_COLLAPSED_KEY, collapsed ? "1" : "0");
+    },
+
+    async setLanguage(choice: Language | null): Promise<void> {
+      // The core owns the choice; the broadcast that follows reaches
+      // this page too, and applying it twice changes nothing.
+      const result = await getClient().command("language.set", { language: choice });
+      applyLanguageChoice(result?.language ?? null);
     },
 
     setCaptainSplit(percent: number): void {

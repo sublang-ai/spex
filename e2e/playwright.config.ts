@@ -29,6 +29,11 @@ export default defineConfig({
     screenshot: "only-on-failure",
     // The shell serves loopback plaintext; nothing is remote.
     ignoreHTTPSErrors: true,
+    // The interface follows the browser's languages when the home has
+    // stored no choice (localization-2), so the journeys pin English
+    // and assert English; a journey that wants Chinese sets its own
+    // context locale.
+    locale: "en-US",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });

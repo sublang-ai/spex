@@ -19,6 +19,7 @@ import {
   type AttentionItem,
 } from "../state/dashboard.js";
 import { useAppStore } from "../state/store.js";
+import { i18n } from "../i18n.js";
 import { isHistory } from "../lib/sessions.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { absoluteTitle, compactAge, relativeAge } from "../lib/time.js";
@@ -48,13 +49,15 @@ export const SURFACES: readonly Surface[] = [
 
 /** What each surface is called on screen (DR-057): the Workspace
  * reads "Projects" while every identifier and state key keeps the
- * internal name, so nothing stored changes shape. */
-export const SURFACE_LABELS: Record<Surface, string> = {
-  Dashboard: "Dashboard",
-  Workspace: "Projects",
-  Playbooks: "Playbooks",
-  Space: "Space",
-  Settings: "Settings",
+ * internal name, so nothing stored changes shape. Each label is a
+ * thunk, never a string: a table read at module load would freeze the
+ * language the module was imported in (localization-4). */
+export const SURFACE_LABELS: Record<Surface, () => string> = {
+  Dashboard: () => i18n._("Dashboard"),
+  Workspace: () => i18n._("Projects"),
+  Playbooks: () => i18n._("Playbooks"),
+  Space: () => i18n._("Space"),
+  Settings: () => i18n._("Settings"),
 };
 
 // The interaction hue's tinted fill is a hue shift, not a luminance
@@ -387,7 +390,7 @@ export function NavRail(props: NavRailProps) {
   const surfaceEntry = (name: Surface) => {
     const active = surface === name;
     const badge = name === "Dashboard" && attentionCount > 0;
-    const label = SURFACE_LABELS[name];
+    const label = SURFACE_LABELS[name]();
     return (
       <button
         key={name}
@@ -732,7 +735,7 @@ export function NavRail(props: NavRailProps) {
                   : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"
               }`}
             >
-              {SURFACE_LABELS.Workspace}
+              {SURFACE_LABELS.Workspace()}
             </button>
             {paletteControl}
           </div>

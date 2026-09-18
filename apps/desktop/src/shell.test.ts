@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { mergeEnv, parseEnvOutput } from "./shell-env.js";
+import { speak } from "./i18n.js";
 import { notificationFor } from "./notifications.js";
 import type { RecordEnvelope } from "@sublang/spex-core";
 
@@ -16,6 +17,14 @@ function envelope(record: Record<string, unknown>, hidden = false): RecordEnvelo
     hidden,
     record: record as unknown as RecordEnvelope["record"],
   };
+}
+
+/** The mapping in English; i18n.test.ts covers the reader's language. */
+function notify(
+  received: RecordEnvelope,
+  prefs: Record<string, string>,
+): ReturnType<typeof notificationFor> {
+  return notificationFor(received, prefs, speak("en"));
 }
 
 test("parseEnvOutput reads keys after the marker and multi-line values", () => {
@@ -37,20 +46,20 @@ test("mergeEnv never clobbers existing values", () => {
 
 test("notificationFor honors sink preferences and hidden records", () => {
   assert.equal(
-    notificationFor(envelope({ type: "turn_finished", turnId: 1 }), {
+    notify(envelope({ type: "turn_finished", turnId: 1 }), {
       turn_finished: "off",
     }),
     null,
   );
-  const shown = notificationFor(envelope({ type: "turn_finished", turnId: 1 }), {});
+  const shown = notify(envelope({ type: "turn_finished", turnId: 1 }), {});
   assert.equal(shown?.event, "turn_finished");
   assert.equal(shown?.sink, "desktop");
-  const belled = notificationFor(envelope({ type: "turn_finished", turnId: 1 }), {
+  const belled = notify(envelope({ type: "turn_finished", turnId: 1 }), {
     turn_finished: "bell",
   });
   assert.equal(belled?.sink, "bell");
   assert.equal(
-    notificationFor(envelope({ type: "turn_finished", turnId: 1 }, true), {}),
+    notify(envelope({ type: "turn_finished", turnId: 1 }, true), {}),
     null,
   );
 });
@@ -61,20 +70,20 @@ test("notificationFor maps player_finished behind its off-by-default pref", () =
     playerId: "coder",
     result: { status: "succeeded" },
   };
-  assert.equal(notificationFor(envelope(record), {}), null);
-  const shown = notificationFor(envelope(record), {
+  assert.equal(notify(envelope(record), {}), null);
+  const shown = notify(envelope(record), {
     player_finished: "desktop",
   });
   assert.equal(shown?.event, "player_finished");
   assert.equal(shown?.sink, "desktop");
   assert.equal(shown?.title, "Player finished");
   assert.equal(shown?.body, "coder succeeded");
-  const belled = notificationFor(envelope(record), { player_finished: "bell" });
+  const belled = notify(envelope(record), { player_finished: "bell" });
   assert.equal(belled?.sink, "bell");
 });
 
 test("notificationFor surfaces boss questions with the question text", () => {
-  const notification = notificationFor(
+  const notification = notify(
     envelope({
       type: "captain_telemetry",
       topic: "playbook.fsm.state",
@@ -91,7 +100,7 @@ test("notificationFor folds the 2.0 shell's object-shaped telemetry", () => {
   // The real captain shell reports states as rich objects and the
   // pending question as a {player, question, …} record; the string
   // forms above come from the fake harness and older playbooks.
-  const notification = notificationFor(
+  const notification = notify(
     envelope({
       type: "captain_telemetry",
       topic: "playbook.fsm.state",
@@ -119,7 +128,7 @@ test("notificationFor folds the 2.0 shell's object-shaped telemetry", () => {
   );
   // A non-parked object state stays silent.
   assert.equal(
-    notificationFor(
+    notify(
       envelope({
         type: "captain_telemetry",
         topic: "playbook.fsm.state",
@@ -132,7 +141,7 @@ test("notificationFor folds the 2.0 shell's object-shaped telemetry", () => {
 });
 
 test("boss questions and failures are always desktop notifications", () => {
-  const failure = notificationFor(
+  const failure = notify(
     envelope({ type: "runtime_error", message: "boom" }),
     { turn_finished: "off", turn_aborted: "off", player_finished: "off" },
   );
@@ -141,7 +150,7 @@ test("boss questions and failures are always desktop notifications", () => {
 });
 
 test("notificationFor surfaces the 2.0 shell's failed state", () => {
-  const failure = notificationFor(
+  const failure = notify(
     envelope({
       type: "captain_telemetry",
       topic: "playbook.fsm.state",

@@ -38,6 +38,7 @@ import { DashboardSurface } from "./DashboardSurface.js";
 import { OverviewTab } from "./ProjectsSurface.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
 import { initialSessionView } from "../state/reducer.js";
+import { currentLocale } from "../i18n.js";
 
 afterEach(() => {
   cleanup();
@@ -324,7 +325,7 @@ describe("dashboard-1/2/3/35: the two-band attention queue", () => {
     expect(question.textContent).toContain("10m ago");
     expect(
       within(question).getByTitle(
-        new Date(ATTENTION[0].since).toLocaleString(),
+        new Date(ATTENTION[0].since).toLocaleString(currentLocale()),
       ),
     ).toBeTruthy();
     expect(screen.getByTestId("attention-s6-failure").textContent).toContain(
@@ -1696,7 +1697,7 @@ describe("dashboard-28: the Now band reads the live lane", () => {
     // The start reads as an age with the moment in the tooltip.
     expect(row.textContent).toContain("started 45m ago");
     expect(
-      within(row).getByTitle(new Date(NOW - 45 * MIN).toLocaleString()),
+      within(row).getByTitle(new Date(NOW - 45 * MIN).toLocaleString(currentLocale())),
     ).toBeTruthy();
     fireEvent.click(row);
     expect(onOpenSession).toHaveBeenCalledWith("s-live");
@@ -1948,7 +1949,7 @@ describe("dashboard-50: the Running band lists what is working", () => {
     // The turn's span, with the moment it began in the tooltip.
     expect(row.textContent).toContain("12m");
     expect(
-      within(row).getByTitle(new Date(RUN_START).toLocaleString()),
+      within(row).getByTitle(new Date(RUN_START).toLocaleString(currentLocale())),
     ).toBeTruthy();
 
     // A summoned session stands in the queue, never in both places.
@@ -2490,7 +2491,7 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     // Ages say "ago" and carry the absolute moment (DR-010 §2).
     expect(done.textContent).toContain("2m ago");
     expect(
-      within(done).getByTitle(new Date(NOW - 2 * MIN).toLocaleString()),
+      within(done).getByTitle(new Date(NOW - 2 * MIN).toLocaleString(currentLocale())),
     ).toBeTruthy();
 
     // A fixed bug: struck through under the red tag, no check.
@@ -2862,7 +2863,7 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
     expect(ids()).toEqual(["IR-9", "IR-8"]);
     expect(
       within(screen.getByTestId("history-row-IR-9")).getByTitle(
-        new Date(Date.parse("2026-03-01")).toLocaleString(),
+        new Date(Date.parse("2026-03-01")).toLocaleString(currentLocale()),
       ),
     ).toBeTruthy();
   });

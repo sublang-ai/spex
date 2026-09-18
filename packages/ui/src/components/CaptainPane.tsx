@@ -14,6 +14,7 @@ import { readRecordFailure } from "../lib/failure-catalogue.js";
 import { FailureCard, type FailureContext } from "./FailureCard.js";
 import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, clockTime, duration } from "../lib/time.js";
+import { currentLocale } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { latestCall } from "./PlayerPane.js";
@@ -70,7 +71,7 @@ export function ThreadLine({
    * (run-view-147). */
   failure?: FailureContext;
 }) {
-  const time = new Date(line.at).toLocaleString();
+  const time = new Date(line.at).toLocaleString(currentLocale());
   // A failure the runtime reported draws as the card, wherever the
   // thread shows it (run-view-2, DR-075): the failed-state status line
   // the shell narrates, which carries the runtime's own account of the
@@ -300,7 +301,7 @@ function formatSeparator(date: Date, withDay: boolean): string {
   if (!withDay) return time;
   const today = new Date();
   if (date.toDateString() === today.toDateString()) return time;
-  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+  return `${date.toLocaleDateString(currentLocale(), { month: "short", day: "numeric" })} ${time}`;
 }
 
 const STATE_TONE_CLASSES: Record<string, string> = {

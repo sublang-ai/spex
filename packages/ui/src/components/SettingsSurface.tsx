@@ -31,6 +31,7 @@ import {
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
+import { i18n, type Language } from "../i18n.js";
 import { patchPlayer, setCaptain } from "../lib/config-ops.js";
 import { NOTIFICATION_LABELS } from "../lib/labels.js";
 import {
@@ -88,6 +89,61 @@ function SavedTick({ testId }: { testId: string }) {
     >
       {SAVED}
     </span>
+  );
+}
+
+/** The interface language (settings-37, localization-3): one choice
+ * per home, written through the core, which broadcasts it to every
+ * page. The two languages stand in their own words — a language name
+ * is not translated — while System is a text like any other. */
+const LANGUAGE_CHOICES: readonly { value: string; label: () => string }[] = [
+  { value: "system", label: () => i18n._("System") },
+  { value: "en", label: () => "English" },
+  { value: "zh", label: () => "简体中文" },
+];
+
+function LanguageSection({ onError }: { onError: (message?: string) => void }) {
+  const choice = useAppStore((state) => state.language.choice);
+  const setLanguage = useAppStore((state) => state.setLanguage);
+  const [pending, setPending] = useState(false);
+  const [saved, setSaved] = useTransient(1500);
+
+  return (
+    <section data-testid="language-section" className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-neutral-500">
+        {i18n._("Language")}
+      </h2>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <select
+          data-testid="language-select"
+          aria-label={i18n._("Interface language")}
+          value={choice ?? "system"}
+          disabled={pending}
+          onChange={(event) => {
+            const next = event.target.value;
+            onError(undefined);
+            setPending(true);
+            setLanguage(next === "system" ? (null as Language | null) : (next as Language))
+              .then(() => setSaved("language"))
+              .catch((cause: Error) => onError(cause.message))
+              .finally(() => setPending(false));
+          }}
+          className="rounded border border-neutral-300 bg-white px-2 py-1 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
+        >
+          {LANGUAGE_CHOICES.map((entry) => (
+            <option key={entry.value} value={entry.value}>
+              {entry.label()}
+            </option>
+          ))}
+        </select>
+        {saved === "language" ? <SavedTick testId="language-saved" /> : null}
+        {/* The effect is a phrase where it applies, never a sentence
+            (DR-069). */}
+        <span className="text-xs text-neutral-500">
+          {i18n._("System follows your device")}
+        </span>
+      </div>
+    </section>
   );
 }
 
@@ -772,6 +828,8 @@ export function SettingsSurface() {
           })}
         </div>
       </section>
+
+      <LanguageSection onError={setError} />
 
       <section data-testid="shortcuts-section" className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">

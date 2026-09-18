@@ -27,6 +27,7 @@ import {
   type IntentAct, type RebindProjectOptions, type StorageDiagnostic,
 } from "./app-storage.js";
 import { createRequire } from "node:module";
+import { isLanguage, type Language } from "./language.js";
 
 import type {
   ForgeState,
@@ -165,6 +166,8 @@ function sessionInfo(
 
 const agentSettingsKey = (sessionId: string): string => `session:${sessionId}:agents`;
 const parkedRunKey = (sessionId: string): string => `session:${sessionId}:parked`;
+/** The home's one interface language (storage-5). */
+const LANGUAGE_PREF = "language";
 
 /** A parked run's captured controls, read defensively: a hand-edited
  * or older preference never invalidates the rest of the session. */
@@ -1590,6 +1593,21 @@ export class Store {
   setParkedRun(sessionId: string, parked: ParkedRun | undefined): void {
     if (!parked) this.deletePref(parkedRunKey(sessionId));
     else this.setPref(parkedRunKey(sessionId), parked);
+  }
+
+  /** The home's interface language (storage-5, DR-078): one choice for
+   * every client of the home. A value no catalog holds reads as none,
+   * so a hand-edited file leaves the reader on his system's language
+   * rather than on a language the interface cannot speak. */
+  interfaceLanguage(): Language | null {
+    const stored = this.getPref<unknown>(LANGUAGE_PREF);
+    return isLanguage(stored) ? stored : null;
+  }
+
+  /** The reader's system is no key: null forgets the choice. */
+  setInterfaceLanguage(language: Language | null): void {
+    if (language === null) this.deletePref(LANGUAGE_PREF);
+    else this.setPref(LANGUAGE_PREF, language);
   }
 
   /** An empty tuning is no tuning: the key leaves rather than standing

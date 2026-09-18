@@ -17,6 +17,7 @@ import {
   type AttentionItem,
 } from "./state/dashboard.js";
 import { setCaptain } from "./lib/config-ops.js";
+import { currentLocale } from "./i18n.js";
 import { causePhrase } from "./lib/failure-catalogue.js";
 import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionView } from "./state/reducer.js";
@@ -271,7 +272,7 @@ function sessionTooltip(
 ): string {
   const first = view?.captain.find((line) => line.kind === "boss");
   const text = first?.text ?? session.title;
-  const started = new Date(session.createdAt).toLocaleString();
+  const started = new Date(session.createdAt).toLocaleString(currentLocale());
   return text ? `${text}\nstarted ${started}` : `started ${started}`;
 }
 

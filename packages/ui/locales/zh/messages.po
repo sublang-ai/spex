@@ -1,0 +1,124 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-09-18 11:39-0700\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: zh\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#: src/lib/time.ts
+msgid "{days}d ago"
+msgstr "{days} 天前"
+
+#: src/lib/time.ts
+msgid "{hours}h"
+msgstr "{hours} 小时"
+
+#: src/lib/time.ts
+msgid "{hours}h {minutes}m"
+msgstr "{hours} 小时 {minutes} 分"
+
+#: src/lib/time.ts
+msgid "{hours}h ago"
+msgstr "{hours} 小时前"
+
+#: src/lib/time.ts
+msgid "{minutes}m"
+msgstr "{minutes} 分"
+
+#: src/lib/time.ts
+msgid "{minutes}m {seconds}s"
+msgstr "{minutes} 分 {seconds} 秒"
+
+#: src/lib/time.ts
+msgid "{minutes}m ago"
+msgstr "{minutes} 分钟前"
+
+#: src/lib/time.ts
+msgid "{seconds}s"
+msgstr "{seconds} 秒"
+
+#: src/lib/time.ts
+msgid "{span} ago"
+msgstr "{span}前"
+
+#: src/lib/time.ts
+msgid "{weeks}w ago"
+msgstr "{weeks} 周前"
+
+#. a span shorter than one second
+#: src/lib/time.ts
+msgid "<1s"
+msgstr "<1 秒"
+
+#. compact age in tight chrome: that many days ago
+#: src/lib/time.ts
+msgid "age.days"
+msgstr "{days} 天"
+
+#. compact age in tight chrome: that many hours ago
+#: src/lib/time.ts
+msgid "age.hours"
+msgstr "{hours} 小时"
+
+#. compact age in tight chrome: that many minutes ago
+#: src/lib/time.ts
+msgid "age.minutes"
+msgstr "{minutes} 分钟"
+
+#. compact age in tight chrome: under a minute old
+#: src/lib/time.ts
+msgid "age.now"
+msgstr "刚刚"
+
+#. compact age in tight chrome: that many weeks ago
+#: src/lib/time.ts
+msgid "age.weeks"
+msgstr "{weeks} 周"
+
+#: src/components/NavRail.tsx
+msgid "Dashboard"
+msgstr "仪表盘"
+
+#: src/components/SettingsSurface.tsx
+msgid "Interface language"
+msgstr "界面语言"
+
+#: src/lib/time.ts
+msgid "just now"
+msgstr "刚刚"
+
+#: src/components/SettingsSurface.tsx
+msgid "Language"
+msgstr "语言"
+
+#: src/components/NavRail.tsx
+msgid "Playbooks"
+msgstr "剧本"
+
+#: src/components/NavRail.tsx
+msgid "Projects"
+msgstr "项目"
+
+#: src/components/NavRail.tsx
+msgid "Settings"
+msgstr "设置"
+
+#: src/components/NavRail.tsx
+msgid "Space"
+msgstr "空间"
+
+#: src/components/SettingsSurface.tsx
+msgid "System"
+msgstr "跟随系统"
+
+#: src/components/SettingsSurface.tsx
+msgid "System follows your device"
+msgstr "跟随系统：设备的语言"

@@ -49,6 +49,7 @@ import {
 import { initialSessionView, type SessionView } from "./state/reducer.js";
 import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
+import { currentLocale } from "./i18n.js";
 
 // A live clock: the rows print ages relative to now.
 const NOW = Date.now();
@@ -237,7 +238,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
       const age = screen.getByTestId(`sidebar-age-${moment.id}`);
       const row = screen.getByTestId(`sidebar-session-${moment.id}`);
       expect(age.textContent).toBe(moment.compact);
-      expect(age.title).toBe(new Date(moment.at).toLocaleString());
+      expect(age.title).toBe(new Date(moment.at).toLocaleString(currentLocale()));
       expect(row.getAttribute("aria-label")).toContain(moment.spoken);
     }
   });
@@ -315,7 +316,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     // the fuller scent is in the accessible description (run-view-73).
     expect(liveRow.textContent).toContain("2m");
     expect(screen.getByTestId("sidebar-age-a-live").title).toBe(
-      new Date(NOW - 120_000).toLocaleString(),
+      new Date(NOW - 120_000).toLocaleString(currentLocale()),
     );
     expect(liveRow.getAttribute("aria-label")).toContain("2m ago");
     expect(liveRow.getAttribute("aria-label")).toContain("2 turns");

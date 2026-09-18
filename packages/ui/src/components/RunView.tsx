@@ -28,6 +28,7 @@ import {
   useAppStore,
 } from "../state/store.js";
 import { SessionRecovery } from "./SessionRecovery.js";
+import { currentLocale } from "../i18n.js";
 import { ParkedRun } from "./ParkedRun.js";
 import { Composer } from "./Composer.js";
 import { DeliveryCard } from "./DeliveryCard.js";
@@ -643,7 +644,7 @@ export function RunView({
             className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
           >
             Last active{" "}
-            {session.endedAt ? new Date(session.endedAt).toLocaleString() : ""}
+            {session.endedAt ? new Date(session.endedAt).toLocaleString(currentLocale()) : ""}
           </span>
         ) : null}
       </div>

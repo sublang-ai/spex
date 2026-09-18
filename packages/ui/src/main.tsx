@@ -4,7 +4,7 @@
 import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { App } from "./App.js";
+import { Root } from "./Root.js";
 import { useAppStore } from "./state/store.js";
 import "./index.css";
 
@@ -58,7 +58,7 @@ useAppStore.getState().connect();
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <Root />
     </ErrorBoundary>
   </StrictMode>,
 );

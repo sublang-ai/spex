@@ -17,6 +17,7 @@ import type { SpecEditorState } from "../lib/spec-view-model.js";
 import type { DraftSourceMode, DraftSourceState } from "../state/store.js";
 import { busyReason } from "../lib/drafts.js";
 import { relativeAge } from "../lib/time.js";
+import { currentLocale } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { Markdown } from "./Markdown.js";
 import { SpecEditor } from "./SpecEditor.js";
@@ -243,7 +244,7 @@ export function DraftSourceTab({
       <div className="flex flex-wrap items-center gap-2">
         <span
           data-testid="source-caption"
-          title={new Date(source.mtime).toLocaleString()}
+          title={new Date(source.mtime).toLocaleString(currentLocale())}
           className="min-w-0 truncate text-xs text-neutral-500"
         >
           Updated {relativeAge(source.mtime, now)}

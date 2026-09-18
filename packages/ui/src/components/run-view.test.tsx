@@ -52,6 +52,7 @@ import {
 import codeGraph from "../fixtures/machines/code.json";
 import reviewGraph from "../fixtures/machines/review.json";
 import type { MachineGraph } from "@sublang/spex-core/protocol";
+import { currentLocale } from "../i18n.js";
 
 const SESSION: SessionInfo = {
   id: "s1",
@@ -273,9 +274,9 @@ describe("RUN-30: boss messages echo as user bubbles", () => {
       const at = Date.parse(stamp.getAttribute("dateTime") ?? "");
       expect(Number.isFinite(at)).toBe(true);
       expect(stamp.textContent).toBe(
-        new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+        new Date(at).toLocaleTimeString(currentLocale(), { hour: "numeric", minute: "2-digit" }),
       );
-      expect(stamp.title).toBe(new Date(at).toLocaleString());
+      expect(stamp.title).toBe(new Date(at).toLocaleString(currentLocale()));
     }
     // A Boss bubble's stamp stands on its outer side — before the
     // bubble in a right-aligned row; a counterpart's stands after.

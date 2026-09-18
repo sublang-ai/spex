@@ -9,10 +9,17 @@
    deliberately absent. Light neutrals shift to the system's warm
    paper values; dark steps stay stock. */
 @theme {
+  /* Each stack names the platforms' Simplified Chinese faces after its
+     Latin faces (DR-078, localization-3): the brand faces still set
+     every Latin glyph, and a Chinese glyph the Latin faces do not hold
+     falls to the reader's own system face rather than a generic. */
   --font-sans:
-    "Euclid Circular A", ui-sans-serif, system-ui, sans-serif;
+    "Euclid Circular A", ui-sans-serif, system-ui, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Noto Sans SC", sans-serif;
   --font-mono:
-    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    "Noto Sans Mono CJK SC", "PingFang SC", "Microsoft YaHei", monospace;
 
   --color-brand-50: #faf4fe;
   --color-brand-100: #f3e4fc;

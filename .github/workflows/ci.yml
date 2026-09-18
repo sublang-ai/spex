@@ -18,14 +18,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The catalog tooling's floor is Node 22 (DR-078); Node 20
+        # reached end of life in April 2026.
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: [20, 22]
+        node-version: [22, 24]
         exclude:
-          # better-sqlite3 ships no win32 prebuild for the Node 20 ABI
-          # and the source build trips node-gyp's VS detection there;
-          # Node 20 coverage stays on ubuntu/macos.
+          # Windows keeps the single Node whose better-sqlite3 win32
+          # prebuild the lockfile is known to resolve: a source build
+          # there trips node-gyp's VS detection. The second version's
+          # coverage stays on ubuntu/macos.
           - os: windows-latest
-            node-version: 20
+            node-version: 24
     runs-on: ${{ matrix.os }}
 
     steps:

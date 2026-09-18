@@ -32,6 +32,7 @@ import type {
   Command,
   CommandResults,
   CompileProgressMessage,
+  Language,
   ReadinessEntry,
   RecordMessage,
   ServerMessage,
@@ -3221,4 +3222,60 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", model: null });
   const bare = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === tuned.id);
   assert.equal(bare?.agentSettings, undefined, "a session tuning nothing carries none");
+});
+
+// ---------------------------------------------------------------------------
+// core-service-110: the home's one interface language (DR-078)
+// ---------------------------------------------------------------------------
+
+test("core-service-110: the home's language is one stored choice every client reads and follows", async (t) => {
+  const harness = await startHarness();
+  const first = new Client(harness.service.port());
+  const second = new Client(harness.service.port());
+  t.after(async () => {
+    first.close();
+    second.close();
+    await harness.service.stop();
+    rmSync(harness.dir, { recursive: true, force: true });
+  });
+  await first.open();
+  await second.open();
+
+  const prefsFile = join(harness.dataDir, "prefs.json");
+  const storedLanguage = (): unknown =>
+    (JSON.parse(readFileSync(prefsFile, "utf8")) as { prefs: Record<string, unknown> }).prefs.language;
+  const broadcasts = (client: Client): (Language | null)[] =>
+    client.messages
+      .filter((m): m is Extract<ServerMessage, { type: "language.state" }> => m.type === "language.state")
+      .map((m) => m.language);
+
+  // A fresh home stores no choice: every client resolves its own.
+  assert.deepEqual(await first.expectOk("language.get", {}), { language: null });
+  assert.equal(harness.service.language(), null, "the embedding shell reads the same choice in process");
+
+  // One client's choice reaches both.
+  assert.deepEqual(await first.expectOk("language.set", { language: "zh" }), { language: "zh" });
+  await first.waitFor((m) => m.type === "language.state" && m.language === "zh");
+  await second.waitFor((m) => m.type === "language.state" && m.language === "zh");
+  assert.deepEqual(await first.expectOk("language.get", {}), { language: "zh" });
+  assert.deepEqual(await second.expectOk("language.get", {}), { language: "zh" });
+  assert.equal(storedLanguage(), "zh", "the preferences file holds the choice");
+  assert.equal(harness.service.language(), "zh");
+
+  // A code no catalog holds is a validation error, and the stored
+  // choice stands: nothing is written and nothing is broadcast.
+  const refused = await second.command("language.set", { language: "fr" as Language });
+  assert.ok(!refused.ok && refused.error.code === "invalid_message", `refused: ${JSON.stringify(refused)}`);
+  assert.deepEqual(await first.expectOk("language.get", {}), { language: "zh" });
+  assert.equal(storedLanguage(), "zh", "the refusal left the stored choice as it was");
+  assert.deepEqual(broadcasts(first), ["zh"], "the refusal told no client anything");
+  assert.deepEqual(broadcasts(second), ["zh"]);
+
+  // None returns the home to each client's own system language.
+  assert.deepEqual(await second.expectOk("language.set", { language: null }), { language: null });
+  await first.waitFor((m) => m.type === "language.state" && m.language === null);
+  await second.waitFor((m) => m.type === "language.state" && m.language === null);
+  assert.deepEqual(await first.expectOk("language.get", {}), { language: null });
+  assert.equal(storedLanguage(), undefined, "the cleared choice is no key at all");
+  assert.equal(harness.service.language(), null);
 });

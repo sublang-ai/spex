@@ -18,9 +18,25 @@ vi.mock("../state/store.js", async (importOriginal) => {
 });
 
 import { SettingsSurface } from "./SettingsSurface.js";
-import { useAppStore } from "../state/store.js";
+import {
+  setClientForTests,
+  useAppStore,
+  safeStorageRemove,
+  LANGUAGE_KEY,
+} from "../state/store.js";
+import { activateLanguage } from "../i18n.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import type { ConfigState, ReadinessEntry } from "@sublang/spex-core/protocol";
+
+// The language control writes the real store, which mirrors the choice
+// and activates the catalog: put both back so no later test inherits a
+// language it did not ask for.
+afterEach(() => {
+  setClientForTests(undefined);
+  safeStorageRemove(LANGUAGE_KEY);
+  useAppStore.setState({ language: { choice: null, resolved: "en" } });
+  activateLanguage("en");
+});
 
 const CONFIG: ConfigState = {
   status: "valid",
@@ -332,6 +348,43 @@ describe("settings-6: every edit acknowledges in place", () => {
     expect(
       screen.getByTestId("notification-saved-player_finished").textContent,
     ).toBe("Saved ✓");
+  });
+
+  test("the language control lists the three choices, shows the home's, and ticks", async () => {
+    let land!: (value: unknown) => void;
+    commandMock.mockImplementation(
+      () => new Promise((resolve) => (land = resolve)),
+    );
+    // The language write goes through a store action, which resolves
+    // the module-local client the module mock cannot reach.
+    setClientForTests({ command: commandMock } as never);
+    useAppStore.setState({ language: { choice: "en", resolved: "en" } });
+    renderSettings();
+    const section = screen.getByTestId("language-section");
+    // System, English and 简体中文 — the two languages in their own
+    // words (settings-37).
+    expect(
+      within(section)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["System", "English", "简体中文"]);
+    const select = within(section).getByTestId(
+      "language-select",
+    ) as HTMLSelectElement;
+    // The home's stored choice, not the language the page resolved to.
+    expect(select.value).toBe("en");
+    fireEvent.change(select, { target: { value: "zh" } });
+    expect(commandMock).toHaveBeenCalledWith("language.set", {
+      language: "zh",
+    });
+    expect(select.disabled).toBe(true);
+    expect(within(section).queryByTestId("language-saved")).toBeNull();
+    land({ language: "zh" });
+    await vi.waitFor(() => expect(select.disabled).toBe(false));
+    expect(within(section).getByTestId("language-saved").textContent).toBe(
+      "Saved ✓",
+    );
+    expect(select.value).toBe("zh");
   });
 
   test("the terminal theme is named for the CLI and stands last", () => {

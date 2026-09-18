@@ -10,12 +10,18 @@
 
 import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
+import { LANGUAGES, type Language } from "./language.js";
 
 export const PROTOCOL_VERSION = 16;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
 export { PIPELINE_PHASES, phaseLabel } from "./phases.js";
+
+/** An offered interface language (localization-1, DR-078). The
+ * resolution both shells share lives in the `language` entry point,
+ * which the UI imports as it imports this one. */
+export type { Language };
 
 export type TmuxPlayRecord = RuntimeRecord & {contextSeq?: number};
 
@@ -590,6 +596,11 @@ export type Channel = z.infer<typeof channelSchema>;
 const spaceChoiceSchema = z.enum(["mine", "remote"]);
 export type SpaceChoice = z.infer<typeof spaceChoiceSchema>;
 
+/** The home's interface language, or null for the reader's system
+ * (core-service-109): a code no catalog holds is a validation error,
+ * so no client can store a language the interface cannot speak. */
+const languageChoiceSchema = z.enum(LANGUAGES).nullable();
+
 export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("config.get"), id }),
   z.object({ type: z.literal("readiness.get"), id }),
@@ -780,6 +791,11 @@ export const commandSchema = z.discriminatedUnion("type", [
     turnId: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal("session.delete"), id, sessionId: z.string().min(1) }),
+  // The home's interface language (core-service-108/109, DR-078): one
+  // choice every client of the home reads, the reader's system when
+  // none is stored.
+  z.object({ type: z.literal("language.get"), id }).strict(),
+  z.object({ type: z.literal("language.set"), id, language: languageChoiceSchema }).strict(),
   // The Space surface (space-29, DR-057): the core performs every Git
   // operation; long commands reply `accepted` at once and report their
   // outcome as `space.state`.
@@ -916,6 +932,10 @@ export interface CommandResults {
   "ledger.get": LedgerState;
   "ledger.history": { intents: ClosedIntent[]; more: boolean };
   "session.viewed": null;
+  /** The stored choice; null is the reader's system (core-service-108). */
+  "language.get": { language: Language | null };
+  /** The choice after the write, as `language.state` carries it. */
+  "language.set": { language: Language | null };
   "space.get": SpaceState;
   "space.init": SpaceState;
   "space.remote.set": SpaceState;
@@ -1396,6 +1416,14 @@ export interface IntentsChangedMessage {
   projectIds: string[];
 }
 
+/** The home's interface language was set (core-service-109):
+ * broadcast to every connected client, so every page of the home
+ * follows one choice. */
+export interface LanguageStateMessage {
+  type: "language.state";
+  language: Language | null;
+}
+
 /** The Space machine moved, or `space.init`, `space.remote.set` or a
  * sync's Refresh step landed (space-29): broadcast to every client,
  * the state replacing the last one wholesale. */
@@ -1447,6 +1475,7 @@ export type ServerMessage =
   | SessionHistoryReplacedMessage
   | CompileProgressMessage
   | IntentsChangedMessage
+  | LanguageStateMessage
   | SpaceStateMessage
   | DraftRecordMessage
   | DraftStateMessage

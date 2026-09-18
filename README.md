@@ -43,7 +43,7 @@ Spex answers each with one systematic design:
 
 ## Getting started
 
-Requires Node.js 20 or later.
+Requires Node.js 22 or later.
 
 **1. Scaffold `specs/` in your project.**
 

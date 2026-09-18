@@ -43,7 +43,7 @@ When the interface formats a moment, a clock time, a number, or orders names, it
 
 #### localization-6
 
-Each package that composes interface text — the UI bundle and the desktop shell — shall keep one gettext PO catalog [[2]] per offered language at `locales/<language>/messages.po` under the package, extracted from the package's source by its `i18n:extract` script:
+Each package that composes interface text — the UI bundle and the desktop shell — shall keep one gettext PO catalog [[2]] per offered language as `locales/<language>/messages.po`, beside the UI bundle's source and inside the desktop shell's, extracted from the package's source by its `i18n:extract` script:
 
 - an entry's `msgid` is the English text as the source states it, its references name the source files that use it, and a comment carries the author's note for the translator where the English alone is ambiguous;
 - the `zh` entry's `msgstr` is the translation, edited in place by a human or an agent; an empty `msgstr` is a missing translation;

@@ -57,6 +57,7 @@ import {
   type SessionInfo,
   type SessionAgentSettingsMap,
 } from "./protocol.js";
+import type { Language } from "./language.js";
 import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import type { TurnControlKind } from "./control-record.js";
@@ -703,6 +704,14 @@ export class CoreService {
 
   configStateSnapshot(): ConfigState {
     return this.configState;
+  }
+
+  /** The home's interface language, or null for the reader's system
+   * (core-service-108, DR-078): the embedding shell reads it in
+   * process for the text it composes itself, so its notifications and
+   * dialogs speak the language every page of the home speaks. */
+  language(): Language | null {
+    return this.store.interfaceLanguage();
   }
 
   /** Config notification preferences (event -> off|bell|desktop). */
@@ -1669,6 +1678,17 @@ export class CoreService {
           if (session) this.queueLedgerChange([session.projectId]);
         }
         return null;
+      }
+      // The home's interface language (core-service-108/109): one
+      // stored choice, read by every client and followed by every one
+      // of them the moment it changes.
+      case "language.get":
+        return { language: this.language() };
+      case "language.set": {
+        this.store.setInterfaceLanguage(command.language);
+        const language = this.language();
+        this.broadcast({ type: "language.state", language });
+        return { language };
       }
       // The Space surface (space-29): the core performs every Git
       // operation; long commands reply accepted and report as state.

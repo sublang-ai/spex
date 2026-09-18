@@ -12,11 +12,14 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run i18n:check && tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "i18n:extract": "lingui extract --clean",
+    "i18n:check": "node ../../scripts/i18n-check.mjs",
+    "test": "npm run i18n:check && vitest run"
   },
   "dependencies": {
+    "@lingui/core": "^6.7.0",
     "@sublang/spex-core": "*",
     "d3-force": "^3.0.0",
     "d3-selection": "^3.0.0",
@@ -28,6 +31,9 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@lingui/cli": "^6.7.0",
+    "@lingui/format-po": "^6.7.0",
+    "@lingui/vite-plugin": "^6.7.0",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/react": "^16.1.0",
     "@types/d3-force": "^3.0.10",

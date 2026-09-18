@@ -20,14 +20,36 @@ import {
   shell,
 } from "electron";
 import { CoreService } from "@sublang/spex-core";
+import { resolveLanguage } from "@sublang/spex-core/language";
+import type { I18n } from "@lingui/core";
 
 import { captureLoginShellEnv, mergeEnv } from "./shell-env.js";
+import { speak } from "./i18n.js";
 import { notificationFor } from "./notifications.js";
 import { resolveRevealTarget } from "./reveal-path.js";
 
 let service: CoreService | undefined;
 let window: BrowserWindow | undefined;
 let quitting = false;
+
+/**
+ * The shell's tongue at this moment (app-shell-29, localization-2):
+ * the home's stored choice read from the embedded core, or with none
+ * the first of the operating system's preferred languages that is
+ * offered. Resolved per composed text, so a choice made in Settings
+ * reaches the next notification without a restart — and so a startup
+ * failure, which has no core to ask, still speaks the system's
+ * language.
+ */
+function reader(): I18n {
+  let preferred: readonly string[] = [];
+  try {
+    preferred = app.getPreferredSystemLanguages();
+  } catch {
+    // Before the app is ready on some platforms; English then.
+  }
+  return speak(resolveLanguage(service?.language() ?? null, preferred));
+}
 
 // A driven or acceptance run keeps its own user-data directory
 // (app-shell-24, DR-020). The redirect comes before the single-instance
@@ -58,12 +80,16 @@ if (!singleInstance) {
   // as a dialog naming the cause.
   void main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    dialog.showErrorBox("Spex could not start", message);
+    const i18n = reader();
+    dialog.showErrorBox(i18n._("Spex could not start"), message);
     app.exit(1);
   });
 }
 
 function installApplicationMenu(): void {
+  // Electron localizes its own `role:` entries; only the Help item is
+  // the shell's own text (app-shell-29).
+  const i18n = reader();
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(process.platform === "darwin"
       ? [{ role: "appMenu" as const }]
@@ -75,7 +101,7 @@ function installApplicationMenu(): void {
       role: "help",
       submenu: [
         {
-          label: "Spex on GitHub",
+          label: i18n._("Spex on GitHub"),
           click: () =>
             void shell.openExternal("https://github.com/sublang-ai/spex"),
         },
@@ -101,7 +127,6 @@ async function main(): Promise<void> {
   }
   await app.whenReady();
 
-  installApplicationMenu();
   if (process.platform === "darwin") {
     app.setAboutPanelOptions({
       applicationName: "Spex",
@@ -134,6 +159,10 @@ async function main(): Promise<void> {
     port: 0,
   });
 
+  // The menu waits for the core: its one item of the shell's own text
+  // reads the home's language choice (app-shell-29).
+  installApplicationMenu();
+
   if (smokeHandshake) {
     // Atomic-enough for the single local reader: write sidecar, then
     // rename into place so the driver never sees a partial file.
@@ -155,7 +184,7 @@ async function main(): Promise<void> {
   };
   service.events.onRecord = (envelope) => {
     const prefs = service?.notificationPrefs() ?? {};
-    const notification = notificationFor(envelope, prefs);
+    const notification = notificationFor(envelope, prefs, reader());
     if (notification?.sink === "bell") {
       shell.beep();
     } else if (notification && ElectronNotification.isSupported()) {
@@ -303,13 +332,16 @@ async function main(): Promise<void> {
   app.on("before-quit", (event) => {
     if (quitting) return;
     if (service?.hasActiveTurns()) {
+      const i18n = reader();
       const choice = dialog.showMessageBoxSync({
         type: "warning",
-        buttons: ["Keep running", "Quit anyway"],
+        buttons: [i18n._("Keep running"), i18n._("Quit anyway")],
         defaultId: 0,
         cancelId: 0,
-        message: "A playbook turn is still running.",
-        detail: "Quitting aborts the running turn; a message continues the conversation later.",
+        message: i18n._("A playbook turn is still running."),
+        detail: i18n._(
+          "Quitting aborts the running turn; a message continues the conversation later.",
+        ),
       });
       if (choice === 0) {
         event.preventDefault();

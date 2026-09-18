@@ -1,0 +1,98 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-09-18 11:41-0700\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: zh\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#: src/notifications.ts
+msgid "{playerId} {status}"
+msgstr "{playerId} {status}"
+
+#: src/notifications.ts
+msgid "A playbook entered its failed state and needs attention."
+msgstr "剧本进入失败状态，需要你处理。"
+
+#: src/notifications.ts
+msgid "A playbook is waiting for your reply."
+msgstr "剧本正在等待你的回复。"
+
+#: src/main.ts
+msgid "A playbook turn is still running."
+msgstr "仍有剧本轮次正在运行。"
+
+#: src/notifications.ts
+msgid "A player needs you"
+msgstr "Player 需要你的答复"
+
+#. Notification body when an aborted turn names no reason
+#: src/notifications.ts
+msgid "aborted"
+msgstr "已中止"
+
+#. Stands in for a result the record does not name
+#: src/notifications.ts
+msgid "finished"
+msgstr "已完成"
+
+#: src/main.ts
+msgid "Keep running"
+msgstr "继续运行"
+
+#: src/notifications.ts
+msgid "Playbook error"
+msgstr "剧本错误"
+
+#: src/notifications.ts
+msgid "Playbook failed"
+msgstr "剧本失败"
+
+#. Stands in for a player the record does not name
+#: src/notifications.ts
+msgid "player"
+msgstr "Player"
+
+#: src/notifications.ts
+msgid "Player finished"
+msgstr "Player 已完成"
+
+#: src/main.ts
+msgid "Quit anyway"
+msgstr "仍要退出"
+
+#: src/main.ts
+msgid "Quitting aborts the running turn; a message continues the conversation later."
+msgstr "退出会中止正在运行的轮次；之后发送消息可继续对话。"
+
+#. Notification body when a runtime error carries no message
+#: src/notifications.ts
+msgid "runtime error"
+msgstr "运行时错误"
+
+#: src/main.ts
+msgid "Spex could not start"
+msgstr "Spex 无法启动"
+
+#: src/main.ts
+msgid "Spex on GitHub"
+msgstr "GitHub 上的 Spex"
+
+#: src/notifications.ts
+msgid "The Captain finished your turn."
+msgstr "Captain 已完成本轮。"
+
+#: src/notifications.ts
+msgid "Turn aborted"
+msgstr "本轮已中止"
+
+#: src/notifications.ts
+msgid "Turn finished"
+msgstr "本轮已完成"

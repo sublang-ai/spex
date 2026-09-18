@@ -14,6 +14,8 @@ import type {
   SpecRecordInfo,
 } from "@sublang/spex-core/protocol";
 
+import { currentLocale } from "../i18n.js";
+
 export type { SpecGroup };
 
 /** Filter toggle and count order (DR-015 group model). */
@@ -230,9 +232,11 @@ export function buildDirTree(files: SpecFileInfo[]): SpecDirNode {
   };
   for (const file of files) dirNode(file.dir).files.push(file);
   const sortNode = (node: SpecDirNode): void => {
-    node.dirs.sort((a, b) => a.name.localeCompare(b.name));
+    // Collation follows the interface language (localization-5).
+    const locale = currentLocale();
+    node.dirs.sort((a, b) => a.name.localeCompare(b.name, locale));
     node.files.sort((a, b) =>
-      a.basename.toUpperCase().localeCompare(b.basename.toUpperCase()),
+      a.basename.toUpperCase().localeCompare(b.basename.toUpperCase(), locale),
     );
     node.dirs.forEach(sortNode);
   };

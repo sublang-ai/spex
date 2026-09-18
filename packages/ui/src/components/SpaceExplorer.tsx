@@ -37,6 +37,7 @@ import {
   sessionPartName,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
+import { currentLocale } from "../i18n.js";
 import { Markdown } from "./Markdown.js";
 import { PathControls, SECONDARY, type Note } from "./SpaceSurface.js";
 
@@ -318,7 +319,7 @@ function PreviewBody({
   const kind = previewKindOf(entry.name);
   const cut = result.truncated ? (
     <p className="text-xs text-neutral-500">
-      Showing the first {result.lines.toLocaleString()} lines; the file is longer.
+      Showing the first {result.lines.toLocaleString(currentLocale())} lines; the file is longer.
     </p>
   ) : null;
   if (kind === "markdown") {

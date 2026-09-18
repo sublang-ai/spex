@@ -10,6 +10,7 @@ import type { SessionInfo } from "@sublang/spex-core/protocol";
 import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { absoluteTitle, clockTime, duration } from "../lib/time.js";
+import { currentLocale } from "../i18n.js";
 import { inputBlocks, outputBlock } from "../lib/tool-body.js";
 import { useClock } from "../lib/useClock.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
@@ -26,7 +27,7 @@ import { RunningMark } from "./RunningMark.js";
 const RENDER_WINDOW = 200;
 
 function timeTitle(at: number): string {
-  return Number.isFinite(at) ? new Date(at).toLocaleString() : "";
+  return Number.isFinite(at) ? new Date(at).toLocaleString(currentLocale()) : "";
 }
 
 /** Prints only the tokens the call reported. A runtime that told us
@@ -38,9 +39,9 @@ function Usage({ usage }: { usage: UsageView }) {
   }
   return (
     <span className="text-xs text-neutral-500">
-      {`${(usage.inputTokens ?? 0).toLocaleString()}→${(
+      {`${(usage.inputTokens ?? 0).toLocaleString(currentLocale())}→${(
         usage.outputTokens ?? 0
-      ).toLocaleString()} tok`}
+      ).toLocaleString(currentLocale())} tok`}
     </span>
   );
 }

@@ -3,7 +3,12 @@
 
 // Record-driven notification mapping (SHELL-2/3/4): pure logic so it
 // is unit-testable without Electron.
+//
+// The shell's own words come from its catalog in the language the
+// caller activated (app-shell-29); text the run relays — a question,
+// an abort reason, an error message — stays as the record wrote it.
 
+import type { I18n } from "@lingui/core";
 import type { RecordEnvelope } from "@sublang/spex-core";
 
 export type NotificationSink = "bell" | "desktop";
@@ -64,10 +69,14 @@ function sinkFor(
  * desktop, others → off). boss_question and failure are always shown
  * on the desktop sink — they are the app's own attention signals, not
  * config events.
+ *
+ * `i18n` speaks the home's language already (app-shell-29): the caller
+ * resolves and activates it, so this mapping stays pure.
  */
 export function notificationFor(
   envelope: RecordEnvelope,
   prefs: Record<string, string>,
+  i18n: I18n,
 ): AppNotification | null {
   if (envelope.hidden) return null;
   const record = envelope.record as unknown as Record<string, unknown> & {
@@ -82,8 +91,8 @@ export function notificationFor(
       return {
         event: "turn_finished",
         sink,
-        title: "Turn finished",
-        body: "The Captain finished your turn.",
+        title: i18n._("Turn finished"),
+        body: i18n._("The Captain finished your turn."),
         sessionId,
       };
     }
@@ -93,8 +102,14 @@ export function notificationFor(
       return {
         event: "turn_aborted",
         sink,
-        title: "Turn aborted",
-        body: String(record.reason ?? "aborted"),
+        title: i18n._("Turn aborted"),
+        body: String(
+          record.reason ??
+            i18n._({
+              id: "aborted",
+              comment: "Notification body when an aborted turn names no reason",
+            }),
+        ),
         sessionId,
       };
     }
@@ -105,8 +120,23 @@ export function notificationFor(
       return {
         event: "player_finished",
         sink,
-        title: "Player finished",
-        body: `${String(record.playerId ?? "player")} ${String(result?.status ?? "finished")}`,
+        title: i18n._("Player finished"),
+        body: i18n._("{playerId} {status}", {
+          playerId: String(
+            record.playerId ??
+              i18n._({
+                id: "player",
+                comment: "Stands in for a player the record does not name",
+              }),
+          ),
+          status: String(
+            result?.status ??
+              i18n._({
+                id: "finished",
+                comment: "Stands in for a result the record does not name",
+              }),
+          ),
+        }),
         sessionId,
       };
     }
@@ -124,10 +154,10 @@ export function notificationFor(
         return {
           event: "boss_question",
           sink: "desktop",
-          title: "A player needs you",
+          title: i18n._("A player needs you"),
           body:
             questionText(payload?.pendingBossQuestion) ??
-            "A playbook is waiting for your reply.",
+            i18n._("A playbook is waiting for your reply."),
           sessionId,
         };
       }
@@ -138,8 +168,8 @@ export function notificationFor(
         return {
           event: "failure",
           sink: "desktop",
-          title: "Playbook failed",
-          body: "A playbook entered its failed state and needs attention.",
+          title: i18n._("Playbook failed"),
+          body: i18n._("A playbook entered its failed state and needs attention."),
           sessionId,
         };
       }
@@ -149,8 +179,14 @@ export function notificationFor(
       return {
         event: "failure",
         sink: "desktop",
-        title: "Playbook error",
-        body: String(record.message ?? "runtime error"),
+        title: i18n._("Playbook error"),
+        body: String(
+          record.message ??
+            i18n._({
+              id: "runtime error",
+              comment: "Notification body when a runtime error carries no message",
+            }),
+        ),
         sessionId,
       };
     default:
