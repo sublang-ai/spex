@@ -27,6 +27,10 @@ Where the shared config file's notification preferences enable an event kind, wh
 
 - Where the preferences disable an event kind, the app posts no notification for events of that kind.
 
+#### app-shell-29
+
+When the app composes text of its own — a notification's title and body [[app-shell-3](#app-shell-3)], the quit confirmation [[app-shell-7](#app-shell-7)], the startup failure — the app shall speak the home's interface language, resolved as a client of the embedded core with the operating system's languages standing for the reader's system [[localization-2](localization.md#localization-2)], from its own catalog [[localization-6](localization.md#localization-6)], so the desktop's own words match the page's.
+
 #### app-shell-4
 
 While the attention count published by the Dashboard [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the app shall display that count as the dock or taskbar badge:
@@ -187,6 +191,10 @@ Where a fixture playbook that raises an `awaitBossReply` question is enabled and
 - While the question awaits a reply, the test suite asserts that the dock or taskbar badge displays the attention count [[app-shell-4](#app-shell-4)].
 - When the question is then answered, the test suite asserts that the badge is removed [[app-shell-4](#app-shell-4)].
 - Where the shared config disables that notification kind, the test suite asserts that the same fixture run posts no notification [[app-shell-3](#app-shell-3)].
+
+#### app-shell-30
+
+Where the home's interface language is `zh`, when a project session finishes a turn, the test suite shall assert that the notification's title and body read their Chinese phrases, and that with no stored choice the system languages `["zh-Hans-CN", "en-US"]` yield the same while `["en-US"]` yields English [[app-shell-29](#app-shell-29)].
 
 ### App Data Coverage
 

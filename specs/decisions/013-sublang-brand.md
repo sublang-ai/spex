@@ -6,6 +6,7 @@
 ## Status
 
 Accepted; the logo recolor is reverted by owner decision (2026-07-23) — the Logo bullet below records the standing rule.
+Amended by [DR-078](078-the-interface-speaks-the-readers-language.md) in scope: each type stack names the platforms' Simplified Chinese faces after its Latin faces; the brand faces stand.
 
 ## Context
 

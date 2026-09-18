@@ -7,6 +7,7 @@
 
 Accepted (2026-09-02) on the owner's review: overlapping text in narrow panes, a composer whose buttons leave their box, a native resize grip inside a custom control, and button labels that run to sentences.
 Amends [DR-010](010-interface-craft.md) with a ninth principle and clarifies [DR-030](030-workspace-chrome.md): panes stacking under a container width is layout, not chrome that moves by itself.
+Amended by [DR-078](078-the-interface-speaks-the-readers-language.md) in scope: a character budget counts the English text, and its translation fits the control the English text fits; every other fit rule stands.
 
 ## Context
 

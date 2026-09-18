@@ -76,6 +76,7 @@ The preference store shall encode `prefs.json` as exactly `{v:1,prefs:{...}}`, w
 - `draft:<id>:player` stores the roster player id answering that draft's authoring conversation; absent means the Captain's block; removed with the draft.
 - `session:<id>:agents` stores that session's own agent settings as agent id — the reserved `captain`, or a roster player — to a model, an effort and a fast mode, each a string, `false` for the provider's current default, or absent for the configured value [[core-service-100](core-service.md#core-service-100)]; absent means the session runs what the config resolves; removed with the session.
 - `session:<id>:parked` stores what a run of that session standing parked on the Boss advertised at its last settlement — the park's reason, its actions and the shell's ending, each an id with its label and any standing the runtime reported [[core-service-32](core-service.md#core-service-32)]; absent means that settlement found no parked run advertising anything; the next settlement writes it again [[core-service-91](core-service.md#core-service-91)], and it is removed with the session.
+- `language` stores the home's interface language as an offered language code [[core-service-108](core-service.md#core-service-108)]; absent means the reader's system ([DR-078](../decisions/078-the-interface-speaks-the-readers-language.md)).
 
 ### storage-6
 

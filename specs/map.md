@@ -103,6 +103,7 @@ meta.md       The spec of specs
 | [DR-075](decisions/075-a-failure-says-what-and-what-now.md) | 075-a-failure-says-what-and-what-now.md | A failure says what, why, and what now: one catalogue phrasing every Playbook failure code, a three-line card, one control per advertised action with its standing, cause phrased on every surface |
 | [DR-076](decisions/076-playbook-14-1-adoption.md) | 076-playbook-14-1-adoption.md | Playbook 14.1 adoption: floor to ^14.1.0, catalogue tested against the runtime's exported code list, parked-failure fixtures re-captured, browser lane proving real advertised actions |
 | [DR-077](decisions/077-up-next-is-a-committed-queue.md) | 077-up-next-is-a-committed-queue.md | Up next is one committed queue: every row reads Queued, the next states what precedes it, and clean settled turns hand off without typed success proof |
+| [DR-078](decisions/078-the-interface-speaks-the-readers-language.md) | 078-the-interface-speaks-the-readers-language.md | The interface speaks the reader's language: English source, Simplified Chinese, one choice per home following the system by default, open PO catalogs a human edits, a build that refuses an incomplete language; amends DR-010, DR-041 and DR-013 |
 
 ## Packages
 
@@ -116,6 +117,7 @@ meta.md       The spec of specs
 | [git.md](packages/git.md) | Commit message format and AI co-authorship trailers |
 | [licensing.md](packages/licensing.md) | SPDX header requirements, file-scope rules, and header presence checks |
 | [lint.md](packages/lint.md) | `spex lint`: structure with the legacy-tree migration prompt pointer, package sections, item IDs, citation form and coverage, citation discipline, reference markers, records, map listing |
+| [localization.md](packages/localization.md) | Interface language: offered languages, one choice per home and its client-side resolution, PO catalogs keyed by English with ICU messages, the completeness gate, locale-following formatting |
 | [playbook-library.md](packages/playbook-library.md) | Playbook library: browse/enable, per-role inline agents, chat-assisted authoring drafts with the two-pane workspace and directive-driven compile, slc compile pipeline, registry validation, comment-preserving config writes |
 | [projects.md](packages/projects.md) | Projects: register/create local git repos, repo state, gh forge binding and work lists, safe removal |
 | [release.md](packages/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene, end-user and live migration smokes |

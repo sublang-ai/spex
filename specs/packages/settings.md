@@ -98,6 +98,13 @@ Where the Settings surface is open, the Settings surface shall provide editors f
 - A preference control is disabled while its edit is in flight and, once the edit lands, a transient "Saved ✓" status stands beside it — on the row beside the edit control for an agent editor, which has closed by then [[settings-1](#settings-1)] — so no edit goes unacknowledged ([DR-010](../decisions/010-interface-craft.md) §3).
 - The `theme` editor is labeled as the terminal pane theme for CLI-run sessions only, stands last, and says Spex itself follows the OS theme.
 
+#### settings-37
+
+Where the Settings surface is open, the Settings surface shall provide a language control in its own section before the terminal pane theme, offering System, English and 简体中文, showing the home's choice [[core-service-108](core-service.md#core-service-108)] and writing a change as the home's choice [[core-service-109](core-service.md#core-service-109)], so every page of the home follows it [[localization-3](localization.md#localization-3)]:
+
+- the control's effect is a phrase beside it — System follows the reader's device — and no sentence ([DR-069](../decisions/069-key-phrases-not-sentences.md));
+- the control is disabled while its write is in flight and shows the transient Saved status once it lands, as any preference control [[settings-6](#settings-6)].
+
 ### Config File Semantics
 
 #### settings-7
@@ -256,6 +263,7 @@ Where the Settings surface renders against fixture state, the test suite shall a
 
 - the Captain stands as a collapsed row with an edit control and no removal, its editor opening on that control with Save and Cancel, Cancel and Escape closing it without a write and handing focus back to the control, and a player's editor opening closing the Captain's [[settings-1](#settings-1)];
 - a saved Captain edit closes its editor and shows the transient Saved status on the Captain's row, and a notification select is disabled while its edit is in flight and ticks once it lands [[settings-6](#settings-6)];
+- the language control lists System, English and 简体中文, shows the home's stored choice, is disabled while a change is in flight, and ticks once the write lands [[settings-37](#settings-37)];
 - the terminal theme editor stands last under its CLI-only name [[settings-6](#settings-6)];
 - a seeded config names the created file, and a loaded one says nothing [[settings-9](#settings-9)];
 - the permission mode's description follows the selected mode, and the shortcut sheet lists the bindings with the platform's modifier [[settings-10](#settings-10)];

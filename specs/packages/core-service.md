@@ -510,6 +510,18 @@ When a host shell stops the core service, the core service shall persist every l
 - Successful cleanup reports the session as no longer live; failed cleanup retains its ownership evidence [[core-service-4](#core-service-4)].
 - Shutdown waits for settlement bookkeeping already in progress before closing the store.
 
+### Interface Language
+
+#### core-service-108
+
+When a client sends `language.get`, the core service shall reply with the home's interface language — an offered language code [[localization-1](localization.md#localization-1)], or none for the reader's system — as stored in the state root's preferences file [[storage-5](storage.md#storage-5)], so every client of the home reads one choice ([DR-078](../decisions/078-the-interface-speaks-the-readers-language.md)).
+
+#### core-service-109
+
+When a client sends `language.set` naming an offered language code [[localization-1](localization.md#localization-1)] or none, the core service shall persist it as the home's interface language [[storage-5](storage.md#storage-5)], reply with the resulting choice, and broadcast `language.state` carrying it to every connected client:
+
+- a code that is not offered is rejected as a validation error, and the stored choice stands.
+
 ## Internal Behavior
 
 ### Package Layout
@@ -747,6 +759,12 @@ Where a config file with a comment and a non-default mode sits at the previous X
 #### core-service-69
 
 Where the core service runs with the installed playbook's real captain shell and registries over a git-initialized project, the test suite shall create a session and assert the capability contract of [[core-service-67](#core-service-67)]: the session starts with a capability covering every enabled playbook [[core-service-17](#core-service-17)], and a Boss turn round-trips the Captain's reply after reconciliation.
+
+### Interface Language Coverage
+
+#### core-service-110
+
+Where a core service runs on a scratch state root with two clients connected, when one client sets the interface language to `zh`, the test suite shall assert that both clients receive `language.state` carrying `zh`, that `language.get` answers `zh` on either client and the preferences file holds it [[core-service-108](#core-service-108)] [[core-service-109](#core-service-109)], that setting none clears the stored choice, and that a code that is not offered is rejected with the stored choice unchanged [[core-service-109](#core-service-109)].
 
 ### Intent Ledger Coverage
 
