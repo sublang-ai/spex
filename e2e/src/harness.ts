@@ -860,6 +860,42 @@ export const test = base.extend<{ app: App; appOptions: AppOptions }>({
 
 /** Open the app at its token URL and wait for the shell to draw. */
 export async function open(page: Page, app: App, path = ""): Promise<void> {
+  await load(page, app, path);
+  await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
+}
+
+/**
+ * The same, for a page that may not speak English (localization-10):
+ * the rail is waited on by what it is rather than by what it says,
+ * since every label is translated and no attribute is.
+ */
+export async function openTranslated(
+  page: Page,
+  app: App,
+  path = "",
+): Promise<void> {
+  await load(page, app, path);
+  await expect(surfaceEntry(page, "Dashboard")).toBeVisible();
+}
+
+/**
+ * The sidebar entry for a surface, by which surface it is rather than
+ * by what it says. Projects is the rail's own tree heading while the
+ * sidebar stands open and a plain entry while it is collapsed; either
+ * shape answers here, and exactly one of them is ever drawn.
+ */
+export function surfaceEntry(page: Page, name: SurfaceName) {
+  return page
+    .getByTestId("sidebar")
+    .locator(
+      name === "Workspace"
+        ? '[data-testid="sidebar-workspace"], [data-surface="Workspace"]'
+        : `[data-surface="${name}"]`,
+    );
+}
+
+/** Go to the token URL, with the debug instrumentation when asked. */
+async function load(page: Page, app: App, path: string): Promise<void> {
   if (process.env.SPEX_E2E_DEBUG) {
     const tag = `[${app.origin}]`;
     await page.addInitScript(() => {
@@ -917,10 +953,17 @@ export async function open(page: Page, app: App, path = ""): Promise<void> {
     });
   }
   await page.goto(`${app.origin}/${path}?token=${encodeURIComponent(app.token)}`);
-  await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
 }
 
-/** The sidebar entry for a surface. */
+/** The surfaces as the rail names them in its own attributes. */
+export type SurfaceName =
+  | "Dashboard"
+  | "Workspace"
+  | "Playbooks"
+  | "Space"
+  | "Settings";
+
+/** The sidebar entry for a surface, by its English name. */
 export function nav(
   page: Page,
   name: "Dashboard" | "Projects" | "Playbooks" | "Space" | "Settings",

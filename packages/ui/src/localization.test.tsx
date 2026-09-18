@@ -3,12 +3,20 @@
 
 // localization-9: the interface rendered in the reader's language.
 // The app is driven whole — the rail's labels come from the catalog,
-// the document says which language it speaks, the time vocabulary
-// reads as messages and a moment formats for the resolved language —
-// and a change of choice re-renders the root in the new language.
+// the Dashboard and the Settings surface read theirs, the document
+// says which language it speaks, the time vocabulary reads as
+// messages and a moment formats for the resolved language — and a
+// change of choice re-renders the root in the new language.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 
 afterEach(cleanup);
 
@@ -21,7 +29,9 @@ vi.mock("./state/store.js", async (importOriginal) => {
 
 import { Root } from "./Root.js";
 import {
+  SURFACE_KEY,
   deliverServerMessageForTests,
+  safeStorageRemove,
   setClientForTests,
   useAppStore,
 } from "./state/store.js";
@@ -42,6 +52,48 @@ const NOW = Date.UTC(2026, 8, 18, 22, 22, 0);
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+
+/** Nothing owed: the fold every surface but the Dashboard's own tests
+ * read, so no attention count ever joins a rail label. */
+const EMPTY_LEDGER = { intents: [], attention: [], badge: 0 };
+
+/** One finished intent owing a verdict, so the Dashboard's queue draws
+ * a row whose stats carry counts. Both counts are one: English would
+ * take its singular form, Chinese has only the one form. */
+const LEDGER = {
+  intents: [],
+  attention: [
+    {
+      band: "finished",
+      kind: "finish",
+      intentId: "i1",
+      title: "Ship docs",
+      projectId: "p1",
+      sessionId: "s1",
+      turnId: 9,
+      since: Date.now() - 30 * MINUTE,
+      stats: { reviewRounds: 1, turns: 1, elapsedMs: 12 * MINUTE },
+    },
+  ],
+  badge: 1,
+};
+
+/** A whole valid config, so the Settings surface draws every section. */
+const CONFIG = {
+  status: "valid",
+  seeded: false,
+  summary: {
+    path: "/tmp/playbook.config.yaml",
+    captain: {
+      adapter: "claude",
+      model: "claude-opus-5",
+      effort: "high",
+      permissions: { mode: "auto" },
+    },
+    players: [],
+    playbooks: [],
+  },
+};
 
 function seed(): void {
   useAppStore.setState({
@@ -66,11 +118,12 @@ function seed(): void {
     machineGraphs: {},
     stagedIntents: {},
     history: {},
-    configState: {
-      status: "valid",
-      summary: { playbooks: [], captain: undefined },
-    } as never,
-  });
+    ledger: undefined,
+    ledgerError: undefined,
+    foldedSources: {},
+    dashboardGroupsCollapsed: {},
+    configState: CONFIG,
+  } as never);
 }
 
 function speak(language: Language, choice: Language | null = language): void {
@@ -86,9 +139,30 @@ function railLabels(): string[] {
     .filter((label): label is string => !!label);
 }
 
+/** Serve this fold to every read of it, from the first. */
+function serveLedger(ledger: unknown): void {
+  commandMock.mockImplementation(async (type: string) => {
+    if (type === "ledger.get") return ledger;
+    if (type === "ledger.history") return { intents: [], more: false };
+    return {};
+  });
+}
+
+/** Stand on a surface through the rail, which names each entry by
+ * which surface it is, never by what it says (localization-4). */
+async function goTo(surface: "Dashboard" | "Settings"): Promise<void> {
+  const entry = screen
+    .getByTestId("sidebar")
+    .querySelector<HTMLButtonElement>(`[data-surface="${surface}"]`);
+  if (!entry) throw new Error(`the rail has no ${surface} entry`);
+  await act(async () => {
+    fireEvent.click(entry);
+  });
+}
+
 beforeEach(() => {
   commandMock.mockReset();
-  commandMock.mockResolvedValue({});
+  serveLedger(EMPTY_LEDGER);
   // Store actions resolve the module-local client, which the module
   // mock cannot reach.
   setClientForTests({ command: commandMock } as never);
@@ -97,6 +171,9 @@ beforeEach(() => {
 
 afterEach(() => {
   setClientForTests(undefined);
+  // The rail remembers the surface it was left on; no later test
+  // inherits one it did not ask for.
+  safeStorageRemove(SURFACE_KEY);
   speak("en", null);
 });
 
@@ -120,6 +197,182 @@ describe("localization-4: the rail reads the resolved language", () => {
     for (const label of ["Dashboard", "Projects", "Playbooks", "Space", "Settings"]) {
       expect(labels).toContain(label);
     }
+  });
+});
+
+describe("localization-4: the Dashboard reads the resolved language", () => {
+  test("with zh resolved its bands, its filter and a counted phrase read Chinese", async () => {
+    speak("zh");
+    serveLedger(LEDGER);
+    render(<Root />);
+    await goTo("Dashboard");
+    const dashboard = screen.getByTestId("dashboard-scroll");
+    // Needs attention · Running · Projects — the three bands, whole.
+    expect(
+      within(dashboard)
+        .getAllByRole("heading", { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["需要关注", "运行中", "项目"]);
+    const text = dashboard.textContent ?? "";
+    for (const phrase of [
+      "所有项目", // All projects — the filter's first option
+      "已完成 — 确认？", // finished — confirm?
+      "没有正在运行的工作。", // Nothing running.
+    ]) {
+      expect(text).toContain(phrase);
+    }
+    // A count takes the language's own plural form (localization-4):
+    // Chinese has the one, where English would read "1 review round ·
+    // 1 turn", and the duration beside them is a message too.
+    expect(text).toContain("1 轮审阅 · 1 个轮次 · 12 分");
+    for (const english of [
+      "Needs attention",
+      "All projects",
+      "finished — confirm?",
+      "Nothing running.",
+      "1 review round",
+      "1 turn",
+    ]) {
+      expect(text).not.toContain(english);
+    }
+  });
+
+  test("with en resolved the same bands read their English labels", async () => {
+    speak("en", null);
+    serveLedger(LEDGER);
+    render(<Root />);
+    await goTo("Dashboard");
+    const dashboard = screen.getByTestId("dashboard-scroll");
+    expect(
+      within(dashboard)
+        .getAllByRole("heading", { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Needs attention", "Running", "Projects"]);
+    const text = dashboard.textContent ?? "";
+    for (const phrase of [
+      "All projects",
+      "finished — confirm?",
+      "Nothing running.",
+      "1 review round · 1 turn · 12m",
+    ]) {
+      expect(text).toContain(phrase);
+    }
+  });
+});
+
+describe("localization-4: the Settings surface reads the resolved language", () => {
+  test("with zh resolved every section and the language control read Chinese", async () => {
+    speak("zh");
+    render(<Root />);
+    await goTo("Settings");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("设置");
+
+    // Each section by what it is, never by what it says: the heading
+    // and the words inside it are the catalog's.
+    const sections: [string, string[]][] = [
+      // The Captain's row keeps the config's own key and the name
+      // Playbook gives the agent; only the acts around it translate.
+      ["captain-section", ["Captain", "编辑 Captain"]],
+      [
+        "players-section",
+        [
+          "会话 Player", // Session players
+          "还没有 Player — 在库中启用剧本会自动添加其角色所需的 Player。",
+          "添加 Player", // Add a player
+        ],
+      ],
+      [
+        "agents-section",
+        [
+          "智能体", // Agents
+          "重新检查就绪状态", // Re-check readiness
+          "尚未使用任何适配器 — 为 Captain 或某个剧本角色指定智能体后，其就绪状态会显示在这里。",
+        ],
+      ],
+      [
+        "notifications-section",
+        [
+          "通知", // Notifications
+          "轮次完成", // A turn finishes
+          "关闭", // off
+          "响铃", // bell
+          "桌面通知", // desktop
+        ],
+      ],
+      [
+        "language-section",
+        [
+          "语言", // Language
+          "跟随系统：设备的语言", // System follows your device
+        ],
+      ],
+      [
+        "shortcuts-section",
+        [
+          "键盘快捷键", // Keyboard shortcuts
+          "按键", // Keys
+          "功能", // Does
+        ],
+      ],
+      ["theme-section", ["终端窗格主题（仅 CLI）"]],
+    ];
+    let whole = "";
+    for (const [testId, phrases] of sections) {
+      const section = screen.getByTestId(testId);
+      const labels = Array.from(section.querySelectorAll("[aria-label]"))
+        .map((node) => node.getAttribute("aria-label"))
+        .join(" ");
+      const text = `${section.textContent ?? ""} ${labels}`;
+      for (const phrase of phrases) {
+        expect(text, `${testId} reads ${phrase}`).toContain(phrase);
+      }
+      whole += ` ${text}`;
+    }
+
+    // A language stands in its own words; System is a text like any
+    // other (settings-37).
+    const language = within(screen.getByTestId("language-section"));
+    const select = language.getByLabelText<HTMLSelectElement>("界面语言");
+    expect(
+      Array.from(select.options).map((option) => option.textContent),
+    ).toEqual(["跟随系统", "English", "简体中文"]);
+    expect(select.value).toBe("zh");
+
+    for (const english of [
+      "Session players",
+      "Agents",
+      "Notifications",
+      "Language",
+      "Keyboard shortcuts",
+      "Add a player",
+      "Re-check readiness",
+    ]) {
+      expect(whole).not.toContain(english);
+    }
+  });
+
+  test("with en resolved the same sections read their English labels", async () => {
+    speak("en", null);
+    render(<Root />);
+    await goTo("Settings");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Settings",
+    );
+    for (const [testId, phrase] of [
+      ["players-section", "Session players"],
+      ["agents-section", "Re-check readiness"],
+      ["notifications-section", "A turn finishes"],
+      ["language-section", "System follows your device"],
+      ["shortcuts-section", "Keyboard shortcuts"],
+      ["theme-section", "Terminal pane theme (CLI only)"],
+    ] as const) {
+      expect(screen.getByTestId(testId).textContent).toContain(phrase);
+    }
+    const select = within(screen.getByTestId("language-section"))
+      .getByLabelText<HTMLSelectElement>("Interface language");
+    expect(
+      Array.from(select.options).map((option) => option.textContent),
+    ).toEqual(["System", "English", "简体中文"]);
   });
 });
 
