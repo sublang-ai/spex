@@ -23,11 +23,15 @@ The interface shall offer the languages `en` (English) and `zh` (Simplified Chin
 
 #### localization-2
 
-When a client of the home — a page in either shell, or the desktop shell for its own text — needs the interface language, the client shall resolve it as the home's stored choice [[core-service-108](core-service.md#core-service-108)], or with none stored as the first of the client's preferred languages — the browser's for a page, the operating system's for the desktop shell — that is offered, Chinese in the simplified script reading as `zh`, and `en` when none is.
+When a client of the home — a page in either shell, the desktop shell for its own text, or the core for the prose it authors — needs the interface language, the client shall resolve it as the home's stored choice [[core-service-108](core-service.md#core-service-108)], or with none stored as the first of the client's preferred languages — the browser's for a page, the operating system's for the desktop shell, and for the core the languages its host passes at start or else its own process locale — that is offered, Chinese in the simplified script reading as `zh`, and `en` when none is.
 
 #### localization-3
 
 When a page starts, the page shall paint in the choice it last read, kept in its own storage, then read the home's choice once connected [[core-service-108](core-service.md#core-service-108)] and follow every later `language.state` [[core-service-109](core-service.md#core-service-109)], re-rendering whole whenever the resolution [[localization-2](#localization-2)] changes and declaring the resolved language as the document's language attribute, so fonts and glyph forms follow it.
+
+#### localization-11
+
+When the home's choice changes [[core-service-109](core-service.md#core-service-109)], a page shall re-read the live state it holds — the config, readiness, the Space and the diagnostics — so every phrase the core composed for it [[core-service-111](core-service.md#core-service-111)] reads in the new language, while a record already written keeps the language it was written in.
 
 ### Rendering
 
@@ -43,7 +47,7 @@ When the interface formats a moment, a clock time, a number, or orders names, it
 
 #### localization-6
 
-Each package that composes interface text — the UI bundle and the desktop shell — shall keep one gettext PO catalog [[2]] per offered language as `locales/<language>/messages.po`, beside the UI bundle's source and inside the desktop shell's, extracted from the package's source by its `i18n:extract` script:
+Each package that composes text for the reader — the UI bundle, the desktop shell and the core — shall keep one gettext PO catalog [[2]] per offered language as `locales/<language>/messages.po`, beside the UI bundle's source and inside the desktop shell's and the core's, extracted from the package's source by its `i18n:extract` script:
 
 - an entry's `msgid` is the English text as the source states it, its references name the source files that use it, and a comment carries the author's note for the translator where the English alone is ambiguous;
 - the `zh` entry's `msgstr` is the translation, edited in place by a human or an agent; an empty `msgstr` is a missing translation;
@@ -76,6 +80,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 - opened with the browser language `zh-CN` and no stored choice, the page speaks Chinese and declares `zh` [[localization-2](#localization-2)] [[localization-3](#localization-3)];
 - opened with `en-US`, choosing 简体中文 in Settings re-renders the page in Chinese without a reload, a second page of the same home opens in Chinese, and choosing System returns both to English [[localization-3](#localization-3)];
+- after choosing 简体中文, a message the core composes for the page — the Sources band's guidance with no GitHub remote — reads in Chinese without a reload [[localization-11](#localization-11)];
 - at the 320-pixel viewport with the sidebar collapsed, the Dashboard and Settings surfaces in Chinese scroll in neither direction and no two visible siblings overlap [[localization-1](#localization-1)] ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 ## References

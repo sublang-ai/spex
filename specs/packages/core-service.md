@@ -522,6 +522,13 @@ When a client sends `language.set` naming an offered language code [[localizatio
 
 - a code that is not offered is rejected as a validation error, and the stored choice stands.
 
+#### core-service-111
+
+When the core service composes text for the reader — a refusal's message, a config error, a readiness requirement, a diagnostic's reason, the Space's messages and guidance, a unit's label and detail, a compile step's line and the toolchain's guidance, a draft's diagnostic, an authoring thread's status line, a specs notice — the core service shall phrase it in the home's interface language from its own catalog [[localization-6](localization.md#localization-6)], resolved from the stored choice or the system languages its host passes at start [[localization-2](localization.md#localization-2)], and on a change of the choice [[core-service-109](#core-service-109)] re-derive and broadcast the states it caches so they read in the new language ([DR-079](../decisions/079-the-core-speaks-the-homes-language.md)):
+
+- a message that names an internal failure for a developer, text relayed from a runtime, a tool, a file or a library, and a wire text the page matches to phrase itself stay as they are;
+- a record already written keeps the language it was written in.
+
 ## Internal Behavior
 
 ### Package Layout
@@ -765,6 +772,10 @@ Where the core service runs with the installed playbook's real captain shell and
 #### core-service-110
 
 Where a core service runs on a scratch state root with two clients connected, when one client sets the interface language to `zh`, the test suite shall assert that both clients receive `language.state` carrying `zh`, that `language.get` answers `zh` on either client and the preferences file holds it [[core-service-108](#core-service-108)] [[core-service-109](#core-service-109)], that setting none clears the stored choice, and that a code that is not offered is rejected with the stored choice unchanged [[core-service-109](#core-service-109)].
+
+#### core-service-112
+
+Where a core service runs with a config carrying an error and an adapter that is not ready, when a client sets the interface language to `zh`, the test suite shall assert that the config error and the readiness requirement the client then reads are the catalog's Chinese phrases, broadcast without a further request, that a refusal's message reads Chinese, and that setting none returns each to English [[core-service-111](#core-service-111)] [[core-service-109](#core-service-109)].
 
 ### Intent Ledger Coverage
 

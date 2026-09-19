@@ -10,6 +10,7 @@ Amends [DR-010](010-interface-craft.md) with an eleventh principle.
 Amends [DR-041](041-chrome-that-fits.md) in scope: a character budget counts the English text, and its translation fits the control the English text fits; every other fit rule stands.
 Amends [DR-013](013-sublang-brand.md) in scope: each type stack names the platforms' Simplified Chinese faces after its Latin faces; the brand faces stand.
 Shares its language codes with [DR-001](001-scaffold-localization.md) and nothing else: a specs tree's authoring language and the reader's interface language are two choices.
+Extended by [DR-079](079-the-core-speaks-the-homes-language.md): the prose the core authors, and the Node 22 floor for every package.
 
 ## Context
 

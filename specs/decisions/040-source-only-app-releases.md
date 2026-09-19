@@ -7,6 +7,7 @@
 
 Accepted (2026-09-02) on the owner's direction: release the app without binaries, letting users build locally, since no signing exists and per-platform builds would cost more than they return.
 Amends [DR-002](002-desktop-app-architecture.md) (distribution: GitHub Releases still, without build artifacts for now) and [DR-033](033-remote-gui-serving.md) (the server shell ships in the same source release).
+Floor raised by [DR-079](079-the-core-speaks-the-homes-language.md): Node 22 or later for every package.
 
 ## Context
 

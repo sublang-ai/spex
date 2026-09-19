@@ -29,7 +29,9 @@ Where the shared config file's notification preferences enable an event kind, wh
 
 #### app-shell-29
 
-When the app composes text of its own — a notification's title and body [[app-shell-3](#app-shell-3)], the quit confirmation [[app-shell-7](#app-shell-7)], the startup failure — the app shall speak the home's interface language, resolved as a client of the embedded core with the operating system's languages standing for the reader's system [[localization-2](localization.md#localization-2)], from its own catalog [[localization-6](localization.md#localization-6)], so the desktop's own words match the page's.
+When the app composes text of its own — a notification's title and body [[app-shell-3](#app-shell-3)], the quit confirmation [[app-shell-7](#app-shell-7)], the startup failure — the app shall speak the home's interface language, resolved as a client of the embedded core with the operating system's languages standing for the reader's system [[localization-2](localization.md#localization-2)], from its own catalog [[localization-6](localization.md#localization-6)], so the desktop's own words match the page's:
+
+- the shell passes the operating system's preferred languages to the core it embeds at start, so the core resolves the reader's system as the shell does [[core-service-111](core-service.md#core-service-111)].
 
 #### app-shell-4
 
@@ -136,7 +138,7 @@ Where the app is packaged, the packaged app shall ship agent-SDK native binaries
 When a tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog and the run-from-source instructions, attaching no build artifacts ([DR-040](../decisions/040-source-only-app-releases.md)):
 
 - the workflow confirms the CI workflow concluded `success` for the tagged commit, verifies the tag's version against both shells' `package.json`, and builds and tests the tree before creating the release — empty notes or a mismatch fail it without a release;
-- the release names Node 20 or later, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
+- the release names Node 22 or later, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 
