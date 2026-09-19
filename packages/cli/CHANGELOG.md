@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The CLI requires Node.js 22 or later.** Node 20 reached end of life
+  in April 2026, and every Spex package now declares the same floor
+  (DR-079). Raising the supported runtime is a breaking change: the
+  next release is a major.
+
 ## [3.0.0] - 2026-08-13
 
 ### Changed

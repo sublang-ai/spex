@@ -35,7 +35,7 @@
     "test:integration": "node scripts/stage-scaffold.mjs && node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "devDependencies": {
     "@types/mdast": "^4.0.4",

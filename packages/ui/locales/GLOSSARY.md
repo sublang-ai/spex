@@ -9,7 +9,7 @@ The desktop shell keeps its own, smaller catalog at `apps/desktop/src/locales/`,
 ## Editing a translation
 
 - The English text is the entry's `msgid`; the translation is its `msgstr`. Edit the `msgstr` in place and keep every `{placeholder}` and every `<0>…</0>` tag exactly as the English has them.
-- Plurals are ICU MessageFormat. `{count, plural, one {# playbook} other {# playbooks}}` becomes `{count, plural, other {# 个剧本}}`: Chinese has one form.
+- Plurals are ICU MessageFormat. `{count, plural, one {# playbook} other {# playbooks}}` becomes `{count, plural, other {# 个规程}}`: Chinese has one form.
 - `npm run i18n:check -w packages/ui` confirms that every entry is present and compiles; the build runs the same check and fails on a missing translation.
 - New English text in the source: `npm run i18n:extract -w packages/ui` adds its entry; fill the `zh` `msgstr` before building.
 - A `#.` comment on an entry is the author's note for the translator; `#:` lines name the source files that use the text.
@@ -29,7 +29,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | --- | --- | --- |
 | Spex | Spex | product name |
 | Boss, Captain, Coder, Reviewer, Player | as authored | Playbook's role names, as in the config and the transcripts |
-| playbook | 剧本 | the artifact the roles play |
+| playbook | 规程 | the artifact the roles play |
 | session | 会话 | |
 | turn | 轮次 | one Boss turn; "Turn finished" → 本轮已完成 |
 | conversation | 对话 | |
@@ -37,7 +37,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Space | 空间 | the shared home |
 | Dashboard | 仪表盘 | |
 | Projects (surface) | 项目 | |
-| Playbooks (surface) | 剧本 | |
+| Playbooks (surface) | 规程 | |
 | Settings | 设置 | |
 | Workspace | 工作区 | |
 | intent | 意图 | the ledger's unit of work |
@@ -48,8 +48,9 @@ Product names and the role names Playbook defines stay as authored; everything e
 | spec package / spec item | 规约包 / 规约条目 | |
 | decision record (DR) / intent record (IR) | 决策记录 / 意图记录 | |
 | draft | 草稿 | an authoring draft |
-| library | 库 | the compiled-artifact store; the surface itself says 剧本 |
+| library | 库 | the compiled-artifact store; the surface itself says 规程 |
 | compile / register / publish | 编译 / 注册 / 发布 | |
+| Normalize / Spec items / Optimize / Machine / Link / Package | 规范化 / 规约条目 / 优化 / 状态机 / 链接 / 打包 | the compile pipeline's stages, as the band and the chips name them |
 | adapter | 适配器 | |
 | readiness / ready / not ready / unverified | 就绪状态 / 就绪 / 未就绪 / 未验证 | |
 | model / effort / fast mode | 模型 / 推理强度 / 快速模式 | |

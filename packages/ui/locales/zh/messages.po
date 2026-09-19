@@ -196,7 +196,7 @@ msgstr "{count, plural, other {# 项需要关注}}"
 
 #: src/App.tsx
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
-msgstr "{count, plural, other {# 个剧本}}"
+msgstr "{count, plural, other {# 个规程}}"
 
 #: src/components/SpaceExplorer.tsx
 msgid "{count, plural, one {# record} other {# records}}"
@@ -311,7 +311,7 @@ msgstr "{hours} 小时前"
 
 #: src/components/LibrarySurface.tsx
 msgid "{id} is a built-in — enable it below instead"
-msgstr "{id} 是内置剧本 — 请在下方启用"
+msgstr "{id} 是内置规程 — 请在下方启用"
 
 #: src/components/SpecView.tsx
 msgid "{id} not found"
@@ -467,7 +467,7 @@ msgstr "{span}前"
 
 #: src/components/PlaybookStages.tsx
 msgid "{stage} not found next to this playbook's registry"
-msgstr "在该剧本的注册表旁未找到 {stage}"
+msgstr "在该规程的注册表旁未找到 {stage}"
 
 #. {step} is the sync step's name
 #: src/components/SpaceSurface.tsx
@@ -531,11 +531,11 @@ msgstr "{who} 工作中…"
 
 #: src/components/Composer.tsx
 msgid "/ for playbooks · Enter sends"
-msgstr "/ 打开剧本 · Enter 发送"
+msgstr "/ 打开规程 · Enter 发送"
 
 #: src/components/LibrarySurface.tsx
 msgid "/{id} is already a configured playbook"
-msgstr "/{id} 已是已配置的剧本"
+msgstr "/{id} 已是已配置的规程"
 
 #. a run's one-line strip: the workflow, where it stands, who called it
 #: src/components/MachineCard.tsx
@@ -609,7 +609,7 @@ msgstr "◇ 已中止"
 
 #: src/state/store.ts
 msgid "✓ compiled and registered — see Configured playbooks"
-msgstr "✓ 已编译并注册 — 见“已配置的剧本”"
+msgstr "✓ 已编译并注册 — 见“已配置的规程”"
 
 #. how a player's call ended; ✓ stays as it is
 #: src/components/PlayerPane.tsx
@@ -1021,7 +1021,7 @@ msgstr "自动：智能体在仓库内自主工作，并启用适配器自带的
 
 #: src/components/LibrarySurface.tsx
 msgid "Available built-ins"
-msgstr "可用内置剧本"
+msgstr "可用内置规程"
 
 #: src/components/SpecView.tsx
 msgid "back to {id}"
@@ -1029,7 +1029,7 @@ msgstr "返回 {id}"
 
 #: src/components/AuthoringWorkspace.tsx
 msgid "Back to the playbook list — the draft stays as it is"
-msgstr "返回剧本列表 — 草稿保持原样"
+msgstr "返回规程列表 — 草稿保持原样"
 
 #: src/components/ProjectsSurface.tsx
 msgid "behind upstream"
@@ -1493,7 +1493,7 @@ msgstr "配置 Captain 智能体"
 
 #: src/components/LibrarySurface.tsx
 msgid "Configured playbooks"
-msgstr "已配置的剧本"
+msgstr "已配置的规程"
 
 #. default confirm button: go ahead with the act
 #. verdict control: accept the delivered work
@@ -1791,7 +1791,7 @@ msgstr "描述一个工作流"
 
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
-msgstr "描述这个剧本…"
+msgstr "描述这个规程…"
 
 #. notification sink: an OS notification
 #: src/components/SettingsSurface.tsx
@@ -2032,7 +2032,7 @@ msgstr "启用"
 
 #: src/components/LibrarySurface.tsx
 msgid "Enable this playbook — it is written to the shared config"
-msgstr "启用此剧本 — 会写入共享配置"
+msgstr "启用此规程 — 会写入共享配置"
 
 #. the enable request is in flight
 #: src/components/LibrarySurface.tsx
@@ -2345,7 +2345,7 @@ msgstr "请先为该 Player 设置 id。"
 
 #: src/lib/shortcuts.ts
 msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
-msgstr "前往仪表盘、项目、剧本、空间、设置"
+msgstr "前往仪表盘、项目、规程、空间、设置"
 
 #. toggle: show the citation graph
 #: src/components/SpecView.tsx
@@ -2358,15 +2358,15 @@ msgstr "注意 — 部分智能体尚未就绪："
 
 #: src/components/CaptainHome.tsx
 msgid "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "你好！我是你的 Captain。先添加一个项目 — 任意本地 git 仓库 — 再告诉我要做什么；我会把它交给某个剧本，也就是由 AI Player 执行的脚本化工作流。"
+msgstr "你好！我是你的 Captain。先添加一个项目 — 任意本地 git 仓库 — 再告诉我要做什么；我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
 
 #: src/components/CaptainHome.tsx
 msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "你好！我是你的 Captain。在侧栏选择一个项目，再告诉我要做什么，我会把它交给某个剧本，也就是由 AI Player 执行的脚本化工作流。"
+msgstr "你好！我是你的 Captain。在侧栏选择一个项目，再告诉我要做什么，我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
 
 #: src/components/CaptainHome.tsx
 msgid "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "你好！这里是 {project} — 告诉我要做什么，我会把它交给某个剧本，也就是由 AI Player 执行的脚本化工作流。"
+msgstr "你好！这里是 {project} — 告诉我要做什么，我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
 
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
@@ -2378,7 +2378,7 @@ msgstr "隐藏差异"
 
 #: src/components/CaptainHome.tsx
 msgid "Hide quick start (playbooks stay under / in the composer)"
-msgstr "隐藏快速开始（剧本仍在输入框的 / 菜单中）"
+msgstr "隐藏快速开始（规程仍在输入框的 / 菜单中）"
 
 #: src/components/NavRail.tsx
 msgid "Hide sessions in {project}"
@@ -2429,7 +2429,7 @@ msgstr "空闲 — 还没有对话。"
 
 #: src/components/PlayerPane.tsx
 msgid "Idle until the playbook calls {player}"
-msgstr "在剧本调用 {player} 前保持空闲"
+msgstr "在规程调用 {player} 前保持空闲"
 
 #: src/components/NavRail.tsx
 msgid "idle, held a failure"
@@ -2634,6 +2634,11 @@ msgstr "最后输出：{age}"
 msgid "leases and locks"
 msgstr "租约与锁"
 
+#. compile phase: slc links the machine
+#: src/lib/compile-log.ts
+msgid "Link"
+msgstr "链接"
+
 #: src/components/SettingsSurface.tsx
 msgid "loading config…"
 msgstr "加载配置中…"
@@ -2695,8 +2700,10 @@ msgid "Lowercase; it names the file and the /command — the command can change 
 msgstr "小写；它决定文件名和斜杠命令 — 该命令可在注册时更改"
 
 #. pipeline stage: the compiled state machine
+#. pipeline stage: the compiled state machine
 #. tab: the compiled state machine
 #: src/components/AuthoringWorkspace.tsx
+#: src/lib/compile-log.ts
 msgid "Machine"
 msgstr "状态机"
 
@@ -2831,12 +2838,12 @@ msgstr "新增"
 #. start a draft of one's own
 #: src/components/LibrarySurface.tsx
 msgid "New playbook"
-msgstr "新建剧本"
+msgstr "新建规程"
 
 #. slash menu's last entry: start authoring a playbook
 #: src/components/SlashMenu.tsx
 msgid "New playbook…"
-msgstr "新建剧本…"
+msgstr "新建规程…"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "New player {id}"
@@ -2871,7 +2878,7 @@ msgstr "没有名为“{adapter}”的适配器 — 请检查配置"
 
 #: src/components/SettingsSurface.tsx
 msgid "No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here."
-msgstr "尚未使用任何适配器 — 为 Captain 或某个剧本角色指定智能体后，其就绪状态会显示在这里。"
+msgstr "尚未使用任何适配器 — 为 Captain 或某个规程角色指定智能体后，其就绪状态会显示在这里。"
 
 #: src/components/AgentChip.tsx
 msgid "no automatic check for this adapter — verify sign-in yourself"
@@ -2918,11 +2925,11 @@ msgstr "没有未关闭的 PR。"
 
 #: src/components/LibrarySurface.tsx
 msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
-msgstr "尚未启用任何剧本 — 在下方启用内置剧本，或用“新建剧本”自己创建。"
+msgstr "尚未启用任何规程 — 在下方启用内置规程，或用“新建规程”自己创建。"
 
 #: src/App.tsx
 msgid "No playbooks yet"
-msgstr "还没有剧本"
+msgstr "还没有规程"
 
 #: src/lib/labels.ts
 msgid "No player named \"{player}\" — check the config"
@@ -2930,7 +2937,7 @@ msgstr "没有名为“{player}”的 Player — 请检查配置"
 
 #: src/components/SettingsSurface.tsx
 msgid "No players yet — enabling a playbook in the Library adds the ones its roles need."
-msgstr "还没有 Player — 在库中启用剧本会自动添加其角色所需的 Player。"
+msgstr "还没有 Player — 在库中启用规程会自动添加其角色所需的 Player。"
 
 #: src/components/SpaceExplorer.tsx
 msgid "No preview for this file."
@@ -2981,6 +2988,11 @@ msgstr "无（适配器默认）"
 #: src/components/AgentEditor.tsx
 msgid "none: the adapter's own default posture"
 msgstr "无：适配器自身的默认权限模式"
+
+#. compile phase: slc normalizes the source
+#: src/lib/compile-log.ts
+msgid "Normalize"
+msgstr "规范化"
 
 #. pipeline stage: slc's normalized workflow markdown
 #: src/components/LibrarySurface.tsx
@@ -3272,6 +3284,11 @@ msgstr "打开中…"
 msgid "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
 msgstr "打开名为 {id} 的草稿，规范化文本已备好可粘贴 — 不会写入或编译任何内容"
 
+#. compile phase: slc optimizes the spec items
+#: src/lib/compile-log.ts
+msgid "Optimize"
+msgstr "优化"
+
 #. the Git remote's name; leave as Git spells it
 #: src/components/SpaceSurface.tsx
 msgid "origin"
@@ -3304,6 +3321,11 @@ msgstr "覆盖"
 msgid "ownership unknown"
 msgstr "归属未知"
 
+#. compile phase: Spex packages the artifacts
+#: src/lib/compile-log.ts
+msgid "Package"
+msgstr "打包"
+
 #. bring in a source of one's own
 #. bring in a source of one's own
 #: src/components/DraftSourceTab.tsx
@@ -3316,7 +3338,7 @@ msgstr "粘贴源文本或选择文件"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
-msgstr "粘贴剧本源文本 — 散文、SKILL.md 或工作流 markdown…"
+msgstr "粘贴规程源文本 — 散文、SKILL.md 或工作流 markdown…"
 
 #. field holding a path to select and copy
 #: src/components/SpaceSurface.tsx
@@ -3344,17 +3366,17 @@ msgstr "指定一个值…"
 #. one unit's kind: a playbook source
 #: src/lib/space.ts
 msgid "Playbook"
-msgstr "剧本"
+msgstr "规程"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Playbook id"
-msgstr "剧本 id"
+msgstr "规程 id"
 
 #. tooltip: which workflow the parked run belongs to
 #: src/components/ParkedRun.tsx
 msgid "playbook: {playbookId}"
-msgstr "剧本：{playbookId}"
+msgstr "规程：{playbookId}"
 
 #. the surface listing every playbook
 #. the surface listing every playbook
@@ -3363,11 +3385,11 @@ msgstr "剧本：{playbookId}"
 #: src/components/NavRail.tsx
 #: src/lib/space.ts
 msgid "Playbooks"
-msgstr "剧本"
+msgstr "规程"
 
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
-msgstr "剧本需要有效的配置 — 请在<0>设置</0>中修复。"
+msgstr "规程需要有效的配置 — 请在<0>设置</0>中修复。"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Player for {role}"
@@ -3784,7 +3806,7 @@ msgstr "移除这条消息"
 
 #: src/components/LibrarySurface.tsx
 msgid "Remove this playbook from the config?"
-msgstr "从配置中移除此剧本？"
+msgstr "从配置中移除此规程？"
 
 #: src/components/SettingsSurface.tsx
 msgid "Remove this player from the roster"
@@ -4310,7 +4332,7 @@ msgstr "源文缺失"
 
 #: src/components/LibrarySurface.tsx
 msgid "Source this playbook was loaded from: {from}"
-msgstr "此剧本的来源：{from}"
+msgstr "此规程的来源：{from}"
 
 #: src/components/SourcesTabs.tsx
 msgid "Sources: {issues, plural, one {# issue} other {# issues}} · {prs, plural, one {# PR} other {# PRs}} · {records, plural, one {# open record} other {# open records}}"
@@ -4342,6 +4364,11 @@ msgstr "空间视图"
 msgid "space.issues"
 msgstr "问题"
 
+#. compile phase: slc derives the spec items
+#: src/lib/compile-log.ts
+msgid "Spec items"
+msgstr "规约条目"
+
 #: src/components/SpecGraph.tsx
 msgid "Spec package citation graph"
 msgstr "规约包引用图谱"
@@ -4372,7 +4399,7 @@ msgstr "Spex 无法读取此代码块"
 
 #: src/components/CaptainHome.tsx
 msgid "Spex has no config file yet — playbooks are unavailable."
-msgstr "Spex 还没有配置文件 — 剧本不可用。"
+msgstr "Spex 还没有配置文件 — 规程不可用。"
 
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
@@ -4572,7 +4599,7 @@ msgstr "同步中…"
 
 #: src/components/SpaceSurface.tsx
 msgid "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up."
-msgstr "同步会话、队列、项目、设置和剧本源文 — <0>查看哪些留在本机</0>。设置之前不会联系任何地址。"
+msgstr "同步会话、队列、项目、设置和规程源文 — <0>查看哪些留在本机</0>。设置之前不会联系任何地址。"
 
 #: src/components/SettingsSurface.tsx
 msgid "System"
@@ -4597,7 +4624,7 @@ msgstr "将此任务移出队列 — 撤销可放回"
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
-msgstr "告诉智能体这个剧本做什么、谁做什么、何时算完成"
+msgstr "告诉智能体这个规程做什么、谁做什么、何时算完成"
 
 #: src/components/SettingsSurface.tsx
 msgid "Terminal pane theme"
@@ -4661,7 +4688,7 @@ msgstr "调用超时"
 
 #: src/components/LibrarySurface.tsx
 msgid "The Captain can only run playbooks listed here."
-msgstr "Captain 只能运行这里列出的剧本。"
+msgstr "Captain 只能运行这里列出的规程。"
 
 #: src/components/CaptainPane.tsx
 msgid "The Captain will report here."
@@ -4787,7 +4814,7 @@ msgstr "工作流正在等待你的答复。"
 
 #: src/components/PlaybookStages.tsx
 msgid "The workflow markdown the playbook was compiled from"
-msgstr "剧本编译所用的工作流 markdown"
+msgstr "规程编译所用的工作流 markdown"
 
 #. stands where a project name would, for sessions with no folder
 #: src/components/SpaceSync.tsx
@@ -4862,7 +4889,7 @@ msgstr "此草稿未找到该阶段"
 
 #: src/components/LibrarySurface.tsx
 msgid "this stage was not found for this playbook"
-msgstr "此剧本未找到该阶段"
+msgstr "此规程未找到该阶段"
 
 #: src/components/CompileBand.tsx
 msgid "three in a row — tell the agent how to proceed"
@@ -5151,7 +5178,7 @@ msgstr "可写路径（逗号分隔）"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Writes the playbook and any new player to the shared config"
-msgstr "把剧本和新增的 Player 写入共享配置"
+msgstr "把规程和新增的 Player 写入共享配置"
 
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx
@@ -5168,7 +5195,7 @@ msgstr "更改已保存；尚未推送"
 
 #: src/components/CaptainHome.tsx
 msgid "Your config file has errors — playbooks are unavailable."
-msgstr "配置文件有错误 — 剧本不可用。"
+msgstr "配置文件有错误 — 规程不可用。"
 
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx

@@ -2634,6 +2634,11 @@ msgstr "last output {age}"
 msgid "leases and locks"
 msgstr "leases and locks"
 
+#. compile phase: slc links the machine
+#: src/lib/compile-log.ts
+msgid "Link"
+msgstr "Link"
+
 #: src/components/SettingsSurface.tsx
 msgid "loading config…"
 msgstr "loading config…"
@@ -2695,8 +2700,10 @@ msgid "Lowercase; it names the file and the /command — the command can change 
 msgstr "Lowercase; it names the file and the /command — the command can change at registration"
 
 #. pipeline stage: the compiled state machine
+#. pipeline stage: the compiled state machine
 #. tab: the compiled state machine
 #: src/components/AuthoringWorkspace.tsx
+#: src/lib/compile-log.ts
 msgid "Machine"
 msgstr "Machine"
 
@@ -2981,6 +2988,11 @@ msgstr "none (adapter default)"
 #: src/components/AgentEditor.tsx
 msgid "none: the adapter's own default posture"
 msgstr "none: the adapter's own default posture"
+
+#. compile phase: slc normalizes the source
+#: src/lib/compile-log.ts
+msgid "Normalize"
+msgstr "Normalize"
 
 #. pipeline stage: slc's normalized workflow markdown
 #: src/components/LibrarySurface.tsx
@@ -3272,6 +3284,11 @@ msgstr "Opening…"
 msgid "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
 msgstr "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
 
+#. compile phase: slc optimizes the spec items
+#: src/lib/compile-log.ts
+msgid "Optimize"
+msgstr "Optimize"
+
 #. the Git remote's name; leave as Git spells it
 #: src/components/SpaceSurface.tsx
 msgid "origin"
@@ -3303,6 +3320,11 @@ msgstr "Overwrite"
 #: src/components/NavRail.tsx
 msgid "ownership unknown"
 msgstr "ownership unknown"
+
+#. compile phase: Spex packages the artifacts
+#: src/lib/compile-log.ts
+msgid "Package"
+msgstr "Package"
 
 #. bring in a source of one's own
 #. bring in a source of one's own
@@ -4341,6 +4363,11 @@ msgstr "Space views"
 #: src/components/SpaceSync.tsx
 msgid "space.issues"
 msgstr "Issues"
+
+#. compile phase: slc derives the spec items
+#: src/lib/compile-log.ts
+msgid "Spec items"
+msgstr "Spec items"
 
 #: src/components/SpecGraph.tsx
 msgid "Spec package citation graph"

@@ -61,6 +61,9 @@ function savedWord(): string {
   return i18n._({ id: "Saved ✓", comment: "an edit landed; the tick is part of the word" });
 }
 
+/** How long a landed edit's tick stands (settings-6). */
+const SAVED_MS = 1500;
+
 /** Transient text that clears itself — the saved tick — with the
  * timer dying alongside the component. */
 function useTransient(
@@ -109,9 +112,19 @@ const LANGUAGE_CHOICES: readonly { value: string; label: () => string }[] = [
 
 function LanguageSection({ onError }: { onError: (message?: string) => void }) {
   const choice = useAppStore((state) => state.language.choice);
+  const savedAt = useAppStore((state) => state.language.savedAt);
   const setLanguage = useAppStore((state) => state.setLanguage);
   const [pending, setPending] = useState(false);
-  const [saved, setSaved] = useTransient(1500);
+  const [saved, setSaved] = useTransient(SAVED_MS);
+  // A landed write re-renders the whole app in the chosen language
+  // (localization-3), so this section is a new one by the time it
+  // acknowledges: the mark is the store's, and it ticks on the mount
+  // that finds it fresh as it does where the language stays
+  // (settings-37).
+  useEffect(() => {
+    if (savedAt === undefined || Date.now() - savedAt >= SAVED_MS) return;
+    setSaved("language");
+  }, [savedAt, setSaved]);
 
   return (
     <section data-testid="language-section" className="flex flex-col gap-2">
@@ -129,7 +142,6 @@ function LanguageSection({ onError }: { onError: (message?: string) => void }) {
             onError(undefined);
             setPending(true);
             setLanguage(next === "system" ? (null as Language | null) : (next as Language))
-              .then(() => setSaved("language"))
               .catch((cause: Error) => onError(cause.message))
               .finally(() => setPending(false));
           }}
@@ -344,7 +356,7 @@ function PlayerRoster({
   const [confirmDelete, setConfirmDelete] = useState<string>();
   const [error, setError] = useState<{ playerId: string; message: string }>();
   // The editor closes on save, so the tick lives on the row.
-  const [saved, setSaved] = useTransient(1500);
+  const [saved, setSaved] = useTransient(SAVED_MS);
   const readinessByAdapter = new Map(
     readiness.map((entry) => [entry.adapter, entry]),
   );
@@ -555,7 +567,7 @@ export function SettingsSurface() {
   const [retrying, setRetrying] = useState(false);
   // Which preference edit is in flight, and which one just landed.
   const [pending, setPending] = useState<string>();
-  const [saved, setSaved] = useTransient(1500);
+  const [saved, setSaved] = useTransient(SAVED_MS);
   // The one open agent-row editor, the Captain's or a player's.
   const rows = useRowEditing();
 

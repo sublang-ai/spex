@@ -174,8 +174,11 @@ export interface AppState {
    * home's stored choice — null meaning the reader's system — and the
    * language this page therefore renders in. The choice is mirrored in
    * this page's own storage so the first paint already speaks it,
-   * before the core has answered. */
-  language: { choice: Language | null; resolved: Language };
+   * before the core has answered. `savedAt` is when this page's own
+   * write last landed (settings-37): the mark the language section
+   * ticks, which the re-rendering in the new language would otherwise
+   * take with the section it replaces. */
+  language: { choice: Language | null; resolved: Language; savedAt?: number };
   /** The Captain pane's share of the run view, as a percentage. A
    * machine drawing has a natural width that text does not, so the
    * split is the reader's to set (DR-030). */
@@ -735,18 +738,41 @@ export const useAppStore = create<AppState>((set, get) => {
   /** The home's choice, from wherever it reached this page — the reply
    * to `language.get`, the reply to this page's own `language.set`, or
    * the broadcast that followed anyone's (localization-3). Idempotent:
-   * the setter gets both its reply and the broadcast. */
-  function applyLanguageChoice(choice: Language | null | undefined): void {
+   * the setter gets both its reply and the broadcast.
+   *
+   * `saved` marks this page's own write landing (settings-37), and
+   * `reread` is false only for the first read of the choice at connect:
+   * what that refresh is loading already speaks the home's language. */
+  function applyLanguageChoice(
+    choice: Language | null | undefined,
+    options: { saved?: boolean; reread?: boolean } = {},
+  ): void {
     const stored = isLanguage(choice) ? choice : null;
     if (stored) safeStorageSet(LANGUAGE_KEY, stored);
     else safeStorageRemove(LANGUAGE_KEY);
     const resolved = resolveLanguage(stored, preferredLanguages());
     const current = get().language;
-    if (current.choice === stored && current.resolved === resolved) return;
+    // The mark of a landed write outlives the re-rendering it causes:
+    // the section that ticks is a new one, so the tick is the store's.
+    const savedAt = options.saved ? Date.now() : current.savedAt;
+    if (current.choice === stored && current.resolved === resolved) {
+      if (savedAt !== current.savedAt) set({ language: { ...current, savedAt } });
+      return;
+    }
     // Only a changed resolution reloads the catalog; the root re-renders
     // off the resolved language, so nothing else need subscribe.
-    if (current.resolved !== resolved) activateLanguage(resolved);
-    set({ language: { choice: stored, resolved } });
+    const changed = current.resolved !== resolved;
+    if (changed) activateLanguage(resolved);
+    set({ language: { choice: stored, resolved, savedAt } });
+    // The core composes prose in the home's language (localization-11):
+    // what this page holds of it was written in the one before, so a
+    // change re-reads it — the config, readiness, the projects and the
+    // sessions, and the Space with the diagnostics it carries, where
+    // this page holds a Space at all.
+    if (!changed || options.reread === false) return;
+    if (get().connection !== "open") return;
+    void get().refresh().catch(() => {});
+    if (get().space) void get().loadSpace().catch(() => {});
   }
 
   /** Dispatch the next queued composer message when a turn is idle
@@ -1344,7 +1370,9 @@ export const useAppStore = create<AppState>((set, get) => {
       void (async () => {
         try {
           const result = await getClient().command("language.get", {});
-          applyLanguageChoice(result?.language ?? null);
+          // This very refresh is reading the core's prose in the home's
+          // language already, so learning it re-reads nothing.
+          applyLanguageChoice(result?.language ?? null, { reread: false });
         } catch {
           // Unreadable: this page's mirror stands.
         }
@@ -1449,7 +1477,7 @@ export const useAppStore = create<AppState>((set, get) => {
       // The core owns the choice; the broadcast that follows reaches
       // this page too, and applying it twice changes nothing.
       const result = await getClient().command("language.set", { language: choice });
-      applyLanguageChoice(result?.language ?? null);
+      applyLanguageChoice(result?.language ?? null, { saved: true });
     },
 
     setCaptainSplit(percent: number): void {

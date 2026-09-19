@@ -224,14 +224,13 @@ export function prettyJson(text: string): string {
   }
 }
 
-/** The phrase a withheld preview reads (space-24). */
+/** The phrase a withheld preview reads (space-24): the page's own
+ * words for a read the core answered with the `withheld` kind, which
+ * is what the page recognizes — never the reason's wording, which the
+ * core composes in the home's language (localization-11). */
 export function withheldPhrase(): string {
   return i18n._("May hold provider tokens — not shown");
 }
-
-/** The same phrase as the core states it (space-24), for recognizing a
- * reason it sent: data, never shown, so it is never translated. */
-export const WITHHELD_REASON = "May hold provider tokens — not shown";
 
 /** Whether the page runs on a Mac, for the reveal control's name. */
 export function isMacPlatform(): boolean {

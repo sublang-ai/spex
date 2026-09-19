@@ -27,7 +27,6 @@ import {
 } from "../state/store.js";
 import {
   SHARING_LABELS,
-  WITHHELD_REASON,
   absolutePath,
   formatSize,
   prettyJson,
@@ -325,13 +324,11 @@ function PreviewBody({
     return <p className="text-sm text-neutral-500">{i18n._("Loading…")}</p>;
   }
   if (result.kind === "withheld") {
+    // The kind is what says a read was withheld; the words are this
+    // page's own, so the core's reason is never matched or echoed.
     return (
       <p data-testid="space-preview-withheld" className="text-sm text-neutral-500">
         {withheldPhrase()}
-        {/* The core's own reason, where it says more than the phrase. */}
-        {result.reason && result.reason !== WITHHELD_REASON ? (
-          <span className="block text-xs">{result.reason}</span>
-        ) : null}
       </p>
     );
   }

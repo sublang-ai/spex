@@ -27,7 +27,7 @@ import { HEIGHTS, TALL, measure, record } from "../src/fit";
 const RAIL_ZH: [SurfaceName, string][] = [
   ["Dashboard", "仪表盘"],
   ["Workspace", "项目"],
-  ["Playbooks", "剧本"],
+  ["Playbooks", "规程"],
   ["Space", "空间"],
   ["Settings", "设置"],
 ];
@@ -134,9 +134,9 @@ test("localization-10: choosing 简体中文 re-renders this page and reaches a 
   ).resolves.toEqual(["System", "English", "简体中文"]);
 
   await select.selectOption("zh");
-  // The whole interface changing language is the acknowledgment: the
-  // resolved language keys the root, so the row that carried the
-  // transient tick is replaced by its Chinese self.
+  // The whole interface changes language: the resolved language keys
+  // the root, so every surface is painted anew — the language section
+  // among them, which carries its own landed-write tick (settings-37).
   await expectRail(page, RAIL_ZH);
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
   // 设置 is the Settings heading; 界面语言 names the control itself.

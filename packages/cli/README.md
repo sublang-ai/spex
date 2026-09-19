@@ -183,7 +183,7 @@ Then loop back to the next decision or intent.
 
 ## Requirements
 
-- Node.js >= 20
+- Node.js >= 22
 - Git (optional, used for repo root detection)
 
 ## Contributing

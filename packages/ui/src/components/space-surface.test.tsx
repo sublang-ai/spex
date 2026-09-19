@@ -236,6 +236,9 @@ const READS: Record<string, SpaceReadResult> = {
   "sessions/s1.json": { kind: "text", text: '{"kind":"captain-session"}', lines: 1, truncated: false },
   "README.md": { kind: "text", text: "# Hello\n\nSome *text*", lines: 3, truncated: false },
   "prefs.json": { kind: "text", text: "{}", lines: 2000, truncated: true },
+  // A read the core withheld, its reason composed in the home's
+  // language (localization-11): the kind is what the page reads.
+  "sessions/s2.json": { kind: "withheld", reason: "可能包含提供方令牌——不予显示" },
 };
 
 async function renderSpace(state: SpaceState) {
@@ -1094,6 +1097,19 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     expect(screen.getByTestId("space-preview").textContent).toContain("binary file · 8.8 KB");
     fireEvent.click(screen.getByTestId("space-node-local"));
     expect(screen.getByTestId("space-preview").textContent).toContain("local project paths · 1 entry");
+  });
+
+  test("a read the core withheld is known by its kind, whatever language its reason speaks", async () => {
+    await openExplore();
+    fireEvent.click(screen.getByTestId("space-node-sessions"));
+    await screen.findByTestId("space-node-session:s2");
+    fireEvent.click(screen.getByTestId("space-node-session:s2"));
+    // The entry says text, so the read goes out and comes back
+    // withheld with a reason in the home's language (space-24).
+    fireEvent.click(screen.getByTestId("space-node-sessions/s2.json"));
+    const withheld = await screen.findByTestId("space-preview-withheld");
+    expect(withheld.textContent).toBe("May hold provider tokens — not shown");
+    expect(screen.getByTestId("space-preview").textContent).not.toContain("可能包含提供方令牌");
   });
 
   test("'Stays on this device' lists the seven families with their reasons and remembers its fold", async () => {

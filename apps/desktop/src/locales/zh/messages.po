@@ -19,15 +19,15 @@ msgstr "{playerId} {status}"
 
 #: src/notifications.ts
 msgid "A playbook entered its failed state and needs attention."
-msgstr "剧本进入失败状态，需要你处理。"
+msgstr "规程进入失败状态，需要你处理。"
 
 #: src/notifications.ts
 msgid "A playbook is waiting for your reply."
-msgstr "剧本正在等待你的回复。"
+msgstr "规程正在等待你的回复。"
 
 #: src/main.ts
 msgid "A playbook turn is still running."
-msgstr "仍有剧本轮次正在运行。"
+msgstr "仍有规程轮次正在运行。"
 
 #: src/notifications.ts
 msgid "A player needs you"
@@ -49,11 +49,11 @@ msgstr "继续运行"
 
 #: src/notifications.ts
 msgid "Playbook error"
-msgstr "剧本错误"
+msgstr "规程错误"
 
 #: src/notifications.ts
 msgid "Playbook failed"
-msgstr "剧本失败"
+msgstr "规程失败"
 
 #. Stands in for a player the record does not name
 #: src/notifications.ts

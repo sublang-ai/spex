@@ -35,7 +35,7 @@ import {
   setClientForTests,
   useAppStore,
 } from "./state/store.js";
-import { activateLanguage, currentLocale } from "./i18n.js";
+import { activateLanguage, currentLocale, i18n } from "./i18n.js";
 import {
   clockTime,
   compactAge,
@@ -95,13 +95,15 @@ const CONFIG = {
   },
 };
 
+const PROJECTS = [
+  { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0 },
+];
+
 function seed(): void {
   useAppStore.setState({
     connection: "open",
     everConnected: true,
-    projects: [
-      { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0 },
-    ] as never,
+    projects: PROJECTS as never,
     projectMeta: {},
     sessions: [],
     views: {},
@@ -120,6 +122,7 @@ function seed(): void {
     history: {},
     ledger: undefined,
     ledgerError: undefined,
+    space: undefined,
     foldedSources: {},
     dashboardGroupsCollapsed: {},
     configState: CONFIG,
@@ -139,12 +142,45 @@ function railLabels(): string[] {
     .filter((label): label is string => !!label);
 }
 
-/** Serve this fold to every read of it, from the first. */
+/** The home's choice as the core holds it: a write moves it, and every
+ * later read — the one a re-read makes — finds what was written. */
+let homeLanguage: Language | null = null;
+
+/** Serve this fold to every read of it, from the first — and the app
+ * state the core answers with, since a change of language re-reads it
+ * whole (localization-11). */
 function serveLedger(ledger: unknown): void {
-  commandMock.mockImplementation(async (type: string) => {
-    if (type === "ledger.get") return ledger;
-    if (type === "ledger.history") return { intents: [], more: false };
-    return {};
+  commandMock.mockImplementation(
+    async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "ledger.get") return ledger;
+      if (type === "ledger.history") return { intents: [], more: false };
+      if (type === "config.get") return CONFIG;
+      if (type === "readiness.get") return [];
+      if (type === "project.list") return PROJECTS;
+      if (type === "session.list") return [];
+      if (type === "draft.list") return [];
+      if (type === "project.status") {
+        return { branch: "main", dirty: false, ahead: 0, behind: 0 };
+      }
+      if (type === "forge.items") {
+        return { adapter: "github", authenticated: null, issues: [], prs: [] };
+      }
+      if (type === "language.set") {
+        homeLanguage = (fields.language as Language | null) ?? null;
+        return { language: homeLanguage };
+      }
+      if (type === "language.get") return { language: homeLanguage };
+      return {};
+    },
+  );
+}
+
+/** The core announcing the home's choice to every page (localization-3),
+ * the core's own copy moving with it. */
+async function broadcast(language: Language | null): Promise<void> {
+  homeLanguage = language;
+  await act(async () => {
+    deliverServerMessageForTests({ type: "language.state", language });
   });
 }
 
@@ -162,6 +198,7 @@ async function goTo(surface: "Dashboard" | "Settings"): Promise<void> {
 
 beforeEach(() => {
   commandMock.mockReset();
+  homeLanguage = null;
   serveLedger(EMPTY_LEDGER);
   // Store actions resolve the module-local client, which the module
   // mock cannot reach.
@@ -182,7 +219,7 @@ describe("localization-4: the rail reads the resolved language", () => {
     speak("zh");
     render(<Root />);
     const labels = railLabels();
-    for (const label of ["仪表盘", "项目", "剧本", "空间", "设置"]) {
+    for (const label of ["仪表盘", "项目", "规程", "空间", "设置"]) {
       expect(labels).toContain(label);
     }
     for (const label of ["Dashboard", "Playbooks", "Space", "Settings"]) {
@@ -277,7 +314,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
         "players-section",
         [
           "会话 Player", // Session players
-          "还没有 Player — 在库中启用剧本会自动添加其角色所需的 Player。",
+          "还没有 Player — 在库中启用规程会自动添加其角色所需的 Player。",
           "添加 Player", // Add a player
         ],
       ],
@@ -286,7 +323,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
         [
           "智能体", // Agents
           "重新检查就绪状态", // Re-check readiness
-          "尚未使用任何适配器 — 为 Captain 或某个剧本角色指定智能体后，其就绪状态会显示在这里。",
+          "尚未使用任何适配器 — 为 Captain 或某个规程角色指定智能体后，其就绪状态会显示在这里。",
         ],
       ],
       [
@@ -431,7 +468,6 @@ describe("localization-5: ages, durations and moments follow the language", () =
 describe("localization-3: a change of choice re-renders the whole root", () => {
   test("setting the language through the store repaints the rail in it", async () => {
     speak("en", null);
-    commandMock.mockResolvedValue({ language: "zh" });
     render(<Root />);
     expect(railLabels()).toContain("Dashboard");
     await act(async () => {
@@ -442,16 +478,126 @@ describe("localization-3: a change of choice re-renders the whole root", () => {
     expect(document.documentElement.lang).toBe("zh");
     // The broadcast that follows the write says the same thing; the
     // page that sent it applies both and nothing moves twice.
-    act(() => {
-      deliverServerMessageForTests({ type: "language.state", language: "zh" });
-    });
+    await broadcast("zh");
     expect(railLabels()).toContain("仪表盘");
     // Another page choosing System returns this one to English.
-    act(() => {
-      deliverServerMessageForTests({ type: "language.state", language: null });
-    });
+    await broadcast(null);
     expect(railLabels()).toContain("Dashboard");
     expect(useAppStore.getState().language.choice).toBeNull();
+  });
+});
+
+describe("settings-37: the Saved mark outlives the re-rendering", () => {
+  // A page keeps the surface the reader stands on in its own storage,
+  // which this environment does not provide: without one, the app that
+  // the language change mounts anew would land on the Workspace and
+  // there would be no section to tick.
+  let realStorage: PropertyDescriptor | undefined;
+  beforeEach(() => {
+    realStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const kept = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => kept.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          kept.set(key, value);
+        },
+        removeItem: (key: string) => {
+          kept.delete(key);
+        },
+        key: (index: number) => [...kept.keys()][index] ?? null,
+        get length() {
+          return kept.size;
+        },
+      },
+    });
+  });
+  afterEach(() => {
+    if (realStorage) Object.defineProperty(window, "localStorage", realStorage);
+  });
+
+  test("choosing 简体中文 ticks in the section the new language painted", async () => {
+    speak("en", null);
+    render(<Root />);
+    await goTo("Settings");
+    const select = screen.getByTestId("language-select") as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(select, { target: { value: "zh" } });
+    });
+    // The whole app repainted in Chinese, so the section that ticks is
+    // not the one the reader changed: the mark rides the store.
+    const section = screen.getByTestId("language-section");
+    expect(within(section).getByLabelText("界面语言")).toBeTruthy();
+    expect(within(section).getByTestId("language-saved").textContent).toBe(
+      i18n._("Saved ✓"),
+    );
+  });
+
+  test("a change that leaves the page's language as it is ticks in place", async () => {
+    // System already resolves to English here, so choosing English
+    // moves the home's choice and leaves the page as it stands.
+    speak("en", null);
+    render(<Root />);
+    await goTo("Settings");
+    const select = screen.getByTestId("language-select") as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(select, { target: { value: "en" } });
+    });
+    expect(useAppStore.getState().language.choice).toBe("en");
+    expect(screen.getByTestId("language-saved").textContent).toBe("Saved ✓");
+  });
+});
+
+describe("localization-11: a change of choice re-reads the core's prose", () => {
+  /** Stand where a Space the page already holds would (space-2): the
+   * store re-reads one only when it holds one. */
+  const SPACE = { diagnostics: [], units: [] } as never;
+
+  /** Let the surfaces finish their own arrival reads and forget them:
+   * what follows is the change's doing alone. */
+  async function quiet(): Promise<void> {
+    await act(async () => {});
+    commandMock.mockClear();
+  }
+
+  test("a different resolution re-issues the live reads", async () => {
+    speak("en", null);
+    useAppStore.setState({ space: SPACE });
+    render(<Root />);
+    await quiet();
+    await broadcast("zh");
+    const asked = commandMock.mock.calls.map(([type]) => type as string);
+    for (const command of [
+      "config.get",
+      "readiness.get",
+      "project.list",
+      "session.list",
+      "space.get",
+    ]) {
+      expect(asked, `${command} re-read`).toContain(command);
+    }
+  });
+
+  test("the same resolution re-reads nothing", async () => {
+    speak("en", null);
+    useAppStore.setState({ space: SPACE });
+    render(<Root />);
+    await quiet();
+    // System to English: the home's choice moved, the language the core
+    // composes in did not.
+    await broadcast("en");
+    expect(useAppStore.getState().language.choice).toBe("en");
+    const asked = commandMock.mock.calls.map(([type]) => type as string);
+    for (const command of [
+      "config.get",
+      "readiness.get",
+      "project.list",
+      "session.list",
+      "space.get",
+    ]) {
+      expect(asked, `${command} left alone`).not.toContain(command);
+    }
   });
 });
 

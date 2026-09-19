@@ -12,6 +12,10 @@
 // the compiler's ids kept for the tooltips (DR-010 §2). A phase the
 // compiler names that the row lacks is appended, so a future slc
 // phase still shows rather than vanishing.
+//
+// The names are the page's own words (localization-4), not text read
+// off the wire: the English of each is the core's own name for that
+// phase, so both shells call one phase by one word.
 
 export type PhaseStatus = "waiting" | "running" | "done" | "failed";
 
@@ -19,7 +23,7 @@ export interface PhaseView {
   /** The compiler's id: `normalize`, `text2gears`, …, or `spex` for
    * Spex's own packaging step. */
   id: string;
-  /** The human name the row shows. */
+  /** The name the row shows, in the language the fold was read in. */
   label: string;
   status: PhaseStatus;
   /** The compiler's own elapsed text for a finished or failed phase
@@ -48,15 +52,36 @@ export interface CompileLogFold {
   status: string[];
 }
 
-/** The pipeline in order with its human names, and the name of one
- * phase id (playbook-library-6): the core's table, so the thread's ◇
- * lines and the band's row call a phase by one word. The table stays
- * the core's, untranslated, because the core writes those same names
- * into the thread lines this page prints verbatim; the UI's own words
- * around a phase — its status, "Failed at …" — are catalog texts. */
-import { PIPELINE_PHASES, phaseLabel } from "@sublang/spex-core/protocol";
+/** The pipeline in order (playbook-library-6): the core's table, for
+ * the phase ids and the order they run in. */
+import { PIPELINE_PHASES } from "@sublang/spex-core/protocol";
 
-export { PIPELINE_PHASES, phaseLabel };
+import { i18n } from "../i18n.js";
+
+/** Spex's own packaging step, which a compile reports under either
+ * id: one word, so one message. */
+const packageLabel = () =>
+  i18n._({ id: "Package", comment: "compile phase: Spex packages the artifacts" });
+
+/** The word the page calls each phase by, keyed by the compiler's id:
+ * the page's own text, read at render (localization-4), whose English
+ * is the core's own name for the phase. Thunks, never strings: a table
+ * read at module load would freeze the language it was imported in. */
+const PHASE_LABELS: Record<string, () => string> = {
+  normalize: () => i18n._({ id: "Normalize", comment: "compile phase: slc normalizes the source" }),
+  text2gears: () => i18n._({ id: "Spec items", comment: "compile phase: slc derives the spec items" }),
+  optimize: () => i18n._({ id: "Optimize", comment: "compile phase: slc optimizes the spec items" }),
+  gears2fsm: () => i18n._({ id: "Machine", comment: "pipeline stage: the compiled state machine" }),
+  link: () => i18n._({ id: "Link", comment: "compile phase: slc links the machine" }),
+  spex: packageLabel,
+  packaging: packageLabel,
+};
+
+/** The name of one phase id; an unknown id reads as itself, so a phase
+ * a later slc adds is never renamed into nonsense. */
+export function phaseLabel(id: string): string {
+  return PHASE_LABELS[id]?.() ?? id;
+}
 
 const OPEN = /^→ (\S+)/u;
 const DONE = /^✓ (\S+)(?: .*)?\((\S+)\)\s*$/u;
@@ -75,7 +100,8 @@ export function foldCompileLog(
   at?: readonly number[],
 ): CompileLogFold {
   const phases: PhaseView[] = PIPELINE_PHASES.map((phase) => ({
-    ...phase,
+    id: phase.id,
+    label: phaseLabel(phase.id),
     status: "waiting",
     output: [],
   }));
