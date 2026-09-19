@@ -1911,10 +1911,16 @@ export class CoreService {
         // and broadcasts them, so a page reads the core's prose in the
         // new language without asking for it (core-service-111,
         // localization-11). The config's errors and the adapter
-        // readiness requirements are the two the core holds; the Space,
-        // the storage diagnostics and every reply are composed at the
-        // moment they are read.
-        if (this.spoken !== before) void this.reloadConfig();
+        // readiness requirements are the two the core holds and
+        // re-derives; a forge cache entry that carries guidance rather
+        // than lists is dropped, so the page's re-read composes the
+        // guidance afresh (dashboard-14 keeps every entry with lists);
+        // the Space, the storage diagnostics and every reply are
+        // composed at the moment they are read.
+        if (this.spoken !== before) {
+          this.store.dropForgeGuidance();
+          void this.reloadConfig();
+        }
         return { language };
       }
       // The Space surface (space-29): the core performs every Git

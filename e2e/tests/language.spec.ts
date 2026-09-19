@@ -4,9 +4,11 @@
 // The interface language through the page (localization-10, DR-078):
 // a browser that asks for Chinese gets Chinese with nothing stored,
 // the home's choice re-renders the page that made it and reaches
-// another page of the same home, and the Chinese interface fits the
-// 320px floor (DR-041). Every Chinese phrase asserted here is the
-// `msgstr` its `msgid` carries in packages/ui/locales/zh/messages.po.
+// another page of the same home, prose the core composed for the page
+// follows the change, and the Chinese interface fits the 320px floor
+// (DR-041). Every Chinese phrase asserted here is the `msgstr` its
+// `msgid` carries in packages/ui/locales/zh/messages.po — except the
+// core's own, which comes from packages/core/src/locales/zh/messages.po.
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -173,6 +175,71 @@ test("localization-10: choosing 简体中文 re-renders this page and reaches a 
   } finally {
     await second.close();
   }
+});
+
+// ---------------------------------------------------------------------------
+// The core's own prose follows the choice
+// ---------------------------------------------------------------------------
+
+/** The Sources guidance the core composes where the project names no
+ * GitHub origin (`src/forge.ts`), in the English the source authors
+ * and in the `msgstr` the core's own `zh` catalog carries. */
+const GUIDANCE_EN =
+  "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.";
+const GUIDANCE_ZH =
+  "没有 GitHub origin 远程仓库。添加一个（git remote add origin …）即可查看 Issue 与 PR。";
+
+test.describe("prose the core composed for the page", () => {
+  // The demo project is a plain `git init` with no remote, and the
+  // real forge adapter answers such a project with its guidance alone
+  // — no `gh` is ever run, so the band is hermetic.
+  test.use({ appOptions: { project: true } });
+
+  test("localization-10: the Sources guidance reads in Chinese without a reload", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await nav(page, "Dashboard").click();
+    const guidance = page.getByTestId(`sources-guidance-${app.projectId}`);
+    // Sources stands open on its Issues tab (dashboard-20), where the
+    // guidance replaces the lists; open the band and pick the tab
+    // through their own attributes should a launch have folded it.
+    const toggle = page.getByTestId(`sources-toggle-${app.projectId}`);
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+      await toggle.click();
+    }
+    const issues = page.getByTestId(`sources-tab-issues-${app.projectId}`);
+    if ((await issues.getAttribute("aria-selected")) !== "true") {
+      await issues.click();
+    }
+    await expect(guidance).toContainText(GUIDANCE_EN);
+
+    // A mark on this page's window: a reload would take it with it.
+    await page.evaluate(() => {
+      (window as unknown as { __spexSameDocument?: boolean }).__spexSameDocument =
+        true;
+    });
+
+    await nav(page, "Settings").click();
+    await page.getByTestId("language-select").selectOption("zh");
+    await expectRail(page, RAIL_ZH);
+
+    // Back to the band on the same page: the choice made the page
+    // re-read what the core had composed for it, so the guidance is
+    // waited for in Chinese rather than asserted at once.
+    await surfaceEntry(page, "Dashboard").click();
+    await expect(guidance).toContainText(GUIDANCE_ZH);
+    await expect(guidance).not.toContainText(GUIDANCE_EN);
+    expect(
+      await page.evaluate(
+        () =>
+          (window as unknown as { __spexSameDocument?: boolean })
+            .__spexSameDocument === true,
+      ),
+      "the page re-rendered without a reload",
+    ).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

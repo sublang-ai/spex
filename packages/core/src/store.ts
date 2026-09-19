@@ -1726,6 +1726,22 @@ export class Store {
     this.forgeCache.set(projectId, entry);
     this.saveForgeCache();
   }
+
+  /** Forget every cached forge state that carries guidance rather than
+   * lists (core-service-111): guidance is prose composed in a language,
+   * so a change of the home's language must compose it again, while an
+   * entry holding issue and pull-request lists stays served as before
+   * (dashboard-14). */
+  dropForgeGuidance(): void {
+    let dropped = false;
+    for (const [projectId, entry] of this.forgeCache) {
+      if (entry.state.guidance !== undefined) {
+        this.forgeCache.delete(projectId);
+        dropped = true;
+      }
+    }
+    if (dropped) this.saveForgeCache();
+  }
 }
 
 function processAlive(pid: number): boolean {
